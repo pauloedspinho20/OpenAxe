@@ -1,21 +1,57 @@
 /*
-  Fixed hardware-chassis theme - deliberately not responsive to
-  prefers-color-scheme. A physical device doesn't relight itself for the
-  OS's light/dark setting, and this app is meant to read as one.
+  Two hardware finishes, not a website's light/dark mode: "Carbon" (dark,
+  TX-6-style unibody) and "Aluminum" (light, OP-1-style brushed finish).
+  Both stay true to the hardware look - screens/LCDs stay dark glass in
+  both finishes, since that's how real hardware works regardless of its
+  case color. Defaults to dark; useTheme persists the user's choice.
 */
-:root {
+:root,
+:root[data-theme='dark'] {
   /* Surfaces */
   --chassis: #101010;
   --panel: #1a1a1a;
   --panel-raised: #212121;
-  --panel-recessed: #060606;
+  --panel-recessed: #171613;
   --seam: rgba(255, 255, 255, 0.06);
   --seam-strong: rgba(255, 255, 255, 0.12);
+  --highlight: rgba(255, 255, 255, 0.04);
 
   /* Text */
   --ink-1: #eeece6;
   --ink-2: #8f8d86;
   --ink-3: #57564f;
+
+  --shadow-ambient: rgba(0, 0, 0, 0.5);
+  --shadow-deep: rgba(0, 0, 0, 0.7);
+  --shadow-soft: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='light'] {
+  /* Surfaces - warm brushed-aluminum finish, not stark white */
+  --chassis: #e7e2d6;
+  --panel: #efeae0;
+  --panel-raised: #f7f3ea;
+  --panel-recessed: #d9d3c4;
+  --seam: rgba(0, 0, 0, 0.08);
+  --seam-strong: rgba(0, 0, 0, 0.16);
+  --highlight: rgba(255, 255, 255, 0.6);
+
+  /* Text */
+  --ink-1: #201f1a;
+  --ink-2: #6b6a62;
+  --ink-3: #a6a297;
+
+  --shadow-ambient: rgba(0, 0, 0, 0.16);
+  --shadow-deep: rgba(0, 0, 0, 0.3);
+  --shadow-soft: rgba(0, 0, 0, 0.22);
+}
+
+:root {
+  /* Screens/LCDs: always dark glass, regardless of chassis finish - this is
+     how real hardware works (an OP-1's screen doesn't turn white). */
+  --screen-bg: #06070a;
+  --screen-text: #5fdc7a;
+  --screen-dim: #3a3f38;
 
   /* Accent - signature hardware orange, used sparingly for active state only */
   --accent: #ff5a1f;
@@ -45,12 +81,11 @@
   --r-md: 6px;
   --r-lg: 10px;
 
-  /* Elevation */
-  --shadow-panel: 0 1px 0 var(--seam) inset, 0 12px 28px rgba(0, 0, 0, 0.5);
-  --shadow-recessed: inset 0 2px 5px rgba(0, 0, 0, 0.7), inset 0 -1px 0 rgba(255, 255, 255, 0.03);
-  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  /* Elevation - built from the theme's shadow tones so both finishes still look machined */
+  --shadow-panel: 0 1px 0 var(--seam) inset, 0 12px 28px var(--shadow-ambient);
+  --shadow-recessed: inset 0 2px 5px var(--shadow-deep), inset 0 -1px 0 var(--highlight);
+  --shadow-control: 0 1px 2px var(--shadow-soft), inset 0 1px 1px var(--highlight);
 
-  color-scheme: dark;
   font: 14px/1.4 var(--font-body);
   color: var(--ink-1);
   background: var(--chassis);
@@ -58,6 +93,16 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 *,

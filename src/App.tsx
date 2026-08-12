@@ -3,7 +3,9 @@ import { MasterSection } from './components/MasterSection'
 import { SignalFlow } from './components/SignalFlow'
 import { HardwareButton } from './components/primitives/HardwareButton'
 import { Led } from './components/primitives/Led'
+import { Toggle } from './components/primitives/Toggle'
 import { useAudioEngine } from './hooks/useAudioEngine'
+import { useTheme } from './hooks/useTheme'
 import styles from './App.module.css'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -15,6 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function App() {
   const engine = useAudioEngine()
+  const { theme, setTheme } = useTheme()
   const isReady = engine.status === 'ready'
 
   return (
@@ -25,6 +28,11 @@ function App() {
           NAM WEB STUDIO
         </div>
         <div className={styles.powerGroup}>
+          <Toggle
+            label="Aluminum"
+            checked={theme === 'light'}
+            onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
+          />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
             {isReady && !engine.micGranted ? ' · no mic' : ''}
@@ -45,8 +53,8 @@ function App() {
         <SignalFlow />
 
         <div className={styles.chains}>
-          <ChannelStrip chain="A" rig={engine.rig} />
-          <ChannelStrip chain="B" rig={engine.rig} />
+          <ChannelStrip chain="A" rig={engine.rig} context={engine.context} />
+          <ChannelStrip chain="B" rig={engine.rig} context={engine.context} />
         </div>
 
         <MasterSection analyser={engine.analyser} />

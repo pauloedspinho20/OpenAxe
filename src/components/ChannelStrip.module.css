@@ -3,20 +3,50 @@
   flex-direction: column;
   gap: 2px;
   padding: var(--sp-3);
-  background: var(--panel-recessed);
+  background: var(--screen-bg);
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-recessed);
+  cursor: pointer;
+  border: none;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+}
+
+.screen:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.screen:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .screenLabel {
-  color: var(--ink-3);
+  color: var(--screen-dim);
 }
 
 .screenValue {
   font-family: var(--font-display);
   font-size: 12px;
   letter-spacing: 0.02em;
-  color: var(--led-on);
+  color: var(--screen-text);
+}
+
+.screenError {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--led-hot);
 }
 
 .fxRow {
@@ -36,17 +66,92 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: none;
   border: 1px dashed var(--seam-strong);
   border-radius: var(--r-sm);
   color: var(--ink-3);
   font-family: var(--font-display);
   font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fxSlot:disabled {
   cursor: default;
+  opacity: 0.4;
+}
+
+.fxSlot:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fxSlotFilled {
+  flex-direction: column;
+  gap: 2px;
+  border-style: solid;
+  border-color: var(--seam-strong);
+  background: var(--panel-raised);
+  padding: var(--sp-1);
+}
+
+.fxSlotName {
+  background: none;
+  border: none;
+  color: var(--ink-1);
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+.fxSlotBypassed {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.fxSlotRemove {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fxSlotRemove:hover {
+  color: var(--led-hot);
+}
+
+.fxSlotSelect {
+  flex: 1;
+  aspect-ratio: 1.6;
+  background: var(--panel-raised);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  color: var(--ink-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  padding: 0 var(--sp-1);
 }
 
 .row {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: var(--sp-4);
+}
+
+.row .screen {
+  flex: 1;
 }
 
 .stripRow {
