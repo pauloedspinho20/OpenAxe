@@ -169,6 +169,10 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
   const isEffectivelyMuted = useDualChainStore((s) => s.isEffectivelyMuted)
 
   const [irMix, setIrMixState] = useState(1)
+  const [bass, setBassState] = useState(0)
+  const [mid, setMidState] = useState(0)
+  const [treble, setTrebleState] = useState(0)
+  const [presence, setPresenceState] = useState(0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [preFx, setPreFx] = useState<Effect[]>([])
   const [postFx, setPostFx] = useState<Effect[]>([])
@@ -264,6 +268,92 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
         </button>
       </div>
 
+      {modelName && (
+        <div className={styles.ampControls}>
+          <div className={styles.toneStack}>
+            <Knob
+              label="Bass"
+              value={bass}
+              min={-12}
+              max={12}
+              defaultValue={0}
+              onChange={(v) => {
+                setBassState(v)
+                amp?.setBass(v)
+              }}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`}
+            />
+            <Knob
+              label="Mid"
+              value={mid}
+              min={-12}
+              max={12}
+              defaultValue={0}
+              onChange={(v) => {
+                setMidState(v)
+                amp?.setMid(v)
+              }}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`}
+            />
+            <Knob
+              label="Treble"
+              value={treble}
+              min={-12}
+              max={12}
+              defaultValue={0}
+              onChange={(v) => {
+                setTrebleState(v)
+                amp?.setTreble(v)
+              }}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`}
+            />
+            <Knob
+              label="Presence"
+              value={presence}
+              min={-12}
+              max={12}
+              defaultValue={0}
+              onChange={(v) => {
+                setPresenceState(v)
+                amp?.setPresence(v)
+              }}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`}
+            />
+          </div>
+          <div className={styles.ampMetaRow}>
+            {amp?.getSlimmableInfo() && (
+              <select
+                className={styles.slimSizeSelect}
+                value={amp.getSlimmableInfo()!.currentSize}
+                onChange={(e) => void amp!.setModelSlimSize(Number(e.target.value))}
+                aria-label="Model slim size"
+              >
+                <option value={1}>Full (100%)</option>
+                {amp.getSlimmableInfo()!.breakpoints.map((bp) => (
+                  <option key={bp} value={bp}>
+                    {slimLabel(bp)}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="button"
+              className={styles.unloadBtn}
+              onClick={() => {
+                void amp?.unloadModel()
+                setBassState(0)
+                setMidState(0)
+                setTrebleState(0)
+                setPresenceState(0)
+              }}
+              title="Unload the amp model"
+            >
+              UNLOAD
+            </button>
+          </div>
+        </div>
+      )}
+
       <FxRow
         label="Pre FX"
         fxChain={rig?.preFx(chain) ?? null}
@@ -346,4 +436,12 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
       </div>
     </Panel>
   )
+}
+
+/** Convert a slim ratio (0.01–1) to a human-readable label. */
+function slimLabel(ratio: number): string {
+  if (ratio >= 0.9) return 'Full (100%)'
+  if (ratio >= 0.4) return `Lite (${Math.round(ratio * 100)}%)`
+  if (ratio >= 0.15) return `Feather (${Math.round(ratio * 100)}%)`
+  return `Nano (${Math.round(ratio * 100)}%)`
 }
