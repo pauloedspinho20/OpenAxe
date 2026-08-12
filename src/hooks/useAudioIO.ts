@@ -15,7 +15,6 @@ function mapDevice(device: MediaDeviceInfo) {
 }
 
 export function useAudioIO() {
-  const store = useIOStore()
   const enumeratedRef = useRef(false)
 
   const enumerate = useCallback(async () => {
@@ -23,23 +22,23 @@ export function useAudioIO() {
       const all = await navigator.mediaDevices.enumerateDevices()
       const inputs = all.filter((d) => d.kind === 'audioinput').map(mapDevice)
       const outputs = all.filter((d) => d.kind === 'audiooutput').map(mapDevice)
-      const currentInput = useIOStore.getState().inputDeviceId
+      const io = useIOStore.getState()
 
       // If the selected device disappeared, fall back to default.
       const inputStillExists =
-        currentInput === '' || inputs.some((d) => d.deviceId === currentInput)
+        io.inputDeviceId === '' || inputs.some((d) => d.deviceId === io.inputDeviceId)
       if (!inputStillExists) {
-        store.setInputDevice('')
-        store.setMicError('Selected input device disconnected — switched to default.')
+        io.setInputDevice('')
+        io.setMicError('Selected input device disconnected — switched to default.')
       }
 
-      store.setDeviceLists(inputs, outputs)
+      io.setDeviceLists(inputs, outputs)
     } catch (err) {
       // enumerateDevices may fail in insecure contexts — that's fine, the
       // input selector will just show "Default" with no label.
       console.warn('[useAudioIO] enumerateDevices failed:', err)
     }
-  }, [store])
+  }, [])
 
   useEffect(() => {
     if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return

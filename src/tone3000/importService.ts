@@ -1,17 +1,16 @@
 /**
  * Import service: takes a Tone3000 model/IR the user picked, downloads it via
  * the authenticated client, caches the bytes in the asset StoreDB (keyed by
- * id so presets + offline reuse work), and loads it into a live chain's amp
- * or cab slot.
+ * id so presets + offline reuse work), and loads it into a live Amp or Cab
+ * block.
  */
-import type { ChainId } from '../engine/DualChainRig'
 import { Tone3000Library } from './library'
 import type { Tone3000Slot } from './types'
 
 export interface ImportRequest {
   /** App-level asset id (e.g. `tone3000:model:123`) - key cached under and stored in presets. */
   id: string
-  chain: ChainId
+  blockId: string
   slot: Tone3000Slot
   name: string
   /** Bearer-authed model_url from the API. */
@@ -26,25 +25,25 @@ export interface ImportResult {
   id: string
   name: string
   slot: Tone3000Slot
-  chain: ChainId
+  blockId: string
 }
 
 /**
- * Load functions for a live chain's amp/cab slot. Pass null when the engine
- * isn't powered on - the asset is still downloaded + cached for later.
+ * Load functions for a live Amp/Cab block. Pass null when the engine isn't
+ * powered on - the asset is still downloaded + cached for later.
  */
-export interface ChainLoadTarget {
+export interface BlockLoadTarget {
   loadModel: (json: string, info: { id: string; name: string }) => Promise<unknown>
   loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) => void
 }
 
 /**
  * Download + cache the model/IR blob and (if a live target is given) load it
- * into the chain's slot. Returns the info to record on the screen.
+ * into the block. Returns the info to record on the screen.
  */
 export async function importTone3000Asset(
   request: ImportRequest,
-  load: ChainLoadTarget | null,
+  load: BlockLoadTarget | null,
   context: AudioContext | null,
 ): Promise<ImportResult> {
   const entry = await Tone3000Library.importAsset({
@@ -70,5 +69,5 @@ export async function importTone3000Asset(
     }
   }
 
-  return { id: entry.id, name: entry.name, slot: request.slot, chain: request.chain }
+  return { id: entry.id, name: entry.name, slot: request.slot, blockId: request.blockId }
 }

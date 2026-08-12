@@ -1,4 +1,6 @@
 import type { EffectKind } from './Effect'
+import type { BlockKind } from '../engine/blocks/Block'
+import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
 
 interface KnobField {
   key: string
@@ -404,4 +406,71 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
     },
   ],
+}
+
+const TONE_STACK_BANDS = ['bass', 'mid', 'treble', 'presence'] as const
+
+/**
+ * Schema entries for the 4 new grid block kinds beyond the 11 effects
+ * (Amp has none - model loading isn't a continuous "param", and its only
+ * one, slim size, gets a dedicated select like it already did on the old
+ * ChannelStrip rather than going through the generic knob panel).
+ */
+export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
+  'tone-stack': TONE_STACK_BANDS.map((key) => ({
+    key,
+    label: key[0]!.toUpperCase() + key.slice(1),
+    control: 'knob',
+    min: -12,
+    max: 12,
+    step: 0.1,
+    defaultValue: 0,
+    formatValue: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`,
+  })),
+  cab: [
+    {
+      key: 'irMix',
+      label: 'IR Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
+    },
+  ],
+  mixer: Array.from({ length: MIXER_INPUT_COUNT }, (_, i) => {
+    const group = `In ${i + 1}`
+    const fields: KnobField[] = [
+      {
+        key: `in${i}_level`,
+        label: 'Level',
+        control: 'knob',
+        min: 0,
+        max: 1.5,
+        step: 0.01,
+        defaultValue: 1,
+        formatValue: percent,
+        group,
+      },
+      {
+        key: `in${i}_pan`,
+        label: 'Pan',
+        control: 'knob',
+        min: -1,
+        max: 1,
+        step: 0.01,
+        defaultValue: 0,
+        formatValue: plain,
+        group,
+      },
+    ]
+    return fields
+  }).flat(),
+}
+
+/** Looks up the field schema for any grid block kind - the 11 effect kinds plus the 4 new ones. */
+export function getParamSchema(kind: BlockKind): ParamFieldSchema[] {
+  if (kind in EFFECT_PARAM_SCHEMAS) return EFFECT_PARAM_SCHEMAS[kind as EffectKind]
+  return BLOCK_PARAM_SCHEMAS[kind] ?? []
 }

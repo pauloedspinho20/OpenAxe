@@ -1,25 +1,26 @@
-import type { Effect, EffectKind, EffectParams } from '../effects/Effect'
+import type { BlockKind, EffectParams } from '../engine/blocks/Block'
+import type { Jack } from '../engine/gridConfig'
 
-export interface EffectPresetData {
-  kind: EffectKind
-  bypass: boolean
-  mix: number
+export interface PresetBlockData {
+  id: string
+  kind: BlockKind
+  row: number
+  col: number
+  /** Only meaningful for the 11 effect kinds - Amp/Cab/Tone Stack/Mixer have no bypass concept. */
+  bypass?: boolean
   params: EffectParams
+  /** Amp blocks only - reference into the local asset cache (see assetCache.ts). */
+  modelId?: string | null
+  modelName?: string | null
+  /** Cab blocks only. */
+  irId?: string | null
+  irName?: string | null
 }
 
-export interface ChainPresetData {
-  /** References into the local asset cache (see assetCache.ts) - null if no model/IR is loaded. */
-  modelId: string | null
-  modelName: string | null
-  irId: string | null
-  irName: string | null
-  irMix: number
-  level: number
-  pan: number
-  mute: boolean
-  solo: boolean
-  preFx: EffectPresetData[]
-  postFx: EffectPresetData[]
+export interface PresetEdgeData {
+  id: string
+  from: Jack
+  to: Jack
 }
 
 export interface Preset {
@@ -29,38 +30,47 @@ export interface Preset {
   favorite: boolean
   createdAt: number
   updatedAt: number
-  chainA: ChainPresetData
-  chainB: ChainPresetData
+  blocks: PresetBlockData[]
+  edges: PresetEdgeData[]
   masterLevel: number
-  linked: boolean
+  masterMuted: boolean
 }
 
 /**
- * The narrow slice of AmpCabChain that capture/apply need. Declared
- * separately (rather than importing AmpCabChain directly) so tests can pass
- * a plain mock instead of standing up a real AudioContext + wasm engine -
- * same reasoning as bindDualChainRig's DualChainRigControls.
+ * The narrow slice of a live block capture/apply need. The "extra" methods
+ * are all optional: only Amp/Cab blocks have asset methods, only the 11
+ * effect kinds have bypass - callers duck-type check before use, the same
+ * pattern EffectParamsPanel/BlockCard already use elsewhere in the app.
  */
-export interface PresetAmpChain {
-  getLoadedModel(): { id: string; name: string } | null
-  getLoadedIr(): { id: string; name: string } | null
-  getIrMix(): number
-  loadModel(json: string, slimSize?: number, info?: { id: string; name: string }): Promise<unknown>
-  unloadModel(): Promise<void>
-  loadIR(audioBuffer: AudioBuffer, mix?: number, info?: { id: string; name: string }): void
-  clearIR(): void
+export interface PresetBlock {
+  readonly kind: BlockKind
+  getParams(): EffectParams
+  setParams(params: EffectParams): void
+  isBypassed?(): boolean
+  setBypass?(bypassed: boolean): void
+  getLoadedModel?(): { id: string; name: string } | null
+  loadModel?(
+    json: string,
+    slimSize: number | undefined,
+    info: { id: string; name: string },
+  ): Promise<unknown>
+  unloadModel?(): Promise<void>
+  getLoadedIr?(): { id: string; name: string } | null
+  loadIR?(buffer: AudioBuffer, mix: number, info: { id: string; name: string }): void
+  clearIR?(): void
 }
 
-/** The narrow slice of EffectsChain that capture/apply need. */
-export interface PresetEffectsChain {
-  list(): readonly Effect[]
-  insert(effect: Effect, index?: number): void
-  remove(effect: Effect): void
-}
-
-/** The narrow slice of DualChainRig that capture/apply need. */
+/**
+ * The narrow slice of GraphRig that capture/apply need. Declared separately
+ * (rather than importing GraphRig directly) so tests can pass a plain mock
+ * instead of standing up a real AudioContext - same reasoning as
+ * bindGraphRig's GraphRigControls.
+ */
 export interface PresetRig {
-  amp(chain: 'A' | 'B'): PresetAmpChain
-  preFx(chain: 'A' | 'B'): PresetEffectsChain
-  postFx(chain: 'A' | 'B'): PresetEffectsChain
+  listBlockIds(): string[]
+  getBlock(id: string): PresetBlock | null
+  addBlock(kind: BlockKind, row: number, col: number, id?: string): Promise<string>
+  removeBlock(id: string): Promise<void>
+  listEdgeIds(): string[]
+  connect(from: Jack, to: Jack, id?: string): { ok: boolean; reason?: string }
 }

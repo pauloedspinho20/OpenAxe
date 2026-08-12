@@ -5,7 +5,7 @@ import { Tone3000Library, useTone3000Library } from '../tone3000/library'
 import type { Tone3000LibraryEntry } from '../tone3000/library'
 import { apiListMakes, apiListModels, apiListTags, apiSearchTones } from '../tone3000/client'
 import { importTone3000Asset } from '../tone3000/importService'
-import type { ChainLoadTarget } from '../tone3000/importService'
+import type { BlockLoadTarget } from '../tone3000/importService'
 import type { Tone, Tone3000Model } from '../tone3000/types'
 import { HardwareButton } from './primitives/HardwareButton'
 import styles from './Tone3000Browser.module.css'
@@ -14,8 +14,8 @@ import styles from './Tone3000Browser.module.css'
 const SEARCH_PAGE_SIZE = 25
 
 interface Props {
-  /** Loads an imported model/IR into the target chain's amp/cab slot (null = engine off). */
-  target: ChainLoadTarget | null
+  /** Loads an imported model/IR into the target Amp/Cab block (null = engine off). */
+  target: BlockLoadTarget | null
   context: AudioContext | null
 }
 
@@ -165,7 +165,7 @@ export function Tone3000Browser({ target, context }: Props) {
 
   const runImport = async (model: Tone3000Model, tone: Tone) => {
     if (!browser.target) return
-    const { chain, slot } = browser.target
+    const { blockId, slot } = browser.target
     setImportingId(model.id.toString())
     setImportDone(null)
     setImportError(null)
@@ -174,7 +174,7 @@ export function Tone3000Browser({ target, context }: Props) {
       await importTone3000Asset(
         {
           id,
-          chain,
+          blockId,
           slot,
           name: model.name,
           modelUrl: model.model_url,
@@ -229,7 +229,7 @@ export function Tone3000Browser({ target, context }: Props) {
 
   if (!browser.open || !browser.target) return null
 
-  const { chain, slot } = browser.target
+  const { slot } = browser.target
   const totalPages = Math.ceil(total / SEARCH_PAGE_SIZE)
 
   return (
@@ -237,7 +237,7 @@ export function Tone3000Browser({ target, context }: Props) {
       <div className={styles.modal}>
         <header className={styles.header}>
           <span className={`label ${styles.heading}`}>
-            TONE3000 CATALOG · CHAIN {chain} · {slot === 'model' ? 'AMP MODEL' : 'CAB IR'}
+            TONE3000 CATALOG · {slot === 'model' ? 'AMP MODEL' : 'CAB IR'}
           </span>
           <div className={styles.tabs}>
             <button

@@ -1,41 +1,22 @@
 import type { UseBoundStore, StoreApi } from 'zustand'
-import type { DualChainState } from '../state/dualChainStore'
-import type { ChainId } from '../engine/DualChainRig'
-import type {
-  ChainPresetData,
-  EffectPresetData,
-  Preset,
-  PresetEffectsChain,
-  PresetRig,
-} from './types'
+import type { GraphState, BlockInstance } from '../state/graphStore'
+import type { Preset, PresetBlockData, PresetRig } from './types'
 
-function captureEffectsChain(chain: PresetEffectsChain): EffectPresetData[] {
-  return chain.list().map((effect) => ({
-    kind: effect.kind,
-    bypass: effect.isBypassed(),
-    mix: effect.getMix(),
-    params: effect.getParams(),
-  }))
-}
-
-function captureChain(chainId: ChainId, rig: PresetRig, state: DualChainState): ChainPresetData {
-  const amp = rig.amp(chainId)
-  const strip = chainId === 'A' ? state.chainA : state.chainB
-  const model = amp.getLoadedModel()
-  const ir = amp.getLoadedIr()
-
+function captureBlock(rig: PresetRig, stored: BlockInstance): PresetBlockData {
+  const block = rig.getBlock(stored.id)
+  const model = block?.getLoadedModel?.() ?? null
+  const ir = block?.getLoadedIr?.() ?? null
   return {
+    id: stored.id,
+    kind: stored.kind,
+    row: stored.row,
+    col: stored.col,
+    ...(stored.bypass !== undefined && { bypass: stored.bypass }),
+    params: block?.getParams() ?? stored.params,
     modelId: model?.id ?? null,
     modelName: model?.name ?? null,
     irId: ir?.id ?? null,
     irName: ir?.name ?? null,
-    irMix: amp.getIrMix(),
-    level: strip.level,
-    pan: strip.pan,
-    mute: strip.mute,
-    solo: strip.solo,
-    preFx: captureEffectsChain(rig.preFx(chainId)),
-    postFx: captureEffectsChain(rig.postFx(chainId)),
   }
 }
 
@@ -51,7 +32,7 @@ export function capturePreset(
   id: string,
   name: string,
   rig: PresetRig,
-  store: UseBoundStore<StoreApi<DualChainState>>,
+  store: UseBoundStore<StoreApi<GraphState>>,
   meta: CapturePresetMeta = {},
 ): Preset {
   const state = store.getState()
@@ -63,9 +44,9 @@ export function capturePreset(
     favorite: meta.favorite ?? false,
     createdAt: meta.createdAt ?? now,
     updatedAt: now,
-    chainA: captureChain('A', rig, state),
-    chainB: captureChain('B', rig, state),
+    blocks: state.blocks.map((b) => captureBlock(rig, b)),
+    edges: state.edges.map((e) => ({ id: e.id, from: e.from, to: e.to })),
     masterLevel: state.masterLevel,
-    linked: state.linked,
+    masterMuted: state.masterMuted,
   }
 }

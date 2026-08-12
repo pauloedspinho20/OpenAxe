@@ -7,7 +7,13 @@
  */
 
 const DB_NAME = 'nam-web-studio'
-const DB_VERSION = 3
+/**
+ * v4: the preset schema changed from a fixed dual-chain shape (chainA/
+ * chainB) to a generic block/edge graph (see presets/types.ts) - old rows
+ * would just fail the new validation, so the presets store is wiped on
+ * upgrade rather than leaving unreadable rows sitting in it.
+ */
+const DB_VERSION = 4
 
 /** Blob store: downloaded .nam/IR files, keyed by an explicit id (see assetCache.ts). */
 export const STORE_ASSETS = 'assets'
@@ -19,13 +25,15 @@ export const STORE_LIBRARY = 'library'
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result
       if (!db.objectStoreNames.contains(STORE_ASSETS)) {
         db.createObjectStore(STORE_ASSETS)
       }
       if (!db.objectStoreNames.contains(STORE_PRESETS)) {
         db.createObjectStore(STORE_PRESETS, { keyPath: 'id' })
+      } else if (event.oldVersion < 4) {
+        request.transaction?.objectStore(STORE_PRESETS).clear()
       }
       if (!db.objectStoreNames.contains(STORE_LIBRARY)) {
         db.createObjectStore(STORE_LIBRARY, { keyPath: 'id' })

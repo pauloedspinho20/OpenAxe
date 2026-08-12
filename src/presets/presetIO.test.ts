@@ -10,34 +10,30 @@ function makePreset(overrides: Partial<Preset> = {}): Preset {
     favorite: true,
     createdAt: 100,
     updatedAt: 200,
-    chainA: {
-      modelId: 'm1',
-      modelName: 'Deluxe',
-      irId: 'ir1',
-      irName: 'Celestion',
-      irMix: 0.8,
-      level: 1,
-      pan: -1,
-      mute: false,
-      solo: false,
-      preFx: [{ kind: 'drive', bypass: false, mix: 1, params: { drive: 0.5 } }],
-      postFx: [],
-    },
-    chainB: {
-      modelId: null,
-      modelName: null,
-      irId: null,
-      irName: null,
-      irMix: 1,
-      level: 1,
-      pan: 1,
-      mute: false,
-      solo: false,
-      preFx: [],
-      postFx: [],
-    },
+    blocks: [
+      {
+        id: 'b1',
+        kind: 'amp',
+        row: 0,
+        col: 0,
+        params: {},
+        modelId: 'm1',
+        modelName: 'Deluxe',
+        irId: null,
+        irName: null,
+      },
+      {
+        id: 'b2',
+        kind: 'drive',
+        row: 0,
+        col: 1,
+        bypass: false,
+        params: { drive: 0.5 },
+      },
+    ],
+    edges: [{ id: 'e1', from: { blockId: 'b1', port: 0 }, to: { blockId: 'b2', port: 0 } }],
     masterLevel: 1,
-    linked: false,
+    masterMuted: false,
     ...overrides,
   }
 }
@@ -56,25 +52,31 @@ describe('presetToJson / presetFromJson', () => {
     expect(() => presetFromJson(JSON.stringify({ name: 'X' }))).toThrow(/'id'/)
   })
 
-  it('throws when a chain is missing required fields', () => {
-    const broken = { ...makePreset(), chainA: { level: 1 } }
-    expect(() => presetFromJson(JSON.stringify(broken))).toThrow(/chainA/)
+  it('throws when blocks is missing', () => {
+    const broken = { ...makePreset(), blocks: undefined }
+    expect(() => presetFromJson(JSON.stringify(broken))).toThrow(/'blocks'/)
   })
 
-  it('throws when an effect entry is missing required fields', () => {
+  it('throws when a block entry is missing required fields', () => {
     const preset = makePreset()
-    preset.chainA.preFx = [{ kind: 'drive' } as never]
-    expect(() => presetFromJson(JSON.stringify(preset))).toThrow(/bypass/)
+    preset.blocks = [{ kind: 'drive' } as never]
+    expect(() => presetFromJson(JSON.stringify(preset))).toThrow(/'id'/)
+  })
+
+  it('throws when an edge entry is missing required fields', () => {
+    const preset = makePreset()
+    preset.edges = [{ id: 'e1' } as never]
+    expect(() => presetFromJson(JSON.stringify(preset))).toThrow(/'from'/)
   })
 
   it('defaults missing optional fields (tags/favorite/timestamps) rather than throwing', () => {
     const minimal = {
       id: 'p1',
       name: 'Minimal',
-      chainA: makePreset().chainA,
-      chainB: makePreset().chainB,
+      blocks: makePreset().blocks,
+      edges: makePreset().edges,
       masterLevel: 1,
-      linked: false,
+      masterMuted: false,
     }
     const preset = presetFromJson(JSON.stringify(minimal))
     expect(preset.tags).toEqual([])

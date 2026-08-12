@@ -1,143 +1,126 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useDualChainStore } from '../state/dualChainStore'
+import { useGraphStore } from '../state/graphStore'
 import { capturePreset } from './capture'
-import type { Effect } from '../effects/Effect'
-import type { PresetAmpChain, PresetEffectsChain, PresetRig } from './types'
+import type { PresetBlock, PresetRig } from './types'
 
-function createMockAmp(overrides: Partial<PresetAmpChain> = {}): PresetAmpChain {
+function createMockBlock(overrides: Partial<PresetBlock> = {}): PresetBlock {
   return {
-    getLoadedModel: () => null,
-    getLoadedIr: () => null,
-    getIrMix: () => 0,
-    loadModel: async () => undefined,
-    unloadModel: async () => undefined,
-    loadIR: () => undefined,
-    clearIR: () => undefined,
-    ...overrides,
-  }
-}
-
-function createMockEffect(kind: Effect['kind'], overrides: Partial<Effect> = {}): Effect {
-  return {
-    kind,
-    name: kind,
-    inputNode: {} as unknown as AudioNode,
-    outputNode: {} as unknown as AudioNode,
-    setMix: () => undefined,
-    getMix: () => 1,
-    setBypass: () => undefined,
-    isBypassed: () => false,
+    kind: 'drive',
     getParams: () => ({}),
     setParams: () => undefined,
-    dispose: () => undefined,
     ...overrides,
   }
 }
 
-function createMockEffectsChain(effects: Effect[] = []): PresetEffectsChain {
+function createMockRig(blocks: Record<string, PresetBlock> = {}): PresetRig {
   return {
-    list: () => effects,
-    insert: () => undefined,
-    remove: () => undefined,
+    listBlockIds: () => Object.keys(blocks),
+    getBlock: (id) => blocks[id] ?? null,
+    addBlock: async () => '',
+    removeBlock: async () => undefined,
+    listEdgeIds: () => [],
+    connect: () => ({ ok: true }),
   }
 }
 
 describe('capturePreset', () => {
   beforeEach(() => {
-    useDualChainStore.setState({
-      chainA: { level: 0.8, pan: -1, mute: false, solo: false },
-      chainB: { level: 1, pan: 1, mute: true, solo: false },
-      masterLevel: 0.9,
-      linked: true,
-    })
+    useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
   })
 
   it('captures top-level metadata and store-level state', () => {
-    const rig: PresetRig = {
-      amp: () => createMockAmp(),
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
-
-    const preset = capturePreset('p1', 'My Tone', rig, useDualChainStore)
+    useGraphStore.setState({ masterLevel: 0.9, masterMuted: true })
+    const preset = capturePreset('p1', 'My Tone', createMockRig(), useGraphStore)
 
     expect(preset.id).toBe('p1')
     expect(preset.name).toBe('My Tone')
     expect(preset.masterLevel).toBe(0.9)
-    expect(preset.linked).toBe(true)
+    expect(preset.masterMuted).toBe(true)
     expect(preset.tags).toEqual([])
     expect(preset.favorite).toBe(false)
   })
 
-  it('captures each chain strip from the store, per chain', () => {
-    const rig: PresetRig = {
-      amp: () => createMockAmp(),
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
-
-    const preset = capturePreset('p1', 'My Tone', rig, useDualChainStore)
-
-    expect(preset.chainA).toMatchObject({ level: 0.8, pan: -1, mute: false, solo: false })
-    expect(preset.chainB).toMatchObject({ level: 1, pan: 1, mute: true, solo: false })
-  })
-
-  it('captures the loaded model/IR identity and mix per chain', () => {
-    const rig: PresetRig = {
-      amp: (chain) =>
-        createMockAmp({
-          getLoadedModel: () => (chain === 'A' ? { id: 'model-1', name: 'Deluxe' } : null),
-          getLoadedIr: () => (chain === 'A' ? { id: 'ir-1', name: 'Celestion' } : null),
-          getIrMix: () => (chain === 'A' ? 0.75 : 0),
-        }),
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
-
-    const preset = capturePreset('p1', 'My Tone', rig, useDualChainStore)
-
-    expect(preset.chainA.modelId).toBe('model-1')
-    expect(preset.chainA.modelName).toBe('Deluxe')
-    expect(preset.chainA.irId).toBe('ir-1')
-    expect(preset.chainA.irMix).toBe(0.75)
-    expect(preset.chainB.modelId).toBeNull()
-    expect(preset.chainB.irId).toBeNull()
-  })
-
-  it('captures each effect in the pre/post FX chains with its kind, bypass, mix, and params', () => {
-    const driveEffect = createMockEffect('drive', {
-      isBypassed: () => true,
-      getMix: () => 0.5,
-      getParams: () => ({ type: 'fuzz', drive: 0.9 }),
+  it('captures each block from the store with its position and live params', () => {
+    const rig = createMockRig({
+      b1: createMockBlock({ getParams: () => ({ drive: 0.8 }) }),
     })
-    const reverbEffect = createMockEffect('reverb', { getParams: () => ({ roomSize: 0.6 }) })
+    useGraphStore.setState({
+      blocks: [{ id: 'b1', kind: 'drive', row: 1, col: 2, params: {} }],
+    })
 
-    const rig: PresetRig = {
-      amp: () => createMockAmp(),
-      preFx: (chain) => createMockEffectsChain(chain === 'A' ? [driveEffect] : []),
-      postFx: (chain) => createMockEffectsChain(chain === 'A' ? [reverbEffect] : []),
-    }
+    const preset = capturePreset('p1', 'My Tone', rig, useGraphStore)
 
-    const preset = capturePreset('p1', 'My Tone', rig, useDualChainStore)
-
-    expect(preset.chainA.preFx).toEqual([
-      { kind: 'drive', bypass: true, mix: 0.5, params: { type: 'fuzz', drive: 0.9 } },
+    expect(preset.blocks).toEqual([
+      {
+        id: 'b1',
+        kind: 'drive',
+        row: 1,
+        col: 2,
+        params: { drive: 0.8 },
+        modelId: null,
+        modelName: null,
+        irId: null,
+        irName: null,
+      },
     ])
-    expect(preset.chainA.postFx).toEqual([
-      { kind: 'reverb', bypass: false, mix: 1, params: { roomSize: 0.6 } },
+  })
+
+  it('falls back to the store copy of params when the block is not live (e.g. engine off)', () => {
+    useGraphStore.setState({
+      blocks: [{ id: 'b1', kind: 'drive', row: 0, col: 0, params: { drive: 0.5 } }],
+    })
+
+    const preset = capturePreset('p1', 'My Tone', createMockRig(), useGraphStore)
+
+    expect(preset.blocks[0]?.params).toEqual({ drive: 0.5 })
+  })
+
+  it('captures bypass only when explicitly set on the stored block', () => {
+    useGraphStore.setState({
+      blocks: [
+        { id: 'b1', kind: 'drive', row: 0, col: 0, bypass: true, params: {} },
+        { id: 'b2', kind: 'eq', row: 0, col: 1, params: {} },
+      ],
+    })
+
+    const preset = capturePreset('p1', 'My Tone', createMockRig(), useGraphStore)
+
+    expect(preset.blocks[0]?.bypass).toBe(true)
+    expect(preset.blocks[1]?.bypass).toBeUndefined()
+  })
+
+  it('captures the loaded model/IR identity for Amp/Cab blocks', () => {
+    const rig = createMockRig({
+      amp1: createMockBlock({
+        kind: 'amp',
+        getLoadedModel: () => ({ id: 'model-1', name: 'Deluxe' }),
+      }),
+    })
+    useGraphStore.setState({
+      blocks: [{ id: 'amp1', kind: 'amp', row: 0, col: 0, params: {} }],
+    })
+
+    const preset = capturePreset('p1', 'My Tone', rig, useGraphStore)
+
+    expect(preset.blocks[0]?.modelId).toBe('model-1')
+    expect(preset.blocks[0]?.modelName).toBe('Deluxe')
+  })
+
+  it('captures edges verbatim from the store', () => {
+    useGraphStore.setState({
+      edges: [{ id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'b1', port: 0 } }],
+    })
+
+    const preset = capturePreset('p1', 'My Tone', createMockRig(), useGraphStore)
+
+    expect(preset.edges).toEqual([
+      { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'b1', port: 0 } },
     ])
-    expect(preset.chainB.preFx).toEqual([])
   })
 
   it('preserves tags/favorite/createdAt when re-capturing an existing preset', () => {
-    const rig: PresetRig = {
-      amp: () => createMockAmp(),
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
-
-    const preset = capturePreset('p1', 'My Tone', rig, useDualChainStore, {
+    const preset = capturePreset('p1', 'My Tone', createMockRig(), useGraphStore, {
       tags: ['ambient'],
       favorite: true,
       createdAt: 12345,

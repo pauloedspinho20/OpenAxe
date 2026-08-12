@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Knob } from './primitives/Knob'
-import type { Effect, EffectParams } from '../effects/Effect'
-import { EFFECT_PARAM_SCHEMAS, type ParamFieldSchema } from '../effects/paramSchema'
+import type { Block, EffectParams } from '../engine/blocks/Block'
+import { getParamSchema, type ParamFieldSchema } from '../effects/paramSchema'
+import { useGraphStore } from '../state/graphStore'
 import styles from './EffectParamsPanel.module.css'
 
 export interface EffectParamsPanelProps {
-  effect: Effect
+  blockId: string
+  block: Block
 }
 
 function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchema[]]> {
@@ -27,13 +29,20 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * `effect.getParams()` after each edit: the underlying AudioParams ramp via
  * `setTargetAtTime`, so reading `.value` back immediately would show a
  * stale, not-yet-settled number and make the knobs visually stutter.
+ *
+ * Changes go through graphStore, not straight to the live block: bindGraphRig
+ * re-applies every block's stored params on every reconcile pass (same
+ * "always re-apply, cheap and idempotent" philosophy as the old
+ * bindDualChainRig), so if a knob wrote directly to the engine instead, the
+ * very next unrelated store change (adding some other block, say) would
+ * silently revert it back to the store's stale copy.
  */
-export function EffectParamsPanel({ effect }: EffectParamsPanelProps) {
-  const [values, setValues] = useState<EffectParams>(() => effect.getParams())
-  const schema = EFFECT_PARAM_SCHEMAS[effect.kind]
+export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
+  const [values, setValues] = useState<EffectParams>(() => block.getParams())
+  const schema = getParamSchema(block.kind)
 
   const setParam = (key: string, value: number | string) => {
-    effect.setParams({ [key]: value })
+    useGraphStore.getState().setBlockParams(blockId, { [key]: value })
     setValues((prev) => ({ ...prev, [key]: value }))
   }
 

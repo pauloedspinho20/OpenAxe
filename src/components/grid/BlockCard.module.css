@@ -1,0 +1,119 @@
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  height: 100%;
+  min-width: 0;
+  padding: var(--sp-2);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel);
+  cursor: grab;
+  touch-action: none;
+  overflow: visible;
+}
+
+.card:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cardSelected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    var(--shadow-panel);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1);
+}
+
+.kindLabel {
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.bypassBtn {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.bypassBtnOn {
+  color: var(--led-on);
+}
+
+.removeBtn {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.removeBtn:hover {
+  color: var(--led-hot);
+}
+
+.jacks {
+  position: absolute;
+  top: var(--sp-2);
+  bottom: var(--sp-2);
+  left: -6px;
+  right: -6px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.jacksIn {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  height: 100%;
+}
+
+.jack {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--seam-strong);
+  cursor: crosshair;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.jack:hover {
+  border-color: var(--accent);
+}
+
+.status {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

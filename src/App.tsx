@@ -1,7 +1,9 @@
 import { useEffect, useMemo } from 'react'
-import { ChannelStrip } from './components/ChannelStrip'
+import { GridEditor } from './components/grid/GridEditor'
+import { BlockInspector } from './components/grid/BlockInspector'
 import { MasterSection } from './components/MasterSection'
-import { SignalFlow } from './components/SignalFlow'
+import { MasterUtility } from './components/MasterUtility'
+import { PresetManager } from './components/presets/PresetManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
 import { HardwareButton } from './components/primitives/HardwareButton'
 import { Led } from './components/primitives/Led'
@@ -13,8 +15,13 @@ import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authSt
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { useIOStore } from './state/ioStore'
-import type { ChainId } from './engine/DualChainRig'
-import type { ChainLoadTarget } from './tone3000/importService'
+import { useToast } from './state/toast'
+import { useEngineVersion } from './state/engineVersion'
+import { usePresetManager } from './state/presetManager'
+import { installFactoryPresets } from './presets/factoryPresets'
+import type { AmpBlock } from './engine/blocks/AmpBlock'
+import type { CabBlock } from './engine/blocks/CabBlock'
+import type { BlockLoadTarget } from './tone3000/importService'
 import type { LatencyHint } from './state/ioStore'
 import styles from './App.module.css'
 
@@ -37,6 +44,9 @@ const LATENCY_HINT: Record<LatencyHint, string> = {
   playback: 'Highest latency; safest for weak CPUs or many effects.',
 }
 
+/** Soft advisory only, not an enforced cap - see GraphRig.countActiveHeavyBlocks. */
+const HEAVY_BLOCK_SOFT_THRESHOLD = 6
+
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
@@ -45,20 +55,39 @@ function App() {
   const auth = useTone3000Auth()
   const io = useIOStore()
   const { outputSelectionSupported } = useAudioIO()
+  const toastMessage = useToast((s) => s.message)
+  // Re-render when the engine's live block state changes (model/IR loads) -
+  // graphStore doesn't track that, see engineVersion.ts.
+  useEngineVersion((s) => s.version)
+  const activeHeavyBlocks = engine.rig?.countActiveHeavyBlocks() ?? 0
+  const openPresetManager = usePresetManager((s) => s.openManager)
 
-  // Complete a Tone3000 OAuth redirect-back on launch, and refresh the local
-  // library metadata. Network-free when not configured.
+  // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
+  // library metadata, and make sure the bundled starter presets exist.
+  // Network-free when Tone3000 isn't configured.
   useEffect(() => {
     void handleTone3000CallbackOnLoad()
     void Tone3000Library.refresh()
+    void installFactoryPresets()
   }, [])
 
-  const tone3000Target: ChainLoadTarget | null = useMemo(() => {
+  const tone3000Target: BlockLoadTarget | null = useMemo(() => {
     if (!browser.target || !engine.rig) return null
-    const chain: ChainId = browser.target.chain
+    const block = engine.rig.getBlock(browser.target.blockId)
+    if (!block) return null
+    if (browser.target.slot === 'model') {
+      return {
+        loadModel: (json, info) => (block as AmpBlock).loadModel(json, undefined, info),
+        loadIR: () => {
+          throw new Error('This block is not a Cab block')
+        },
+      }
+    }
     return {
-      loadModel: (json, info) => engine.rig!.amp(chain).loadModel(json, undefined, info),
-      loadIR: (buffer, info) => engine.rig!.amp(chain).loadIR(buffer, 1, info),
+      loadModel: () => {
+        throw new Error('This block is not an Amp block')
+      },
+      loadIR: (buffer, info) => (block as CabBlock).loadIR(buffer, 1, info),
     }
   }, [browser.target, engine.rig])
 
@@ -79,6 +108,14 @@ function App() {
             {STATUS_LABEL[engine.status]}
             {isReady && !engine.micGranted ? ' · no mic' : ''}
           </span>
+          {isReady && activeHeavyBlocks > HEAVY_BLOCK_SOFT_THRESHOLD && (
+            <span
+              className={styles.connectionBadge}
+              title="No hard limit, but this many simultaneous amp models/cab IRs may strain your CPU"
+            >
+              {activeHeavyBlocks} amps/cabs active
+            </span>
+          )}
           <span className={styles.connectionBadge}>
             {auth.status === 'connected' ? 'TONE3000 ✓' : ''}
           </span>
@@ -98,6 +135,7 @@ function App() {
             </select>
           )}
           <Led on={isReady} color={engine.status === 'error' ? 'red' : 'green'} />
+          <HardwareButton label="Presets" onClick={openPresetManager} />
           <HardwareButton
             label={isReady ? 'Power off' : 'Power on'}
             active={isReady}
@@ -118,19 +156,17 @@ function App() {
             : `Mic error: ${io.micError}`}
         </div>
       )}
+      {toastMessage && <div className={styles.noticeBanner}>{toastMessage}</div>}
 
       <main className={styles.main}>
-        <SignalFlow />
+        <GridEditor rig={engine.rig} />
 
-        <div className={styles.chains}>
-          <ChannelStrip chain="A" rig={engine.rig} context={engine.context} />
-          <ChannelStrip chain="B" rig={engine.rig} context={engine.context} />
+        <BlockInspector rig={engine.rig} context={engine.context} />
+
+        <div className={styles.masterRow}>
+          <MasterUtility analyser={engine.analyser} />
+          <MasterSection outputSelectionSupported={outputSelectionSupported} />
         </div>
-
-        <MasterSection
-          analyser={engine.analyser}
-          outputSelectionSupported={outputSelectionSupported}
-        />
       </main>
 
       <footer className={styles.footer}>
@@ -154,6 +190,7 @@ function App() {
       </footer>
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
+      <PresetManager rig={engine.rig} context={engine.context} />
     </div>
   )
 }

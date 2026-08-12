@@ -1,18 +1,16 @@
 /**
- * Tone3000 feature is wired into the amp/cab "screens" of both channel
- * strips. This store tracks which chain + slot an import is targeted at, so
- * the modal can decide how to present results (model vs IR) and where to
- * route them on import. Kept out of the app shell (#/route) state on purpose:
- * it's a transient UI concern.
+ * Tone3000 feature is wired into the amp/cab "screens" of grid blocks. This
+ * store tracks which block + slot an import is targeted at, so the modal
+ * can decide how to present results (model vs IR) and where to route them
+ * on import. Kept out of the app shell (#/route) state on purpose: it's a
+ * transient UI concern.
  */
 import { create } from 'zustand'
-import type { ChainId } from '../engine/DualChainRig'
 import type { Tone3000Slot } from './types'
 
 export interface BrowserTarget {
-  chain: ChainId
+  blockId: string
   slot: Tone3000Slot
-  /** Current name shown on the screen, if one is loaded (e.g. "NO MODEL LOADED"). */
 }
 
 export interface Tone3000BrowserState {

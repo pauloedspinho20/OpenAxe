@@ -1,51 +1,47 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useDualChainStore } from '../state/dualChainStore'
-import type { Effect } from '../effects/Effect'
-import type {
-  ChainPresetData,
-  Preset,
-  PresetAmpChain,
-  PresetEffectsChain,
-  PresetRig,
-} from './types'
+import { useGraphStore } from '../state/graphStore'
+import type { Preset, PresetBlock, PresetRig } from './types'
 
 const { getCachedAssetMock } = vi.hoisted(() => ({ getCachedAssetMock: vi.fn() }))
 vi.mock('../engine/assetCache', () => ({ getCachedAsset: getCachedAssetMock }))
 
-const { createEffectMock } = vi.hoisted(() => ({ createEffectMock: vi.fn() }))
-vi.mock('../effects/effectRegistry', () => ({ createEffect: createEffectMock }))
-
 const { applyPreset } = await import('./apply')
 
-function createMockAmp(): PresetAmpChain & {
-  loadModel: ReturnType<typeof vi.fn<PresetAmpChain['loadModel']>>
-  unloadModel: ReturnType<typeof vi.fn<PresetAmpChain['unloadModel']>>
-  loadIR: ReturnType<typeof vi.fn<PresetAmpChain['loadIR']>>
-  clearIR: ReturnType<typeof vi.fn<PresetAmpChain['clearIR']>>
-} {
+function createMockBlock(overrides: Partial<PresetBlock> = {}): PresetBlock {
   return {
+    kind: 'drive',
+    getParams: () => ({}),
+    setParams: vi.fn(),
+    setBypass: vi.fn(),
     getLoadedModel: () => null,
-    getLoadedIr: () => null,
-    getIrMix: () => 0,
     loadModel: vi.fn(async () => undefined),
     unloadModel: vi.fn(async () => undefined),
+    getLoadedIr: () => null,
     loadIR: vi.fn(),
     clearIR: vi.fn(),
+    ...overrides,
   }
 }
 
-function createMockEffectsChain(): PresetEffectsChain & {
-  insert: ReturnType<typeof vi.fn<PresetEffectsChain['insert']>>
-  remove: ReturnType<typeof vi.fn<PresetEffectsChain['remove']>>
+function createMockRig(initial: Record<string, PresetBlock> = {}): PresetRig & {
+  blocks: Record<string, PresetBlock>
 } {
-  const effects: Effect[] = []
+  const blocks = { ...initial }
   return {
-    list: () => effects,
-    insert: vi.fn((effect: Effect) => {
-      effects.push(effect)
+    blocks,
+    listBlockIds: () => Object.keys(blocks),
+    getBlock: (id) => blocks[id] ?? null,
+    addBlock: vi.fn(async (kind, _row, _col, id) => {
+      const blockId = id ?? `${kind}-generated`
+      blocks[blockId] = createMockBlock({ kind })
+      return blockId
     }),
-    remove: vi.fn(),
+    removeBlock: vi.fn(async (id) => {
+      delete blocks[id]
+    }),
+    listEdgeIds: () => [],
+    connect: vi.fn(() => ({ ok: true })),
   }
 }
 
@@ -53,23 +49,6 @@ function createMockContext(): AudioContext {
   return {
     decodeAudioData: vi.fn(async () => ({ duration: 1 }) as AudioBuffer),
   } as unknown as AudioContext
-}
-
-function emptyChainData(overrides: Partial<ChainPresetData> = {}): ChainPresetData {
-  return {
-    modelId: null,
-    modelName: null,
-    irId: null,
-    irName: null,
-    irMix: 1,
-    level: 1,
-    pan: 0,
-    mute: false,
-    solo: false,
-    preFx: [],
-    postFx: [],
-    ...overrides,
-  }
 }
 
 function emptyPreset(overrides: Partial<Preset> = {}): Preset {
@@ -80,10 +59,10 @@ function emptyPreset(overrides: Partial<Preset> = {}): Preset {
     favorite: false,
     createdAt: 0,
     updatedAt: 0,
-    chainA: emptyChainData(),
-    chainB: emptyChainData(),
+    blocks: [],
+    edges: [],
     masterLevel: 1,
-    linked: false,
+    masterMuted: false,
     ...overrides,
   }
 }
@@ -91,122 +70,136 @@ function emptyPreset(overrides: Partial<Preset> = {}): Preset {
 describe('applyPreset', () => {
   beforeEach(() => {
     getCachedAssetMock.mockReset()
-    createEffectMock.mockReset()
-    useDualChainStore.setState({
-      chainA: { level: 1, pan: -1, mute: false, solo: false },
-      chainB: { level: 1, pan: 1, mute: false, solo: false },
-      masterLevel: 1,
-      linked: false,
-    })
+    useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
   })
 
-  it('applies top-level store state (levels, pans, mute/solo, master, linked)', async () => {
-    const rig: PresetRig = {
-      amp: () => createMockAmp(),
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
-    const preset = emptyPreset({
-      chainA: emptyChainData({ level: 0.4, pan: -0.5, mute: true }),
-      masterLevel: 0.6,
-      linked: true,
-    })
+  it('clears every existing block on the rig before rebuilding', async () => {
+    const rig = createMockRig({ old1: createMockBlock() })
 
-    await applyPreset(createMockContext(), preset, rig, useDualChainStore)
+    await applyPreset(createMockContext(), emptyPreset(), rig, useGraphStore)
 
-    const state = useDualChainStore.getState()
-    expect(state.chainA).toMatchObject({ level: 0.4, pan: -0.5, mute: true })
-    expect(state.masterLevel).toBe(0.6)
-    expect(state.linked).toBe(true)
+    expect(rig.removeBlock).toHaveBeenCalledWith('old1')
   })
 
-  it('loads a cached model/IR by id and reports none missing when both are cached', async () => {
-    const amp = createMockAmp()
-    getCachedAssetMock.mockImplementation(async (id: string) => ({
-      text: async () => `{"id":"${id}"}`,
-      arrayBuffer: async () => new ArrayBuffer(0),
-    }))
-    const rig: PresetRig = {
-      amp: () => amp,
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
+  it('adds every preset block at its saved position and pushes its params', async () => {
+    const rig = createMockRig()
     const preset = emptyPreset({
-      chainA: emptyChainData({
-        modelId: 'model-1',
-        modelName: 'Deluxe',
-        irId: 'ir-1',
-        irName: 'Cab',
-      }),
+      blocks: [{ id: 'b1', kind: 'drive', row: 1, col: 2, params: { drive: 0.8 } }],
     })
 
-    const result = await applyPreset(createMockContext(), preset, rig, useDualChainStore)
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.addBlock).toHaveBeenCalledWith('drive', 1, 2, 'b1')
+    expect(rig.blocks.b1?.setParams).toHaveBeenCalledWith({ drive: 0.8 })
+  })
+
+  it('sets bypass on the new block only when the preset specifies it', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      blocks: [{ id: 'b1', kind: 'drive', row: 0, col: 0, bypass: true, params: {} }],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.blocks.b1?.setBypass).toHaveBeenCalledWith(true)
+  })
+
+  it('connects every preset edge with its saved id', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      blocks: [
+        { id: 'b1', kind: 'drive', row: 0, col: 0, params: {} },
+        { id: 'b2', kind: 'eq', row: 0, col: 1, params: {} },
+      ],
+      edges: [{ id: 'e1', from: { blockId: 'b1', port: 0 }, to: { blockId: 'b2', port: 0 } }],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.connect).toHaveBeenCalledWith(
+      { blockId: 'b1', port: 0 },
+      { blockId: 'b2', port: 0 },
+      'e1',
+    )
+  })
+
+  it('loads a cached model by id and reports none missing when cached', async () => {
+    getCachedAssetMock.mockResolvedValue({ text: async () => '{"id":"model-1"}' })
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      blocks: [
+        {
+          id: 'amp1',
+          kind: 'amp',
+          row: 0,
+          col: 0,
+          params: {},
+          modelId: 'model-1',
+          modelName: 'Deluxe',
+        },
+      ],
+    })
+
+    const result = await applyPreset(createMockContext(), preset, rig, useGraphStore)
 
     expect(result.missingAssets).toEqual([])
-    expect(amp.loadModel).toHaveBeenCalledWith('{"id":"model-1"}', undefined, {
+    expect(rig.blocks.amp1?.loadModel).toHaveBeenCalledWith('{"id":"model-1"}', undefined, {
       id: 'model-1',
       name: 'Deluxe',
     })
-    expect(amp.loadIR).toHaveBeenCalled()
   })
 
-  it('reports a missing asset instead of throwing when a referenced model/IR is not cached', async () => {
+  it('reports a missing asset instead of throwing when a referenced model is not cached', async () => {
     getCachedAssetMock.mockResolvedValue(null)
-    const amp = createMockAmp()
-    const rig: PresetRig = {
-      amp: () => amp,
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
+    const rig = createMockRig()
     const preset = emptyPreset({
-      chainA: emptyChainData({ modelId: 'missing-model', modelName: 'Ghost Amp' }),
+      blocks: [
+        {
+          id: 'amp1',
+          kind: 'amp',
+          row: 0,
+          col: 0,
+          params: {},
+          modelId: 'missing',
+          modelName: 'Ghost',
+        },
+      ],
     })
 
-    const result = await applyPreset(createMockContext(), preset, rig, useDualChainStore)
+    const result = await applyPreset(createMockContext(), preset, rig, useGraphStore)
 
     expect(result.missingAssets).toEqual([
-      { chain: 'A', kind: 'model', id: 'missing-model', name: 'Ghost Amp' },
+      { blockId: 'amp1', kind: 'model', id: 'missing', name: 'Ghost' },
     ])
-    expect(amp.loadModel).not.toHaveBeenCalled()
+    expect(rig.blocks.amp1?.loadModel).not.toHaveBeenCalled()
   })
 
-  it('unloads the model/IR when the preset has none, rather than leaving the previous one', async () => {
-    const amp = createMockAmp()
-    const rig: PresetRig = {
-      amp: () => amp,
-      preFx: () => createMockEffectsChain(),
-      postFx: () => createMockEffectsChain(),
-    }
-
-    await applyPreset(createMockContext(), emptyPreset(), rig, useDualChainStore)
-
-    expect(amp.unloadModel).toHaveBeenCalled()
-    expect(amp.clearIR).toHaveBeenCalled()
-  })
-
-  it('rebuilds the FX chains: disposes old effects and inserts new ones from saved params', async () => {
-    const oldEffect = { dispose: vi.fn() } as unknown as Effect
-    const preFx = createMockEffectsChain()
-    preFx.list = () => [oldEffect]
-    const newEffect = { name: 'Reverb', setBypass: vi.fn(), setMix: vi.fn() } as unknown as Effect
-    createEffectMock.mockResolvedValue(newEffect)
-
-    const rig: PresetRig = {
-      amp: () => createMockAmp(),
-      preFx: () => preFx,
-      postFx: () => createMockEffectsChain(),
-    }
+  it('unloads the model when the preset has none, rather than leaving the previous one', async () => {
+    const rig = createMockRig()
     const preset = emptyPreset({
-      chainA: emptyChainData({
-        preFx: [{ kind: 'reverb', bypass: true, mix: 0.3, params: { roomSize: 0.5 } }],
-      }),
+      blocks: [{ id: 'amp1', kind: 'amp', row: 0, col: 0, params: {} }],
     })
 
-    await applyPreset(createMockContext(), preset, rig, useDualChainStore)
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
 
-    expect(preFx.remove).toHaveBeenCalledWith(oldEffect)
-    expect(oldEffect.dispose).toHaveBeenCalled()
-    expect(createEffectMock).toHaveBeenCalledWith(expect.anything(), 'reverb', { roomSize: 0.5 })
-    expect(preFx.insert).toHaveBeenCalledWith(newEffect)
+    expect(rig.blocks.amp1?.unloadModel).toHaveBeenCalled()
+  })
+
+  it('syncs graphStore to the rebuilt graph so future reconciles are no-ops', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      blocks: [{ id: 'b1', kind: 'drive', row: 0, col: 0, params: { drive: 0.8 } }],
+      masterLevel: 0.6,
+      masterMuted: true,
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    const state = useGraphStore.getState()
+    expect(state.blocks).toEqual([
+      { id: 'b1', kind: 'drive', row: 0, col: 0, params: { drive: 0.8 } },
+    ])
+    expect(state.masterLevel).toBe(0.6)
+    expect(state.masterMuted).toBe(true)
   })
 })

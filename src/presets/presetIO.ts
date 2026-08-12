@@ -4,7 +4,7 @@
  * (testable without a browser) and thin DOM-triggering helpers for the
  * actual file download/upload (the UI/UX epic wires these to buttons).
  */
-import type { ChainPresetData, EffectPresetData, Preset } from './types'
+import type { PresetBlockData, PresetEdgeData, Preset } from './types'
 
 export function presetToJson(preset: Preset): string {
   return JSON.stringify(preset, null, 2)
@@ -35,11 +35,21 @@ function validatePreset(value: unknown): Preset {
   if (typeof preset.masterLevel !== 'number') {
     throw new Error("Preset is missing required number field 'masterLevel'")
   }
-  if (typeof preset.linked !== 'boolean') {
-    throw new Error("Preset is missing required boolean field 'linked'")
+  if (typeof preset.masterMuted !== 'boolean') {
+    throw new Error("Preset is missing required boolean field 'masterMuted'")
   }
-  validateChain(preset.chainA, 'chainA')
-  validateChain(preset.chainB, 'chainB')
+  if (!Array.isArray(preset.blocks)) {
+    throw new Error("Preset is missing required array field 'blocks'")
+  }
+  for (const block of preset.blocks) {
+    validateBlock(block)
+  }
+  if (!Array.isArray(preset.edges)) {
+    throw new Error("Preset is missing required array field 'edges'")
+  }
+  for (const edge of preset.edges) {
+    validateEdge(edge)
+  }
 
   return {
     id: preset.id as string,
@@ -48,56 +58,53 @@ function validatePreset(value: unknown): Preset {
     favorite: typeof preset.favorite === 'boolean' ? preset.favorite : false,
     createdAt: typeof preset.createdAt === 'number' ? preset.createdAt : Date.now(),
     updatedAt: typeof preset.updatedAt === 'number' ? preset.updatedAt : Date.now(),
-    chainA: preset.chainA as ChainPresetData,
-    chainB: preset.chainB as ChainPresetData,
+    blocks: preset.blocks as PresetBlockData[],
+    edges: preset.edges as PresetEdgeData[],
     masterLevel: preset.masterLevel as number,
-    linked: preset.linked as boolean,
+    masterMuted: preset.masterMuted as boolean,
   }
 }
 
-function validateChain(value: unknown, fieldName: string): asserts value is ChainPresetData {
+function validateBlock(value: unknown): asserts value is PresetBlockData {
   if (typeof value !== 'object' || value === null) {
-    throw new Error(`Preset is missing required object field '${fieldName}'`)
+    throw new Error('Preset.blocks entries must be objects')
   }
-  const chain = value as Record<string, unknown>
-  const requiredNumbers = ['irMix', 'level', 'pan']
-  for (const key of requiredNumbers) {
-    if (typeof chain[key] !== 'number') {
-      throw new Error(`Preset.${fieldName} is missing required number field '${key}'`)
-    }
+  const block = value as Record<string, unknown>
+  if (typeof block.id !== 'string') {
+    throw new Error("Preset.blocks entry is missing required string field 'id'")
   }
-  const requiredBooleans = ['mute', 'solo']
-  for (const key of requiredBooleans) {
-    if (typeof chain[key] !== 'boolean') {
-      throw new Error(`Preset.${fieldName} is missing required boolean field '${key}'`)
-    }
+  if (typeof block.kind !== 'string') {
+    throw new Error("Preset.blocks entry is missing required string field 'kind'")
   }
-  for (const key of ['preFx', 'postFx']) {
-    if (!Array.isArray(chain[key])) {
-      throw new Error(`Preset.${fieldName} is missing required array field '${key}'`)
-    }
-    for (const effect of chain[key] as unknown[]) {
-      validateEffect(effect, `${fieldName}.${key}`)
-    }
+  if (typeof block.row !== 'number' || typeof block.col !== 'number') {
+    throw new Error("Preset.blocks entry is missing required number fields 'row'/'col'")
+  }
+  if (typeof block.params !== 'object' || block.params === null) {
+    throw new Error("Preset.blocks entry is missing required object field 'params'")
   }
 }
 
-function validateEffect(value: unknown, fieldName: string): asserts value is EffectPresetData {
+function validateEdge(value: unknown): asserts value is PresetEdgeData {
   if (typeof value !== 'object' || value === null) {
-    throw new Error(`${fieldName} entries must be objects`)
+    throw new Error('Preset.edges entries must be objects')
   }
-  const effect = value as Record<string, unknown>
-  if (typeof effect.kind !== 'string') {
-    throw new Error(`${fieldName} entry is missing required string field 'kind'`)
+  const edge = value as Record<string, unknown>
+  if (typeof edge.id !== 'string') {
+    throw new Error("Preset.edges entry is missing required string field 'id'")
   }
-  if (typeof effect.bypass !== 'boolean') {
-    throw new Error(`${fieldName} entry is missing required boolean field 'bypass'`)
+  validateJack(edge.from, 'from')
+  validateJack(edge.to, 'to')
+}
+
+function validateJack(value: unknown, fieldName: string): void {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`Preset.edges entry is missing required object field '${fieldName}'`)
   }
-  if (typeof effect.mix !== 'number') {
-    throw new Error(`${fieldName} entry is missing required number field 'mix'`)
-  }
-  if (typeof effect.params !== 'object' || effect.params === null) {
-    throw new Error(`${fieldName} entry is missing required object field 'params'`)
+  const jack = value as Record<string, unknown>
+  if (typeof jack.blockId !== 'string' || typeof jack.port !== 'number') {
+    throw new Error(
+      `Preset.edges entry's '${fieldName}' is missing required fields 'blockId'/'port'`,
+    )
   }
 }
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NamEngine } from 'neural-amp-modeler-wasm/engine'
-import { DualChainRig } from '../engine/DualChainRig'
-import { bindDualChainRig } from '../engine/bindDualChainRig'
-import { useDualChainStore } from '../state/dualChainStore'
+import { GraphRig } from '../engine/GraphRig'
+import { bindGraphRig } from '../engine/bindGraphRig'
+import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
@@ -10,7 +10,7 @@ export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
 export interface AudioEngineState {
   status: EngineStatus
   error: string | null
-  rig: DualChainRig | null
+  rig: GraphRig | null
   context: AudioContext | null
   analyser: AnalyserNode | null
   micGranted: boolean
@@ -35,7 +35,7 @@ export function useAudioEngine() {
   const startingRef = useRef(false)
   const unbindRef = useRef<(() => void) | null>(null)
   const contextRef = useRef<AudioContext | null>(null)
-  const rigRef = useRef<DualChainRig | null>(null)
+  const rigRef = useRef<GraphRig | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const channelRouterRef = useRef<AudioNode[]>([])
@@ -57,6 +57,18 @@ export function useAudioEngine() {
     if (state.status !== 'ready' || connectingRef.current) return
     void connectMic()
   }, [inputDeviceId, inputChannel, state.status])
+
+  // Re-route to the selected output device live, without recreating the context.
+  const outputDeviceId = useIOStore((s) => s.outputDeviceId)
+  useEffect(() => {
+    const ctx = contextRef.current
+    if (state.status !== 'ready' || !ctx || !('setSinkId' in AudioContext.prototype)) return
+    void (ctx as AudioContext & { setSinkId(id: string): Promise<void> })
+      .setSinkId(outputDeviceId)
+      .catch(() => {
+        // setSinkId can fail if the device disappeared — continue with current output.
+      })
+  }, [outputDeviceId, state.status])
 
   // ── Mic connection ──────────────────────────────────────────────────────
 
@@ -110,13 +122,14 @@ export function useAudioEngine() {
       const trim = new GainNode(ctx, { gain: io.inputGain })
       trimRef.current = trim
       routerOut.connect(trim)
-      rig.connectInput(trim, 'mono-to-both')
+      rig.connectInput(trim)
 
       const micGranted = true
       setState((s) => (s.context === ctx ? { ...s, micGranted } : s))
     } catch (micError: unknown) {
       const msg = micError instanceof Error ? micError.message : String(micError)
       useIOStore.getState().setMicError(msg)
+      setState((s) => (s.context === ctx ? { ...s, micGranted: false } : s))
       console.warn('[useAudioEngine] microphone unavailable:', msg)
     } finally {
       connectingRef.current = false
@@ -134,22 +147,11 @@ export function useAudioEngine() {
       const io = useIOStore.getState()
       const context = new AudioContext({ latencyHint: io.latencyHint })
       const engine = await NamEngine.attach(context)
-      const rig = await DualChainRig.create(context, engine)
+      const rig = await GraphRig.create(context, engine)
       contextRef.current = context
       rigRef.current = rig
 
-      // Wire the output device if supported and a specific one is selected.
-      if (io.outputDeviceId && 'setSinkId' in AudioContext.prototype) {
-        try {
-          await (context as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(
-            io.outputDeviceId,
-          )
-        } catch {
-          // setSinkId can fail if the device disappears between enumerate and now — continue with default.
-        }
-      }
-
-      unbindRef.current = bindDualChainRig(useDualChainStore, rig)
+      unbindRef.current = bindGraphRig(useGraphStore, rig)
 
       const analyser = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
       rig.outputNode.connect(analyser)
