@@ -37,8 +37,10 @@ Input (mic/interface) ┤                                                       
 - Chains default hard-panned left/right (that's the point of running two amp voicings). A `linked`
   toggle lets level/mute mirror identically and pan mirror symmetrically across both chains, for
   fast A/B tone matching without collapsing the stereo width — see `src/state/dualChainStore.ts`.
-- Effects are Web Audio / WASM DSP nodes placed before and after the amp block per chain (not yet
-  built — see the Effects Suite epic).
+- Effects are native Web Audio DSP nodes placed before and after the amp block per chain, chained
+  via `EffectsChain` — 10 effects across noise gate/dynamics/EQ/drive/modulation/delay/reverb are
+  built; see [src/effects/README.md](./src/effects/README.md) (including why they're all
+  original/native rather than ported from a specific pedal/plugin project).
 - [Tone3000](https://www.tone3000.com/api) integration lets users browse and import `.nam` models
   and IRs directly into the local preset library.
 - A pitch-detection tuner (Pitchfinder.js) runs independently of the signal chains.
@@ -83,6 +85,8 @@ npm run dev
 
 ## License
 
-[GPLv3](./LICENSE) — chosen so the project can incorporate high-quality GPL-licensed audio DSP
-(e.g. Dragonfly Reverb, ChowDSP) alongside MIT/permissive sources. See
-[CONTRIBUTING.md](./CONTRIBUTING.md) for what that means when contributing new effects.
+[GPLv3](./LICENSE) — keeps this and any derivative work free and open. The built-in effects suite
+turned out to need no GPL-licensed DSP at all (see
+[src/effects/README.md](./src/effects/README.md)), but GPLv3 still leaves that door open for future
+contributions that do. See [CONTRIBUTING.md](./CONTRIBUTING.md) for what that means when
+contributing new effects.
