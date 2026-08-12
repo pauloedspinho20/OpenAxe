@@ -1,0 +1,49 @@
+.panel {
+  position: relative;
+  background: linear-gradient(180deg, var(--panel-raised) 0%, var(--panel) 100%);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-panel);
+  padding: var(--sp-4) var(--sp-4) var(--sp-5);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--seam);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.screw {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #4a4a48 0%, #0a0a0a 100%);
+  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.06);
+}
+
+.tl {
+  top: 8px;
+  left: 8px;
+}
+.tr {
+  top: 8px;
+  right: 8px;
+}
+.bl {
+  bottom: 8px;
+  left: 8px;
+}
+.br {
+  bottom: 8px;
+  right: 8px;
+}

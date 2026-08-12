@@ -48,6 +48,10 @@ Input (mic/interface) ┤                                                       
   and IRs directly into the local preset library.
 - A pitch-detection tuner (Pitchfinder.js) runs independently of the signal chains.
 - A service worker caches the app shell and downloaded models/IRs for offline use.
+- The UI is styled as hardware, not a website — a fixed dark chassis theme, custom SVG knobs and a
+  real fader instead of browser form controls, one signature accent color. See
+  [src/components/README.md](./src/components/README.md) for the design system and what's still a
+  placeholder (effect browsing UI, onboarding, per-chain meters).
 
 ## Roadmap
 
