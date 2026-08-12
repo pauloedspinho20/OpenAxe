@@ -23,15 +23,22 @@ installed as a PWA.
 ## Architecture overview
 
 ```
-Input (mic/interface) ──┬─► Chain A: [FX] → [NAM amp model] → [IR cab] → [FX] ─┐
-                          │                                                     ├─► Stereo mixer → Output
-                          └─► Chain B: [FX] → [NAM amp model] → [IR cab] → [FX] ─┘
+                    ┌─► Chain A: [FX] → [NAM amp model] → [IR cab] → [FX] → [level/pan/mute] ─┐
+Input (mic/interface) ┤                                                                        ├─► Master bus → Output
+                    └─► Chain B: [FX] → [NAM amp model] → [IR cab] → [FX] → [level/pan/mute] ─┘
 ```
 
-- Each chain runs its own NAM WASM engine instance inside an `AudioWorklet` (real-time audio
-  thread, no `SharedArrayBuffer`/COOP-COEP required — see the
-  [neural-amp-modeler-wasm](https://github.com/tone-3000/neural-amp-modeler-wasm) architecture).
-- Effects are Web Audio / WASM DSP nodes placed before and after the amp block per chain.
+- Both chains' NAM amp models run inside the **same** `AudioWorklet`/wasm module (one `NamEngine`
+  per `AudioContext`, shared) — no `SharedArrayBuffer`/COOP-COEP required, and running the second
+  chain doesn't double the wasm memory footprint. See
+  [src/engine/README.md](./src/engine/README.md) for the full breakdown of `AmpCabChain` and
+  `DualChainRig`.
+- Cabinet simulation is a native `ConvolverNode` per chain, not part of the wasm engine.
+- Chains default hard-panned left/right (that's the point of running two amp voicings). A `linked`
+  toggle lets level/mute mirror identically and pan mirror symmetrically across both chains, for
+  fast A/B tone matching without collapsing the stereo width — see `src/state/dualChainStore.ts`.
+- Effects are Web Audio / WASM DSP nodes placed before and after the amp block per chain (not yet
+  built — see the Effects Suite epic).
 - [Tone3000](https://www.tone3000.com/api) integration lets users browse and import `.nam` models
   and IRs directly into the local preset library.
 - A pitch-detection tuner (Pitchfinder.js) runs independently of the signal chains.

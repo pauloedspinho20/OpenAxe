@@ -74,12 +74,86 @@ Tests run this module under the Vitest `node` environment (see the `@vitest-envi
 docblock in `assetCache.test.ts`) with `fake-indexeddb`, not jsdom — jsdom's `Blob` doesn't survive
 `fake-indexeddb`'s structured clone with its prototype intact, while Node's native `Blob` does.
 
+## `DualChainRig`
+
+Two `AmpCabChain`s plus a stereo channel strip per chain (level, pan, mute), summed to a master
+bus. This is the dual-chain rig itself: `input -> [chain A + strip A] -\`, `input -> [chain B +
+strip B] -/` `-> master -> output`.
+
+```ts
+import { NamEngine } from 'neural-amp-modeler-wasm/engine'
+import { DualChainRig } from '@/engine/DualChainRig'
+
+const context = new AudioContext()
+const engine = await NamEngine.attach(context)
+const rig = await DualChainRig.create(context, engine) // chain A pans hard left, B hard right
+
+await rig.amp('A').loadModel(ampAJson)
+await rig.amp('B').loadModel(ampBJson)
+rig.amp('A').loadIR(cabAIr)
+rig.amp('B').loadIR(cabBIr)
+
+rig.connectInput(instrumentSource, 'mono-to-both') // or 'stereo-split' for a stereo source
+rig.outputNode.connect(context.destination)
+```
+
+- **Input routing** (`connectInput`): `mono-to-both` duplicates a single source to both chains —
+  the common case, one instrument through two different amp voicings for stereo width.
+  `stereo-split` splits a stereo source's L/R channels, one per chain, for a genuinely stereo
+  source (e.g. two mic'd amps, a stereo pickup). This is a routing decision, not a device/hardware
+  one — actual input device selection is the Audio I/O Management epic's job; this just says what
+  to do with whatever source node that epic hands over.
+- **Per-chain controls**: `setLevel`, `setPan`, `setEffectivelyMuted` (already-resolved mute, see
+  below), `setMasterLevel`. These are the raw imperative Web Audio calls — for reactive state, use
+  the store (next section).
+- Chains default hard-panned left/right because that's the point of running two amp models at
+  once. Nothing stops a caller from narrowing the pan via `setPan`.
+
+## `dualChainStore` + `bindDualChainRig`
+
+`useDualChainStore` (Zustand, `src/state/dualChainStore.ts`) is the reactive source of truth for
+the rig's channel-strip state: `chainA`/`chainB` (`level`, `pan`, `mute`, `solo`), `masterLevel`,
+and a `linked` toggle. It's pure state/logic with no Web Audio dependency, so it's fully unit
+tested without a real `AudioContext`.
+
+**Solo behavior**: soloing a chain doesn't set the other chain's `mute` flag — it's resolved via
+`isEffectivelyMuted(chain)`, which returns true if that chain is explicitly muted, or if the
+_other_ chain is soloed and this one isn't. Soloing both chains cancels out (neither is silenced).
+
+**Link behavior** (mirroring "for fast A/B tone matching" per the epic): what "mirror" means
+differs by control, because the two chains are intentionally asymmetric (opposite pan) by default:
+
+- `level` and `mute` mirror **identically** — you generally want both chains at the same loudness.
+- `pan` mirrors **symmetrically** (setting A's pan to `p` sets B's to `-p`) — keeps the stereo
+  image centered while widening/narrowing both sides together, instead of collapsing it to mono.
+- `solo` is **never** mirrored — soloing is inherently "just this one."
+
+`bindDualChainRig(store, rig)` subscribes the store to a `DualChainRig` (or any object matching its
+narrow `DualChainRigControls` interface — tests pass a plain mock, no `AudioContext` needed) and
+keeps the rig's live audio params in sync with store changes. Returns an unsubscribe function.
+
+```ts
+import { useDualChainStore } from '@/state/dualChainStore'
+import { bindDualChainRig } from '@/engine/bindDualChainRig'
+
+const unbind = bindDualChainRig(useDualChainStore, rig)
+// ...
+unbind() // when disposing the rig
+```
+
 ## Verified manually
 
-Ran two concurrent `AmpCabChain` instances (same engine/context) each loading a real `.nam` model
-and IR, driven by independent oscillators for 2 seconds. Both models loaded in ~70 ms combined, no
-errors, no audio dropouts. Confirms the "one wasm module, N nodes" design holds up with 2 chains
-running at once. (Chrome's `performance.memory` heap-delta reading in that same run wasn't
-sensitive enough to be a meaningful memory benchmark on its own — the upstream project's own
-figures, 50-75 MB peak per `AudioWorkletGlobalScope` for the whole engine regardless of node count,
-are the more useful number here.)
+Two rounds of manual browser verification (temporary harnesses, removed after use — search the
+git history for `DevHarness.tsx` if you need to reproduce one):
+
+1. Two concurrent `AmpCabChain` instances (same engine/context), each loading a real `.nam` model
+   and IR, driven by independent oscillators for 2 seconds. Both models loaded in ~70 ms combined,
+   no errors, no audio dropouts. Confirms the "one wasm module, N nodes" design holds with 2 chains
+   running at once. (Chrome's `performance.memory` heap-delta reading in that run wasn't sensitive
+   enough to be a meaningful memory benchmark on its own — the upstream project's own figures,
+   50-75 MB peak per `AudioWorkletGlobalScope` for the whole engine regardless of node count, are
+   the more useful number here.)
+2. A full `DualChainRig` + store binding: both chains loaded, mono source routed to both
+   (`mono-to-both`), soloing chain A while it's playing (correctly silenced B), then linking and
+   panning A from hard-left to center mid-playback (B mirrored to center too, confirming the
+   symmetric-pan link behavior) — no errors throughout.
