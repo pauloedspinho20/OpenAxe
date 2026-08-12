@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local-only test assets (third-party sample .nam/.wav files, not ours to redistribute)
+public/dev-test/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
