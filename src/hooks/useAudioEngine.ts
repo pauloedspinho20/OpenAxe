@@ -34,18 +34,96 @@ export function useAudioEngine() {
   const [state, setState] = useState<AudioEngineState>(IDLE_STATE)
   const startingRef = useRef(false)
   const unbindRef = useRef<(() => void) | null>(null)
+  const contextRef = useRef<AudioContext | null>(null)
+  const rigRef = useRef<DualChainRig | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const channelRouterRef = useRef<AudioNode[]>([])
   const trimRef = useRef<GainNode | null>(null)
+  const connectingRef = useRef(false)
 
   // Sync input gain to the trim node when it changes while the engine is running.
   const inputGain = useIOStore((s) => s.inputGain)
   useEffect(() => {
-    if (trimRef.current) {
-      trimRef.current.gain.setTargetAtTime(inputGain, state.context?.currentTime ?? 0, 0.01)
+    if (trimRef.current && contextRef.current) {
+      trimRef.current.gain.setTargetAtTime(inputGain, contextRef.current.currentTime, 0.01)
     }
-  }, [inputGain, state.context])
+  }, [inputGain])
+
+  // Reconnect mic when the input device or channel routing changes live.
+  const inputDeviceId = useIOStore((s) => s.inputDeviceId)
+  const inputChannel = useIOStore((s) => s.inputChannel)
+  useEffect(() => {
+    if (state.status !== 'ready' || connectingRef.current) return
+    void connectMic()
+  }, [inputDeviceId, inputChannel, state.status])
+
+  // ── Mic connection ──────────────────────────────────────────────────────
+
+  function teardownMic() {
+    useIOStore.getState().setMicError(null)
+    for (const node of channelRouterRef.current) node.disconnect()
+    channelRouterRef.current = []
+    trimRef.current?.disconnect()
+    trimRef.current = null
+    sourceRef.current?.disconnect()
+    sourceRef.current = null
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+  }
+
+  const connectMic = useCallback(async () => {
+    const ctx = contextRef.current
+    const rig = rigRef.current
+    if (!ctx || !rig) return
+    if (connectingRef.current) return
+    connectingRef.current = true
+
+    teardownMic()
+
+    try {
+      const io = useIOStore.getState()
+      const audioConstraints: MediaTrackConstraints = {
+        channelCount: { ideal: 2 },
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      }
+      if (io.inputDeviceId) audioConstraints.deviceId = { exact: io.inputDeviceId }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+
+      streamRef.current = stream
+      const source = ctx.createMediaStreamSource(stream)
+      sourceRef.current = source
+
+      const routerNodes: AudioNode[] = []
+      const actualChannels = source.channelCount
+      const routerOut = buildChannelRouter(
+        ctx,
+        source,
+        io.inputChannel,
+        actualChannels,
+        routerNodes,
+      )
+      channelRouterRef.current = routerNodes
+
+      const trim = new GainNode(ctx, { gain: io.inputGain })
+      trimRef.current = trim
+      routerOut.connect(trim)
+      rig.connectInput(trim, 'mono-to-both')
+
+      const micGranted = true
+      setState((s) => (s.context === ctx ? { ...s, micGranted } : s))
+    } catch (micError: unknown) {
+      const msg = micError instanceof Error ? micError.message : String(micError)
+      useIOStore.getState().setMicError(msg)
+      console.warn('[useAudioEngine] microphone unavailable:', msg)
+    } finally {
+      connectingRef.current = false
+    }
+  }, [])
+
+  // ── Power on / off ──────────────────────────────────────────────────────
 
   const powerOn = useCallback(async () => {
     if (startingRef.current || state.status === 'ready') return
@@ -57,6 +135,8 @@ export function useAudioEngine() {
       const context = new AudioContext({ latencyHint: io.latencyHint })
       const engine = await NamEngine.attach(context)
       const rig = await DualChainRig.create(context, engine)
+      contextRef.current = context
+      rigRef.current = rig
 
       // Wire the output device if supported and a specific one is selected.
       if (io.outputDeviceId && 'setSinkId' in AudioContext.prototype) {
@@ -77,37 +157,8 @@ export function useAudioEngine() {
 
       setState({ status: 'ready', error: null, rig, context, analyser, micGranted: false })
 
-      // Get user media with the selected input device (background, non-blocking).
-      const audioConstraints: MediaTrackConstraints = {
-        channelCount: { ideal: 2 },
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      }
-      if (io.inputDeviceId) audioConstraints.deviceId = { exact: io.inputDeviceId }
-      const constraints: MediaStreamConstraints = { audio: audioConstraints }
-      navigator.mediaDevices
-        .getUserMedia(constraints)
-        .then((stream) => {
-          streamRef.current = stream
-          const source = context.createMediaStreamSource(stream)
-          sourceRef.current = source
-          const routerNodes: AudioNode[] = []
-          const mode = useIOStore.getState().inputChannel
-          const actualChannels = source.channelCount
-          const routerOut = buildChannelRouter(context, source, mode, actualChannels, routerNodes)
-          channelRouterRef.current = routerNodes
-          const trim = new GainNode(context, { gain: useIOStore.getState().inputGain })
-          trimRef.current = trim
-          routerOut.connect(trim)
-          rig.connectInput(trim, 'mono-to-both')
-          setState((s) => (s.context === context ? { ...s, micGranted: true } : s))
-        })
-        .catch((micError: unknown) => {
-          const msg = micError instanceof Error ? micError.message : String(micError)
-          useIOStore.getState().setMicError(msg)
-          console.warn('[useAudioEngine] microphone unavailable:', msg)
-        })
+      // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
+      void connectMic()
     } catch (error) {
       setState({
         ...IDLE_STATE,
@@ -117,22 +168,17 @@ export function useAudioEngine() {
     } finally {
       startingRef.current = false
     }
-  }, [state.status])
+  }, [state.status, connectMic])
 
   const powerOff = useCallback(async () => {
     unbindRef.current?.()
     unbindRef.current = null
-    for (const node of channelRouterRef.current) node.disconnect()
-    channelRouterRef.current = []
-    trimRef.current?.disconnect()
-    trimRef.current = null
-    sourceRef.current?.disconnect()
-    sourceRef.current = null
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
+    teardownMic()
     state.analyser?.disconnect()
     await state.rig?.dispose()
     await state.context?.close()
+    contextRef.current = null
+    rigRef.current = null
     setState(IDLE_STATE)
   }, [state.rig, state.context, state.analyser])
 
@@ -158,7 +204,6 @@ function buildChannelRouter(
   nodes.push(splitter)
 
   if (mode === 'l') {
-    // Splitter output 0 = first channel. Chain through a gain to make mono.
     const g = new GainNode(context, { channelCount: 1, channelCountMode: 'explicit' })
     splitter.connect(g, 0, 0)
     nodes.push(g)
@@ -177,7 +222,6 @@ function buildChannelRouter(
   splitter.connect(merger, 0, 0)
   if (channelCount >= 2) splitter.connect(merger, 1, 1)
   nodes.push(merger)
-  // Merge to mono through a gain node.
   const g = new GainNode(context, { channelCount: 1, channelCountMode: 'explicit' })
   merger.connect(g)
   nodes.push(g)
