@@ -7,11 +7,11 @@ high-contrast, one accent, technical monospace labels everywhere a real product 
 name onto its panel).
 
 This pass added the design system, primitive component library, the core dual-chain layout wired
-to real state, two hardware finishes (light/dark), and made loading actually work: local `.nam`
-model files, cabinet IR files, and adding/bypassing/removing effects in the FX slots. Still open
-on this epic: a first-run onboarding walkthrough, per-chain live meters, Tone3000-backed model
-browsing (currently local-file-only), and a full accessibility/responsive audit. See "what's
-deferred" at the end.
+to real state, two hardware finishes (light/dark), local `.nam`/IR file loading,
+adding/bypassing/removing effects in the FX slots, and editing every added effect's actual
+parameters. Still open on this epic: a first-run onboarding walkthrough, per-chain live meters,
+Tone3000-backed model browsing (currently local-file-only), effect reordering, and a full
+accessibility/responsive audit. See "what's deferred" at the end.
 
 ## Design tokens (`src/index.css`) — two finishes, not a website's light/dark mode
 
@@ -86,11 +86,29 @@ screen updates to show the loaded filename, or a red error line below if it fail
 
 **FX slots are functional**: each of the 3 slots per row is either an empty `+` button, a
 `<select>` of all 10 built effect kinds (appears in place of the slot when you click `+`), or a
-filled slot showing the effect's name (click to bypass - bypassed effects show struck-through) and
-a `×` to remove it. Backed directly by `rig.preFx(chain)`/`postFx(chain)` (`EffectsChain.insert`/
-`remove`, `effectRegistry.createEffect`) - `ChannelStrip` mirrors the chain's effect list in local
-state purely to trigger re-renders, since `EffectsChain` itself has no change-notification
-mechanism and `ChannelStrip` is presently the only thing that mutates it during a session.
+filled slot with a small ● bypass toggle (dim when bypassed), a `×` to remove it, and the effect's
+name - clicking the name expands/collapses that effect's parameter panel below the slot row.
+Backed directly by `rig.preFx(chain)`/`postFx(chain)` (`EffectsChain.insert`/`remove`,
+`effectRegistry.createEffect`) - `ChannelStrip` mirrors the chain's effect list in local state
+purely to trigger re-renders, since `EffectsChain` itself has no change-notification mechanism and
+`ChannelStrip` is presently the only thing that mutates it during a session.
+
+**Effect parameters are editable**: expanding a slot renders `EffectParamsPanel`
+(`src/components/EffectParamsPanel.tsx`), which is generic - it doesn't know anything about any
+specific effect. It's driven entirely by `src/effects/paramSchema.ts`, a declarative table mapping
+each `EffectKind` to its tunable fields (control type - knob or select, range, step, a
+`formatValue` for the readout, and an optional `group` for visual clustering). `ParametricEQ`'s 4
+bands (12 fields total) render as 4 grouped columns via that `group` field rather than one flat row
+of 12 knobs. Adding a new effect's UI later means adding one schema entry, not writing bespoke
+controls.
+
+The panel keeps its own local `values` state (seeded once from `effect.getParams()` when it mounts)
+as the source of truth for what's displayed, rather than re-reading `effect.getParams()` after
+every change: the underlying `AudioParam`s ramp via `setTargetAtTime`, so reading `.value` back
+immediately after setting it returns a stale, not-yet-settled number - the knob would visibly
+stutter toward its real position instead of tracking the drag directly. Each control's `onChange`
+updates local state _and_ calls `effect.setParams()` in the same step, so the UI is instantaneous
+regardless of how the audio thread ramps underneath it.
 
 ## `useAudioEngine` — the power-on flow
 
@@ -134,14 +152,18 @@ reaching elements, stale accessibility-tree refs, a screenshot scaling bug, this
 scenario) - resolved each time by cross-checking against `getBoundingClientRect()`, direct DOM
 state reads, and console tracing rather than trusting any single capture or test run.
 
+Effect parameter editing was verified in a third pass: added a Drive effect, confirmed its
+auto-expanded panel showed exactly its class defaults (Drive 50%, Tone 8.0kHz, Level 70%, matching
+`Drive.ts`'s own defaults), dragged the Drive knob and confirmed the readout updated live (50% →
+100%), and switched its Type `<select>` from Overdrive to Fuzz. Separately added an EQ and
+confirmed all 4 bands rendered correctly grouped with their real defaults (100Hz/500Hz/2.0kHz/6.0kHz
+center frequencies, 0dB gain, Q 1.00) - the most structurally complex case, since it's 12 fields
+across 4 groups rather than a flat list.
+
 ## What's deferred (still open on the UI/UX epic)
 
 - **Tone3000-backed model/IR browsing** — loading is local-file-only for now (see above). Browsing
   and importing from Tone3000's catalog is the Tone3000 Integration epic's job.
-- **Effect parameter editing** — a filled FX slot can be bypassed or removed, but its parameters
-  (e.g. a Drive's gain, an EQ's bands) aren't editable from the UI yet; effects load with their
-  class defaults. Every effect's `getParams()`/`setParams()` already exists (Effects Suite epic) -
-  this is purely the missing per-effect control UI.
 - **Effect reordering** — `EffectsChain.move()` exists and is tested, but there's no drag-and-drop
   (or any UI) wired to it yet.
 - **First-run onboarding** — the power-on button _is_ the audio-permission moment, but there's no

@@ -4,6 +4,7 @@ import { Knob } from './primitives/Knob'
 import { Fader } from './primitives/Fader'
 import { HardwareButton } from './primitives/HardwareButton'
 import { Led } from './primitives/Led'
+import { EffectParamsPanel } from './EffectParamsPanel'
 import type { DualChainRig, ChainId } from '../engine/DualChainRig'
 import type { Effect, EffectKind } from '../effects/Effect'
 import type { PresetEffectsChain } from '../presets/types'
@@ -43,6 +44,7 @@ interface FxRowProps {
 
 function FxRow({ label, fxChain, context, effects, onEffectsChange }: FxRowProps) {
   const [pendingSlot, setPendingSlot] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState<Effect | null>(null)
 
   const addEffect = async (kind: EffectKind) => {
     if (!fxChain || !context) return
@@ -50,6 +52,7 @@ function FxRow({ label, fxChain, context, effects, onEffectsChange }: FxRowProps
     fxChain.insert(effect)
     onEffectsChange([...effects, effect])
     setPendingSlot(null)
+    setExpanded(effect)
   }
 
   const removeEffect = async (effect: Effect) => {
@@ -57,6 +60,7 @@ function FxRow({ label, fxChain, context, effects, onEffectsChange }: FxRowProps
     fxChain.remove(effect)
     await effect.dispose()
     onEffectsChange(effects.filter((e) => e !== effect))
+    setExpanded((current) => (current === effect ? null : current))
   }
 
   const toggleBypass = (effect: Effect) => {
@@ -73,23 +77,35 @@ function FxRow({ label, fxChain, context, effects, onEffectsChange }: FxRowProps
         {Array.from({ length: FX_SLOT_COUNT }, (_, i) => {
           const effect = effects[i]
           if (effect) {
+            const bypassed = effect.isBypassed()
             return (
               <div key={i} className={`${styles.fxSlot} ${styles.fxSlotFilled}`}>
+                <div className={styles.fxSlotHeader}>
+                  <button
+                    type="button"
+                    className={`${styles.fxSlotBypass} ${bypassed ? '' : styles.fxSlotBypassOn}`}
+                    onClick={() => toggleBypass(effect)}
+                    title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+                    aria-label={bypassed ? `Enable ${effect.name}` : `Bypass ${effect.name}`}
+                  >
+                    ●
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.fxSlotRemove}
+                    onClick={() => void removeEffect(effect)}
+                    aria-label={`Remove ${effect.name}`}
+                  >
+                    ×
+                  </button>
+                </div>
                 <button
                   type="button"
-                  className={`${styles.fxSlotName} ${effect.isBypassed() ? styles.fxSlotBypassed : ''}`}
-                  onClick={() => toggleBypass(effect)}
-                  title={effect.isBypassed() ? 'Bypassed - click to enable' : 'Click to bypass'}
+                  className={`${styles.fxSlotName} ${bypassed ? styles.fxSlotBypassed : ''}`}
+                  onClick={() => setExpanded((current) => (current === effect ? null : effect))}
+                  title="Click to edit parameters"
                 >
                   {effect.name}
-                </button>
-                <button
-                  type="button"
-                  className={styles.fxSlotRemove}
-                  onClick={() => void removeEffect(effect)}
-                  aria-label={`Remove ${effect.name}`}
-                >
-                  ×
                 </button>
               </div>
             )
@@ -131,6 +147,9 @@ function FxRow({ label, fxChain, context, effects, onEffectsChange }: FxRowProps
           )
         })}
       </div>
+      {expanded && effects.includes(expanded) && (
+        <EffectParamsPanel key={expanded.name + effects.indexOf(expanded)} effect={expanded} />
+      )}
     </div>
   )
 }

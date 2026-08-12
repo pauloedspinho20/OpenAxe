@@ -88,11 +88,33 @@
 
 .fxSlotFilled {
   flex-direction: column;
+  justify-content: space-between;
   gap: 2px;
   border-style: solid;
   border-color: var(--seam-strong);
   background: var(--panel-raised);
   padding: var(--sp-1);
+}
+
+.fxSlotHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.fxSlotBypass {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.fxSlotBypassOn {
+  color: var(--led-on);
 }
 
 .fxSlotName {

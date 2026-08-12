@@ -50,10 +50,11 @@ Input (mic/interface) ┤                                                       
 - A service worker caches the app shell and downloaded models/IRs for offline use.
 - The UI is styled as hardware, not a website — two finishes (dark "Carbon" / light "Aluminum",
   user-picked and persisted, not tied to OS theme), custom SVG knobs and a real fader instead of
-  browser form controls, one signature accent color. Loading a local `.nam`/IR file and
-  adding/bypassing/removing effects in the FX slots both work end-to-end. See
-  [src/components/README.md](./src/components/README.md) for the design system and what's still a
-  placeholder (Tone3000-backed browsing, effect parameter editing, onboarding, per-chain meters).
+  browser form controls, one signature accent color. Loading a local `.nam`/IR file,
+  adding/bypassing/removing effects, and tuning every added effect's actual parameters all work
+  end-to-end. See [src/components/README.md](./src/components/README.md) for the design system and
+  what's still a placeholder (Tone3000-backed browsing, effect reordering, onboarding, per-chain
+  meters).
 
 ## Roadmap
 

@@ -1,0 +1,42 @@
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  padding: var(--sp-4);
+  background: var(--panel-recessed);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-recessed);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.groupLabel {
+  text-align: center;
+}
+
+.fields {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: flex-start;
+}
+
+.selectField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  align-items: center;
+}
+
+.select {
+  font-family: var(--font-display);
+  font-size: 10px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+}
