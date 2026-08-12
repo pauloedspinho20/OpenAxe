@@ -48,11 +48,14 @@ chainA.outputNode.connect(destination)
 await chainA.dispose()
 ```
 
-- `loadModel(json, slimSize?)` — load a `.nam` file's contents (a JSON string). `slimSize` only
-  applies to slimmable (e.g. A2) models; see `NamModelInfo.slimmable`/`slimmableBreakpoints` in the
-  upstream types if you need to expose a size control in the UI.
-- `loadIR(audioBuffer, mix?)` / `setIrMix(mix)` / `clearIR()` — cabinet convolution and its
-  wet/dry blend, independent of model loading.
+- `loadModel(json, slimSize?, info?)` — load a `.nam` file's contents (a JSON string). `slimSize`
+  only applies to slimmable (e.g. A2) models; see `NamModelInfo.slimmable`/`slimmableBreakpoints` in
+  the upstream types if you need to expose a size control in the UI. `info` (`{id, name}`) records
+  _which_ model this is — purely bookkeeping (see `getLoadedModel()`), for the Preset Management
+  epic to know what to save; omit it for one-off/test loads.
+- `loadIR(audioBuffer, mix?, info?)` / `setIrMix(mix)` / `getIrMix()` / `clearIR()` — cabinet
+  convolution and its wet/dry blend, independent of model loading. Same `info` bookkeeping via
+  `getLoadedIr()`.
 - `dispose()` — tears down the wasm instance and disconnects every node. Not reusable afterwards;
   create a new chain.
 
@@ -76,22 +79,27 @@ docblock in `assetCache.test.ts`) with `fake-indexeddb`, not jsdom — jsdom's `
 
 ## `DualChainRig`
 
-Two `AmpCabChain`s plus a stereo channel strip per chain (level, pan, mute), summed to a master
-bus. This is the dual-chain rig itself: `input -> [chain A + strip A] -\`, `input -> [chain B +
-strip B] -/` `-> master -> output`.
+Two full signal chains, each `preFx -> AmpCabChain -> postFx -> [level/pan/mute strip]`, summed to
+a master bus — the architecture diagram's `[FX] -> [NAM amp] -> [IR cab] -> [FX]` per side, now
+that the Effects Suite epic exists to fill those `[FX]` slots (they were placeholders before it).
 
 ```ts
 import { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { DualChainRig } from '@/engine/DualChainRig'
+import { Drive } from '@/effects/Drive'
+import { Freeverb } from '@/effects/Freeverb'
 
 const context = new AudioContext()
 const engine = await NamEngine.attach(context)
 const rig = await DualChainRig.create(context, engine) // chain A pans hard left, B hard right
 
-await rig.amp('A').loadModel(ampAJson)
+await rig.amp('A').loadModel(ampAJson, undefined, { id: 'tone3000:123', name: 'Deluxe Reverb' })
 await rig.amp('B').loadModel(ampBJson)
 rig.amp('A').loadIR(cabAIr)
 rig.amp('B').loadIR(cabBIr)
+
+rig.preFx('A').insert(new Drive(context, 'overdrive')) // before the amp
+rig.postFx('A').insert(new Freeverb(context)) // after the amp+cab
 
 rig.connectInput(instrumentSource, 'mono-to-both') // or 'stereo-split' for a stereo source
 rig.outputNode.connect(context.destination)
@@ -103,11 +111,17 @@ rig.outputNode.connect(context.destination)
   source (e.g. two mic'd amps, a stereo pickup). This is a routing decision, not a device/hardware
   one — actual input device selection is the Audio I/O Management epic's job; this just says what
   to do with whatever source node that epic hands over.
+- **`preFx(chain)` / `postFx(chain)`** — each returns an `EffectsChain` (see the Effects Suite
+  epic/`src/effects/README.md`) that's already wired into the signal path; `insert`/`remove`/`move`
+  on it exactly as documented there.
 - **Per-chain controls**: `setLevel`, `setPan`, `setEffectivelyMuted` (already-resolved mute, see
   below), `setMasterLevel`. These are the raw imperative Web Audio calls — for reactive state, use
   the store (next section).
 - Chains default hard-panned left/right because that's the point of running two amp models at
   once. Nothing stops a caller from narrowing the pan via `setPan`.
+- `dispose()` also disposes every effect currently in each side's `preFx`/`postFx` chains —
+  `EffectsChain.dispose()` itself only tears down its own wiring, not the effects it holds (they
+  might be reused elsewhere), so the rig does that bookkeeping explicitly.
 
 ## `dualChainStore` + `bindDualChainRig`
 

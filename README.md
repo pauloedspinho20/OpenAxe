@@ -41,6 +41,9 @@ Input (mic/interface) ┤                                                       
   via `EffectsChain` — 10 effects across noise gate/dynamics/EQ/drive/modulation/delay/reverb are
   built; see [src/effects/README.md](./src/effects/README.md) (including why they're all
   original/native rather than ported from a specific pedal/plugin project).
+- Presets capture the full rig state (both chains' model/IR identity, level/pan/mute/solo, and
+  every pre/post FX effect's parameters) into local IndexedDB, with JSON export/import for sharing
+  since there's no cloud sync — see [src/presets/README.md](./src/presets/README.md).
 - [Tone3000](https://www.tone3000.com/api) integration lets users browse and import `.nam` models
   and IRs directly into the local preset library.
 - A pitch-detection tuner (Pitchfinder.js) runs independently of the signal chains.

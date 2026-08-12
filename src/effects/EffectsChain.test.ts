@@ -13,6 +13,7 @@ function createMockContext(): BaseAudioContext {
 
 function createMockEffect(name: string): Effect {
   return {
+    kind: 'reverb',
     name,
     inputNode: createMockAudioNode() as unknown as AudioNode,
     outputNode: createMockAudioNode() as unknown as AudioNode,
@@ -20,6 +21,8 @@ function createMockEffect(name: string): Effect {
     getMix: vi.fn(() => 1),
     setBypass: vi.fn(),
     isBypassed: vi.fn(() => false),
+    getParams: vi.fn(() => ({})),
+    setParams: vi.fn(),
     dispose: vi.fn(),
   }
 }

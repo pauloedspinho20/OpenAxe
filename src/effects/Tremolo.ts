@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 /** LFO-modulated gain - the amp-tremolo "volume wobble" effect. */
 export class Tremolo extends BaseEffect {
@@ -16,7 +16,7 @@ export class Tremolo extends BaseEffect {
     depthGain.connect(ampGain.gain)
     lfo.start()
 
-    super(context, 'Tremolo', ampGain, ampGain)
+    super(context, 'tremolo', 'Tremolo', ampGain, ampGain)
     this.lfo = lfo
     this.depthGain = depthGain
     this.ampGain = ampGain
@@ -33,6 +33,18 @@ export class Tremolo extends BaseEffect {
     const now = this.ampGain.context.currentTime
     this.ampGain.gain.setTargetAtTime(1 - this.depth / 2, now, 0.01)
     this.depthGain.gain.setTargetAtTime(this.depth / 2, now, 0.01)
+  }
+
+  getParams(): EffectParams {
+    return {
+      rate: this.lfo.frequency.value,
+      depth: this.depth,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.rate === 'number') this.setRate(params.rate)
+    if (typeof params.depth === 'number') this.setDepth(params.depth)
   }
 
   dispose(): void {

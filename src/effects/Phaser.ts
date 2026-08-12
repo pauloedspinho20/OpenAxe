@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 const STAGE_COUNT = 4
 const MIN_FREQ = 200
@@ -42,7 +42,7 @@ export class Phaser extends BaseEffect {
     lfo.connect(depthGain)
     lfo.start()
 
-    super(context, 'Phaser', input, output)
+    super(context, 'phaser', 'Phaser', input, output)
     this.input = input
     this.stages = stages
     this.lfo = lfo
@@ -63,6 +63,20 @@ export class Phaser extends BaseEffect {
   /** Resonance / regeneration amount, [0, ~0.9]. */
   setFeedback(amount: number): void {
     this.feedbackGain.gain.setTargetAtTime(amount, this.input.context.currentTime, 0.01)
+  }
+
+  getParams(): EffectParams {
+    return {
+      rate: this.lfo.frequency.value,
+      depth: this.depthGain.gain.value,
+      feedback: this.feedbackGain.gain.value,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.rate === 'number') this.setRate(params.rate)
+    if (typeof params.depth === 'number') this.setDepth(params.depth)
+    if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
   }
 
   dispose(): void {

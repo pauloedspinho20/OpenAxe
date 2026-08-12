@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 const PROCESSOR_NAME = 'noise-gate-processor'
 const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
@@ -17,7 +17,7 @@ export class NoiseGate extends BaseEffect {
   private readonly node: AudioWorkletNode
 
   private constructor(context: AudioContext, node: AudioWorkletNode) {
-    super(context, 'Noise Gate', node, node)
+    super(context, 'noise-gate', 'Noise Gate', node, node)
     this.node = node
   }
 
@@ -40,6 +40,26 @@ export class NoiseGate extends BaseEffect {
   /** Seconds to close once the signal drops back below the threshold. */
   setRelease(seconds: number): void {
     this.node.parameters.get('release')?.setValueAtTime(seconds, this.node.context.currentTime)
+  }
+
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`NoiseGate: unknown AudioParam '${name}'`)
+    return param
+  }
+
+  getParams(): EffectParams {
+    return {
+      threshold: this.param('threshold').value,
+      attack: this.param('attack').value,
+      release: this.param('release').value,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.threshold === 'number') this.setThreshold(params.threshold)
+    if (typeof params.attack === 'number') this.setAttack(params.attack)
+    if (typeof params.release === 'number') this.setRelease(params.release)
   }
 
   dispose(): void {

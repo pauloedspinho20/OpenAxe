@@ -10,6 +10,7 @@ export interface ModulatedDelay {
   readonly output: AudioNode
   readonly lfo: OscillatorNode
   readonly delay: DelayNode
+  readonly depthGain: GainNode
   readonly feedbackGain: GainNode
   setRate(hz: number): void
   setDepth(ms: number): void
@@ -51,6 +52,7 @@ export function createModulatedDelay(
     output,
     lfo,
     delay,
+    depthGain,
     feedbackGain,
     setRate(hz) {
       lfo.frequency.setTargetAtTime(hz, context.currentTime, 0.01)

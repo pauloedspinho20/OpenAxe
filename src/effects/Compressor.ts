@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 /**
  * Wraps the native DynamicsCompressorNode - it already exposes the standard
@@ -10,7 +10,7 @@ export class Compressor extends BaseEffect {
 
   constructor(context: BaseAudioContext) {
     const node = new DynamicsCompressorNode(context)
-    super(context, 'Compressor', node, node)
+    super(context, 'compressor', 'Compressor', node, node)
     this.node = node
   }
 
@@ -40,6 +40,24 @@ export class Compressor extends BaseEffect {
   /** Current gain reduction in dB (negative), for a UI meter. */
   getReductionDb(): number {
     return this.node.reduction
+  }
+
+  getParams(): EffectParams {
+    return {
+      threshold: this.node.threshold.value,
+      knee: this.node.knee.value,
+      ratio: this.node.ratio.value,
+      attack: this.node.attack.value,
+      release: this.node.release.value,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.threshold === 'number') this.setThreshold(params.threshold)
+    if (typeof params.knee === 'number') this.setKnee(params.knee)
+    if (typeof params.ratio === 'number') this.setRatio(params.ratio)
+    if (typeof params.attack === 'number') this.setAttack(params.attack)
+    if (typeof params.release === 'number') this.setRelease(params.release)
   }
 
   dispose(): void {

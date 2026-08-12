@@ -40,6 +40,15 @@ describe('dualChainStore', () => {
     expect(useDualChainStore.getState().chainA.pan).toBe(-1)
   })
 
+  it('setLinked sets the exact value, unlike toggleLinked', () => {
+    useDualChainStore.getState().setLinked(true)
+    expect(useDualChainStore.getState().linked).toBe(true)
+    useDualChainStore.getState().setLinked(true)
+    expect(useDualChainStore.getState().linked).toBe(true)
+    useDualChainStore.getState().setLinked(false)
+    expect(useDualChainStore.getState().linked).toBe(false)
+  })
+
   it('mirrors level identically to both chains when linked', () => {
     useDualChainStore.getState().toggleLinked()
     useDualChainStore.getState().setLevel('A', 0.3)

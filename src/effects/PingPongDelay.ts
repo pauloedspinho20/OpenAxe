@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 /**
  * Stereo delay that alternates repeats left/right: input feeds the left
@@ -36,7 +36,7 @@ export class PingPongDelay extends BaseEffect {
     delayR.connect(feedbackRtoL)
     feedbackRtoL.connect(delayL)
 
-    super(context, 'Ping-Pong Delay', input, wetOut)
+    super(context, 'ping-pong-delay', 'Ping-Pong Delay', input, wetOut)
     this.input = input
     this.wetOut = wetOut
     this.delayL = delayL
@@ -58,6 +58,18 @@ export class PingPongDelay extends BaseEffect {
     const now = this.delayL.context.currentTime
     this.feedbackLtoR.gain.setTargetAtTime(amount, now, 0.01)
     this.feedbackRtoL.gain.setTargetAtTime(amount, now, 0.01)
+  }
+
+  getParams(): EffectParams {
+    return {
+      time: this.delayL.delayTime.value,
+      feedback: this.feedbackLtoR.gain.value,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.time === 'number') this.setTime(params.time)
+    if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
   }
 
   dispose(): void {

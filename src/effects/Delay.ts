@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 export type DelayCharacter = 'clean' | 'tape'
 
@@ -25,6 +25,7 @@ export class Delay extends BaseEffect {
   private readonly toneFilter: BiquadFilterNode
   private readonly wetOut: GainNode
   private readonly saturator: WaveShaperNode | null
+  private readonly character: DelayCharacter
 
   constructor(context: BaseAudioContext, character: DelayCharacter = 'clean') {
     const delayNode = new DelayNode(context, { delayTime: 0.35, maxDelayTime: 5 })
@@ -50,12 +51,13 @@ export class Delay extends BaseEffect {
     }
     feedbackGain.connect(delayNode)
 
-    super(context, character === 'tape' ? 'Tape Delay' : 'Delay', delayNode, wetOut)
+    super(context, 'delay', character === 'tape' ? 'Tape Delay' : 'Delay', delayNode, wetOut)
     this.delayNode = delayNode
     this.feedbackGain = feedbackGain
     this.toneFilter = toneFilter
     this.wetOut = wetOut
     this.saturator = saturator
+    this.character = character
   }
 
   setTime(seconds: number): void {
@@ -68,6 +70,22 @@ export class Delay extends BaseEffect {
 
   setTone(hz: number): void {
     this.toneFilter.frequency.setTargetAtTime(hz, this.delayNode.context.currentTime, 0.01)
+  }
+
+  /** `character` is fixed at construction (it changes the node topology) - reported so a preset can reconstruct with the right one, but setParams() can't change it on a live instance. */
+  getParams(): EffectParams {
+    return {
+      character: this.character,
+      time: this.delayNode.delayTime.value,
+      feedback: this.feedbackGain.gain.value,
+      tone: this.toneFilter.frequency.value,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.time === 'number') this.setTime(params.time)
+    if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
+    if (typeof params.tone === 'number') this.setTone(params.tone)
   }
 
   dispose(): void {

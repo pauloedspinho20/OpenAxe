@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 export interface EqBandConfig {
   type: BiquadFilterType
@@ -34,7 +34,7 @@ export class ParametricEQ extends BaseEffect {
     )
     for (let i = 0; i < bands.length - 1; i++) bands[i]!.connect(bands[i + 1]!)
 
-    super(context, 'EQ', bands[0]!, bands[bands.length - 1]!)
+    super(context, 'eq', 'EQ', bands[0]!, bands[bands.length - 1]!)
     this.bands = bands
   }
 
@@ -62,6 +62,31 @@ export class ParametricEQ extends BaseEffect {
 
   private context(): BaseAudioContext {
     return this.bands[0]!.context
+  }
+
+  /**
+   * Flattened per-band keys (`band0_frequency`, `band0_gain`, `band0_q`, `band1_...`) rather than
+   * a nested structure, since EffectParams is a flat record shared by every effect kind.
+   */
+  getParams(): EffectParams {
+    const params: EffectParams = { bandCount: this.bands.length }
+    this.bands.forEach((band, i) => {
+      params[`band${i}_frequency`] = band.frequency.value
+      params[`band${i}_gain`] = band.gain.value
+      params[`band${i}_q`] = band.Q.value
+    })
+    return params
+  }
+
+  setParams(params: EffectParams): void {
+    this.bands.forEach((_, i) => {
+      const frequency = params[`band${i}_frequency`]
+      const gain = params[`band${i}_gain`]
+      const q = params[`band${i}_q`]
+      if (typeof frequency === 'number') this.setBandFrequency(i, frequency)
+      if (typeof gain === 'number') this.setBandGain(i, gain)
+      if (typeof q === 'number') this.setBandQ(i, q)
+    })
   }
 
   dispose(): void {

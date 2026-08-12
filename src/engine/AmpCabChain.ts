@@ -1,5 +1,11 @@
 import { NamEngine, NamNode, type NamModelInfo } from 'neural-amp-modeler-wasm/engine'
 
+/** Which model/IR is currently loaded, for saving into a preset. Null if none is loaded. */
+export interface LoadedAssetInfo {
+  id: string
+  name: string
+}
+
 /**
  * One mono amp+cab signal chain: NAM amp model -> cabinet IR (parallel wet/dry
  * via ConvolverNode, since NAM's wasm engine only models the amp, not the
@@ -19,6 +25,9 @@ export class AmpCabChain {
   private readonly irDryGain: GainNode
   private irNode: ConvolverNode | null = null
   private disposed = false
+  private irMix = 0
+  private loadedModel: LoadedAssetInfo | null = null
+  private loadedIr: LoadedAssetInfo | null = null
 
   private constructor(context: BaseAudioContext, namNode: NamNode) {
     this.context = context
@@ -56,42 +65,69 @@ export class AmpCabChain {
     return this.output
   }
 
-  /** Load a `.nam` model from its JSON file contents. Fades in over ~21ms, click-free. */
-  async loadModel(json: string, slimSize?: number): Promise<NamModelInfo> {
-    return this.namNode.loadModel(json, slimSize === undefined ? undefined : { slimSize })
+  /**
+   * Load a `.nam` model from its JSON file contents. Fades in over ~21ms, click-free.
+   * @param info Identifies the model (e.g. a Tone3000 id/name), so a preset can record which one
+   *   is loaded and later reload it. Omit for one-off/test loads that don't need to be recalled.
+   */
+  async loadModel(json: string, slimSize?: number, info?: LoadedAssetInfo): Promise<NamModelInfo> {
+    const modelInfo = await this.namNode.loadModel(
+      json,
+      slimSize === undefined ? undefined : { slimSize },
+    )
+    this.loadedModel = info ?? null
+    return modelInfo
   }
 
   async unloadModel(): Promise<void> {
     await this.namNode.unloadModel()
+    this.loadedModel = null
+  }
+
+  /** Which model is currently loaded, or null if none is (or it wasn't loaded with an id/name). */
+  getLoadedModel(): LoadedAssetInfo | null {
+    return this.loadedModel
   }
 
   /**
    * Load a cabinet impulse response and cross-fade the wet/dry mix.
    * @param audioBuffer Decoded IR audio (see AudioContext.decodeAudioData).
    * @param mix Wet/dry mix in [0, 1], 1 = fully wet (IR only). Defaults to fully wet.
+   * @param info Identifies the IR, same purpose as loadModel's `info`.
    */
-  loadIR(audioBuffer: AudioBuffer, mix = 1): void {
+  loadIR(audioBuffer: AudioBuffer, mix = 1, info?: LoadedAssetInfo): void {
     const newIrNode = new ConvolverNode(this.context, { buffer: audioBuffer })
     this.namNode.connect(newIrNode)
     newIrNode.connect(this.irWetGain)
 
     this.irNode?.disconnect()
     this.irNode = newIrNode
+    this.loadedIr = info ?? null
     this.setIrMix(mix)
+  }
+
+  /** Which IR is currently loaded, or null if none is (or it wasn't loaded with an id/name). */
+  getLoadedIr(): LoadedAssetInfo | null {
+    return this.loadedIr
   }
 
   /** Adjust the cabinet wet/dry mix without reloading the IR. */
   setIrMix(mix: number): void {
-    const clamped = Math.min(1, Math.max(0, mix))
+    this.irMix = Math.min(1, Math.max(0, mix))
     const now = this.context.currentTime
-    this.irWetGain.gain.setTargetAtTime(clamped, now, 0.01)
-    this.irDryGain.gain.setTargetAtTime(1 - clamped, now, 0.01)
+    this.irWetGain.gain.setTargetAtTime(this.irMix, now, 0.01)
+    this.irDryGain.gain.setTargetAtTime(1 - this.irMix, now, 0.01)
+  }
+
+  getIrMix(): number {
+    return this.irMix
   }
 
   /** Remove the cabinet IR; the chain passes the amp's raw output through. */
   clearIR(): void {
     this.irNode?.disconnect()
     this.irNode = null
+    this.loadedIr = null
     this.setIrMix(0)
   }
 

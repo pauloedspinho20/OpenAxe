@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 /**
  * Freeverb (Jezar at Dreampoint, public domain): 8 parallel damped feedback
@@ -99,7 +99,7 @@ export class Freeverb extends BaseEffect {
       previous = allpass.output
     }
 
-    super(context, 'Reverb', input, previous)
+    super(context, 'reverb', 'Reverb', input, previous)
     this.input = input
     this.combSum = combSum
     this.combs = combs
@@ -121,6 +121,18 @@ export class Freeverb extends BaseEffect {
     const cutoff = 12000 - this.damping * 11000
     const now = this.combs[0]!.damping.context.currentTime
     for (const comb of this.combs) comb.damping.frequency.setTargetAtTime(cutoff, now, 0.01)
+  }
+
+  getParams(): EffectParams {
+    return {
+      roomSize: this.roomSize,
+      damping: this.damping,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (typeof params.roomSize === 'number') this.setRoomSize(params.roomSize)
+    if (typeof params.damping === 'number') this.setDamping(params.damping)
   }
 
   dispose(): void {

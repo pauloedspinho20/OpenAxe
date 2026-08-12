@@ -30,6 +30,7 @@ export interface DualChainState {
   setSolo: (chain: ChainId, solo: boolean) => void
   setMasterLevel: (level: number) => void
   toggleLinked: () => void
+  setLinked: (linked: boolean) => void
   /** True if this chain is silent given its own mute plus the other's solo. */
   isEffectivelyMuted: (chain: ChainId) => boolean
 }
@@ -96,6 +97,8 @@ export const useDualChainStore = create<DualChainState>()((set, get) => ({
   setMasterLevel: (level) => set({ masterLevel: clampLevel(level) }),
 
   toggleLinked: () => set((state) => ({ linked: !state.linked })),
+
+  setLinked: (linked) => set({ linked }),
 
   isEffectivelyMuted: (chain) => {
     const state = get()

@@ -1,4 +1,4 @@
-import { BaseEffect } from './Effect'
+import { BaseEffect, type EffectParams } from './Effect'
 
 export type DriveType = 'overdrive' | 'distortion' | 'fuzz'
 
@@ -67,7 +67,7 @@ export class Drive extends BaseEffect {
     shaper.connect(tone)
     tone.connect(makeupGain)
 
-    super(context, 'Drive', shaper, makeupGain)
+    super(context, 'drive', 'Drive', shaper, makeupGain)
     this.shaper = shaper
     this.tone = tone
     this.makeupGain = makeupGain
@@ -99,6 +99,24 @@ export class Drive extends BaseEffect {
 
   setOutputLevel(gain: number): void {
     this.makeupGain.gain.setTargetAtTime(gain, this.makeupGain.context.currentTime, 0.01)
+  }
+
+  getParams(): EffectParams {
+    return {
+      type: this.type,
+      drive: this.amount,
+      tone: this.tone.frequency.value,
+      level: this.makeupGain.gain.value,
+    }
+  }
+
+  setParams(params: EffectParams): void {
+    if (params.type === 'overdrive' || params.type === 'distortion' || params.type === 'fuzz') {
+      this.setType(params.type)
+    }
+    if (typeof params.drive === 'number') this.setDrive(params.drive)
+    if (typeof params.tone === 'number') this.setTone(params.tone)
+    if (typeof params.level === 'number') this.setOutputLevel(params.level)
   }
 
   dispose(): void {
