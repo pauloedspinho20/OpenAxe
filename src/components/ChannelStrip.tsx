@@ -190,6 +190,13 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
   // imports straight into the chain and this stays in sync with it.
   const modelName = amp?.getLoadedModel()?.name ?? null
   const irName = amp?.getLoadedIr()?.name ?? null
+  const libraryEntries = useTone3000Library((s) => s.entries)
+  const modelLibraryEntry = modelName
+    ? (libraryEntries.find((e) => e.id === amp?.getLoadedModel()?.id) ?? null)
+    : null
+  const irLibraryEntry = irName
+    ? (libraryEntries.find((e) => e.id === amp?.getLoadedIr()?.id) ?? null)
+    : null
 
   const handleModelFile = async (file: File) => {
     if (!amp) return
@@ -254,8 +261,18 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
           onClick={() => modelInputRef.current?.click()}
           title={amp ? 'Click to load a .nam model file' : 'Power on to load a model'}
         >
-          <span className={`label ${styles.screenLabel}`}>Amp Model</span>
-          <span className={styles.screenValue}>{modelName ?? 'NO MODEL LOADED'}</span>
+          {modelLibraryEntry?.imageUrl && (
+            <img
+              src={modelLibraryEntry.imageUrl}
+              alt=""
+              className={styles.screenImage}
+              loading="lazy"
+            />
+          )}
+          <span className={styles.screenMeta}>
+            <span className={`label ${styles.screenLabel}`}>Amp Model</span>
+            <span className={styles.screenValue}>{modelName ?? 'NO MODEL LOADED'}</span>
+          </span>
         </button>
         <button
           type="button"
@@ -371,8 +388,18 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
             onClick={() => irInputRef.current?.click()}
             title={amp ? 'Click to load a cabinet IR file' : 'Power on to load an IR'}
           >
-            <span className={`label ${styles.screenLabel}`}>Cab IR</span>
-            <span className={styles.screenValue}>{irName ?? 'NO IR LOADED'}</span>
+            {irLibraryEntry?.imageUrl && (
+              <img
+                src={irLibraryEntry.imageUrl}
+                alt=""
+                className={styles.screenImage}
+                loading="lazy"
+              />
+            )}
+            <span className={styles.screenMeta}>
+              <span className={`label ${styles.screenLabel}`}>Cab IR</span>
+              <span className={styles.screenValue}>{irName ?? 'NO IR LOADED'}</span>
+            </span>
           </button>
           <button
             type="button"

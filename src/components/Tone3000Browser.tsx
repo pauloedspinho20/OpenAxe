@@ -181,6 +181,7 @@ export function Tone3000Browser({ target, context }: Props) {
           creator: tone.user.username,
           sourceUrl: tone.url,
           toneTitle: tone.title,
+          imageUrl: tone.images?.[0] ?? null,
         },
         target,
         context,
@@ -458,6 +459,14 @@ export function Tone3000Browser({ target, context }: Props) {
               {library.map((entry) => (
                 <li key={entry.id} className={styles.card}>
                   <div className={styles.libraryRow}>
+                    {entry.imageUrl && (
+                      <img
+                        src={entry.imageUrl}
+                        alt=""
+                        className={styles.cardImage}
+                        loading="lazy"
+                      />
+                    )}
                     <div className={styles.libraryInfo}>
                       <span className={styles.cardTitle}>{entry.name}</span>
                       <span className={`label ${styles.cardMeta}`}>

@@ -1,7 +1,7 @@
 .screen {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--sp-2);
   padding: var(--sp-3);
   background: var(--screen-bg);
   border-radius: var(--r-sm);
@@ -11,6 +11,22 @@
   text-align: left;
   width: 100%;
   font: inherit;
+}
+
+.screenImage {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--panel);
+}
+
+.screenMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .screen:disabled {

@@ -21,6 +21,8 @@ export interface Tone3000LibraryEntry {
   sourceUrl: string
   /** Tone's own title, when we have it. */
   toneTitle: string | null
+  /** Thumbnail image URL from the tone page (tone.images?.[0]). */
+  imageUrl: string | null
   importedAt: number
 }
 
@@ -39,6 +41,7 @@ interface LibraryQuery {
     creator: string
     sourceUrl: string
     toneTitle?: string | null
+    imageUrl?: string | null
     modelUrl: string
   }): Promise<Tone3000LibraryEntry>
   remove: (id: string) => Promise<void>
@@ -82,7 +85,7 @@ export const Tone3000Library: LibraryQuery = {
     return getCachedAsset(id)
   },
 
-  async importAsset({ id, kind, name, creator, sourceUrl, toneTitle, modelUrl }) {
+  async importAsset({ id, kind, name, creator, sourceUrl, toneTitle, imageUrl, modelUrl }) {
     const blob = await apiDownloadModel(modelUrl)
     await putCachedAsset(id, blob)
     const entry: Tone3000LibraryEntry = {
@@ -92,6 +95,7 @@ export const Tone3000Library: LibraryQuery = {
       creator,
       sourceUrl,
       toneTitle: toneTitle ?? null,
+      imageUrl: imageUrl ?? null,
       importedAt: Date.now(),
     }
     await withStore<IDBValidKey>(

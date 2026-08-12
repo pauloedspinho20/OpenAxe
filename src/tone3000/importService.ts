@@ -19,6 +19,7 @@ export interface ImportRequest {
   creator: string
   sourceUrl: string
   toneTitle: string | null
+  imageUrl?: string | null
 }
 
 export interface ImportResult {
@@ -54,6 +55,7 @@ export async function importTone3000Asset(
     sourceUrl: request.sourceUrl,
     modelUrl: request.modelUrl,
     toneTitle: request.toneTitle,
+    imageUrl: request.imageUrl ?? null,
   })
 
   if (load && context) {
