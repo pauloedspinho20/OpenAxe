@@ -21,13 +21,22 @@ interface Props {
 
 interface SearchState {
   query: string
-  gear: '' | Tone['gear']
   format: '' | Tone['format']
   sort: 'trending' | 'newest' | 'oldest' | 'downloads-all-time' | 'best-match'
 }
 
-const DEFAULT_SEARCH: SearchState = { query: '', gear: '', format: '', sort: 'trending' }
+const DEFAULT_SEARCH: SearchState = { query: '', format: '', sort: 'trending' }
 const NOT_AUTHENTICATED = 'Not authenticated'
+
+const GEAR_LABELS: Record<Tone['gear'], string> = {
+  amp: 'AMP MODEL',
+  'amp-cab': 'AMP+CAB MODEL',
+  pedal: 'PEDAL MODEL',
+  outboard: 'OUTBOARD MODEL',
+  space: 'SPACE MODEL',
+  cab: 'CAB IR',
+  experimental: 'EXPERIMENTAL',
+}
 
 export function Tone3000Browser({ target, context }: Props) {
   const browser = useTone3000Browser()
@@ -92,7 +101,7 @@ export function Tone3000Browser({ target, context }: Props) {
   // The search itself, keyed on the settled filters. Re-runs after connect
   // (auth.status in deps) for the lazy-auth flow.
   useEffect(() => {
-    if (tab !== 'browse') return
+    if (tab !== 'browse' || !browser.target) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -102,8 +111,8 @@ export function Tone3000Browser({ target, context }: Props) {
       pageSize: SEARCH_PAGE_SIZE,
       sort: search.sort,
       architecture: 2,
+      gears: [browser.target.gear],
     }
-    if (search.gear) params.gears = [search.gear]
     if (search.format) params.format = search.format
     if (makesValue) params.makes = [makesValue]
     if (tagsValue) params.tags = [tagsValue]
@@ -136,7 +145,7 @@ export function Tone3000Browser({ target, context }: Props) {
     tab,
     debouncedQuery,
     page,
-    search.gear,
+    browser.target,
     search.format,
     search.sort,
     makesValue,
@@ -229,16 +238,14 @@ export function Tone3000Browser({ target, context }: Props) {
 
   if (!browser.open || !browser.target) return null
 
-  const { slot } = browser.target
+  const { slot, gear } = browser.target
   const totalPages = Math.ceil(total / SEARCH_PAGE_SIZE)
 
   return (
     <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label="Tone3000 catalog">
       <div className={styles.modal}>
         <header className={styles.header}>
-          <span className={`label ${styles.heading}`}>
-            TONE3000 CATALOG · {slot === 'model' ? 'AMP MODEL' : 'CAB IR'}
-          </span>
+          <span className={`label ${styles.heading}`}>TONE3000 CATALOG · {GEAR_LABELS[gear]}</span>
           <div className={styles.tabs}>
             <button
               type="button"
@@ -274,20 +281,6 @@ export function Tone3000Browser({ target, context }: Props) {
                 onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
                 className={styles.input}
               />
-              <select
-                value={search.gear}
-                onChange={(e) => setSearch((s) => ({ ...s, gear: e.target.value as Tone['gear'] }))}
-                className={styles.input}
-                aria-label="Gear"
-              >
-                <option value="">All gear</option>
-                <option value="amp">Amp</option>
-                <option value="amp-cab">Amp+Cab</option>
-                <option value="cab">Cab</option>
-                <option value="pedal">Pedal</option>
-                <option value="outboard">Outboard</option>
-                <option value="space">Space</option>
-              </select>
               <select
                 value={search.format}
                 onChange={(e) =>

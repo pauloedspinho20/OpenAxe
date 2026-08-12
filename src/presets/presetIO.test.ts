@@ -24,7 +24,7 @@ function makePreset(overrides: Partial<Preset> = {}): Preset {
       },
       {
         id: 'b2',
-        kind: 'drive',
+        kind: 'compressor',
         row: 0,
         col: 1,
         bypass: false,
@@ -59,7 +59,7 @@ describe('presetToJson / presetFromJson', () => {
 
   it('throws when a block entry is missing required fields', () => {
     const preset = makePreset()
-    preset.blocks = [{ kind: 'drive' } as never]
+    preset.blocks = [{ kind: 'compressor' } as never]
     expect(() => presetFromJson(JSON.stringify(preset))).toThrow(/'id'/)
   })
 

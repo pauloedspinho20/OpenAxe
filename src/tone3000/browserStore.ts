@@ -6,11 +6,13 @@
  * transient UI concern.
  */
 import { create } from 'zustand'
-import type { Tone3000Slot } from './types'
+import type { Gear, Tone3000Slot } from './types'
 
 export interface BrowserTarget {
   blockId: string
   slot: Tone3000Slot
+  /** Locks the browser to this gear type - see Tone3000Browser, which hides the gear picker entirely when set. */
+  gear: Gear
 }
 
 export interface Tone3000BrowserState {

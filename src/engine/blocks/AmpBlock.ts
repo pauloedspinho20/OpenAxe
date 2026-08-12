@@ -13,27 +13,36 @@ export interface SlimmableInfo {
   currentSize: number
 }
 
+/** Every gear category that's a NAM model capture rather than an IR - see CabBlock for the IR case. */
+export type NamModelBlockKind = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space'
+
 /**
- * One NAM amp model instance - a standalone grid block (no built-in tone
- * stack or cab; those are separate blocks, see ToneStackBlock/CabBlock).
+ * One NAM model instance - a standalone grid block. Structurally identical
+ * regardless of gear category: on Tone3000, `amp`/`amp-cab`/`pedal`/
+ * `outboard`/`space` are all model-format captures (an "amp-cab" entry is a
+ * single combo-unit capture with the speaker baked in, not a separate amp
+ * + IR pairing - see the engine README/plan notes). `kind` only changes
+ * which gear filter Tone3000 browsing uses and how the block is labeled;
+ * one class covers all five rather than four near-duplicate ones.
  * `inputNode`/`outputNode` are the underlying `NamNode` itself, which is
  * already mono-in/mono-out and stays the same instance across model swaps.
  */
 export class AmpBlock implements Block {
-  readonly kind = 'amp' as const
+  readonly kind: NamModelBlockKind
   private readonly namNode: NamNode
   private disposed = false
   private loadedModel: LoadedAssetInfo | null = null
   private modelJson: string | null = null
   private slimmable: SlimmableInfo | null = null
 
-  private constructor(namNode: NamNode) {
+  private constructor(namNode: NamNode, kind: NamModelBlockKind) {
     this.namNode = namNode
+    this.kind = kind
   }
 
-  static async create(engine: NamEngine): Promise<AmpBlock> {
+  static async create(engine: NamEngine, kind: NamModelBlockKind = 'amp'): Promise<AmpBlock> {
     const namNode = await engine.createNode()
-    return new AmpBlock(namNode)
+    return new AmpBlock(namNode, kind)
   }
 
   get inputNode(): AudioNode {

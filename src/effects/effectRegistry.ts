@@ -2,7 +2,6 @@ import type { Effect, EffectKind, EffectParams } from './Effect'
 import { NoiseGate } from './NoiseGate'
 import { Compressor } from './Compressor'
 import { ParametricEQ } from './ParametricEQ'
-import { Drive, type DriveType } from './Drive'
 import { Chorus } from './Chorus'
 import { Flanger } from './Flanger'
 import { Phaser } from './Phaser'
@@ -39,8 +38,6 @@ async function buildEffect(
       return new Compressor(context)
     case 'eq':
       return new ParametricEQ(context)
-    case 'drive':
-      return new Drive(context, asDriveType(params?.type))
     case 'chorus':
       return new Chorus(context)
     case 'flanger':
@@ -56,10 +53,6 @@ async function buildEffect(
     case 'reverb':
       return new Freeverb(context)
   }
-}
-
-function asDriveType(value: unknown): DriveType {
-  return value === 'overdrive' || value === 'distortion' || value === 'fuzz' ? value : 'overdrive'
 }
 
 function asDelayCharacter(value: unknown): DelayCharacter {

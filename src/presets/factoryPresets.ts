@@ -21,13 +21,6 @@ interface RowEffect {
   params: EffectParams
 }
 
-function drive(overrides: Partial<EffectParams> = {}): RowEffect {
-  return {
-    kind: 'drive',
-    params: { type: 'overdrive', drive: 0.4, tone: 8000, level: 0.7, ...overrides },
-  }
-}
-
 function compressor(): RowEffect {
   return {
     kind: 'compressor',
@@ -134,10 +127,6 @@ export const FACTORY_PRESETS: readonly Preset[] = [
   buildFactoryPreset('factory-clean-boost', 'Clean Boost', [
     [compressor(), eq()],
     [compressor(), eq()],
-  ]),
-  buildFactoryPreset('factory-bedroom-overdrive', 'Bedroom Overdrive', [
-    [drive(), tapeDelay()],
-    [drive({ drive: 0.3 })],
   ]),
   buildFactoryPreset('factory-ambient-swell', 'Ambient Swell', [
     [chorus(), reverb(0.7)],

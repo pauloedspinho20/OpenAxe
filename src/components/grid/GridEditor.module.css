@@ -29,6 +29,14 @@
   box-shadow: var(--shadow-recessed);
 }
 
+.tunerSlot {
+  z-index: 1;
+  flex-shrink: 0;
+  width: 140px;
+  display: flex;
+  align-items: center;
+}
+
 .railLabel {
   color: var(--ink-2);
   writing-mode: vertical-rl;

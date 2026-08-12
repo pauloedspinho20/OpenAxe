@@ -49,15 +49,15 @@ describe('bindGraphRig', () => {
     bindGraphRig(useGraphStore, rig)
     await flush()
 
-    const id = useGraphStore.getState().addBlock('drive', 0, 0)
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
     await flush()
 
-    expect(rig.addBlock).toHaveBeenCalledWith('drive', 0, 0, id)
+    expect(rig.addBlock).toHaveBeenCalledWith('compressor', 0, 0, id)
   })
 
   it('removes a block dropped from the store', async () => {
     const rig = createMockRig()
-    const id = useGraphStore.getState().addBlock('drive', 0, 0)
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
     rig.listBlockIds.mockReturnValue([id])
     bindGraphRig(useGraphStore, rig)
     await flush()
@@ -70,7 +70,7 @@ describe('bindGraphRig', () => {
 
   it('pushes params for every block on each reconcile', async () => {
     const rig = createMockRig()
-    const id = useGraphStore.getState().addBlock('drive', 0, 0)
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
     bindGraphRig(useGraphStore, rig)
     await flush()
     rig.setBlockParams.mockClear()
@@ -83,7 +83,7 @@ describe('bindGraphRig', () => {
 
   it('connects a new edge from the store', async () => {
     const rig = createMockRig()
-    const a = useGraphStore.getState().addBlock('drive', 0, 0)
+    const a = useGraphStore.getState().addBlock('compressor', 0, 0)
     const b = useGraphStore.getState().addBlock('eq', 0, 1)
     bindGraphRig(useGraphStore, rig)
     await flush()
@@ -97,7 +97,7 @@ describe('bindGraphRig', () => {
 
   it('disconnects an edge removed from the store', async () => {
     const rig = createMockRig()
-    const a = useGraphStore.getState().addBlock('drive', 0, 0)
+    const a = useGraphStore.getState().addBlock('compressor', 0, 0)
     const b = useGraphStore.getState().addBlock('eq', 0, 1)
     const result = useGraphStore.getState().connect(jack(a), jack(b))
     const edgeId = (result as { ok: true; id: string }).id
@@ -118,7 +118,7 @@ describe('bindGraphRig', () => {
     unbind()
     rig.addBlock.mockClear()
 
-    useGraphStore.getState().addBlock('drive', 0, 0)
+    useGraphStore.getState().addBlock('compressor', 0, 0)
     await flush()
 
     expect(rig.addBlock).not.toHaveBeenCalled()

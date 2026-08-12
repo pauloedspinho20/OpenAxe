@@ -7,7 +7,7 @@ import type { GraphRig } from '../../engine/GraphRig'
 import { GRID_ROWS, GRID_COLS } from '../../engine/gridConfig'
 import { resolveGridCell } from './gridGeometry'
 import type { BlockKind } from '../../engine/blocks/Block'
-import { EFFECT_KINDS } from '../../engine/blocks/blockRegistry'
+import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '../../engine/blocks/MixerBlock'
 import { BLOCK_KIND_LABELS } from './blockOptions'
 import { jackElementId } from './jackId'
@@ -30,14 +30,14 @@ interface MaybeBypassable {
   setBypass?(bypassed: boolean): void
 }
 
-/** Anything with optional loaded-asset getters - only Amp/Cab blocks have these. */
+/** Anything with optional loaded-asset getters - only NAM-model/Cab blocks have these. */
 interface MaybeAsset {
   getLoadedModel?(): { name: string } | null
   getLoadedIr?(): { name: string } | null
 }
 
 function statusText(instance: BlockInstance, block: MaybeAsset | null): string | null {
-  if (instance.kind === 'amp') return block?.getLoadedModel?.()?.name ?? 'No model'
+  if (NAM_MODEL_KINDS.has(instance.kind)) return block?.getLoadedModel?.()?.name ?? 'No model'
   if (instance.kind === 'cab') return block?.getLoadedIr?.()?.name ?? 'No IR'
   return null
 }

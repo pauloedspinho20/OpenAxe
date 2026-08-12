@@ -159,7 +159,7 @@ function App() {
       {toastMessage && <div className={styles.noticeBanner}>{toastMessage}</div>}
 
       <main className={styles.main}>
-        <GridEditor rig={engine.rig} />
+        <GridEditor rig={engine.rig} tunerAnalyser={engine.tunerAnalyser} />
 
         <BlockInspector rig={engine.rig} context={engine.context} />
 

@@ -169,49 +169,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     ...eqBand(2, [500, 5000], 2000),
     ...eqBand(3, [2000, 12000], 6000),
   ],
-  drive: [
-    {
-      key: 'type',
-      label: 'Type',
-      control: 'select',
-      defaultValue: 'overdrive',
-      options: [
-        { value: 'overdrive', label: 'Overdrive' },
-        { value: 'distortion', label: 'Distortion' },
-        { value: 'fuzz', label: 'Fuzz' },
-      ],
-    },
-    {
-      key: 'drive',
-      label: 'Drive',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-    },
-    {
-      key: 'tone',
-      label: 'Tone',
-      control: 'knob',
-      min: 1000,
-      max: 12000,
-      step: 100,
-      defaultValue: 8000,
-      formatValue: hz,
-    },
-    {
-      key: 'level',
-      label: 'Level',
-      control: 'knob',
-      min: 0,
-      max: 1.5,
-      step: 0.01,
-      defaultValue: 0.7,
-      formatValue: percent,
-    },
-  ],
   chorus: [
     {
       key: 'rate',
@@ -408,25 +365,14 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   ],
 }
 
-const TONE_STACK_BANDS = ['bass', 'mid', 'treble', 'presence'] as const
-
 /**
- * Schema entries for the 4 new grid block kinds beyond the 11 effects
- * (Amp has none - model loading isn't a continuous "param", and its only
- * one, slim size, gets a dedicated select like it already did on the old
- * ChannelStrip rather than going through the generic knob panel).
+ * Schema entries for grid block kinds beyond the 10 effects (the 5 NAM
+ * model kinds - amp/amp-cab/pedal/outboard/space - have none: model
+ * loading isn't a continuous "param", and their only one, slim size, gets
+ * a dedicated select in the inspector rather than going through the
+ * generic knob panel).
  */
 export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
-  'tone-stack': TONE_STACK_BANDS.map((key) => ({
-    key,
-    label: key[0]!.toUpperCase() + key.slice(1),
-    control: 'knob',
-    min: -12,
-    max: 12,
-    step: 0.1,
-    defaultValue: 0,
-    formatValue: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`,
-  })),
   cab: [
     {
       key: 'irMix',

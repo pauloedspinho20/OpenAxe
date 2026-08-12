@@ -13,7 +13,7 @@ describe('canConnect', () => {
   it('allows a forward connection between two real blocks', () => {
     const result = canConnect(
       blocks([
-        ['a', 'drive', 0],
+        ['a', 'compressor', 0],
         ['b', 'eq', 1],
       ]),
       [],
@@ -26,7 +26,7 @@ describe('canConnect', () => {
   it('rejects a backward connection', () => {
     const result = canConnect(
       blocks([
-        ['a', 'drive', 2],
+        ['a', 'compressor', 2],
         ['b', 'eq', 0],
       ]),
       [],
@@ -39,7 +39,7 @@ describe('canConnect', () => {
   it('rejects a same-column connection', () => {
     const result = canConnect(
       blocks([
-        ['a', 'drive', 3],
+        ['a', 'compressor', 3],
         ['b', 'eq', 3],
       ]),
       [],
@@ -50,25 +50,25 @@ describe('canConnect', () => {
   })
 
   it('rejects connecting a jack to itself', () => {
-    const result = canConnect(blocks([['a', 'drive', 0]]), [], jack('a'), jack('a'))
+    const result = canConnect(blocks([['a', 'compressor', 0]]), [], jack('a'), jack('a'))
     expect(result.ok).toBe(false)
   })
 
   it('rejects an unknown source or target block', () => {
-    const map = blocks([['a', 'drive', 0]])
+    const map = blocks([['a', 'compressor', 0]])
     expect(canConnect(map, [], jack('ghost'), jack('a')).ok).toBe(false)
     expect(canConnect(map, [], jack('a'), jack('ghost')).ok).toBe(false)
   })
 
   it('allows IN as a source and OUT as a target regardless of real column numbers', () => {
-    const map = blocks([['a', 'drive', 0]])
+    const map = blocks([['a', 'compressor', 0]])
     expect(canConnect(map, [], jack('IN'), jack('a')).ok).toBe(true)
     expect(canConnect(map, [], jack('a'), jack('OUT')).ok).toBe(true)
   })
 
   it('rejects a second cable into the same jack on a normal block', () => {
     const map = blocks([
-      ['a', 'drive', 0],
+      ['a', 'compressor', 0],
       ['b', 'eq', 1],
       ['c', 'reverb', 0],
     ])
@@ -79,7 +79,7 @@ describe('canConnect', () => {
 
   it('allows several cables into a Mixer as long as each targets a different port', () => {
     const map = blocks([
-      ['a', 'drive', 0],
+      ['a', 'compressor', 0],
       ['b', 'eq', 0],
       ['m', 'mixer', 1],
     ])
@@ -90,7 +90,7 @@ describe('canConnect', () => {
 
   it('rejects a second cable into the same Mixer port', () => {
     const map = blocks([
-      ['a', 'drive', 0],
+      ['a', 'compressor', 0],
       ['b', 'eq', 0],
       ['m', 'mixer', 1],
     ])
@@ -101,7 +101,7 @@ describe('canConnect', () => {
 
   it('rejects a port index beyond a Mixer input count', () => {
     const map = blocks([
-      ['a', 'drive', 0],
+      ['a', 'compressor', 0],
       ['m', 'mixer', 1],
     ])
     const result = canConnect(map, [], jack('a'), jack('m', 4))
@@ -110,7 +110,7 @@ describe('canConnect', () => {
 
   it('rejects any non-zero port on a non-Mixer block', () => {
     const map = blocks([
-      ['a', 'drive', 0],
+      ['a', 'compressor', 0],
       ['b', 'eq', 1],
     ])
     const result = canConnect(map, [], jack('a'), jack('b', 1))
@@ -121,7 +121,7 @@ describe('canConnect', () => {
 describe('isEdgeOrderValid', () => {
   it('is true while the source column stays left of the target column', () => {
     const map = blocks([
-      ['a', 'drive', 0],
+      ['a', 'compressor', 0],
       ['b', 'eq', 1],
     ])
     expect(isEdgeOrderValid(map, { from: jack('a'), to: jack('b') })).toBe(true)
@@ -129,7 +129,7 @@ describe('isEdgeOrderValid', () => {
 
   it('is false once a moved block makes the source column land on or after the target', () => {
     const map = blocks([
-      ['a', 'drive', 3],
+      ['a', 'compressor', 3],
       ['b', 'eq', 1],
     ])
     expect(isEdgeOrderValid(map, { from: jack('a'), to: jack('b') })).toBe(false)

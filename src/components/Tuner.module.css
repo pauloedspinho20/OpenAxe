@@ -1,0 +1,102 @@
+.tuner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: var(--screen-bg);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-recessed);
+  width: 100%;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  justify-content: center;
+}
+
+.note {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--screen-dim);
+  line-height: 1;
+}
+
+.noteGood {
+  color: var(--led-on);
+}
+
+.noteOff {
+  color: var(--screen-text);
+}
+
+.freq {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--screen-dim);
+}
+
+.meter {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: var(--panel-recessed);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.meterCenter {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--seam-strong);
+  transform: translateX(-50%);
+}
+
+.needle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: left 0.08s linear;
+}
+
+.needleGood {
+  background: var(--led-on);
+}
+
+.needleOff {
+  background: var(--led-hot);
+}
+
+.calRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calInput {
+  width: 44px;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ink-1);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: 1px 4px;
+  text-align: center;
+}
+
+.calUnit {
+  color: var(--ink-3);
+}

@@ -10,7 +10,7 @@ const { applyPreset } = await import('./apply')
 
 function createMockBlock(overrides: Partial<PresetBlock> = {}): PresetBlock {
   return {
-    kind: 'drive',
+    kind: 'compressor',
     getParams: () => ({}),
     setParams: vi.fn(),
     setBypass: vi.fn(),
@@ -84,19 +84,19 @@ describe('applyPreset', () => {
   it('adds every preset block at its saved position and pushes its params', async () => {
     const rig = createMockRig()
     const preset = emptyPreset({
-      blocks: [{ id: 'b1', kind: 'drive', row: 1, col: 2, params: { drive: 0.8 } }],
+      blocks: [{ id: 'b1', kind: 'compressor', row: 1, col: 2, params: { drive: 0.8 } }],
     })
 
     await applyPreset(createMockContext(), preset, rig, useGraphStore)
 
-    expect(rig.addBlock).toHaveBeenCalledWith('drive', 1, 2, 'b1')
+    expect(rig.addBlock).toHaveBeenCalledWith('compressor', 1, 2, 'b1')
     expect(rig.blocks.b1?.setParams).toHaveBeenCalledWith({ drive: 0.8 })
   })
 
   it('sets bypass on the new block only when the preset specifies it', async () => {
     const rig = createMockRig()
     const preset = emptyPreset({
-      blocks: [{ id: 'b1', kind: 'drive', row: 0, col: 0, bypass: true, params: {} }],
+      blocks: [{ id: 'b1', kind: 'compressor', row: 0, col: 0, bypass: true, params: {} }],
     })
 
     await applyPreset(createMockContext(), preset, rig, useGraphStore)
@@ -108,7 +108,7 @@ describe('applyPreset', () => {
     const rig = createMockRig()
     const preset = emptyPreset({
       blocks: [
-        { id: 'b1', kind: 'drive', row: 0, col: 0, params: {} },
+        { id: 'b1', kind: 'compressor', row: 0, col: 0, params: {} },
         { id: 'b2', kind: 'eq', row: 0, col: 1, params: {} },
       ],
       edges: [{ id: 'e1', from: { blockId: 'b1', port: 0 }, to: { blockId: 'b2', port: 0 } }],
@@ -188,7 +188,7 @@ describe('applyPreset', () => {
   it('syncs graphStore to the rebuilt graph so future reconciles are no-ops', async () => {
     const rig = createMockRig()
     const preset = emptyPreset({
-      blocks: [{ id: 'b1', kind: 'drive', row: 0, col: 0, params: { drive: 0.8 } }],
+      blocks: [{ id: 'b1', kind: 'compressor', row: 0, col: 0, params: { drive: 0.8 } }],
       masterLevel: 0.6,
       masterMuted: true,
     })
@@ -197,7 +197,7 @@ describe('applyPreset', () => {
 
     const state = useGraphStore.getState()
     expect(state.blocks).toEqual([
-      { id: 'b1', kind: 'drive', row: 0, col: 0, params: { drive: 0.8 } },
+      { id: 'b1', kind: 'compressor', row: 0, col: 0, params: { drive: 0.8 } },
     ])
     expect(state.masterLevel).toBe(0.6)
     expect(state.masterMuted).toBe(true)

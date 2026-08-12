@@ -2,16 +2,14 @@ import type { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { createEffect } from '../../effects/effectRegistry'
 import type { EffectKind } from '../../effects/Effect'
 import type { Block, BlockKind, EffectParams } from './Block'
-import { AmpBlock } from './AmpBlock'
+import { AmpBlock, type NamModelBlockKind } from './AmpBlock'
 import { CabBlock } from './CabBlock'
-import { ToneStackBlock } from './ToneStackBlock'
 import { MixerBlock } from './MixerBlock'
 
 export const EFFECT_KINDS = new Set<BlockKind>([
   'noise-gate',
   'compressor',
   'eq',
-  'drive',
   'chorus',
   'flanger',
   'phaser',
@@ -20,6 +18,9 @@ export const EFFECT_KINDS = new Set<BlockKind>([
   'ping-pong-delay',
   'reverb',
 ])
+
+/** Every gear kind that's a NAM model capture rather than an IR - see CabBlock/AmpBlock's doc comments. */
+export const NAM_MODEL_KINDS = new Set<BlockKind>(['amp', 'amp-cab', 'pedal', 'outboard', 'space'])
 
 /**
  * Builds any grid block from its serialized `kind` (+ optional saved
@@ -45,15 +46,12 @@ async function buildBlock(
   params: EffectParams | undefined,
 ): Promise<Block> {
   switch (kind) {
-    case 'amp':
-      return AmpBlock.create(engine)
     case 'cab':
       return CabBlock.create(context)
-    case 'tone-stack':
-      return new ToneStackBlock(context)
     case 'mixer':
       return new MixerBlock(context)
     default:
+      if (NAM_MODEL_KINDS.has(kind)) return AmpBlock.create(engine, kind as NamModelBlockKind)
       if (EFFECT_KINDS.has(kind)) return createEffect(context, kind as EffectKind, params)
       throw new Error(`Unknown block kind: ${kind}`)
   }

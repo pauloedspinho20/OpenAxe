@@ -13,6 +13,8 @@ export interface AudioEngineState {
   rig: GraphRig | null
   context: AudioContext | null
   analyser: AnalyserNode | null
+  /** Taps the raw input (post-trim, pre-graph) for the tuner - never touches the signal path itself. */
+  tunerAnalyser: AnalyserNode | null
   micGranted: boolean
 }
 
@@ -27,6 +29,7 @@ const IDLE_STATE: AudioEngineState = {
   rig: null,
   context: null,
   analyser: null,
+  tunerAnalyser: null,
   micGranted: false,
 }
 
@@ -40,6 +43,7 @@ export function useAudioEngine() {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const channelRouterRef = useRef<AudioNode[]>([])
   const trimRef = useRef<GainNode | null>(null)
+  const tunerAnalyserRef = useRef<AnalyserNode | null>(null)
   const connectingRef = useRef(false)
 
   // Sync input gain to the trim node when it changes while the engine is running.
@@ -123,6 +127,10 @@ export function useAudioEngine() {
       trimRef.current = trim
       routerOut.connect(trim)
       rig.connectInput(trim)
+      // Tap the same trimmed signal for the tuner - a second fan-out from
+      // `trim`, entirely separate from the graph it feeds into, so tuning
+      // never touches (or is touched by) whatever's on the grid.
+      if (tunerAnalyserRef.current) trim.connect(tunerAnalyserRef.current)
 
       const micGranted = true
       setState((s) => (s.context === ctx ? { ...s, micGranted } : s))
@@ -157,7 +165,21 @@ export function useAudioEngine() {
       rig.outputNode.connect(analyser)
       analyser.connect(context.destination)
 
-      setState({ status: 'ready', error: null, rig, context, analyser, micGranted: false })
+      // Large fftSize: the tuner's autocorrelation needs a wide enough
+      // time-domain window to resolve low frequencies (a 5-string bass's
+      // low B is ~31Hz, needing >1500 samples per cycle at 48kHz).
+      const tunerAnalyser = new AnalyserNode(context, { fftSize: 4096, smoothingTimeConstant: 0 })
+      tunerAnalyserRef.current = tunerAnalyser
+
+      setState({
+        status: 'ready',
+        error: null,
+        rig,
+        context,
+        analyser,
+        tunerAnalyser,
+        micGranted: false,
+      })
 
       // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
       void connectMic()
@@ -177,12 +199,14 @@ export function useAudioEngine() {
     unbindRef.current = null
     teardownMic()
     state.analyser?.disconnect()
+    state.tunerAnalyser?.disconnect()
+    tunerAnalyserRef.current = null
     await state.rig?.dispose()
     await state.context?.close()
     contextRef.current = null
     rigRef.current = null
     setState(IDLE_STATE)
-  }, [state.rig, state.context, state.analyser])
+  }, [state.rig, state.context, state.analyser, state.tunerAnalyser])
 
   return { ...state, powerOn, powerOff }
 }

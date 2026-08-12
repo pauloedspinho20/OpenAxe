@@ -4,9 +4,10 @@ import { useGraphStore } from '../../state/graphStore'
 import { useSelection } from '../../state/selection'
 import { useEngineVersion } from '../../state/engineVersion'
 import type { GraphRig } from '../../engine/GraphRig'
+import { NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
 import type { AmpBlock } from '../../engine/blocks/AmpBlock'
 import type { CabBlock } from '../../engine/blocks/CabBlock'
-import { AssetScreenButton } from './AssetScreenButton'
+import { AssetScreenButton, type AssetGearType } from './AssetScreenButton'
 import { EffectParamsPanel } from '../EffectParamsPanel'
 import { getParamSchema } from '../../effects/paramSchema'
 import { BLOCK_KIND_LABELS } from './blockOptions'
@@ -50,25 +51,17 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const block = rig?.getBlock(instance.id) ?? null
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const isAssetKind = instance.kind === 'amp' || instance.kind === 'cab'
+  const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
 
   return (
     <Panel label={`Block Inspector · ${label}`}>
       <div className={styles.content}>
         {!block && <p className={styles.empty}>Power on to edit this block.</p>}
-        {block && instance.kind === 'amp' && (
+        {block && isAssetKind && (
           <AssetScreenButton
             blockId={instance.id}
-            kind="amp"
-            block={block as AmpBlock}
-            context={context}
-          />
-        )}
-        {block && instance.kind === 'cab' && (
-          <AssetScreenButton
-            blockId={instance.id}
-            kind="cab"
-            block={block as CabBlock}
+            gearType={instance.kind as AssetGearType}
+            block={block as AmpBlock | CabBlock}
             context={context}
           />
         )}

@@ -11,7 +11,6 @@ export type EffectKind =
   | 'noise-gate'
   | 'compressor'
   | 'eq'
-  | 'drive'
   | 'chorus'
   | 'flanger'
   | 'phaser'

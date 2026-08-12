@@ -7,11 +7,14 @@ import { BlockCard } from './BlockCard'
 import { BlockPalette } from './BlockPalette'
 import { CableLayer, type DragPreview } from './CableLayer'
 import { AddBlockMenu } from './AddBlockMenu'
+import { Tuner } from '../Tuner'
 import { jackElementId, parseJackElementId } from './jackId'
 import styles from './GridEditor.module.css'
 
 export interface GridEditorProps {
   rig: GraphRig | null
+  /** Taps the raw input signal - rendered as a tuner right next to the IN rail. */
+  tunerAnalyser: AnalyserNode | null
 }
 
 /**
@@ -23,7 +26,7 @@ export interface GridEditorProps {
  * cards only show basic info - full parameters and asset loading live in
  * BlockInspector, which reads the selection this component sets on click.
  */
-export function GridEditor({ rig }: GridEditorProps) {
+export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
   const blocks = useGraphStore((s) => s.blocks)
   const edges = useGraphStore((s) => s.edges)
   const [addMenuCell, setAddMenuCell] = useState<{ row: number; col: number } | null>(null)
@@ -112,6 +115,10 @@ export function GridEditor({ rig }: GridEditorProps) {
           dragPreview={dragPreview}
           rejectMessage={rejectMessage}
         />
+
+        <div className={styles.tunerSlot}>
+          <Tuner analyser={tunerAnalyser} />
+        </div>
 
         <div className={styles.rail}>
           <span className={`label ${styles.railLabel}`}>IN</span>

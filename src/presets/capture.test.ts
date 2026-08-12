@@ -6,7 +6,7 @@ import type { PresetBlock, PresetRig } from './types'
 
 function createMockBlock(overrides: Partial<PresetBlock> = {}): PresetBlock {
   return {
-    kind: 'drive',
+    kind: 'compressor',
     getParams: () => ({}),
     setParams: () => undefined,
     ...overrides,
@@ -46,7 +46,7 @@ describe('capturePreset', () => {
       b1: createMockBlock({ getParams: () => ({ drive: 0.8 }) }),
     })
     useGraphStore.setState({
-      blocks: [{ id: 'b1', kind: 'drive', row: 1, col: 2, params: {} }],
+      blocks: [{ id: 'b1', kind: 'compressor', row: 1, col: 2, params: {} }],
     })
 
     const preset = capturePreset('p1', 'My Tone', rig, useGraphStore)
@@ -54,7 +54,7 @@ describe('capturePreset', () => {
     expect(preset.blocks).toEqual([
       {
         id: 'b1',
-        kind: 'drive',
+        kind: 'compressor',
         row: 1,
         col: 2,
         params: { drive: 0.8 },
@@ -68,7 +68,7 @@ describe('capturePreset', () => {
 
   it('falls back to the store copy of params when the block is not live (e.g. engine off)', () => {
     useGraphStore.setState({
-      blocks: [{ id: 'b1', kind: 'drive', row: 0, col: 0, params: { drive: 0.5 } }],
+      blocks: [{ id: 'b1', kind: 'compressor', row: 0, col: 0, params: { drive: 0.5 } }],
     })
 
     const preset = capturePreset('p1', 'My Tone', createMockRig(), useGraphStore)
@@ -79,7 +79,7 @@ describe('capturePreset', () => {
   it('captures bypass only when explicitly set on the stored block', () => {
     useGraphStore.setState({
       blocks: [
-        { id: 'b1', kind: 'drive', row: 0, col: 0, bypass: true, params: {} },
+        { id: 'b1', kind: 'compressor', row: 0, col: 0, bypass: true, params: {} },
         { id: 'b2', kind: 'eq', row: 0, col: 1, params: {} },
       ],
     })
