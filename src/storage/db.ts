@@ -7,12 +7,14 @@
  */
 
 const DB_NAME = 'nam-web-studio'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 /** Blob store: downloaded .nam/IR files, keyed by an explicit id (see assetCache.ts). */
 export const STORE_ASSETS = 'assets'
 /** Preset store: keyPath 'id', so put() uses each preset's own id as the key (see presetStore.ts). */
 export const STORE_PRESETS = 'presets'
+/** Tone3000 library metadata (what's been imported, who made it) - see src/tone3000/library.ts. */
+export const STORE_LIBRARY = 'library'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -25,10 +27,22 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_PRESETS)) {
         db.createObjectStore(STORE_PRESETS, { keyPath: 'id' })
       }
+      if (!db.objectStoreNames.contains(STORE_LIBRARY)) {
+        db.createObjectStore(STORE_LIBRARY, { keyPath: 'id' })
+      }
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
   })
+}
+
+/** Remove all entries from an object store. */
+export async function clearStore(storeName: string): Promise<void> {
+  await withStore<undefined>(
+    storeName,
+    'readwrite',
+    (store) => store.clear() as IDBRequest<undefined>,
+  )
 }
 
 /** Run one request against a store inside its own transaction, opening/closing the db each time. */

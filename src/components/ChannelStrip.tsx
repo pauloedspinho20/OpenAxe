@@ -10,6 +10,8 @@ import type { Effect, EffectKind } from '../effects/Effect'
 import type { PresetEffectsChain } from '../presets/types'
 import { createEffect } from '../effects/effectRegistry'
 import { useDualChainStore } from '../state/dualChainStore'
+import { useTone3000Browser } from '../tone3000/browserStore'
+import { useTone3000Library } from '../tone3000/library'
 import styles from './ChannelStrip.module.css'
 
 export interface ChannelStripProps {
@@ -167,16 +169,23 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
   const isEffectivelyMuted = useDualChainStore((s) => s.isEffectivelyMuted)
 
   const [irMix, setIrMixState] = useState(1)
-  const [modelName, setModelName] = useState<string | null>(null)
-  const [irName, setIrName] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [preFx, setPreFx] = useState<Effect[]>([])
   const [postFx, setPostFx] = useState<Effect[]>([])
 
+  // Re-render when the Tone3000 library changes (a sibling modal imports into this rig, or
+  // loads a cached item from the library tab) so the amp/cab screens show the right name.
+  useTone3000Library((s) => s.version)
+
   const modelInputRef = useRef<HTMLInputElement>(null)
   const irInputRef = useRef<HTMLInputElement>(null)
+  const openBrowser = useTone3000Browser((s) => s.openBrowser)
 
   const amp = rig?.amp(chain) ?? null
+  // Displayed names come from the rig, not local state - the Tone3000 modal
+  // imports straight into the chain and this stays in sync with it.
+  const modelName = amp?.getLoadedModel()?.name ?? null
+  const irName = amp?.getLoadedIr()?.name ?? null
 
   const handleModelFile = async (file: File) => {
     if (!amp) return
@@ -184,7 +193,6 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
     try {
       const json = await file.text()
       await amp.loadModel(json, undefined, { id: file.name, name: file.name })
-      setModelName(file.name)
     } catch (error) {
       setLoadError(`Model: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -196,7 +204,6 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
     try {
       const audioBuffer = await context.decodeAudioData(await file.arrayBuffer())
       amp.loadIR(audioBuffer, irMix, { id: file.name, name: file.name })
-      setIrName(file.name)
     } catch (error) {
       setLoadError(`IR: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -235,16 +242,27 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
         }}
       />
 
-      <button
-        type="button"
-        className={styles.screen}
-        disabled={!amp}
-        onClick={() => modelInputRef.current?.click()}
-        title={amp ? 'Click to load a .nam model file' : 'Power on to load a model'}
-      >
-        <span className={`label ${styles.screenLabel}`}>Amp Model</span>
-        <span className={styles.screenValue}>{modelName ?? 'NO MODEL LOADED'}</span>
-      </button>
+      <div className={styles.screenBlock}>
+        <button
+          type="button"
+          className={styles.screen}
+          disabled={!amp}
+          onClick={() => modelInputRef.current?.click()}
+          title={amp ? 'Click to load a .nam model file' : 'Power on to load a model'}
+        >
+          <span className={`label ${styles.screenLabel}`}>Amp Model</span>
+          <span className={styles.screenValue}>{modelName ?? 'NO MODEL LOADED'}</span>
+        </button>
+        <button
+          type="button"
+          className={styles.browseBtn}
+          disabled={!amp}
+          onClick={() => openBrowser({ chain, slot: 'model' })}
+          title={amp ? 'Browse Tone3000 models' : 'Power on to browse Tone3000'}
+        >
+          T3K BROWSE
+        </button>
+      </div>
 
       <FxRow
         label="Pre FX"
@@ -255,16 +273,27 @@ export function ChannelStrip({ chain, rig, context }: ChannelStripProps) {
       />
 
       <div className={styles.row}>
-        <button
-          type="button"
-          className={styles.screen}
-          disabled={!amp || !context}
-          onClick={() => irInputRef.current?.click()}
-          title={amp ? 'Click to load a cabinet IR file' : 'Power on to load an IR'}
-        >
-          <span className={`label ${styles.screenLabel}`}>Cab IR</span>
-          <span className={styles.screenValue}>{irName ?? 'NO IR LOADED'}</span>
-        </button>
+        <div className={styles.screenBlock}>
+          <button
+            type="button"
+            className={styles.screen}
+            disabled={!amp || !context}
+            onClick={() => irInputRef.current?.click()}
+            title={amp ? 'Click to load a cabinet IR file' : 'Power on to load an IR'}
+          >
+            <span className={`label ${styles.screenLabel}`}>Cab IR</span>
+            <span className={styles.screenValue}>{irName ?? 'NO IR LOADED'}</span>
+          </button>
+          <button
+            type="button"
+            className={styles.browseBtn}
+            disabled={!amp || !context}
+            onClick={() => openBrowser({ chain, slot: 'ir' })}
+            title={amp ? 'Browse Tone3000 IRs' : 'Power on to browse Tone3000'}
+          >
+            T3K BROWSE
+          </button>
+        </div>
         <Knob
           label="IR Mix"
           value={irMix}

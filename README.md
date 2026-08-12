@@ -44,8 +44,12 @@ Input (mic/interface) ┤                                                       
 - Presets capture the full rig state (both chains' model/IR identity, level/pan/mute/solo, and
   every pre/post FX effect's parameters) into local IndexedDB, with JSON export/import for sharing
   since there's no cloud sync — see [src/presets/README.md](./src/presets/README.md).
-- [Tone3000](https://www.tone3000.com/api) integration lets users browse and import `.nam` models
-  and IRs directly into the local preset library.
+- [Tone3000](https://www.tone3000.com/api) integration — browse and import `.nam` models and IRs
+  directly into the local preset library via OAuth2+PKCE. The catalog is built into each
+  ChannelStrip's amp/cab screen (click "T3K BROWSE"). Configure with `VITE_PUBLISHABLE_KEY` in
+  `.env.local` (see [.env.example](./.env.example)). **Before every release, re-check
+  [Tone3000's API terms](https://www.tone3000.com/api/terms) against the app's free & non-commercial
+  status** — the current free tier covers non-commercial use, but terms change.
 - A pitch-detection tuner (Pitchfinder.js) runs independently of the signal chains.
 - A service worker caches the app shell and downloaded models/IRs for offline use.
 - The UI is styled as hardware, not a website — two finishes (dark "Carbon" / light "Aluminum",
@@ -53,8 +57,7 @@ Input (mic/interface) ┤                                                       
   browser form controls, one signature accent color. Loading a local `.nam`/IR file,
   adding/bypassing/removing effects, and tuning every added effect's actual parameters all work
   end-to-end. See [src/components/README.md](./src/components/README.md) for the design system and
-  what's still a placeholder (Tone3000-backed browsing, effect reordering, onboarding, per-chain
-  meters).
+  what's still a placeholder (effect reordering, onboarding, per-chain meters).
 
 ## Roadmap
 
@@ -66,7 +69,7 @@ Work is tracked as epics with task checklists in the
 3. Dual signal-chain / stereo architecture
 4. Effects suite
 5. Preset management (local-first)
-6. Tone3000 integration
+6. Tone3000 integration ✓
 7. Guitar/bass tuner
 8. UI/UX & design system
 9. Audio I/O management
