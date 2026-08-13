@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { GridEditor } from './components/grid/GridEditor'
 import { BlockInspector } from './components/grid/BlockInspector'
 import { MasterSection } from './components/MasterSection'
@@ -13,6 +13,7 @@ import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useOnboarding } from './hooks/useOnboarding'
 import { useTheme } from './hooks/useTheme'
+import { useTone3000Target } from './hooks/useTone3000Target'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
@@ -21,9 +22,6 @@ import { useToast } from './state/toast'
 import { useEngineVersion } from './state/engineVersion'
 import { usePresetManager } from './state/presetManager'
 import { installFactoryPresets } from './presets/factoryPresets'
-import type { AmpBlock } from './engine/blocks/AmpBlock'
-import type { CabBlock } from './engine/blocks/CabBlock'
-import type { BlockLoadTarget } from './tone3000/importService'
 import type { LatencyHint } from './state/ioStore'
 import styles from './App.module.css'
 
@@ -61,7 +59,7 @@ function App() {
   const toastMessage = useToast((s) => s.message)
   // Re-render when the engine's live block state changes (model/IR loads) -
   // graphStore doesn't track that, see engineVersion.ts.
-  useEngineVersion((s) => s.version)
+  const engineVersion = useEngineVersion((s) => s.version)
   const activeHeavyBlocks = engine.rig?.countActiveHeavyBlocks() ?? 0
   const openPresetManager = usePresetManager((s) => s.openManager)
 
@@ -74,25 +72,7 @@ function App() {
     void installFactoryPresets()
   }, [])
 
-  const tone3000Target: BlockLoadTarget | null = useMemo(() => {
-    if (!browser.target || !engine.rig) return null
-    const block = engine.rig.getBlock(browser.target.blockId)
-    if (!block) return null
-    if (browser.target.slot === 'model') {
-      return {
-        loadModel: (json, info) => (block as AmpBlock).loadModel(json, undefined, info),
-        loadIR: () => {
-          throw new Error('This block is not a Cab block')
-        },
-      }
-    }
-    return {
-      loadModel: () => {
-        throw new Error('This block is not an Amp block')
-      },
-      loadIR: (buffer, info) => (block as CabBlock).loadIR(buffer, 1, info),
-    }
-  }, [browser.target, engine.rig])
+  const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
   return (
     <div className={styles.chassis}>
