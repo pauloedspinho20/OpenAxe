@@ -5,6 +5,29 @@ const SEGMENT_COUNT = 12
 const AMBER_FROM = 0.75
 const RED_FROM = 0.92
 
+function levelColor(level: number): 'green' | 'amber' | 'red' {
+  return level > RED_FROM ? 'red' : level > AMBER_FROM ? 'amber' : 'green'
+}
+
+export interface MiniMeterProps {
+  /** Signal level in [0, 1], 1 = clipping. */
+  level: number
+  title?: string | undefined
+}
+
+/** A single-bar meter for tight spaces (e.g. a grid block card) - same colour thresholds as Meter. */
+export function MiniMeter({ level, title }: MiniMeterProps) {
+  const clamped = Math.min(1, Math.max(0, level))
+  return (
+    <span className={styles.miniWrap} title={title}>
+      <span
+        className={`${styles.miniFill} ${styles[levelColor(clamped)]}`}
+        style={{ width: `${clamped * 100}%` }}
+      />
+    </span>
+  )
+}
+
 export interface MeterProps {
   label?: string
   /** Signal level in [0, 1], 1 = clipping. */

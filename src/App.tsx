@@ -5,11 +5,13 @@ import { MasterSection } from './components/MasterSection'
 import { MasterUtility } from './components/MasterUtility'
 import { PresetManager } from './components/presets/PresetManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
+import { OnboardingModal } from './components/OnboardingModal'
 import { HardwareButton } from './components/primitives/HardwareButton'
 import { Led } from './components/primitives/Led'
 import { Toggle } from './components/primitives/Toggle'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
+import { useOnboarding } from './hooks/useOnboarding'
 import { useTheme } from './hooks/useTheme'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
@@ -50,6 +52,7 @@ const HEAVY_BLOCK_SOFT_THRESHOLD = 6
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
+  const onboarding = useOnboarding()
   const isReady = engine.status === 'ready'
   const browser = useTone3000Browser()
   const auth = useTone3000Auth()
@@ -191,6 +194,7 @@ function App() {
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
+      <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
     </div>
   )
 }

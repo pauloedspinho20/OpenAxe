@@ -3,14 +3,20 @@ import { useTone3000Auth } from '../tone3000/authStore'
 import { useTone3000Browser } from '../tone3000/browserStore'
 import { Tone3000Library, useTone3000Library } from '../tone3000/library'
 import type { Tone3000LibraryEntry } from '../tone3000/library'
-import { apiListMakes, apiListModels, apiListTags, apiSearchTones } from '../tone3000/client'
+import {
+  apiListFavoritedTones,
+  apiListMakes,
+  apiListModels,
+  apiListTags,
+  apiSearchTones,
+} from '../tone3000/client'
 import { importTone3000Asset } from '../tone3000/importService'
 import type { BlockLoadTarget } from '../tone3000/importService'
 import type { Tone, Tone3000Model } from '../tone3000/types'
 import { HardwareButton } from './primitives/HardwareButton'
 import styles from './Tone3000Browser.module.css'
 
-/** Max results /tones/search returns per page (per API docs). */
+/** Max results /tones/search and /tones/favorited return per page (per API docs). */
 const SEARCH_PAGE_SIZE = 25
 
 interface Props {
@@ -18,6 +24,9 @@ interface Props {
   target: BlockLoadTarget | null
   context: AudioContext | null
 }
+
+type Scope = 'browse' | 'library' | 'favorites'
+type ViewMode = 'list' | 'cards'
 
 interface SearchState {
   query: string
@@ -38,11 +47,16 @@ const GEAR_LABELS: Record<Tone['gear'], string> = {
   experimental: 'EXPERIMENTAL',
 }
 
+function matchesQuery(text: string, query: string): boolean {
+  return !query || text.toLowerCase().includes(query.trim().toLowerCase())
+}
+
 export function Tone3000Browser({ target, context }: Props) {
   const browser = useTone3000Browser()
   const auth = useTone3000Auth()
   const library = useTone3000Library((s) => s.entries)
-  const [tab, setTab] = useState<'browse' | 'library'>('browse')
+  const [scope, setScope] = useState<Scope>('browse')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [search, setSearch] = useState<SearchState>(DEFAULT_SEARCH)
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [tones, setTones] = useState<Tone[]>([])
@@ -75,8 +89,9 @@ export function Tone3000Browser({ target, context }: Props) {
     return () => clearTimeout(t)
   }, [search.query])
 
-  // Deliverable taxonomies (makes/tags) for the autocomplete datalists.
+  // Deliverable taxonomies (makes/tags) for the autocomplete datalists - browse only.
   useEffect(() => {
+    if (scope !== 'browse') return
     const t = setTimeout(
       () =>
         void apiListMakes(makesValue)
@@ -85,9 +100,10 @@ export function Tone3000Browser({ target, context }: Props) {
       300,
     )
     return () => clearTimeout(t)
-  }, [makesValue])
+  }, [scope, makesValue])
 
   useEffect(() => {
+    if (scope !== 'browse') return
     const t = setTimeout(
       () =>
         void apiListTags(tagsValue)
@@ -96,27 +112,41 @@ export function Tone3000Browser({ target, context }: Props) {
       300,
     )
     return () => clearTimeout(t)
-  }, [tagsValue])
+  }, [scope, tagsValue])
+
+  useEffect(() => {
+    setPage(1)
+  }, [scope])
 
   // The search itself, keyed on the settled filters. Re-runs after connect
-  // (auth.status in deps) for the lazy-auth flow.
+  // (auth.status in deps) for the lazy-auth flow. Browse and Favorites share
+  // this effect - both are paginated Tone lists, just from different
+  // endpoints and (for Favorites) without the free-text/format/sort/makes/
+  // tags filters the search endpoint supports.
   useEffect(() => {
-    if (tab !== 'browse' || !browser.target) return
+    if (scope === 'library' || !browser.target) return
     let cancelled = false
     setLoading(true)
     setError(null)
-    const params: Parameters<typeof apiSearchTones>[0] = {
-      query: debouncedQuery,
-      page,
-      pageSize: SEARCH_PAGE_SIZE,
-      sort: search.sort,
-      architecture: 2,
-      gears: [browser.target.gear],
-    }
-    if (search.format) params.format = search.format
-    if (makesValue) params.makes = [makesValue]
-    if (tagsValue) params.tags = [tagsValue]
-    apiSearchTones(params)
+    const request =
+      scope === 'favorites'
+        ? apiListFavoritedTones({
+            page,
+            pageSize: SEARCH_PAGE_SIZE,
+            gear: browser.target.gear,
+          })
+        : apiSearchTones({
+            query: debouncedQuery,
+            page,
+            pageSize: SEARCH_PAGE_SIZE,
+            sort: search.sort,
+            architecture: 2,
+            gears: [browser.target.gear],
+            ...(search.format ? { format: search.format } : {}),
+            ...(makesValue ? { makes: [makesValue] } : {}),
+            ...(tagsValue ? { tags: [tagsValue] } : {}),
+          })
+    request
       .then((res) => {
         if (cancelled) return
         setTones(res.data)
@@ -142,7 +172,7 @@ export function Tone3000Browser({ target, context }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    tab,
+    scope,
     debouncedQuery,
     page,
     browser.target,
@@ -225,7 +255,7 @@ export function Tone3000Browser({ target, context }: Props) {
 
   const close = () => {
     browser.closeBrowser()
-    setTab('browse')
+    setScope('browse')
     setSearch(DEFAULT_SEARCH)
     setDebouncedQuery('')
     setTones([])
@@ -240,6 +270,14 @@ export function Tone3000Browser({ target, context }: Props) {
 
   const { slot, gear } = browser.target
   const totalPages = Math.ceil(total / SEARCH_PAGE_SIZE)
+  const listClass = viewMode === 'cards' ? styles.cardsGrid : styles.list
+  const cardClass = `${styles.card} ${viewMode === 'cards' ? styles.cardVertical : ''}`
+  const filteredLibrary = library.filter(
+    (e) =>
+      matchesQuery(e.name, search.query) ||
+      matchesQuery(e.creator, search.query) ||
+      matchesQuery(e.toneTitle ?? '', search.query),
+  )
 
   return (
     <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label="Tone3000 catalog">
@@ -249,18 +287,45 @@ export function Tone3000Browser({ target, context }: Props) {
           <div className={styles.tabs}>
             <button
               type="button"
-              className={`${styles.tab} ${tab === 'browse' ? styles.tabActive : ''}`}
-              onClick={() => setTab('browse')}
+              className={`${styles.tab} ${scope === 'browse' ? styles.tabActive : ''}`}
+              onClick={() => setScope('browse')}
             >
-              BROWSE
+              ALL
             </button>
             <button
               type="button"
-              className={`${styles.tab} ${tab === 'library' ? styles.tabActive : ''}`}
-              onClick={() => setTab('library')}
+              className={`${styles.tab} ${scope === 'library' ? styles.tabActive : ''}`}
+              onClick={() => setScope('library')}
             >
               LIBRARY ({library.length})
             </button>
+            <button
+              type="button"
+              className={`${styles.tab} ${scope === 'favorites' ? styles.tabActive : ''}`}
+              onClick={() => setScope('favorites')}
+            >
+              FAVORITES
+            </button>
+            <span className={styles.viewToggle} role="group" aria-label="View mode">
+              <button
+                type="button"
+                className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
+                onClick={() => setViewMode('list')}
+                aria-label="List view"
+                title="List view"
+              >
+                ☰
+              </button>
+              <button
+                type="button"
+                className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
+                onClick={() => setViewMode('cards')}
+                aria-label="Card view"
+                title="Card view"
+              >
+                ▦
+              </button>
+            </span>
             <button type="button" className={styles.closeBtn} onClick={close} aria-label="Close">
               ×
             </button>
@@ -271,7 +336,7 @@ export function Tone3000Browser({ target, context }: Props) {
         {importError && <p className={styles.error}>{importError}</p>}
         {error && <p className={styles.error}>{error}</p>}
 
-        {tab === 'browse' && (
+        {scope !== 'library' && (
           <div className={styles.body}>
             <div className={styles.filters}>
               <input
@@ -281,62 +346,75 @@ export function Tone3000Browser({ target, context }: Props) {
                 onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
                 className={styles.input}
               />
-              <select
-                value={search.format}
-                onChange={(e) =>
-                  setSearch((s) => ({ ...s, format: e.target.value as Tone['format'] }))
-                }
-                className={styles.input}
-                aria-label="Format"
-              >
-                <option value="">All formats</option>
-                <option value="nam">NAM</option>
-                <option value="ir">IR</option>
-              </select>
-              <select
-                value={search.sort}
-                onChange={(e) =>
-                  setSearch((s) => ({ ...s, sort: e.target.value as SearchState['sort'] }))
-                }
-                className={styles.input}
-                aria-label="Sort"
-              >
-                <option value="trending">Trending</option>
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-                <option value="downloads-all-time">Most downloaded</option>
-                <option value="best-match">Best match</option>
-              </select>
+              {scope === 'browse' && (
+                <>
+                  <select
+                    value={search.format}
+                    onChange={(e) =>
+                      setSearch((s) => ({ ...s, format: e.target.value as Tone['format'] }))
+                    }
+                    className={styles.input}
+                    aria-label="Format"
+                  >
+                    <option value="">All formats</option>
+                    <option value="nam">NAM</option>
+                    <option value="ir">IR</option>
+                  </select>
+                  <select
+                    value={search.sort}
+                    onChange={(e) =>
+                      setSearch((s) => ({ ...s, sort: e.target.value as SearchState['sort'] }))
+                    }
+                    className={styles.input}
+                    aria-label="Sort"
+                  >
+                    <option value="trending">Trending</option>
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="downloads-all-time">Most downloaded</option>
+                    <option value="best-match">Best match</option>
+                  </select>
+                </>
+              )}
             </div>
 
-            <div className={styles.filterRow}>
-              <input
-                type="text"
-                list="t3k-makes"
-                placeholder="Makes…"
-                value={makesValue}
-                onChange={(e) => setMakesValue(e.target.value)}
-                className={styles.input}
-              />
-              <datalist id="t3k-makes">
-                {makes.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-              <input
-                type="text"
-                list="t3k-tags"
-                placeholder="Tags…"
-                value={tagsValue}
-                onChange={(e) => setTagsValue(e.target.value)}
-                className={styles.input}
-              />
-              <datalist id="t3k-tags">
-                {tags.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-            </div>
+            {scope === 'browse' && (
+              <div className={styles.filterRow}>
+                <input
+                  type="text"
+                  list="t3k-makes"
+                  placeholder="Makes…"
+                  value={makesValue}
+                  onChange={(e) => setMakesValue(e.target.value)}
+                  className={styles.input}
+                />
+                <datalist id="t3k-makes">
+                  {makes.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+                <input
+                  type="text"
+                  list="t3k-tags"
+                  placeholder="Tags…"
+                  value={tagsValue}
+                  onChange={(e) => setTagsValue(e.target.value)}
+                  className={styles.input}
+                />
+                <datalist id="t3k-tags">
+                  {tags.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
+            )}
+
+            {scope === 'favorites' && (
+              <p className={styles.hint}>
+                Tones you've favorited on tone3000.com - filtered by title, from {GEAR_LABELS[gear]}
+                .
+              </p>
+            )}
 
             {needsConnect && (
               <div className={styles.connect}>
@@ -353,70 +431,80 @@ export function Tone3000Browser({ target, context }: Props) {
               <p className={styles.hint}>No tones match.</p>
             )}
 
-            <ul className={styles.list}>
-              {tones.map((tone) => (
-                <li key={tone.id} className={styles.card}>
-                  <button
-                    type="button"
-                    className={styles.cardHeader}
-                    onClick={() => void toggleTone(tone)}
-                  >
-                    {tone.images?.[0] && (
-                      <img
-                        src={tone.images[0]}
-                        alt=""
-                        className={styles.cardImage}
-                        loading="lazy"
-                      />
-                    )}
-                    <span className={styles.cardInfo}>
-                      <span className={styles.cardTitle}>{tone.title}</span>
-                      <span className={`label ${styles.cardMeta}`}>
-                        {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
-                      </span>
-                      <span className={`label ${styles.cardCredit}`}>
-                        Captured by {tone.user.username}
-                      </span>
-                    </span>
-                  </button>
+            <ul className={listClass}>
+              {tones
+                .filter((tone) => scope !== 'favorites' || matchesQuery(tone.title, search.query))
+                .map((tone) => {
+                  const inLibrary = library.some((e) => e.sourceUrl === tone.url)
+                  return (
+                    <li key={tone.id} className={cardClass}>
+                      <button
+                        type="button"
+                        className={styles.cardHeader}
+                        onClick={() => void toggleTone(tone)}
+                      >
+                        {tone.images?.[0] && (
+                          <img
+                            src={tone.images[0]}
+                            alt=""
+                            className={styles.cardImage}
+                            loading="lazy"
+                          />
+                        )}
+                        <span className={styles.cardInfo}>
+                          <span className={styles.cardTitle}>
+                            {tone.title}
+                            {inLibrary && (
+                              <span className={`label ${styles.inLibraryBadge}`}>IN LIBRARY</span>
+                            )}
+                          </span>
+                          <span className={`label ${styles.cardMeta}`}>
+                            {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
+                          </span>
+                          <span className={`label ${styles.cardCredit}`}>
+                            Captured by {tone.user.username}
+                          </span>
+                        </span>
+                      </button>
 
-                  {expanded === tone.id && modelsLoading && (
-                    <p className={styles.hint}>Loading models…</p>
-                  )}
-                  {expanded === tone.id && models[tone.id] && (
-                    <ul className={styles.modelList}>
-                      {models[tone.id]!.map((model) => {
-                        const assetId = `tone3000:${slot}:${model.id}`
-                        const cached = library.some((e) => e.id === assetId)
-                        return (
-                          <li key={model.id} className={styles.modelRow}>
-                            <span className={styles.modelName}>
-                              {model.name}
-                              <span className={`label ${styles.modelSize}`}>
-                                {model.size} · A{model.architecture_version}
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              className={styles.importBtn}
-                              disabled={importingId === model.id.toString()}
-                              onClick={() => void runImport(model, tone)}
-                            >
-                              {importingId === model.id.toString()
-                                ? 'IMPORTING…'
-                                : importDone === model.id.toString()
-                                  ? 'IMPORTED ✓'
-                                  : cached
-                                    ? 'RELOAD'
-                                    : 'IMPORT'}
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </li>
-              ))}
+                      {expanded === tone.id && modelsLoading && (
+                        <p className={styles.hint}>Loading models…</p>
+                      )}
+                      {expanded === tone.id && models[tone.id] && (
+                        <ul className={styles.modelList}>
+                          {models[tone.id]!.map((model) => {
+                            const assetId = `tone3000:${slot}:${model.id}`
+                            const cached = library.some((e) => e.id === assetId)
+                            return (
+                              <li key={model.id} className={styles.modelRow}>
+                                <span className={styles.modelName}>
+                                  {model.name}
+                                  <span className={`label ${styles.modelSize}`}>
+                                    {model.size} · A{model.architecture_version}
+                                  </span>
+                                </span>
+                                <button
+                                  type="button"
+                                  className={styles.importBtn}
+                                  disabled={importingId === model.id.toString()}
+                                  onClick={() => void runImport(model, tone)}
+                                >
+                                  {importingId === model.id.toString()
+                                    ? 'IMPORTING…'
+                                    : importDone === model.id.toString()
+                                      ? 'IMPORTED ✓'
+                                      : cached
+                                        ? 'RELOAD'
+                                        : 'IMPORT'}
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                    </li>
+                  )
+                })}
             </ul>
 
             {totalPages > 1 && (
@@ -445,12 +533,24 @@ export function Tone3000Browser({ target, context }: Props) {
           </div>
         )}
 
-        {tab === 'library' && (
+        {scope === 'library' && (
           <div className={styles.body}>
+            <div className={styles.filters}>
+              <input
+                type="text"
+                placeholder="Filter your library…"
+                value={search.query}
+                onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+                className={styles.input}
+              />
+            </div>
             {library.length === 0 && <p className={styles.hint}>Nothing imported yet.</p>}
-            <ul className={styles.list}>
-              {library.map((entry) => (
-                <li key={entry.id} className={styles.card}>
+            {library.length > 0 && filteredLibrary.length === 0 && (
+              <p className={styles.hint}>No library items match.</p>
+            )}
+            <ul className={listClass}>
+              {filteredLibrary.map((entry) => (
+                <li key={entry.id} className={cardClass}>
                   <div className={styles.libraryRow}>
                     {entry.imageUrl && (
                       <img

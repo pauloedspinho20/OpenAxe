@@ -15,6 +15,26 @@
   overflow: visible;
 }
 
+/* Shows the loaded model/IR's Tone3000 image as the card's background, for
+   an at-a-glance read of what's plugged into each block - dimmed by the
+   ::before overlay below so text and jacks stay legible over any image. */
+.cardWithImage {
+  background-size: cover;
+  background-position: center;
+  isolation: isolate;
+}
+
+.cardWithImage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: var(--panel-raised);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
 .card:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
@@ -28,6 +48,8 @@
 }
 
 .header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -39,6 +61,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.kindIcon {
+  color: var(--ink-2);
+  flex-shrink: 0;
 }
 
 .headerActions {
@@ -78,6 +109,7 @@
 
 .jacks {
   position: absolute;
+  z-index: 1;
   top: var(--sp-2);
   bottom: var(--sp-2);
   left: -6px;
@@ -92,6 +124,13 @@
   flex-direction: column;
   justify-content: space-around;
   height: 100%;
+}
+
+.jackWrap {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 .jack {
@@ -110,6 +149,8 @@
 }
 
 .status {
+  position: relative;
+  z-index: 1;
   font-family: var(--font-display);
   font-size: 10px;
   color: var(--ink-3);

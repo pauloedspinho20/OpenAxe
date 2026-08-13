@@ -27,30 +27,110 @@ export type NamModelBlockKind = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'spac
  * `inputNode`/`outputNode` are the underlying `NamNode` itself, which is
  * already mono-in/mono-out and stays the same instance across model swaps.
  */
+/** ±12dB, matching the old AmpCabChain tone stack's range. */
+const TONE_GAIN_LIMIT = 12
+
 export class AmpBlock implements Block {
   readonly kind: NamModelBlockKind
   private readonly namNode: NamNode
+  private readonly context: BaseAudioContext
   private disposed = false
   private loadedModel: LoadedAssetInfo | null = null
   private modelJson: string | null = null
   private slimmable: SlimmableInfo | null = null
 
-  private constructor(namNode: NamNode, kind: NamModelBlockKind) {
+  /** 4-band tone stack (Bass low-shelf, Mid peaking, Treble high-shelf, Presence peaking), wired after the model. */
+  private readonly bassFilter: BiquadFilterNode
+  private readonly midFilter: BiquadFilterNode
+  private readonly trebleFilter: BiquadFilterNode
+  private readonly presenceFilter: BiquadFilterNode
+  private bassGain = 0
+  private midGain = 0
+  private trebleGain = 0
+  private presenceGain = 0
+
+  private constructor(context: BaseAudioContext, namNode: NamNode, kind: NamModelBlockKind) {
+    this.context = context
     this.namNode = namNode
     this.kind = kind
+
+    this.bassFilter = new BiquadFilterNode(context, { type: 'lowshelf', frequency: 100, gain: 0 })
+    this.midFilter = new BiquadFilterNode(context, {
+      type: 'peaking',
+      frequency: 1000,
+      Q: 0.7,
+      gain: 0,
+    })
+    this.trebleFilter = new BiquadFilterNode(context, {
+      type: 'highshelf',
+      frequency: 5000,
+      gain: 0,
+    })
+    this.presenceFilter = new BiquadFilterNode(context, {
+      type: 'peaking',
+      frequency: 8000,
+      Q: 0.5,
+      gain: 0,
+    })
+
+    namNode.connect(this.bassFilter)
+    this.bassFilter.connect(this.midFilter)
+    this.midFilter.connect(this.trebleFilter)
+    this.trebleFilter.connect(this.presenceFilter)
   }
 
   static async create(engine: NamEngine, kind: NamModelBlockKind = 'amp'): Promise<AmpBlock> {
     const namNode = await engine.createNode()
-    return new AmpBlock(namNode, kind)
+    return new AmpBlock(engine.context, namNode, kind)
   }
 
   get inputNode(): AudioNode {
     return this.namNode
   }
 
+  /** The tone stack's tail - colours the model output the same way a real amp's tone controls sit before the speaker. */
   get outputNode(): AudioNode {
-    return this.namNode
+    return this.presenceFilter
+  }
+
+  /** Set Bass shelf gain in dB (±12). */
+  setBass(gain: number): void {
+    this.bassGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
+    this.bassFilter.gain.setTargetAtTime(this.bassGain, this.context.currentTime, 0.01)
+  }
+
+  getBass(): number {
+    return this.bassGain
+  }
+
+  /** Set Mid peaking gain in dB (±12). */
+  setMid(gain: number): void {
+    this.midGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
+    this.midFilter.gain.setTargetAtTime(this.midGain, this.context.currentTime, 0.01)
+  }
+
+  getMid(): number {
+    return this.midGain
+  }
+
+  /** Set Treble shelf gain in dB (±12). */
+  setTreble(gain: number): void {
+    this.trebleGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
+    this.trebleFilter.gain.setTargetAtTime(this.trebleGain, this.context.currentTime, 0.01)
+  }
+
+  getTreble(): number {
+    return this.trebleGain
+  }
+
+  /** Set Presence peaking gain in dB (±12). */
+  setPresence(gain: number): void {
+    this.presenceGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
+    this.presenceFilter.gain.setTargetAtTime(this.presenceGain, this.context.currentTime, 0.01)
+  }
+
+  getPresence(): number {
+    return this.presenceGain
   }
 
   async loadModel(json: string, slimSize?: number, info?: LoadedAssetInfo): Promise<NamModelInfo> {
@@ -94,18 +174,32 @@ export class AmpBlock implements Block {
     return this.loadedModel
   }
 
-  /** Only the slim size is a continuous "param" - model loading is a separate action. */
+  /** Model loading is a separate action, not a continuous "param" - slim size and the tone stack are. */
   getParams(): EffectParams {
-    return this.slimmable ? { slimSize: this.slimmable.currentSize } : {}
+    return {
+      ...(this.slimmable ? { slimSize: this.slimmable.currentSize } : {}),
+      bass: this.bassGain,
+      mid: this.midGain,
+      treble: this.trebleGain,
+      presence: this.presenceGain,
+    }
   }
 
   setParams(params: EffectParams): void {
     if (typeof params.slimSize === 'number') void this.setModelSlimSize(params.slimSize)
+    if (typeof params.bass === 'number') this.setBass(params.bass)
+    if (typeof params.mid === 'number') this.setMid(params.mid)
+    if (typeof params.treble === 'number') this.setTreble(params.treble)
+    if (typeof params.presence === 'number') this.setPresence(params.presence)
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    this.bassFilter.disconnect()
+    this.midFilter.disconnect()
+    this.trebleFilter.disconnect()
+    this.presenceFilter.disconnect()
     await this.namNode.dispose()
   }
 }

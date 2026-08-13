@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useGraphStore } from '../state/graphStore'
+import { useGraphStore, type BlockInstance, type EdgeInstance } from '../state/graphStore'
 import { bindGraphRig, type GraphRigControls } from './bindGraphRig'
 import { jack } from './gridConfig'
 
@@ -18,9 +18,18 @@ function createMockRig(): {
     disconnect: vi.fn(),
     setMasterLevel: vi.fn(),
     setMasterMuted: vi.fn(),
+    setTunerMuted: vi.fn(),
     listBlockIds: vi.fn(() => []),
     listEdgeIds: vi.fn(() => []),
   }
+}
+
+function block(id: string, kind: string, row: number, col: number): BlockInstance {
+  return { id, kind: kind as BlockInstance['kind'], row, col, params: {} }
+}
+
+function loadGraph(blocks: BlockInstance[], edges: EdgeInstance[]) {
+  useGraphStore.getState().loadGraph(blocks, edges, 1, false)
 }
 
 /** Let the internal reconcile promise chain settle. */
@@ -32,7 +41,13 @@ async function flush() {
 
 describe('bindGraphRig', () => {
   beforeEach(() => {
-    useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
+    useGraphStore.setState({
+      blocks: [],
+      edges: [],
+      masterLevel: 1,
+      masterMuted: false,
+      tunerMuted: false,
+    })
   })
 
   it('applies the current state immediately on bind', async () => {
@@ -42,6 +57,7 @@ describe('bindGraphRig', () => {
 
     expect(rig.setMasterLevel).toHaveBeenCalledWith(1)
     expect(rig.setMasterMuted).toHaveBeenCalledWith(false)
+    expect(rig.setTunerMuted).toHaveBeenCalledWith(false)
   })
 
   it('adds a block that appears in the store but not yet in the rig', async () => {
@@ -83,32 +99,43 @@ describe('bindGraphRig', () => {
 
   it('connects a new edge from the store', async () => {
     const rig = createMockRig()
-    const a = useGraphStore.getState().addBlock('compressor', 0, 0)
-    const b = useGraphStore.getState().addBlock('eq', 0, 1)
     bindGraphRig(useGraphStore, rig)
     await flush()
+    loadGraph([block('a', 'compressor', 0, 0), block('b', 'eq', 0, 1)], [])
+    await flush()
 
-    const result = useGraphStore.getState().connect(jack(a), jack(b))
+    const result = useGraphStore.getState().connect(jack('a'), jack('b'))
     await flush()
 
     expect(result.ok).toBe(true)
-    expect(rig.connect).toHaveBeenCalledWith(jack(a), jack(b), (result as { id: string }).id)
+    expect(rig.connect).toHaveBeenCalledWith(jack('a'), jack('b'), (result as { id: string }).id)
   })
 
   it('disconnects an edge removed from the store', async () => {
     const rig = createMockRig()
-    const a = useGraphStore.getState().addBlock('compressor', 0, 0)
-    const b = useGraphStore.getState().addBlock('eq', 0, 1)
-    const result = useGraphStore.getState().connect(jack(a), jack(b))
-    const edgeId = (result as { ok: true; id: string }).id
-    rig.listEdgeIds.mockReturnValue([edgeId])
+    loadGraph(
+      [block('a', 'compressor', 0, 0), block('b', 'eq', 0, 1)],
+      [{ id: 'ab', from: jack('a'), to: jack('b') }],
+    )
+    rig.listEdgeIds.mockReturnValue(['ab'])
     bindGraphRig(useGraphStore, rig)
     await flush()
 
-    useGraphStore.getState().disconnect(edgeId)
+    useGraphStore.getState().disconnect('ab')
     await flush()
 
-    expect(rig.disconnect).toHaveBeenCalledWith(edgeId)
+    expect(rig.disconnect).toHaveBeenCalledWith('ab')
+  })
+
+  it('pushes the tuner mute flag', async () => {
+    const rig = createMockRig()
+    bindGraphRig(useGraphStore, rig)
+    await flush()
+
+    useGraphStore.getState().setTunerMuted(true)
+    await flush()
+
+    expect(rig.setTunerMuted).toHaveBeenCalledWith(true)
   })
 
   it('stops applying updates once unbound', async () => {

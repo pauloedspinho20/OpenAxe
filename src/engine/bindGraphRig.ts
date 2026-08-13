@@ -21,6 +21,7 @@ export interface GraphRigControls {
   disconnect(edgeId: string): void
   setMasterLevel(level: number): void
   setMasterMuted(muted: boolean): void
+  setTunerMuted(muted: boolean): void
   listBlockIds(): string[]
   listEdgeIds(): string[]
 }
@@ -63,6 +64,7 @@ async function reconcile(rig: GraphRigControls, state: GraphState): Promise<void
 
   rig.setMasterLevel(state.masterLevel)
   rig.setMasterMuted(state.masterMuted)
+  rig.setTunerMuted(state.tunerMuted)
 
   // Block creation above is async - components that read live block state
   // imperatively during render (BlockCard) have nothing else to subscribe

@@ -3,6 +3,10 @@ import type { BlockKind } from '../../engine/blocks/Block'
 import { useGraphStore } from '../../state/graphStore'
 import { BLOCK_OPTIONS } from './blockOptions'
 import { findGridElement, isPointOverGrid, resolveGridCell } from './gridGeometry'
+import { BlockIcon, TunerIcon } from './blockIcons'
+import { Tuner } from '../Tuner'
+import { TunerDialog } from './TunerDialog'
+import { openCatalogForNewBlock } from './openCatalogForNewBlock'
 import styles from './BlockPalette.module.css'
 
 interface DragState {
@@ -13,14 +17,21 @@ interface DragState {
   overGrid: boolean
 }
 
+export interface BlockPaletteProps {
+  tunerAnalyser: AnalyserNode | null
+}
+
 /**
  * A persistent shelf of every placeable block kind, above the grid. Drag a
  * chip onto an empty cell to place it there - the click-to-add popover on
  * empty cells (AddBlockMenu) still works too, this is just a second, more
- * direct path to the same `graphStore.addBlock` call.
+ * direct path to the same `graphStore.addBlock` call. The tuner lives at the
+ * left as its own non-draggable block section: a live mini readout that
+ * expands into a full-size dialog (which mutes the app output) on click.
  */
-export function BlockPalette() {
+export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
   const [drag, setDrag] = useState<DragState | null>(null)
+  const [tunerOpen, setTunerOpen] = useState(false)
   const dragRef = useRef<DragState | null>(null)
 
   const handlePointerDown = (e: React.PointerEvent, kind: BlockKind, label: string) => {
@@ -60,43 +71,66 @@ export function BlockPalette() {
     const { row, col } = resolveGridCell(gridEl, e.clientX, e.clientY)
     const store = useGraphStore.getState()
     if (store.blocks.some((b) => b.row === row && b.col === col)) return
-    store.addBlock(current.kind, row, col)
+    const id = store.addBlock(current.kind, row, col)
+    openCatalogForNewBlock(id, current.kind)
   }
 
   const groups = Array.from(new Set(BLOCK_OPTIONS.map((o) => o.group)))
 
   return (
-    <div className={styles.shelf}>
-      {groups.map((group) => (
-        <div key={group} className={styles.group}>
-          <span className={`label ${styles.groupLabel}`}>{group}</span>
-          <div className={styles.chips}>
-            {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
-              <div
-                key={option.kind}
-                className={styles.chip}
-                role="button"
-                tabIndex={0}
-                aria-label={`Drag ${option.label} onto the grid`}
-                onPointerDown={(e) => handlePointerDown(e, option.kind, option.label)}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-              >
-                {option.label}
-              </div>
-            ))}
+    <div className={styles.paletteRow}>
+      <button
+        type="button"
+        className={styles.tunerSection}
+        onClick={() => setTunerOpen(true)}
+        aria-label="Open tuner"
+        title="Open the full-size tuner (mutes output)"
+      >
+        <TunerIcon size={16} className={styles.tunerIcon} />
+        <div className={styles.tunerLive}>
+          <Tuner analyser={tunerAnalyser} />
+        </div>
+      </button>
+      <div className={styles.shelf}>
+        {groups.map((group) => (
+          <div key={group} className={styles.group}>
+            <span className={`label ${styles.groupLabel}`}>{group}</span>
+            <div className={styles.chips}>
+              {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
+                <div
+                  key={option.kind}
+                  className={styles.chip}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Drag ${option.label} onto the grid`}
+                  onPointerDown={(e) => handlePointerDown(e, option.kind, option.label)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                >
+                  <BlockIcon kind={option.kind} size={12} />
+                  {option.label}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
 
-      {drag && (
-        <div
-          className={`${styles.ghost} ${drag.overGrid ? styles.ghostOverGrid : ''}`}
-          style={{ left: drag.x, top: drag.y }}
-        >
-          {drag.label}
-        </div>
-      )}
+        {drag && (
+          <div
+            className={`${styles.ghost} ${drag.overGrid ? styles.ghostOverGrid : ''}`}
+            style={{ left: drag.x, top: drag.y }}
+          >
+            <BlockIcon kind={drag.kind} size={12} />
+            {drag.label}
+          </div>
+        )}
+
+        <TunerDialog
+          open={tunerOpen}
+          onClose={() => setTunerOpen(false)}
+          analyser={tunerAnalyser}
+        />
+      </div>
     </div>
   )
 }

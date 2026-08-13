@@ -6,6 +6,8 @@ import styles from './Tuner.module.css'
 export interface TunerProps {
   /** Taps the raw input signal (post-trim, pre-graph) - see useAudioEngine's tunerAnalyser. */
   analyser: AnalyserNode | null
+  /** 'compact' is the shelf/mini readout; 'full' is the large tuning dialog. */
+  size?: 'compact' | 'full'
 }
 
 /** Detection doesn't need to run every animation frame - a tuner only needs a few readings a second. */
@@ -22,7 +24,7 @@ const IN_TUNE_CENTS = 5
  * per-string/alternate-tuning highlight is a reasonable follow-up (see
  * REFERENCE_TUNINGS in noteUtils.ts).
  */
-export function Tuner({ analyser }: TunerProps) {
+export function Tuner({ analyser, size = 'compact' }: TunerProps) {
   const [reading, setReading] = useState<{ frequency: number; note: DetectedNote } | null>(null)
   const [referenceA4, setReferenceA4] = useState(440)
   const bufferRef = useRef<Float32Array<ArrayBuffer> | null>(null)
@@ -53,7 +55,7 @@ export function Tuner({ analyser }: TunerProps) {
   const needlePercent = Math.max(-50, Math.min(50, cents))
 
   return (
-    <div className={styles.tuner}>
+    <div className={`${styles.tuner} ${size === 'full' ? styles.tunerFull : ''}`}>
       <div className={styles.readout}>
         <span
           className={`${styles.note} ${reading ? (inTune ? styles.noteGood : styles.noteOff) : ''}`}
@@ -64,7 +66,7 @@ export function Tuner({ analyser }: TunerProps) {
       </div>
 
       <div
-        className={styles.meter}
+        className={`${styles.meter} ${size === 'full' ? styles.meterFull : ''}`}
         role="meter"
         aria-label="Tuning offset in cents"
         aria-valuemin={-50}

@@ -87,6 +87,20 @@
   .masterRow {
     grid-template-columns: 1fr;
   }
+
+  .header {
+    flex-wrap: wrap;
+    row-gap: var(--sp-2);
+  }
+
+  .powerGroup {
+    flex-wrap: wrap;
+    row-gap: var(--sp-2);
+  }
+
+  .main {
+    padding: var(--sp-4);
+  }
 }
 
 .footer {

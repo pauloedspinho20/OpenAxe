@@ -21,6 +21,7 @@ vi.stubGlobal('StereoPannerNode', stubAudioNode())
 vi.stubGlobal('BiquadFilterNode', stubAudioNode())
 vi.stubGlobal('DynamicsCompressorNode', stubAudioNode())
 vi.stubGlobal('ConvolverNode', stubAudioNode())
+vi.stubGlobal('AnalyserNode', stubAudioNode())
 
 function createMockContext(): AudioContext {
   return { currentTime: 0 } as AudioContext
@@ -53,6 +54,15 @@ describe('GraphRig', () => {
     const id = await rig.addBlock('eq', 1, 2)
     expect(rig.getBlockPosition(id)).toEqual({ row: 1, col: 2 })
     expect(rig.getBlock(id)?.kind).toBe('eq')
+  })
+
+  it('getBlockAnalyser lazily creates and caches one tap per block, null for an unknown id', async () => {
+    const id = await rig.addBlock('eq', 0, 0)
+    expect(rig.getBlockAnalyser('nope')).toBeNull()
+    const first = rig.getBlockAnalyser(id)
+    const second = rig.getBlockAnalyser(id)
+    expect(first).not.toBeNull()
+    expect(second).toBe(first)
   })
 
   it('honors an explicit id when adding a block', async () => {
@@ -155,6 +165,20 @@ describe('GraphRig', () => {
 
     expect(rig.listBlockIds()).toEqual([])
     expect(rig.listEdgeIds()).toEqual([])
+  })
+
+  it('silences the output while tuner-muted, restoring the saved level after', () => {
+    const masterGain = (
+      rig as unknown as { masterGain: { gain: { setTargetAtTime: ReturnType<typeof vi.fn> } } }
+    ).masterGain
+    rig.setMasterLevel(0.5)
+    const lastTarget = () => masterGain.gain.setTargetAtTime.mock.calls.at(-1)![0]
+
+    rig.setTunerMuted(true)
+    expect(lastTarget()).toBe(0)
+
+    rig.setTunerMuted(false)
+    expect(lastTarget()).toBe(0.5)
   })
 
   it('counts only Amp/Cab blocks with an actual model/IR loaded', async () => {

@@ -1,5 +1,6 @@
 import type { BlockKind } from '../../engine/blocks/Block'
 import { BLOCK_OPTIONS } from './blockOptions'
+import { BlockIcon } from './blockIcons'
 import styles from './AddBlockMenu.module.css'
 
 export interface AddBlockMenuProps {
@@ -31,6 +32,7 @@ export function AddBlockMenu({ onPick, onClose }: AddBlockMenuProps) {
                   className={styles.option}
                   onClick={() => onPick(option.kind)}
                 >
+                  <BlockIcon kind={option.kind} size={12} />
                   {option.label}
                 </button>
               ))}

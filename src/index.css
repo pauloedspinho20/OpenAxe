@@ -115,12 +115,28 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  /* Stops the two-finger/trackpad horizontal overscroll gesture from being
+     read as "swipe back/forward" in browser history. */
+  overscroll-behavior-x: none;
 }
 
 body {
   background: var(--chassis);
   color: var(--ink-1);
   overflow-x: hidden;
+  /* This is a hardware control surface, not a document - dragging across
+     knobs, cables, and jacks should never leave a text-selection behind. */
+  user-select: none;
+  -webkit-user-select: none;
+  /* Mobile browsers flash a blue overlay on tap by default - a dead giveaway
+     this is a webpage, not the hardware-inspired surface it's meant to look like. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #root {

@@ -47,6 +47,14 @@
   border-radius: var(--r-sm);
   padding: var(--sp-2) var(--sp-3);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.option > svg {
+  color: var(--ink-3);
+  flex-shrink: 0;
 }
 
 .option:hover {

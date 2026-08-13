@@ -39,12 +39,15 @@ export class GraphRig {
   private readonly engine: NamEngine
   private readonly blocks = new Map<string, BlockEntry>()
   private readonly edges = new Map<string, Edge>()
+  /** Lazily-created per-block output taps for live meters - see getBlockAnalyser. */
+  private readonly analysers = new Map<string, AnalyserNode>()
   private readonly outSink: GainNode
   private readonly masterGain: GainNode
   private readonly limiter: DynamicsCompressorNode
   private inputSource: AudioNode | null = null
   private masterLevel = 1
   private masterMuted = false
+  private tunerMuted = false
   private disposed = false
   private nextId = 0
 
@@ -99,6 +102,7 @@ export class GraphRig {
       }
     }
     this.blocks.delete(id)
+    this.analysers.delete(id)
     await entry.block.dispose()
   }
 
@@ -127,6 +131,23 @@ export class GraphRig {
 
   getBlock(id: string): Block | null {
     return this.blocks.get(id)?.block ?? null
+  }
+
+  /**
+   * A live meter tap on this block's output - created and connected on
+   * first request, then cached (a fan-out tap, so it never touches the
+   * signal itself). Null for an unknown block id.
+   */
+  getBlockAnalyser(id: string): AnalyserNode | null {
+    const entry = this.blocks.get(id)
+    if (!entry) return null
+    let analyser = this.analysers.get(id)
+    if (!analyser) {
+      analyser = new AnalyserNode(this.context)
+      entry.block.outputNode.connect(analyser)
+      this.analysers.set(id, analyser)
+    }
+    return analyser
   }
 
   getBlockPosition(id: string): { row: number; col: number } | null {
@@ -257,8 +278,14 @@ export class GraphRig {
     this.applyMasterGain()
   }
 
+  /** Programmatic output silence (e.g. while the tuner dialog is open) - independent of the saved master mute. */
+  setTunerMuted(muted: boolean): void {
+    this.tunerMuted = muted
+    this.applyMasterGain()
+  }
+
   private applyMasterGain(): void {
-    const gain = this.masterMuted ? 0 : this.masterLevel
+    const gain = this.masterMuted || this.tunerMuted ? 0 : this.masterLevel
     this.masterGain.gain.setTargetAtTime(gain, this.context.currentTime, 0.01)
   }
 
@@ -271,6 +298,7 @@ export class GraphRig {
     const disposals: Array<void | Promise<void>> = []
     for (const entry of this.blocks.values()) disposals.push(entry.block.dispose())
     this.blocks.clear()
+    this.analysers.clear()
     this.outSink.disconnect()
     this.masterGain.disconnect()
     this.limiter.disconnect()

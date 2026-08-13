@@ -100,3 +100,48 @@
 .calUnit {
   color: var(--ink-3);
 }
+
+/* Full-size tuning dialog variant - bigger readout, wider needle meter. */
+.tunerFull {
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+}
+
+.tunerFull .readout {
+  gap: var(--sp-1);
+  min-height: 0;
+}
+
+.tunerFull .note {
+  font-size: 52px;
+}
+
+.tunerFull .freq {
+  font-size: 14px;
+}
+
+.tunerFull .meter {
+  height: 14px;
+  border-radius: 7px;
+}
+
+.tunerFull .needle {
+  top: -5px;
+  bottom: -5px;
+  width: 4px;
+}
+
+.tunerFull .meterCenter {
+  top: -4px;
+  bottom: -4px;
+}
+
+.tunerFull .calRow {
+  gap: var(--sp-2);
+}
+
+.tunerFull .calInput {
+  width: 64px;
+  font-size: 13px;
+  padding: 2px 6px;
+}

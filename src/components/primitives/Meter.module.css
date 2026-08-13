@@ -35,3 +35,30 @@
   background: var(--led-hot);
   box-shadow: 0 0 4px rgba(255, 59, 48, 0.6);
 }
+
+.miniWrap {
+  display: inline-block;
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-recessed);
+  box-shadow: var(--shadow-recessed);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.miniFill {
+  display: block;
+  height: 100%;
+  transition: width 0.05s linear;
+}
+
+.miniFill.green {
+  background: var(--led-on);
+}
+.miniFill.amber {
+  background: var(--led-warn);
+}
+.miniFill.red {
+  background: var(--led-hot);
+}

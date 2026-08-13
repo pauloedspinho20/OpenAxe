@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Meter } from './primitives/Meter'
+import { Meter, MiniMeter } from './primitives/Meter'
 
 export interface LiveMeterProps {
   label?: string
   analyser: AnalyserNode | null
+  /** 'segments' (default) is the full VU-style meter; 'mini' is a single bar for tight spaces. */
+  variant?: 'segments' | 'mini'
 }
 
 /**
@@ -11,7 +13,7 @@ export interface LiveMeterProps {
  * requestAnimationFrame loop and local state, so the ~60fps updates don't
  * re-render anything outside this component.
  */
-export function LiveMeter({ label, analyser }: LiveMeterProps) {
+export function LiveMeter({ label, analyser, variant = 'segments' }: LiveMeterProps) {
   const [level, setLevel] = useState(0)
   const bufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
 
@@ -37,5 +39,6 @@ export function LiveMeter({ label, analyser }: LiveMeterProps) {
     return () => cancelAnimationFrame(frame)
   }, [analyser])
 
+  if (variant === 'mini') return <MiniMeter level={level} title={label} />
   return label === undefined ? <Meter level={level} /> : <Meter label={label} level={level} />
 }

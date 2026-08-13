@@ -365,14 +365,63 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   ],
 }
 
+/** Bass/Mid/Treble/Presence tone stack, ±12dB - shared by every NAM model block kind (see AmpBlock). */
+const AMP_TONE_STACK: KnobField[] = [
+  {
+    key: 'bass',
+    label: 'Bass',
+    control: 'knob',
+    min: -12,
+    max: 12,
+    step: 0.5,
+    defaultValue: 0,
+    formatValue: dB,
+  },
+  {
+    key: 'mid',
+    label: 'Mid',
+    control: 'knob',
+    min: -12,
+    max: 12,
+    step: 0.5,
+    defaultValue: 0,
+    formatValue: dB,
+  },
+  {
+    key: 'treble',
+    label: 'Treble',
+    control: 'knob',
+    min: -12,
+    max: 12,
+    step: 0.5,
+    defaultValue: 0,
+    formatValue: dB,
+  },
+  {
+    key: 'presence',
+    label: 'Presence',
+    control: 'knob',
+    min: -12,
+    max: 12,
+    step: 0.5,
+    defaultValue: 0,
+    formatValue: dB,
+  },
+]
+
 /**
- * Schema entries for grid block kinds beyond the 10 effects (the 5 NAM
- * model kinds - amp/amp-cab/pedal/outboard/space - have none: model
- * loading isn't a continuous "param", and their only one, slim size, gets
- * a dedicated select in the inspector rather than going through the
- * generic knob panel).
+ * Schema entries for grid block kinds beyond the 10 effects. The 5 NAM
+ * model kinds (amp/amp-cab/pedal/outboard/space) each get the same 4-band
+ * tone stack - model loading itself isn't a continuous "param" and stays a
+ * dedicated action in the inspector, but the tone controls go through the
+ * same generic knob panel as everything else.
  */
 export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
+  amp: AMP_TONE_STACK,
+  'amp-cab': AMP_TONE_STACK,
+  pedal: AMP_TONE_STACK,
+  outboard: AMP_TONE_STACK,
+  space: AMP_TONE_STACK,
   cab: [
     {
       key: 'irMix',

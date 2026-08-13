@@ -4,12 +4,16 @@ import { useEngineVersion } from '../../state/engineVersion'
 import { useSelection } from '../../state/selection'
 import { showToast } from '../../state/toast'
 import type { GraphRig } from '../../engine/GraphRig'
-import { GRID_ROWS, GRID_COLS } from '../../engine/gridConfig'
+import { GRID_ROWS, GRID_COLS, jack } from '../../engine/gridConfig'
 import { resolveGridCell } from './gridGeometry'
 import type { BlockKind } from '../../engine/blocks/Block'
 import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '../../engine/blocks/MixerBlock'
+import { useTone3000Library } from '../../tone3000/library'
+import { LiveMeter } from '../LiveMeter'
 import { BLOCK_KIND_LABELS } from './blockOptions'
+import { BlockIcon } from './blockIcons'
+import { JackDisconnect } from './JackDisconnect'
 import { jackElementId } from './jackId'
 import styles from './BlockCard.module.css'
 
@@ -32,13 +36,22 @@ interface MaybeBypassable {
 
 /** Anything with optional loaded-asset getters - only NAM-model/Cab blocks have these. */
 interface MaybeAsset {
-  getLoadedModel?(): { name: string } | null
-  getLoadedIr?(): { name: string } | null
+  getLoadedModel?(): { id: string; name: string } | null
+  getLoadedIr?(): { id: string; name: string } | null
 }
 
-function statusText(instance: BlockInstance, block: MaybeAsset | null): string | null {
-  if (NAM_MODEL_KINDS.has(instance.kind)) return block?.getLoadedModel?.()?.name ?? 'No model'
-  if (instance.kind === 'cab') return block?.getLoadedIr?.()?.name ?? 'No IR'
+function loadedAsset(
+  instance: BlockInstance,
+  block: MaybeAsset | null,
+): { id: string; name: string } | null {
+  if (NAM_MODEL_KINDS.has(instance.kind)) return block?.getLoadedModel?.() ?? null
+  if (instance.kind === 'cab') return block?.getLoadedIr?.() ?? null
+  return null
+}
+
+function statusText(instance: BlockInstance, loaded: { name: string } | null): string | null {
+  if (NAM_MODEL_KINDS.has(instance.kind)) return loaded?.name ?? 'No model'
+  if (instance.kind === 'cab') return loaded?.name ?? 'No IR'
   return null
 }
 
@@ -52,15 +65,22 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
   const dragState = useRef<{ startX: number; startY: number } | null>(null)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
+  const edges = useGraphStore((s) => s.edges)
 
   // Re-render once async block creation inside bindGraphRig's reconcile
   // finishes - graphStore's own state doesn't change when that happens, so
   // nothing else would trigger this component to look again.
   useEngineVersion((s) => s.version)
+  const libraryEntries = useTone3000Library((s) => s.entries)
   const block = rig?.getBlock(instance.id) ?? null
   const isEffect = EFFECT_KINDS.has(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const status = statusText(instance, block as MaybeAsset | null)
+  const loaded = loadedAsset(instance, block as MaybeAsset | null)
+  const status = statusText(instance, loaded)
+  const cardImageUrl = loaded
+    ? (libraryEntries.find((e) => e.id === loaded.id)?.imageUrl ?? null)
+    : null
+  const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   const isSelected = selectedBlockId === instance.id
 
   const handleCardPointerDown = (e: React.PointerEvent) => {
@@ -165,12 +185,13 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
 
   return (
     <div
-      className={`${styles.card} ${isSelected ? styles.cardSelected : ''}`}
-      style={
-        dragOffset
+      className={`${styles.card} ${isSelected ? styles.cardSelected : ''} ${cardImageUrl ? styles.cardWithImage : ''}`}
+      style={{
+        ...(cardImageUrl ? { backgroundImage: `url(${cardImageUrl})` } : {}),
+        ...(dragOffset
           ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`, zIndex: 10 }
-          : undefined
-      }
+          : {}),
+      }}
       tabIndex={0}
       role="button"
       aria-pressed={isSelected}
@@ -181,8 +202,12 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
       onKeyDown={handleKeyDown}
     >
       <div className={styles.header}>
-        <span className={`label ${styles.kindLabel}`}>{label}</span>
+        <span className={`${styles.kindLabel} `}>
+          <BlockIcon kind={instance.kind} size={12} className={styles.kindIcon} />
+          <span className="label">{label}</span>
+        </span>
         <div className={styles.headerActions}>
+          {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
           {isEffect && (
             <button
               type="button"
@@ -210,22 +235,42 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
 
       <div className={styles.jacks}>
         <div className={styles.jacksIn}>
-          {Array.from({ length: portCount(instance.kind) }, (_, port) => (
-            <div
-              key={port}
-              className={styles.jack}
-              data-jack-id={jackElementId(instance.id, 'in', port)}
-              data-jack-side="in"
-              title={instance.kind === 'mixer' ? `Input ${port + 1}` : 'Input'}
-            />
-          ))}
+          {Array.from({ length: portCount(instance.kind) }, (_, port) => {
+            const occupied = edges.some((e) => e.to.blockId === instance.id && e.to.port === port)
+            return (
+              <span key={port} className={styles.jackWrap}>
+                <div
+                  className={styles.jack}
+                  data-jack-id={jackElementId(instance.id, 'in', port)}
+                  data-jack-side="in"
+                  title={
+                    occupied
+                      ? 'Drag to rewire this cable, or use the × on it to remove it'
+                      : instance.kind === 'mixer'
+                        ? `Input ${port + 1}`
+                        : 'Input'
+                  }
+                />
+                {occupied && (
+                  <JackDisconnect
+                    label={`Disconnect input ${port + 1}`}
+                    onDisconnect={() =>
+                      useGraphStore.getState().disconnectConnections(jack(instance.id, port), 'in')
+                    }
+                  />
+                )}
+              </span>
+            )
+          })}
         </div>
-        <div
-          className={styles.jack}
-          data-jack-id={jackElementId(instance.id, 'out', 0)}
-          data-jack-side="out"
-          title="Output"
-        />
+        <span className={styles.jackWrap}>
+          <div
+            className={styles.jack}
+            data-jack-id={jackElementId(instance.id, 'out', 0)}
+            data-jack-side="out"
+            title="Output - drag from here to connect, or drag any of its cables"
+          />
+        </span>
       </div>
 
       {status && <span className={styles.status}>{status}</span>}

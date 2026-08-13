@@ -1,0 +1,23 @@
+.badge {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: var(--led-hot);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.badge:hover {
+  background: #ff6a57;
+}
