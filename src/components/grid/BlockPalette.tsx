@@ -3,7 +3,7 @@ import type { BlockKind } from '../../engine/blocks/Block'
 import { useGraphStore } from '../../state/graphStore'
 import { BLOCK_OPTIONS } from './blockOptions'
 import { findGridElement, isPointOverGrid, resolveGridCell } from './gridGeometry'
-import { BlockIcon, TunerIcon } from './blockIcons'
+import { BlockIcon } from './blockIcons'
 import { Tuner } from '../Tuner'
 import { TunerDialog } from './TunerDialog'
 import { openCatalogForNewBlock } from './openCatalogForNewBlock'
@@ -86,7 +86,6 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
         aria-label="Open tuner"
         title="Open the full-size tuner (mutes output)"
       >
-        <TunerIcon size={16} className={styles.tunerIcon} />
         <div className={styles.tunerLive}>
           <Tuner analyser={tunerAnalyser} />
         </div>
@@ -107,7 +106,7 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                 >
-                  <BlockIcon kind={option.kind} size={12} />
+                  {/*   <BlockIcon kind={option.kind} size={20} /> */}
                   {option.label}
                 </div>
               ))}

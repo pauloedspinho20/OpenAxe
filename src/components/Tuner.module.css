@@ -6,7 +6,6 @@
   padding: var(--sp-2);
   background: var(--screen-bg);
   border-radius: var(--r-sm);
-  box-shadow: var(--shadow-recessed);
   width: 100%;
 }
 

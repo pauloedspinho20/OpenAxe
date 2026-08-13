@@ -2,8 +2,10 @@ import { useEffect } from 'react'
 import { GridEditor } from './components/grid/GridEditor'
 import { BlockInspector } from './components/grid/BlockInspector'
 import { HeaderIO } from './components/HeaderIO'
-import { MasterUtility } from './components/MasterUtility'
+import { MidiManager } from './components/midi/MidiManager'
 import { PresetManager } from './components/presets/PresetManager'
+import { SceneBar } from './components/scenes/SceneBar'
+import { SceneManager } from './components/scenes/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
 import { OnboardingModal } from './components/OnboardingModal'
 import { PowerGate } from './components/PowerGate'
@@ -12,16 +14,22 @@ import { Led } from './components/primitives/Led'
 import { Toggle } from './components/primitives/Toggle'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
+import { useMidiEngine } from './hooks/useMidiEngine'
 import { useOnboarding } from './hooks/useOnboarding'
+import { useSceneEngine } from './hooks/useSceneEngine'
+import { useSceneHotkeys } from './hooks/useSceneHotkeys'
 import { useTheme } from './hooks/useTheme'
 import { useTone3000Target } from './hooks/useTone3000Target'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
+import { installFactoryScenes } from './scenes/factoryScenes'
 import { useIOStore } from './state/ioStore'
+import { useMidiManager } from './state/midiManager'
+import { useMidiStore } from './state/midiStore'
 import { useToast } from './state/toast'
 import { useEngineVersion } from './state/engineVersion'
-import { usePresetManager } from './state/presetManager'
+import { hydrateSceneStore } from './state/sceneStore'
 import { installFactoryPresets } from './presets/factoryPresets'
 import styles from './App.module.css'
 
@@ -49,16 +57,31 @@ function App() {
   // graphStore doesn't track that, see engineVersion.ts.
   const engineVersion = useEngineVersion((s) => s.version)
   const activeHeavyBlocks = engine.rig?.countActiveHeavyBlocks() ?? 0
-  const openPresetManager = usePresetManager((s) => s.openManager)
+  const openMidiManager = useMidiManager((s) => s.openManager)
+  const midiSupported = useMidiStore((s) => s.supported)
+  const midiPermission = useMidiStore((s) => s.permission)
+  const midiInputCount = useMidiStore((s) => s.inputs.length)
+  const midiMappingCount = useMidiStore((s) => s.mappings.length)
+  const midiConnected = midiSupported && midiPermission === 'granted' && midiInputCount > 0
+  const midiStatusTitle = !midiSupported
+    ? 'Web MIDI not supported in this browser'
+    : midiPermission !== 'granted'
+      ? 'MIDI not enabled'
+      : `MIDI: ${midiInputCount} input${midiInputCount === 1 ? '' : 's'}, ${midiMappingCount} mapping${midiMappingCount === 1 ? '' : 's'}`
 
   // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
-  // library metadata, and make sure the bundled starter presets exist.
+  // library metadata, and make sure the bundled starter presets/scenes exist.
   // Network-free when Tone3000 isn't configured.
   useEffect(() => {
     void handleTone3000CallbackOnLoad()
     void Tone3000Library.refresh()
     void installFactoryPresets()
+    void installFactoryScenes().then(hydrateSceneStore)
   }, [])
+
+  useSceneEngine(engine.rig, engine.context, engine.status)
+  useSceneHotkeys()
+  useMidiEngine()
 
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
@@ -104,7 +127,12 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
-          <HardwareButton label="Presets" onClick={openPresetManager} />
+          <HardwareButton
+            label="MIDI"
+            active={midiConnected}
+            onClick={openMidiManager}
+            title={midiStatusTitle}
+          />
           {isReady && (
             <HardwareButton label="Power off" active onClick={() => void engine.powerOff()} />
           )}
@@ -124,17 +152,21 @@ function App() {
       )}
       {toastMessage && <div className={styles.noticeBanner}>{toastMessage}</div>}
 
+      <SceneBar rig={engine.rig} context={engine.context} />
+
       <main className={styles.main}>
-        <GridEditor rig={engine.rig} tunerAnalyser={engine.tunerAnalyser} />
+        <GridEditor
+          rig={engine.rig}
+          tunerAnalyser={engine.tunerAnalyser}
+          analyser={engine.analyser}
+        />
 
         <BlockInspector rig={engine.rig} context={engine.context} />
-
-        <MasterUtility analyser={engine.analyser} />
       </main>
 
       <footer className={styles.footer}>
         <span>
-          Built on{' '}
+          Built using{' '}
           <a
             href="https://github.com/tone-3000/neural-amp-modeler-wasm"
             target="_blank"
@@ -150,10 +182,19 @@ function App() {
             TONE3000
           </a>
         </span>
+
+        <span>
+          Made with ❤ by{' '}
+          <a href="https://hotdogtor.com" target="_blank" rel="noreferrer">
+            Hot Dogtor
+          </a>
+        </span>
       </footer>
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
+      <SceneManager />
+      <MidiManager />
       <PowerGate
         status={engine.status}
         error={engine.error}

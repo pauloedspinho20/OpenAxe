@@ -8,7 +8,7 @@ export interface BlockInstance {
   kind: BlockKind
   row: number
   col: number
-  /** Only meaningful for the 11 effect kinds - Amp/Cab/Tone Stack/Mixer have no bypass concept. */
+  /** Meaningful for the 11 effect kinds and the 5 NAM model kinds - Cab/Tone Stack/Mixer/Splitter have no bypass concept. */
   bypass?: boolean
   params: EffectParams
 }

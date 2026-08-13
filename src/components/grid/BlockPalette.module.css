@@ -1,19 +1,20 @@
 .paletteRow {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-5);
 }
 
 .shelf {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-5);
+  gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   background: var(--panel);
   border-radius: var(--r-lg);
   border: 1px solid var(--seam);
   min-width: 0;
+  box-shadow: var(--shadow-panel);
 }
 
 @media (max-width: 680px) {
@@ -43,18 +44,19 @@
 .chip {
   font-family: var(--font-display);
   font-size: 11px;
+  font-weight: bold;
   letter-spacing: 0.02em;
   color: var(--ink-1);
   background: var(--panel-raised);
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-sm);
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-1) var(--sp-3);
   cursor: grab;
   touch-action: none;
   user-select: none;
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
+  gap: var(--sp-2);
 }
 
 .shelf .chip > svg {
@@ -104,7 +106,7 @@
   padding: var(--sp-2);
   background: var(--screen-bg);
   border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-lg);
   cursor: pointer;
   color: var(--ink-1);
   flex-shrink: 0;
@@ -112,12 +114,6 @@
 
 .tunerSection:hover {
   border-color: var(--accent);
-}
-
-.tunerIcon {
-  color: var(--screen-text);
-  flex-shrink: 0;
-  display: flex;
 }
 
 .tunerLive {

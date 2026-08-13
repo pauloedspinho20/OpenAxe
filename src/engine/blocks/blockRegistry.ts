@@ -5,6 +5,7 @@ import type { Block, BlockKind, EffectParams } from './Block'
 import { AmpBlock, type NamModelBlockKind } from './AmpBlock'
 import { CabBlock } from './CabBlock'
 import { MixerBlock } from './MixerBlock'
+import { SplitterBlock } from './SplitterBlock'
 
 export const EFFECT_KINDS = new Set<BlockKind>([
   'noise-gate',
@@ -50,6 +51,8 @@ async function buildBlock(
       return CabBlock.create(context)
     case 'mixer':
       return new MixerBlock(context)
+    case 'splitter':
+      return new SplitterBlock(context)
     default:
       if (NAM_MODEL_KINDS.has(kind)) return AmpBlock.create(engine, kind as NamModelBlockKind)
       if (EFFECT_KINDS.has(kind)) return createEffect(context, kind as EffectKind, params)

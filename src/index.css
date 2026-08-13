@@ -82,7 +82,7 @@
   --r-lg: 10px;
 
   /* Elevation - built from the theme's shadow tones so both finishes still look machined */
-  --shadow-panel: 0 1px 0 var(--seam) inset, 0 12px 28px var(--shadow-ambient);
+  --shadow-panel: 0 1px 0 var(--seam) inset, 0 5px 10px var(--shadow-ambient);
   --shadow-recessed: inset 0 2px 5px var(--shadow-deep), inset 0 -1px 0 var(--highlight);
   --shadow-control: 0 1px 2px var(--shadow-soft), inset 0 1px 1px var(--highlight);
 

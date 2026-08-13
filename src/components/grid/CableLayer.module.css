@@ -10,7 +10,7 @@
 
 .cable {
   fill: none;
-  stroke: var(--accent-dim);
+  stroke: var(--accent);
   stroke-width: 2;
   stroke-linecap: round;
   pointer-events: stroke;
@@ -23,23 +23,6 @@
 .cable:hover {
   stroke: var(--accent);
   stroke-width: 3;
-}
-
-.cableBadge {
-  fill: var(--led-hot);
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.cableBadge:hover {
-  fill: #ff6a57;
-}
-
-.cableBadgeGlyph {
-  fill: #fff;
-  font-size: 10px;
-  pointer-events: none;
-  user-select: none;
 }
 
 .cablePreview {

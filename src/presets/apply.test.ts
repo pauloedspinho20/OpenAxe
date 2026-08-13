@@ -149,6 +149,35 @@ describe('applyPreset', () => {
     })
   })
 
+  it.each(['amp-cab', 'pedal', 'outboard', 'space'] as const)(
+    'loads a cached model for %s blocks too, not just amp',
+    async (kind) => {
+      getCachedAssetMock.mockResolvedValue({ text: async () => '{"id":"model-1"}' })
+      const rig = createMockRig()
+      const preset = emptyPreset({
+        blocks: [
+          {
+            id: 'blk1',
+            kind,
+            row: 0,
+            col: 0,
+            params: {},
+            modelId: 'model-1',
+            modelName: 'Deluxe',
+          },
+        ],
+      })
+
+      const result = await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+      expect(result.missingAssets).toEqual([])
+      expect(rig.blocks.blk1?.loadModel).toHaveBeenCalledWith('{"id":"model-1"}', undefined, {
+        id: 'model-1',
+        name: 'Deluxe',
+      })
+    },
+  )
+
   it('reports a missing asset instead of throwing when a referenced model is not cached', async () => {
     getCachedAssetMock.mockResolvedValue(null)
     const rig = createMockRig()

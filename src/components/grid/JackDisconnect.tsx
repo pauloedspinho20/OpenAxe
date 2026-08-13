@@ -7,10 +7,10 @@ export interface JackDisconnectProps {
 }
 
 /**
- * The tiny × badge shown over a jack that already has a cable. Centered in
- * its parent (which should be sized like the jack it sits on). Pointer-down
- * is stopped so it never starts a card/grid drag - the badge only ever
- * disconnects.
+ * The plain circular badge shown over a jack that already has a cable.
+ * Centered in its parent (which should be sized like the jack it sits on).
+ * Pointer-down is stopped so it never starts a card/grid drag - the badge
+ * only ever disconnects.
  */
 export function JackDisconnect({ onDisconnect, label, className }: JackDisconnectProps) {
   return (
@@ -24,8 +24,6 @@ export function JackDisconnect({ onDisconnect, label, className }: JackDisconnec
       onPointerDown={(e) => e.stopPropagation()}
       aria-label={label}
       title={label}
-    >
-      ×
-    </button>
+    />
   )
 }

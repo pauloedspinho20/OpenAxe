@@ -82,19 +82,21 @@ export function Tuner({ analyser, size = 'compact' }: TunerProps) {
         )}
       </div>
 
-      <label className={styles.calRow} title="Reference pitch for A4 (concert pitch is 440Hz)">
-        <span className="label">A4</span>
-        <input
-          type="number"
-          min={415}
-          max={466}
-          value={referenceA4}
-          onChange={(e) => setReferenceA4(Number(e.target.value) || 440)}
-          className={styles.calInput}
-          aria-label="A4 reference pitch in Hz"
-        />
-        <span className={`label ${styles.calUnit}`}>Hz</span>
-      </label>
+      {size === 'full' && (
+        <label className={styles.calRow} title="Reference pitch for A4 (concert pitch is 440Hz)">
+          <span className="label">A4</span>
+          <input
+            type="number"
+            min={415}
+            max={466}
+            value={referenceA4}
+            onChange={(e) => setReferenceA4(Number(e.target.value) || 440)}
+            className={styles.calInput}
+            aria-label="A4 reference pitch in Hz"
+          />
+          <span className={`label ${styles.calUnit}`}>Hz</span>
+        </label>
+      )}
     </div>
   )
 }

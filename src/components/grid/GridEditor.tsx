@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useGraphStore } from '../../state/graphStore'
+import { useIOStore } from '../../state/ioStore'
 import type { GraphRig } from '../../engine/GraphRig'
 import { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey } from '../../engine/gridConfig'
 import type { BlockKind } from '../../engine/blocks/Block'
@@ -10,12 +11,17 @@ import { AddBlockMenu } from './AddBlockMenu'
 import { JackDisconnect } from './JackDisconnect'
 import { openCatalogForNewBlock } from './openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from './jackId'
+import { Knob } from '../primitives/Knob'
+import { HardwareButton } from '../primitives/HardwareButton'
+import { LiveMeter } from '../LiveMeter'
 import styles from './GridEditor.module.css'
 
 export interface GridEditorProps {
   rig: GraphRig | null
-  /** Taps the raw input signal - rendered as a tuner right next to the IN rail. */
+  /** Taps the raw input signal - rendered as the tuner and the IN rail's level meter. */
   tunerAnalyser: AnalyserNode | null
+  /** Post-graph output tap - rendered as the OUT rail's level meter. */
+  analyser: AnalyserNode | null
 }
 
 /**
@@ -27,12 +33,19 @@ export interface GridEditorProps {
  * cards only show basic info - full parameters and asset loading live in
  * BlockInspector, which reads the selection this component sets on click.
  */
-export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
+export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
   const blocks = useGraphStore((s) => s.blocks)
   const edges = useGraphStore((s) => s.edges)
+  const masterLevel = useGraphStore((s) => s.masterLevel)
+  const setMasterLevel = useGraphStore((s) => s.setMasterLevel)
+  const masterMuted = useGraphStore((s) => s.masterMuted)
+  const setMasterMuted = useGraphStore((s) => s.setMasterMuted)
+  const inputGain = useIOStore((s) => s.inputGain)
+  const setInputGain = useIOStore((s) => s.setInputGain)
   const [addMenuCell, setAddMenuCell] = useState<{ row: number; col: number } | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
   const [rejectMessage, setRejectMessage] = useState<string | null>(null)
+  const [blockDragCell, setBlockDragCell] = useState<{ row: number; col: number } | null>(null)
   const draggingJackRef = useRef<string | null>(null)
 
   const outHasCable = edges.some((e) => e.to.blockId === OUT_RAIL)
@@ -103,6 +116,7 @@ export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const block = blocks.find((b) => b.row === row && b.col === col)
+      const isDragTarget = blockDragCell?.row === row && blockDragCell?.col === col
       cells.push(
         <div
           key={`${row}-${col}`}
@@ -110,11 +124,11 @@ export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
           style={{ gridRow: row + 1, gridColumn: col + 1 }}
         >
           {block ? (
-            <BlockCard instance={block} rig={rig} />
+            <BlockCard instance={block} rig={rig} onDragCellChange={setBlockDragCell} />
           ) : (
             <button
               type="button"
-              className={styles.addCell}
+              className={`${styles.addCell} ${isDragTarget ? styles.addCellDragOver : ''}`}
               onClick={() => setAddMenuCell({ row, col })}
               aria-label={`Add a block at row ${row + 1}, column ${col + 1}`}
             >
@@ -145,6 +159,17 @@ export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
 
         <div className={styles.rail}>
           <span className={`label ${styles.railLabel}`}>IN</span>
+          <Knob
+            label="Trim"
+            value={inputGain}
+            min={0}
+            max={2}
+            defaultValue={1}
+            onChange={setInputGain}
+            formatValue={(v) => `${Math.round(v * 100)}%`}
+            size={32}
+          />
+          <LiveMeter label="Input" analyser={tunerAnalyser} />
           <span className={`${styles.railJackWrap} ${styles.railJackWrapRight}`}>
             <span
               className={styles.railJack}
@@ -160,6 +185,22 @@ export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
         </div>
 
         <div className={styles.rail}>
+          <span className={`label ${styles.railLabel}`}>OUT</span>
+          <Knob
+            label="Master"
+            value={masterLevel}
+            max={1.5}
+            defaultValue={1}
+            onChange={setMasterLevel}
+            formatValue={(v) => v.toFixed(2)}
+            size={32}
+          />
+          <LiveMeter label="Output" analyser={analyser} />
+          <HardwareButton
+            label="Mute"
+            active={masterMuted}
+            onClick={() => setMasterMuted(!masterMuted)}
+          />
           <span className={`${styles.railJackWrap} ${styles.railJackWrapLeft}`}>
             <span
               className={styles.railJack}
@@ -167,7 +208,7 @@ export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
               data-jack-side="in"
               title={
                 outHasCable
-                  ? 'Drag to rewire this cable, or use the × on it to remove it'
+                  ? 'Drag to rewire this cable, or click the badge on it to disconnect'
                   : "Input - drag a block's output here"
               }
             />
@@ -180,7 +221,6 @@ export function GridEditor({ rig, tunerAnalyser }: GridEditorProps) {
               />
             )}
           </span>
-          <span className={`label ${styles.railLabel}`}>OUT</span>
         </div>
       </div>
 

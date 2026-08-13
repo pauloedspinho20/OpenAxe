@@ -77,7 +77,7 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Compressor' }).click()
   await page.getByRole('dialog', { name: 'Tone3000 catalog' }).waitFor({ state: 'hidden' })
 
-  await page.getByRole('button', { name: 'Presets' }).click()
+  await page.getByRole('button', { name: 'Library' }).click()
   const presetDialog = page.getByRole('dialog', { name: 'Preset manager' })
   await expect(presetDialog).toBeVisible()
   await presetDialog.getByPlaceholder('Preset name').fill(presetName)
@@ -93,7 +93,7 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
   }
   await powerOn(page)
 
-  await page.getByRole('button', { name: 'Presets' }).click()
+  await page.getByRole('button', { name: 'Library' }).click()
   const reopenedDialog = page.getByRole('dialog', { name: 'Preset manager' })
   await expect(reopenedDialog.getByText(presetName)).toBeVisible()
   await reopenedDialog.getByRole('button', { name: `Load ${presetName}` }).click()

@@ -2,6 +2,7 @@ import type { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import type { Block, BlockKind, EffectParams } from './blocks/Block'
 import { createBlock } from './blocks/blockRegistry'
 import { MixerBlock } from './blocks/MixerBlock'
+import { SplitterBlock } from './blocks/SplitterBlock'
 import { IN_RAIL, OUT_RAIL, type Jack } from './gridConfig'
 import { canConnect, isEdgeOrderValid, type ValidatableBlock } from './graphValidation'
 
@@ -26,7 +27,9 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * makes cycles impossible by construction, so Web Audio's native cycle
  * rejection never comes into play. Every jack accepts at most one incoming
  * cable; combining two signal paths always requires routing through a
- * Mixer block's several independent input jacks.
+ * Mixer block's several independent input jacks, and fanning one signal out
+ * to several downstream chains always requires a Splitter's several
+ * independent output jacks.
  *
  * Replaces DualChainRig. `connectInput`/`outputNode` keep the same names as
  * before so useAudioEngine's mic/output-device wiring needs no changes;
@@ -203,6 +206,9 @@ export class GraphRig {
     const entry = this.blocks.get(j.blockId)
     if (!entry) return null
     if (side === 'to' && entry.block instanceof MixerBlock) return entry.block.inputNodeAt(j.port)
+    if (side === 'from' && entry.block instanceof SplitterBlock) {
+      return entry.block.outputNodeAt(j.port)
+    }
     return side === 'from' ? entry.block.outputNode : entry.block.inputNode
   }
 

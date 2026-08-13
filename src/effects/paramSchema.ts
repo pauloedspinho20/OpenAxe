@@ -1,6 +1,7 @@
 import type { EffectKind } from './Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
+import { SPLITTER_OUTPUT_COUNT } from '../engine/blocks/SplitterBlock'
 
 interface KnobField {
   key: string
@@ -529,6 +530,17 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
     ]
     return fields
   }).flat(),
+  splitter: Array.from({ length: SPLITTER_OUTPUT_COUNT }, (_, i): KnobField => ({
+    key: `out${i}_level`,
+    label: 'Level',
+    control: 'knob',
+    min: 0,
+    max: 1.5,
+    step: 0.01,
+    defaultValue: 1,
+    formatValue: percent,
+    group: `Out ${i + 1}`,
+  })),
 }
 
 /** Looks up the field schema for any grid block kind - the 11 effect kinds plus the 4 new ones. */

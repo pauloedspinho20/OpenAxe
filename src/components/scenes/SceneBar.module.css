@@ -1,0 +1,223 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-6);
+  border-bottom: 1px solid var(--seam);
+  background: var(--panel);
+}
+
+.sceneNav {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.navArrow {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-2);
+  background: none;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+  cursor: pointer;
+}
+
+.navArrow:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.readout {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.readout:hover {
+  border-color: var(--accent);
+}
+
+.sceneIndex {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.sceneName {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slots {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.slot {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.slot:hover .slotActions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.slotBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 84px;
+  height: 48px;
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-control);
+  cursor: pointer;
+  padding: 0 var(--sp-1);
+}
+
+.slotBtn:hover {
+  border-color: var(--accent);
+}
+
+.slotBtn.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow:
+    0 0 8px var(--accent-dim),
+    inset 0 1px 1px rgba(255, 255, 255, 0.06);
+}
+
+.slotBtn.pending {
+  opacity: 0.6;
+}
+
+.slotIndex {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.slotName {
+  font-size: 11px;
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 76px;
+}
+
+.renameInput {
+  width: 84px;
+  height: 48px;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 11px;
+  text-align: center;
+  color: var(--ink-1);
+  background: var(--screen-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+  padding: 0 var(--sp-1);
+}
+
+.slotActions {
+  /*
+   * Flush against the slot button (top: 100%, no margin/gap) on purpose -
+   * :hover on `.slot` only stays true while the pointer is over `.slot` or
+   * a descendant, so any dead-space gap between the button and this panel
+   * breaks the hover chain the instant the pointer crosses it, hiding the
+   * panel before it can be reached.
+   */
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-1);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-panel);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.slotActionBtn {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.slotActionBtn:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--panel-recessed);
+}
+
+.slotActionBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.currentPreset {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--seam);
+}
+
+.currentPresetName {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-2);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .bar {
+    padding: var(--sp-3) var(--sp-4);
+  }
+}

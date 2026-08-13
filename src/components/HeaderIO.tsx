@@ -1,4 +1,3 @@
-import { Knob } from './primitives/Knob'
 import { useIOStore } from '../state/ioStore'
 import styles from './HeaderIO.module.css'
 
@@ -51,16 +50,6 @@ export function HeaderIO({ outputSelectionSupported }: HeaderIOProps) {
         <option value="stereo">Stereo</option>
         <option value="sum">Ch 1+2</option>
       </select>
-      <Knob
-        label="Trim"
-        value={io.inputGain}
-        min={0}
-        max={2}
-        defaultValue={1}
-        onChange={io.setInputGain}
-        formatValue={(v) => `${Math.round(v * 100)}%`}
-        size={32}
-      />
       {outputSelectionSupported ? (
         <select
           className={styles.select}

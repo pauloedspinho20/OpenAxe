@@ -21,6 +21,7 @@ export const BLOCK_OPTIONS: BlockOption[] = [
   { kind: 'outboard', label: 'Outboard', group: 'Core' },
   { kind: 'space', label: 'Space', group: 'Core' },
   { kind: 'mixer', label: 'Mixer', group: 'Core' },
+  { kind: 'splitter', label: 'Splitter', group: 'Core' },
   { kind: 'noise-gate', label: 'Noise Gate', group: 'Effects' },
   { kind: 'compressor', label: 'Compressor', group: 'Effects' },
   { kind: 'eq', label: 'EQ', group: 'Effects' },

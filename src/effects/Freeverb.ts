@@ -73,6 +73,7 @@ function createAllpass(context: BaseAudioContext, delaySeconds: number, g: numbe
 
 export class Freeverb extends BaseEffect {
   private readonly input: GainNode
+  private readonly combInputGain: GainNode
   private readonly combSum: GainNode
   private readonly combs: Comb[]
   private readonly allpasses: Allpass[]
@@ -81,12 +82,14 @@ export class Freeverb extends BaseEffect {
 
   constructor(context: BaseAudioContext) {
     const input = new GainNode(context)
+    const combInputGain = new GainNode(context)
     const combSum = new GainNode(context, { gain: 1 / 8 })
     const combs = COMB_DELAYS_SAMPLES.map((samples) =>
       createComb(context, samples / REFERENCE_SAMPLE_RATE),
     )
+    input.connect(combInputGain)
     for (const comb of combs) {
-      input.connect(comb.delay)
+      combInputGain.connect(comb.delay)
       comb.delay.connect(combSum)
     }
 
@@ -101,6 +104,7 @@ export class Freeverb extends BaseEffect {
 
     super(context, 'reverb', 'Reverb', input, previous)
     this.input = input
+    this.combInputGain = combInputGain
     this.combSum = combSum
     this.combs = combs
     this.allpasses = allpasses
@@ -108,11 +112,18 @@ export class Freeverb extends BaseEffect {
     this.setDamping(this.damping)
   }
 
-  /** Decay length, [0, 1]. Higher rings out longer (feedback approaches 1). */
+  /**
+   * Decay length, [0, 1]. Higher rings out longer (feedback approaches 1).
+   * Each comb's own low-frequency gain is 1/(1-feedback), which blows up as
+   * feedback approaches 1 - combInputGain applies the inverse (1-feedback)
+   * before the comb bank so the wet path stays at roughly unity gain across
+   * the whole range instead of getting dramatically louder as the knob turns up.
+   */
   setRoomSize(size: number): void {
     this.roomSize = Math.min(0.97, Math.max(0, size))
     const now = this.combs[0]!.feedbackGain.context.currentTime
     for (const comb of this.combs) comb.feedbackGain.gain.setTargetAtTime(this.roomSize, now, 0.01)
+    this.combInputGain.gain.setTargetAtTime(1 - this.roomSize, now, 0.01)
   }
 
   /** High-frequency damping in the tail, [0, 1]. Higher = darker decay. */
@@ -140,6 +151,7 @@ export class Freeverb extends BaseEffect {
   dispose(): void {
     this.disposeBase()
     this.input.disconnect()
+    this.combInputGain.disconnect()
     this.combSum.disconnect()
     for (const comb of this.combs) {
       comb.delay.disconnect()

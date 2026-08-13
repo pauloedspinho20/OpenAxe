@@ -6,7 +6,7 @@ export interface PresetBlockData {
   kind: BlockKind
   row: number
   col: number
-  /** Only meaningful for the 11 effect kinds - Amp/Cab/Tone Stack/Mixer have no bypass concept. */
+  /** Meaningful for the 11 effect kinds and the 5 NAM model kinds - Cab/Tone Stack/Mixer/Splitter have no bypass concept. */
   bypass?: boolean
   params: EffectParams
   /** Amp blocks only - reference into the local asset cache (see assetCache.ts). */
@@ -39,8 +39,9 @@ export interface Preset {
 /**
  * The narrow slice of a live block capture/apply need. The "extra" methods
  * are all optional: only Amp/Cab blocks have asset methods, only the 11
- * effect kinds have bypass - callers duck-type check before use, the same
- * pattern EffectParamsPanel/BlockCard already use elsewhere in the app.
+ * effect kinds and the 5 NAM model kinds have bypass - callers duck-type
+ * check before use, the same pattern EffectParamsPanel/BlockCard already
+ * use elsewhere in the app.
  */
 export interface PresetBlock {
   readonly kind: BlockKind

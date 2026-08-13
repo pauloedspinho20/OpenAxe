@@ -2,17 +2,18 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
   height: 100%;
   min-width: 0;
-  padding: var(--sp-2);
+  padding: var(--sp-1);
   background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-panel);
   cursor: grab;
   touch-action: none;
   overflow: visible;
+  align-items: center;
+  justify-content: space-between;
 }
 
 /* Shows the loaded model/IR's Tone3000 image as the card's background, for
@@ -31,7 +32,7 @@
   z-index: 0;
   border-radius: inherit;
   background: var(--panel-raised);
-  opacity: 0.8;
+  opacity: 0.9;
   pointer-events: none;
 }
 
@@ -54,17 +55,45 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-1);
+  width: 100%;
 }
 
 .kindLabel {
-  color: var(--ink-1);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--sp-1);
+  justify-content: center;
+  gap: var(--sp-2);
   min-width: 0;
+  text-align: center;
+  width: 100%;
+  padding: 0 6px;
+}
+
+.blockLabel {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  font-weight: bold;
+  color: var(--ink-1);
+}
+
+.status {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: 8px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* white-space: nowrap; */
+  width: 100%;
 }
 
 .kindIcon {
@@ -75,15 +104,23 @@
 .headerActions {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sp-1);
-  flex-shrink: 0;
+  width: 100%;
+}
+
+.meterWrap {
+  position: absolute;
+  bottom: 5px;
+  right: 50%;
+  transform: translateX(50%);
 }
 
 .bypassBtn {
   background: none;
   border: none;
   color: var(--ink-3);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1;
   cursor: pointer;
   padding: 2px;
@@ -97,7 +134,7 @@
   background: none;
   border: none;
   color: var(--ink-3);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   padding: 0 2px;
@@ -119,7 +156,8 @@
   pointer-events: none;
 }
 
-.jacksIn {
+.jacksIn,
+.jacksOut {
   display: flex;
   flex-direction: column;
   justify-content: space-around;
@@ -128,8 +166,8 @@
 
 .jackWrap {
   position: relative;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 
@@ -138,23 +176,12 @@
   height: 12px;
   border-radius: 50%;
   background: var(--panel);
-  border: 2px solid var(--seam-strong);
-  cursor: crosshair;
+  border: 2px solid var(--accent);
+  cursor: pointer;
   pointer-events: auto;
   touch-action: none;
 }
 
 .jack:hover {
   border-color: var(--accent);
-}
-
-.status {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-display);
-  font-size: 10px;
-  color: var(--ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

@@ -29,17 +29,6 @@ function cablePath(from: Point, to: Point): string {
   return `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`
 }
 
-/** Point at t=0.5 of the same cubic bezier cablePath draws, for the per-cable disconnect badge. */
-function cableMidpoint(from: Point, to: Point): Point {
-  const dx = Math.max(24, Math.abs(to.x - from.x) / 2)
-  const c1 = { x: from.x + dx, y: from.y }
-  const c2 = { x: to.x - dx, y: to.y }
-  return {
-    x: (from.x + 3 * c1.x + 3 * c2.x + to.x) / 8,
-    y: (from.y + 3 * c1.y + 3 * c2.y + to.y) / 8,
-  }
-}
-
 /**
  * Purely presentational SVG overlay: draws one bezier cable per store edge
  * plus a live preview while a new one is being dragged. Jack positions are
@@ -56,7 +45,7 @@ export function CableLayer({
   onDisconnect,
 }: CableLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const [paths, setPaths] = useState<Array<{ id: string; d: string; mid: Point }>>([])
+  const [paths, setPaths] = useState<Array<{ id: string; d: string }>>([])
   const [previewD, setPreviewD] = useState<string | null>(null)
 
   const pointFor = useCallback((elementId: string) => {
@@ -72,12 +61,11 @@ export function CableLayer({
   }, [])
 
   const recompute = useCallback(() => {
-    const next: Array<{ id: string; d: string; mid: Point }> = []
+    const next: Array<{ id: string; d: string }> = []
     for (const edge of edges) {
       const from = pointFor(jackElementId(edge.from.blockId, 'out', edge.from.port))
       const to = pointFor(jackElementId(edge.to.blockId, 'in', edge.to.port))
-      if (from && to)
-        next.push({ id: edge.id, d: cablePath(from, to), mid: cableMidpoint(from, to) })
+      if (from && to) next.push({ id: edge.id, d: cablePath(from, to) })
     }
     setPaths(next)
   }, [edges, pointFor])
@@ -127,26 +115,6 @@ export function CableLayer({
               onDisconnect(p.id)
             }}
           />
-          <circle
-            className={styles.cableBadge}
-            cx={p.mid.x}
-            cy={p.mid.y}
-            r={7}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              onDisconnect(p.id)
-            }}
-          />
-          <text
-            className={styles.cableBadgeGlyph}
-            x={p.mid.x}
-            y={p.mid.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-          >
-            ×
-          </text>
         </g>
       ))}
       {previewD && <path className={styles.cablePreview} d={previewD} />}

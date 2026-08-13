@@ -5,6 +5,13 @@
   min-height: 64px;
 }
 
+.meterAndParams {
+  display: flex;
+  width: 100%;
+  flex-direction: row;
+  gap: var(--sp-2);
+}
+
 .empty {
   color: var(--ink-3);
   font-size: 13px;

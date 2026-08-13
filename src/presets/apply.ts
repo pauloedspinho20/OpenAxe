@@ -1,6 +1,7 @@
 import type { UseBoundStore, StoreApi } from 'zustand'
 import type { GraphState } from '../state/graphStore'
 import { getCachedAsset } from '../engine/assetCache'
+import { NAM_MODEL_KINDS } from '../engine/blocks/blockRegistry'
 import type { Preset, PresetBlockData, PresetBlock, PresetRig } from './types'
 
 export interface MissingAsset {
@@ -27,7 +28,7 @@ async function applyBlockAsset(
   block: PresetBlock,
   missingAssets: MissingAsset[],
 ): Promise<void> {
-  if (data.kind === 'amp') {
+  if (NAM_MODEL_KINDS.has(data.kind)) {
     if (data.modelId) {
       const blob = await getCachedAsset(data.modelId)
       if (blob) {

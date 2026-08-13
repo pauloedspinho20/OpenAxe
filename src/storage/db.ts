@@ -12,8 +12,9 @@ const DB_NAME = 'nam-web-studio'
  * chainB) to a generic block/edge graph (see presets/types.ts) - old rows
  * would just fail the new validation, so the presets store is wiped on
  * upgrade rather than leaving unreadable rows sitting in it.
+ * v5: adds the scenes and midi stores; presets are untouched.
  */
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 /** Blob store: downloaded .nam/IR files, keyed by an explicit id (see assetCache.ts). */
 export const STORE_ASSETS = 'assets'
@@ -21,6 +22,10 @@ export const STORE_ASSETS = 'assets'
 export const STORE_PRESETS = 'presets'
 /** Tone3000 library metadata (what's been imported, who made it) - see src/tone3000/library.ts. */
 export const STORE_LIBRARY = 'library'
+/** Scene bank: keyPath 'id', a single row keyed 'default' (see scenes/sceneBankStore.ts). */
+export const STORE_SCENES = 'scenes'
+/** MIDI mapping config: keyPath 'id', a single row keyed 'midi-config' (see midi/midiConfigStore.ts). */
+export const STORE_MIDI = 'midi'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -37,6 +42,12 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_LIBRARY)) {
         db.createObjectStore(STORE_LIBRARY, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_SCENES)) {
+        db.createObjectStore(STORE_SCENES, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_MIDI)) {
+        db.createObjectStore(STORE_MIDI, { keyPath: 'id' })
       }
     }
     request.onsuccess = () => resolve(request.result)

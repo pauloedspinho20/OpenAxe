@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePresetManager } from '../../state/presetManager'
 import { useGraphStore } from '../../state/graphStore'
+import { useSceneStore } from '../../state/sceneStore'
 import { capturePreset } from '../../presets/capture'
 import { applyPreset } from '../../presets/apply'
 import { deletePreset, listPresets, savePreset } from '../../presets/presetStore'
@@ -22,6 +23,7 @@ export interface PresetManagerProps {
  */
 export function PresetManager({ rig, context }: PresetManagerProps) {
   const open = usePresetManager((s) => s.open)
+  const pickTarget = usePresetManager((s) => s.pickTarget)
   const closeManager = usePresetManager((s) => s.closeManager)
   const [presets, setPresets] = useState<Preset[]>([])
   const [newName, setNewName] = useState('')
@@ -82,6 +84,12 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     }
   }
 
+  const handleAssign = (preset: Preset) => {
+    if (!pickTarget) return
+    useSceneStore.getState().assignSlot(pickTarget.scene, pickTarget.slot, preset.id)
+    closeManager()
+  }
+
   const handleDelete = async (id: string) => {
     setBusy(true)
     try {
@@ -120,43 +128,51 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label="Preset manager">
       <div className={styles.modal}>
         <header className={styles.header}>
-          <span className={`label ${styles.heading}`}>PRESETS</span>
+          <span className={`label ${styles.heading}`}>
+            {pickTarget
+              ? `ASSIGN TO SCENE ${pickTarget.scene + 1} · SLOT ${pickTarget.slot + 1}`
+              : 'PRESETS'}
+          </span>
           <HardwareButton label="Close" onClick={closeManager} />
         </header>
 
-        <div className={styles.saveRow}>
-          <input
-            type="text"
-            className={styles.nameInput}
-            placeholder="Preset name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            disabled={busy || !rig}
-          />
-          <HardwareButton
-            label="Save Current"
-            onClick={() => void handleSave()}
-            disabled={busy || !rig || newName.trim().length === 0}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            className={styles.hiddenInput}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleImportFile(file)
-              e.target.value = ''
-            }}
-          />
-          <HardwareButton
-            label="Import…"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-          />
-        </div>
+        {!pickTarget && (
+          <div className={styles.saveRow}>
+            <input
+              type="text"
+              className={styles.nameInput}
+              placeholder="Preset name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              disabled={busy || !rig}
+            />
+            <HardwareButton
+              label="Save Current"
+              onClick={() => void handleSave()}
+              disabled={busy || !rig || newName.trim().length === 0}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              className={styles.hiddenInput}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void handleImportFile(file)
+                e.target.value = ''
+              }}
+            />
+            <HardwareButton
+              label="Import…"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+            />
+          </div>
+        )}
 
-        {!rig && <p className={styles.hint}>Power on to save the current grid as a preset.</p>}
+        {!pickTarget && !rig && (
+          <p className={styles.hint}>Power on to save the current grid as a preset.</p>
+        )}
         {error && <p className={styles.error}>{error}</p>}
         {missingAssetsNote && <p className={styles.hint}>{missingAssetsNote}</p>}
 
@@ -183,15 +199,26 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
                 </span>
               </div>
               <div className={styles.rowActions}>
-                <button
-                  type="button"
-                  className={styles.actionBtn}
-                  onClick={() => void handleLoad(preset)}
-                  disabled={busy}
-                  aria-label={`Load ${preset.name}`}
-                >
-                  Load
-                </button>
+                {pickTarget ? (
+                  <button
+                    type="button"
+                    className={styles.actionBtn}
+                    onClick={() => handleAssign(preset)}
+                    aria-label={`Assign ${preset.name}`}
+                  >
+                    Assign
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.actionBtn}
+                    onClick={() => void handleLoad(preset)}
+                    disabled={busy}
+                    aria-label={`Load ${preset.name}`}
+                  >
+                    Load
+                  </button>
+                )}
                 <button
                   type="button"
                   className={styles.actionBtn}

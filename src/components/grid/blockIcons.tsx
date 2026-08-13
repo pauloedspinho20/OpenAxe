@@ -106,6 +106,17 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
       <Dot cx="20" cy="10.5" />
     </>
   ),
+  splitter: (
+    <>
+      <path d="M3 12h4" />
+      <Dot cx="3" cy="12" />
+      <path d="M7 12l6-6M7 12l6-2M7 12l6 2M7 12l6 6" />
+      <Dot cx="20" cy="6" r={0.9} />
+      <Dot cx="20" cy="10" r={0.9} />
+      <Dot cx="20" cy="14" r={0.9} />
+      <Dot cx="20" cy="18" r={0.9} />
+    </>
+  ),
   'noise-gate': (
     <>
       <path d="M3 14v-4l3-2M3 10h3M6 8h0" />

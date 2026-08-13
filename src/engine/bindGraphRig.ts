@@ -26,7 +26,7 @@ export interface GraphRigControls {
   listEdgeIds(): string[]
 }
 
-/** Anything with an optional `setBypass` - only the 11 effect kinds have one; Amp/Cab/Tone Stack/Mixer don't. */
+/** Anything with an optional `setBypass` - the 11 effect kinds and the 5 NAM model kinds have one; Cab/Tone Stack/Mixer/Splitter don't. */
 interface MaybeBypassable {
   setBypass?(bypassed: boolean): void
 }

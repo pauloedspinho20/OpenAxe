@@ -16,19 +16,19 @@ import type { EffectKind } from '../effects/Effect'
 import type { EffectParams } from '../engine/blocks/Block'
 import type { Preset, PresetBlockData, PresetEdgeData } from './types'
 
-interface RowEffect {
+export interface RowEffect {
   kind: EffectKind
   params: EffectParams
 }
 
-function compressor(): RowEffect {
+export function compressor(): RowEffect {
   return {
     kind: 'compressor',
     params: { threshold: -24, knee: 6, ratio: 3, attack: 0.01, release: 0.2 },
   }
 }
 
-function eq(): RowEffect {
+export function eq(): RowEffect {
   return {
     kind: 'eq',
     params: {
@@ -49,20 +49,20 @@ function eq(): RowEffect {
   }
 }
 
-function chorus(): RowEffect {
+export function chorus(): RowEffect {
   return { kind: 'chorus', params: { rate: 1.2, depth: 4, feedback: 0.15 } }
 }
 
-function tapeDelay(): RowEffect {
+export function tapeDelay(): RowEffect {
   return { kind: 'delay', params: { character: 'tape', time: 0.35, feedback: 0.35, tone: 3500 } }
 }
 
-function reverb(roomSize: number): RowEffect {
+export function reverb(roomSize: number): RowEffect {
   return { kind: 'reverb', params: { roomSize, damping: 0.5 } }
 }
 
 /** Lay out parallel rows of effects (IN -> row's effects in series -> Mixer -> OUT). */
-function buildFactoryPreset(id: string, name: string, rows: RowEffect[][]): Preset {
+export function buildFactoryPreset(id: string, name: string, rows: RowEffect[][]): Preset {
   const blocks: PresetBlockData[] = []
   const edges: PresetEdgeData[] = []
   let nextId = 0

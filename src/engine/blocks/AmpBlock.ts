@@ -45,6 +45,20 @@ export class AmpBlock implements Block {
   private readonly inputGain: GainNode
   private readonly outputGain: GainNode
 
+  /**
+   * True bypass: when engaged, the raw input passes straight through
+   * unprocessed instead of through the model/tone stack - there's no
+   * continuous mix like an effect's, just a binary switch (like a real
+   * amp's bypass footswitch). `input`/`output` are the external jacks;
+   * `inputGain`/`outputGain` keep their existing trim role inside the wet
+   * path, which `dryGain`/`wetMuteGain` crossfade around.
+   */
+  private readonly input: GainNode
+  private readonly output: GainNode
+  private readonly dryGain: GainNode
+  private readonly wetMuteGain: GainNode
+  private bypassed = false
+
   /** 4-band tone stack (Bass low-shelf, Mid peaking, Treble high-shelf, Presence peaking), wired after the model. */
   private readonly bassFilter: BiquadFilterNode
   private readonly midFilter: BiquadFilterNode
@@ -89,6 +103,17 @@ export class AmpBlock implements Block {
     this.midFilter.connect(this.trebleFilter)
     this.trebleFilter.connect(this.presenceFilter)
     this.presenceFilter.connect(this.outputGain)
+
+    this.input = new GainNode(context)
+    this.output = new GainNode(context)
+    this.dryGain = new GainNode(context, { gain: 0 })
+    this.wetMuteGain = new GainNode(context, { gain: 1 })
+
+    this.input.connect(this.inputGain)
+    this.input.connect(this.dryGain)
+    this.outputGain.connect(this.wetMuteGain)
+    this.wetMuteGain.connect(this.output)
+    this.dryGain.connect(this.output)
   }
 
   static async create(engine: NamEngine, kind: NamModelBlockKind = 'amp'): Promise<AmpBlock> {
@@ -97,12 +122,25 @@ export class AmpBlock implements Block {
   }
 
   get inputNode(): AudioNode {
-    return this.inputGain
+    return this.input
   }
 
   /** After the tone stack's output level trim - colours the model output the same way a real amp's tone controls sit before the speaker. */
   get outputNode(): AudioNode {
-    return this.outputGain
+    return this.output
+  }
+
+  /** True bypass - the model/tone stack is silenced and the raw input passes straight through. */
+  setBypass(bypassed: boolean): void {
+    if (bypassed === this.bypassed) return
+    this.bypassed = bypassed
+    const now = this.context.currentTime
+    this.wetMuteGain.gain.setTargetAtTime(bypassed ? 0 : 1, now, 0.01)
+    this.dryGain.gain.setTargetAtTime(bypassed ? 1 : 0, now, 0.01)
+  }
+
+  isBypassed(): boolean {
+    return this.bypassed
   }
 
   /** Trim before the model - useful for gain-staging a hot DI signal or a quiet pickup. */
@@ -232,6 +270,10 @@ export class AmpBlock implements Block {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    this.input.disconnect()
+    this.output.disconnect()
+    this.dryGain.disconnect()
+    this.wetMuteGain.disconnect()
     this.inputGain.disconnect()
     this.outputGain.disconnect()
     this.bassFilter.disconnect()

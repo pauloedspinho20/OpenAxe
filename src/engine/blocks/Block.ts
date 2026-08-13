@@ -3,16 +3,16 @@ import type { EffectKind, EffectParams } from '../../effects/Effect'
 export type { EffectParams } from '../../effects/Effect'
 
 /**
- * Every placeable grid block kind: the 10 synthetic effects, `mixer`, and
- * the Tone3000 gear categories (`amp`/`amp-cab`/`pedal`/`outboard`/`space`/
- * `cab`) - these 6 gear kinds are named to match Tone3000's own `Gear` enum
- * exactly (see tone3000/types.ts), so a block's `kind` doubles as the gear
- * filter for browsing. Only `cab` is a genuinely different asset type (an
- * IR, convolved); the other 5 are all NAM model captures, structurally
- * identical - see AmpBlock's doc comment.
+ * Every placeable grid block kind: the 10 synthetic effects, `mixer`,
+ * `splitter`, and the Tone3000 gear categories (`amp`/`amp-cab`/`pedal`/
+ * `outboard`/`space`/`cab`) - these 6 gear kinds are named to match
+ * Tone3000's own `Gear` enum exactly (see tone3000/types.ts), so a block's
+ * `kind` doubles as the gear filter for browsing. Only `cab` is a genuinely
+ * different asset type (an IR, convolved); the other 5 are all NAM model
+ * captures, structurally identical - see AmpBlock's doc comment.
  */
 export type BlockKind =
-  EffectKind | 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space' | 'cab' | 'mixer'
+  EffectKind | 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space' | 'cab' | 'mixer' | 'splitter'
 
 /**
  * The minimal shape the graph engine needs from any block - a strict subset

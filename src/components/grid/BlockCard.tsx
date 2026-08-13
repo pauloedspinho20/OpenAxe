@@ -9,10 +9,10 @@ import { resolveGridCell } from './gridGeometry'
 import type { BlockKind } from '../../engine/blocks/Block'
 import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '../../engine/blocks/MixerBlock'
+import { SPLITTER_OUTPUT_COUNT } from '../../engine/blocks/SplitterBlock'
 import { useTone3000Library } from '../../tone3000/library'
 import { LiveMeter } from '../LiveMeter'
 import { BLOCK_KIND_LABELS } from './blockOptions'
-import { BlockIcon } from './blockIcons'
 import { JackDisconnect } from './JackDisconnect'
 import { jackElementId } from './jackId'
 import styles from './BlockCard.module.css'
@@ -20,6 +20,8 @@ import styles from './BlockCard.module.css'
 export interface BlockCardProps {
   instance: BlockInstance
   rig: GraphRig | null
+  /** Reports the grid cell currently under the pointer while this card is being dragged, or null once the drag ends. */
+  onDragCellChange?: (cell: { row: number; col: number } | null) => void
 }
 
 /** A click barely moves the pointer; anything past this is a drag, not a select. */
@@ -29,7 +31,11 @@ function portCount(kind: BlockKind): number {
   return kind === 'mixer' ? MIXER_INPUT_COUNT : 1
 }
 
-/** Anything with an optional bypass toggle - only the 11 effect kinds have one. */
+function outputPortCount(kind: BlockKind): number {
+  return kind === 'splitter' ? SPLITTER_OUTPUT_COUNT : 1
+}
+
+/** Anything with an optional bypass toggle - the 11 effect kinds and the 5 NAM model kinds have one. */
 interface MaybeBypassable {
   setBypass?(bypassed: boolean): void
 }
@@ -61,7 +67,7 @@ function statusText(instance: BlockInstance, loaded: { name: string } | null): s
  * asset load/browse controls live in BlockInspector instead - click the card
  * to select it there, rather than crowding every detail into a small tile.
  */
-export function BlockCard({ instance, rig }: BlockCardProps) {
+export function BlockCard({ instance, rig, onDragCellChange }: BlockCardProps) {
   const dragState = useRef<{ startX: number; startY: number } | null>(null)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
@@ -74,6 +80,7 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
   const libraryEntries = useTone3000Library((s) => s.entries)
   const block = rig?.getBlock(instance.id) ?? null
   const isEffect = EFFECT_KINDS.has(instance.kind)
+  const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
   const loaded = loadedAsset(instance, block as MaybeAsset | null)
   const status = statusText(instance, loaded)
@@ -102,6 +109,8 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
       x: e.clientX - dragState.current.startX,
       y: e.clientY - dragState.current.startY,
     })
+    const gridEl = (e.currentTarget as Element).closest('[data-grid-bounds]') as HTMLElement | null
+    onDragCellChange?.(gridEl ? resolveGridCell(gridEl, e.clientX, e.clientY) : null)
   }
 
   const handleCardPointerUp = (e: React.PointerEvent) => {
@@ -139,6 +148,7 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
       }
     }
 
+    onDragCellChange?.(null)
     dragState.current = null
     setDragOffset(null)
   }
@@ -202,13 +212,8 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
       onKeyDown={handleKeyDown}
     >
       <div className={styles.header}>
-        <span className={`${styles.kindLabel} `}>
-          <BlockIcon kind={instance.kind} size={12} className={styles.kindIcon} />
-          <span className="label">{label}</span>
-        </span>
         <div className={styles.headerActions}>
-          {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
-          {isEffect && (
+          {hasBypass && (
             <button
               type="button"
               className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
@@ -233,6 +238,16 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
         </div>
       </div>
 
+      <span className={`${styles.kindLabel} `}>
+        {/*   <BlockIcon kind={instance.kind} size={18} className={styles.kindIcon} /> */}
+        <span className={styles.blockLabel}>{label}</span>
+        {status && <span className={styles.status}>{status}</span>}
+      </span>
+
+      <div className={styles.meterWrap}>
+        {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
+      </div>
+
       <div className={styles.jacks}>
         <div className={styles.jacksIn}>
           {Array.from({ length: portCount(instance.kind) }, (_, port) => {
@@ -245,7 +260,7 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
                   data-jack-side="in"
                   title={
                     occupied
-                      ? 'Drag to rewire this cable, or use the × on it to remove it'
+                      ? 'Drag to rewire this cable, or click the badge on it to disconnect'
                       : instance.kind === 'mixer'
                         ? `Input ${port + 1}`
                         : 'Input'
@@ -263,17 +278,23 @@ export function BlockCard({ instance, rig }: BlockCardProps) {
             )
           })}
         </div>
-        <span className={styles.jackWrap}>
-          <div
-            className={styles.jack}
-            data-jack-id={jackElementId(instance.id, 'out', 0)}
-            data-jack-side="out"
-            title="Output - drag from here to connect, or drag any of its cables"
-          />
-        </span>
+        <div className={styles.jacksOut}>
+          {Array.from({ length: outputPortCount(instance.kind) }, (_, port) => (
+            <span key={port} className={styles.jackWrap}>
+              <div
+                className={styles.jack}
+                data-jack-id={jackElementId(instance.id, 'out', port)}
+                data-jack-side="out"
+                title={
+                  instance.kind === 'splitter'
+                    ? `Output ${port + 1} - drag from here to connect, or drag any of its cables`
+                    : 'Output - drag from here to connect, or drag any of its cables'
+                }
+              />
+            </span>
+          ))}
+        </div>
       </div>
-
-      {status && <span className={styles.status}>{status}</span>}
     </div>
   )
 }

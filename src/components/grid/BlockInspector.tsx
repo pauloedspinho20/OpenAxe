@@ -20,7 +20,7 @@ export interface BlockInspectorProps {
   context: AudioContext | null
 }
 
-/** Anything with an optional bypass toggle - only the 11 effect kinds have one. */
+/** Anything with an optional bypass toggle - the 11 effect kinds and the 5 NAM model kinds have one. */
 interface MaybeBypassable {
   setBypass?(bypassed: boolean): void
 }
@@ -61,15 +61,15 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const label = BLOCK_KIND_LABELS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
   const isEffect = EFFECT_KINDS.has(instance.kind)
+  const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
   const bypassed = instance.bypass ?? false
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
-
   return (
     <Panel
       label={`Block Inspector · ${label}`}
       corner={
         block &&
-        isEffect && (
+        hasBypass && (
           <HardwareButton
             label={bypassed ? 'Bypassed' : 'Bypass'}
             active={!bypassed}
@@ -84,7 +84,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     >
       <div className={styles.content}>
         {!block && <p className={styles.empty}>Power on to edit this block.</p>}
-        {block && analyser && <LiveMeter label={`${label} level`} analyser={analyser} />}
+
         {block && isAssetKind && (
           <AssetScreenButton
             blockId={instance.id}
@@ -94,7 +94,10 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
           />
         )}
         {block && schema.length > 0 && (
-          <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} />
+          <div className={styles.meterAndParams}>
+            <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} />
+            {block && analyser && <LiveMeter analyser={analyser} />}
+          </div>
         )}
         {block && schema.length === 0 && !isAssetKind && (
           <p className={styles.empty}>This block has no editable parameters.</p>
