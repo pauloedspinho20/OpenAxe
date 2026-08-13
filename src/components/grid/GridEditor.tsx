@@ -8,6 +8,8 @@ import { BlockCard } from './BlockCard'
 import { BlockPalette } from './BlockPalette'
 import { CableLayer, type DragPreview } from './CableLayer'
 import { AddBlockMenu } from './AddBlockMenu'
+import { InputDeviceDialog } from './InputDeviceDialog'
+import { OutputDeviceDialog } from './OutputDeviceDialog'
 import { JackDisconnect } from './JackDisconnect'
 import { openCatalogForNewBlock } from './openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from './jackId'
@@ -15,6 +17,7 @@ import { Knob } from '../primitives/Knob'
 import { HardwareButton } from '../primitives/HardwareButton'
 import { LiveMeter } from '../LiveMeter'
 import styles from './GridEditor.module.css'
+import { BlockInspector } from './BlockInspector'
 
 export interface GridEditorProps {
   rig: GraphRig | null
@@ -22,6 +25,10 @@ export interface GridEditorProps {
   tunerAnalyser: AnalyserNode | null
   /** Post-graph output tap - rendered as the OUT rail's level meter. */
   analyser: AnalyserNode | null
+  /** AudioContext.setSinkId support - passed through to the OUT rail's device dialog. */
+  outputSelectionSupported: boolean
+  /** AudioContext - passed through to the BlockInspector for NAM model evaluation. */
+  context: AudioContext | null
 }
 
 /**
@@ -33,7 +40,13 @@ export interface GridEditorProps {
  * cards only show basic info - full parameters and asset loading live in
  * BlockInspector, which reads the selection this component sets on click.
  */
-export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
+export function GridEditor({
+  rig,
+  tunerAnalyser,
+  analyser,
+  outputSelectionSupported,
+  context,
+}: GridEditorProps) {
   const blocks = useGraphStore((s) => s.blocks)
   const edges = useGraphStore((s) => s.edges)
   const masterLevel = useGraphStore((s) => s.masterLevel)
@@ -46,6 +59,8 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
   const [rejectMessage, setRejectMessage] = useState<string | null>(null)
   const [blockDragCell, setBlockDragCell] = useState<{ row: number; col: number } | null>(null)
+  const [inputDialogOpen, setInputDialogOpen] = useState(false)
+  const [outputDialogOpen, setOutputDialogOpen] = useState(false)
   const draggingJackRef = useRef<string | null>(null)
 
   const outHasCable = edges.some((e) => e.to.blockId === OUT_RAIL)
@@ -142,7 +157,10 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
 
   return (
     <div className={styles.editor}>
-      <BlockPalette tunerAnalyser={tunerAnalyser} />
+      <div className={styles.paletteAndInspector}>
+        <BlockPalette tunerAnalyser={tunerAnalyser} />
+        <BlockInspector rig={rig} context={context} />
+      </div>
       <div
         className={styles.wrap}
         onPointerDown={handlePointerDown}
@@ -158,7 +176,12 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
         />
 
         <div className={styles.rail}>
-          <span className={`label ${styles.railLabel}`}>IN</span>
+          <HardwareButton
+            fullWidth
+            label="IN"
+            onClick={() => setInputDialogOpen(true)}
+            title="Input device and channel"
+          />
           <Knob
             label="Trim"
             value={inputGain}
@@ -167,7 +190,7 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
             defaultValue={1}
             onChange={setInputGain}
             formatValue={(v) => `${Math.round(v * 100)}%`}
-            size={32}
+            size={46}
           />
           <LiveMeter label="Input" analyser={tunerAnalyser} />
           <span className={`${styles.railJackWrap} ${styles.railJackWrapRight}`}>
@@ -185,7 +208,12 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
         </div>
 
         <div className={styles.rail}>
-          <span className={`label ${styles.railLabel}`}>OUT</span>
+          <HardwareButton
+            fullWidth
+            label="OUT"
+            onClick={() => setOutputDialogOpen(true)}
+            title="Output device and channel"
+          />
           <Knob
             label="Master"
             value={masterLevel}
@@ -193,14 +221,15 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
             defaultValue={1}
             onChange={setMasterLevel}
             formatValue={(v) => v.toFixed(2)}
-            size={32}
+            size={46}
           />
-          <LiveMeter label="Output" analyser={analyser} />
           <HardwareButton
             label="Mute"
             active={masterMuted}
             onClick={() => setMasterMuted(!masterMuted)}
           />
+          <LiveMeter label="Output" analyser={analyser} />
+
           <span className={`${styles.railJackWrap} ${styles.railJackWrapLeft}`}>
             <span
               className={styles.railJack}
@@ -234,6 +263,13 @@ export function GridEditor({ rig, tunerAnalyser, analyser }: GridEditorProps) {
           onClose={() => setAddMenuCell(null)}
         />
       )}
+
+      <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
+      <OutputDeviceDialog
+        open={outputDialogOpen}
+        onClose={() => setOutputDialogOpen(false)}
+        outputSelectionSupported={outputSelectionSupported}
+      />
     </div>
   )
 }

@@ -19,10 +19,10 @@ export function Panel({ label, corner, children, className }: PanelProps) {
         </header>
       )}
       <div className={styles.body}>{children}</div>
-      <span className={`${styles.screw} ${styles.tl}`} />
+      {/*  <span className={`${styles.screw} ${styles.tl}`} />
       <span className={`${styles.screw} ${styles.tr}`} />
       <span className={`${styles.screw} ${styles.bl}`} />
-      <span className={`${styles.screw} ${styles.br}`} />
+      <span className={`${styles.screw} ${styles.br}`} /> */}
     </section>
   )
 }

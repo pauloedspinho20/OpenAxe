@@ -144,14 +144,14 @@ export function SceneBar({ rig }: SceneBarProps) {
   return (
     <div className={styles.bar} role="group" aria-label="Scenes">
       <div className={styles.sceneNav}>
-        <button
+        {/*   <button
           type="button"
           className={styles.navArrow}
           onClick={() => void SceneNavigator.prevScene({ source: 'ui' })}
           aria-label="Previous scene"
         >
           ‹
-        </button>
+        </button> */}
         <button
           type="button"
           className={styles.readout}
@@ -161,19 +161,19 @@ export function SceneBar({ rig }: SceneBarProps) {
           <span className={styles.sceneIndex}>{String(activeScene + 1).padStart(2, '0')}</span>
           <span className={styles.sceneName}>{sceneLabel}</span>
         </button>
-        <button
+        {/*    <HardwareButton
+          label="›"
+          onClick={() => void SceneNavigator.nextScene({ source: 'ui' })}
+          title="Next scene"
+        /> */}
+        {/*   <button
           type="button"
           className={styles.navArrow}
           onClick={() => void SceneNavigator.nextScene({ source: 'ui' })}
           aria-label="Next scene"
         >
           ›
-        </button>
-        <HardwareButton
-          label="Library"
-          onClick={openLibrary}
-          title="Browse, save-as-new, import, export, or delete presets"
-        />
+        </button> */}
       </div>
 
       <div className={styles.slots}>
@@ -182,7 +182,10 @@ export function SceneBar({ rig }: SceneBarProps) {
           const name = presetId ? (names.get(presetId) ?? '…') : null
           const isActive = i === activeSlot
           return (
-            <div key={i} className={styles.slot}>
+            <div
+              key={i}
+              className={`${styles.slot} ${switching && isActive ? styles.pending : ''}`}
+            >
               {renamingSlot === i ? (
                 <input
                   autoFocus
@@ -196,17 +199,13 @@ export function SceneBar({ rig }: SceneBarProps) {
                   onBlur={() => void commitRename(i)}
                 />
               ) : (
-                <button
-                  type="button"
-                  className={`${styles.slotBtn} ${isActive ? styles.active : ''} ${switching && isActive ? styles.pending : ''}`}
-                  aria-pressed={isActive}
-                  aria-keyshortcuts={String(i + 1)}
-                  title={name ?? 'Empty'}
+                <HardwareButton
+                  fullWidth
+                  label={`${i + 1} ${name ?? 'Empty'}`}
+                  active={isActive}
                   onClick={() => void SceneNavigator.goToSlot(i, { source: 'ui' })}
-                >
-                  <span className={styles.slotIndex}>{i + 1}</span>
-                  <span className={styles.slotName}>{name ?? '—'}</span>
-                </button>
+                  title={name ?? 'Empty'}
+                />
               )}
               <div className={styles.slotActions}>
                 <button
@@ -246,6 +245,12 @@ export function SceneBar({ rig }: SceneBarProps) {
 
       <div className={styles.currentPreset}>
         <span className={styles.currentPresetName}>{saved?.name ?? '—'}</span>
+        <HardwareButton
+          label="Presets"
+          onClick={openLibrary}
+          title="Browse, save-as-new, import, export, or delete presets"
+        />
+
         <HardwareButton
           label="Save"
           active={isDirty}

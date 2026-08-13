@@ -415,6 +415,7 @@ const AMP_TONE_STACK: KnobField[] = [
     step: 0.5,
     defaultValue: 0,
     formatValue: dB,
+    group: 'EQ',
   },
   {
     key: 'mid',
@@ -425,6 +426,7 @@ const AMP_TONE_STACK: KnobField[] = [
     step: 0.5,
     defaultValue: 0,
     formatValue: dB,
+    group: 'EQ',
   },
   {
     key: 'treble',
@@ -435,6 +437,7 @@ const AMP_TONE_STACK: KnobField[] = [
     step: 0.5,
     defaultValue: 0,
     formatValue: dB,
+    group: 'EQ',
   },
   {
     key: 'presence',
@@ -445,6 +448,7 @@ const AMP_TONE_STACK: KnobField[] = [
     step: 0.5,
     defaultValue: 0,
     formatValue: dB,
+    group: 'EQ',
   },
 ]
 

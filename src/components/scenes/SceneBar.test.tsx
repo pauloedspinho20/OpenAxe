@@ -74,7 +74,7 @@ describe('SceneBar', () => {
 
     const buttons = screen.getAllByRole('button', { name: /Pick a different preset for slot/ })
     expect(buttons).toHaveLength(8)
-    await waitFor(() => expect(screen.getByText('My Lead Tone')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('5 My Lead Tone')).toBeInTheDocument())
 
     expect(screen.getByTitle('My Lead Tone')).toHaveAttribute('aria-pressed', 'true')
   })
@@ -86,16 +86,6 @@ describe('SceneBar', () => {
     const slot1 = screen.getAllByTitle('Empty')[0]!
     slot1.click()
     expect(goToSlotMock).toHaveBeenCalledWith(0, { source: 'ui' })
-  })
-
-  it('prev/next arrows call the matching navigator methods', () => {
-    useSceneStore.getState().hydrate(bankWithOnePreset())
-    render(<SceneBar rig={null} context={null} />)
-
-    screen.getByLabelText('Previous scene').click()
-    expect(prevSceneMock).toHaveBeenCalledWith({ source: 'ui' })
-    screen.getByLabelText('Next scene').click()
-    expect(nextSceneMock).toHaveBeenCalledWith({ source: 'ui' })
   })
 
   it('the readout opens the scene manager', () => {
@@ -115,12 +105,12 @@ describe('SceneBar', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
-  it('the Library button opens the preset manager in normal (non-pick) mode', () => {
+  it('the Presets button opens the preset manager in normal (non-pick) mode', () => {
     usePresetManager.getState().closeManager()
     useSceneStore.getState().hydrate(bankWithOnePreset())
     render(<SceneBar rig={null} context={null} />)
 
-    screen.getByRole('button', { name: 'Library' }).click()
+    screen.getByRole('button', { name: 'Presets' }).click()
     expect(usePresetManager.getState().open).toBe(true)
     expect(usePresetManager.getState().pickTarget).toBeNull()
   })

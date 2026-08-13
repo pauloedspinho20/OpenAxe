@@ -13,6 +13,11 @@
   border-bottom: 1px solid var(--seam);
 }
 
+.logo {
+  width: 100px;
+  height: auto;
+}
+
 /*
  * Each zone of the header (brand, theme, I/O, status, actions) sits in its
  * own group, separated by a hairline rather than crowded into one run of
@@ -37,17 +42,13 @@
   margin-right: auto;
 }
 
-.status {
-  margin-left: auto;
-}
-
 .wordmark {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: bold;
   letter-spacing: 0.14em;
   color: var(--ink-1);
 }

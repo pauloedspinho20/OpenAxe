@@ -69,7 +69,7 @@ export function PowerGate({
         </select>
 
         <HardwareButton
-          label={starting ? 'Starting…' : 'Power on'}
+          label={starting ? 'Starting…' : 'POWER ON'}
           onClick={onPowerOn}
           disabled={starting}
         />

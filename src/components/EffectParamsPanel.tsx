@@ -90,7 +90,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
                   step={field.step}
                   defaultValue={field.defaultValue}
                   formatValue={field.formatValue}
-                  size={44}
+                  size={50}
                   onChange={(value) => setParam(field.key, value)}
                 />
               )

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSceneStore } from '../state/sceneStore'
 import { useCurrentPresetStore } from '../state/currentPresetStore'
+import { useGraphStore } from '../state/graphStore'
 import { createEmptyBank } from './sceneBankStore'
 import type { Preset, PresetRig } from '../presets/types'
 
@@ -162,6 +163,49 @@ describe('SceneNavigator', () => {
       getPresetMock.mockResolvedValue(null)
       await SceneNavigator.goToSlot(0)
       expect(useCurrentPresetStore.getState().saved).toBeNull()
+    })
+  })
+
+  describe('clearing the grid on an empty slot', () => {
+    beforeEach(() => {
+      useGraphStore.setState({
+        blocks: [{ id: 'b1', kind: 'compressor', row: 0, col: 0, params: {} }],
+        edges: [{ id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'b1', port: 0 } }],
+        masterLevel: 0.75,
+        masterMuted: true,
+      })
+    })
+
+    it('removes every live block from the rig and empties the store, keeping master level/mute', async () => {
+      const removeBlock = vi.fn(async () => undefined)
+      SceneNavigator.setTarget({
+        rig: { ...fakeRig(), listBlockIds: () => ['b1'], removeBlock },
+        context: fakeContext(),
+      })
+
+      await SceneNavigator.goToSlot(2)
+
+      expect(removeBlock).toHaveBeenCalledWith('b1')
+      const state = useGraphStore.getState()
+      expect(state.blocks).toEqual([])
+      expect(state.edges).toEqual([])
+      expect(state.masterLevel).toBe(0.75)
+      expect(state.masterMuted).toBe(true)
+    })
+
+    it('still empties the store when no engine is registered', async () => {
+      SceneNavigator.setTarget(null)
+
+      await SceneNavigator.goToSlot(2)
+
+      const state = useGraphStore.getState()
+      expect(state.blocks).toEqual([])
+      expect(state.edges).toEqual([])
+    })
+
+    it('does not clear the grid when the slot has a preset to load', async () => {
+      await SceneNavigator.goToSlot(0)
+      expect(useGraphStore.getState().blocks).not.toEqual([])
     })
   })
 })

@@ -32,6 +32,9 @@
  *   always-visible Save button diffs the live rig against. Resolved
  *   whenever a slot's preset id is known, independent of whether an engine
  *   is registered, so it's already correct the moment one comes up.
+ * - Landing on an empty slot clears the grid (live rig, when one's
+ *   registered, and the store either way) rather than leaving whatever the
+ *   previous slot loaded still sitting there.
  */
 import { applyPreset, type MissingAsset } from '../presets/apply'
 import { getPreset } from '../presets/presetStore'
@@ -90,6 +93,22 @@ function wrap(n: number, count: number): number {
   return ((n % count) + count) % count
 }
 
+/**
+ * Empties the grid - every live block on the rig (if one's registered) and
+ * the store's block/edge list either way, keeping master level/mute as-is.
+ * Mirrors applyPreset's own teardown loop, just with nothing to rebuild.
+ */
+async function clearGrid(): Promise<void> {
+  if (target) {
+    for (const id of [...target.rig.listBlockIds()]) {
+      await target.rig.removeBlock(id)
+    }
+    useEngineVersion.getState().bump()
+  }
+  const { masterLevel, masterMuted } = useGraphStore.getState()
+  useGraphStore.getState().loadGraph([], [], masterLevel, masterMuted)
+}
+
 async function applySlot(scene: number, slot: number, mySeq: number): Promise<SceneNavResult> {
   if (mySeq !== seq) return { ok: false, reason: 'superseded', scene, slot, presetId: null }
 
@@ -104,6 +123,8 @@ async function applySlot(scene: number, slot: number, mySeq: number): Promise<Sc
 
   if (!presetId) {
     useCurrentPresetStore.getState().setSaved(null)
+    await clearGrid()
+    if (mySeq !== seq) return { ok: false, reason: 'superseded', scene, slot, presetId: null }
     return { ok: false, reason: 'empty-slot', scene, slot, presetId: null }
   }
 

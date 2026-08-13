@@ -3,10 +3,6 @@
   width: 100%;
   flex-wrap: wrap;
   gap: var(--sp-5);
-  padding: var(--sp-4);
-  background: var(--panel-recessed);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-recessed);
 }
 
 .group {

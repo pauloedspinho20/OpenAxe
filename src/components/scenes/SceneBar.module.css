@@ -42,6 +42,7 @@
   padding: var(--sp-1) var(--sp-3);
   cursor: pointer;
   min-width: 140px;
+  height: 33px;
 }
 
 .readout:hover {
@@ -73,6 +74,11 @@
 .slot {
   position: relative;
   flex-shrink: 0;
+  width: 84px;
+}
+
+.slot.pending {
+  opacity: 0.6;
 }
 
 .slot:hover .slotActions {
@@ -81,65 +87,17 @@
   transform: translateY(0);
 }
 
-.slotBtn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  width: 84px;
-  height: 48px;
-  background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-control);
-  cursor: pointer;
-  padding: 0 var(--sp-1);
-}
-
-.slotBtn:hover {
-  border-color: var(--accent);
-}
-
-.slotBtn.active {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  box-shadow:
-    0 0 8px var(--accent-dim),
-    inset 0 1px 1px rgba(255, 255, 255, 0.06);
-}
-
-.slotBtn.pending {
-  opacity: 0.6;
-}
-
-.slotIndex {
-  font-family: var(--font-display);
-  font-size: 10px;
-  color: var(--ink-3);
-}
-
-.slotName {
-  font-size: 11px;
-  color: var(--ink-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 76px;
-}
-
 .renameInput {
-  width: 84px;
-  height: 48px;
+  width: 100%;
   font: inherit;
   font-family: var(--font-display);
   font-size: 11px;
   text-align: center;
   color: var(--ink-1);
-  background: var(--screen-bg);
+  /*  background: var(--screen-bg); */
   border: 1px solid var(--accent);
-  border-radius: var(--r-md);
-  padding: 0 var(--sp-1);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-1);
 }
 
 .slotActions {
@@ -194,10 +152,9 @@
 .currentPreset {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-4);
   flex-shrink: 0;
   padding-left: var(--sp-3);
-  border-left: 1px solid var(--seam);
 }
 
 .currentPresetName {

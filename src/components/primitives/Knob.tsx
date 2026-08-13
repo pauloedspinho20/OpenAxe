@@ -135,6 +135,7 @@ export function Knob({
 
   return (
     <div className={styles.wrap} style={{ width: size }}>
+      {formatValue && <span className={styles.value}>{formatValue(value)}</span>}
       <svg
         role="slider"
         tabIndex={disabled ? -1 : 0}
@@ -181,7 +182,6 @@ export function Knob({
       <span id={id} className={`label ${styles.label}`}>
         {label}
       </span>
-      {formatValue && <span className={styles.value}>{formatValue(value)}</span>}
     </div>
   )
 }

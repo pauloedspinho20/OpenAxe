@@ -7,7 +7,7 @@
 
 .segments {
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 2px;
   padding: var(--sp-2);
   background: var(--panel-recessed);

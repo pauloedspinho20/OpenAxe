@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { GridEditor } from './components/grid/GridEditor'
 import { BlockInspector } from './components/grid/BlockInspector'
-import { HeaderIO } from './components/HeaderIO'
 import { MidiManager } from './components/midi/MidiManager'
 import { PresetManager } from './components/presets/PresetManager'
 import { SceneBar } from './components/scenes/SceneBar'
@@ -90,21 +89,9 @@ function App() {
       <header className={styles.header}>
         <div className={`${styles.headerGroup} ${styles.brand}`}>
           <div className={styles.wordmark}>
-            <span className={styles.dot} />
+            <img src="./logo.png" className={styles.logo} />
             NAM WEB STUDIO
           </div>
-        </div>
-
-        <div className={styles.headerGroup}>
-          <Toggle
-            label="Aluminum"
-            checked={theme === 'light'}
-            onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
-          />
-        </div>
-
-        <div className={styles.headerGroup}>
-          <HeaderIO outputSelectionSupported={outputSelectionSupported} />
         </div>
 
         <div className={`${styles.headerGroup} ${styles.status}`}>
@@ -127,6 +114,14 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
+          <Toggle
+            label="Theme"
+            checked={theme === 'light'}
+            onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
+          />
+        </div>
+
+        <div className={styles.headerGroup}>
           <HardwareButton
             label="MIDI"
             active={midiConnected}
@@ -134,7 +129,7 @@ function App() {
             title={midiStatusTitle}
           />
           {isReady && (
-            <HardwareButton label="Power off" active onClick={() => void engine.powerOff()} />
+            <HardwareButton label="POWER OFF" active onClick={() => void engine.powerOff()} />
           )}
         </div>
       </header>
@@ -159,6 +154,8 @@ function App() {
           rig={engine.rig}
           tunerAnalyser={engine.tunerAnalyser}
           analyser={engine.analyser}
+          outputSelectionSupported={outputSelectionSupported}
+          context={engine.context}
         />
 
         <BlockInspector rig={engine.rig} context={engine.context} />

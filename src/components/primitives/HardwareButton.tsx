@@ -7,6 +7,7 @@ export interface HardwareButtonProps {
   variant?: 'accent' | 'danger'
   disabled?: boolean
   title?: string
+  fullWidth?: boolean
 }
 
 /** A tactile rack button. `active` lights it up in the given variant color, like an engaged pedal. */
@@ -17,11 +18,12 @@ export function HardwareButton({
   variant = 'accent',
   disabled = false,
   title,
+  fullWidth = false,
 }: HardwareButtonProps) {
   return (
     <button
       type="button"
-      className={`${styles.button} ${active ? styles.active : ''} ${styles[variant]}`}
+      className={`${styles.button} ${active ? styles.active : ''} ${styles[variant]} ${fullWidth ? styles.fullWidth : ''}`}
       onClick={onClick}
       disabled={disabled}
       aria-pressed={active}

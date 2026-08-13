@@ -16,6 +16,12 @@
   justify-content: space-between;
 }
 
+.card:hover {
+  box-shadow:
+    0 0 0 2px var(--ink-3),
+    var(--shadow-panel);
+}
+
 /* Shows the loaded model/IR's Tone3000 image as the card's background, for
    an at-a-glance read of what's plugged into each block - dimmed by the
    ::before overlay below so text and jacks stay legible over any image. */
@@ -41,10 +47,11 @@
   outline-offset: 2px;
 }
 
-.cardSelected {
+.cardSelected,
+.cardSelected:hover {
   border-color: var(--accent);
   box-shadow:
-    0 0 0 1px var(--accent),
+    0 0 0 2px var(--accent),
     var(--shadow-panel);
 }
 
@@ -62,6 +69,7 @@
   position: absolute;
   top: 50%;
   left: 50%;
+  font-family: var(--font-display);
   transform: translate(-50%, -50%);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -138,6 +146,7 @@
   line-height: 1;
   cursor: pointer;
   padding: 0 2px;
+  margin-left: auto;
 }
 
 .removeBtn:hover {
