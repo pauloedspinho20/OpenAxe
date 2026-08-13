@@ -29,6 +29,8 @@ export type NamModelBlockKind = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'spac
  */
 /** ±12dB, matching the old AmpCabChain tone stack's range. */
 const TONE_GAIN_LIMIT = 12
+/** Headroom above unity, matching the Mix/Level convention used everywhere else (master, mixer, effects). */
+const MAX_LEVEL = 1.5
 
 export class AmpBlock implements Block {
   readonly kind: NamModelBlockKind
@@ -39,6 +41,10 @@ export class AmpBlock implements Block {
   private modelJson: string | null = null
   private slimmable: SlimmableInfo | null = null
 
+  /** True input/output jacks - a trim before the model and a level after the tone stack, both just this block's own gain stages. */
+  private readonly inputGain: GainNode
+  private readonly outputGain: GainNode
+
   /** 4-band tone stack (Bass low-shelf, Mid peaking, Treble high-shelf, Presence peaking), wired after the model. */
   private readonly bassFilter: BiquadFilterNode
   private readonly midFilter: BiquadFilterNode
@@ -48,12 +54,16 @@ export class AmpBlock implements Block {
   private midGain = 0
   private trebleGain = 0
   private presenceGain = 0
+  private inputLevel = 1
+  private outputLevel = 1
 
   private constructor(context: BaseAudioContext, namNode: NamNode, kind: NamModelBlockKind) {
     this.context = context
     this.namNode = namNode
     this.kind = kind
 
+    this.inputGain = new GainNode(context)
+    this.outputGain = new GainNode(context)
     this.bassFilter = new BiquadFilterNode(context, { type: 'lowshelf', frequency: 100, gain: 0 })
     this.midFilter = new BiquadFilterNode(context, {
       type: 'peaking',
@@ -73,10 +83,12 @@ export class AmpBlock implements Block {
       gain: 0,
     })
 
+    this.inputGain.connect(namNode)
     namNode.connect(this.bassFilter)
     this.bassFilter.connect(this.midFilter)
     this.midFilter.connect(this.trebleFilter)
     this.trebleFilter.connect(this.presenceFilter)
+    this.presenceFilter.connect(this.outputGain)
   }
 
   static async create(engine: NamEngine, kind: NamModelBlockKind = 'amp'): Promise<AmpBlock> {
@@ -85,12 +97,32 @@ export class AmpBlock implements Block {
   }
 
   get inputNode(): AudioNode {
-    return this.namNode
+    return this.inputGain
   }
 
-  /** The tone stack's tail - colours the model output the same way a real amp's tone controls sit before the speaker. */
+  /** After the tone stack's output level trim - colours the model output the same way a real amp's tone controls sit before the speaker. */
   get outputNode(): AudioNode {
-    return this.presenceFilter
+    return this.outputGain
+  }
+
+  /** Trim before the model - useful for gain-staging a hot DI signal or a quiet pickup. */
+  setInputLevel(gain: number): void {
+    this.inputLevel = Math.min(MAX_LEVEL, Math.max(0, gain))
+    this.inputGain.gain.setTargetAtTime(this.inputLevel, this.context.currentTime, 0.01)
+  }
+
+  getInputLevel(): number {
+    return this.inputLevel
+  }
+
+  /** Trim after the tone stack - independent of the model's own loudness. */
+  setOutputLevel(gain: number): void {
+    this.outputLevel = Math.min(MAX_LEVEL, Math.max(0, gain))
+    this.outputGain.gain.setTargetAtTime(this.outputLevel, this.context.currentTime, 0.01)
+  }
+
+  getOutputLevel(): number {
+    return this.outputLevel
   }
 
   /** Set Bass shelf gain in dB (±12). */
@@ -174,7 +206,7 @@ export class AmpBlock implements Block {
     return this.loadedModel
   }
 
-  /** Model loading is a separate action, not a continuous "param" - slim size and the tone stack are. */
+  /** Model loading is a separate action, not a continuous "param" - slim size, the tone stack, and the in/out levels are. */
   getParams(): EffectParams {
     return {
       ...(this.slimmable ? { slimSize: this.slimmable.currentSize } : {}),
@@ -182,6 +214,8 @@ export class AmpBlock implements Block {
       mid: this.midGain,
       treble: this.trebleGain,
       presence: this.presenceGain,
+      inputLevel: this.inputLevel,
+      outputLevel: this.outputLevel,
     }
   }
 
@@ -191,11 +225,15 @@ export class AmpBlock implements Block {
     if (typeof params.mid === 'number') this.setMid(params.mid)
     if (typeof params.treble === 'number') this.setTreble(params.treble)
     if (typeof params.presence === 'number') this.setPresence(params.presence)
+    if (typeof params.inputLevel === 'number') this.setInputLevel(params.inputLevel)
+    if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    this.inputGain.disconnect()
+    this.outputGain.disconnect()
     this.bassFilter.disconnect()
     this.midFilter.disconnect()
     this.trebleFilter.disconnect()

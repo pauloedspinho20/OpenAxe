@@ -67,6 +67,7 @@ export class Phaser extends BaseEffect {
 
   getParams(): EffectParams {
     return {
+      ...this.baseParams(),
       rate: this.lfo.frequency.value,
       depth: this.depthGain.gain.value,
       feedback: this.feedbackGain.gain.value,
@@ -74,6 +75,7 @@ export class Phaser extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)

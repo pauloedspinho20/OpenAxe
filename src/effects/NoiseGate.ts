@@ -50,6 +50,7 @@ export class NoiseGate extends BaseEffect {
 
   getParams(): EffectParams {
     return {
+      ...this.baseParams(),
       threshold: this.param('threshold').value,
       attack: this.param('attack').value,
       release: this.param('release').value,
@@ -57,6 +58,7 @@ export class NoiseGate extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     if (typeof params.threshold === 'number') this.setThreshold(params.threshold)
     if (typeof params.attack === 'number') this.setAttack(params.attack)
     if (typeof params.release === 'number') this.setRelease(params.release)

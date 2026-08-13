@@ -44,6 +44,7 @@ export class Compressor extends BaseEffect {
 
   getParams(): EffectParams {
     return {
+      ...this.baseParams(),
       threshold: this.node.threshold.value,
       knee: this.node.knee.value,
       ratio: this.node.ratio.value,
@@ -53,6 +54,7 @@ export class Compressor extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     if (typeof params.threshold === 'number') this.setThreshold(params.threshold)
     if (typeof params.knee === 'number') this.setKnee(params.knee)
     if (typeof params.ratio === 'number') this.setRatio(params.ratio)

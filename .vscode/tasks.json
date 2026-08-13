@@ -1,0 +1,122 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install dependencies",
+      "type": "shell",
+      "command": "npm install --legacy-peer-deps",
+      "detail": "npm install (legacy-peer-deps works around neural-amp-modeler-wasm's react@^18 peer dep vs. this project's React 19)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Install Playwright browsers",
+      "type": "shell",
+      "command": "npx playwright install",
+      "detail": "One-time fetch of the chromium/firefox/webkit binaries used by the e2e suite",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev server",
+      "type": "shell",
+      "command": "npm run dev",
+      "detail": "Starts the Vite dev server",
+      "isBackground": true,
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": {
+        "pattern": [{ "regexp": ".", "file": 1, "location": 2, "message": 3 }],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE v",
+          "endsPattern": "ready in"
+        }
+      }
+    },
+    {
+      "label": "Build",
+      "type": "shell",
+      "command": "npm run build",
+      "detail": "Typecheck (tsc -b) + production build",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Lint",
+      "type": "shell",
+      "command": "npm run lint",
+      "detail": "oxlint",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Format check",
+      "type": "shell",
+      "command": "npm run format:check",
+      "detail": "Prettier --check",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Format write",
+      "type": "shell",
+      "command": "npm run format",
+      "detail": "Prettier --write",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test (watch)",
+      "type": "shell",
+      "command": "npm run test",
+      "detail": "Vitest in watch mode",
+      "isBackground": true,
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test (run once)",
+      "type": "shell",
+      "command": "npm run test:run",
+      "detail": "Vitest, single run - unit/component tests",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test coverage",
+      "type": "shell",
+      "command": "npm run test:coverage",
+      "detail": "Vitest with the v8 coverage report",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "E2E test",
+      "type": "shell",
+      "command": "npm run test:e2e",
+      "detail": "Playwright e2e suite - needs \"Install Playwright browsers\" run once first",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "dependsOn": ["Install Playwright browsers"]
+    },
+    {
+      "label": "Full check (lint + format + build + test + e2e)",
+      "detail": "Everything CI runs, in order - see .github/workflows/ci.yml",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Lint", "Format check", "Build", "Test (run once)", "E2E test"],
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

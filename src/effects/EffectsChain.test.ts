@@ -19,6 +19,8 @@ function createMockEffect(name: string): Effect {
     outputNode: createMockAudioNode() as unknown as AudioNode,
     setMix: vi.fn(),
     getMix: vi.fn(() => 1),
+    setLevel: vi.fn(),
+    getLevel: vi.fn(() => 1),
     setBypass: vi.fn(),
     isBypassed: vi.fn(() => false),
     getParams: vi.fn(() => ({})),

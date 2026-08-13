@@ -125,12 +125,14 @@ export class Freeverb extends BaseEffect {
 
   getParams(): EffectParams {
     return {
+      ...this.baseParams(),
       roomSize: this.roomSize,
       damping: this.damping,
     }
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     if (typeof params.roomSize === 'number') this.setRoomSize(params.roomSize)
     if (typeof params.damping === 'number') this.setDamping(params.damping)
   }

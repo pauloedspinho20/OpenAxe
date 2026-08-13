@@ -69,7 +69,7 @@ export class ParametricEQ extends BaseEffect {
    * a nested structure, since EffectParams is a flat record shared by every effect kind.
    */
   getParams(): EffectParams {
-    const params: EffectParams = { bandCount: this.bands.length }
+    const params: EffectParams = { ...this.baseParams(), bandCount: this.bands.length }
     this.bands.forEach((band, i) => {
       params[`band${i}_frequency`] = band.frequency.value
       params[`band${i}_gain`] = band.gain.value
@@ -79,6 +79,7 @@ export class ParametricEQ extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     this.bands.forEach((_, i) => {
       const frequency = params[`band${i}_frequency`]
       const gain = params[`band${i}_gain`]

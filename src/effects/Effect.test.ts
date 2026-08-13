@@ -5,9 +5,10 @@ import { BaseEffect, type EffectParams } from './Effect'
 /** Real enough to observe gain values without a real Web Audio context. */
 class StubGainNode {
   gain: { value: number; setTargetAtTime: (v: number) => void }
+  context: unknown
   connect = vi.fn()
   disconnect = vi.fn()
-  constructor(_context: unknown, options?: { gain?: number }) {
+  constructor(context: unknown, options?: { gain?: number }) {
     const gain = {
       value: options?.gain ?? 1,
       setTargetAtTime: (v: number) => {
@@ -15,6 +16,7 @@ class StubGainNode {
       },
     }
     this.gain = gain
+    this.context = context
   }
 }
 vi.stubGlobal('GainNode', StubGainNode)
@@ -25,9 +27,11 @@ class TestEffect extends BaseEffect {
     super(context, 'compressor', 'Test', wetNode, wetNode)
   }
   getParams(): EffectParams {
-    return {}
+    return this.baseParams()
   }
-  setParams(): void {}
+  setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
+  }
   dispose(): void {
     this.disposeBase()
   }
@@ -53,5 +57,31 @@ describe('BaseEffect', () => {
     }
     expect(wetGain.gain.value).toBe(1)
     expect(dryGain.gain.value).toBe(0)
+  })
+
+  it('setLevel applies to the outputNode gain directly - no extra node needed', () => {
+    const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
+    expect(effect.getLevel()).toBe(1)
+
+    effect.setLevel(0.5)
+    expect(effect.getLevel()).toBe(0.5)
+    expect((effect.outputNode as unknown as StubGainNode).gain.value).toBe(0.5)
+
+    effect.setLevel(3) // clamped to MAX_LEVEL (1.5), same headroom as the master/mixer knobs
+    expect(effect.getLevel()).toBe(1.5)
+  })
+
+  it('getParams/setParams round-trip mix and level via baseParams/applyBaseParams', () => {
+    const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
+    effect.setMix(0.6)
+    effect.setLevel(0.8)
+
+    const saved = effect.getParams()
+    expect(saved).toEqual({ mix: 0.6, level: 0.8 })
+
+    const restored = new TestEffect({ currentTime: 0 } as BaseAudioContext)
+    restored.setParams(saved)
+    expect(restored.getMix()).toBe(0.6)
+    expect(restored.getLevel()).toBe(0.8)
   })
 })

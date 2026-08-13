@@ -74,6 +74,34 @@ function eqBand(index: number, freqRange: [number, number], freqDefault: number)
 }
 
 /**
+ * Mix (dry/wet blend) and Level (post-effect output trim) - every effect
+ * kind has both, backed by BaseEffect's own setMix/setLevel (see Effect.ts),
+ * so they're appended to every entry below rather than repeated per kind.
+ */
+const MIX_LEVEL_FIELDS: KnobField[] = [
+  {
+    key: 'mix',
+    label: 'Mix',
+    control: 'knob',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    defaultValue: 1,
+    formatValue: percent,
+  },
+  {
+    key: 'level',
+    label: 'Level',
+    control: 'knob',
+    min: 0,
+    max: 1.5,
+    step: 0.01,
+    defaultValue: 1,
+    formatValue: percent,
+  },
+]
+
+/**
  * Declarative per-effect-kind field list, driving one generic renderer
  * (EffectParamsPanel) instead of bespoke UI per effect. Ranges/defaults
  * mirror each effect class's own constructor/setter defaults.
@@ -110,6 +138,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.15,
       formatValue: ms,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   compressor: [
     {
@@ -162,12 +191,14 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.2,
       formatValue: ms,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   eq: [
     ...eqBand(0, [40, 500], 100),
     ...eqBand(1, [200, 2000], 500),
     ...eqBand(2, [500, 5000], 2000),
     ...eqBand(3, [2000, 12000], 6000),
+    ...MIX_LEVEL_FIELDS,
   ],
   chorus: [
     {
@@ -200,6 +231,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.15,
       formatValue: percent,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   flanger: [
     {
@@ -232,6 +264,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.6,
       formatValue: percent,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   phaser: [
     {
@@ -264,6 +297,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   tremolo: [
     {
@@ -286,6 +320,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   delay: [
     {
@@ -318,6 +353,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 12000,
       formatValue: hz,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   'ping-pong-delay': [
     {
@@ -340,6 +376,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.35,
       formatValue: percent,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
   reverb: [
     {
@@ -362,6 +399,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
     },
+    ...MIX_LEVEL_FIELDS,
   ],
 }
 
@@ -409,6 +447,32 @@ const AMP_TONE_STACK: KnobField[] = [
   },
 ]
 
+/** Pre/post trims - shared by every NAM model block kind and Cab (see AmpBlock/CabBlock's own input/output gain stages). */
+const IN_OUT_LEVEL_FIELDS: KnobField[] = [
+  {
+    key: 'inputLevel',
+    label: 'Input',
+    control: 'knob',
+    min: 0,
+    max: 1.5,
+    step: 0.01,
+    defaultValue: 1,
+    formatValue: percent,
+    group: 'I/O',
+  },
+  {
+    key: 'outputLevel',
+    label: 'Output',
+    control: 'knob',
+    min: 0,
+    max: 1.5,
+    step: 0.01,
+    defaultValue: 1,
+    formatValue: percent,
+    group: 'I/O',
+  },
+]
+
 /**
  * Schema entries for grid block kinds beyond the 10 effects. The 5 NAM
  * model kinds (amp/amp-cab/pedal/outboard/space) each get the same 4-band
@@ -416,12 +480,14 @@ const AMP_TONE_STACK: KnobField[] = [
  * dedicated action in the inspector, but the tone controls go through the
  * same generic knob panel as everything else.
  */
+const AMP_CONTROLS: ParamFieldSchema[] = [...AMP_TONE_STACK, ...IN_OUT_LEVEL_FIELDS]
+
 export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
-  amp: AMP_TONE_STACK,
-  'amp-cab': AMP_TONE_STACK,
-  pedal: AMP_TONE_STACK,
-  outboard: AMP_TONE_STACK,
-  space: AMP_TONE_STACK,
+  amp: AMP_CONTROLS,
+  'amp-cab': AMP_CONTROLS,
+  pedal: AMP_CONTROLS,
+  outboard: AMP_CONTROLS,
+  space: AMP_CONTROLS,
   cab: [
     {
       key: 'irMix',
@@ -433,6 +499,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       defaultValue: 1,
       formatValue: percent,
     },
+    ...IN_OUT_LEVEL_FIELDS,
   ],
   mixer: Array.from({ length: MIXER_INPUT_COUNT }, (_, i) => {
     const group = `In ${i + 1}`

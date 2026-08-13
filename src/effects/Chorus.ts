@@ -33,6 +33,7 @@ export class Chorus extends BaseEffect {
 
   getParams(): EffectParams {
     return {
+      ...this.baseParams(),
       rate: this.modDelay.lfo.frequency.value,
       depth: this.modDelay.depthGain.gain.value * 1000,
       feedback: this.modDelay.feedbackGain.gain.value,
@@ -40,6 +41,7 @@ export class Chorus extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)

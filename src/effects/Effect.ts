@@ -35,6 +35,9 @@ export interface Effect {
   /** Bypass forces the mix to 0 without discarding the previous mix value. */
   setBypass(bypassed: boolean): void
   isBypassed(): boolean
+  /** Output trim, applied after the dry/wet sum - independent of mix, and not affected by bypass. */
+  setLevel(gain: number): void
+  getLevel(): number
   /** This effect's current tunable parameters, for saving into a preset. */
   getParams(): EffectParams
   /** Restore parameters previously returned by getParams(), e.g. when loading a preset. */
@@ -43,6 +46,9 @@ export interface Effect {
 }
 
 const clampUnit = (value: number) => Math.min(1, Math.max(0, value))
+/** Matches the Knob convention used for other post-gain trims (e.g. the master/mixer levels) - +3.5dB of headroom, not just unity. */
+const MAX_LEVEL = 1.5
+const clampLevel = (value: number) => Math.min(MAX_LEVEL, Math.max(0, value))
 
 /**
  * Handles the dry/wet crossfade and bypass plumbing shared by every effect,
@@ -61,6 +67,7 @@ export abstract class BaseEffect implements Effect {
   private mix = 1
   private bypassed = false
   private preBypassMix = 1
+  private level = 1
 
   protected constructor(
     context: BaseAudioContext,
@@ -112,10 +119,36 @@ export abstract class BaseEffect implements Effect {
     return this.bypassed
   }
 
+  /** Output trim - the outputNode is already the dry/wet sum point, so its own gain doubles as this with no extra node. */
+  setLevel(gain: number): void {
+    this.level = clampLevel(gain)
+    this.outputNode.gain.setTargetAtTime(this.level, this.inputNode.context.currentTime, 0.01)
+  }
+
+  getLevel(): number {
+    return this.level
+  }
+
   private applyMix(wet: number): void {
     const context = this.inputNode.context
     this.wetGain.gain.setTargetAtTime(wet, context.currentTime, 0.01)
     this.dryGain.gain.setTargetAtTime(1 - wet, context.currentTime, 0.01)
+  }
+
+  /**
+   * Mix and Level are common to every effect kind - concrete subclasses
+   * spread `...this.baseParams()` into their own getParams() and call
+   * `this.applyBaseParams(params)` from their own setParams(), so both
+   * round-trip through presets exactly like any other param instead of
+   * needing a bespoke UI path (see paramSchema.ts's MIX_LEVEL_FIELDS).
+   */
+  protected baseParams(): EffectParams {
+    return { mix: this.mix, level: this.level }
+  }
+
+  protected applyBaseParams(params: EffectParams): void {
+    if (typeof params.mix === 'number') this.setMix(params.mix)
+    if (typeof params.level === 'number') this.setLevel(params.level)
   }
 
   /** Disconnects the shared crossfade nodes. Subclasses must dispose their own wet subgraph. */

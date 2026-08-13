@@ -6,6 +6,9 @@ export interface LoadedAssetInfo {
   name: string
 }
 
+/** Headroom above unity, matching the Mix/Level convention used everywhere else (master, mixer, effects). */
+const MAX_LEVEL = 1.5
+
 /**
  * One cabinet IR convolution instance - a standalone grid block, separate
  * from the amp model it used to be fused with. Parallel wet/dry via
@@ -22,6 +25,8 @@ export class CabBlock implements Block {
   private irMix = 1
   private loadedIr: LoadedAssetInfo | null = null
   private disposed = false
+  private inputLevel = 1
+  private outputLevel = 1
 
   constructor(context: BaseAudioContext) {
     this.context = context
@@ -79,12 +84,34 @@ export class CabBlock implements Block {
     this.setIrMix(0)
   }
 
+  /** Trim before the IR convolution - scales both the dry and wet paths equally, ahead of the mix. */
+  setInputLevel(gain: number): void {
+    this.inputLevel = Math.min(MAX_LEVEL, Math.max(0, gain))
+    this.input.gain.setTargetAtTime(this.inputLevel, this.context.currentTime, 0.01)
+  }
+
+  getInputLevel(): number {
+    return this.inputLevel
+  }
+
+  /** Trim after the dry/wet sum - the `output` node is already that summing point, so its own gain doubles as this. */
+  setOutputLevel(gain: number): void {
+    this.outputLevel = Math.min(MAX_LEVEL, Math.max(0, gain))
+    this.output.gain.setTargetAtTime(this.outputLevel, this.context.currentTime, 0.01)
+  }
+
+  getOutputLevel(): number {
+    return this.outputLevel
+  }
+
   getParams(): EffectParams {
-    return { irMix: this.irMix }
+    return { irMix: this.irMix, inputLevel: this.inputLevel, outputLevel: this.outputLevel }
   }
 
   setParams(params: EffectParams): void {
     if (typeof params.irMix === 'number') this.setIrMix(params.irMix)
+    if (typeof params.inputLevel === 'number') this.setInputLevel(params.inputLevel)
+    if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
   }
 
   dispose(): void {

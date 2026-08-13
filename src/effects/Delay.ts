@@ -75,6 +75,7 @@ export class Delay extends BaseEffect {
   /** `character` is fixed at construction (it changes the node topology) - reported so a preset can reconstruct with the right one, but setParams() can't change it on a live instance. */
   getParams(): EffectParams {
     return {
+      ...this.baseParams(),
       character: this.character,
       time: this.delayNode.delayTime.value,
       feedback: this.feedbackGain.gain.value,
@@ -83,6 +84,7 @@ export class Delay extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
+    this.applyBaseParams(params)
     if (typeof params.time === 'number') this.setTime(params.time)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
     if (typeof params.tone === 'number') this.setTone(params.tone)

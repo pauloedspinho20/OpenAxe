@@ -103,7 +103,7 @@ function App() {
           )}
         </div>
 
-        <div className={`${styles.headerGroup} ${styles.actions}`}>
+        <div className={styles.headerGroup}>
           <HardwareButton label="Presets" onClick={openPresetManager} />
           {isReady && (
             <HardwareButton label="Power off" active onClick={() => void engine.powerOff()} />
