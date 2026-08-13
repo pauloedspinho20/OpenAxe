@@ -93,7 +93,9 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
             context={context}
           />
         )}
-        {block && schema.length > 0 && <EffectParamsPanel blockId={instance.id} block={block} />}
+        {block && schema.length > 0 && (
+          <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} />
+        )}
         {block && schema.length === 0 && !isAssetKind && (
           <p className={styles.empty}>This block has no editable parameters.</p>
         )}
