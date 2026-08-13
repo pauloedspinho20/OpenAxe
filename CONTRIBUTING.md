@@ -39,10 +39,15 @@ Useful scripts:
 - `npm run lint` — oxlint
 - `npm run format` / `npm run format:check` — Prettier
 - `npm run test` / `npm run test:run` — Vitest (watch / single run)
+- `npm run test:e2e` — Playwright e2e (chromium/firefox/webkit desktop + a mobile viewport project,
+  see `playwright.config.ts`); run `npx playwright install` once first to fetch the browser
+  binaries. These hit a real browser's Web Audio API against the actual Vite dev server, which
+  Vitest's jsdom environment can't reach - use them for anything that needs a real AudioContext,
+  not as a substitute for unit tests.
 - `npm run build` — typecheck + production build
 
-All four (`lint`, `format:check`, `build`, `test:run`) must pass before a PR is merged — CI runs
-them on every push and pull request.
+All five (`lint`, `format:check`, `build`, `test:run`, `test:e2e`) must pass before a PR is merged —
+CI runs them on every push and pull request.
 
 ## Commit / PR expectations
 

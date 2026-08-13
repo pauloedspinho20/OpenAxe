@@ -188,6 +188,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
                   className={styles.actionBtn}
                   onClick={() => void handleLoad(preset)}
                   disabled={busy}
+                  aria-label={`Load ${preset.name}`}
                 >
                   Load
                 </button>
@@ -195,6 +196,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
                   type="button"
                   className={styles.actionBtn}
                   onClick={() => downloadPresetAsFile(preset)}
+                  aria-label={`Export ${preset.name}`}
                 >
                   Export
                 </button>
@@ -203,6 +205,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
                   className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
                   onClick={() => void handleDelete(preset.id)}
                   disabled={busy}
+                  aria-label={`Delete ${preset.name}`}
                 >
                   Delete
                 </button>

@@ -4,6 +4,7 @@ import { useTone3000Browser } from '../tone3000/browserStore'
 import { Tone3000Library, useTone3000Library } from '../tone3000/library'
 import type { Tone3000LibraryEntry } from '../tone3000/library'
 import {
+  apiListCreatedTones,
   apiListFavoritedTones,
   apiListMakes,
   apiListModels,
@@ -25,7 +26,7 @@ interface Props {
   context: AudioContext | null
 }
 
-type Scope = 'browse' | 'library' | 'favorites'
+type Scope = 'browse' | 'library' | 'favorites' | 'created'
 type ViewMode = 'list' | 'cards'
 
 interface SearchState {
@@ -119,10 +120,10 @@ export function Tone3000Browser({ target, context }: Props) {
   }, [scope])
 
   // The search itself, keyed on the settled filters. Re-runs after connect
-  // (auth.status in deps) for the lazy-auth flow. Browse and Favorites share
-  // this effect - both are paginated Tone lists, just from different
-  // endpoints and (for Favorites) without the free-text/format/sort/makes/
-  // tags filters the search endpoint supports.
+  // (auth.status in deps) for the lazy-auth flow. Browse, Favorites, and
+  // Created share this effect - all three are paginated Tone lists, just
+  // from different endpoints, and Favorites/Created skip the free-text/
+  // format/sort/makes/tags filters only the search endpoint supports.
   useEffect(() => {
     if (scope === 'library' || !browser.target) return
     let cancelled = false
@@ -135,17 +136,23 @@ export function Tone3000Browser({ target, context }: Props) {
             pageSize: SEARCH_PAGE_SIZE,
             gear: browser.target.gear,
           })
-        : apiSearchTones({
-            query: debouncedQuery,
-            page,
-            pageSize: SEARCH_PAGE_SIZE,
-            sort: search.sort,
-            architecture: 2,
-            gears: [browser.target.gear],
-            ...(search.format ? { format: search.format } : {}),
-            ...(makesValue ? { makes: [makesValue] } : {}),
-            ...(tagsValue ? { tags: [tagsValue] } : {}),
-          })
+        : scope === 'created'
+          ? apiListCreatedTones({
+              page,
+              pageSize: SEARCH_PAGE_SIZE,
+              gear: browser.target.gear,
+            })
+          : apiSearchTones({
+              query: debouncedQuery,
+              page,
+              pageSize: SEARCH_PAGE_SIZE,
+              sort: search.sort,
+              architecture: 2,
+              gears: [browser.target.gear],
+              ...(search.format ? { format: search.format } : {}),
+              ...(makesValue ? { makes: [makesValue] } : {}),
+              ...(tagsValue ? { tags: [tagsValue] } : {}),
+            })
     request
       .then((res) => {
         if (cancelled) return
@@ -306,6 +313,13 @@ export function Tone3000Browser({ target, context }: Props) {
             >
               FAVORITES
             </button>
+            <button
+              type="button"
+              className={`${styles.tab} ${scope === 'created' ? styles.tabActive : ''}`}
+              onClick={() => setScope('created')}
+            >
+              MY MODELS
+            </button>
             <span className={styles.viewToggle} role="group" aria-label="View mode">
               <button
                 type="button"
@@ -416,6 +430,12 @@ export function Tone3000Browser({ target, context }: Props) {
               </p>
             )}
 
+            {scope === 'created' && (
+              <p className={styles.hint}>
+                Tones you've uploaded to tone3000.com - filtered by title, from {GEAR_LABELS[gear]}.
+              </p>
+            )}
+
             {needsConnect && (
               <div className={styles.connect}>
                 <p className={styles.connectText}>
@@ -433,7 +453,11 @@ export function Tone3000Browser({ target, context }: Props) {
 
             <ul className={listClass}>
               {tones
-                .filter((tone) => scope !== 'favorites' || matchesQuery(tone.title, search.query))
+                .filter(
+                  (tone) =>
+                    (scope !== 'favorites' && scope !== 'created') ||
+                    matchesQuery(tone.title, search.query),
+                )
                 .map((tone) => {
                   const inLibrary = library.some((e) => e.sourceUrl === tone.url)
                   return (
