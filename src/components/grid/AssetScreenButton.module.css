@@ -16,7 +16,7 @@
   align-items: center;
   gap: var(--sp-2);
   padding: var(--sp-2);
-  background: var(--screen-bg);
+  background: var(--panel-recessed);
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-recessed);
   cursor: pointer;
@@ -74,14 +74,14 @@
 }
 
 .screenLabel {
-  color: var(--screen-dim);
+  color: var(--ink-3);
 }
 
 .screenValue {
   font-family: var(--font-display);
   font-size: 11px;
   letter-spacing: 0.02em;
-  color: var(--screen-text);
+  color: var(--ink-1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

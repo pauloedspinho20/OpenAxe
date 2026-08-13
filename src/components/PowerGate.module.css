@@ -63,7 +63,8 @@
   background: var(--panel-raised);
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-sm);
-  padding: var(--sp-2) var(--sp-3);
+  height: 32px;
+  padding: 0 var(--sp-3);
   cursor: pointer;
 }
 

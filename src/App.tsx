@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { GridEditor } from './components/grid/GridEditor'
 import { BlockInspector } from './components/grid/BlockInspector'
-import { MasterSection } from './components/MasterSection'
+import { HeaderIO } from './components/HeaderIO'
 import { MasterUtility } from './components/MasterUtility'
 import { PresetManager } from './components/presets/PresetManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
@@ -65,16 +65,27 @@ function App() {
   return (
     <div className={styles.chassis}>
       <header className={styles.header}>
-        <div className={styles.wordmark}>
-          <span className={styles.dot} />
-          NAM WEB STUDIO
+        <div className={`${styles.headerGroup} ${styles.brand}`}>
+          <div className={styles.wordmark}>
+            <span className={styles.dot} />
+            NAM WEB STUDIO
+          </div>
         </div>
-        <div className={styles.powerGroup}>
+
+        <div className={styles.headerGroup}>
           <Toggle
             label="Aluminum"
             checked={theme === 'light'}
             onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
           />
+        </div>
+
+        <div className={styles.headerGroup}>
+          <HeaderIO outputSelectionSupported={outputSelectionSupported} />
+        </div>
+
+        <div className={`${styles.headerGroup} ${styles.status}`}>
+          <Led on={isReady} color={engine.status === 'error' ? 'red' : 'green'} />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
             {isReady && !engine.micGranted ? ' · no mic' : ''}
@@ -87,10 +98,12 @@ function App() {
               {activeHeavyBlocks} amps/cabs active
             </span>
           )}
-          <span className={styles.connectionBadge}>
-            {auth.status === 'connected' ? 'TONE3000 ✓' : ''}
-          </span>
-          <Led on={isReady} color={engine.status === 'error' ? 'red' : 'green'} />
+          {auth.status === 'connected' && (
+            <span className={styles.connectionBadge}>TONE3000 ✓</span>
+          )}
+        </div>
+
+        <div className={`${styles.headerGroup} ${styles.actions}`}>
           <HardwareButton label="Presets" onClick={openPresetManager} />
           {isReady && (
             <HardwareButton label="Power off" active onClick={() => void engine.powerOff()} />
@@ -116,10 +129,7 @@ function App() {
 
         <BlockInspector rig={engine.rig} context={engine.context} />
 
-        <div className={styles.masterRow}>
-          <MasterUtility analyser={engine.analyser} />
-          <MasterSection outputSelectionSupported={outputSelectionSupported} />
-        </div>
+        <MasterUtility analyser={engine.analyser} />
       </main>
 
       <footer className={styles.footer}>

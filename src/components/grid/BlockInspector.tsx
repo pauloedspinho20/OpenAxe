@@ -1,14 +1,16 @@
 import { useEffect } from 'react'
 import { Panel } from '../primitives/Panel'
+import { HardwareButton } from '../primitives/HardwareButton'
 import { useGraphStore } from '../../state/graphStore'
 import { useSelection } from '../../state/selection'
 import { useEngineVersion } from '../../state/engineVersion'
 import type { GraphRig } from '../../engine/GraphRig'
-import { NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
+import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
 import type { AmpBlock } from '../../engine/blocks/AmpBlock'
 import type { CabBlock } from '../../engine/blocks/CabBlock'
 import { AssetScreenButton, type AssetGearType } from './AssetScreenButton'
 import { EffectParamsPanel } from '../EffectParamsPanel'
+import { LiveMeter } from '../LiveMeter'
 import { getParamSchema } from '../../effects/paramSchema'
 import { BLOCK_KIND_LABELS } from './blockOptions'
 import styles from './BlockInspector.module.css'
@@ -18,11 +20,17 @@ export interface BlockInspectorProps {
   context: AudioContext | null
 }
 
+/** Anything with an optional bypass toggle - only the 11 effect kinds have one. */
+interface MaybeBypassable {
+  setBypass?(bypassed: boolean): void
+}
+
 /**
  * The full editing surface for whichever block is selected in the grid -
- * asset loading (Amp/Cab) and every tunable parameter. BlockCard itself
- * only shows basic info (kind, bypass, a one-line status); this is where
- * the detail actually lives, so cards stay small and legible at grid scale.
+ * asset loading (Amp/Cab), bypass, a level meter, and every tunable
+ * parameter. BlockCard itself only shows basic info (kind, a small bypass
+ * dot, a one-line status); this is where the detail actually lives, so
+ * cards stay small and legible at grid scale.
  */
 export function BlockInspector({ rig, context }: BlockInspectorProps) {
   // Re-render once async block creation finishes - see BlockCard for why.
@@ -52,11 +60,31 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
+  const isEffect = EFFECT_KINDS.has(instance.kind)
+  const bypassed = instance.bypass ?? false
+  const analyser = rig?.getBlockAnalyser(instance.id) ?? null
 
   return (
-    <Panel label={`Block Inspector · ${label}`}>
+    <Panel
+      label={`Block Inspector · ${label}`}
+      corner={
+        block &&
+        isEffect && (
+          <HardwareButton
+            label={bypassed ? 'Bypassed' : 'Bypass'}
+            active={!bypassed}
+            onClick={() => {
+              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+            }}
+            title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+          />
+        )
+      }
+    >
       <div className={styles.content}>
         {!block && <p className={styles.empty}>Power on to edit this block.</p>}
+        {block && analyser && <LiveMeter label={`${label} level`} analyser={analyser} />}
         {block && isAssetKind && (
           <AssetScreenButton
             blockId={instance.id}

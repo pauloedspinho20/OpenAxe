@@ -134,11 +134,12 @@
   font: inherit;
   font-family: var(--font-display);
   font-size: 11px;
-  color: var(--screen-text);
-  background: var(--screen-bg);
+  color: var(--ink-1);
+  background: var(--panel-raised);
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-sm);
-  padding: var(--sp-2);
+  height: 32px;
+  padding: 0 var(--sp-2);
   min-width: 0;
 }
 

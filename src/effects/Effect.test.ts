@@ -8,13 +8,13 @@ class StubGainNode {
   connect = vi.fn()
   disconnect = vi.fn()
   constructor(_context: unknown, options?: { gain?: number }) {
-    const self = this
-    this.gain = {
+    const gain = {
       value: options?.gain ?? 1,
       setTargetAtTime: (v: number) => {
-        self.gain.value = v
+        gain.value = v
       },
     }
+    this.gain = gain
   }
 }
 vi.stubGlobal('GainNode', StubGainNode)
