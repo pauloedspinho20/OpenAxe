@@ -73,8 +73,12 @@ export abstract class BaseEffect implements Effect {
     this.name = name
     this.inputNode = new GainNode(context)
     this.outputNode = new GainNode(context)
-    this.dryGain = new GainNode(context)
-    this.wetGain = new GainNode(context, { gain: 0 })
+    // Mirrors the default `mix = 1` (fully wet) below - GainNode's own
+    // default gain is 1, so without this the dry path would carry the full
+    // signal and the wet path none, silently bypassing every effect no
+    // matter what its params were set to until something called setMix().
+    this.dryGain = new GainNode(context, { gain: 0 })
+    this.wetGain = new GainNode(context, { gain: 1 })
 
     this.inputNode.connect(this.dryGain)
     this.dryGain.connect(this.outputNode)
