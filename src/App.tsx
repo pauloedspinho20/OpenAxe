@@ -6,6 +6,7 @@ import { MasterUtility } from './components/MasterUtility'
 import { PresetManager } from './components/presets/PresetManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
 import { OnboardingModal } from './components/OnboardingModal'
+import { PowerGate } from './components/PowerGate'
 import { HardwareButton } from './components/primitives/HardwareButton'
 import { Led } from './components/primitives/Led'
 import { Toggle } from './components/primitives/Toggle'
@@ -22,7 +23,6 @@ import { useToast } from './state/toast'
 import { useEngineVersion } from './state/engineVersion'
 import { usePresetManager } from './state/presetManager'
 import { installFactoryPresets } from './presets/factoryPresets'
-import type { LatencyHint } from './state/ioStore'
 import styles from './App.module.css'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,18 +30,6 @@ const STATUS_LABEL: Record<string, string> = {
   starting: 'Starting…',
   ready: 'Running',
   error: 'Error',
-}
-
-const LATENCY_OPTIONS: Array<{ value: LatencyHint; label: string }> = [
-  { value: 'interactive', label: 'Low latency' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'playback', label: 'Safe' },
-]
-
-const LATENCY_HINT: Record<LatencyHint, string> = {
-  interactive: 'Lowest possible latency; best for live playing.',
-  balanced: 'Moderate latency; conserves CPU.',
-  playback: 'Highest latency; safest for weak CPUs or many effects.',
 }
 
 /** Soft advisory only, not an enforced cap - see GraphRig.countActiveHeavyBlocks. */
@@ -102,29 +90,11 @@ function App() {
           <span className={styles.connectionBadge}>
             {auth.status === 'connected' ? 'TONE3000 ✓' : ''}
           </span>
-          {!isReady && (
-            <select
-              className={styles.latencySelect}
-              value={io.latencyHint}
-              onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
-              aria-label="Latency mode"
-              title={LATENCY_HINT[io.latencyHint]}
-            >
-              {LATENCY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          )}
           <Led on={isReady} color={engine.status === 'error' ? 'red' : 'green'} />
           <HardwareButton label="Presets" onClick={openPresetManager} />
-          <HardwareButton
-            label={isReady ? 'Power off' : 'Power on'}
-            active={isReady}
-            disabled={engine.status === 'starting'}
-            onClick={() => void (isReady ? engine.powerOff() : engine.powerOn())}
-          />
+          {isReady && (
+            <HardwareButton label="Power off" active onClick={() => void engine.powerOff()} />
+          )}
         </div>
       </header>
 
@@ -174,6 +144,13 @@ function App() {
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
+      <PowerGate
+        status={engine.status}
+        error={engine.error}
+        latencyHint={io.latencyHint}
+        onLatencyChange={io.setLatencyHint}
+        onPowerOn={() => void engine.powerOn()}
+      />
       <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
     </div>
   )

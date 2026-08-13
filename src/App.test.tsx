@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest'
 import App from './App'
 
 describe('App', () => {
-  it('renders the wordmark and the routing grid before power-on', () => {
+  it('gates the app behind a power-on overlay, with the routing grid mounted underneath', () => {
     render(<App />)
-    expect(screen.getByText('NAM WEB STUDIO')).toBeInTheDocument()
+    expect(screen.getAllByText('NAM WEB STUDIO').length).toBeGreaterThan(0)
+    expect(screen.getByRole('dialog', { name: 'Power on' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Power on' })).toBeInTheDocument()
+    // The grid stays mounted (just visually covered) so it's ready the instant the gate clears.
     expect(screen.getByText('IN')).toBeInTheDocument()
     expect(screen.getByText('OUT')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Power on' })).toBeInTheDocument()
   })
 })

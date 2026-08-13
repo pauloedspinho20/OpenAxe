@@ -232,7 +232,20 @@ export function Tone3000Browser({ target, context }: Props) {
         target,
         context,
       )
-      close()
+      // `target`/`context` are null whenever the engine isn't powered on yet
+      // (or, briefly, right after adding a block - see useTone3000Target) -
+      // importTone3000Asset still downloads and caches in that case, but
+      // there's no live block for it to actually load into. Closing here as
+      // if it succeeded would silently strand the download - surface it
+      // instead and leave the dialog open so the user can see what happened.
+      if (target && context) {
+        close()
+      } else {
+        setImportDone(model.id.toString())
+        setImportError(
+          "Downloaded and cached, but the engine isn't running yet - power on, then click Reload here (or find it under Library).",
+        )
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message === NOT_AUTHENTICATED) {

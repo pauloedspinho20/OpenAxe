@@ -1,23 +1,29 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 /** wasm engine init + AudioWorklet registration - generous under parallel cross-browser load. */
 const POWER_ON_TIMEOUT = 30000
 
 /**
- * Waits for the engine to reach 'ready'. Checks the "Power off" button
- * rather than the status text: only Chromium's fake-media-device flag (see
- * playwright.config.ts) grants the mic, so on Firefox/WebKit the status
- * text is legitimately "Running · no mic" instead of "Running" - the power
- * button's label flip is the one signal that's the same in every browser.
+ * Powers on via the PowerGate overlay and waits for the engine to reach
+ * 'ready'. Checks the "Power off" button rather than the status text: only
+ * Chromium's fake-media-device flag (see playwright.config.ts) grants the
+ * mic, so on Firefox/WebKit the status text is legitimately "Running ·
+ * no mic" instead of "Running" - the power button's label flip is the one
+ * signal that's the same in every browser. Everything in the grid sits
+ * behind the PowerGate until this resolves - see PowerGate.tsx.
  */
-async function waitForRunning(page: import('@playwright/test').Page) {
+async function powerOn(page: Page) {
+  await page
+    .getByRole('dialog', { name: 'Power on' })
+    .getByRole('button', { name: 'Power on' })
+    .click()
   await expect(page.getByRole('button', { name: 'Power off' })).toBeVisible({
     timeout: POWER_ON_TIMEOUT,
   })
 }
 
 /**
- * The core flow issue #11 asks for: load app → place a block → power on →
+ * The core flow issue #11 asks for: load app → power on → place a block →
  * save a preset → reload it. Runs against a real browser (see
  * playwright.config.ts), so it exercises the actual Web Audio engine that
  * Vitest's jsdom environment can never reach - this is deliberately the
@@ -32,14 +38,21 @@ test.beforeEach(async ({ page }) => {
   }
 })
 
-test('loads the app shell with the routing grid', async ({ page }) => {
-  await expect(page.getByText('NAM WEB STUDIO')).toBeVisible()
+test('gates the app behind a power-on overlay until started', async ({ page }) => {
+  const gate = page.getByRole('dialog', { name: 'Power on' })
+  await expect(gate).toBeVisible()
+  await expect(gate.getByRole('button', { name: 'Power on' })).toBeVisible()
+  // The grid stays mounted underneath (just visually covered), ready the instant the gate clears.
   await expect(page.getByText('IN', { exact: true })).toBeVisible()
   await expect(page.getByText('OUT', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Power on' })).toBeVisible()
+
+  await powerOn(page)
+  await expect(gate).not.toBeVisible()
 })
 
 test('places a block, auto-opens the Tone3000 catalog, and powers on', async ({ page }) => {
+  await powerOn(page)
+
   await page.getByRole('button', { name: 'Add a block at row 1, column 1' }).click()
   await page.getByRole('menuitem', { name: 'Amp', exact: true }).click()
 
@@ -53,20 +66,16 @@ test('places a block, auto-opens the Tone3000 catalog, and powers on', async ({ 
   await expect(
     page.getByRole('button', { name: 'Amp block - click or Enter to edit, arrow keys to move' }),
   ).toBeVisible()
-
-  await page.getByRole('button', { name: 'Power on' }).click()
-  await waitForRunning(page)
 })
 
 test('saves the current grid as a preset and reloads it', async ({ page }) => {
   const presetName = `e2e-preset-${Date.now()}`
 
+  await powerOn(page)
+
   await page.getByRole('button', { name: 'Add a block at row 1, column 1' }).click()
   await page.getByRole('menuitem', { name: 'Compressor' }).click()
   await page.getByRole('dialog', { name: 'Tone3000 catalog' }).waitFor({ state: 'hidden' })
-
-  await page.getByRole('button', { name: 'Power on' }).click()
-  await waitForRunning(page)
 
   await page.getByRole('button', { name: 'Presets' }).click()
   const presetDialog = page.getByRole('dialog', { name: 'Preset manager' })
@@ -82,8 +91,7 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
   }
-  await page.getByRole('button', { name: 'Power on' }).click()
-  await waitForRunning(page)
+  await powerOn(page)
 
   await page.getByRole('button', { name: 'Presets' }).click()
   const reopenedDialog = page.getByRole('dialog', { name: 'Preset manager' })
