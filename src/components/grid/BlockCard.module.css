@@ -6,7 +6,7 @@
   min-width: 0;
   padding: var(--sp-1);
   background: var(--panel-raised);
-  border: 1px solid transparent;
+  /*  border: 1px solid transparent; */
   border-radius: var(--r-md);
   box-shadow: var(--shadow-panel);
   cursor: grab;
