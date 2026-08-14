@@ -102,7 +102,7 @@ describe('SceneBar', () => {
     useSceneStore.getState().hydrate(bankWithOnePreset())
     render(<SceneBar rig={null} context={null} />)
 
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'SAVE' })).toBeDisabled()
   })
 
   it('the Presets button opens the preset manager in normal (non-pick) mode', () => {
@@ -110,7 +110,7 @@ describe('SceneBar', () => {
     useSceneStore.getState().hydrate(bankWithOnePreset())
     render(<SceneBar rig={null} context={null} />)
 
-    screen.getByRole('button', { name: 'Presets' }).click()
+    screen.getByRole('button', { name: 'PRESETS' }).click()
     expect(usePresetManager.getState().open).toBe(true)
     expect(usePresetManager.getState().pickTarget).toBeNull()
   })
@@ -121,7 +121,7 @@ describe('SceneBar', () => {
     useCurrentPresetStore.getState().setSaved(emptyPreset())
 
     render(<SceneBar rig={fakeRig} context={null} />)
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'SAVE' })).toBeDisabled()
   })
 
   it('the Save button enables once the live rig differs from the saved preset', () => {
@@ -131,7 +131,7 @@ describe('SceneBar', () => {
     useGraphStore.getState().addBlock('compressor', 0, 0)
 
     render(<SceneBar rig={fakeRig} context={null} />)
-    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'SAVE' })).not.toBeDisabled()
   })
 
   it('a slot pointing at a preset id renders a name (or placeholder), not blank', async () => {
