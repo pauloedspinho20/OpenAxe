@@ -26,25 +26,33 @@ This project ships under **GPLv3**. That means:
 
 ## Development setup
 
+This is a pnpm + Turborepo monorepo (see [README.md](./README.md#project-structure) for the full
+layout): the web app lives in `apps/web`, shared design-system components in `packages/ui`, and
+`packages/core`/`packages/vst3`/`apps/desktop`/`apps/ios`/`apps/android` are scaffolding for
+platform targets tracked by their own issues (#14-#17).
+
 ```bash
-npm install --legacy-peer-deps
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-> `--legacy-peer-deps` works around a known npm/arborist resolution issue with the current
-> `vitest` + `@vitest/coverage-v8` peer dependency graph — safe to use here.
+> Peer dependency warnings from `neural-amp-modeler-wasm` (pinned to React 18 peers) and a
+> Storybook MCP addon transitive dep are expected and harmless — `.npmrc` disables strict peer
+> checking so `pnpm install` doesn't fail on them.
 
-Useful scripts:
+Useful scripts (run at the repo root; Turborepo fans them out to the relevant package):
 
-- `npm run lint` — oxlint
-- `npm run format` / `npm run format:check` — Prettier
-- `npm run test` / `npm run test:run` — Vitest (watch / single run)
-- `npm run test:e2e` — Playwright e2e (chromium/firefox/webkit desktop + a mobile viewport project,
-  see `playwright.config.ts`); run `npx playwright install` once first to fetch the browser
-  binaries. These hit a real browser's Web Audio API against the actual Vite dev server, which
-  Vitest's jsdom environment can't reach - use them for anything that needs a real AudioContext,
-  not as a substitute for unit tests.
-- `npm run build` — typecheck + production build
+- `pnpm lint` — oxlint
+- `pnpm format` / `pnpm format:check` — Prettier
+- `pnpm test` / `pnpm test:run` — Vitest (watch / single run)
+- `pnpm test:e2e` — Playwright e2e (chromium/firefox/webkit desktop + a mobile viewport project,
+  see `apps/web/playwright.config.ts`); run `pnpm --filter @nam/web exec playwright install` once
+  first to fetch the browser binaries. These hit a real browser's Web Audio API against the actual
+  Vite dev server, which Vitest's jsdom environment can't reach - use them for anything that needs
+  a real AudioContext, not as a substitute for unit tests.
+- `pnpm build` — typecheck + production build
+- `pnpm storybook` / `pnpm build-storybook` — Storybook dev server / static build, scanning
+  `packages/ui`'s component stories
 
 All five (`lint`, `format:check`, `build`, `test:run`, `test:e2e`) must pass before a PR is merged —
 CI runs them on every push and pull request.
