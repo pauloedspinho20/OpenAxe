@@ -6,18 +6,18 @@ Runs entirely in the browser: no native app required, no backend, no account. Wo
 
 ## Project decisions
 
-| Area             | Decision                                                                                                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Distribution     | Free & open source, licensed [GPLv3](./LICENSE)                                                                                                     |
-| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h (desktop) / iPlug2 (VST3) / native (mobile)                                                   |
-| Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 3×8 grid, cabled left-to-right                                                                     |
-| Audio (web)      | AudioWorklet + WASM (C++ compiled via Emscripten, migrating to SAB lock-free params)                                                                |
-| Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                             |
-| Shared DSP core  | **C++** — wraps Dragonfly Reverb, ChowTapeModel, BYOD, LSP Suite, NeuralAmpModelerCore, RTNeural                                                    |
-| State management | [Zustand](https://github.com/pmndrs/zustand)                                                                                                        |
-| CSS              | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                             |
-| Persistence      | IndexedDB (web) / filesystem (desktop/mobile)                                                                                                       |
-| Monorepo (#13)   | pnpm + Turborepo workspaces: `apps/web`, `apps/desktop`, `apps/ios`, `apps/android`, `packages/core` (C++), `packages/vst3` (iPlug2), `packages/ui` |
+| Area             | Decision                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Distribution     | Free & open source, licensed [GPLv3](./LICENSE)                                                                                                                     |
+| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h (desktop) / iPlug2 (VST3) / native (mobile)                                                                   |
+| Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 3×8 grid, cabled left-to-right                                                                                     |
+| Audio (web)      | AudioWorklet + WASM (C++ compiled via Emscripten, migrating to SAB lock-free params)                                                                                |
+| Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                                             |
+| Shared DSP core  | **C++** — wraps Dragonfly Reverb, AnalogTapeModel, BYOD, LSP Suite, NeuralAmpModelerCore (pedals/outboard gear also modeled as NAM captures, not a separate engine) |
+| State management | [Zustand](https://github.com/pmndrs/zustand)                                                                                                                        |
+| CSS              | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                                             |
+| Persistence      | IndexedDB (web) / filesystem (desktop/mobile)                                                                                                                       |
+| Monorepo (#13)   | pnpm + Turborepo workspaces: `apps/web`, `apps/desktop`, `apps/ios`, `apps/android`, `packages/core` (C++), `packages/vst3` (iPlug2), `packages/ui`                 |
 
 ## Platform targets
 
@@ -34,7 +34,7 @@ Runs entirely in the browser: no native app required, no backend, no account. Wo
 
 ### Why these choices
 
-- **C++ for DSP core, not Rust** — All 6 DSP libraries are C++ (Dragonfly, ChowTapeModel, BYOD, LSP, NAMCore, RTNeural). Wrapping them in Rust requires 6 FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
+- **C++ for DSP core, not Rust** — All 5 DSP libraries are C++ (Dragonfly, AnalogTapeModel, BYOD, LSP, NAMCore). Wrapping them in Rust requires 5 FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
 - **Desktop: C++ + webview.h, not Electron** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. Tauri v2 kept as an alternative for its bundling/signing tooling.
 - **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. iOS/AUv3 for mobile. WebAudio Module (WAM) for browser.
 - **Mobile: Native shells, not Tauri v2 mobile or React Native** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
@@ -62,27 +62,27 @@ interface)
 
 ### Effects suite
 
-| Effect        | Web (current)                | Shared DSP (#14)                                          | Web upgrade (#22) |
-| ------------- | ---------------------------- | --------------------------------------------------------- | ----------------- |
-| Noise Gate    | Custom AudioWorkletProcessor | LSP Gate (LGPLv3)                                         | LSP → WASM        |
-| Compressor    | DynamicsCompressorNode       | LSP Compressor (LGPLv3) + Airwindows Pressure4 (MIT)      | LSP → WASM        |
-| Parametric EQ | BiquadFilterNodes            | LSP Parametric EQ (LGPLv3, 16-band)                       | LSP → WASM        |
-| Drive         | WaveShaperNode, 3 curves     | BYOD (GPLv3, 43+ models) + ChowCentaur (BSD-3)            | BYOD → WASM       |
-| Chorus        | LFO-modulated DelayNode      | BYOD Chorus (GPLv3)                                       | BYOD → WASM       |
-| Flanger       | LFO-modulated DelayNode      | BYOD Flanger (GPLv3)                                      | BYOD → WASM       |
-| Phaser        | Allpass cascade              | ChowPhaser (BSD-3) or BYOD Phaser4/8 (GPLv3)              | ChowPhaser → WASM |
-| Tremolo       | LFO × GainNode               | BYOD Tremolo (GPLv3)                                      | Evaluate          |
-| Delay         | Feedback + tone filter       | ChowTapeModel (GPLv3, physical tape) + LSP Delay (LGPLv3) | ChowTape → WASM   |
-| Ping-Pong     | Cross-coupled delay          | Keep as native routing                                    | Keep native nodes |
-| Reverb        | Freeverb (1993 algorithm)    | Dragonfly Reverb (GPLv3, hall/room/plate/studio)          | Dragonfly → WASM  |
+| Effect        | Web (current)                | Shared DSP (#14)                                                              | Web upgrade (#22) |
+| ------------- | ---------------------------- | ----------------------------------------------------------------------------- | ----------------- |
+| Noise Gate    | Custom AudioWorkletProcessor | LSP Gate (LGPLv3)                                                             | LSP → WASM        |
+| Compressor    | DynamicsCompressorNode       | LSP Compressor (LGPLv3) + Airwindows Pressure4 (MIT)                          | LSP → WASM        |
+| Parametric EQ | BiquadFilterNodes            | LSP Parametric EQ (LGPLv3, 16-band)                                           | LSP → WASM        |
+| Drive         | WaveShaperNode, 3 curves     | BYOD (GPLv3, 43+ models) + ChowCentaur (BSD-3)                                | BYOD → WASM       |
+| Chorus        | LFO-modulated DelayNode      | BYOD Chorus (GPLv3)                                                           | BYOD → WASM       |
+| Flanger       | LFO-modulated DelayNode      | BYOD Flanger (GPLv3)                                                          | BYOD → WASM       |
+| Phaser        | Allpass cascade              | ChowPhaser (BSD-3) or BYOD Phaser4/8 (GPLv3)                                  | ChowPhaser → WASM |
+| Tremolo       | LFO × GainNode               | BYOD Tremolo (GPLv3)                                                          | Evaluate          |
+| Delay         | Feedback + tone filter       | AnalogTapeModel (GPLv3, physical tape) + LSP Delay (LGPLv3)                   | ChowTape → WASM   |
+| Ping-Pong     | Cross-coupled delay          | Keep as native routing                                                        | Keep native nodes |
+| Reverb        | Freeverb (1993 algorithm)    | ✓ Dragonfly Reverb (GPLv3, hall/room/plate/early-reflections — all 4 wrapped) | Dragonfly → WASM  |
 
 ### Amp modeling
 
-| Target            | Library                                 | Integration                            |
-| ----------------- | --------------------------------------- | -------------------------------------- |
-| **All platforms** | NeuralAmpModelerCore (MIT, C++)         | Direct C++ link — same code everywhere |
-| **Web**           | NAMCore compiled to WASM via Emscripten | AudioWorklet + SAB params              |
-| **Neural pedals** | RTNeural (BSD-3, C++)                   | Direct C++ link                        |
+| Target              | Library                                 | Integration                                                                                                                                                       |
+| ------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **All platforms**   | NeuralAmpModelerCore (MIT, C++)         | ✓ Direct C++ link — same code everywhere                                                                                                                          |
+| **Web**             | NAMCore compiled to WASM via Emscripten | AudioWorklet + SAB params                                                                                                                                         |
+| **Pedals/outboard** | NeuralAmpModelerCore (MIT, C++)         | Same engine, not a separate one — NAM's format isn't amp-specific, so pedal captures reuse the amp wrapper directly (RTNeural was evaluated and dropped for this) |
 
 ### Design system
 
@@ -90,7 +90,7 @@ Two hardware finishes: **Carbon** (dark, TX-6-style) and **Aluminum** (light, OP
 
 ## Project structure
 
-pnpm + Turborepo monorepo (#13). `apps/desktop`, `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#15, #17, #17, #16); `packages/core` has real CMake build-system scaffolding but no DSP code yet (#14).
+pnpm + Turborepo monorepo (#13). `apps/desktop`, `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#15, #17, #17, #16); `packages/core` has a real, tested C++ audio graph engine, full NAM inference wrapper, and all four Dragonfly Reverb algorithms, with three more DSP libraries still to wrap (#14).
 
 ```
 NAM-Web-Studio/
@@ -115,10 +115,10 @@ NAM-Web-Studio/
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
-│   ├── core/                  # C++ DSP library — CMake scaffolding only, no DSP yet (#14)
-│   │   ├── include/nam_studio/    # extern "C" public API (placeholder)
-│   │   ├── src/                   # Implementation (placeholder)
-│   │   └── third_party/           # Dragonfly, ChowTape, BYOD, LSP, NAMCore, RTNeural (empty, #14)
+│   ├── core/                  # C++ DSP library — graph engine, NAM, Dragonfly Reverb done (#14)
+│   │   ├── include/nam_studio/    # Graph engine, dsp/ wrappers, extern "C" lifecycle API
+│   │   ├── src/                   # Implementation + tests/ (CTest, all passing)
+│   │   └── third_party/           # Dragonfly (wired), NAMCore (wired), AnalogTapeModel/BYOD/LSP (vendored, not yet wrapped)
 │   ├── vst3/                   # Placeholder — iPlug2 (C++) VST3/CLAP/AU/AAX plugin (#16)
 │   └── ui/                     # Shared React component library + design tokens
 │       ├── src/primitives/         # Knob, Fader, HardwareButton, Led, Meter, Toggle, Panel
@@ -131,6 +131,12 @@ NAM-Web-Studio/
 ```
 
 ## Development
+
+### Requirements
+
+- [Node.js](https://nodejs.org) 22+ and [pnpm](https://pnpm.io) (`corepack enable`, or install directly) — for `apps/web` and `packages/ui`.
+- [CMake](https://cmake.org) 3.22+ and a C++20 compiler (Clang, GCC, or MSVC) — for `packages/core`, the shared C++ DSP library (#14). Not needed for pure web-app work. On macOS, if you installed CMake via CMake.app rather than Homebrew, run **Tools → How to Install For Command Line Use** from CMake.app first, or the `cmake` command below won't resolve.
+- Git — the vendored DSP libraries under `packages/core/third_party/` are git submodules; see below to initialize them.
 
 ```bash
 pnpm install
@@ -148,6 +154,25 @@ Scripts run at the repo root via Turborepo, fanning out to the relevant workspac
 | `pnpm test` / `pnpm test:run`             | Vitest                                              |
 | `pnpm test:e2e`                           | Playwright E2E                                      |
 | `pnpm storybook` / `pnpm build-storybook` | Storybook dev server / static build (`packages/ui`) |
+
+### C++ DSP core (`packages/core`)
+
+Not part of the pnpm/Turborepo workspace — built and tested independently with CMake/CTest:
+
+```bash
+# One-time: pull in the vendored DSP library submodules
+git submodule update --init --recursive -- packages/core/third_party/nam-core
+git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+
+# Configure, build, and run the test suite
+cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON
+cmake --build packages/core/build
+ctest --test-dir packages/core/build --output-on-failure
+```
+
+VS Code users: the same steps are available as tasks (**Terminal → Run Task**) — `C++: Init submodules`, `C++: Configure`, `C++: Build`, `C++: Test`, each depending on the previous.
+
+See [packages/core/README.md](./packages/core/README.md) for what's implemented so far (audio graph engine, NAM inference, all four Dragonfly Reverb algorithms), vendored-library licensing, and known build gotchas.
 
 ## Roadmap
 
