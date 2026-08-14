@@ -68,11 +68,11 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     <Panel
       label={`Block Inspector · ${label}`}
       corner={
-        block &&
-        hasBypass && (
+        block && (
           <HardwareButton
-            label={bypassed ? 'Bypassed' : 'Bypass'}
-            active={!bypassed}
+            label="Bypass"
+            disabled={!hasBypass}
+            active={bypassed}
             onClick={() => {
               useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
               ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)

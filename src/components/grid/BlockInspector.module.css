@@ -1,8 +1,14 @@
 .content {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--sp-3);
   min-height: 64px;
+}
+
+@media (max-width: 760px) {
+  .content {
+    flex-direction: column;
+  }
 }
 
 .meterAndParams {

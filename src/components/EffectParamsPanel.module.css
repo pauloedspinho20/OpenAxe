@@ -3,6 +3,7 @@
   width: 100%;
   flex-wrap: wrap;
   gap: var(--sp-5);
+  align-items: flex-end;
 }
 
 .group {

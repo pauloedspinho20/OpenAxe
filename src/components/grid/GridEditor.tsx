@@ -18,6 +18,8 @@ import { HardwareButton } from '../primitives/HardwareButton'
 import { LiveMeter } from '../LiveMeter'
 import styles from './GridEditor.module.css'
 import { BlockInspector } from './BlockInspector'
+import { TunerDialog } from './TunerDialog'
+import { Tuner } from '../Tuner'
 
 export interface GridEditorProps {
   rig: GraphRig | null
@@ -62,6 +64,7 @@ export function GridEditor({
   const [inputDialogOpen, setInputDialogOpen] = useState(false)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
   const draggingJackRef = useRef<string | null>(null)
+  const [tunerOpen, setTunerOpen] = useState(false)
 
   const outHasCable = edges.some((e) => e.to.blockId === OUT_RAIL)
 
@@ -182,6 +185,25 @@ export function GridEditor({
             onClick={() => setInputDialogOpen(true)}
             title="Input device and channel"
           />
+
+          {/*   <HardwareButton
+            fullWidth
+            label="TUNER"
+            onClick={() => setTunerOpen(true)}
+            title="Open the full-size tuner (mutes output)"
+          /> */}
+
+          <button
+            type="button"
+            className={styles.tunerSection}
+            onClick={() => setTunerOpen(true)}
+            aria-label="Open tuner"
+            title="Open the full-size tuner (mutes output)"
+          >
+            <div className={styles.tunerLive}>
+              <Tuner analyser={tunerAnalyser} />
+            </div>
+          </button>
           <Knob
             label="Trim"
             value={inputGain}
@@ -214,6 +236,12 @@ export function GridEditor({
             onClick={() => setOutputDialogOpen(true)}
             title="Output device and channel"
           />
+          <HardwareButton
+            label="MUTE"
+            active={masterMuted}
+            onClick={() => setMasterMuted(!masterMuted)}
+          />
+
           <Knob
             label="Master"
             value={masterLevel}
@@ -223,11 +251,7 @@ export function GridEditor({
             formatValue={(v) => v.toFixed(2)}
             size={46}
           />
-          <HardwareButton
-            label="Mute"
-            active={masterMuted}
-            onClick={() => setMasterMuted(!masterMuted)}
-          />
+
           <LiveMeter label="Output" analyser={analyser} />
 
           <span className={`${styles.railJackWrap} ${styles.railJackWrapLeft}`}>
@@ -270,6 +294,7 @@ export function GridEditor({
         onClose={() => setOutputDialogOpen(false)}
         outputSelectionSupported={outputSelectionSupported}
       />
+      <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />
     </div>
   )
 }

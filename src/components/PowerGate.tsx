@@ -42,7 +42,7 @@ export function PowerGate({
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
         <div className={styles.wordmark}>
-          <span className={styles.dot} />
+          <img src="./logo.png" className={styles.logo} />
           NAM WEB STUDIO
         </div>
         <p className={styles.description}>

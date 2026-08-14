@@ -10,12 +10,18 @@
   gap: var(--sp-5);
 }
 
+@media (max-width: 760px) {
+  .paletteAndInspector {
+    grid-template-columns: 1fr;
+  }
+}
+
 .wrap {
   position: relative;
   display: flex;
   align-items: stretch;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
+  gap: var(--sp-4);
+  padding: var(--sp-2);
   background: var(--panel);
   border-radius: var(--r-lg);
   border: 1px solid var(--seam);
@@ -32,7 +38,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  width: 80px;
+  min-width: 80px;
   padding: var(--sp-3);
   border-radius: var(--r-md);
   background: var(--panel-recessed);
@@ -77,6 +83,7 @@
   grid-auto-columns: minmax(100px, 1fr);
   gap: var(--sp-4);
   flex: 1;
+  padding: var(--sp-2) 0;
   /*
    * No min-width: 0 here on purpose - that would let flexbox squeeze this
    * item's own box below its 8 columns' actual minimum width, and CSS Grid
@@ -110,4 +117,27 @@
 .addCellDragOver {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* Tuner block section - leftmost, non-draggable, click to expand. */
+.tunerSection {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: var(--screen-bg);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  color: var(--ink-1);
+  flex-shrink: 0;
+}
+
+.tunerSection:hover {
+  border-color: var(--accent);
+}
+
+.tunerLive {
+  width: 70px;
+  min-width: 0;
 }

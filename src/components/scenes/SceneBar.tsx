@@ -246,13 +246,13 @@ export function SceneBar({ rig }: SceneBarProps) {
       <div className={styles.currentPreset}>
         <span className={styles.currentPresetName}>{saved?.name ?? '—'}</span>
         <HardwareButton
-          label="Presets"
+          label="PRESETS"
           onClick={openLibrary}
           title="Browse, save-as-new, import, export, or delete presets"
         />
 
         <HardwareButton
-          label="Save"
+          label="SAVE"
           active={isDirty}
           disabled={!isDirty || saveBusy}
           onClick={() => void handleSaveCurrent()}

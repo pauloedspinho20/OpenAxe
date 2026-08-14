@@ -4,7 +4,6 @@ import { useGraphStore } from '../../state/graphStore'
 import { BLOCK_OPTIONS } from './blockOptions'
 import { findGridElement, isPointOverGrid, resolveGridCell } from './gridGeometry'
 import { BlockIcon } from './blockIcons'
-import { Tuner } from '../Tuner'
 import { TunerDialog } from './TunerDialog'
 import { openCatalogForNewBlock } from './openCatalogForNewBlock'
 import styles from './BlockPalette.module.css'
@@ -79,17 +78,6 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
 
   return (
     <div className={styles.paletteRow}>
-      <button
-        type="button"
-        className={styles.tunerSection}
-        onClick={() => setTunerOpen(true)}
-        aria-label="Open tuner"
-        title="Open the full-size tuner (mutes output)"
-      >
-        <div className={styles.tunerLive}>
-          <Tuner analyser={tunerAnalyser} />
-        </div>
-      </button>
       <div className={styles.shelf}>
         {groups.map((group) => (
           <div key={group} className={styles.group}>

@@ -15,6 +15,7 @@
   border: 1px solid var(--seam);
   min-width: 0;
   box-shadow: var(--shadow-panel);
+  height: 100%;
 }
 
 @media (max-width: 680px) {
@@ -96,27 +97,4 @@
 .ghostOverGrid {
   border-color: var(--led-on);
   color: var(--led-on);
-}
-
-/* Tuner block section - leftmost, non-draggable, click to expand. */
-.tunerSection {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2);
-  background: var(--screen-bg);
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-lg);
-  cursor: pointer;
-  color: var(--ink-1);
-  flex-shrink: 0;
-}
-
-.tunerSection:hover {
-  border-color: var(--accent);
-}
-
-.tunerLive {
-  width: 130px;
-  min-width: 0;
 }

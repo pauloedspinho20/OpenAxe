@@ -5,6 +5,7 @@ import { useEngineVersion } from '../../state/engineVersion'
 import { useTone3000Browser } from '../../tone3000/browserStore'
 import { useTone3000Library } from '../../tone3000/library'
 import styles from './AssetScreenButton.module.css'
+import { HardwareButton } from '../primitives/HardwareButton'
 
 /** The 6 gear-type block kinds that have an asset to load - matches Tone3000's own Gear enum minus 'experimental'. */
 export type AssetGearType = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space' | 'cab'
@@ -110,14 +111,10 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
             <span className={styles.screenValue}>{loaded?.name ?? emptyText}</span>
           </span>
         </button>
-        <button
-          type="button"
-          className={styles.localFileBtn}
+        <HardwareButton
           onClick={() => fileInputRef.current?.click()}
-          title={`Load a local ${isIr ? 'IR' : '.nam'} file instead`}
-        >
-          FILE
-        </button>
+          label={`Load a local ${isIr ? 'IR' : '.nam'} file instead`}
+        ></HardwareButton>
       </div>
       {loadError && <p className={styles.screenError}>{loadError}</p>}
     </div>
