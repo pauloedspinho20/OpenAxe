@@ -1,8 +1,8 @@
-import { HardwareButton } from '../primitives/HardwareButton/HardwareButton'
-import { Wordmark } from '../shared'
-import type { EngineStatus } from '../../hooks/useAudioEngine'
-import type { LatencyHint } from '../../state/ioStore'
-import { useTone3000Auth } from '../../tone3000/authStore'
+import { HardwareButton } from '@/components/primitives/HardwareButton/HardwareButton'
+import { Wordmark } from '@/components/shared'
+import type { EngineStatus } from '@/hooks/useAudioEngine'
+import type { LatencyHint } from '@/state/ioStore'
+import { useTone3000Auth } from '@/tone3000/authStore'
 import styles from './PowerGate.module.css'
 
 export interface PowerGateProps {

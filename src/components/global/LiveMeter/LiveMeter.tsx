@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Meter, MiniMeter } from '../primitives/Meter/Meter'
+import { Meter, MiniMeter } from '@/components/primitives/Meter/Meter'
 
 export interface LiveMeterProps {
   label?: string

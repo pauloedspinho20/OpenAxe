@@ -14,14 +14,14 @@ import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
-import { Knob } from '../../primitives/Knob/Knob'
-import { HardwareButton } from '../../primitives/HardwareButton/HardwareButton'
-import { LiveMeter } from '../../LiveMeter/LiveMeter'
-import styles from './GridEditor.module.css'
+import { Knob } from '@/components/primitives/Knob/Knob'
+import { HardwareButton } from '@/components/primitives/HardwareButton/HardwareButton'
+import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
-import { Tuner } from '../../Tuner/Tuner'
+import { Tuner } from '@/components/Tuner/Tuner'
 
+import styles from './GridEditor.module.css'
 export interface GridEditorProps {
   rig: GraphRig | null
   /** Taps the raw input signal - rendered as the tuner and the IN rail's level meter. */

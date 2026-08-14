@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Knob } from '../primitives/Knob/Knob'
-import type { Block, EffectParams } from '../../engine/blocks/Block'
-import { getParamSchema, type ParamFieldSchema } from '../../effects/paramSchema'
-import { useGraphStore } from '../../state/graphStore'
+import { Knob } from '@/components/primitives/Knob/Knob'
+import type { Block, EffectParams } from '@/engine/blocks/Block'
+import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
+import { useGraphStore } from '@/state/graphStore'
 import styles from './EffectParamsPanel.module.css'
 
 export interface EffectParamsPanelProps {

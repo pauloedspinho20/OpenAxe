@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GraphRig } from '../../engine/GraphRig'
-import type { EngineStatus } from '../../hooks/useAudioEngine'
-import { useIOStore, type InputChannelMode, type LatencyHint } from '../../state/ioStore'
-import { useSettingsStore } from '../../state/settingsStore'
-import { useTone3000Auth } from '../../tone3000/authStore'
+import type { GraphRig } from '../../../engine/GraphRig'
+import type { EngineStatus } from '../../../hooks/useAudioEngine'
+import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../state/ioStore'
+import { useSettingsStore } from '../../../state/settingsStore'
+import { useTone3000Auth } from '../../../tone3000/authStore'
 import {
   buildDataBundle,
   clearAssetCache,
@@ -13,11 +13,11 @@ import {
   importDataBundle,
   readDataBundleFromFile,
   type DataBundle,
-} from '../../settings/dataBundle'
-import { Dialog } from '../shared'
-import { HardwareButton } from '../primitives/HardwareButton/HardwareButton'
-import { Knob } from '../primitives/Knob/Knob'
-import { Toggle } from '../primitives/Toggle/Toggle'
+} from '../../../settings/dataBundle'
+import { Dialog } from '../../shared'
+import { HardwareButton } from '../../primitives/HardwareButton/HardwareButton'
+import { Knob } from '../../primitives/Knob/Knob'
+import { Toggle } from '../../primitives/Toggle/Toggle'
 import styles from './SettingsDialog.module.css'
 
 export interface SettingsDialogProps {

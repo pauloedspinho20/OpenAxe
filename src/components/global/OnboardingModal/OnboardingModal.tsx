@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { HardwareButton } from '../primitives/HardwareButton/HardwareButton'
-import { Dialog } from '../shared'
+import { HardwareButton } from '@/components/primitives/HardwareButton/HardwareButton'
+import { Dialog } from '@/components/shared'
 import styles from './OnboardingModal.module.css'
 
 export interface OnboardingModalProps {
