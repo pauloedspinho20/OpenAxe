@@ -6,6 +6,7 @@ export interface DialogProps {
   onClose: () => void
   title: string
   children: ReactNode
+  headerContent?: ReactNode
   width?: string
   zIndex?: number
   maxHeight?: string
@@ -17,6 +18,7 @@ export function Dialog({
   onClose,
   title,
   children,
+  headerContent,
   width,
   zIndex,
   maxHeight,
@@ -41,6 +43,7 @@ export function Dialog({
       <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>{title}</span>
+          {headerContent && <div className={styles.headerExtra}>{headerContent}</div>}
           <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
             ✕
           </button>

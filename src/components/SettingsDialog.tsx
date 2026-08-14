@@ -14,6 +14,7 @@ import {
   readDataBundleFromFile,
   type DataBundle,
 } from '../settings/dataBundle'
+import { Dialog } from './shared'
 import { HardwareButton } from './primitives/HardwareButton'
 import { Knob } from './primitives/Knob'
 import { Toggle } from './primitives/Toggle'
@@ -189,310 +190,286 @@ export function SettingsDialog({
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose} role="presentation">
-      <div
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Settings"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className={styles.header}>
-          <span className={`label ${styles.title}`}>Settings</span>
-          <button
-            type="button"
-            className={styles.close}
-            onClick={onClose}
-            aria-label="Close settings"
-          >
-            ×
-          </button>
+    <Dialog open={open} onClose={onClose} title="Settings" width="min(520px, 90vw)">
+      {/* Audio input */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
+        <div className={styles.row}>
+          <label className={styles.field}>
+            <span className="label">Device</span>
+            <select
+              className={styles.select}
+              value={io.inputDeviceId}
+              onChange={(e) => io.setInputDevice(e.target.value)}
+              aria-label="Input device"
+            >
+              <option value="">Default input</option>
+              {io.inputDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span className="label">Channel</span>
+            <select
+              className={styles.select}
+              value={io.inputChannel}
+              onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
+              aria-label="Input channel"
+            >
+              <option value="l">Ch 1</option>
+              <option value="r">Ch 2</option>
+              <option value="stereo">Stereo</option>
+              <option value="sum">Ch 1+2</option>
+            </select>
+          </label>
+        </div>
+        {io.micError && <p className={styles.errorText}>{io.micError}</p>}
+      </section>
+
+      {/* Audio output */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Audio Output</span>
+        {outputSelectionSupported ? (
+          <div className={styles.row}>
+            <label className={styles.field}>
+              <span className="label">Device</span>
+              <select
+                className={styles.select}
+                value={io.outputDeviceId}
+                onChange={(e) => io.setOutputDevice(e.target.value)}
+                aria-label="Output device"
+              >
+                <option value="">Default output</option>
+                {io.outputDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <p className={styles.sectionHint}>
+            Output device selection isn't supported in this browser.
+          </p>
+        )}
+      </section>
+
+      {/* Buffer size / latency */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Buffer Size / Latency</span>
+        <p className={styles.sectionHint}>
+          A smaller buffer responds faster but is more likely to click/drop out on a slower machine.
+          Changes only take effect after restarting the audio engine.
+        </p>
+        <div className={styles.row}>
+          <label className={styles.field}>
+            <span className="label">Buffer</span>
+            <select
+              className={styles.select}
+              value={io.latencyHint}
+              onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
+              aria-label="Buffer size / latency"
+            >
+              {LATENCY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {status === 'ready' && (
+            <HardwareButton
+              label="Restart Audio Engine"
+              disabled={busy === 'restart'}
+              onClick={() => void handleRestartEngine()}
+              title="Power-cycles the audio engine to apply the buffer size"
+            />
+          )}
+        </div>
+      </section>
+
+      {/* NAM quality */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Neural Amp Modeler Quality</span>
+        <p className={styles.sectionHint}>
+          Lower quality uses a smaller neural network per model, reducing CPU load at some cost to
+          fidelity. Applies immediately to every loaded amp/pedal/outboard/space model, and becomes
+          the default for anything you load next.
+        </p>
+        <div className={styles.qualityRow}>
+          <Knob
+            label="Quality"
+            value={namQuality}
+            min={0.01}
+            max={1}
+            step={0.01}
+            defaultValue={1}
+            onChange={handleQualityChange}
+            formatValue={(v) => `${Math.round(v * 100)}%`}
+            size={56}
+          />
+          <p className={styles.sectionHint}>
+            100% is full fidelity. Only affects models captured as "slimmable" (e.g. most Tone3000
+            A2 captures) - other models are unaffected.
+          </p>
+        </div>
+      </section>
+
+      {/* Diagnostics */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Diagnostics</span>
+        <div className={styles.diagGrid}>
+          <div className={styles.diagItem}>
+            <span className={styles.diagValue}>{context?.state ?? 'off'}</span>
+            <span className={`label ${styles.diagLabel}`}>Engine State</span>
+          </div>
+          <div className={styles.diagItem}>
+            <span className={styles.diagValue}>{context ? `${context.sampleRate} Hz` : '—'}</span>
+            <span className={`label ${styles.diagLabel}`}>Sample Rate</span>
+          </div>
+          <div className={styles.diagItem}>
+            <span className={styles.diagValue}>
+              {context ? `${Math.round(context.baseLatency * 1000)} ms` : '—'}
+            </span>
+            <span className={`label ${styles.diagLabel}`}>Base Latency</span>
+          </div>
+          <div className={styles.diagItem}>
+            <span className={styles.diagValue}>
+              {context ? `${Math.round((context.outputLatency || 0) * 1000)} ms` : '—'}
+            </span>
+            <span className={`label ${styles.diagLabel}`}>Output Latency</span>
+          </div>
+          <div className={styles.diagItem}>
+            <span className={styles.diagValue}>{rig?.countActiveHeavyBlocks() ?? 0}</span>
+            <span className={`label ${styles.diagLabel}`}>Amps/Cabs Loaded</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Tone3000 account */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Tone3000 Account</span>
+        <div className={styles.row}>
+          <p className={styles.sectionHint}>
+            {auth.status === 'connected'
+              ? `Connected${auth.user ? ` as ${auth.user.username}` : ''}.`
+              : 'Not connected - browsing works anonymously, but importing/downloading models needs a connection.'}
+          </p>
+          {auth.status === 'connected' ? (
+            <HardwareButton label="Disconnect" onClick={() => auth.disconnect()} />
+          ) : (
+            <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
+          )}
+        </div>
+      </section>
+
+      {/* Cache */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Model/IR Cache</span>
+        <div className={styles.row}>
+          <p className={styles.sectionHint}>
+            {cacheStats
+              ? `${cacheStats.count} file(s), ${formatBytes(cacheStats.bytes)} cached locally.`
+              : 'Loading…'}
+          </p>
+          <HardwareButton
+            label="Clear Cache"
+            disabled={busy === 'cache' || !cacheStats?.count}
+            onClick={() => void handleClearCache()}
+            title="Removes downloaded model/IR files - your library list and presets are unaffected, but re-loading them will re-download"
+          />
+        </div>
+      </section>
+
+      {/* User data */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>User Data</span>
+        <p className={styles.sectionHint}>
+          Presets, scenes, MIDI mappings, your Tone3000 library, and cached model/IR files -
+          everything this app stores on this device.
+        </p>
+        <div className={styles.actions}>
+          <HardwareButton
+            label="Export All Data"
+            disabled={busy === 'export'}
+            onClick={() => void handleExport()}
+          />
+          <HardwareButton
+            label="Import Data…"
+            disabled={busy === 'import'}
+            onClick={() => fileInputRef.current?.click()}
+          />
+          <HardwareButton
+            label="Delete All Data"
+            variant="danger"
+            disabled={busy === 'delete'}
+            onClick={() => setDeleteConfirming(true)}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            className="srOnly"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handlePickImportFile(file)
+              e.target.value = ''
+            }}
+          />
         </div>
 
-        <div className={styles.body}>
-          {/* Audio input */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
-            <div className={styles.row}>
-              <label className={styles.field}>
-                <span className="label">Device</span>
-                <select
-                  className={styles.select}
-                  value={io.inputDeviceId}
-                  onChange={(e) => io.setInputDevice(e.target.value)}
-                  aria-label="Input device"
-                >
-                  <option value="">Default input</option>
-                  {io.inputDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className="label">Channel</span>
-                <select
-                  className={styles.select}
-                  value={io.inputChannel}
-                  onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
-                  aria-label="Input channel"
-                >
-                  <option value="l">Ch 1</option>
-                  <option value="r">Ch 2</option>
-                  <option value="stereo">Stereo</option>
-                  <option value="sum">Ch 1+2</option>
-                </select>
-              </label>
-            </div>
-            {io.micError && <p className={styles.errorText}>{io.micError}</p>}
-          </section>
-
-          {/* Audio output */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Audio Output</span>
-            {outputSelectionSupported ? (
-              <div className={styles.row}>
-                <label className={styles.field}>
-                  <span className="label">Device</span>
-                  <select
-                    className={styles.select}
-                    value={io.outputDeviceId}
-                    onChange={(e) => io.setOutputDevice(e.target.value)}
-                    aria-label="Output device"
-                  >
-                    <option value="">Default output</option>
-                    {io.outputDevices.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId}>
-                        {d.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            ) : (
-              <p className={styles.sectionHint}>
-                Output device selection isn't supported in this browser.
-              </p>
-            )}
-          </section>
-
-          {/* Buffer size / latency */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Buffer Size / Latency</span>
-            <p className={styles.sectionHint}>
-              A smaller buffer responds faster but is more likely to click/drop out on a slower
-              machine. Changes only take effect after restarting the audio engine.
-            </p>
-            <div className={styles.row}>
-              <label className={styles.field}>
-                <span className="label">Buffer</span>
-                <select
-                  className={styles.select}
-                  value={io.latencyHint}
-                  onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
-                  aria-label="Buffer size / latency"
-                >
-                  {LATENCY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {status === 'ready' && (
-                <HardwareButton
-                  label="Restart Audio Engine"
-                  disabled={busy === 'restart'}
-                  onClick={() => void handleRestartEngine()}
-                  title="Power-cycles the audio engine to apply the buffer size"
-                />
-              )}
-            </div>
-          </section>
-
-          {/* NAM quality */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Neural Amp Modeler Quality</span>
-            <p className={styles.sectionHint}>
-              Lower quality uses a smaller neural network per model, reducing CPU load at some cost
-              to fidelity. Applies immediately to every loaded amp/pedal/outboard/space model, and
-              becomes the default for anything you load next.
-            </p>
-            <div className={styles.qualityRow}>
-              <Knob
-                label="Quality"
-                value={namQuality}
-                min={0.01}
-                max={1}
-                step={0.01}
-                defaultValue={1}
-                onChange={handleQualityChange}
-                formatValue={(v) => `${Math.round(v * 100)}%`}
-                size={56}
-              />
-              <p className={styles.sectionHint}>
-                100% is full fidelity. Only affects models captured as "slimmable" (e.g. most
-                Tone3000 A2 captures) - other models are unaffected.
-              </p>
-            </div>
-          </section>
-
-          {/* Diagnostics */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Diagnostics</span>
-            <div className={styles.diagGrid}>
-              <div className={styles.diagItem}>
-                <span className={styles.diagValue}>{context?.state ?? 'off'}</span>
-                <span className={`label ${styles.diagLabel}`}>Engine State</span>
-              </div>
-              <div className={styles.diagItem}>
-                <span className={styles.diagValue}>
-                  {context ? `${context.sampleRate} Hz` : '—'}
-                </span>
-                <span className={`label ${styles.diagLabel}`}>Sample Rate</span>
-              </div>
-              <div className={styles.diagItem}>
-                <span className={styles.diagValue}>
-                  {context ? `${Math.round(context.baseLatency * 1000)} ms` : '—'}
-                </span>
-                <span className={`label ${styles.diagLabel}`}>Base Latency</span>
-              </div>
-              <div className={styles.diagItem}>
-                <span className={styles.diagValue}>
-                  {context ? `${Math.round((context.outputLatency || 0) * 1000)} ms` : '—'}
-                </span>
-                <span className={`label ${styles.diagLabel}`}>Output Latency</span>
-              </div>
-              <div className={styles.diagItem}>
-                <span className={styles.diagValue}>{rig?.countActiveHeavyBlocks() ?? 0}</span>
-                <span className={`label ${styles.diagLabel}`}>Amps/Cabs Loaded</span>
-              </div>
-            </div>
-          </section>
-
-          {/* Tone3000 account */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Tone3000 Account</span>
-            <div className={styles.row}>
-              <p className={styles.sectionHint}>
-                {auth.status === 'connected'
-                  ? `Connected${auth.user ? ` as ${auth.user.username}` : ''}.`
-                  : 'Not connected - browsing works anonymously, but importing/downloading models needs a connection.'}
-              </p>
-              {auth.status === 'connected' ? (
-                <HardwareButton label="Disconnect" onClick={() => auth.disconnect()} />
-              ) : (
-                <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
-              )}
-            </div>
-          </section>
-
-          {/* Cache */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Model/IR Cache</span>
-            <div className={styles.row}>
-              <p className={styles.sectionHint}>
-                {cacheStats
-                  ? `${cacheStats.count} file(s), ${formatBytes(cacheStats.bytes)} cached locally.`
-                  : 'Loading…'}
-              </p>
-              <HardwareButton
-                label="Clear Cache"
-                disabled={busy === 'cache' || !cacheStats?.count}
-                onClick={() => void handleClearCache()}
-                title="Removes downloaded model/IR files - your library list and presets are unaffected, but re-loading them will re-download"
-              />
-            </div>
-          </section>
-
-          {/* User data */}
-          <section className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>User Data</span>
-            <p className={styles.sectionHint}>
-              Presets, scenes, MIDI mappings, your Tone3000 library, and cached model/IR files -
-              everything this app stores on this device.
+        {importPreview && (
+          <div className={styles.confirmBox}>
+            <p className={styles.confirmText}>
+              This backup has {importPreview.presets.length} preset(s),{' '}
+              {importPreview.library.length} library entr
+              {importPreview.library.length === 1 ? 'y' : 'ies'}, {importPreview.assets.length}{' '}
+              cached file(s), from {new Date(importPreview.exportedAt).toLocaleString()}. Importing
+              replaces <strong>all</strong> current presets, scenes, MIDI mappings, library, and
+              cache, then reloads the app.
             </p>
             <div className={styles.actions}>
               <HardwareButton
-                label="Export All Data"
-                disabled={busy === 'export'}
-                onClick={() => void handleExport()}
-              />
-              <HardwareButton
-                label="Import Data…"
+                label="Yes, Import & Replace Everything"
+                variant="danger"
                 disabled={busy === 'import'}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => void handleConfirmImport()}
               />
+              <HardwareButton label="Cancel" onClick={() => setImportPreview(null)} />
+            </div>
+          </div>
+        )}
+
+        {deleteConfirming && (
+          <div className={styles.confirmBox}>
+            <p className={styles.confirmText}>
+              This permanently deletes every preset, scene, MIDI mapping, library entry, and cached
+              file on this device, then reloads the app. This cannot be undone.
+            </p>
+            <Toggle
+              label="Also sign out of Tone3000"
+              checked={signOutOnDelete}
+              onChange={setSignOutOnDelete}
+            />
+            <div className={styles.actions}>
               <HardwareButton
-                label="Delete All Data"
+                label="Yes, Delete Everything"
                 variant="danger"
                 disabled={busy === 'delete'}
-                onClick={() => setDeleteConfirming(true)}
+                onClick={() => void handleConfirmDelete()}
               />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/json"
-                className="srOnly"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) void handlePickImportFile(file)
-                  e.target.value = ''
-                }}
-              />
+              <HardwareButton label="Cancel" onClick={() => setDeleteConfirming(false)} />
             </div>
+          </div>
+        )}
 
-            {importPreview && (
-              <div className={styles.confirmBox}>
-                <p className={styles.confirmText}>
-                  This backup has {importPreview.presets.length} preset(s),{' '}
-                  {importPreview.library.length} library entr
-                  {importPreview.library.length === 1 ? 'y' : 'ies'}, {importPreview.assets.length}{' '}
-                  cached file(s), from {new Date(importPreview.exportedAt).toLocaleString()}.
-                  Importing replaces <strong>all</strong> current presets, scenes, MIDI mappings,
-                  library, and cache, then reloads the app.
-                </p>
-                <div className={styles.actions}>
-                  <HardwareButton
-                    label="Yes, Import & Replace Everything"
-                    variant="danger"
-                    disabled={busy === 'import'}
-                    onClick={() => void handleConfirmImport()}
-                  />
-                  <HardwareButton label="Cancel" onClick={() => setImportPreview(null)} />
-                </div>
-              </div>
-            )}
-
-            {deleteConfirming && (
-              <div className={styles.confirmBox}>
-                <p className={styles.confirmText}>
-                  This permanently deletes every preset, scene, MIDI mapping, library entry, and
-                  cached file on this device, then reloads the app. This cannot be undone.
-                </p>
-                <Toggle
-                  label="Also sign out of Tone3000"
-                  checked={signOutOnDelete}
-                  onChange={setSignOutOnDelete}
-                />
-                <div className={styles.actions}>
-                  <HardwareButton
-                    label="Yes, Delete Everything"
-                    variant="danger"
-                    disabled={busy === 'delete'}
-                    onClick={() => void handleConfirmDelete()}
-                  />
-                  <HardwareButton label="Cancel" onClick={() => setDeleteConfirming(false)} />
-                </div>
-              </div>
-            )}
-
-            {statusMessage && <p className={styles.statusText}>{statusMessage}</p>}
-            {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
-          </section>
-        </div>
-      </div>
-    </div>
+        {statusMessage && <p className={styles.statusText}>{statusMessage}</p>}
+        {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
+      </section>
+    </Dialog>
   )
 }

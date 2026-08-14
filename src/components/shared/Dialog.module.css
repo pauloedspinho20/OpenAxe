@@ -30,6 +30,14 @@
   flex-shrink: 0;
 }
 
+.headerExtra {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  justify-content: center;
+}
+
 .title {
   composes: label from global;
   margin: 0;

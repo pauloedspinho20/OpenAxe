@@ -9,6 +9,7 @@ import { downloadPresetAsFile, readPresetFromFile } from '../../presets/presetIO
 import type { Preset } from '../../presets/types'
 import type { GraphRig } from '../../engine/GraphRig'
 import { HardwareButton } from '../primitives/HardwareButton'
+import { Dialog } from '../shared'
 import styles from './PresetManager.module.css'
 
 export interface PresetManagerProps {
@@ -125,122 +126,119 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
   })
 
   return (
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Preset manager">
-      <div className={styles.modal}>
-        <header className={styles.header}>
-          <span className={`label ${styles.title}`}>
-            {pickTarget
-              ? `ASSIGN TO SCENE ${pickTarget.scene + 1} · SLOT ${pickTarget.slot + 1}`
-              : 'PRESETS'}
-          </span>
-          <HardwareButton label="Close" onClick={closeManager} />
-        </header>
+    <Dialog
+      open={true}
+      onClose={closeManager}
+      title={
+        pickTarget
+          ? `ASSIGN TO SCENE ${pickTarget.scene + 1} · SLOT ${pickTarget.slot + 1}`
+          : 'PRESETS'
+      }
+      width="min(560px, 90vw)"
+      zIndex={300}
+    >
+      {!pickTarget && (
+        <div className={styles.saveRow}>
+          <input
+            type="text"
+            className={styles.nameInput}
+            placeholder="Preset name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            disabled={busy || !rig}
+          />
+          <HardwareButton
+            label="Save Current"
+            onClick={() => void handleSave()}
+            disabled={busy || !rig || newName.trim().length === 0}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            className="srOnly"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handleImportFile(file)
+              e.target.value = ''
+            }}
+          />
+          <HardwareButton
+            label="Import…"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+          />
+        </div>
+      )}
 
-        {!pickTarget && (
-          <div className={styles.saveRow}>
-            <input
-              type="text"
-              className={styles.nameInput}
-              placeholder="Preset name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              disabled={busy || !rig}
-            />
-            <HardwareButton
-              label="Save Current"
-              onClick={() => void handleSave()}
-              disabled={busy || !rig || newName.trim().length === 0}
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json"
-              className="srOnly"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void handleImportFile(file)
-                e.target.value = ''
-              }}
-            />
-            <HardwareButton
-              label="Import…"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={busy}
-            />
-          </div>
-        )}
+      {!pickTarget && !rig && (
+        <p className={styles.hint}>Power on to save the current grid as a preset.</p>
+      )}
+      {error && <p className={styles.error}>{error}</p>}
+      {missingAssetsNote && <p className={styles.hint}>{missingAssetsNote}</p>}
 
-        {!pickTarget && !rig && (
-          <p className={styles.hint}>Power on to save the current grid as a preset.</p>
-        )}
-        {error && <p className={styles.error}>{error}</p>}
-        {missingAssetsNote && <p className={styles.hint}>{missingAssetsNote}</p>}
-
-        <div className={styles.list}>
-          {sorted.length === 0 && <p className={styles.hint}>No saved presets yet.</p>}
-          {sorted.map((preset) => (
-            <div key={preset.id} className={styles.row}>
-              <button
-                type="button"
-                className={styles.favoriteBtn}
-                onClick={() => void handleToggleFavorite(preset)}
-                aria-label={
-                  preset.favorite ? `Unfavorite ${preset.name}` : `Favorite ${preset.name}`
-                }
-                title={preset.favorite ? 'Unfavorite' : 'Favorite'}
-              >
-                {preset.favorite ? '★' : '☆'}
-              </button>
-              <div className={styles.rowInfo}>
-                <span className={styles.rowName}>{preset.name}</span>
-                <span className={styles.rowMeta}>
-                  {preset.blocks.length} block{preset.blocks.length === 1 ? '' : 's'}
-                  {preset.tags.length > 0 ? ` · ${preset.tags.join(', ')}` : ''}
-                </span>
-              </div>
-              <div className={styles.rowActions}>
-                {pickTarget ? (
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={() => handleAssign(preset)}
-                    aria-label={`Assign ${preset.name}`}
-                  >
-                    Assign
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={() => void handleLoad(preset)}
-                    disabled={busy}
-                    aria-label={`Load ${preset.name}`}
-                  >
-                    Load
-                  </button>
-                )}
+      <div className={styles.list}>
+        {sorted.length === 0 && <p className={styles.hint}>No saved presets yet.</p>}
+        {sorted.map((preset) => (
+          <div key={preset.id} className={styles.row}>
+            <button
+              type="button"
+              className={styles.favoriteBtn}
+              onClick={() => void handleToggleFavorite(preset)}
+              aria-label={preset.favorite ? `Unfavorite ${preset.name}` : `Favorite ${preset.name}`}
+              title={preset.favorite ? 'Unfavorite' : 'Favorite'}
+            >
+              {preset.favorite ? '★' : '☆'}
+            </button>
+            <div className={styles.rowInfo}>
+              <span className={styles.rowName}>{preset.name}</span>
+              <span className={styles.rowMeta}>
+                {preset.blocks.length} block{preset.blocks.length === 1 ? '' : 's'}
+                {preset.tags.length > 0 ? ` · ${preset.tags.join(', ')}` : ''}
+              </span>
+            </div>
+            <div className={styles.rowActions}>
+              {pickTarget ? (
                 <button
                   type="button"
                   className={styles.actionBtn}
-                  onClick={() => downloadPresetAsFile(preset)}
-                  aria-label={`Export ${preset.name}`}
+                  onClick={() => handleAssign(preset)}
+                  aria-label={`Assign ${preset.name}`}
                 >
-                  Export
+                  Assign
                 </button>
+              ) : (
                 <button
                   type="button"
-                  className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-                  onClick={() => void handleDelete(preset.id)}
+                  className={styles.actionBtn}
+                  onClick={() => void handleLoad(preset)}
                   disabled={busy}
-                  aria-label={`Delete ${preset.name}`}
+                  aria-label={`Load ${preset.name}`}
                 >
-                  Delete
+                  Load
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => downloadPresetAsFile(preset)}
+                aria-label={`Export ${preset.name}`}
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+                onClick={() => void handleDelete(preset.id)}
+                disabled={busy}
+                aria-label={`Delete ${preset.name}`}
+              >
+                Delete
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    </div>
+    </Dialog>
   )
 }

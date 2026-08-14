@@ -14,6 +14,7 @@ import {
 import { importTone3000Asset } from '../tone3000/importService'
 import type { BlockLoadTarget } from '../tone3000/importService'
 import type { Tone, Tone3000Model } from '../tone3000/types'
+import { Dialog } from './shared'
 import { HardwareButton } from './primitives/HardwareButton'
 import styles from './Tone3000Browser.module.css'
 
@@ -324,344 +325,337 @@ export function Tone3000Browser({ target, context }: Props) {
   )
 
   return (
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Tone3000 catalog">
-      <div className={styles.modal}>
-        <header className={styles.header}>
-          <span className={`label ${styles.title}`}>TONE3000 CATALOG · {GEAR_LABELS[gear]}</span>
-          <div className={styles.tabs}>
+    <Dialog
+      open={true}
+      onClose={close}
+      title={`TONE3000 CATALOG · ${GEAR_LABELS[gear]}`}
+      width="min(1040px, 96vw)"
+      zIndex={40}
+      headerContent={
+        <div className={styles.tabs}>
+          <button
+            type="button"
+            className={`${styles.tab} ${scope === 'browse' ? styles.tabActive : ''}`}
+            onClick={() => setScope('browse')}
+          >
+            ALL
+          </button>
+          <button
+            type="button"
+            className={`${styles.tab} ${scope === 'library' ? styles.tabActive : ''}`}
+            onClick={() => setScope('library')}
+          >
+            LIBRARY ({library.length})
+          </button>
+          <button
+            type="button"
+            className={`${styles.tab} ${scope === 'favorites' ? styles.tabActive : ''}`}
+            onClick={() => setScope('favorites')}
+          >
+            FAVORITES
+          </button>
+          <button
+            type="button"
+            className={`${styles.tab} ${scope === 'created' ? styles.tabActive : ''}`}
+            onClick={() => setScope('created')}
+          >
+            MY MODELS
+          </button>
+          <span className={styles.viewToggle} role="group" aria-label="View mode">
             <button
               type="button"
-              className={`${styles.tab} ${scope === 'browse' ? styles.tabActive : ''}`}
-              onClick={() => setScope('browse')}
+              className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
+              onClick={() => setViewMode('list')}
+              aria-label="List view"
+              title="List view"
             >
-              ALL
+              ☰
             </button>
             <button
               type="button"
-              className={`${styles.tab} ${scope === 'library' ? styles.tabActive : ''}`}
-              onClick={() => setScope('library')}
+              className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
+              onClick={() => setViewMode('cards')}
+              aria-label="Card view"
+              title="Card view"
             >
-              LIBRARY ({library.length})
+              ▦
             </button>
-            <button
-              type="button"
-              className={`${styles.tab} ${scope === 'favorites' ? styles.tabActive : ''}`}
-              onClick={() => setScope('favorites')}
-            >
-              FAVORITES
-            </button>
-            <button
-              type="button"
-              className={`${styles.tab} ${scope === 'created' ? styles.tabActive : ''}`}
-              onClick={() => setScope('created')}
-            >
-              MY MODELS
-            </button>
-            <span className={styles.viewToggle} role="group" aria-label="View mode">
-              <button
-                type="button"
-                className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
-                onClick={() => setViewMode('list')}
-                aria-label="List view"
-                title="List view"
-              >
-                ☰
-              </button>
-              <button
-                type="button"
-                className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
-                onClick={() => setViewMode('cards')}
-                aria-label="Card view"
-                title="Card view"
-              >
-                ▦
-              </button>
-            </span>
-            <button type="button" className={styles.close} onClick={close} aria-label="Close">
-              ×
-            </button>
-          </div>
-        </header>
-
-        {auth.error && <p className={styles.error}>{auth.error}</p>}
-        {importError && <p className={styles.error}>{importError}</p>}
-        {error && <p className={styles.error}>{error}</p>}
-
-        {scope !== 'library' && (
-          <div className={styles.body}>
-            <div className={styles.filters}>
-              <input
-                type="text"
-                placeholder="Search tones…"
-                value={search.query}
-                onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
-                className={styles.input}
-              />
-              {scope === 'browse' && (
-                <>
-                  <select
-                    value={search.format}
-                    onChange={(e) =>
-                      setSearch((s) => ({ ...s, format: e.target.value as Tone['format'] }))
-                    }
-                    className={styles.input}
-                    aria-label="Format"
-                  >
-                    <option value="">All formats</option>
-                    <option value="nam">NAM</option>
-                    <option value="ir">IR</option>
-                  </select>
-                  <select
-                    value={search.sort}
-                    onChange={(e) =>
-                      setSearch((s) => ({ ...s, sort: e.target.value as SearchState['sort'] }))
-                    }
-                    className={styles.input}
-                    aria-label="Sort"
-                  >
-                    <option value="trending">Trending</option>
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="downloads-all-time">Most downloaded</option>
-                    <option value="best-match">Best match</option>
-                  </select>
-                </>
-              )}
-            </div>
-
-            {scope === 'browse' && (
-              <div className={styles.filterRow}>
-                <input
-                  type="text"
-                  list="t3k-makes"
-                  placeholder="Makes…"
-                  value={makesValue}
-                  onChange={(e) => setMakesValue(e.target.value)}
-                  className={styles.input}
-                />
-                <datalist id="t3k-makes">
-                  {makes.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-                <input
-                  type="text"
-                  list="t3k-tags"
-                  placeholder="Tags…"
-                  value={tagsValue}
-                  onChange={(e) => setTagsValue(e.target.value)}
-                  className={styles.input}
-                />
-                <datalist id="t3k-tags">
-                  {tags.map((t) => (
-                    <option key={t} value={t} />
-                  ))}
-                </datalist>
-              </div>
-            )}
-
-            {scope === 'favorites' && (
-              <p className={styles.hint}>
-                Tones you've favorited on tone3000.com - filtered by title, from {GEAR_LABELS[gear]}
-                .
-              </p>
-            )}
-
-            {scope === 'created' && (
-              <p className={styles.hint}>
-                Tones you've uploaded to tone3000.com - filtered by title, from {GEAR_LABELS[gear]}.
-              </p>
-            )}
-
-            {needsConnect && (
-              <div className={styles.connect}>
-                <p className={styles.connectText}>
-                  Browsing/importing Tone3000 content uses your Tone3000 account. Connect once; your
-                  refresh token is kept on this device for future sessions.
-                </p>
-                <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
-              </div>
-            )}
-
-            {loading && <p className={styles.hint}>Loading…</p>}
-            {!loading && !needsConnect && tones.length === 0 && !error && (
-              <p className={styles.hint}>No tones match.</p>
-            )}
-
-            <ul className={listClass}>
-              {tones
-                .filter(
-                  (tone) =>
-                    (scope !== 'favorites' && scope !== 'created') ||
-                    matchesQuery(tone.title, search.query),
-                )
-                .map((tone) => {
-                  const inLibrary = library.some((e) => e.sourceUrl === tone.url)
-                  return (
-                    <li key={tone.id} className={cardClass}>
-                      <button
-                        type="button"
-                        className={styles.cardHeader}
-                        onClick={() => void toggleTone(tone)}
-                      >
-                        {tone.images?.[0] && (
-                          <div className={styles.cardImageContainer}>
-                            <img
-                              src={tone.images[0]}
-                              alt=""
-                              className={styles.cardImage}
-                              loading="lazy"
-                            />
-                          </div>
-                        )}
-                        <span className={styles.cardInfo}>
-                          <span className={styles.cardTitle}>
-                            {tone.title}
-                            {inLibrary && (
-                              <span className={`label ${styles.inLibraryBadge}`}>IN LIBRARY</span>
-                            )}
-                          </span>
-                          <span className={`label ${styles.cardMeta}`}>
-                            {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
-                          </span>
-                          <span className={`label ${styles.cardCredit}`}>
-                            Captured by {tone.user.username}
-                          </span>
-                        </span>
-                      </button>
-
-                      {expanded === tone.id && modelsLoading && (
-                        <p className={styles.hint}>Loading models…</p>
-                      )}
-                      {expanded === tone.id && models[tone.id] && (
-                        <ul className={styles.modelList}>
-                          {models[tone.id]!.map((model) => {
-                            const assetId = `tone3000:${slot}:${model.id}`
-                            const cached = library.some((e) => e.id === assetId)
-                            return (
-                              <li key={model.id} className={styles.modelRow}>
-                                <span className={styles.modelName}>
-                                  {model.name}
-                                  <span className={`label ${styles.modelSize}`}>
-                                    {model.size} · A{model.architecture_version}
-                                  </span>
-                                </span>
-                                <button
-                                  type="button"
-                                  className={styles.importBtn}
-                                  disabled={importingId === model.id.toString()}
-                                  onClick={() => void runImport(model, tone)}
-                                >
-                                  {importingId === model.id.toString()
-                                    ? 'IMPORTING…'
-                                    : importDone === model.id.toString()
-                                      ? 'IMPORTED ✓'
-                                      : cached
-                                        ? 'RELOAD'
-                                        : 'IMPORT'}
-                                </button>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      )}
-                    </li>
-                  )
-                })}
-            </ul>
-
-            {totalPages > 1 && (
-              <nav className={styles.pagination}>
-                <button
-                  type="button"
-                  className={styles.pageBtn}
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  ‹
-                </button>
-                <span className={`label ${styles.pageInfo}`}>
-                  {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className={styles.pageBtn}
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  ›
-                </button>
-              </nav>
-            )}
-          </div>
-        )}
-
-        {scope === 'library' && (
-          <div className={styles.body}>
-            <div className={styles.filters}>
-              <input
-                type="text"
-                placeholder="Filter your library…"
-                value={search.query}
-                onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
-                className={styles.input}
-              />
-            </div>
-            {library.length === 0 && <p className={styles.hint}>Nothing imported yet.</p>}
-            {library.length > 0 && filteredLibrary.length === 0 && (
-              <p className={styles.hint}>No library items match.</p>
-            )}
-            <ul className={listClass}>
-              {filteredLibrary.map((entry) => (
-                <li key={entry.id} className={cardClass}>
-                  <div className={styles.libraryRow}>
-                    {entry.imageUrl && (
-                      <img
-                        src={entry.imageUrl}
-                        alt=""
-                        className={styles.cardImage}
-                        loading="lazy"
-                      />
-                    )}
-                    <div className={styles.libraryInfo}>
-                      <span className={styles.cardTitle}>{entry.name}</span>
-                      <span className={`label ${styles.cardMeta}`}>
-                        {entry.creator} · {entry.kind}
-                        {entry.toneTitle ? ` · ${entry.toneTitle}` : ''}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.importBtn}
-                      disabled={!target}
-                      onClick={() => void reloadFromLibrary(entry)}
-                    >
-                      LOAD
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.removeBtn}
-                      onClick={() => void Tone3000Library.remove(entry.id)}
-                      aria-label={`Remove ${entry.name} from library`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <footer className={styles.footer}>
-          <span className={`label ${styles.footerText}`}>
-            Models &amp; IRs via TONE3000 ·{' '}
-            <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
-              tone3000.com
-            </a>
           </span>
-        </footer>
-      </div>
-    </div>
+        </div>
+      }
+    >
+      {auth.error && <p className={styles.error}>{auth.error}</p>}
+      {importError && <p className={styles.error}>{importError}</p>}
+      {error && <p className={styles.error}>{error}</p>}
+
+      {scope !== 'library' && (
+        <div className={styles.body}>
+          <div className={styles.filters}>
+            <input
+              type="text"
+              placeholder="Search tones…"
+              value={search.query}
+              onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+              className={styles.input}
+            />
+            {scope === 'browse' && (
+              <>
+                <select
+                  value={search.format}
+                  onChange={(e) =>
+                    setSearch((s) => ({ ...s, format: e.target.value as Tone['format'] }))
+                  }
+                  className={styles.input}
+                  aria-label="Format"
+                >
+                  <option value="">All formats</option>
+                  <option value="nam">NAM</option>
+                  <option value="ir">IR</option>
+                </select>
+                <select
+                  value={search.sort}
+                  onChange={(e) =>
+                    setSearch((s) => ({ ...s, sort: e.target.value as SearchState['sort'] }))
+                  }
+                  className={styles.input}
+                  aria-label="Sort"
+                >
+                  <option value="trending">Trending</option>
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="downloads-all-time">Most downloaded</option>
+                  <option value="best-match">Best match</option>
+                </select>
+              </>
+            )}
+          </div>
+
+          {scope === 'browse' && (
+            <div className={styles.filterRow}>
+              <input
+                type="text"
+                list="t3k-makes"
+                placeholder="Makes…"
+                value={makesValue}
+                onChange={(e) => setMakesValue(e.target.value)}
+                className={styles.input}
+              />
+              <datalist id="t3k-makes">
+                {makes.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+              <input
+                type="text"
+                list="t3k-tags"
+                placeholder="Tags…"
+                value={tagsValue}
+                onChange={(e) => setTagsValue(e.target.value)}
+                className={styles.input}
+              />
+              <datalist id="t3k-tags">
+                {tags.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </div>
+          )}
+
+          {scope === 'favorites' && (
+            <p className={styles.hint}>
+              Tones you've favorited on tone3000.com - filtered by title, from {GEAR_LABELS[gear]}.
+            </p>
+          )}
+
+          {scope === 'created' && (
+            <p className={styles.hint}>
+              Tones you've uploaded to tone3000.com - filtered by title, from {GEAR_LABELS[gear]}.
+            </p>
+          )}
+
+          {needsConnect && (
+            <div className={styles.connect}>
+              <p className={styles.connectText}>
+                Browsing/importing Tone3000 content uses your Tone3000 account. Connect once; your
+                refresh token is kept on this device for future sessions.
+              </p>
+              <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
+            </div>
+          )}
+
+          {loading && <p className={styles.hint}>Loading…</p>}
+          {!loading && !needsConnect && tones.length === 0 && !error && (
+            <p className={styles.hint}>No tones match.</p>
+          )}
+
+          <ul className={listClass}>
+            {tones
+              .filter(
+                (tone) =>
+                  (scope !== 'favorites' && scope !== 'created') ||
+                  matchesQuery(tone.title, search.query),
+              )
+              .map((tone) => {
+                const inLibrary = library.some((e) => e.sourceUrl === tone.url)
+                return (
+                  <li key={tone.id} className={cardClass}>
+                    <button
+                      type="button"
+                      className={styles.cardHeader}
+                      onClick={() => void toggleTone(tone)}
+                    >
+                      {tone.images?.[0] && (
+                        <div className={styles.cardImageContainer}>
+                          <img
+                            src={tone.images[0]}
+                            alt=""
+                            className={styles.cardImage}
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+                      <span className={styles.cardInfo}>
+                        <span className={styles.cardTitle}>
+                          {tone.title}
+                          {inLibrary && (
+                            <span className={`label ${styles.inLibraryBadge}`}>IN LIBRARY</span>
+                          )}
+                        </span>
+                        <span className={`label ${styles.cardMeta}`}>
+                          {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
+                        </span>
+                        <span className={`label ${styles.cardCredit}`}>
+                          Captured by {tone.user.username}
+                        </span>
+                      </span>
+                    </button>
+
+                    {expanded === tone.id && modelsLoading && (
+                      <p className={styles.hint}>Loading models…</p>
+                    )}
+                    {expanded === tone.id && models[tone.id] && (
+                      <ul className={styles.modelList}>
+                        {models[tone.id]!.map((model) => {
+                          const assetId = `tone3000:${slot}:${model.id}`
+                          const cached = library.some((e) => e.id === assetId)
+                          return (
+                            <li key={model.id} className={styles.modelRow}>
+                              <span className={styles.modelName}>
+                                {model.name}
+                                <span className={`label ${styles.modelSize}`}>
+                                  {model.size} · A{model.architecture_version}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                className={styles.importBtn}
+                                disabled={importingId === model.id.toString()}
+                                onClick={() => void runImport(model, tone)}
+                              >
+                                {importingId === model.id.toString()
+                                  ? 'IMPORTING…'
+                                  : importDone === model.id.toString()
+                                    ? 'IMPORTED ✓'
+                                    : cached
+                                      ? 'RELOAD'
+                                      : 'IMPORT'}
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                )
+              })}
+          </ul>
+
+          {totalPages > 1 && (
+            <nav className={styles.pagination}>
+              <button
+                type="button"
+                className={styles.pageBtn}
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                ‹
+              </button>
+              <span className={`label ${styles.pageInfo}`}>
+                {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className={styles.pageBtn}
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                ›
+              </button>
+            </nav>
+          )}
+        </div>
+      )}
+
+      {scope === 'library' && (
+        <div className={styles.body}>
+          <div className={styles.filters}>
+            <input
+              type="text"
+              placeholder="Filter your library…"
+              value={search.query}
+              onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+              className={styles.input}
+            />
+          </div>
+          {library.length === 0 && <p className={styles.hint}>Nothing imported yet.</p>}
+          {library.length > 0 && filteredLibrary.length === 0 && (
+            <p className={styles.hint}>No library items match.</p>
+          )}
+          <ul className={listClass}>
+            {filteredLibrary.map((entry) => (
+              <li key={entry.id} className={cardClass}>
+                <div className={styles.libraryRow}>
+                  {entry.imageUrl && (
+                    <img src={entry.imageUrl} alt="" className={styles.cardImage} loading="lazy" />
+                  )}
+                  <div className={styles.libraryInfo}>
+                    <span className={styles.cardTitle}>{entry.name}</span>
+                    <span className={`label ${styles.cardMeta}`}>
+                      {entry.creator} · {entry.kind}
+                      {entry.toneTitle ? ` · ${entry.toneTitle}` : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.importBtn}
+                    disabled={!target}
+                    onClick={() => void reloadFromLibrary(entry)}
+                  >
+                    LOAD
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.removeBtn}
+                    onClick={() => void Tone3000Library.remove(entry.id)}
+                    aria-label={`Remove ${entry.name} from library`}
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <footer className={styles.footer}>
+        <span className={`label ${styles.footerText}`}>
+          Models &amp; IRs via TONE3000 ·{' '}
+          <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
+            tone3000.com
+          </a>
+        </span>
+      </footer>
+    </Dialog>
   )
 }

@@ -6,13 +6,9 @@ import { actionKey, actionLabel, type MidiAction } from '../../midi/actions'
 import { formatMidiMatch, messageMatches } from '../../midi/message'
 import { SCENE_COUNT, SLOTS_PER_SCENE } from '../../scenes/types'
 import { HardwareButton } from '../primitives/HardwareButton'
+import { Dialog } from '../shared'
 import styles from './MidiManager.module.css'
 
-/**
- * Split into a thin wrapper (subscribes only to `open`) and the body
- * (everything else) - `lastMessage` updates at controller message rate and
- * must not re-render the closed modal.
- */
 export function MidiManager() {
   const open = useMidiManager((s) => s.open)
   if (!open) return null
@@ -84,111 +80,104 @@ function MidiManagerBody() {
     .sort((a, b) => a.scene - b.scene)
 
   return (
-    <div
-      className={styles.overlay}
-      role="dialog"
-      aria-modal="true"
-      aria-label="MIDI control"
-      onClick={closeManager}
+    <Dialog
+      open={true}
+      onClose={closeManager}
+      title="MIDI CONTROL"
+      width="min(560px, 90vw)"
+      zIndex={300}
     >
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <header className={styles.header}>
-          <span className={`label ${styles.title}`}>MIDI CONTROL</span>
-          <HardwareButton label="Close" onClick={closeManager} />
-        </header>
-
-        <div className={styles.section}>
-          {!supported && (
-            <p className={styles.hint}>
-              This browser doesn't support the Web MIDI API. Try Chrome or Edge.
-            </p>
-          )}
-          {supported && permission !== 'granted' && (
-            <>
-              <p className={styles.hint}>Enable MIDI to learn footswitch/controller mappings.</p>
-              {error && <p className={styles.error}>{error}</p>}
-              <HardwareButton label="Enable MIDI" onClick={() => void requestMidiAccess()} />
-            </>
-          )}
-          {connected && (
-            <>
-              <select
-                className={styles.select}
-                value={selectedInputId ?? ''}
-                onChange={(e) => selectInput(e.target.value || null)}
-                aria-label="MIDI input"
-              >
-                <option value="">All inputs</option>
-                {inputs.map((input) => (
-                  <option key={input.id} value={input.id}>
-                    {input.name}
-                  </option>
-                ))}
-              </select>
-              <p className={styles.hint}>
-                {inputs.length} device{inputs.length === 1 ? '' : 's'} connected
-              </p>
-              <p className={styles.hint}>
-                Last received: {lastMessage ? formatMidiMatch(lastMessage) : '—'}
-              </p>
-            </>
-          )}
-        </div>
-
-        {connected && (
+      <div className={styles.section}>
+        {!supported && (
+          <p className={styles.hint}>
+            This browser doesn't support the Web MIDI API. Try Chrome or Edge.
+          </p>
+        )}
+        {supported && permission !== 'granted' && (
           <>
-            <div className={styles.section}>
-              <span className={styles.sectionTitle}>Preset Slot Triggers</span>
-              {Array.from({ length: SLOTS_PER_SCENE }, (_, i) => (
-                <MappingRow key={i} action={{ kind: 'slot', slot: i }} />
-              ))}
-            </div>
-
-            <div className={styles.section}>
-              <span className={styles.sectionTitle}>Navigation</span>
-              <MappingRow action={{ kind: 'nextScene' }} />
-              <MappingRow action={{ kind: 'prevScene' }} />
-            </div>
-
-            <div className={styles.section}>
-              <span className={styles.sectionTitle}>Scene Jump Triggers</span>
-              <div className={styles.addRow}>
-                <input
-                  type="number"
-                  min={1}
-                  max={SCENE_COUNT}
-                  value={jumpSceneInput}
-                  onChange={(e) => setJumpSceneInput(e.target.value)}
-                  className={styles.numberInput}
-                  aria-label="Scene number"
-                />
-                <HardwareButton
-                  label="Add & Learn"
-                  onClick={() => {
-                    const n = Math.min(SCENE_COUNT, Math.max(1, Number(jumpSceneInput) || 1))
-                    armLearn({ kind: 'scene', scene: n - 1 })
-                  }}
-                />
-              </div>
-              {sceneMappings.map((m) => (
-                <MappingRow key={m.id} action={m.action} />
-              ))}
-            </div>
+            <p className={styles.hint}>Enable MIDI to learn footswitch/controller mappings.</p>
+            {error && <p className={styles.error}>{error}</p>}
+            <HardwareButton label="Enable MIDI" onClick={() => void requestMidiAccess()} />
           </>
         )}
-
-        <p className={styles.hint}>
-          Only Note On, Control Change, and Program Change are used. Clock, note-off, and other
-          messages are ignored. Presses are detected on CC values 64 and above.
-        </p>
-        <button
-          type="button"
-          className={styles.dangerBtn}
-          onClick={() => useMidiStore.getState().resetAll()}
-        >
-          Reset all mappings
-        </button>
+        {connected && (
+          <>
+            <select
+              className={styles.select}
+              value={selectedInputId ?? ''}
+              onChange={(e) => selectInput(e.target.value || null)}
+              aria-label="MIDI input"
+            >
+              <option value="">All inputs</option>
+              {inputs.map((input) => (
+                <option key={input.id} value={input.id}>
+                  {input.name}
+                </option>
+              ))}
+            </select>
+            <p className={styles.hint}>
+              {inputs.length} device{inputs.length === 1 ? '' : 's'} connected
+            </p>
+            <p className={styles.hint}>
+              Last received: {lastMessage ? formatMidiMatch(lastMessage) : '—'}
+            </p>
+          </>
+        )}
       </div>
-    </div>
+
+      {connected && (
+        <>
+          <div className={styles.section}>
+            <span className={styles.sectionTitle}>Preset Slot Triggers</span>
+            {Array.from({ length: SLOTS_PER_SCENE }, (_, i) => (
+              <MappingRow key={i} action={{ kind: 'slot', slot: i }} />
+            ))}
+          </div>
+
+          <div className={styles.section}>
+            <span className={styles.sectionTitle}>Navigation</span>
+            <MappingRow action={{ kind: 'nextScene' }} />
+            <MappingRow action={{ kind: 'prevScene' }} />
+          </div>
+
+          <div className={styles.section}>
+            <span className={styles.sectionTitle}>Scene Jump Triggers</span>
+            <div className={styles.addRow}>
+              <input
+                type="number"
+                min={1}
+                max={SCENE_COUNT}
+                value={jumpSceneInput}
+                onChange={(e) => setJumpSceneInput(e.target.value)}
+                className={styles.numberInput}
+                aria-label="Scene number"
+              />
+              <HardwareButton
+                label="Add & Learn"
+                onClick={() => {
+                  const n = Math.min(SCENE_COUNT, Math.max(1, Number(jumpSceneInput) || 1))
+                  armLearn({ kind: 'scene', scene: n - 1 })
+                }}
+              />
+            </div>
+            {sceneMappings.map((m) => (
+              <MappingRow key={m.id} action={m.action} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <p className={styles.hint}>
+        Only Note On, Control Change, and Program Change are used. Clock, note-off, and other
+        messages are ignored. Presses are detected on CC values 64 and above.
+      </p>
+      <button
+        type="button"
+        className={styles.dangerBtn}
+        onClick={() => useMidiStore.getState().resetAll()}
+      >
+        Reset all mappings
+      </button>
+    </Dialog>
   )
 }
