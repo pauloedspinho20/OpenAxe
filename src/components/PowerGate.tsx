@@ -1,6 +1,7 @@
 import { HardwareButton } from './primitives/HardwareButton'
 import type { EngineStatus } from '../hooks/useAudioEngine'
 import type { LatencyHint } from '../state/ioStore'
+import { useTone3000Auth } from '../tone3000/authStore'
 import styles from './PowerGate.module.css'
 
 export interface PowerGateProps {
@@ -34,6 +35,8 @@ export function PowerGate({
   onLatencyChange,
   onPowerOn,
 }: PowerGateProps) {
+  const auth = useTone3000Auth()
+
   if (status === 'ready') return null
 
   const starting = status === 'starting'
@@ -53,6 +56,29 @@ export function PowerGate({
         </p>
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
+
+        <div className={styles.tone3000Row}>
+          <span className={styles.tone3000Text}>
+            {auth.status === 'connected'
+              ? `Tone3000: connected${auth.user ? ` as ${auth.user.username}` : ''}`
+              : 'Tone3000: not connected (optional - browsing works without it)'}
+          </span>
+          {auth.status === 'connected' ? (
+            <HardwareButton label="Disconnect" onClick={() => auth.disconnect()} />
+          ) : (
+            <HardwareButton
+              label={auth.pendingFlow ? 'Connecting…' : 'Connect Tone3000'}
+              disabled={auth.pendingFlow}
+              onClick={() => void auth.connect()}
+            />
+          )}
+        </div>
+        {auth.status === 'error' && auth.error && (
+          <p className={styles.tone3000Hint}>
+            Couldn't connect to Tone3000 ({auth.error}) - you can still power on and browse the
+            catalog anonymously, or try connecting again above.
+          </p>
+        )}
 
         <select
           className={styles.latencySelect}

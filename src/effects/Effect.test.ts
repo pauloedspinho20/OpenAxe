@@ -59,16 +59,55 @@ describe('BaseEffect', () => {
     expect(dryGain.gain.value).toBe(0)
   })
 
-  it('setLevel applies to the outputNode gain directly - no extra node needed', () => {
+  it('setLevel scales the wet path only - the shared outputNode is untouched', () => {
     const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
     expect(effect.getLevel()).toBe(1)
 
     effect.setLevel(0.5)
     expect(effect.getLevel()).toBe(0.5)
-    expect((effect.outputNode as unknown as StubGainNode).gain.value).toBe(0.5)
+
+    const { wetGain, dryGain } = effect as unknown as {
+      wetGain: StubGainNode
+      dryGain: StubGainNode
+    }
+    // mix is still 1 (fully wet): wetGain = mix * level = 0.5; dry is untouched by level.
+    expect(wetGain.gain.value).toBe(0.5)
+    expect(dryGain.gain.value).toBe(0)
+    expect((effect.outputNode as unknown as StubGainNode).gain.value).toBe(1)
 
     effect.setLevel(3) // clamped to MAX_LEVEL (1.5), same headroom as the master/mixer knobs
     expect(effect.getLevel()).toBe(1.5)
+  })
+
+  it('a bypassed effect is a hard unity passthrough - Level and Mix changes have no audible effect until un-bypassed', () => {
+    // Regression test: setLevel used to write straight to outputNode.gain,
+    // which is also where the dry bypass signal sums in - so turning the
+    // Level knob (or Mix) audibly changed a bypassed pedal's passthrough
+    // volume instead of leaving it untouched, the way a real footswitch
+    // bypass would.
+    const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
+    const { wetGain, dryGain } = effect as unknown as {
+      wetGain: StubGainNode
+      dryGain: StubGainNode
+    }
+
+    effect.setBypass(true)
+    expect(wetGain.gain.value).toBe(0)
+    expect(dryGain.gain.value).toBe(1)
+
+    effect.setLevel(0.2)
+    effect.setMix(0.1)
+    expect(wetGain.gain.value).toBe(0)
+    expect(dryGain.gain.value).toBe(1)
+    // The values themselves are still tracked/editable while bypassed...
+    expect(effect.getLevel()).toBe(0.2)
+    expect(effect.getMix()).toBe(0.1)
+
+    // ...and correctly take effect once un-bypassed, rather than being
+    // silently reverted to whatever they were when bypass first engaged.
+    effect.setBypass(false)
+    expect(wetGain.gain.value).toBeCloseTo(0.1 * 0.2)
+    expect(dryGain.gain.value).toBeCloseTo(1 - 0.1)
   })
 
   it('getParams/setParams round-trip mix and level via baseParams/applyBaseParams', () => {

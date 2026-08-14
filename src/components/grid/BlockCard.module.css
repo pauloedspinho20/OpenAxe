@@ -7,7 +7,7 @@
   padding: var(--sp-1);
   background: var(--panel-raised);
   /*  border: 1px solid transparent; */
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow-panel);
   cursor: grab;
   touch-action: none;

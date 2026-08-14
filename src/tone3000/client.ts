@@ -112,24 +112,61 @@ export async function refreshTokens(refreshToken: string): Promise<T3KTokens> {
   }
 }
 
+export interface OAuthCallbackParams {
+  code: string | null
+  error: string | null
+  state: string | null
+}
+
 /**
- * Handle the OAuth redirect back into the app (?code=...&state=...).
- * Verifies state, redeems the code, persists tokens, and returns them on
- * success - or a typed error (state mismatch / missing code / failed exchange).
+ * Reads `?code=`/`?state=`/`?error=` off the current URL and immediately
+ * strips them, atomically, so the same callback can never be processed
+ * twice - neither by reloading/bookmarking a URL that still carries an
+ * already-consumed code, nor by React StrictMode's dev-only double effect
+ * invocation (the second invocation runs synchronously right after the
+ * first and would otherwise see the exact same still-present params).
+ * Returns null when the URL isn't carrying a callback at all.
  */
-export async function handleOAuthCallback(): Promise<OAuthCallbackResult> {
+export function consumeOAuthCallbackParams(): OAuthCallbackParams | null {
   const params = new URLSearchParams(window.location.search)
-  const code = params.get('code')
-  const error = params.get('error')
-  const returnedState = params.get('state')
+  if (!params.has('code') && !params.has('error')) return null
+  const result: OAuthCallbackParams = {
+    code: params.get('code'),
+    error: params.get('error'),
+    state: params.get('state'),
+  }
+  params.delete('code')
+  params.delete('state')
+  params.delete('error')
+  const query = params.toString()
+  const url = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+  window.history.replaceState(null, '', url)
+  return result
+}
+
+/**
+ * Handle an OAuth redirect back into the app. Verifies state, redeems the
+ * code, persists tokens, and returns them on success - or a typed error
+ * (not a pending flow at all / state mismatch / missing code / failed
+ * exchange).
+ */
+export async function handleOAuthCallback(
+  params: OAuthCallbackParams,
+): Promise<OAuthCallbackResult> {
+  const { code, error, state: returnedState } = params
 
   const storedState = sessionStorage.getItem(STATE_KEY)
   const verifier = sessionStorage.getItem(VERIFIER_KEY)
   clearPkce()
 
+  // No verifier means this browser never actually started a connect flow in
+  // this session - most likely a stale or bookmarked URL still carrying an
+  // old code/state pair, not a real failed attempt, so this isn't an error
+  // worth surfacing.
+  if (!verifier) return { ok: false, error: 'not_pending' }
   if (returnedState !== storedState) return { ok: false, error: 'state_mismatch' }
   if (error) return { ok: false, error }
-  if (!code || !verifier) return { ok: false, error: 'missing_code' }
+  if (!code) return { ok: false, error: 'missing_code' }
 
   try {
     const tokens = await redeemCode(code, verifier)

@@ -1,0 +1,220 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: var(--sp-4);
+}
+
+.dialog {
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--panel);
+  border-bottom: 1px solid var(--seam);
+}
+
+.title {
+  color: var(--ink-2);
+}
+
+.close {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--sp-1);
+}
+
+.close:hover {
+  color: var(--led-hot);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+.hero {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+}
+
+.toneTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.badge {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: 2px var(--sp-2);
+}
+
+.creatorRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-raised);
+}
+
+.creatorName {
+  color: var(--ink-1);
+}
+
+.uploadDate {
+  color: var(--ink-3);
+}
+
+.metrics {
+  display: flex;
+  gap: var(--sp-5);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metricValue {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.metricLabel {
+  color: var(--ink-3);
+}
+
+.description {
+  color: var(--ink-1);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.sectionLabel {
+  color: var(--ink-3);
+}
+
+.modelRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-recessed);
+  border-radius: var(--r-sm);
+}
+
+.modelName {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-1);
+}
+
+.modelMeta {
+  color: var(--ink-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.chip {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ink-2);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: 2px var(--sp-2);
+}
+
+.licenseText {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.note {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--seam);
+}
+
+.link {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

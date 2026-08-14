@@ -221,11 +221,21 @@ export class AmpBlock implements Block {
     return modelInfo
   }
 
-  /** Re-load the currently loaded model with a different slim size. No-op if not slimmable. */
+  /**
+   * Re-slim the currently loaded model. No-op if not slimmable, or if the
+   * size hasn't actually changed - bindGraphRig's reconcile reapplies every
+   * block's full params on every store change (see its doc comment), so this
+   * runs far more often than the user actually touches a slim-size control.
+   * Uses NamNode.setSlimSize (a lightweight re-slim), not loadModel, which
+   * reparses the whole model and pauses rendering for ~100-300ms - calling
+   * that on every reconcile pass was audible as the output cutting out
+   * whenever *any* block's params changed, not just this one's.
+   */
   async setModelSlimSize(slimSize: number): Promise<void> {
     if (!this.modelJson || !this.slimmable) return
     const clamped = Math.min(1, Math.max(0.01, slimSize))
-    await this.namNode.loadModel(this.modelJson, { slimSize: clamped })
+    if (clamped === this.slimmable.currentSize) return
+    await this.namNode.setSlimSize(clamped)
     this.slimmable.currentSize = clamped
   }
 

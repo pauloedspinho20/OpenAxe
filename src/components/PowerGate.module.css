@@ -61,6 +61,30 @@
   font-size: 12px;
 }
 
+.tone3000Row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-recessed);
+  border-radius: var(--r-md);
+}
+
+.tone3000Text {
+  font-size: 12px;
+  color: var(--ink-2);
+  text-align: left;
+}
+
+.tone3000Hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
 .latencySelect {
   font: inherit;
   font-family: var(--font-display);

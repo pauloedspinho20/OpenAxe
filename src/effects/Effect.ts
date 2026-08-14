@@ -35,7 +35,7 @@ export interface Effect {
   /** Bypass forces the mix to 0 without discarding the previous mix value. */
   setBypass(bypassed: boolean): void
   isBypassed(): boolean
-  /** Output trim, applied after the dry/wet sum - independent of mix, and not affected by bypass. */
+  /** Output trim, applied to the wet signal only - like Mix, has no audible effect while bypassed. */
   setLevel(gain: number): void
   getLevel(): number
   /** This effect's current tunable parameters, for saving into a preset. */
@@ -66,7 +66,6 @@ export abstract class BaseEffect implements Effect {
   private readonly wetGain: GainNode
   private mix = 1
   private bypassed = false
-  private preBypassMix = 1
   private level = 1
 
   protected constructor(
@@ -106,23 +105,28 @@ export abstract class BaseEffect implements Effect {
   setBypass(bypassed: boolean): void {
     if (bypassed === this.bypassed) return
     this.bypassed = bypassed
-    if (bypassed) {
-      this.preBypassMix = this.mix
-      this.applyMix(0)
-    } else {
-      this.applyMix(this.preBypassMix)
-      this.mix = this.preBypassMix
-    }
+    // `this.mix` is already kept current by setMix regardless of bypass
+    // state (only the graph write is gated on it below) - un-bypassing just
+    // re-applies whatever it currently is, correctly picking up any Mix/
+    // Level change made while bypassed instead of reverting it.
+    this.applyMix(bypassed ? 0 : this.mix)
   }
 
   isBypassed(): boolean {
     return this.bypassed
   }
 
-  /** Output trim - the outputNode is already the dry/wet sum point, so its own gain doubles as this with no extra node. */
+  /**
+   * Output trim - folded into the wet path's own gain (wetGain = mix *
+   * level) rather than the shared outputNode, which is also where the dry
+   * bypass signal sums in. Applying it there would mean Level (and Mix)
+   * still audibly scaled a bypassed pedal's passthrough - a real footswitch
+   * bypass is a hard, unaffected-by-any-knob unity passthrough, and
+   * `applyMix`'s `1 - wet` dry gain has no dependency on `level` at all.
+   */
   setLevel(gain: number): void {
     this.level = clampLevel(gain)
-    this.outputNode.gain.setTargetAtTime(this.level, this.inputNode.context.currentTime, 0.01)
+    if (!this.bypassed) this.applyMix(this.mix)
   }
 
   getLevel(): number {
@@ -131,7 +135,7 @@ export abstract class BaseEffect implements Effect {
 
   private applyMix(wet: number): void {
     const context = this.inputNode.context
-    this.wetGain.gain.setTargetAtTime(wet, context.currentTime, 0.01)
+    this.wetGain.gain.setTargetAtTime(wet * this.level, context.currentTime, 0.01)
     this.dryGain.gain.setTargetAtTime(1 - wet, context.currentTime, 0.01)
   }
 

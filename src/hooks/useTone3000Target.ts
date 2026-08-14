@@ -4,6 +4,7 @@ import type { BrowserTarget } from '../tone3000/browserStore'
 import type { BlockLoadTarget } from '../tone3000/importService'
 import type { AmpBlock } from '../engine/blocks/AmpBlock'
 import type { CabBlock } from '../engine/blocks/CabBlock'
+import { useSettingsStore } from '../state/settingsStore'
 
 /**
  * Resolves the live block the Tone3000 catalog should load into, given
@@ -34,7 +35,7 @@ export function useTone3000Target(
     if (browserTarget.slot === 'model') {
       return {
         loadModel: (json: string, info: { id: string; name: string }) =>
-          (block as AmpBlock).loadModel(json, undefined, info),
+          (block as AmpBlock).loadModel(json, useSettingsStore.getState().namQuality, info),
         loadIR: () => {
           throw new Error('This block is not a Cab block')
         },

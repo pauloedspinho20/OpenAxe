@@ -6,11 +6,11 @@
 
 .paletteAndInspector {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr 1fr;
   gap: var(--sp-5);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .paletteAndInspector {
     grid-template-columns: 1fr;
   }
@@ -107,7 +107,7 @@
   justify-content: center;
   background: none;
   border: 1px dashed var(--seam-strong);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   color: var(--ink-3);
   font-size: 20px;
   cursor: pointer;

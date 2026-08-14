@@ -64,7 +64,8 @@ describe('useTone3000Target', () => {
     const { result } = renderHook(() => useTone3000Target(rig, MODEL_TARGET, 0))
 
     await result.current?.loadModel('{}', { id: 'x', name: 'X' })
-    expect(loadModel).toHaveBeenCalledWith('{}', undefined, { id: 'x', name: 'X' })
+    // Third arg is the global NAM quality setting (default 1 = full quality) - see settingsStore.ts.
+    expect(loadModel).toHaveBeenCalledWith('{}', 1, { id: 'x', name: 'X' })
     expect(() => result.current?.loadIR({} as AudioBuffer, { id: 'x', name: 'X' })).toThrow(
       'This block is not a Cab block',
     )

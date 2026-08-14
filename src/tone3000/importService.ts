@@ -5,6 +5,7 @@
  * block.
  */
 import { Tone3000Library } from './library'
+import type { Tone3000ModelSnapshot, Tone3000ToneSnapshot } from './library'
 import type { Tone3000Slot } from './types'
 
 export interface ImportRequest {
@@ -19,6 +20,9 @@ export interface ImportRequest {
   sourceUrl: string
   toneTitle: string | null
   imageUrl?: string | null
+  /** Full parent-tone/model snapshots, cached for the model details dialog. */
+  tone?: Tone3000ToneSnapshot | null
+  model?: Tone3000ModelSnapshot | null
 }
 
 export interface ImportResult {
@@ -55,6 +59,8 @@ export async function importTone3000Asset(
     modelUrl: request.modelUrl,
     toneTitle: request.toneTitle,
     imageUrl: request.imageUrl ?? null,
+    tone: request.tone ?? null,
+    model: request.model ?? null,
   })
 
   if (load && context) {

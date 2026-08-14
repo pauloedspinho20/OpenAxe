@@ -1,0 +1,110 @@
+.box {
+  position: relative;
+  height: 100%;
+  min-height: 132px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--seam);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.namButton {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  height: 100%;
+  min-height: 132px;
+  cursor: pointer;
+  background-color: var(--panel-raised);
+}
+
+.namButtonWithImage {
+  background-size: cover;
+  background-position: center;
+}
+
+.namButton:hover {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.namButton:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.namEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  width: 100%;
+  height: 100%;
+  min-height: 132px;
+}
+
+.emptyText {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.kindChip {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 2;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-sm);
+}
+
+.namInfo {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3);
+  padding-top: var(--sp-6);
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.72) 88%);
+}
+
+.modelName {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.hint {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.artWrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 132px;
+}
+
+.artLabel {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 2;
+  color: var(--ink-2);
+}

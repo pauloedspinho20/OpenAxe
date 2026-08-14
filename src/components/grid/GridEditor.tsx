@@ -6,6 +6,7 @@ import { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey } from '../../en
 import type { BlockKind } from '../../engine/blocks/Block'
 import { BlockCard } from './BlockCard'
 import { BlockPalette } from './BlockPalette'
+import { BlockHighlight } from './BlockHighlight'
 import { CableLayer, type DragPreview } from './CableLayer'
 import { AddBlockMenu } from './AddBlockMenu'
 import { InputDeviceDialog } from './InputDeviceDialog'
@@ -162,6 +163,7 @@ export function GridEditor({
     <div className={styles.editor}>
       <div className={styles.paletteAndInspector}>
         <BlockPalette tunerAnalyser={tunerAnalyser} />
+        <BlockHighlight rig={rig} analyser={analyser} />
         <BlockInspector rig={rig} context={context} />
       </div>
       <div

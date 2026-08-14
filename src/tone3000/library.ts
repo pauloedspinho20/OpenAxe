@@ -8,7 +8,40 @@ import { create } from 'zustand'
 import { getCachedAsset, putCachedAsset } from '../engine/assetCache'
 import { STORE_LIBRARY, withStore } from '../storage/db'
 import { apiDownloadModel } from './client'
-import type { Tone3000Slot } from './types'
+import type { ArchitectureVersion, EmbeddedUser, Gear, ToneFormat, Tone3000Slot } from './types'
+
+/**
+ * A snapshot of the parent Tone's public fields at import time - the detail
+ * page's data doesn't need a network round trip (and Tone3000 API calls need
+ * auth) to redisplay later, and this stays correct even if the tone is later
+ * edited or removed upstream. Absent on entries imported before this existed.
+ */
+export interface Tone3000ToneSnapshot {
+  id: number
+  title: string
+  description: string | null
+  gear: Gear
+  format: ToneFormat
+  license: string
+  images: string[] | null
+  sizes: string[]
+  makes: string[]
+  tags: string[]
+  downloads_count: number
+  favorites_count: number
+  models_count: number
+  user: EmbeddedUser
+  created_at: string | null
+  url: string
+}
+
+/** A snapshot of the specific Tone3000Model actually loaded into this block. */
+export interface Tone3000ModelSnapshot {
+  id: number
+  name: string
+  size: string
+  architecture_version: ArchitectureVersion
+}
 
 /** What the app knows about one imported Tone3000 asset (the bytes are in assetCache). */
 export interface Tone3000LibraryEntry {
@@ -24,6 +57,10 @@ export interface Tone3000LibraryEntry {
   /** Thumbnail image URL from the tone page (tone.images?.[0]). */
   imageUrl: string | null
   importedAt: number
+  /** Full parent-tone snapshot, for the model details dialog. Null on pre-existing entries. */
+  tone: Tone3000ToneSnapshot | null
+  /** The specific model snapshot, for the model details dialog. Null on pre-existing entries. */
+  model: Tone3000ModelSnapshot | null
 }
 
 interface LibraryQuery {
@@ -43,6 +80,8 @@ interface LibraryQuery {
     toneTitle?: string | null
     imageUrl?: string | null
     modelUrl: string
+    tone?: Tone3000ToneSnapshot | null
+    model?: Tone3000ModelSnapshot | null
   }): Promise<Tone3000LibraryEntry>
   remove: (id: string) => Promise<void>
   refresh: () => Promise<void>
@@ -85,7 +124,18 @@ export const Tone3000Library: LibraryQuery = {
     return getCachedAsset(id)
   },
 
-  async importAsset({ id, kind, name, creator, sourceUrl, toneTitle, imageUrl, modelUrl }) {
+  async importAsset({
+    id,
+    kind,
+    name,
+    creator,
+    sourceUrl,
+    toneTitle,
+    imageUrl,
+    modelUrl,
+    tone,
+    model,
+  }) {
     const blob = await apiDownloadModel(modelUrl)
     await putCachedAsset(id, blob)
     const entry: Tone3000LibraryEntry = {
@@ -97,6 +147,8 @@ export const Tone3000Library: LibraryQuery = {
       toneTitle: toneTitle ?? null,
       imageUrl: imageUrl ?? null,
       importedAt: Date.now(),
+      tone: tone ?? null,
+      model: model ?? null,
     }
     await withStore<IDBValidKey>(
       STORE_LIBRARY,

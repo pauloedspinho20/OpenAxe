@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { AmpBlock } from '../../engine/blocks/AmpBlock'
 import type { CabBlock } from '../../engine/blocks/CabBlock'
 import { useEngineVersion } from '../../state/engineVersion'
+import { useSettingsStore } from '../../state/settingsStore'
 import { useTone3000Browser } from '../../tone3000/browserStore'
 import { useTone3000Library } from '../../tone3000/library'
 import styles from './AssetScreenButton.module.css'
@@ -64,7 +65,8 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
         })
       } else {
         const json = await file.text()
-        await (block as AmpBlock).loadModel(json, undefined, { id: file.name, name: file.name })
+        const quality = useSettingsStore.getState().namQuality
+        await (block as AmpBlock).loadModel(json, quality, { id: file.name, name: file.name })
       }
       useEngineVersion.getState().bump()
     } catch (error) {

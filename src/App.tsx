@@ -8,6 +8,8 @@ import { SceneManager } from './components/scenes/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
 import { OnboardingModal } from './components/OnboardingModal'
 import { PowerGate } from './components/PowerGate'
+import { SettingsDialog } from './components/SettingsDialog'
+import { HeaderPerfWidget } from './components/HeaderPerfWidget'
 import { HardwareButton } from './components/primitives/HardwareButton'
 import { Led } from './components/primitives/Led'
 import { Toggle } from './components/primitives/Toggle'
@@ -24,6 +26,7 @@ import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { installFactoryScenes } from './scenes/factoryScenes'
 import { useIOStore } from './state/ioStore'
+import { useSettingsStore } from './state/settingsStore'
 import { useMidiManager } from './state/midiManager'
 import { useMidiStore } from './state/midiStore'
 import { useToast } from './state/toast'
@@ -57,6 +60,9 @@ function App() {
   const engineVersion = useEngineVersion((s) => s.version)
   const activeHeavyBlocks = engine.rig?.countActiveHeavyBlocks() ?? 0
   const openMidiManager = useMidiManager((s) => s.openManager)
+  const settingsOpen = useSettingsStore((s) => s.open)
+  const openSettings = useSettingsStore((s) => s.openSettings)
+  const closeSettings = useSettingsStore((s) => s.closeSettings)
   const midiSupported = useMidiStore((s) => s.supported)
   const midiPermission = useMidiStore((s) => s.permission)
   const midiInputCount = useMidiStore((s) => s.inputs.length)
@@ -114,6 +120,10 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
+          <HeaderPerfWidget context={engine.context} />
+        </div>
+
+        <div className={styles.headerGroup}>
           <Toggle
             label="Theme"
             checked={theme === 'light'}
@@ -122,6 +132,7 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
+          <HardwareButton label="SETTINGS" onClick={openSettings} title="Open app settings" />
           <HardwareButton
             label="MIDI"
             active={midiConnected}
@@ -135,9 +146,6 @@ function App() {
       </header>
 
       {engine.error && <div className={styles.errorBanner}>{engine.error}</div>}
-      {auth.error && auth.status === 'error' && (
-        <div className={styles.errorBanner}>Tone3000: {auth.error}</div>
-      )}
       {io.micError && engine.status === 'ready' && !engine.micGranted && (
         <div className={styles.errorBanner}>
           {io.micError.includes('NotAllowedError') || io.micError.includes('Permission')
@@ -192,6 +200,16 @@ function App() {
       <PresetManager rig={engine.rig} context={engine.context} />
       <SceneManager />
       <MidiManager />
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={closeSettings}
+        rig={engine.rig}
+        context={engine.context}
+        status={engine.status}
+        outputSelectionSupported={outputSelectionSupported}
+        onPowerOff={engine.powerOff}
+        onPowerOn={engine.powerOn}
+      />
       <PowerGate
         status={engine.status}
         error={engine.error}

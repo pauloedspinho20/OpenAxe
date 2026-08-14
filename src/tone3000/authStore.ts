@@ -9,6 +9,7 @@
 import { create } from 'zustand'
 import {
   clearTokens,
+  consumeOAuthCallbackParams,
   getAccessToken,
   handleOAuthCallback,
   setTokens,
@@ -40,7 +41,8 @@ export interface Tone3000AuthActions {
   setError: (error: string | null) => void
 }
 
-const isCallbackUrl = (): boolean =>
+/** Advisory peek only (doesn't consume) - safe to call repeatedly, e.g. before a user gesture. */
+const hasCallbackParams = (): boolean =>
   new URLSearchParams(window.location.search).has('code') ||
   new URLSearchParams(window.location.search).has('error')
 
@@ -51,10 +53,12 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
   pendingFlow: false,
 
   getToken: async () => {
-    // If we're mid-callback (back from Tone3000), handle it before anything else.
-    if (isCallbackUrl()) {
-      const handled = await get().handleCallback()
-      if (!handled) throw new Error('Tone3000 auth callback failed')
+    // If we're mid-callback (back from Tone3000), handle it before anything
+    // else - handleCallback() is a safe no-op if there's nothing to consume,
+    // so any outcome (success, failure, or nothing pending) just falls
+    // through to the normal token lookup below.
+    if (hasCallbackParams()) {
+      await get().handleCallback()
     }
     try {
       const token = await getAccessToken()
@@ -90,11 +94,20 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
   },
 
   handleCallback: async () => {
-    if (!isCallbackUrl()) return false
-    const result = await handleOAuthCallback()
+    const callbackParams = consumeOAuthCallbackParams()
+    if (!callbackParams) return false
+    const result = await handleOAuthCallback(callbackParams)
     if (result.ok) {
       set({ status: 'connected', pendingFlow: false, error: null })
       return true
+    }
+    // A stale or bookmarked URL still carrying an already-consumed (or never
+    // truly started) code/state pair isn't a real failure the user needs to
+    // see - the params are already stripped above, so it also won't recur
+    // on the next reload.
+    if (result.error === 'not_pending') {
+      set({ pendingFlow: false })
+      return false
     }
     set({
       status: result.error === 'canceled' ? 'anonymous' : 'error',
@@ -112,9 +125,12 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
   setError: (error) => set({ error }),
 }))
 
-/** Handle the OAuth callback once on app boot, if the URL carries one. */
+/**
+ * Handle the OAuth callback once on app boot, if the URL carries one.
+ * Unconditional - handleCallback() itself no-ops safely when there's
+ * nothing to consume, which also makes this safe to call twice in a row
+ * (e.g. React StrictMode's dev-only double effect invocation).
+ */
 export async function handleTone3000CallbackOnLoad(): Promise<void> {
-  if (isCallbackUrl()) {
-    await useTone3000Auth.getState().handleCallback()
-  }
+  await useTone3000Auth.getState().handleCallback()
 }
