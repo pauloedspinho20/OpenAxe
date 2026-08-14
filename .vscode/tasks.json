@@ -4,8 +4,8 @@
     {
       "label": "Install dependencies",
       "type": "shell",
-      "command": "npm install --legacy-peer-deps",
-      "detail": "npm install (legacy-peer-deps works around neural-amp-modeler-wasm's react@^18 peer dep vs. this project's React 19)",
+      "command": "pnpm install",
+      "detail": "pnpm install across the workspace (apps/web, packages/ui)",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
@@ -13,7 +13,7 @@
     {
       "label": "Install Playwright browsers",
       "type": "shell",
-      "command": "npx playwright install",
+      "command": "pnpm --filter @nam/web exec playwright install",
       "detail": "One-time fetch of the chromium/firefox/webkit binaries used by the e2e suite",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
@@ -22,8 +22,8 @@
     {
       "label": "Dev server",
       "type": "shell",
-      "command": "npm run dev",
-      "detail": "Starts the Vite dev server",
+      "command": "pnpm dev",
+      "detail": "Starts the Vite dev server (apps/web)",
       "isBackground": true,
       "group": "build",
       "presentation": { "reveal": "always", "panel": "dedicated" },
@@ -39,8 +39,8 @@
     {
       "label": "Build",
       "type": "shell",
-      "command": "npm run build",
-      "detail": "Typecheck (tsc -b) + production build",
+      "command": "pnpm build",
+      "detail": "Typecheck + production build, via Turborepo",
       "group": { "kind": "build", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": ["$tsc"]
@@ -48,8 +48,8 @@
     {
       "label": "Lint",
       "type": "shell",
-      "command": "npm run lint",
-      "detail": "oxlint",
+      "command": "pnpm lint",
+      "detail": "oxlint, via Turborepo",
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
@@ -57,8 +57,8 @@
     {
       "label": "Format check",
       "type": "shell",
-      "command": "npm run format:check",
-      "detail": "Prettier --check",
+      "command": "pnpm format:check",
+      "detail": "Prettier --check, via Turborepo",
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
@@ -66,7 +66,7 @@
     {
       "label": "Format write",
       "type": "shell",
-      "command": "npm run format",
+      "command": "pnpm format",
       "detail": "Prettier --write",
       "group": "none",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -75,8 +75,8 @@
     {
       "label": "Test (watch)",
       "type": "shell",
-      "command": "npm run test",
-      "detail": "Vitest in watch mode",
+      "command": "pnpm test",
+      "detail": "Vitest in watch mode (apps/web)",
       "isBackground": true,
       "group": "test",
       "presentation": { "reveal": "always", "panel": "dedicated" },
@@ -85,8 +85,8 @@
     {
       "label": "Test (run once)",
       "type": "shell",
-      "command": "npm run test:run",
-      "detail": "Vitest, single run - unit/component tests",
+      "command": "pnpm test:run",
+      "detail": "Vitest, single run - unit/component tests, via Turborepo",
       "group": { "kind": "test", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
@@ -94,8 +94,8 @@
     {
       "label": "Test coverage",
       "type": "shell",
-      "command": "npm run test:coverage",
-      "detail": "Vitest with the v8 coverage report",
+      "command": "pnpm --filter @nam/web test:coverage",
+      "detail": "Vitest with the v8 coverage report (apps/web)",
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
@@ -103,12 +103,22 @@
     {
       "label": "E2E test",
       "type": "shell",
-      "command": "npm run test:e2e",
-      "detail": "Playwright e2e suite - needs \"Install Playwright browsers\" run once first",
+      "command": "pnpm test:e2e",
+      "detail": "Playwright e2e suite, via Turborepo - needs \"Install Playwright browsers\" run once first",
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": [],
       "dependsOn": ["Install Playwright browsers"]
+    },
+    {
+      "label": "Storybook",
+      "type": "shell",
+      "command": "pnpm storybook",
+      "detail": "Starts the Storybook dev server (packages/ui)",
+      "isBackground": true,
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
     },
     {
       "label": "Full check (lint + format + build + test + e2e)",

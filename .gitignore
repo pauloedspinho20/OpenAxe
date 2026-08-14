@@ -11,15 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+.turbo
 
 # Local-only test assets (third-party sample .nam/.wav files, not ours to redistribute)
 public/dev-test/
 
 # Playwright e2e output
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # Editor directories and files
 .vscode/*

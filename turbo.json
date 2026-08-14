@@ -1,0 +1,31 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "env": ["VITE_PUBLISHABLE_KEY", "VITE_REDIRECT_URI"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": []
+    },
+    "format:check": {
+      "outputs": []
+    },
+    "test": {
+      "cache": false,
+      "persistent": true
+    },
+    "test:run": {
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false,
+      "outputs": ["playwright-report/**", "test-results/**"]
+    }
+  }
+}
