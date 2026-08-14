@@ -88,8 +88,34 @@ The other three libraries are registered but not initialized/built — no
 `third_party/CMakeLists.txt` exists yet, since each has real build-flag
 decisions (BYOD/AnalogTapeModel both being JUCE-based plugins whose DSP
 classes need extracting independently of their surrounding plugin/app
-scaffolding, LSP's own build system) that belong with whichever PR actually
-wraps each one.
+scaffolding) that belong with whichever PR actually wraps each one.
+
+**`lsp-plugins/lsp-plugins` (vendored here) is the wrong repo to wrap
+against — investigated, not yet fixed.** Since its 1.2.0 release the
+`lsp-plugins/lsp-plugins` repo was decomposed into separate subprojects;
+what's checked out at `third_party/lsp-plugins` is now just an empty
+orchestration shell with no DSP source in it (`src/` contains only a
+`Makefile`). The actual `Compressor`/`Equalizer`/`Gate` classes live in a
+separate repo, [`lsp-plugins/lsp-dsp-units`](https://github.com/lsp-plugins/lsp-dsp-units)
+(LGPLv3, clean `include/`+`src/main/` split, no JUCE), which itself depends
+on `lsp-common-lib` and `lsp-dsp-lib`. The latter is a genuine
+multi-architecture SIMD dispatch library (separate `x86`/`arm`/`aarch64`/
+`generic` source trees, functions bound as runtime function pointers via
+an explicit, idempotent `lsp::dsp::init()` call) that very likely needs
+different compiler flags per source file — reverse-engineering that from
+its own Makefile is real, open-ended work, not a quick fix like Dragonfly's
+three build wrinkles were. Whoever picks up LSP Suite next should swap the
+vendored submodule for `lsp-dsp-units` (+ its two dependencies) rather than
+trying to use what's currently checked out.
+
+AnalogTapeModel was also scouted: its top-level `HysteresisProcessor` is
+deeply JUCE-bound (`AudioProcessorValueTreeState`, `AudioBuffer<float>`),
+but the inner `HysteresisProcessing` class underneath is templated on
+plain `double`s and much closer to standalone — modulo an optional `xsimd`
+SIMD path (togglable via a `HYSTERESIS_USE_SIMD` define), one
+`juce::FloatVectorOperations::multiply` call in its STN solver branch, and
+a JUCE leak-detector macro. Smaller lift than LSP, still not zero. BYOD
+hasn't been investigated yet.
 
 **RTNeural was evaluated and deliberately dropped, not vendored.** It's a
 generic neural-inference engine (no built-in amp/pedal-specific behavior at
