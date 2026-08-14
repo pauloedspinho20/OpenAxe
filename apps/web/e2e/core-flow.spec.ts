@@ -31,8 +31,27 @@ async function powerOn(page: Page) {
  */
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
+  // Start from a clean slate: the grid/presets persist to IndexedDB (see
+  // src/storage/db.ts), so a prior test's saved blocks/presets would
+  // otherwise still be there on the next test's first load.
+  await page.evaluate(async () => {
+    localStorage.clear()
+    const dbs = await indexedDB.databases()
+    await Promise.all(
+      dbs
+        .filter((db): db is { name: string } => !!db.name)
+        .map(
+          (db) =>
+            new Promise((resolve) => {
+              const req = indexedDB.deleteDatabase(db.name)
+              req.onsuccess = req.onerror = req.onblocked = () => resolve(undefined)
+            }),
+        ),
+    )
+  })
+  await page.reload()
   // Dismiss the first-run walkthrough so it doesn't sit on top of everything else.
-  const onboardingClose = page.getByRole('button', { name: 'Close walkthrough' })
+  const onboardingClose = page.getByRole('button', { name: "Let's go" })
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
   }
@@ -53,7 +72,10 @@ test('gates the app behind a power-on overlay until started', async ({ page }) =
 test('places a block, auto-opens the Tone3000 catalog, and powers on', async ({ page }) => {
   await powerOn(page)
 
-  await page.getByRole('button', { name: 'Add a block at row 1, column 1' }).click()
+  // Scene slot 1 ("Clean") is the factory default and loads a Compressor +
+  // EQ (+ auto Mixer) into columns 1-3 on every fresh session (see
+  // factoryScenes.ts) - column 4 is the first actually-empty cell.
+  await page.getByRole('button', { name: 'Add a block at row 1, column 4' }).click()
   await page.getByRole('menuitem', { name: 'Amp', exact: true }).click()
 
   // A freshly placed core block never has a model loaded yet - the catalog
@@ -73,12 +95,17 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
 
   await powerOn(page)
 
-  await page.getByRole('button', { name: 'Add a block at row 1, column 1' }).click()
-  await page.getByRole('menuitem', { name: 'Compressor' }).click()
+  // Scene slot 1 ("Clean") is the factory default and loads a Compressor +
+  // EQ (+ auto Mixer) into columns 1-3 on every fresh session (see
+  // factoryScenes.ts) - column 4 is the first actually-empty cell. Reverb
+  // is used (rather than Compressor) so the new block's accessible name
+  // doesn't collide with the factory Compressor already on the grid.
+  await page.getByRole('button', { name: 'Add a block at row 1, column 4' }).click()
+  await page.getByRole('menuitem', { name: 'Reverb' }).click()
   await page.getByRole('dialog', { name: 'Tone3000 catalog' }).waitFor({ state: 'hidden' })
 
-  await page.getByRole('button', { name: 'Library' }).click()
-  const presetDialog = page.getByRole('dialog', { name: 'Preset manager' })
+  await page.getByRole('button', { name: 'PRESETS' }).click()
+  const presetDialog = page.getByRole('dialog', { name: 'PRESETS' })
   await expect(presetDialog).toBeVisible()
   await presetDialog.getByPlaceholder('Preset name').fill(presetName)
   await presetDialog.getByRole('button', { name: 'Save Current' }).click()
@@ -87,20 +114,20 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
 
   // Reload to a clean grid, then bring the saved preset back.
   await page.reload()
-  const onboardingClose = page.getByRole('button', { name: 'Close walkthrough' })
+  const onboardingClose = page.getByRole('button', { name: "Let's go" })
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
   }
   await powerOn(page)
 
-  await page.getByRole('button', { name: 'Library' }).click()
-  const reopenedDialog = page.getByRole('dialog', { name: 'Preset manager' })
+  await page.getByRole('button', { name: 'PRESETS' }).click()
+  const reopenedDialog = page.getByRole('dialog', { name: 'PRESETS' })
   await expect(reopenedDialog.getByText(presetName)).toBeVisible()
   await reopenedDialog.getByRole('button', { name: `Load ${presetName}` }).click()
 
   await expect(
     page.getByRole('button', {
-      name: 'Compressor block - click or Enter to edit, arrow keys to move',
+      name: 'Reverb block - click or Enter to edit, arrow keys to move',
     }),
   ).toBeVisible()
 })
