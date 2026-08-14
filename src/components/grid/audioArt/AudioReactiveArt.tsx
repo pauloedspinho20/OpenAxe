@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import p5 from 'p5'
-import { createArtDrawer, type ArtVariant, type DrawFn } from '../AudioArt/sketches'
+import { createArtDrawer, type ArtVariant, type DrawFn } from './sketches'
 import { readThemeColors } from './theme'
 import styles from './AudioReactiveArt.module.css'
 
