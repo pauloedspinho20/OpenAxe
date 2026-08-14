@@ -8,7 +8,7 @@ import type { GraphRig } from '../../../engine/GraphRig'
 import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import { AudioReactiveArt } from '../AudioArt/AudioReactiveArt'
-import { toArtVariant } from '../audioArt/sketches'
+import { toArtVariant } from '../AudioArt/sketches'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
 import styles from './BlockHighlight.module.css'
 
