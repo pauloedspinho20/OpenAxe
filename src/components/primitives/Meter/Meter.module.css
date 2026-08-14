@@ -1,0 +1,64 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2);
+  background: var(--panel-recessed);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-recessed);
+}
+
+.segment {
+  width: 20px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--meter-off);
+  transition: background-color 0.05s linear;
+}
+
+.segment.lit.statusGreen {
+  background: var(--led-on);
+  box-shadow: 0 0 4px var(--meter-glow-green);
+}
+.segment.lit.statusAmber {
+  background: var(--led-warn);
+  box-shadow: 0 0 4px var(--meter-glow-amber);
+}
+.segment.lit.statusRed {
+  background: var(--led-hot);
+  box-shadow: 0 0 4px var(--meter-glow-red);
+}
+
+.miniWrap {
+  display: inline-block;
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-recessed);
+  box-shadow: var(--shadow-recessed);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.miniFill {
+  display: block;
+  height: 100%;
+  transition: width 0.05s linear;
+}
+
+.miniFill.statusGreen {
+  background: var(--led-on);
+}
+.miniFill.statusAmber {
+  background: var(--led-warn);
+}
+.miniFill.statusRed {
+  background: var(--led-hot);
+}

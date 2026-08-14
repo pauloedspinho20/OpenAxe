@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
-import { GridEditor } from './components/grid/GridEditor'
-import { MidiManager } from './components/midi/MidiManager'
-import { PresetManager } from './components/presets/PresetManager'
-import { SceneBar } from './components/scenes/SceneBar'
-import { SceneManager } from './components/scenes/SceneManager'
-import { Tone3000Browser } from './components/Tone3000Browser'
-import { OnboardingModal } from './components/OnboardingModal'
-import { PowerGate } from './components/PowerGate'
-import { SettingsDialog } from './components/SettingsDialog'
-import { HeaderPerfWidget } from './components/HeaderPerfWidget'
-import { HardwareButton } from './components/primitives/HardwareButton'
-import { Led } from './components/primitives/Led'
-import { Toggle } from './components/primitives/Toggle'
+import { GridEditor } from './components/grid/GridEditor/GridEditor'
+import { MidiManager } from './components/midi/MidiManager/MidiManager'
+import { PresetManager } from './components/presets/PresetManager/PresetManager'
+import { SceneBar } from './components/scenes/SceneBar/SceneBar'
+import { SceneManager } from './components/scenes/SceneManager/SceneManager'
+import { Tone3000Browser } from './components/Tone3000Browser/Tone3000Browser'
+import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal'
+import { PowerGate } from './components/global/PowerGate/PowerGate'
+import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
+import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
+import { HardwareButton } from './components/primitives/HardwareButton/HardwareButton'
+import { Led } from './components/primitives/Led/Led'
+import { Wordmark } from './components/shared'
+import { Toggle } from './components/primitives/Toggle/Toggle'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useMidiEngine } from './hooks/useMidiEngine'
@@ -32,6 +33,7 @@ import { useToast } from './state/toast'
 import { useEngineVersion } from './state/engineVersion'
 import { hydrateSceneStore } from './state/sceneStore'
 import { installFactoryPresets } from './presets/factoryPresets'
+
 import styles from './App.module.css'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,14 +95,11 @@ function App() {
     <div className={styles.chassis}>
       <header className={styles.header}>
         <div className={`${styles.headerGroup} ${styles.brand}`}>
-          <div className={styles.wordmark}>
-            <img src="./logo.png" className={styles.logo} />
-            NAM WEB STUDIO
-          </div>
+          <Wordmark />
         </div>
 
         <div className={`${styles.headerGroup} ${styles.status}`}>
-          <Led on={isReady} color={engine.status === 'error' ? 'red' : 'green'} />
+          <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
             {isReady && !engine.micGranted ? ' · no mic' : ''}

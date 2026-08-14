@@ -1,0 +1,33 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--led-off);
+  box-shadow: inset 0 1px 1px var(--shadow-soft);
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.dot.on.accent {
+  background: var(--accent);
+  box-shadow: 0 0 6px 1px var(--accent);
+}
+.dot.on.statusGreen {
+  background: var(--led-on);
+  box-shadow: 0 0 6px 1px var(--led-on);
+}
+.dot.on.statusAmber {
+  background: var(--led-warn);
+  box-shadow: 0 0 6px 1px var(--led-warn);
+}
+.dot.on.statusRed {
+  background: var(--led-hot);
+  box-shadow: 0 0 6px 1px var(--led-hot);
+}

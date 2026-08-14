@@ -32,3 +32,6 @@ public/dev-test/
 *.njsproj
 *.sln
 *.sw?
+
+*storybook.log
+storybook-static

@@ -1,0 +1,36 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.label {
+  composes: label from global;
+}
+
+.select,
+.input {
+  height: var(--input-height);
+  padding: 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-1);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.select:focus,
+.input:focus {
+  border-color: var(--accent);
+}
+
+.select {
+  cursor: pointer;
+  appearance: none;
+  padding-right: var(--sp-5);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='%238f8d86'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--sp-2) center;
+}

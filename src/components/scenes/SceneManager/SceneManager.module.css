@@ -1,0 +1,67 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  overflow-y: auto;
+  padding-right: var(--sp-1);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+}
+
+.rowActive {
+  border-color: var(--accent);
+}
+
+.sceneIndex {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--accent);
+  flex-shrink: 0;
+  width: 20px;
+}
+
+.nameInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-1);
+  /*   background: var(--screen-bg); */
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+}
+
+.rowMeta {
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  background: none;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.actionBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}

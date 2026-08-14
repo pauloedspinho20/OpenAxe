@@ -1,0 +1,115 @@
+/* ================================================================
+   Colors — design tokens
+   Two hardware finishes: Carbon (dark, default) and Aluminum (light)
+   Screens/LCDs stay dark glass in both finishes.
+   ================================================================ */
+
+/* Carbon (dark) — default */
+:root,
+:root[data-theme='dark'] {
+  /* Surfaces */
+  --chassis: #101010;
+  --panel: #1a1a1a;
+  --panel-raised: #212121;
+  --panel-recessed: #171613;
+  --seam: rgb(255 255 255 / 6%);
+  --seam-strong: rgb(255 255 255 / 12%);
+  --highlight: rgb(255 255 255 / 4%);
+
+  /* Text */
+  --ink-1: #eeece6;
+  --ink-2: #8f8d86;
+  --ink-3: #57564f;
+
+  /* Text on dark backgrounds (overlays, image cards) */
+  --ink-reverse-1: #fff;
+  --ink-reverse-2: rgb(255 255 255 / 75%);
+  --ink-reverse-3: rgb(255 255 255 / 55%);
+
+  /* Shadows */
+  --shadow-ambient: rgb(0 0 0 / 50%);
+  --shadow-deep: rgb(0 0 0 / 70%);
+  --shadow-soft: rgb(0 0 0 / 60%);
+}
+
+/* Aluminum (light) */
+:root[data-theme='light'] {
+  --chassis: #e7e2d6;
+  --panel: #efeae0;
+  --panel-raised: #f7f3ea;
+  --panel-recessed: #d9d3c4;
+  --seam: rgb(0 0 0 / 8%);
+  --seam-strong: rgb(0 0 0 / 16%);
+  --highlight: rgb(255 255 255 / 60%);
+
+  --ink-1: #201f1a;
+  --ink-2: #6b6a62;
+  --ink-3: #a6a297;
+
+  --ink-reverse-1: #fff;
+  --ink-reverse-2: rgb(255 255 255 / 75%);
+  --ink-reverse-3: rgb(255 255 255 / 55%);
+
+  --shadow-ambient: rgb(0 0 0 / 16%);
+  --shadow-deep: rgb(0 0 0 / 30%);
+  --shadow-soft: rgb(0 0 0 / 22%);
+}
+
+:root {
+  /* Screens/LCDs: always dark glass, regardless of chassis finish */
+  --screen-bg: #06070a;
+  --screen-text: #5fdc7a;
+  --screen-dim: #3a3f38;
+  --screen-white: #eeece6;
+
+  /* Accent — signature hardware orange, used sparingly for active state only */
+  --accent: #ff5a1f;
+  --accent-dim: rgb(255 90 31 / 16%);
+  --accent-ink: #1a0900;
+
+  /* Notice banner (non-critical info) */
+  --notice-surface: rgb(255 90 31 / 10%);
+  --notice-border: rgb(255 90 31 / 30%);
+
+  /* Danger / error */
+  --danger-surface: rgb(255 59 48 / 12%);
+  --danger-border: rgb(255 59 48 / 40%);
+
+  /* Status LEDs */
+  --led-on: #5fdc7a;
+  --led-warn: #ffb020;
+  --led-hot: #ff3b30;
+  --led-hot-bright: #ff6a57;
+  --led-off: #2a2a28;
+
+  /* Meter */
+  --meter-off: #201f1d;
+  --meter-glow-green: rgb(95 220 122 / 50%);
+  --meter-glow-amber: rgb(255 176 32 / 50%);
+  --meter-glow-red: rgb(255 59 48 / 60%);
+
+  /* Overlays / backdrops */
+  --overlay-bg: rgb(0 0 0 / 55%);
+  --overlay-bg-strong: rgb(0 0 0 / 72%);
+
+  /* Panel screws */
+  --screw-light: #4a4a48;
+  --screw-dark: #0a0a0a;
+  --screw-highlight: rgb(255 255 255 / 6%);
+
+  /* Fader */
+  --fader-track: rgb(0 0 0 / 50%);
+  --fader-track-border: rgb(255 255 255 / 4%);
+  --fader-thumb-top: #3c3c39;
+  --fader-thumb-bottom: #201f1d;
+
+  /* Toggle */
+  --toggle-thumb-top: #4a4a48;
+  --toggle-thumb-bottom: #232321;
+
+  /* Button */
+  --btn-hover-border: rgb(255 255 255 / 20%);
+  --btn-active-highlight: rgb(255 255 255 / 6%);
+  --danger-bg-dim: rgb(255 59 48 / 14%);
+  --danger-glow-dim: rgb(255 59 48 / 25%);
+}
