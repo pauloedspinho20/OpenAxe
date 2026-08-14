@@ -324,10 +324,10 @@ export function Tone3000Browser({ target, context }: Props) {
   )
 
   return (
-    <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label="Tone3000 catalog">
+    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Tone3000 catalog">
       <div className={styles.modal}>
         <header className={styles.header}>
-          <span className={`label ${styles.heading}`}>TONE3000 CATALOG · {GEAR_LABELS[gear]}</span>
+          <span className={`label ${styles.title}`}>TONE3000 CATALOG · {GEAR_LABELS[gear]}</span>
           <div className={styles.tabs}>
             <button
               type="button"
@@ -377,7 +377,7 @@ export function Tone3000Browser({ target, context }: Props) {
                 ▦
               </button>
             </span>
-            <button type="button" className={styles.closeBtn} onClick={close} aria-label="Close">
+            <button type="button" className={styles.close} onClick={close} aria-label="Close">
               ×
             </button>
           </div>

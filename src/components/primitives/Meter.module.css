@@ -19,21 +19,21 @@
   width: 20px;
   height: 6px;
   border-radius: 1px;
-  background: #201f1d;
+  background: var(--meter-off);
   transition: background-color 0.05s linear;
 }
 
-.segment.lit.green {
+.segment.lit.statusGreen {
   background: var(--led-on);
-  box-shadow: 0 0 4px rgba(95, 220, 122, 0.5);
+  box-shadow: 0 0 4px var(--meter-glow-green);
 }
-.segment.lit.amber {
+.segment.lit.statusAmber {
   background: var(--led-warn);
-  box-shadow: 0 0 4px rgba(255, 176, 32, 0.5);
+  box-shadow: 0 0 4px var(--meter-glow-amber);
 }
-.segment.lit.red {
+.segment.lit.statusRed {
   background: var(--led-hot);
-  box-shadow: 0 0 4px rgba(255, 59, 48, 0.6);
+  box-shadow: 0 0 4px var(--meter-glow-red);
 }
 
 .miniWrap {
@@ -53,12 +53,12 @@
   transition: width 0.05s linear;
 }
 
-.miniFill.green {
+.miniFill.statusGreen {
   background: var(--led-on);
 }
-.miniFill.amber {
+.miniFill.statusAmber {
   background: var(--led-warn);
 }
-.miniFill.red {
+.miniFill.statusRed {
   background: var(--led-hot);
 }

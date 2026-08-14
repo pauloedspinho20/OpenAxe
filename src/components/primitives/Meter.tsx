@@ -5,8 +5,8 @@ const SEGMENT_COUNT = 12
 const AMBER_FROM = 0.75
 const RED_FROM = 0.92
 
-function levelColor(level: number): 'green' | 'amber' | 'red' {
-  return level > RED_FROM ? 'red' : level > AMBER_FROM ? 'amber' : 'green'
+function levelColor(level: number): 'statusGreen' | 'statusAmber' | 'statusRed' {
+  return level > RED_FROM ? 'statusRed' : level > AMBER_FROM ? 'statusAmber' : 'statusGreen'
 }
 
 export interface MiniMeterProps {
@@ -46,7 +46,12 @@ export function Meter({ label, level }: MeterProps) {
           const index = SEGMENT_COUNT - 1 - i
           const threshold = (index + 1) / SEGMENT_COUNT
           const lit = index < litCount
-          const color = threshold > RED_FROM ? 'red' : threshold > AMBER_FROM ? 'amber' : 'green'
+          const color =
+            threshold > RED_FROM
+              ? 'statusRed'
+              : threshold > AMBER_FROM
+                ? 'statusAmber'
+                : 'statusGreen'
           return (
             <span
               key={index}

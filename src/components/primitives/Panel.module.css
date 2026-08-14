@@ -25,19 +25,19 @@
 
 .screw {
   position: absolute;
-  width: 4px;
-  height: 4px;
+  width: var(--screw-size);
+  height: var(--screw-size);
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #4a4a48 0%, #0a0a0a 100%);
-  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  background: radial-gradient(circle at 35% 30%, var(--screw-light) 0%, var(--screw-dark) 100%);
+  box-shadow: 0 0.5px 0 var(--screw-highlight);
 }
 
 .tl {
-  top: 8px;
+  top: var(--screw-offset);
   left: 8px;
 }
 .tr {
-  top: 8px;
+  top: var(--screw-offset);
   right: 8px;
 }
 .bl {

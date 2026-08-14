@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--sp-5);
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-bg);
 }
 
 .dialog {

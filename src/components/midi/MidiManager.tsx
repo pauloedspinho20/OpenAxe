@@ -85,7 +85,7 @@ function MidiManagerBody() {
 
   return (
     <div
-      className={styles.backdrop}
+      className={styles.overlay}
       role="dialog"
       aria-modal="true"
       aria-label="MIDI control"
@@ -93,7 +93,7 @@ function MidiManagerBody() {
     >
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <header className={styles.header}>
-          <span className={`label ${styles.heading}`}>MIDI CONTROL</span>
+          <span className={`label ${styles.title}`}>MIDI CONTROL</span>
           <HardwareButton label="Close" onClick={closeManager} />
         </header>
 

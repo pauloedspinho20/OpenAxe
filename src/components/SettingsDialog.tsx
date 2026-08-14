@@ -434,7 +434,7 @@ export function SettingsDialog({
                 ref={fileInputRef}
                 type="file"
                 accept="application/json"
-                className={styles.hiddenInput}
+                className="srOnly"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) void handlePickImportFile(file)

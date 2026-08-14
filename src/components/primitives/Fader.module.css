@@ -6,8 +6,8 @@
 }
 
 .track {
-  height: 130px;
-  width: 28px;
+  height: var(--fader-track-height);
+  width: var(--fader-track-width);
   display: flex;
   justify-content: center;
   padding: var(--sp-2) 0;
@@ -34,13 +34,13 @@
 /* Groove: a thin recessed slot the cap rides in. */
 .input::-webkit-slider-runnable-track {
   width: 4px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--fader-track);
   border-radius: 2px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--fader-track-border);
 }
 .input::-moz-range-track {
   width: 4px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--fader-track);
   border-radius: 2px;
 }
 
@@ -50,16 +50,16 @@
   width: 22px;
   height: 11px;
   margin-left: -9px;
-  background: linear-gradient(180deg, #3c3c39 0%, #201f1d 100%);
-  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, var(--fader-thumb-top) 0%, var(--fader-thumb-bottom) 100%);
+  border: 1px solid var(--shadow-soft);
   border-radius: 2px;
   box-shadow: var(--shadow-control);
 }
 .input::-moz-range-thumb {
   width: 22px;
   height: 11px;
-  background: linear-gradient(180deg, #3c3c39 0%, #201f1d 100%);
-  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, var(--fader-thumb-top) 0%, var(--fader-thumb-bottom) 100%);
+  border: 1px solid var(--shadow-soft);
   border-radius: 2px;
   box-shadow: var(--shadow-control);
 }

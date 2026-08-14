@@ -125,10 +125,10 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
   })
 
   return (
-    <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label="Preset manager">
+    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Preset manager">
       <div className={styles.modal}>
         <header className={styles.header}>
-          <span className={`label ${styles.heading}`}>
+          <span className={`label ${styles.title}`}>
             {pickTarget
               ? `ASSIGN TO SCENE ${pickTarget.scene + 1} · SLOT ${pickTarget.slot + 1}`
               : 'PRESETS'}
@@ -155,7 +155,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
               ref={fileInputRef}
               type="file"
               accept="application/json"
-              className={styles.hiddenInput}
+              className="srOnly"
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) void handleImportFile(file)

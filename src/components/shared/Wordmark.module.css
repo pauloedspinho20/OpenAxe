@@ -1,0 +1,18 @@
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-display);
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  color: var(--ink-1);
+  user-select: none;
+}
+
+.accentDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px 1px var(--accent-dim);
+}

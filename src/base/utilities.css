@@ -1,0 +1,24 @@
+/* ================================================================
+   Utilities — global utility classes
+   ================================================================ */
+
+/* Silkscreen label — small uppercase, letter-spaced style for control names */
+.label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  user-select: none;
+}
+
+/* Screen-reader-only — visually hidden but accessible */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

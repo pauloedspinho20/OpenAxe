@@ -100,7 +100,7 @@ function App() {
         </div>
 
         <div className={`${styles.headerGroup} ${styles.status}`}>
-          <Led on={isReady} color={engine.status === 'error' ? 'red' : 'green'} />
+          <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
             {isReady && !engine.micGranted ? ' · no mic' : ''}

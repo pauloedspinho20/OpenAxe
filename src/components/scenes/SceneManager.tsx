@@ -36,7 +36,7 @@ export function SceneManager() {
 
   return (
     <div
-      className={styles.backdrop}
+      className={styles.overlay}
       role="dialog"
       aria-modal="true"
       aria-label="Scene manager"
@@ -44,7 +44,7 @@ export function SceneManager() {
     >
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <header className={styles.header}>
-          <span className={`label ${styles.heading}`}>SCENES</span>
+          <span className={`label ${styles.title}`}>SCENES</span>
           <HardwareButton label="Close" onClick={closeManager} />
         </header>
 

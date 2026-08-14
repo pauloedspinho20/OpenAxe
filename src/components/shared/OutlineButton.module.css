@@ -1,0 +1,28 @@
+.btn {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  background: none;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+  cursor: pointer;
+  transition:
+    color 0.1s ease,
+    border-color 0.1s ease;
+}
+
+.btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.danger {
+  composes: btn;
+}
+
+.danger:hover {
+  color: var(--led-hot);
+  border-color: var(--led-hot);
+}

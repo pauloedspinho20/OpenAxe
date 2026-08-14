@@ -1,0 +1,47 @@
+/* ================================================================
+   Spacing — 4px base scale
+   ================================================================ */
+
+:root {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* Radius: small, machined — not the soft rounded corners of a typical web app */
+  --r-sm: 3px;
+  --r-md: 6px;
+  --r-lg: 10px;
+
+  /* Component sizing */
+  --screw-size: 4px;
+  --screw-offset: 8px;
+  --led-size-sm: 6px;
+
+  --toggle-width: 30px;
+  --toggle-height: 16px;
+  --toggle-thumb: 12px;
+  --toggle-travel: 14px;
+
+  --fader-track-height: 130px;
+  --fader-track-width: 28px;
+  --fader-thumb-w: 22px;
+  --fader-thumb-h: 11px;
+  --fader-thumb-offset: -9px;
+
+  --meter-segment-w: 20px;
+  --meter-segment-h: 6px;
+
+  --input-height: 32px;
+
+  --jack-size: 12px;
+  --jack-wrap-size: 14px;
+  --jack-offset: -6px;
+
+  --rail-min-width: 80px;
+  --grid-min-row: 96px;
+  --grid-min-col: 100px;
+}

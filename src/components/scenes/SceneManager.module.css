@@ -1,7 +1,7 @@
-.backdrop {
+.overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 55%);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -27,7 +27,7 @@
   justify-content: space-between;
 }
 
-.heading {
+.title {
   color: var(--ink-1);
   font-size: 13px;
 }
