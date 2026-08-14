@@ -6,15 +6,51 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(NAM_STUDIO_BUILD_TESTS "Build packages/core unit tests" OFF)
 
-add_library(nam_studio_core STATIC src/core.cpp)
+add_library(nam_studio_core STATIC
+  src/core.cpp
+  src/graph_validation.cpp
+  src/graph_rig.cpp
+  src/api.cpp
+)
 
 target_include_directories(nam_studio_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-# third_party/ is intentionally empty scaffolding, populated by issue #14
-# (NAM inference + DSP graph). Guarded so an empty dir doesn't break configure.
+# --- NAM inference wrapper (issue #14) ---
+# NeuralAmpModelerCore's own root CMakeLists.txt only builds ITS OWN
+# tools/tests (add_subdirectory(tools)) and defines no reusable library
+# target. Its documented downstream-integration pattern (tools/CMakeLists.txt)
+# is to glob NAM/*.cpp directly into the consumer's own target, which is
+# what this does. Eigen/nlohmann include dirs stay PRIVATE: nam_amp.h only
+# forward-declares nam::DSP, so consumers of nam_studio_core never need
+# those paths themselves.
+set(NAM_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nam-core")
+if(EXISTS "${NAM_CORE_DIR}/NAM/dsp.cpp")
+  file(GLOB NAM_CORE_SOURCES_TOP "${NAM_CORE_DIR}/NAM/*.cpp")
+  file(GLOB NAM_CORE_SOURCES_SUB "${NAM_CORE_DIR}/NAM/*/*.cpp")
+  target_sources(nam_studio_core PRIVATE
+    src/dsp/nam_amp.cpp
+    ${NAM_CORE_SOURCES_TOP}
+    ${NAM_CORE_SOURCES_SUB}
+  )
+  target_include_directories(nam_studio_core PRIVATE
+    "${NAM_CORE_DIR}"
+    "${NAM_CORE_DIR}/Dependencies/eigen"
+    "${NAM_CORE_DIR}/Dependencies/nlohmann"
+  )
+  target_compile_definitions(nam_studio_core PRIVATE NAM_SAMPLE_FLOAT)
+  set(NAM_STUDIO_HAS_NAM_CORE TRUE)
+else()
+  message(WARNING
+    "packages/core/third_party/nam-core has no NAM/dsp.cpp - the NAM "
+    "inference wrapper will not build. Run: git submodule update --init "
+    "--recursive -- packages/core/third_party/nam-core")
+endif()
+
+# The other five vendored DSP libraries (dragonfly-reverb, analog-tape-model,
+# byod, lsp-plugins, rtneural) are not wrapped or built yet - see README.md.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CMakeLists.txt")
   add_subdirectory(third_party)
 endif()
