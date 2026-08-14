@@ -1,0 +1,12 @@
+/*
+  NAM Web Studio — Design System
+  Two hardware finishes, not a website's light/dark mode: "Carbon" (dark,
+  TX-6-style unibody) and "Aluminum" (light, OP-1-style brushed finish).
+  Both stay true to the hardware look - screens/LCDs stay dark glass in
+  both finishes, since that's how real hardware works regardless of its
+  case color. Defaults to dark; useTheme persists the user's choice.
+*/
+
+@import '@nam/ui/tokens/index.css';
+@import './base/reset.css';
+@import './base/utilities.css';

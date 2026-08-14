@@ -6,18 +6,18 @@ Runs entirely in the browser: no native app required, no backend, no account. Wo
 
 ## Project decisions
 
-| Area               | Decision                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Distribution       | Free & open source, licensed [GPLv3](./LICENSE)                                                                                         |
-| Stack              | Vite + React + TypeScript SPA (web) / C++ + webview.h (desktop) / iPlug2 (VST3) / native (mobile)                                       |
-| Signal graph       | **Modular grid (GraphRig)** — blocks placed on a 3×8 grid, cabled left-to-right                                                         |
-| Audio (web)        | AudioWorklet + WASM (C++ compiled via Emscripten, migrating to SAB lock-free params)                                                    |
-| Audio (native)     | C++ DSP core → direct call (no FFI, no language bridge)                                                                                 |
-| Shared DSP core    | **C++** — wraps Dragonfly Reverb, ChowTapeModel, BYOD, LSP Suite, NeuralAmpModelerCore, RTNeural                                        |
-| State management   | [Zustand](https://github.com/pmndrs/zustand)                                                                                            |
-| CSS                | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                 |
-| Persistence        | IndexedDB (web) / filesystem (desktop/mobile)                                                                                           |
-| Monorepo (planned) | pnpm workspaces: `apps/web`, `apps/desktop`, `apps/ios`, `apps/android`, `packages/core` (C++), `packages/vst3` (iPlug2), `packages/ui` |
+| Area             | Decision                                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Distribution     | Free & open source, licensed [GPLv3](./LICENSE)                                                                                                     |
+| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h (desktop) / iPlug2 (VST3) / native (mobile)                                                   |
+| Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 3×8 grid, cabled left-to-right                                                                     |
+| Audio (web)      | AudioWorklet + WASM (C++ compiled via Emscripten, migrating to SAB lock-free params)                                                                |
+| Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                             |
+| Shared DSP core  | **C++** — wraps Dragonfly Reverb, ChowTapeModel, BYOD, LSP Suite, NeuralAmpModelerCore, RTNeural                                                    |
+| State management | [Zustand](https://github.com/pmndrs/zustand)                                                                                                        |
+| CSS              | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                             |
+| Persistence      | IndexedDB (web) / filesystem (desktop/mobile)                                                                                                       |
+| Monorepo (#13)   | pnpm + Turborepo workspaces: `apps/web`, `apps/desktop`, `apps/ios`, `apps/android`, `packages/core` (C++), `packages/vst3` (iPlug2), `packages/ui` |
 
 ## Platform targets
 
@@ -86,51 +86,46 @@ interface)
 
 ### Design system
 
-Two hardware finishes: **Carbon** (dark, TX-6-style) and **Aluminum** (light, OP-1-style). 7 primitive components in `src/components/primitives/` (Knob, Fader, HardwareButton, Led, Meter, Toggle, Panel). Design tokens in CSS custom properties, generated to C++/Kotlin/Swift constants for other platforms.
+Two hardware finishes: **Carbon** (dark, TX-6-style) and **Aluminum** (light, OP-1-style). 7 primitive components in `packages/ui/src/primitives/` (Knob, Fader, HardwareButton, Led, Meter, Toggle, Panel). Design tokens in CSS custom properties, transcribed into `packages/ui/tokens/design-tokens.json`; a generator to C++/Kotlin/Swift constants for other platforms is future work.
 
 ## Project structure
 
-```
-NAM-Web-Studio/
-├── src/
-│   ├── components/           # React UI
-│   │   ├── primitives/       # Design-system components
-│   │   ├── grid/             # Signal graph grid editor
-│   │   ├── scenes/           # Scene bar and manager
-│   │   ├── midi/             # MIDI manager
-│   │   └── presets/          # Preset browser
-│   ├── effects/              # 10 audio effect DSP modules
-│   ├── engine/               # Audio engine (GraphRig, AudioContext lifecycle)
-│   ├── hooks/                # React hooks
-│   ├── midi/                 # MIDI message handling
-│   ├── presets/              # Preset capture, storage, sharing
-│   ├── scenes/               # Scene bank
-│   ├── settings/             # App settings
-│   ├── state/                # Zustand stores
-│   ├── storage/              # IndexedDB
-│   ├── test/                 # Vitest setup
-│   ├── tone3000/             # Tone3000 API
-│   └── tuner/                # Pitch detection
-├── e2e/                      # Playwright E2E tests
-└── .github/workflows/        # CI
-```
-
-### Planned monorepo structure (#13)
+pnpm + Turborepo monorepo (#13). `apps/desktop`, `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#15, #17, #17, #16); `packages/core` has real CMake build-system scaffolding but no DSP code yet (#14).
 
 ```
 NAM-Web-Studio/
 ├── apps/
-│   ├── web/              # Current Vite + React app
-│   ├── desktop/          # C++ + webview.h (or Tauri v2) + React UI
-│   ├── ios/              # SwiftUI + C++ via ObjC++ bridge
-│   └── android/          # Jetpack Compose + C++ via JNI
+│   ├── web/                  # Vite + React app (the current live product)
+│   │   ├── src/
+│   │   │   ├── components/       # App-specific React UI (grid, global, scenes, midi, presets...)
+│   │   │   ├── effects/          # 10 audio effect DSP modules
+│   │   │   ├── engine/           # Audio engine (GraphRig, AudioContext lifecycle)
+│   │   │   ├── hooks/            # React hooks
+│   │   │   ├── midi/             # MIDI message handling
+│   │   │   ├── presets/          # Preset capture, storage, sharing
+│   │   │   ├── scenes/           # Scene bank
+│   │   │   ├── settings/         # App settings
+│   │   │   ├── state/            # Zustand stores
+│   │   │   ├── storage/          # IndexedDB
+│   │   │   ├── test/             # Vitest setup
+│   │   │   ├── tone3000/         # Tone3000 API
+│   │   │   └── tuner/            # Pitch detection
+│   │   └── e2e/                  # Playwright E2E tests
+│   ├── desktop/               # Placeholder — C++ + webview.h (or Tauri v2) + React UI (#15)
+│   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
+│   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
-│   ├── core/             # C++ library: NAM DSP, effects, audio graph
-│   │   └── third_party/  # Dragonfly, ChowTape, BYOD, LSP, NAMCore, RTNeural
-│   ├── vst3/             # iPlug2 (C++) VST3/CLAP/AU/AAX plugin
-│   └── ui/               # React component library + design tokens + Storybook
-│       └── tokens/       # design-tokens.json → CSS/C++/Kotlin/Swift generator
-├── CMakeLists.txt        # Top-level C++ build
+│   ├── core/                  # C++ DSP library — CMake scaffolding only, no DSP yet (#14)
+│   │   ├── include/nam_studio/    # extern "C" public API (placeholder)
+│   │   ├── src/                   # Implementation (placeholder)
+│   │   └── third_party/           # Dragonfly, ChowTape, BYOD, LSP, NAMCore, RTNeural (empty, #14)
+│   ├── vst3/                   # Placeholder — iPlug2 (C++) VST3/CLAP/AU/AAX plugin (#16)
+│   └── ui/                     # Shared React component library + design tokens
+│       ├── src/primitives/         # Knob, Fader, HardwareButton, Led, Meter, Toggle, Panel
+│       ├── src/shared/              # Dialog, FormField, OutlineButton, StatusText, Wordmark
+│       └── tokens/                  # CSS custom properties + design-tokens.json
+├── .storybook/                # Storybook, scans packages/ui stories
+├── .github/workflows/         # CI
 ├── pnpm-workspace.yaml
 └── turbo.json
 ```
@@ -138,18 +133,21 @@ NAM-Web-Studio/
 ## Development
 
 ```bash
-npm install --legacy-peer-deps
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-| Script                            | Purpose                      |
-| --------------------------------- | ---------------------------- |
-| `npm run dev`                     | Start Vite dev server        |
-| `npm run build`                   | Typecheck + production build |
-| `npm run lint`                    | oxlint                       |
-| `npm run format` / `format:check` | Prettier                     |
-| `npm run test` / `test:run`       | Vitest                       |
-| `npm run test:e2e`                | Playwright E2E               |
+Scripts run at the repo root via Turborepo, fanning out to the relevant workspace package (currently `apps/web`, `packages/ui`):
+
+| Script                                    | Purpose                                             |
+| ----------------------------------------- | --------------------------------------------------- |
+| `pnpm dev`                                | Start Vite dev server (`apps/web`)                  |
+| `pnpm build`                              | Typecheck + production build                        |
+| `pnpm lint`                               | oxlint                                              |
+| `pnpm format` / `pnpm format:check`       | Prettier                                            |
+| `pnpm test` / `pnpm test:run`             | Vitest                                              |
+| `pnpm test:e2e`                           | Playwright E2E                                      |
+| `pnpm storybook` / `pnpm build-storybook` | Storybook dev server / static build (`packages/ui`) |
 
 ## Roadmap
 
