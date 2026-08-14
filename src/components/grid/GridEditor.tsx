@@ -287,6 +287,7 @@ export function GridEditor({
 
       {addMenuCell && (
         <AddBlockMenu
+          open={!!addMenuCell}
           onPick={(kind: BlockKind) => {
             const id = useGraphStore.getState().addBlock(kind, addMenuCell.row, addMenuCell.col)
             openCatalogForNewBlock(id, kind)

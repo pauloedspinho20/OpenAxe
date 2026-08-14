@@ -11,6 +11,7 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { HeaderPerfWidget } from './components/HeaderPerfWidget'
 import { HardwareButton } from './components/primitives/HardwareButton'
 import { Led } from './components/primitives/Led'
+import { Wordmark } from './components/shared'
 import { Toggle } from './components/primitives/Toggle'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
@@ -93,10 +94,7 @@ function App() {
     <div className={styles.chassis}>
       <header className={styles.header}>
         <div className={`${styles.headerGroup} ${styles.brand}`}>
-          <div className={styles.wordmark}>
-            <img src="./logo.png" className={styles.logo} />
-            NAM WEB STUDIO
-          </div>
+          <Wordmark />
         </div>
 
         <div className={`${styles.headerGroup} ${styles.status}`}>

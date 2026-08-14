@@ -1,4 +1,5 @@
 import { HardwareButton } from './primitives/HardwareButton'
+import { Wordmark } from './shared'
 import type { EngineStatus } from '../hooks/useAudioEngine'
 import type { LatencyHint } from '../state/ioStore'
 import { useTone3000Auth } from '../tone3000/authStore'
@@ -44,10 +45,7 @@ export function PowerGate({
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
-        <div className={styles.wordmark}>
-          <img src="./logo.png" className={styles.logo} />
-          NAM WEB STUDIO
-        </div>
+        <Wordmark variant="hero" />
         <p className={styles.description}>
           Starts the audio engine and asks for microphone access for your instrument input. Your
           browser remembers that permission across visits, but starting audio itself needs a fresh
