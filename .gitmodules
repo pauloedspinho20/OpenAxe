@@ -1,0 +1,20 @@
+[submodule "packages/core/third_party/dragonfly-reverb"]
+	path = packages/core/third_party/dragonfly-reverb
+	url = https://github.com/michaelwillis/dragonfly-reverb.git
+	shallow = true
+[submodule "packages/core/third_party/analog-tape-model"]
+	path = packages/core/third_party/analog-tape-model
+	url = https://github.com/jatinchowdhury18/AnalogTapeModel.git
+	shallow = true
+[submodule "packages/core/third_party/byod"]
+	path = packages/core/third_party/byod
+	url = https://github.com/Chowdhury-DSP/BYOD.git
+	shallow = true
+[submodule "packages/core/third_party/lsp-plugins"]
+	path = packages/core/third_party/lsp-plugins
+	url = https://github.com/lsp-plugins/lsp-plugins.git
+	shallow = true
+[submodule "packages/core/third_party/nam-core"]
+	path = packages/core/third_party/nam-core
+	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
+	shallow = true

@@ -127,6 +127,60 @@
       "dependsOn": ["Lint", "Format check", "Build", "Test (run once)", "E2E test"],
       "group": "test",
       "problemMatcher": []
+    },
+    {
+      "label": "C++: Init submodules",
+      "type": "shell",
+      "command": "git submodule update --init --recursive -- packages/core/third_party/nam-core && git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf",
+      "detail": "One-time fetch of the vendored DSP library submodules (NAMCore's Eigen/AudioDSPTools, Dragonfly's dpf) - needed before configuring packages/core",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "C++: Configure",
+      "type": "shell",
+      "command": "cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
+      "detail": "Configures the packages/core C++ DSP library with tests enabled - see packages/core/README.md if cmake isn't on your PATH",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "dependsOn": ["C++: Init submodules"]
+    },
+    {
+      "label": "C++: Build",
+      "type": "shell",
+      "command": "cmake --build packages/core/build",
+      "detail": "Builds packages/core (graph engine, NAM wrapper, Dragonfly Reverb algorithms)",
+      "group": { "kind": "build", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["C++: Configure"]
+    },
+    {
+      "label": "C++: Test",
+      "type": "shell",
+      "command": "ctest --test-dir packages/core/build --output-on-failure",
+      "detail": "Runs the packages/core CTest suite (graph engine, NAM inference, all 4 Dragonfly Reverb algorithms)",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "dependsOn": ["C++: Build"]
+    },
+    {
+      "label": "Setup & run everything (web + C++)",
+      "detail": "One-shot local setup: pnpm install, init/configure/build/test the C++ engine, then start the web dev server",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Install dependencies",
+        "C++: Init submodules",
+        "C++: Configure",
+        "C++: Build",
+        "C++: Test",
+        "Dev server"
+      ],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }
