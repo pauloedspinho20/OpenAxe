@@ -49,77 +49,71 @@ else()
     "--recursive -- packages/core/third_party/nam-core")
 endif()
 
-# --- Dragonfly Hall Reverb wrapper (issue #14) ---
+# --- Dragonfly Reverb wrappers (issue #14) ---
 # Each reverb algorithm (hall/room/plate/early-reflections) lives in its own
 # self-contained DSP.{hpp,cpp} under plugins/<name>/, separate from the DPF
-# plugin/UI scaffolding - only that gets compiled, not DPF itself. Two
-# wrinkles this works around:
+# plugin/UI scaffolding - only that gets compiled, not DPF itself. Three
+# wrinkles this works around, all inside each wrapper's own .cpp (e.g.
+# src/dsp/dragonfly_hall_reverb.cpp) rather than here:
 #  1. The underlying freeverb3 library (common/freeverb/) uses dynamic
 #     exception specifications removed in C++17, so it (and DSP.cpp, and
 #     this wrapper's own .cpp, which all transitively include those
-#     headers) must compile at C++14 - a separate target with its own
-#     CXX_STANDARD override, linked into the C++20 nam_studio_core target
-#     (mixing standards across TUs in one binary is fine; only same-TU
-#     consistency matters).
+#     headers) must compile at C++14 - each algorithm gets its own target
+#     with a CXX_STANDARD override, linked into the C++20 nam_studio_core
+#     target (mixing standards across TUs in one binary is fine; only
+#     same-TU consistency matters).
 #  2. DSP.cpp includes two small DPF header-only utilities
 #     (DistrhoPlugin.hpp, extra/ScopedDenormalDisable.hpp) despite never
 #     using DPF's actual plugin machinery, so Dragonfly's own nested `dpf`
 #     submodule needs initializing too (see README.md).
+#  3. All four algorithms define an identically-named DragonflyReverbDSP
+#     class (and depend on identically-named freeverb3 classes), which
+#     would be a duplicate-symbol conflict the moment two of them were
+#     ever linked into the same final binary. Each wrapper .cpp compiles
+#     freeverb3 + its own DSP.cpp inside an anonymous namespace (see the
+#     wrapper source for why it must be *all* of freeverb3 together, not
+#     just DSP.cpp) - so each algorithm's target here is just that one
+#     self-contained wrapper source file, nothing else to list.
 set(DRAGONFLY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dragonfly-reverb")
 if(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
    AND EXISTS "${DRAGONFLY_DIR}/dpf/distrho/DistrhoPlugin.hpp")
-  # Exact freeverb3 file list Dragonfly's own Makefile builds for the Hall
-  # algorithm specifically (see plugins/dragonfly-hall-reverb/Makefile) -
-  # NOT a directory glob: common/freeverb/ also has files (blockDelay.cpp,
-  # compmodel.cpp, etc.) used only by other Dragonfly algorithms, which
-  # need the external FFTW library. Hall only needs the bundled KISS FFT.
-  set(FREEVERB3_SOURCES
-    "${DRAGONFLY_DIR}/common/freeverb/allpass.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/biquad.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/comb.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/delay.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/delayline.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/earlyref.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/efilter.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/nrev.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/nrevb.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/progenitor.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/progenitor2.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/revbase.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/slot.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/strev.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/utils.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/zrev.cpp"
-    "${DRAGONFLY_DIR}/common/freeverb/zrev2.cpp"
-    "${DRAGONFLY_DIR}/common/kiss_fft/kiss_fft.c"
-    "${DRAGONFLY_DIR}/common/kiss_fft/kiss_fftr.c"
-  )
-  add_library(dragonfly_hall_reverb_vendor STATIC
-    ${FREEVERB3_SOURCES}
-    "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
-    src/dsp/dragonfly_hall_reverb.cpp
-  )
-  target_include_directories(dragonfly_hall_reverb_vendor PRIVATE
-    "${DRAGONFLY_DIR}/common"
-    "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb"
-    "${DRAGONFLY_DIR}/dpf/distrho"
-    "${DRAGONFLY_DIR}/dpf/distrho/extra"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  )
-  set_target_properties(dragonfly_hall_reverb_vendor PROPERTIES
-    CXX_STANDARD 14
-    CXX_STANDARD_REQUIRED ON
-  )
-  # freeverb3 picks its internal sample type (float/double/long double) via
-  # one of these macros - Dragonfly's own Makefile always builds with
-  # LIBFV3_FLOAT.
-  target_compile_definitions(dragonfly_hall_reverb_vendor PRIVATE LIBFV3_FLOAT)
-  target_link_libraries(nam_studio_core PRIVATE dragonfly_hall_reverb_vendor)
   set(NAM_STUDIO_HAS_DRAGONFLY TRUE)
+
+  # (plugin subdirectory name, wrapper source/target base name) pairs.
+  set(DRAGONFLY_ALGOS
+    "dragonfly-hall-reverb:dragonfly_hall_reverb"
+    "dragonfly-room-reverb:dragonfly_room_reverb"
+    "dragonfly-plate-reverb:dragonfly_plate_reverb"
+    "dragonfly-early-reflections:dragonfly_early_reflections"
+  )
+  foreach(algo ${DRAGONFLY_ALGOS})
+    string(REPLACE ":" ";" algo_parts ${algo})
+    list(GET algo_parts 0 plugin_dir)
+    list(GET algo_parts 1 wrapper_name)
+
+    add_library(${wrapper_name}_vendor STATIC "src/dsp/${wrapper_name}.cpp")
+    target_include_directories(${wrapper_name}_vendor PRIVATE
+      "${DRAGONFLY_DIR}/common"
+      "${DRAGONFLY_DIR}/common/freeverb"
+      "${DRAGONFLY_DIR}/plugins/${plugin_dir}"
+      "${DRAGONFLY_DIR}/dpf/distrho"
+      "${DRAGONFLY_DIR}/dpf/distrho/extra"
+      "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    )
+    set_target_properties(${wrapper_name}_vendor PROPERTIES
+      CXX_STANDARD 14
+      CXX_STANDARD_REQUIRED ON
+    )
+    # freeverb3 picks its internal sample type (float/double/long double)
+    # via one of these macros - Dragonfly's own Makefile always builds
+    # with LIBFV3_FLOAT.
+    target_compile_definitions(${wrapper_name}_vendor PRIVATE LIBFV3_FLOAT)
+    target_link_libraries(nam_studio_core PRIVATE ${wrapper_name}_vendor)
+  endforeach()
 else()
   message(WARNING
     "packages/core/third_party/dragonfly-reverb's dpf submodule isn't "
-    "initialized - the Dragonfly Hall Reverb wrapper will not build. Run: "
+    "initialized - the Dragonfly Reverb wrappers will not build. Run: "
     "git -C packages/core/third_party/dragonfly-reverb submodule update "
     "--init --depth 1 -- dpf")
 endif()

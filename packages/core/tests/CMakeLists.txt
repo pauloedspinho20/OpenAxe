@@ -31,6 +31,25 @@ if(NAM_STUDIO_HAS_DRAGONFLY)
   add_executable(dragonfly_hall_reverb_test dragonfly_hall_reverb_test.cpp)
   target_link_libraries(dragonfly_hall_reverb_test PRIVATE nam_studio_core)
   add_test(NAME dragonfly_hall_reverb_test COMMAND dragonfly_hall_reverb_test)
+
+  add_executable(dragonfly_room_reverb_test dragonfly_room_reverb_test.cpp)
+  target_link_libraries(dragonfly_room_reverb_test PRIVATE nam_studio_core)
+  add_test(NAME dragonfly_room_reverb_test COMMAND dragonfly_room_reverb_test)
+
+  add_executable(dragonfly_plate_reverb_test dragonfly_plate_reverb_test.cpp)
+  target_link_libraries(dragonfly_plate_reverb_test PRIVATE nam_studio_core)
+  add_test(NAME dragonfly_plate_reverb_test COMMAND dragonfly_plate_reverb_test)
+
+  add_executable(dragonfly_early_reflections_test dragonfly_early_reflections_test.cpp)
+  target_link_libraries(dragonfly_early_reflections_test PRIVATE nam_studio_core)
+  add_test(NAME dragonfly_early_reflections_test COMMAND dragonfly_early_reflections_test)
+
+  # The actual regression test for the symbol-collision fix: all four
+  # algorithms in ONE executable. See the test source for why this is the
+  # real proof, not the individual per-algorithm tests above.
+  add_executable(dragonfly_all_algorithms_test dragonfly_all_algorithms_test.cpp)
+  target_link_libraries(dragonfly_all_algorithms_test PRIVATE nam_studio_core)
+  add_test(NAME dragonfly_all_algorithms_test COMMAND dragonfly_all_algorithms_test)
 else()
-  message(WARNING "Skipping dragonfly_hall_reverb_test - dragonfly-reverb's dpf submodule not initialized")
+  message(WARNING "Skipping Dragonfly Reverb tests - dragonfly-reverb's dpf submodule not initialized")
 endif()

@@ -1,15 +1,5 @@
 #pragma once
 
-#include <memory>
-
-// Forward-declared only - defined in the vendored dragonfly-reverb's
-// plugins/dragonfly-hall-reverb/DSP.hpp. Consumers of nam_studio_core never
-// need freeverb3/DPF headers on their own include path because of this -
-// those stay behind this library's CMake target (dragonfly_hall_reverb
-// itself is compiled at C++14, since freeverb3 uses dynamic exception
-// specifications removed in C++17 - see CMakeLists.txt).
-class DragonflyReverbDSP;
-
 // Note: this file (and dragonfly_hall_reverb.cpp) is compiled at C++14 -
 // see CMakeLists.txt - so it avoids the C++17 nested-namespace shorthand
 // used elsewhere in this codebase.
@@ -27,6 +17,17 @@ namespace dsp {
 // reverb algorithm itself is the "model," parameterized directly. Stereo
 // only (Dragonfly's own DSP class processes left/right independently with
 // shared parameters), matching how reverb is actually used.
+//
+// Implementation note: dragonfly_hall_reverb.cpp compiles the real
+// DragonflyReverbDSP class (and all of freeverb3) inside an anonymous
+// namespace, giving it internal linkage private to that one translation
+// unit - Dragonfly's four reverb algorithms (hall/room/plate/early
+// reflections) all define an identically-named DragonflyReverbDSP class,
+// which would otherwise be a duplicate-symbol conflict the moment two of
+// them were ever linked into the same final binary (e.g. a VST3 plugin
+// offering all four). Because the real type is invisible outside its own
+// .cpp, this header can't forward-declare it the normal way - hence the
+// opaque `void*` below instead of `std::unique_ptr<DragonflyReverbDSP>`.
 class DragonflyHallReverb {
  public:
   struct ParamInfo {
@@ -65,7 +66,7 @@ class DragonflyHallReverb {
   void SetParam(int index, float value);
 
  private:
-  std::unique_ptr<DragonflyReverbDSP> dsp_;
+  void* dsp_;  // owning pointer to an (anonymous namespace)::DragonflyReverbDSP*
 };
 
 }  // namespace dsp

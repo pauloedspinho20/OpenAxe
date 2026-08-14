@@ -20,13 +20,18 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   model loading, sample-rate-aware reset, real-time process, input/output
   level calibration (dBu), loudness, and slim-size quality control as a
   clean C++ class (`nam_studio::dsp::NamAmp`).
-- **Dragonfly Hall Reverb wrapper** (`include/nam_studio/dsp/dragonfly_hall_reverb.h`
-  - `src/dsp/dragonfly_hall_reverb.cpp`) — wraps `DragonflyReverbDSP`
-    (freeverb3-based), exposing all 18 of its parameters: dry/early/late
-    levels, room size/width, predelay, diffusion, low/high cut+crossover+
-    multiplier, modulation spin/wander, decay time, and early-reflections
-    send. Stereo (`nam_studio::dsp::DragonflyHallReverb`). Replaces the app's
-    current basic Freeverb effect.
+- **All four Dragonfly Reverb algorithms** (`include/nam_studio/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
+  - matching `src/dsp/*.cpp`) — wrap each of Dragonfly's `DragonflyReverbDSP`
+    classes (freeverb3-based), exposing their full parameter surfaces:
+    `DragonflyHallReverb` (18 params: dry/early/late levels, size, width,
+    predelay, diffuse, low/high cut+crossover+multiplier, spin, wander, decay,
+    early send, modulation), `DragonflyRoomReverb` (17 params, its own
+    size/damping/boost controls), `DragonflyPlateReverb` (9 params, including
+    an algorithm selector across its 3 internal plate models), and
+    `DragonflyEarlyReflections` (7 params, no late-reverb tail — just the
+    discrete early-reflection pattern). Stereo. Replaces the app's current
+    basic Freeverb effect with a full modulated, frequency-dependent-decay
+    reverb suite.
 - **`extern "C"` API** (`include/nam_studio/api.h` + `src/api.cpp`) — opaque
   `NamStudioGraph` handle, lifecycle only (`nam_studio_graph_create`/
   `_destroy`). Real-time entrypoints (`nam_studio_process`,
@@ -43,9 +48,13 @@ port the boundary-value matrix from `graphValidation.test.ts`/
 bundled with the vendored NeuralAmpModelerCore submodule
 (`third_party/nam-core/example_models/lstm.nam`), resets it, processes an
 impulse through it, and asserts every output sample is finite.
-`dragonfly_hall_reverb_test` sweeps every one of the 18 parameters to their
-min/max and processes a real stereo impulse through the reverb, asserting a
-genuine non-silent, finite reverb tail comes out.
+`dragonfly_{hall,room,plate,early_reflections}_reverb_test` each sweep every
+one of that algorithm's parameters to their min/max and process a real
+stereo impulse through it, asserting a genuine non-silent, finite reverb
+tail comes out. `dragonfly_all_algorithms_test` constructs and processes
+audio through all four algorithms in one executable - the actual regression
+test for the symbol-isolation fix described below (linking any two would
+have failed with duplicate symbols before that fix).
 
 ## Vendored third-party DSP libraries
 
@@ -108,8 +117,7 @@ git submodules at all) doesn't raise this concern in the first place.
 ## Non-goals (not yet — tracked for follow-up work)
 
 - DSP wrappers for the other three libraries (tape delay/drive,
-  compression/EQ) and Dragonfly's other three algorithms (room, plate,
-  early reflections - only hall is wrapped so far).
+  compression/EQ). All four Dragonfly Reverb algorithms are now wrapped.
 - `extern "C"` audio-processing entrypoints (process, load-model,
   parameters) — needs a real-time wiring design first.
 - Wiring the graph engine and the NAM wrapper together (they're independent,
@@ -123,9 +131,10 @@ git submodules at all) doesn't raise this concern in the first place.
 **Native (macOS, this environment): verified, not just authored.** CMake
 4.4.2 (installed via CMake.app, not on `PATH` — use the full path,
 `/Applications/CMake.app/Contents/bin/cmake`) configures, builds, and runs
-the full CTest suite (5/5 passing, including the real NAM model
-load-and-process test and a real Dragonfly Hall Reverb impulse-response
-test) against Debug builds:
+the full CTest suite (9/9 passing, including the real NAM model
+load-and-process test, all four Dragonfly Reverb algorithms' real
+impulse-response tests, and the combined-binary symbol-isolation
+regression test) against Debug builds:
 
 ```bash
 CMAKE=/Applications/CMake.app/Contents/bin/cmake
@@ -153,14 +162,14 @@ semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>` (CMake
 3.24+, portable across GNU/Apple/MSVC linkers) — see `tests/CMakeLists.txt`
 for the pattern `nam_amp_test` uses.
 
-**Dragonfly Reverb needed three fixes only discoverable by actually trying
-to build it** (its own Makefile has the answers, but you have to go look):
+**Dragonfly Reverb needed four fixes only discoverable by actually trying
+to build it:**
 
 1. The underlying freeverb3 library (`common/freeverb/`) uses dynamic
    exception specifications (`throw(std::bad_alloc)`) removed in C++17.
-   It (and anything that includes its headers, including this wrapper's
-   own `.cpp`) must compile at C++14 - hence the separate
-   `dragonfly_hall_reverb_vendor` CMake target with `CXX_STANDARD 14`,
+   It (and anything that includes its headers, including each wrapper's
+   own `.cpp`) must compile at C++14 - hence each algorithm gets its own
+   `dragonfly_<algo>_reverb_vendor` CMake target with `CXX_STANDARD 14`,
    linked into the C++20 `nam_studio_core` target. Mixing standards across
    translation units in one binary is fine; only same-TU consistency
    matters.
@@ -169,11 +178,26 @@ to build it** (its own Makefile has the answers, but you have to go look):
    own Makefile always builds with the float variant).
 3. `common/freeverb/*.cpp` is **not** a safe glob target - it also contains
    files (`blockDelay.cpp`, `compmodel.cpp`, etc.) used only by Dragonfly's
-   other reverb algorithms, which need the external FFTW library. Hall
-   Reverb only needs the specific 16 files (plus bundled KISS FFT, not
-   FFTW) listed in `plugins/dragonfly-hall-reverb/Makefile`'s
-   `FILES_COMMON` - `CMakeLists.txt` lists them explicitly rather than
-   globbing.
+   other reverb algorithms, which need the external FFTW library. Every
+   algorithm here only needs the same specific 17 files (16 freeverb3 + one
+   more) listed in each `plugins/dragonfly-*-reverb/Makefile`'s
+   `FILES_COMMON` (identical list across all four plugins) - each wrapper
+   `#include`s them by name rather than globbing.
+4. **All four algorithms define an identically-named `DragonflyReverbDSP`
+   class** (and depend on identically-named freeverb3 classes like
+   `fv3::zrev2_f`). Linking any two into the same final binary is a
+   duplicate-symbol conflict. The fix: each wrapper `.cpp` compiles its own
+   freeverb3 sources + its own `DSP.cpp` entirely inside one anonymous
+   namespace, in one translation unit (see `dragonfly_hall_reverb.cpp`'s
+   header comment for why a _partial_ wrap - just `DSP.cpp`, leaving
+   freeverb3 externally linked - was tried first and rejected: it compiles,
+   but produces a silent linkage _mismatch_ rather than a clean error).
+   Because the real class is now invisible outside its own `.cpp`, the
+   public header can't forward-declare it the normal way - each header
+   uses an opaque `void*` instead of `std::unique_ptr<DragonflyReverbDSP>`.
+   `dragonfly_all_algorithms_test` is the regression test proving this:
+   before the fix, linking it (which uses all four wrapper classes) failed
+   with duplicate symbols; after, it passes.
 
 ## Build targets (native verified; others authored, not yet buildable here)
 
