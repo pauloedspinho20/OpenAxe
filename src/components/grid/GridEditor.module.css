@@ -1,13 +1,20 @@
 .editor {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  gap: var(--sp-4);
 }
 
 .paletteAndInspector {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: var(--sp-5);
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+.paletteAndInspectorItem {
+  min-height: 210px;
+}
+.paletteAndInspectorItem > * {
+  height: 100%;
 }
 
 @media (max-width: 900px) {

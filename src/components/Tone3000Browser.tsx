@@ -505,12 +505,14 @@ export function Tone3000Browser({ target, context }: Props) {
                         onClick={() => void toggleTone(tone)}
                       >
                         {tone.images?.[0] && (
-                          <img
-                            src={tone.images[0]}
-                            alt=""
-                            className={styles.cardImage}
-                            loading="lazy"
-                          />
+                          <div className={styles.cardImageContainer}>
+                            <img
+                              src={tone.images[0]}
+                              alt=""
+                              className={styles.cardImage}
+                              loading="lazy"
+                            />
+                          </div>
                         )}
                         <span className={styles.cardInfo}>
                           <span className={styles.cardTitle}>

@@ -96,7 +96,9 @@
   flex-direction: column;
   gap: var(--sp-5);
   width: 100%;
-  padding: var(--sp-6);
+  padding: var(--sp-4);
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
 @media (max-width: 760px) {

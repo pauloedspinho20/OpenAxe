@@ -42,14 +42,12 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
 
   // Re-render when the Tone3000 library changes (import/offline reload) so the screen shows the right name.
   useTone3000Library((s) => s.version)
-  const libraryEntries = useTone3000Library((s) => s.entries)
   // Re-render after a local file/drop load too - that path doesn't touch the
   // Tone3000 library at all, so nothing else would trigger this component
   // to look at the block's newly-loaded name again.
   useEngineVersion((s) => s.version)
 
   const loaded = isIr ? (block as CabBlock).getLoadedIr() : (block as AmpBlock).getLoadedModel()
-  const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
   const label = GEAR_LABELS[gearType]
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
 
@@ -105,17 +103,17 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
           }}
           title={`Browse Tone3000 ${label.toLowerCase()}s - or drop a ${isIr ? 'cabinet IR' : '.nam model'} file here`}
         >
-          {libraryEntry?.imageUrl && (
+          {/*    {libraryEntry?.imageUrl && (
             <img src={libraryEntry.imageUrl} alt="" className={styles.screenImage} loading="lazy" />
-          )}
+          )} */}
           <span className={styles.screenMeta}>
-            <span className={`label ${styles.screenLabel}`}>{label}</span>
+            {/* <span className={`label ${styles.screenLabel}`}>{label}</span> */}
             <span className={styles.screenValue}>{loaded?.name ?? emptyText}</span>
           </span>
         </button>
         <HardwareButton
           onClick={() => fileInputRef.current?.click()}
-          label={`Load a local ${isIr ? 'IR' : '.nam'} file instead`}
+          label={`Load ${isIr ? 'IR' : '.nam'} file`}
         ></HardwareButton>
       </div>
       {loadError && <p className={styles.screenError}>{loadError}</p>}

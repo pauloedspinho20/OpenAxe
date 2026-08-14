@@ -204,6 +204,7 @@
   border: 1px solid var(--seam);
   border-radius: var(--r-sm);
   overflow: hidden;
+  height: 100%;
 }
 
 .cardHeader {
@@ -218,14 +219,10 @@
   cursor: pointer;
 }
 
-.cardHeader:hover {
-  background: var(--highlight);
-}
-
 .cardImage {
-  flex-shrink: 0;
   width: 44px;
   height: 44px;
+  flex-shrink: 0;
   object-fit: cover;
   border-radius: var(--r-sm);
   background: var(--panel);
@@ -243,12 +240,23 @@
 .cardVertical .cardImage {
   width: 100%;
   height: 160px;
+  transition: scale 0.2s;
   border-radius: 0;
 }
 
 .cardVertical .cardInfo,
 .cardVertical .libraryInfo {
   padding: 0 var(--sp-3);
+}
+
+.cardVertical .cardHeader:hover .cardImage {
+  scale: 1.05;
+}
+
+.cardVertical .cardImageContainer {
+  width: 100%;
+  height: 160px;
+  overflow: hidden;
 }
 
 .cardInfo {

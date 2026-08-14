@@ -162,9 +162,15 @@ export function GridEditor({
   return (
     <div className={styles.editor}>
       <div className={styles.paletteAndInspector}>
-        <BlockPalette tunerAnalyser={tunerAnalyser} />
-        <BlockHighlight rig={rig} analyser={analyser} />
-        <BlockInspector rig={rig} context={context} />
+        <div className={styles.paletteAndInspectorItem}>
+          <BlockPalette tunerAnalyser={tunerAnalyser} />
+        </div>
+        <div className={styles.paletteAndInspectorItem}>
+          <BlockHighlight rig={rig} analyser={analyser} />
+        </div>
+        <div className={styles.paletteAndInspectorItem}>
+          <BlockInspector rig={rig} context={context} />
+        </div>
       </div>
       <div
         className={styles.wrap}

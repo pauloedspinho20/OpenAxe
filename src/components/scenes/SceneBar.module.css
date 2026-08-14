@@ -175,6 +175,6 @@
 
 @media (max-width: 760px) {
   .bar {
-    padding: var(--sp-3) var(--sp-4);
+    padding: var(--sp-3);
   }
 }

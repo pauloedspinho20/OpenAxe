@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { GridEditor } from './components/grid/GridEditor'
-import { BlockInspector } from './components/grid/BlockInspector'
 import { MidiManager } from './components/midi/MidiManager'
 import { PresetManager } from './components/presets/PresetManager'
 import { SceneBar } from './components/scenes/SceneBar'
@@ -165,8 +164,6 @@ function App() {
           outputSelectionSupported={outputSelectionSupported}
           context={engine.context}
         />
-
-        <BlockInspector rig={engine.rig} context={engine.context} />
       </main>
 
       <footer className={styles.footer}>

@@ -4,15 +4,17 @@
   border: 1px solid var(--seam);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-panel);
-  padding: var(--sp-4) var(--sp-4) var(--sp-5);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--sp-4);
-  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-3);
 }
 
 .body {
