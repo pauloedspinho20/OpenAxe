@@ -2,10 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
+import { useClipGuardStore } from '../state/clipGuardStore'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
+import { useSettingsStore } from '../state/settingsStore'
+import { ClipControl } from './clipControl'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
+
+/** Peak (0..1) at or above which an output frame counts as "clipping". */
+const CLIP_THRESHOLD = 0.98
+/** How long the output must sit at/above the clipping threshold before the guard trips. */
+const CLIP_SUSTAINED_MS = 400
+/** How often the clip guard samples the output analyser. */
+const CLIP_POLL_MS = 100
+/** Grace period after a manual unmute before the guard can trip again. */
+const CLIP_REARM_COOLDOWN_MS = 10_000
 
 export interface AudioEngineState {
   status: EngineStatus
@@ -73,6 +85,47 @@ export function useAudioEngine() {
         // setSinkId can fail if the device disappeared — continue with current output.
       })
   }, [outputDeviceId, state.status])
+
+  // ── Clip guard ──────────────────────────────────────────────────────────
+
+  const autoMuteOnClip = useSettingsStore((s) => s.autoMuteOnClip)
+  const clipMuted = useGraphStore((s) => s.clipMuted)
+  const clipCooldownUntilRef = useRef(0)
+  const wasClipMutedRef = useRef(false)
+
+  // Give the player a moment to breathe (and a chance to lower the level)
+  // each time a clip-mute is released, instead of instantly re-tripping.
+  useEffect(() => {
+    if (wasClipMutedRef.current && !clipMuted) {
+      clipCooldownUntilRef.current = performance.now() + CLIP_REARM_COOLDOWN_MS
+    }
+    wasClipMutedRef.current = clipMuted
+  }, [clipMuted])
+
+  // Watch the output analyser for sustained full-scale signal. When the
+  // protection is enabled and the master is clipping, mute the output and
+  // open the explanation dialog. The muted master goes silent, so the
+  // detector naturally re-arms once the player lowers the level or unmutes.
+  useEffect(() => {
+    if (state.status !== 'ready' || !state.analyser || !autoMuteOnClip || clipMuted) return
+    const analyser = state.analyser
+    const buffer = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>
+    const control = new ClipControl({ threshold: CLIP_THRESHOLD, sustainedMs: CLIP_SUSTAINED_MS })
+    const poll = window.setInterval(() => {
+      const now = performance.now()
+      if (now < clipCooldownUntilRef.current) {
+        control.reset()
+        return
+      }
+      analyser.getByteTimeDomainData(buffer)
+      let peak = 0
+      for (let i = 0; i < buffer.length; i++) {
+        peak = Math.max(peak, Math.abs(buffer[i]! - 128) / 128)
+      }
+      if (control.update(peak, now)) useClipGuardStore.getState().trigger()
+    }, CLIP_POLL_MS)
+    return () => window.clearInterval(poll)
+  }, [state.status, state.analyser, autoMuteOnClip, clipMuted])
 
   // ── Mic connection ──────────────────────────────────────────────────────
 
@@ -195,6 +248,7 @@ export function useAudioEngine() {
   }, [state.status, connectMic])
 
   const powerOff = useCallback(async () => {
+    useClipGuardStore.getState().dismiss()
     unbindRef.current?.()
     unbindRef.current = null
     teardownMic()

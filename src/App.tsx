@@ -7,6 +7,7 @@ import { SceneManager } from './components/scenes/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser'
 import { OnboardingModal } from './components/OnboardingModal'
 import { PowerGate } from './components/PowerGate'
+import { ClipDialog } from './components/ClipDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { HeaderPerfWidget } from './components/HeaderPerfWidget'
 import { HardwareButton } from './components/primitives/HardwareButton'
@@ -197,6 +198,7 @@ function App() {
       <PresetManager rig={engine.rig} context={engine.context} />
       <SceneManager />
       <MidiManager />
+      <ClipDialog />
       <SettingsDialog
         open={settingsOpen}
         onClose={closeSettings}

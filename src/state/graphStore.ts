@@ -28,6 +28,8 @@ export interface GraphState {
   masterMuted: boolean
   /** Programmatic output silence while the tuner dialog is open - separate from the user's saved mute. */
   tunerMuted: boolean
+  /** Programmatic output silence set by the clip guard - separate from the user's saved mute. */
+  clipMuted: boolean
 
   addBlock: (kind: BlockKind, row: number, col: number) => string
   removeBlock: (id: string) => void
@@ -40,6 +42,7 @@ export interface GraphState {
   setMasterLevel: (level: number) => void
   setMasterMuted: (muted: boolean) => void
   setTunerMuted: (muted: boolean) => void
+  setClipMuted: (muted: boolean) => void
   /** Replace the whole graph at once - preset load. */
   loadGraph: (
     blocks: BlockInstance[],
@@ -151,6 +154,7 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
   masterLevel: 1,
   masterMuted: false,
   tunerMuted: false,
+  clipMuted: false,
 
   addBlock: (kind, row, col) => {
     const state = get()
@@ -221,6 +225,7 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
   setMasterLevel: (level) => set({ masterLevel: level }),
   setMasterMuted: (muted) => set({ masterMuted: muted }),
   setTunerMuted: (muted) => set({ tunerMuted: muted }),
+  setClipMuted: (muted) => set({ clipMuted: muted }),
 
   loadGraph: (blocks, edges, masterLevel, masterMuted) =>
     set({ blocks, edges, masterLevel, masterMuted }),

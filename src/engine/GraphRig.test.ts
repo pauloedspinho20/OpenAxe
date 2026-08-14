@@ -181,6 +181,20 @@ describe('GraphRig', () => {
     expect(lastTarget()).toBe(0.5)
   })
 
+  it('silences the output while clip-muted, restoring the saved level after', () => {
+    const masterGain = (
+      rig as unknown as { masterGain: { gain: { setTargetAtTime: ReturnType<typeof vi.fn> } } }
+    ).masterGain
+    rig.setMasterLevel(0.5)
+    const lastTarget = () => masterGain.gain.setTargetAtTime.mock.calls.at(-1)![0]
+
+    rig.setClipMuted(true)
+    expect(lastTarget()).toBe(0)
+
+    rig.setClipMuted(false)
+    expect(lastTarget()).toBe(0.5)
+  })
+
   it('counts only Amp/Cab blocks with an actual model/IR loaded', async () => {
     const ampId = await rig.addBlock('amp', 0, 0)
     await rig.addBlock('cab', 0, 1)

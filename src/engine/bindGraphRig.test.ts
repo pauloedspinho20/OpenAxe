@@ -19,6 +19,7 @@ function createMockRig(): {
     setMasterLevel: vi.fn(),
     setMasterMuted: vi.fn(),
     setTunerMuted: vi.fn(),
+    setClipMuted: vi.fn(),
     listBlockIds: vi.fn(() => []),
     listEdgeIds: vi.fn(() => []),
   }
@@ -47,6 +48,7 @@ describe('bindGraphRig', () => {
       masterLevel: 1,
       masterMuted: false,
       tunerMuted: false,
+      clipMuted: false,
     })
   })
 
@@ -58,6 +60,7 @@ describe('bindGraphRig', () => {
     expect(rig.setMasterLevel).toHaveBeenCalledWith(1)
     expect(rig.setMasterMuted).toHaveBeenCalledWith(false)
     expect(rig.setTunerMuted).toHaveBeenCalledWith(false)
+    expect(rig.setClipMuted).toHaveBeenCalledWith(false)
   })
 
   it('adds a block that appears in the store but not yet in the rig', async () => {
@@ -136,6 +139,17 @@ describe('bindGraphRig', () => {
     await flush()
 
     expect(rig.setTunerMuted).toHaveBeenCalledWith(true)
+  })
+
+  it('pushes the clip mute flag', async () => {
+    const rig = createMockRig()
+    bindGraphRig(useGraphStore, rig)
+    await flush()
+
+    useGraphStore.getState().setClipMuted(true)
+    await flush()
+
+    expect(rig.setClipMuted).toHaveBeenCalledWith(true)
   })
 
   it('stops applying updates once unbound', async () => {

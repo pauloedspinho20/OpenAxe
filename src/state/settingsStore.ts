@@ -13,9 +13,12 @@ export interface SettingsState {
   open: boolean
   /** Slim-size fraction in [0.01, 1] - 1 is full quality/fidelity. */
   namQuality: number
+  /** Safety net: mute the master output and show an explanation dialog when it clips. */
+  autoMuteOnClip: boolean
   openSettings: () => void
   closeSettings: () => void
   setNamQuality: (quality: number) => void
+  setAutoMuteOnClip: (enabled: boolean) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -23,13 +26,18 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       open: false,
       namQuality: 1,
+      autoMuteOnClip: true,
       openSettings: () => set({ open: true }),
       closeSettings: () => set({ open: false }),
       setNamQuality: (quality) => set({ namQuality: Math.min(1, Math.max(0.01, quality)) }),
+      setAutoMuteOnClip: (enabled) => set({ autoMuteOnClip: enabled }),
     }),
     {
       name: 'nam-web-studio-settings',
-      partialize: (state) => ({ namQuality: state.namQuality }),
+      partialize: (state) => ({
+        namQuality: state.namQuality,
+        autoMuteOnClip: state.autoMuteOnClip,
+      }),
     },
   ),
 )

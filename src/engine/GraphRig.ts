@@ -51,6 +51,7 @@ export class GraphRig {
   private masterLevel = 1
   private masterMuted = false
   private tunerMuted = false
+  private clipMuted = false
   private disposed = false
   private nextId = 0
 
@@ -290,8 +291,14 @@ export class GraphRig {
     this.applyMasterGain()
   }
 
+  /** Programmatic output silence set by the clip guard - independent of the saved master mute. */
+  setClipMuted(muted: boolean): void {
+    this.clipMuted = muted
+    this.applyMasterGain()
+  }
+
   private applyMasterGain(): void {
-    const gain = this.masterMuted || this.tunerMuted ? 0 : this.masterLevel
+    const gain = this.masterMuted || this.tunerMuted || this.clipMuted ? 0 : this.masterLevel
     this.masterGain.gain.setTargetAtTime(gain, this.context.currentTime, 0.01)
   }
 

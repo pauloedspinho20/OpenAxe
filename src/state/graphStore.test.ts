@@ -36,6 +36,7 @@ describe('graphStore', () => {
       masterLevel: 1,
       masterMuted: false,
       tunerMuted: false,
+      clipMuted: false,
     })
   })
 
@@ -46,6 +47,7 @@ describe('graphStore', () => {
     expect(state.masterLevel).toBe(1)
     expect(state.masterMuted).toBe(false)
     expect(state.tunerMuted).toBe(false)
+    expect(state.clipMuted).toBe(false)
   })
 
   it('addBlock appends a block with empty params at the given position', () => {
@@ -187,14 +189,16 @@ describe('graphStore', () => {
     expect(useGraphStore.getState().blocks.find((x) => x.id === 'a')?.col).toBe(5)
   })
 
-  it('setMasterLevel, setMasterMuted and setTunerMuted set independent fields', () => {
+  it('setMasterLevel, setMasterMuted, setTunerMuted and setClipMuted set independent fields', () => {
     useGraphStore.getState().setMasterLevel(0.6)
     useGraphStore.getState().setMasterMuted(true)
     useGraphStore.getState().setTunerMuted(true)
+    useGraphStore.getState().setClipMuted(true)
     const state = useGraphStore.getState()
     expect(state.masterLevel).toBe(0.6)
     expect(state.masterMuted).toBe(true)
     expect(state.tunerMuted).toBe(true)
+    expect(state.clipMuted).toBe(true)
   })
 
   it('loadGraph replaces the entire graph atomically', () => {

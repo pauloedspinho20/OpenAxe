@@ -69,6 +69,8 @@ export function SettingsDialog({
   const io = useIOStore()
   const namQuality = useSettingsStore((s) => s.namQuality)
   const setNamQuality = useSettingsStore((s) => s.setNamQuality)
+  const autoMuteOnClip = useSettingsStore((s) => s.autoMuteOnClip)
+  const setAutoMuteOnClip = useSettingsStore((s) => s.setAutoMuteOnClip)
   const auth = useTone3000Auth()
 
   const [busy, setBusy] = useState<string | null>(null)
@@ -275,6 +277,23 @@ export function SettingsDialog({
                 Output device selection isn't supported in this browser.
               </p>
             )}
+          </section>
+
+          {/* Output protection */}
+          <section className={styles.section}>
+            <span className={`label ${styles.sectionLabel}`}>Output Protection</span>
+            <div className={styles.row}>
+              <Toggle
+                label="Auto-mute on clipping"
+                checked={autoMuteOnClip}
+                onChange={setAutoMuteOnClip}
+              />
+              <p className={styles.sectionHint}>
+                When the master output clips, the audio is muted and an explanation dialog opens,
+                protecting your speakers and ears. Turn this off and the limiter alone will handle
+                loud signals.
+              </p>
+            </div>
           </section>
 
           {/* Buffer size / latency */}
