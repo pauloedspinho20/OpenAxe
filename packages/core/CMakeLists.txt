@@ -49,8 +49,83 @@ else()
     "--recursive -- packages/core/third_party/nam-core")
 endif()
 
-# The other five vendored DSP libraries (dragonfly-reverb, analog-tape-model,
-# byod, lsp-plugins, rtneural) are not wrapped or built yet - see README.md.
+# --- Dragonfly Hall Reverb wrapper (issue #14) ---
+# Each reverb algorithm (hall/room/plate/early-reflections) lives in its own
+# self-contained DSP.{hpp,cpp} under plugins/<name>/, separate from the DPF
+# plugin/UI scaffolding - only that gets compiled, not DPF itself. Two
+# wrinkles this works around:
+#  1. The underlying freeverb3 library (common/freeverb/) uses dynamic
+#     exception specifications removed in C++17, so it (and DSP.cpp, and
+#     this wrapper's own .cpp, which all transitively include those
+#     headers) must compile at C++14 - a separate target with its own
+#     CXX_STANDARD override, linked into the C++20 nam_studio_core target
+#     (mixing standards across TUs in one binary is fine; only same-TU
+#     consistency matters).
+#  2. DSP.cpp includes two small DPF header-only utilities
+#     (DistrhoPlugin.hpp, extra/ScopedDenormalDisable.hpp) despite never
+#     using DPF's actual plugin machinery, so Dragonfly's own nested `dpf`
+#     submodule needs initializing too (see README.md).
+set(DRAGONFLY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dragonfly-reverb")
+if(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
+   AND EXISTS "${DRAGONFLY_DIR}/dpf/distrho/DistrhoPlugin.hpp")
+  # Exact freeverb3 file list Dragonfly's own Makefile builds for the Hall
+  # algorithm specifically (see plugins/dragonfly-hall-reverb/Makefile) -
+  # NOT a directory glob: common/freeverb/ also has files (blockDelay.cpp,
+  # compmodel.cpp, etc.) used only by other Dragonfly algorithms, which
+  # need the external FFTW library. Hall only needs the bundled KISS FFT.
+  set(FREEVERB3_SOURCES
+    "${DRAGONFLY_DIR}/common/freeverb/allpass.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/biquad.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/comb.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/delay.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/delayline.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/earlyref.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/efilter.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/nrev.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/nrevb.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/progenitor.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/progenitor2.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/revbase.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/slot.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/strev.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/utils.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/zrev.cpp"
+    "${DRAGONFLY_DIR}/common/freeverb/zrev2.cpp"
+    "${DRAGONFLY_DIR}/common/kiss_fft/kiss_fft.c"
+    "${DRAGONFLY_DIR}/common/kiss_fft/kiss_fftr.c"
+  )
+  add_library(dragonfly_hall_reverb_vendor STATIC
+    ${FREEVERB3_SOURCES}
+    "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
+    src/dsp/dragonfly_hall_reverb.cpp
+  )
+  target_include_directories(dragonfly_hall_reverb_vendor PRIVATE
+    "${DRAGONFLY_DIR}/common"
+    "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb"
+    "${DRAGONFLY_DIR}/dpf/distrho"
+    "${DRAGONFLY_DIR}/dpf/distrho/extra"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  )
+  set_target_properties(dragonfly_hall_reverb_vendor PROPERTIES
+    CXX_STANDARD 14
+    CXX_STANDARD_REQUIRED ON
+  )
+  # freeverb3 picks its internal sample type (float/double/long double) via
+  # one of these macros - Dragonfly's own Makefile always builds with
+  # LIBFV3_FLOAT.
+  target_compile_definitions(dragonfly_hall_reverb_vendor PRIVATE LIBFV3_FLOAT)
+  target_link_libraries(nam_studio_core PRIVATE dragonfly_hall_reverb_vendor)
+  set(NAM_STUDIO_HAS_DRAGONFLY TRUE)
+else()
+  message(WARNING
+    "packages/core/third_party/dragonfly-reverb's dpf submodule isn't "
+    "initialized - the Dragonfly Hall Reverb wrapper will not build. Run: "
+    "git -C packages/core/third_party/dragonfly-reverb submodule update "
+    "--init --depth 1 -- dpf")
+endif()
+
+# The remaining three vendored DSP libraries (analog-tape-model, byod,
+# lsp-plugins) are not wrapped or built yet - see README.md.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CMakeLists.txt")
   add_subdirectory(third_party)
 endif()
