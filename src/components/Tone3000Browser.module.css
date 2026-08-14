@@ -57,31 +57,6 @@
   background: var(--accent-dim);
 }
 
-.close {
-  width: 24px;
-  height: 24px;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--ink-3);
-  background: none;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.close:hover {
-  color: var(--led-hot);
-}
-
-.body {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-}
-
 .filters {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -285,29 +260,6 @@
   color: var(--ink-3);
 }
 
-.importBtn {
-  flex-shrink: 0;
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  padding: var(--sp-1) var(--sp-2);
-  cursor: pointer;
-}
-
-.importBtn:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.importBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .libraryRow {
   display: flex;
   align-items: center;
@@ -321,23 +273,6 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-
-.removeBtn {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--ink-3);
-  background: none;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.removeBtn:hover {
-  color: var(--led-hot);
 }
 
 .pagination {

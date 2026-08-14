@@ -14,7 +14,7 @@ import {
 import { importTone3000Asset } from '../tone3000/importService'
 import type { BlockLoadTarget } from '../tone3000/importService'
 import type { Tone, Tone3000Model } from '../tone3000/types'
-import { Dialog } from './shared'
+import { Dialog, OutlineButton } from './shared'
 import { HardwareButton } from './primitives/HardwareButton'
 import styles from './Tone3000Browser.module.css'
 
@@ -546,9 +546,7 @@ export function Tone3000Browser({ target, context }: Props) {
                                   {model.size} · A{model.architecture_version}
                                 </span>
                               </span>
-                              <button
-                                type="button"
-                                className={styles.importBtn}
+                              <OutlineButton
                                 disabled={importingId === model.id.toString()}
                                 onClick={() => void runImport(model, tone)}
                               >
@@ -559,7 +557,7 @@ export function Tone3000Browser({ target, context }: Props) {
                                     : cached
                                       ? 'RELOAD'
                                       : 'IMPORT'}
-                              </button>
+                              </OutlineButton>
                             </li>
                           )
                         })}
@@ -625,22 +623,16 @@ export function Tone3000Browser({ target, context }: Props) {
                       {entry.toneTitle ? ` · ${entry.toneTitle}` : ''}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.importBtn}
-                    disabled={!target}
-                    onClick={() => void reloadFromLibrary(entry)}
-                  >
+                  <OutlineButton disabled={!target} onClick={() => void reloadFromLibrary(entry)}>
                     LOAD
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.removeBtn}
+                  </OutlineButton>
+                  <OutlineButton
+                    variant="danger"
                     onClick={() => void Tone3000Library.remove(entry.id)}
                     aria-label={`Remove ${entry.name} from library`}
                   >
                     ×
-                  </button>
+                  </OutlineButton>
                 </div>
               </li>
             ))}
