@@ -166,6 +166,21 @@
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": [],
       "dependsOn": ["C++: Build"]
+    },
+    {
+      "label": "Setup & run everything (web + C++)",
+      "detail": "One-shot local setup: pnpm install, init/configure/build/test the C++ engine, then start the web dev server",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Install dependencies",
+        "C++: Init submodules",
+        "C++: Configure",
+        "C++: Build",
+        "C++: Test",
+        "Dev server"
+      ],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }
