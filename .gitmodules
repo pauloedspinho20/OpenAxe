@@ -18,7 +18,3 @@
 	path = packages/core/third_party/nam-core
 	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
 	shallow = true
-[submodule "packages/core/third_party/rtneural"]
-	path = packages/core/third_party/rtneural
-	url = https://github.com/jatinchowdhury18/RTNeural.git
-	shallow = true

@@ -39,7 +39,7 @@ impulse through it, and asserts every output sample is finite.
 
 ## Vendored third-party DSP libraries
 
-All added as git submodules under `third_party/`. Two of the six URLs in
+All added as git submodules under `third_party/`. Two of the five URLs in
 issue #14's original text were wrong/renamed — corrected here after
 verifying each repo directly on GitHub:
 
@@ -50,7 +50,6 @@ verifying each repo directly on GitHub:
 | `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                |
 | `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | No                                |
 | `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                |
-| `rtneural`          | [`jatinchowdhury18/RTNeural`](https://github.com/jatinchowdhury18/RTNeural)               | BSD-3   | No                                |
 
 `nam-core` additionally vendors its own nested submodules (Eigen from
 `gitlab.com/libeigen/eigen`, plus `AudioDSPTools`) — after cloning this repo,
@@ -60,20 +59,42 @@ run:
 git submodule update --init --recursive -- packages/core/third_party/nam-core
 ```
 
-The other five libraries are registered but not initialized/built — no
+The other four libraries are registered but not initialized/built — no
 `third_party/CMakeLists.txt` exists yet, since each has real build-flag
-decisions (RTNeural's SIMD/Eigen/STL backend choice, Dragonfly Reverb's
-upstream dependency on DPF/DISTRHO plugin scaffolding, LSP's own build
-system) that belong with whichever PR actually wraps it. **Deliberately no
-standalone `third_party/eigen` submodule** — adding a second,
-independently-versioned Eigen copy alongside NAM-core's own pinned one would
-create a "which one wins" conflict for no benefit yet; RTNeural's Eigen
-needs get resolved when RTNeural is actually wrapped.
+decisions (Dragonfly Reverb's upstream dependency on DPF/DISTRHO plugin
+scaffolding, BYOD/AnalogTapeModel both being JUCE-based plugins whose DSP
+classes need extracting independently of their surrounding plugin/app
+scaffolding, LSP's own build system) that belong with whichever PR actually
+wraps each one.
+
+**RTNeural was evaluated and deliberately dropped, not vendored.** It's a
+generic neural-inference engine (no built-in amp/pedal-specific behavior at
+all) used elsewhere in the Chowdhury-DSP ecosystem for standalone
+neural-pedal captures (e.g. a Klon Centaur emulation). This project doesn't
+need a second neural engine for that: pedal/outboard gear will be modeled
+as NAM captures too (NAM's format isn't amp-specific — it captures any
+nonlinear audio device), reusing the same `NamAmp` wrapper and graph engine
+already built here rather than adding a second, narrower inference engine
+alongside it.
+
+This also means the remaining four libraries' effect wrapping doesn't
+depend on RTNeural, despite two of them referencing it as their own nested
+submodule: BYOD (`modules/RTNeural`) and AnalogTapeModel
+(`Plugin/modules/RTNeural`) both pull it in for a few of their neural/
+Centaur-style optional modules, but the bulk of both libraries' effects
+(diode clippers, tube/transistor stages, tape hysteresis and wow/flutter)
+are pure DSP with no neural component. Wrapping those means extracting the
+specific DSP processor class(es) for the chosen effect directly — the same
+pattern already used for NAMCore (glob just the DSP sources, skip the
+plugin/tool/test scaffolding) — which naturally avoids RTNeural, JUCE, and
+each library's other plugin-framework dependencies entirely. Dragonfly
+Reverb (DPF-based, no RTNeural) and LSP Suite (no git submodules at all)
+don't raise this concern in the first place.
 
 ## Non-goals (not yet — tracked for follow-up work)
 
-- DSP wrappers for the other five libraries (reverb, tape delay, drive,
-  compression/EQ, neural pedal inference).
+- DSP wrappers for the other four libraries (reverb, tape delay/drive,
+  compression/EQ).
 - `extern "C"` audio-processing entrypoints (process, load-model,
   parameters) — needs a real-time wiring design first.
 - Wiring the graph engine and the NAM wrapper together (they're independent,
