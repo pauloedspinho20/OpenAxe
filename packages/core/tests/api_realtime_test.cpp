@@ -141,6 +141,27 @@ void TestEndToEndDriveRig() {
   nam_studio_graph_destroy(graph);
 }
 
+void TestDriveModelSwitchOnlyAffectsThatBlock() {
+  NamStudioGraph* graph = nam_studio_graph_create();
+
+  const int32_t drive_a = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DRIVE, 0, 0);
+  const int32_t drive_b = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DRIVE, 1, 0);
+  const int32_t diode_clipper_param_count = nam_studio_block_param_count(graph, drive_a);
+  NAM_EXPECT(diode_clipper_param_count == nam_studio_block_param_count(graph, drive_b));
+
+  nam_studio_set_drive_model(graph, drive_a, NAM_STUDIO_DRIVE_TUBE_SCREAMER);
+  NAM_EXPECT(nam_studio_block_param_count(graph, drive_a) != diode_clipper_param_count);
+  NAM_EXPECT(nam_studio_block_param_count(graph, drive_b) == diode_clipper_param_count);  // untouched
+
+  nam_studio_set_drive_model(graph, drive_b, NAM_STUDIO_DRIVE_ZEN_DRIVE);
+  NAM_EXPECT(nam_studio_block_param_count(graph, drive_b) != diode_clipper_param_count);
+
+  nam_studio_set_drive_model(graph, drive_a, NAM_STUDIO_DRIVE_MXR_DISTORTION);
+  NAM_EXPECT(nam_studio_block_param_count(graph, drive_a) != diode_clipper_param_count);
+
+  nam_studio_graph_destroy(graph);
+}
+
 void TestUnknownBlockCallsAreSafeNoOps() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
@@ -164,6 +185,7 @@ int main() {
   TestUnwrappedKindPassesAudioThrough();
   TestReverbAlgorithmSwitchOnlyAffectsThatBlock();
   TestEndToEndDriveRig();
+  TestDriveModelSwitchOnlyAffectsThatBlock();
   TestUnknownBlockCallsAreSafeNoOps();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

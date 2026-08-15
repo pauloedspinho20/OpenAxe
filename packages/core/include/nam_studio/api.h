@@ -56,10 +56,13 @@ typedef enum NamStudioReverbAlgorithm {
 } NamStudioReverbAlgorithm;
 
 // Only meaningful for NAM_STUDIO_BLOCK_DRIVE blocks - selects which wrapped
-// BYOD drive/fuzz model backs the block. Only one model exists so far; new
-// drive blocks default to it.
+// BYOD drive/fuzz model backs the block. New drive blocks default to
+// NAM_STUDIO_DRIVE_DIODE_CLIPPER.
 typedef enum NamStudioDriveModel {
   NAM_STUDIO_DRIVE_DIODE_CLIPPER,
+  NAM_STUDIO_DRIVE_TUBE_SCREAMER,
+  NAM_STUDIO_DRIVE_ZEN_DRIVE,
+  NAM_STUDIO_DRIVE_MXR_DISTORTION,
 } NamStudioDriveModel;
 
 // nam_studio_load_nam_model's result - mirrors nam_studio::dsp::NamLoadError.

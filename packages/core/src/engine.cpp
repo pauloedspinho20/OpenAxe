@@ -12,6 +12,9 @@
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
 #include "nam_studio/dsp/dragonfly_room_reverb.h"
+#include "nam_studio/dsp/mxr_distortion.h"
+#include "nam_studio/dsp/tube_screamer.h"
+#include "nam_studio/dsp/zen_drive.h"
 
 namespace nam_studio::engine {
 namespace {
@@ -46,7 +49,8 @@ int PortCountFor(graph::BlockKind kind) {
 
 using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallReverb,
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
-                                 dsp::DragonflyEarlyReflections, dsp::DiodeClipper>;
+                                 dsp::DragonflyEarlyReflections, dsp::DiodeClipper, dsp::TubeScreamer,
+                                 dsp::ZenDrive, dsp::MxrDistortion>;
 
 }  // namespace
 
@@ -534,6 +538,18 @@ void AudioEngine::SetDriveModel(BlockId id, DriveModel model) {
     case DriveModel::kDiodeClipper:
       state->dsp.emplace<dsp::DiodeClipper>();
       state->param_count = dsp::DiodeClipper::ParamCount();
+      break;
+    case DriveModel::kTubeScreamer:
+      state->dsp.emplace<dsp::TubeScreamer>();
+      state->param_count = dsp::TubeScreamer::ParamCount();
+      break;
+    case DriveModel::kZenDrive:
+      state->dsp.emplace<dsp::ZenDrive>();
+      state->param_count = dsp::ZenDrive::ParamCount();
+      break;
+    case DriveModel::kMxrDistortion:
+      state->dsp.emplace<dsp::MxrDistortion>();
+      state->param_count = dsp::MxrDistortion::ParamCount();
       break;
   }
 

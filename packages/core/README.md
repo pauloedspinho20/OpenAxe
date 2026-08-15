@@ -58,6 +58,30 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   `BlockKind`. Wired all the way through to the web app (`apps/web/src/
 effects/Drive.ts`, `apps/web/public/wasm-core/driveWorklet.js`) - the
   app's first distortion/drive effect, no prior implementation replaced.
+- **Tube Screamer, Zen Drive, MXR Distortion+** (`include/nam_studio/dsp/{tube_screamer,zen_drive,mxr_distortion}.h`
+  - matching `src/dsp/*.cpp`) — three more BYOD WDF circuits reimplemented
+    the same way as Diode Clipper (own hand-copied `chowdsp_wdf` circuit, no
+    vendored BYOD source, no parameter smoothing), each individually verified
+    buildable and correct before being added. All three join `DiodeClipper`
+    as additional `DriveModel` enum values (`kTubeScreamer`/`kZenDrive`/
+    `kMxrDistortion`) on the existing `kDrive` `BlockKind` - no new `BlockKind`
+    or ABI shape needed, exactly the seam that enum was built for. Shared
+    helpers (`internal::LogPot`/`InverseLogPot`/`SkewedRange`/`DcBlocker`,
+    the `NonInvertingOpAmpRType` 3-port scattering matrix Tube Screamer and
+    Zen Drive both use) live in `src/dsp/internal/wdf_common.h`, extracted
+    once a second wrapper needed the same audio-taper/DC-blocking math Diode
+    Clipper had already hand-derived. Not yet exported from the WASM build's
+    `EXPORTED_FUNCTIONS` or reachable from the web app's model-selector UI -
+    same "only export what's currently used" deferral `nam_studio_set_drive_model`
+    itself already had with only one model available; still true with four.
+    Two circuit-accurate wrinkles worth knowing if you touch these: Zen Drive
+    and MXR Distortion+ both model a real single-supply op-amp bias network
+    (a `setVoltage(4.5f)` call in their `Prepare`), so a freshly-`Reset`
+    instance has a genuine power-on transient/DC bias in its first samples
+    that decays through `DcBlocker` rather than starting silent - their own
+    tests warm up on silence before measuring steady-state behavior, and
+    check stereo independence by comparing two instances' left-channel output
+    rather than asserting a silent channel stays silent.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -78,12 +102,17 @@ have failed with duplicate symbols before that fix). `diode_clipper_test`
 sweeps every parameter and processes a loud sine through it, asserting the
 output stays finite and its peak is genuinely compressed below the linear
 input level (proof the nonlinearity actually engages, not just that nothing
-crashed) and that channels don't leak into each other. `engine_test` and
-`api_realtime_test` each add a `kDrive`/`NAM_STUDIO_BLOCK_DRIVE` case doing
-the same real-nonlinearity check through the engine layer and the full
-`extern "C"` surface respectively (not just the `DiodeClipper` class
-directly), plus confirming `SetDriveModel`/`nam_studio_set_drive_model` is
-a safe no-op on a block of the wrong kind.
+crashed) and that channels don't leak into each other. `tube_screamer_test`/
+`zen_drive_test`/`mxr_distortion_test` follow the identical pattern for the
+other three drive models (see the bias-network note above for why the
+latter two warm up on silence and check independence via two-instance
+comparison rather than a literal silent-in/silent-out assertion). `engine_test`
+and `api_realtime_test` each add a `kDrive`/`NAM_STUDIO_BLOCK_DRIVE` case
+doing the same real-nonlinearity check through the engine layer and the
+full `extern "C"` surface respectively (not just the `DiodeClipper` class
+directly), plus confirming `SetDriveModel`/`nam_studio_set_drive_model`
+switches models independently per-block and is a safe no-op on a block of
+the wrong kind.
 
 ## Vendored third-party DSP libraries
 
@@ -91,13 +120,13 @@ All added as git submodules under `third_party/`. Two of the five URLs in
 issue #14's original text were wrong/renamed — corrected here after
 verifying each repo directly on GitHub:
 
-| Path                | Upstream                                                                                  | License | Wired into the build?                                         |
-| ------------------- | ----------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
-| `nam-core`          | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore)   | MIT     | **Yes** — see `nam_amp.cpp` above                             |
-| `dragonfly-reverb`  | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)     | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above               |
-| `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | **Partially** — `chowdsp_wdf` only (Diode Clipper), see below |
-| `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                                            |
-| `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                                            |
+| Path                | Upstream                                                                                  | License | Wired into the build?                                          |
+| ------------------- | ----------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------- |
+| `nam-core`          | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore)   | MIT     | **Yes** — see `nam_amp.cpp` above                              |
+| `dragonfly-reverb`  | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)     | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above                |
+| `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | **Partially** — `chowdsp_wdf` only (4 drive models), see below |
+| `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                                             |
+| `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                                             |
 
 Three of these libraries additionally vendor their own nested submodules —
 after cloning this repo, run:
@@ -209,9 +238,10 @@ git submodules at all) doesn't raise this concern in the first place.
 ## Non-goals (not yet — tracked for follow-up work)
 
 - DSP wrappers for the rest of AnalogTapeModel (tape delay), BYOD (BYOD has
-  43+ other effects beyond Diode Clipper — distortion/fuzz/modulation), and
-  all of LSP Suite (compression/EQ). Their block kinds pass audio through
-  unchanged in `AudioEngine` until they're wrapped.
+  39+ other effects beyond the 4 drive models wrapped so far — modulation/
+  fuzz/EQ, e.g. Big Muff, still a candidate for follow-up), and all of LSP
+  Suite (compression/EQ). Their block kinds pass audio through unchanged in
+  `AudioEngine` until they're wrapped.
 - Preset/JSON (de)serialization.
 - Full lock-free concurrency: `Process()` itself is allocation-free and its
   params are lock-free atomics, but topology mutation
@@ -229,11 +259,12 @@ git submodules at all) doesn't raise this concern in the first place.
 ## Build verification status
 
 **Native (macOS, this environment): verified, not just authored.** CMake
-4.4.2 configures, builds, and runs the full CTest suite (12/12 passing,
+4.4.2 configures, builds, and runs the full CTest suite (15/15 passing,
 including the real NAM model load-and-process test, all four Dragonfly
 Reverb algorithms' real impulse-response tests, the combined-binary
-symbol-isolation regression test, and the Diode Clipper's real nonlinear-
-clipping test) against Debug builds:
+symbol-isolation regression test, and all four drive models' (Diode
+Clipper, Tube Screamer, Zen Drive, MXR Distortion+) real nonlinear-clipping
+tests) against Debug builds:
 
 ```bash
 cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug

@@ -15,6 +15,9 @@
 #include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
+#include "nam_studio/dsp/mxr_distortion.h"
+#include "nam_studio/dsp/tube_screamer.h"
+#include "nam_studio/dsp/zen_drive.h"
 #include "test_harness.h"
 
 using nam_studio::engine::AudioEngine;
@@ -122,6 +125,25 @@ void TestDriveDefaultsToDiodeClipperAndProcessesRealAudio() {
   NAM_EXPECT(engine.ParamCount(reverb) == nam_studio::dsp::DragonflyHallReverb::ParamCount());
 }
 
+void TestDriveModelSwitchOnlyAffectsThatBlock() {
+  AudioEngine engine;
+  const BlockId drive_a = engine.AddBlock(BlockKind::kDrive, 0, 0);
+  const BlockId drive_b = engine.AddBlock(BlockKind::kDrive, 1, 0);
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::DiodeClipper::ParamCount());
+  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::DiodeClipper::ParamCount());
+
+  engine.SetDriveModel(drive_a, DriveModel::kTubeScreamer);
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::TubeScreamer::ParamCount());
+  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::DiodeClipper::ParamCount());  // untouched
+
+  engine.SetDriveModel(drive_b, DriveModel::kZenDrive);
+  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::ZenDrive::ParamCount());
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::TubeScreamer::ParamCount());  // untouched
+
+  engine.SetDriveModel(drive_a, DriveModel::kMxrDistortion);
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::MxrDistortion::ParamCount());
+}
+
 void TestUnknownBlockIsSafeNoOp() {
   AudioEngine engine;
   constexpr BlockId kUnknown = 999;
@@ -142,6 +164,7 @@ int main() {
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
   TestDriveDefaultsToDiodeClipperAndProcessesRealAudio();
+  TestDriveModelSwitchOnlyAffectsThatBlock();
   TestUnknownBlockIsSafeNoOp();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

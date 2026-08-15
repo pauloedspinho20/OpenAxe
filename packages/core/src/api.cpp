@@ -71,6 +71,12 @@ nam_studio::engine::DriveModel ToDriveModel(NamStudioDriveModel model) {
   switch (model) {
     case NAM_STUDIO_DRIVE_DIODE_CLIPPER:
       return DriveModel::kDiodeClipper;
+    case NAM_STUDIO_DRIVE_TUBE_SCREAMER:
+      return DriveModel::kTubeScreamer;
+    case NAM_STUDIO_DRIVE_ZEN_DRIVE:
+      return DriveModel::kZenDrive;
+    case NAM_STUDIO_DRIVE_MXR_DISTORTION:
+      return DriveModel::kMxrDistortion;
   }
   return DriveModel::kDiodeClipper;  // unreachable for a valid enum value
 }

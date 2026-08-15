@@ -46,13 +46,17 @@ enum class ReverbAlgorithm {
   kEarlyReflections,
 };
 
-// Only one model so far (Diode Clipper) - this exists so future BYOD
-// drive/fuzz wraps (Big Muff, Tube Screamer, etc., once each is
-// individually verified buildable the way Diode Clipper was) have a seam
-// to plug into without a new BlockKind or ABI shape, mirroring
-// ReverbAlgorithm's own role for kReverb.
+// The seam future BYOD drive/fuzz wraps plug into without a new BlockKind
+// or ABI shape, mirroring ReverbAlgorithm's own role for kReverb. Tube
+// Screamer, Zen Drive, and MXR Distortion joined Diode Clipper here once
+// each was individually verified buildable the same way (see their own
+// wrapper .cpp files) - Big Muff and the rest of BYOD's 43+ effects are
+// still candidates for follow-up additions.
 enum class DriveModel {
   kDiodeClipper,
+  kTubeScreamer,
+  kZenDrive,
+  kMxrDistortion,
 };
 
 struct ParamDescriptor {
