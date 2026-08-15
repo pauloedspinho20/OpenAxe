@@ -27,11 +27,11 @@ else()
   message(WARNING "Skipping nam_amp_test - packages/core/third_party/nam-core not initialized")
 endif()
 
-if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY)
-  # engine.cpp (issue #14's real-time ABI) instantiates both NamAmp and all
-  # 4 Dragonfly wrappers unconditionally - see CMakeLists.txt's comment on
-  # nam_studio_core - so anything that links it needs both present, unlike
-  # the single-DSP-family tests above.
+if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_DIODE_CLIPPER)
+  # engine.cpp (issue #14's real-time ABI) instantiates NamAmp, all 4
+  # Dragonfly wrappers, and DiodeClipper unconditionally - see
+  # CMakeLists.txt's comment on nam_studio_core - so anything that links it
+  # needs all three present, unlike the single-DSP-family tests above.
   add_executable(engine_test engine_test.cpp)
   target_link_libraries(engine_test PRIVATE nam_studio_core)
   add_test(NAME engine_test COMMAND engine_test)
@@ -46,7 +46,7 @@ if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY)
     NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
   add_test(NAME api_realtime_test COMMAND api_realtime_test)
 else()
-  message(WARNING "Skipping engine_test/api_realtime_test - both nam-core and dragonfly-reverb submodules must be initialized")
+  message(WARNING "Skipping engine_test/api_realtime_test - nam-core, dragonfly-reverb, and byod's chowdsp_wdf submodules must all be initialized")
 endif()
 
 if(NAM_STUDIO_HAS_DRAGONFLY)

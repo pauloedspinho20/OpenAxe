@@ -49,7 +49,15 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   1N4148], diode count), reimplemented from BYOD's `DiodeClipperWDF` using
   `chowdsp_wdf`'s header-only WDF primitives directly. Not a vendored
   `#include` of BYOD's own file — see "BYOD" below for why. Mono per
-  channel, run independently per channel like the Dragonfly reverbs.
+  channel, run independently per channel like the Dragonfly reverbs. Wired
+  into a new `kDrive` `BlockKind` (`block.h`) - the first effect kind added
+  since #13's original scaffold, since no "drive"/distortion kind existed
+  to plug into. A `DriveModel` enum + `AudioEngine::SetDriveModel` (mirrors
+  `ReverbAlgorithm`/`SetReverbAlgorithm`) is the seam future BYOD drive/fuzz
+  wraps plug into as additional models, without needing another new
+  `BlockKind`. Wired all the way through to the web app (`apps/web/src/
+effects/Drive.ts`, `apps/web/public/wasm-core/driveWorklet.js`) - the
+  app's first distortion/drive effect, no prior implementation replaced.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -70,7 +78,12 @@ have failed with duplicate symbols before that fix). `diode_clipper_test`
 sweeps every parameter and processes a loud sine through it, asserting the
 output stays finite and its peak is genuinely compressed below the linear
 input level (proof the nonlinearity actually engages, not just that nothing
-crashed) and that channels don't leak into each other.
+crashed) and that channels don't leak into each other. `engine_test` and
+`api_realtime_test` each add a `kDrive`/`NAM_STUDIO_BLOCK_DRIVE` case doing
+the same real-nonlinearity check through the engine layer and the full
+`extern "C"` surface respectively (not just the `DiodeClipper` class
+directly), plus confirming `SetDriveModel`/`nam_studio_set_drive_model` is
+a safe no-op on a block of the wrong kind.
 
 ## Vendored third-party DSP libraries
 
@@ -198,21 +211,18 @@ git submodules at all) doesn't raise this concern in the first place.
 - DSP wrappers for the rest of AnalogTapeModel (tape delay), BYOD (BYOD has
   43+ other effects beyond Diode Clipper — distortion/fuzz/modulation), and
   all of LSP Suite (compression/EQ). Their block kinds pass audio through
-  unchanged in `AudioEngine` until they're wrapped. Diode Clipper isn't
-  wired into `AudioEngine`/`api.h` yet either — no `BlockKind` exists for it
-  (unlike Reverb, which already had one from #13's original scaffold) — see
-  its own section above.
+  unchanged in `AudioEngine` until they're wrapped.
 - Preset/JSON (de)serialization.
 - Full lock-free concurrency: `Process()` itself is allocation-free and its
   params are lock-free atomics, but topology mutation
   (add/remove/connect/disconnect) and NAM model loading are not claimed safe
   to call concurrently with `Process()` — no real host drives this from an
-  audio thread yet (native tests + one browser AudioWorklet, see below).
-- WASM/browser UI wiring beyond Reverb — issue #22's first slice
-  (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`) only calls
-  `create`/`add_block`/`connect`/`reset`/`process`/`set_param`; NAM model
-  loading, metering, and reverb algorithm switching aren't wired into the
-  web app yet. Diode Clipper isn't wired into it at all (see above).
+  audio thread yet (native tests + two browser AudioWorklets, see below).
+- WASM/browser UI wiring beyond Reverb/Drive — NAM model loading, metering,
+  and reverb algorithm switching aren't wired into the web app yet
+  (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`/`driveWorklet.js`,
+  built on the shared `namStudioEffectBase.js`, only call
+  `create`/`add_block`/`connect`/`reset`/`process`/`set_param`).
 - iOS/Android: still unverified, those toolchains aren't installed in this
   environment.
 
