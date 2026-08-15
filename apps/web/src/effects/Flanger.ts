@@ -1,40 +1,83 @@
 import { BaseEffect, type EffectParams } from './Effect'
-import { createModulatedDelay, type ModulatedDelay } from './modulatedDelay'
 
-/** LFO-modulated delay with a very short base delay and higher feedback - the classic comb-filter sweep. */
+const PROCESSOR_NAME = 'flanger-processor'
+const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
+const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+
+function ensureWorkletRegistered(context: AudioContext): Promise<void> {
+  let promise = registeredContexts.get(context)
+  if (!promise) {
+    promise = context.audioWorklet.addModule('/wasm-core/flangerWorklet.js')
+    registeredContexts.set(context, promise)
+  }
+  return promise
+}
+
+function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
+  let promise = wasmBytesByContext.get(context)
+  if (!promise) {
+    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    wasmBytesByContext.set(context, promise)
+  }
+  return promise
+}
+
+/**
+ * Classic stereo flanger (packages/core/src/dsp/flanger.cpp compiled to
+ * WASM): a modulated delay line with strong feedback creating the signature
+ * comb-filter sweep ("jet plane") effect.
+ */
 export class Flanger extends BaseEffect {
-  private readonly modDelay: ModulatedDelay
+  private readonly node: AudioWorkletNode
 
-  constructor(context: BaseAudioContext) {
-    const modDelay = createModulatedDelay(context, {
-      baseDelayMs: 3,
-      depthMs: 2,
-      rateHz: 0.25,
-      feedback: 0.6,
+  private constructor(context: AudioContext, node: AudioWorkletNode) {
+    super(context, 'flanger', 'Flanger', node, node)
+    this.node = node
+  }
+
+  static async create(context: AudioContext): Promise<Flanger> {
+    const [, wasmBytes] = await Promise.all([
+      ensureWorkletRegistered(context),
+      fetchWasmBytes(context),
+    ])
+    const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      processorOptions: { wasmBytes },
     })
-    super(context, 'flanger', 'Flanger', modDelay.input, modDelay.output)
-    this.modDelay = modDelay
+    return new Flanger(context, node)
   }
 
-  setRate(hz: number): void {
-    this.modDelay.setRate(hz)
+  setRate(rate: number): void {
+    this.param('rate').setValueAtTime(rate, this.node.context.currentTime)
   }
 
-  setDepth(ms: number): void {
-    this.modDelay.setDepth(ms)
+  setDepth(depth: number): void {
+    this.param('depth').setValueAtTime(depth, this.node.context.currentTime)
   }
 
-  /** Regeneration amount - higher values push toward metallic self-oscillation. */
-  setFeedback(amount: number): void {
-    this.modDelay.setFeedback(amount)
+  setFeedback(feedback: number): void {
+    this.param('feedback').setValueAtTime(feedback, this.node.context.currentTime)
+  }
+
+  setDelay(delay: number): void {
+    this.param('delay').setValueAtTime(delay, this.node.context.currentTime)
+  }
+
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`Flanger: unknown AudioParam '${name}'`)
+    return param
   }
 
   getParams(): EffectParams {
     return {
       ...this.baseParams(),
-      rate: this.modDelay.lfo.frequency.value,
-      depth: this.modDelay.depthGain.gain.value * 1000,
-      feedback: this.modDelay.feedbackGain.gain.value,
+      rate: this.param('rate').value,
+      depth: this.param('depth').value,
+      feedback: this.param('feedback').value,
+      delay: this.param('delay').value,
     }
   }
 
@@ -43,10 +86,11 @@ export class Flanger extends BaseEffect {
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
+    if (typeof params.delay === 'number') this.setDelay(params.delay)
   }
 
   dispose(): void {
     this.disposeBase()
-    this.modDelay.dispose()
+    this.node.disconnect()
   }
 }

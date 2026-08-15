@@ -40,11 +40,11 @@ async function buildEffect(
     case 'eq':
       return new ParametricEQ(context)
     case 'chorus':
-      return new Chorus(context)
+      return Chorus.create(context)
     case 'flanger':
-      return new Flanger(context)
+      return Flanger.create(context)
     case 'phaser':
-      return new Phaser(context)
+      return Phaser.create(context)
     case 'tremolo':
       return new Tremolo(context)
     case 'delay':

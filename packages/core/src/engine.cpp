@@ -7,12 +7,15 @@
 #include <type_traits>
 #include <variant>
 
+#include "nam_studio/dsp/chorus.h"
 #include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_early_reflections.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
 #include "nam_studio/dsp/dragonfly_room_reverb.h"
+#include "nam_studio/dsp/flanger.h"
 #include "nam_studio/dsp/mxr_distortion.h"
+#include "nam_studio/dsp/phaser.h"
 #include "nam_studio/dsp/tube_screamer.h"
 #include "nam_studio/dsp/zen_drive.h"
 
@@ -50,7 +53,8 @@ int PortCountFor(graph::BlockKind kind) {
 using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallReverb,
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
                                  dsp::DragonflyEarlyReflections, dsp::DiodeClipper, dsp::TubeScreamer,
-                                 dsp::ZenDrive, dsp::MxrDistortion>;
+                                 dsp::ZenDrive, dsp::MxrDistortion, dsp::Chorus, dsp::Flanger,
+                                 dsp::Phaser>;
 
 }  // namespace
 
@@ -178,9 +182,21 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->dsp.emplace<dsp::DiodeClipper>();  // default model; see SetDriveModel
     state->param_count = dsp::DiodeClipper::ParamCount();
     SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kChorus) {
+    state->dsp.emplace<dsp::Chorus>();
+    state->param_count = dsp::Chorus::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kFlanger) {
+    state->dsp.emplace<dsp::Flanger>();
+    state->param_count = dsp::Flanger::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kPhaser) {
+    state->dsp.emplace<dsp::Phaser>();
+    state->param_count = dsp::Phaser::ParamCount();
+    SeedParamsFromDsp(*state);
   }
   // Every other kind stays std::monostate (passthrough) with param_count 0 -
-  // LSP/AnalogTapeModel/BYOD's other 43+ effects aren't wrapped yet (see
+  // the remaining LSP/AnalogTapeModel wrappers aren't written yet (see
   // packages/core/README.md).
 
   if (max_block_size_ > 0) EnsureBuffers(*state);
