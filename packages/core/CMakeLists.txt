@@ -126,15 +126,62 @@ else()
     "--init --depth 1 -- dpf")
 endif()
 
-# The remaining three vendored DSP libraries (analog-tape-model, byod,
-# lsp-plugins) are not wrapped or built yet - see README.md.
+# --- BYOD: Diode Clipper wrapper (issue #14) ---
+# Unlike NAMCore/Dragonfly, this doesn't compile any of BYOD's own source -
+# BYOD force-includes a global pch.h (JUCE + RTNeural + Eigen) into every
+# one of its 249 processor files via CMake's target_precompile_headers, so
+# even its simplest class can't be built standalone as-is. diode_clipper.cpp
+# is a hand-written reimplementation of BYOD's DiodeClipperWDF using
+# chowdsp_wdf's WDF circuit primitives directly (chowdsp_wdf is itself
+# header-only and dependency-free - see diode_clipper.cpp's own doc
+# comments for exactly what was and wasn't ported). Only chowdsp_wdf's
+# include path is needed; math_approx isn't used (chowdsp_wdf has its own
+# built-in Wright-Omega approximation, so pulling in a second one for BYOD's
+# externally-injected OmegaProvider wasn't worth it for no accuracy gain).
+set(CHOWDSP_WDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/byod/modules/chowdsp_wdf")
+if(EXISTS "${CHOWDSP_WDF_DIR}/include/chowdsp_wdf/chowdsp_wdf.h")
+  target_sources(nam_studio_core PRIVATE src/dsp/diode_clipper.cpp)
+  target_include_directories(nam_studio_core PRIVATE "${CHOWDSP_WDF_DIR}/include")
+  set(NAM_STUDIO_HAS_DIODE_CLIPPER TRUE)
+else()
+  message(WARNING
+    "packages/core/third_party/byod/modules/chowdsp_wdf isn't initialized - "
+    "the Diode Clipper wrapper will not build. Run: git -C "
+    "packages/core/third_party/byod submodule update --init --depth 1 -- "
+    "modules/chowdsp_wdf")
+endif()
+
+# The remaining two vendored DSP libraries (analog-tape-model, lsp-plugins)
+# are not wrapped or built yet - see README.md. BYOD's own effects beyond
+# Diode Clipper aren't wrapped either yet.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CMakeLists.txt")
   add_subdirectory(third_party)
 endif()
 
 if(EMSCRIPTEN)
-  # Web target (issue #14): compiled to WASM, consumed by apps/web via AudioWorklet.
-  set_target_properties(nam_studio_core PROPERTIES SUFFIX ".js")
+  # Web target (issue #22): compiled to WASM, consumed by apps/web via
+  # AudioWorklet. Emscripten's exports/link flags only apply to a final
+  # linked module, not a static archive - nam_studio_core itself stays a
+  # plain STATIC library (as every other target links it), and this small
+  # executable is what actually gets Emscripten's MODULARIZE treatment.
+  # wasm_entry.cpp is deliberately empty; nothing needs a main() for the
+  # MODULARIZE=1 factory-function pattern used here.
+  add_executable(nam_studio_core_wasm src/wasm_entry.cpp)
+  target_link_libraries(nam_studio_core_wasm PRIVATE nam_studio_core)
+  set_target_properties(nam_studio_core_wasm PROPERTIES OUTPUT_NAME "nam_studio_core")
+  target_link_options(nam_studio_core_wasm PRIVATE
+    "SHELL:-s MODULARIZE=1"
+    "SHELL:-s EXPORT_ES6=1"
+    "SHELL:-s ENVIRONMENT=worklet"
+    "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    # Only what apps/web's DragonflyReverb worklet (issue #22's first slice)
+    # actually calls - see apps/web/public/wasm-core/dragonflyReverbWorklet.js.
+    # Extend this list as more of the graph ABI gets used from the browser.
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_malloc','_free']"
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
+    -O3
+  )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # iOS target (issue #17): linked into apps/ios via an XCFramework.
   set_target_properties(nam_studio_core PROPERTIES

@@ -34,6 +34,13 @@ const hz = (value: number) =>
   value >= 1000 ? `${(value / 1000).toFixed(1)}kHz` : `${Math.round(value)}Hz`
 const ratio = (value: number) => `${value.toFixed(1)}:1`
 const plain = (value: number) => value.toFixed(2)
+// Dragonfly Reverb's width/predelay/spin/wander/earlySend params (see
+// DragonflyReverb.ts) are already in their display unit, unlike `ms`/
+// `percent` above (which convert from seconds/a 0-1 fraction) - these three
+// just format the raw value, no conversion.
+const msRaw = (value: number) => `${Math.round(value)}ms`
+const percentRaw = (value: number) => `${Math.round(value)}%`
+const hzPrecise = (value: number) => `${value.toFixed(1)}Hz`
 
 function eqBand(index: number, freqRange: [number, number], freqDefault: number): KnobField[] {
   const group = `Band ${index + 1}`
@@ -399,6 +406,59 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+    },
+    // Dragonfly Reverb's own character controls (packages/core/src/dsp/
+    // dragonfly_hall_reverb.cpp), not present in the original Freeverb -
+    // native units/ranges, no remapping (see DragonflyReverb.ts).
+    {
+      key: 'width',
+      label: 'Width',
+      control: 'knob',
+      min: 50,
+      max: 150,
+      step: 1,
+      defaultValue: 100,
+      formatValue: percentRaw,
+    },
+    {
+      key: 'predelay',
+      label: 'Predelay',
+      control: 'knob',
+      min: 0,
+      max: 100,
+      step: 1,
+      defaultValue: 20,
+      formatValue: msRaw,
+    },
+    {
+      key: 'spin',
+      label: 'Spin',
+      control: 'knob',
+      min: 0,
+      max: 10,
+      step: 0.1,
+      defaultValue: 0.6,
+      formatValue: hzPrecise,
+    },
+    {
+      key: 'wander',
+      label: 'Wander',
+      control: 'knob',
+      min: 0,
+      max: 40,
+      step: 0.5,
+      defaultValue: 8,
+      formatValue: msRaw,
+    },
+    {
+      key: 'earlySend',
+      label: 'Early Send',
+      control: 'knob',
+      min: 0,
+      max: 100,
+      step: 1,
+      defaultValue: 20,
+      formatValue: percentRaw,
     },
     ...MIX_LEVEL_FIELDS,
   ],
