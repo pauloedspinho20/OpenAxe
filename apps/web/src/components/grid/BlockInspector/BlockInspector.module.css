@@ -17,3 +17,11 @@
   font-size: 13px;
   margin: 0;
 }
+
+.vendor {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  margin: 0;
+}

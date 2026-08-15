@@ -33,7 +33,13 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
   const [tunerOpen, setTunerOpen] = useState(false)
   const dragRef = useRef<DragState | null>(null)
 
-  const handlePointerDown = (e: React.PointerEvent, kind: BlockKind, label: string) => {
+  const handlePointerDown = (
+    e: React.PointerEvent,
+    kind: BlockKind,
+    label: string,
+    disabled?: boolean,
+  ) => {
+    if (disabled) return
     e.preventDefault()
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -86,11 +92,19 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
               {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
                 <div
                   key={option.kind}
-                  className={styles.chip}
+                  className={`${styles.chip} ${option.disabled ? styles.chipDisabled : ''}`}
                   role="button"
-                  tabIndex={0}
-                  aria-label={`Drag ${option.label} onto the grid`}
-                  onPointerDown={(e) => handlePointerDown(e, option.kind, option.label)}
+                  tabIndex={option.disabled ? -1 : 0}
+                  aria-disabled={option.disabled}
+                  aria-label={
+                    option.disabled
+                      ? `${option.label} - not yet available (${option.vendor})`
+                      : `Drag ${option.label} onto the grid`
+                  }
+                  title={option.disabled ? option.vendor : undefined}
+                  onPointerDown={(e) =>
+                    handlePointerDown(e, option.kind, option.label, option.disabled)
+                  }
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                 >

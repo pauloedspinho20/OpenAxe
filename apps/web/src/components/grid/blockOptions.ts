@@ -4,6 +4,21 @@ export interface BlockOption {
   kind: BlockKind
   label: string
   group: 'Core' | 'Effects'
+  /**
+   * The real DSP/routing this block kind runs on today, shown in
+   * BlockInspector so it's always clear which blocks run the new
+   * packages/core C++ DSP core vs. a pre-existing engine vs. plain Web
+   * Audio routing.
+   */
+  vendor: string
+  /**
+   * True for effect kinds still on their original hand-rolled Web Audio
+   * implementation, awaiting migration to packages/core (see issue #22) -
+   * not placeable yet (BlockPalette/AddBlockMenu both disable these) so a
+   * user can't mistake them for already-migrated DSP. Re-enable each one as
+   * its packages/core wrapper lands and gets wired into the web app.
+   */
+  disabled?: boolean
 }
 
 /**
@@ -14,26 +29,114 @@ export interface BlockOption {
  * own gear type.
  */
 export const BLOCK_OPTIONS: BlockOption[] = [
-  { kind: 'amp', label: 'Amp', group: 'Core' },
-  { kind: 'amp-cab', label: 'Amp+Cab', group: 'Core' },
-  { kind: 'cab', label: 'Cab', group: 'Core' },
-  { kind: 'pedal', label: 'Pedal', group: 'Core' },
-  { kind: 'outboard', label: 'Outboard', group: 'Core' },
-  { kind: 'space', label: 'Space', group: 'Core' },
-  { kind: 'mixer', label: 'Mixer', group: 'Core' },
-  { kind: 'splitter', label: 'Splitter', group: 'Core' },
-  { kind: 'noise-gate', label: 'Noise Gate', group: 'Effects' },
-  { kind: 'compressor', label: 'Compressor', group: 'Effects' },
-  { kind: 'eq', label: 'EQ', group: 'Effects' },
-  { kind: 'chorus', label: 'Chorus', group: 'Effects' },
-  { kind: 'flanger', label: 'Flanger', group: 'Effects' },
-  { kind: 'phaser', label: 'Phaser', group: 'Effects' },
-  { kind: 'tremolo', label: 'Tremolo', group: 'Effects' },
-  { kind: 'delay', label: 'Delay', group: 'Effects' },
-  { kind: 'ping-pong-delay', label: 'Ping-Pong Delay', group: 'Effects' },
-  { kind: 'reverb', label: 'Reverb', group: 'Effects' },
+  {
+    kind: 'amp',
+    label: 'Amp',
+    group: 'Core',
+    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+  },
+  {
+    kind: 'amp-cab',
+    label: 'Amp+Cab',
+    group: 'Core',
+    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+  },
+  { kind: 'cab', label: 'Cab', group: 'Core', vendor: 'Web Audio ConvolverNode (native)' },
+  {
+    kind: 'pedal',
+    label: 'Pedal',
+    group: 'Core',
+    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+  },
+  {
+    kind: 'outboard',
+    label: 'Outboard',
+    group: 'Core',
+    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+  },
+  {
+    kind: 'space',
+    label: 'Space',
+    group: 'Core',
+    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+  },
+  { kind: 'mixer', label: 'Mixer', group: 'Core', vendor: 'Native routing (no DSP)' },
+  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' },
+  {
+    kind: 'noise-gate',
+    label: 'Noise Gate',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'compressor',
+    label: 'Compressor',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'eq',
+    label: 'EQ',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'chorus',
+    label: 'Chorus',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'flanger',
+    label: 'Flanger',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'phaser',
+    label: 'Phaser',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'tremolo',
+    label: 'Tremolo',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'delay',
+    label: 'Delay',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'ping-pong-delay',
+    label: 'Ping-Pong Delay',
+    group: 'Effects',
+    vendor: 'Web Audio (native) - packages/core migration pending',
+    disabled: true,
+  },
+  {
+    kind: 'reverb',
+    label: 'Reverb',
+    group: 'Effects',
+    vendor: 'Dragonfly Hall Reverb (packages/core)',
+  },
 ]
 
 export const BLOCK_KIND_LABELS: Record<BlockKind, string> = Object.fromEntries(
   BLOCK_OPTIONS.map((o) => [o.kind, o.label]),
+) as Record<BlockKind, string>
+
+export const BLOCK_KIND_VENDORS: Record<BlockKind, string> = Object.fromEntries(
+  BLOCK_OPTIONS.map((o) => [o.kind, o.vendor]),
 ) as Record<BlockKind, string>
