@@ -68,8 +68,8 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   return (
     <Panel
       label={`Block Inspector · ${label}`}
-      url={vendorUrl}
-      labelUrl={vendor}
+      url={vendorUrl ?? ''}
+      labelUrl={vendor ?? ''}
       corner={
         block && (
           <HardwareButton
