@@ -6,10 +6,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(NAM_STUDIO_BUILD_TESTS "Build packages/core unit tests" OFF)
 
+# src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
+# nam_studio::dsp::NamAmp and all 4 Dragonfly reverb wrappers directly - it's
+# the layer that makes those already-wrapped families actually produce
+# audio, so unlike the rest of this file it does NOT degrade gracefully if
+# NAM_CORE_DIR/DRAGONFLY_DIR below turn out to be uninitialized; linking
+# nam_studio_core will fail with undefined symbols in that case. Run
+# `git submodule update --init --recursive` first if that happens.
 add_library(nam_studio_core STATIC
   src/core.cpp
   src/graph_validation.cpp
   src/graph_rig.cpp
+  src/engine.cpp
   src/api.cpp
 )
 
