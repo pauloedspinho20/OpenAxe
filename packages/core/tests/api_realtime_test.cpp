@@ -1,13 +1,18 @@
 // Real end-to-end test of the extern "C" real-time ABI (issue #14): builds
 // an IN -> Amp -> Reverb -> OUT rig, loads an actual .nam model bundled with
-// the NeuralAmpModelerCore submodule, and processes real audio through it.
-// Only built if NAM_STUDIO_HAS_NAM_CORE && NAM_STUDIO_HAS_DRAGONFLY (see
+// the NeuralAmpModelerCore submodule, and processes real audio through it -
+// plus a separate IN -> Drive -> OUT rig proving the newer NAM_STUDIO_BLOCK_
+// DRIVE kind (backed by Diode Clipper) actually clips real audio through
+// the full extern "C" surface, not just the C++ class directly (see
+// diode_clipper_test.cpp) or the engine layer (see engine_test.cpp). Only
+// built if NAM_STUDIO_HAS_NAM_CORE && NAM_STUDIO_HAS_DRAGONFLY (see
 // tests/CMakeLists.txt) - same WHOLE_ARCHIVE link requirement as
 // nam_amp_test (NAMCore's architecture parsers self-register via static
 // initializers with no other symbol referenced, so a plain static-archive
 // link silently drops those object files otherwise).
 #include "nam_studio/api.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -104,6 +109,38 @@ void TestReverbAlgorithmSwitchOnlyAffectsThatBlock() {
   nam_studio_graph_destroy(graph);
 }
 
+void TestEndToEndDriveRig() {
+  NamStudioGraph* graph = nam_studio_graph_create();
+
+  const int32_t drive = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DRIVE, 0, 0);
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, drive, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, drive, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  nam_studio_reset(graph, kSampleRate, kBlockSize);
+  nam_studio_set_param(graph, drive, 1 /* drive */, 1.0f);  // max drive
+
+  std::vector<float> input(kBlockSize);
+  for (int32_t i = 0; i < kBlockSize; ++i) {
+    input[static_cast<size_t>(i)] =
+        5.0f * std::sin(static_cast<float>(i) / static_cast<float>(kSampleRate) * 200.0f * 6.283185307179586f);
+  }
+  std::vector<float> output(kBlockSize, 0.0f);
+  const float* in_ptrs[1] = {input.data()};
+  float* out_ptrs[1] = {output.data()};
+  nam_studio_process(graph, in_ptrs, 1, out_ptrs, 1, kBlockSize);
+
+  bool all_finite = true;
+  float max_abs_out = 0.0f;
+  for (float sample : output) {
+    if (!std::isfinite(sample)) all_finite = false;
+    max_abs_out = std::max(max_abs_out, std::fabs(sample));
+  }
+  NAM_EXPECT(all_finite);
+  NAM_EXPECT(max_abs_out > 0.0f);
+  NAM_EXPECT(max_abs_out < 5.0f);  // the nonlinearity actually engages, not a straight passthrough
+
+  nam_studio_graph_destroy(graph);
+}
+
 void TestUnknownBlockCallsAreSafeNoOps() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
@@ -126,6 +163,7 @@ int main() {
   TestEndToEndAmpAndReverbRig();
   TestUnwrappedKindPassesAudioThrough();
   TestReverbAlgorithmSwitchOnlyAffectsThatBlock();
+  TestEndToEndDriveRig();
   TestUnknownBlockCallsAreSafeNoOps();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

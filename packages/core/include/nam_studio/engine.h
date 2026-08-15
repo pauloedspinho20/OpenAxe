@@ -17,13 +17,15 @@
 // one, adding a live DSP object per block, pre-allocated per-block buffers,
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
-// Only two DSP families are wrapped anywhere in this codebase yet: NamAmp
-// (backs the 5 structurally-identical "gear" kinds) and the 4 Dragonfly
-// reverb algorithms (all back the single kReverb kind - algorithm choice is
-// a new per-block setting this layer owns, see SetReverbAlgorithm). Every
-// other kind passes audio through unchanged rather than erroring, so a full
-// rig is buildable/testable today; wiring in real DSP as those libraries
-// get wrapped (AnalogTapeModel, BYOD, LSP) is purely additive later.
+// Three DSP families are wrapped anywhere in this codebase yet: NamAmp
+// (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
+// algorithms (all back the single kReverb kind - algorithm choice is a
+// per-block setting this layer owns, see SetReverbAlgorithm), and Diode
+// Clipper (backs kDrive - model choice similarly owned here, see
+// SetDriveModel, though only one model exists so far). Every other kind
+// passes audio through unchanged rather than erroring, so a full rig is
+// buildable/testable today; wiring in real DSP as those libraries get
+// wrapped (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
 namespace nam_studio::engine {
 
 // Int ids only at this layer - portable across C/WASM/FFI, no string
@@ -42,6 +44,15 @@ enum class ReverbAlgorithm {
   kRoom,
   kPlate,
   kEarlyReflections,
+};
+
+// Only one model so far (Diode Clipper) - this exists so future BYOD
+// drive/fuzz wraps (Big Muff, Tube Screamer, etc., once each is
+// individually verified buildable the way Diode Clipper was) have a seam
+// to plug into without a new BlockKind or ABI shape, mirroring
+// ReverbAlgorithm's own role for kReverb.
+enum class DriveModel {
+  kDiodeClipper,
 };
 
 struct ParamDescriptor {
@@ -107,6 +118,9 @@ class AudioEngine {
   // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
   // safe - reconstructs the underlying wrapper instance.
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);
+
+  // Only meaningful for kDrive blocks; no-op otherwise. Not real-time safe.
+  void SetDriveModel(BlockId id, DriveModel model);
 
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown

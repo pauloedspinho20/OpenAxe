@@ -131,6 +131,12 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     group: 'Effects',
     vendor: 'Dragonfly Hall Reverb (packages/core)',
   },
+  {
+    kind: 'drive',
+    label: 'Drive',
+    group: 'Effects',
+    vendor: 'BYOD Diode Clipper (packages/core)',
+  },
 ]
 
 export const BLOCK_KIND_LABELS: Record<BlockKind, string> = Object.fromEntries(

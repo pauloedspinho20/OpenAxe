@@ -41,6 +41,7 @@ const plain = (value: number) => value.toFixed(2)
 const msRaw = (value: number) => `${Math.round(value)}ms`
 const percentRaw = (value: number) => `${Math.round(value)}%`
 const hzPrecise = (value: number) => `${value.toFixed(1)}Hz`
+const factor = (value: number) => `${value.toFixed(1)}x`
 
 function eqBand(index: number, freqRange: [number, number], freqDefault: number): KnobField[] {
   const group = `Band ${index + 1}`
@@ -459,6 +460,53 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 20,
       formatValue: percentRaw,
+    },
+    ...MIX_LEVEL_FIELDS,
+  ],
+  // BYOD's Diode Clipper (packages/core/src/dsp/diode_clipper.cpp) - the
+  // app's first distortion/drive effect, so all 4 knobs are new (no legacy
+  // effect's semantics to preserve, unlike reverb's roomSize/damping above).
+  drive: [
+    {
+      key: 'cutoff',
+      label: 'Cutoff',
+      control: 'knob',
+      min: 200,
+      max: 20000,
+      step: 10,
+      defaultValue: 5000,
+      formatValue: hz,
+    },
+    {
+      key: 'drive',
+      label: 'Drive',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+    },
+    {
+      key: 'diodeType',
+      label: 'Diode',
+      control: 'select',
+      options: [
+        { value: 'GZ34', label: 'GZ34' },
+        { value: '1N34', label: '1N34' },
+        { value: '1N4148', label: '1N4148' },
+      ],
+      defaultValue: 'GZ34',
+    },
+    {
+      key: 'numDiodes',
+      label: 'Diode Count',
+      control: 'knob',
+      min: 0.3,
+      max: 3,
+      step: 0.1,
+      defaultValue: 1,
+      formatValue: factor,
     },
     ...MIX_LEVEL_FIELDS,
   ],

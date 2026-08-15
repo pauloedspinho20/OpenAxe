@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <variant>
 
+#include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_early_reflections.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
@@ -45,7 +46,7 @@ int PortCountFor(graph::BlockKind kind) {
 
 using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallReverb,
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
-                                 dsp::DragonflyEarlyReflections>;
+                                 dsp::DragonflyEarlyReflections, dsp::DiodeClipper>;
 
 }  // namespace
 
@@ -169,9 +170,14 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->dsp.emplace<dsp::DragonflyHallReverb>();  // default algorithm; see SetReverbAlgorithm
     state->param_count = dsp::DragonflyHallReverb::ParamCount();
     SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kDrive) {
+    state->dsp.emplace<dsp::DiodeClipper>();  // default model; see SetDriveModel
+    state->param_count = dsp::DiodeClipper::ParamCount();
+    SeedParamsFromDsp(*state);
   }
   // Every other kind stays std::monostate (passthrough) with param_count 0 -
-  // LSP/BYOD/AnalogTapeModel aren't wrapped yet (see packages/core/README.md).
+  // LSP/AnalogTapeModel/BYOD's other 43+ effects aren't wrapped yet (see
+  // packages/core/README.md).
 
   if (max_block_size_ > 0) EnsureBuffers(*state);
   block_states_.emplace(id, std::move(state));
@@ -502,6 +508,32 @@ void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
     case ReverbAlgorithm::kEarlyReflections:
       state->dsp.emplace<dsp::DragonflyEarlyReflections>();
       state->param_count = dsp::DragonflyEarlyReflections::ParamCount();
+      break;
+  }
+
+  if (max_block_size_ > 0) {
+    std::visit(
+        [&](auto& d) {
+          using T = std::decay_t<decltype(d)>;
+          if constexpr (!std::is_same_v<T, std::monostate> && !std::is_same_v<T, dsp::NamAmp>) {
+            d.Reset(sample_rate_);
+          }
+        },
+        state->dsp);
+  }
+  SeedParamsFromDsp(*state);
+}
+
+// ── Drive model choice ──────────────────────────────────────────────────
+
+void AudioEngine::SetDriveModel(BlockId id, DriveModel model) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kDrive) return;
+
+  switch (model) {
+    case DriveModel::kDiodeClipper:
+      state->dsp.emplace<dsp::DiodeClipper>();
+      state->param_count = dsp::DiodeClipper::ParamCount();
       break;
   }
 

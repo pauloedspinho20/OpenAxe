@@ -5,12 +5,14 @@
 // SplitterBlock.ts.
 namespace nam_studio::graph {
 
-// Every placeable grid block kind: the 10 synthetic effects, the 5 NAM-model
-// gear kinds (structurally identical, kind only affects UI labeling/gear
-// filtering), plus cab/mixer/splitter. Wire-format string mapping (the TS
-// union's hyphenated literals, e.g. "ping-pong-delay") is intentionally not
-// included here - that's preset/JSON (de)serialization work, a documented
-// non-goal of this PR.
+// Every placeable grid block kind: the 11 synthetic effects (kDrive added
+// after the original #13 scaffold, once issue #14's Diode Clipper wrap
+// needed somewhere to plug into), the 5 NAM-model gear kinds (structurally
+// identical, kind only affects UI labeling/gear filtering), plus
+// cab/mixer/splitter. Wire-format string mapping (the TS union's hyphenated
+// literals, e.g. "ping-pong-delay") is intentionally not included here -
+// that's preset/JSON (de)serialization work, a documented non-goal of this
+// PR.
 enum class BlockKind {
   kNoiseGate,
   kCompressor,
@@ -22,6 +24,7 @@ enum class BlockKind {
   kDelay,
   kPingPongDelay,
   kReverb,
+  kDrive,
   kAmp,
   kAmpCab,
   kPedal,
