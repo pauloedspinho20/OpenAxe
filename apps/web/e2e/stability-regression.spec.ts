@@ -63,18 +63,14 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove Mixer' }).click()
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
-  const FX_KINDS = [
-    'Noise Gate',
-    'Compressor',
-    'EQ',
-    'Chorus',
-    'Flanger',
-    'Phaser',
-    'Tremolo',
-    'Delay',
-    'Ping-Pong Delay',
-    'Reverb',
-  ]
+  // Only the effect kinds actually placeable today (see blockOptions.ts's
+  // `disabled` flag) - the other 9 synthetic-effect kinds still run their
+  // original hand-rolled Web Audio implementation, unrelated to
+  // packages/core, and are disabled in both the palette and this add-block
+  // menu until each gets migrated (see issue #22), so clicking their
+  // menuitem here would be a no-op and hang the test waiting for a block
+  // that never appears.
+  const FX_KINDS = ['Reverb', 'Drive']
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x
   // GRID_COLS, and spread across rows so the semi-auto wiring (see
