@@ -23,8 +23,8 @@ const Phaser::ParamInfo kParamInfo[kParamCount] = {
 };
 
 constexpr int kMaxStages = 8;
-constexpr float kCenterFreq = 800.0f;    // LFO center frequency (Hz)
-constexpr float kSweepRange = 1600.0f;   // max frequency deviation (Hz)
+constexpr float kLowFreq = 150.0f;       // minimum sweep frequency (Hz)
+constexpr float kHighFreq = 3000.0f;     // maximum sweep frequency (Hz)
 constexpr float kStereoOffset = 1.57079632679f;  // π/2
 
 struct AllPassStage {
@@ -82,16 +82,18 @@ void Phaser::Reset(double sample_rate) {
 void Phaser::Process(const float* const* input, float* const* output, int num_frames) {
   const float sr = impl_->sample_rate;
   const float fb = impl_->feedback;
-  const float mod_range = impl_->depth * kSweepRange;
+  const float depth = impl_->depth;
   const float phase_step = impl_->rate / sr;
   const int num_stages = impl_->stages;
+  const float freq_ratio = kHighFreq / kLowFreq;
 
   for (int ch = 0; ch < 2; ++ch) {
     Channel& chan = impl_->channels[static_cast<size_t>(ch)];
     const float lfo_base = chan.phase + (ch == 1 ? kStereoOffset : 0.0f);
     for (int i = 0; i < num_frames; ++i) {
       const float lfo = std::sin(lfo_base + static_cast<float>(i) * phase_step * 6.28318530718f);
-      const float freq = kCenterFreq + mod_range * lfo;
+      const float t = 0.5f + 0.5f * lfo;                                    // [0, 1]
+      const float freq = kLowFreq * std::pow(freq_ratio, t * depth);        // exponential sweep
       const float a = ComputeCoeff(freq, sr);
 
       float x = input[ch][i] + fb * chan.stages[static_cast<size_t>(num_stages - 1)].y1;

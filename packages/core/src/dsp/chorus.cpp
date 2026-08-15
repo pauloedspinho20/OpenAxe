@@ -89,10 +89,9 @@ void Chorus::Process(const float* const* input, float* const* output, int num_fr
       const float lfo = std::sin(lfo_phase + static_cast<float>(i) * phase_step * 6.28318530718f);
       const float delay_ms = base_delay + mod_depth * lfo;
       const float wet = c.ReadDelay(delay_ms, sr);
-      const float out = in + wet * fb;
       c.buffer[static_cast<size_t>(c.write_pos)] = in + wet * fb;
       c.write_pos = (c.write_pos + 1) % static_cast<int>(c.buffer.size());
-      output[ch][i] = out;
+      output[ch][i] = wet;
     }
     c.phase = std::fmod(c.phase + phase_step * static_cast<float>(num_frames) * 6.28318530718f,
                          6.28318530718f);
