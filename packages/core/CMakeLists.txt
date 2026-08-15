@@ -188,7 +188,7 @@ if(EMSCRIPTEN)
     # Only what apps/web's DragonflyReverb worklet (issue #22's first slice)
     # actually calls - see apps/web/public/wasm-core/dragonflyReverbWorklet.js.
     # Extend this list as more of the graph ABI gets used from the browser.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_malloc','_free']"
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_set_drive_model','_malloc','_free']"
     "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
     -O3
   )

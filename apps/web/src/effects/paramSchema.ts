@@ -1,4 +1,5 @@
 import type { EffectKind } from './Effect'
+import type { EffectParams } from './Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
 import { SPLITTER_OUTPUT_COUNT } from '../engine/blocks/SplitterBlock'
@@ -14,6 +15,8 @@ interface KnobField {
   formatValue: (value: number) => string
   /** Visually clusters fields (e.g. EQ's 4 bands) - purely a rendering hint. */
   group?: string
+  /** If set, the field is only rendered when this returns true for the current values. */
+  visible?: (values: EffectParams) => boolean
 }
 
 interface SelectField {
@@ -23,6 +26,8 @@ interface SelectField {
   options: Array<{ value: string; label: string }>
   defaultValue: string
   group?: string
+  /** If set, the field is only rendered when this returns true for the current values. */
+  visible?: (values: EffectParams) => boolean
 }
 
 export type ParamFieldSchema = KnobField | SelectField
@@ -463,10 +468,25 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     },
     ...MIX_LEVEL_FIELDS,
   ],
-  // BYOD's Diode Clipper (packages/core/src/dsp/diode_clipper.cpp) - the
-  // app's first distortion/drive effect, so all 4 knobs are new (no legacy
-  // effect's semantics to preserve, unlike reverb's roomSize/damping above).
+  // Four BYOD wave-digital-filter circuit models (packages/core):
+  // Diode Clipper, Tube Screamer, Zen Drive, MXR Distortion+. The
+  // driveModel select field chooses which model is active — only that
+  // model's params affect the sound (the C++ worklet ignores
+  // out-of-range indices). Per-field `visible` predicates filter knobs
+  // to only the current model's controls.
   drive: [
+    {
+      key: 'driveModel',
+      label: 'Model',
+      control: 'select',
+      options: [
+        { value: 'diode-clipper', label: 'Diode Clipper' },
+        { value: 'tube-screamer', label: 'Tube Screamer' },
+        { value: 'zen-drive', label: 'Zen Drive' },
+        { value: 'mxr-distortion', label: 'MXR Distortion+' },
+      ],
+      defaultValue: 'diode-clipper',
+    },
     {
       key: 'cutoff',
       label: 'Cutoff',
@@ -476,6 +496,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 5000,
       formatValue: hz,
+      visible: (v) => v.driveModel === 'diode-clipper',
     },
     {
       key: 'drive',
@@ -486,6 +507,18 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      visible: (v) => v.driveModel === 'diode-clipper',
+    },
+    {
+      key: 'gain',
+      label: 'Gain',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+      visible: (v) => v.driveModel === 'tube-screamer' || v.driveModel === 'zen-drive',
     },
     {
       key: 'diodeType',
@@ -497,6 +530,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: '1N4148', label: '1N4148' },
       ],
       defaultValue: 'GZ34',
+      visible: (v) => v.driveModel === 'diode-clipper' || v.driveModel === 'tube-screamer',
     },
     {
       key: 'numDiodes',
@@ -507,6 +541,40 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 1,
       formatValue: factor,
+      visible: (v) => v.driveModel === 'diode-clipper' || v.driveModel === 'tube-screamer',
+    },
+    {
+      key: 'voice',
+      label: 'Voice',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+      visible: (v) => v.driveModel === 'zen-drive',
+    },
+    {
+      key: 'dist',
+      label: 'Distortion',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+      visible: (v) => v.driveModel === 'mxr-distortion',
+    },
+    {
+      key: 'outputLevel',
+      label: 'Output Level',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+      visible: (v) => v.driveModel === 'mxr-distortion',
     },
     ...MIX_LEVEL_FIELDS,
   ],

@@ -2,23 +2,23 @@ import { BaseEffect, type EffectParams } from './Effect'
 
 const PROCESSOR_NAME = 'drive-processor'
 const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
-// Fetched once per context, shared across every Drive instance in it (and
-// independently of DragonflyReverb.ts's own cache of the same bytes, since
-// each effect class owns its private registration/bytes cache - same
-// per-file pattern NoiseGate.ts already uses) - each instance gets its own
-// WebAssembly.instantiate() (own memory), just from the same bytes, since
-// AudioWorkletGlobalScope doesn't reliably expose fetch() (see
-// driveWorklet.js's shared base, namStudioEffectBase.js).
 const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
 const DIODE_TYPES = ['GZ34', '1N34', '1N4148'] as const
 type DiodeType = (typeof DIODE_TYPES)[number]
 
+const DRIVE_MODELS = ['diode-clipper', 'tube-screamer', 'zen-drive', 'mxr-distortion'] as const
+type DriveModel = (typeof DRIVE_MODELS)[number]
+const DRIVE_MODEL_INDEX: Record<DriveModel, number> = {
+  'diode-clipper': 0,
+  'tube-screamer': 1,
+  'zen-drive': 2,
+  'mxr-distortion': 3,
+}
+
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
   let promise = registeredContexts.get(context)
   if (!promise) {
-    // Public asset, not a co-located source file - see
-    // apps/web/public/wasm-core/namStudioEffectBase.js's own doc comment.
     promise = context.audioWorklet.addModule('/wasm-core/driveWorklet.js')
     registeredContexts.set(context, promise)
   }
@@ -35,14 +35,12 @@ function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
 }
 
 /**
- * Real Diode Clipper (BYOD's wave digital filter diode-clipper circuit, via
- * packages/core compiled to WASM) - the app's first distortion/drive
- * effect; there's no prior hand-rolled implementation this replaces. Params
- * pass straight through to Diode Clipper's own native units/ranges - no
- * legacy effect's knob semantics to preserve, unlike Reverb's roomSize/
- * damping. `diodeType` is a genuine discrete choice, so it's the app's
- * first real consumer of paramSchema's `SelectField`/`control: 'select'`
- * (already fully rendered by EffectParamsPanel.tsx, just never had one).
+ * Four BYOD wave-digital-filter circuit models compiled to WASM from
+ * packages/core: Diode Clipper, Tube Screamer, Zen Drive, MXR Distortion+.
+ * The `driveModel` AudioParam selects which model backs the block; each model
+ * exposes its own native parameters (see driveWorklet.js for the index
+ * mapping). Model switching reconstructs the DSP wrapper — not real-time
+ * safe, but model choice is a user action, not an automation curve.
  */
 export class Drive extends BaseEffect {
   private readonly node: AudioWorkletNode
@@ -66,25 +64,59 @@ export class Drive extends BaseEffect {
     return new Drive(context, node)
   }
 
-  /** RC lowpass cutoff, [200, 20000]Hz - Diode Clipper's own native range/units. */
+  /** Selects the backing BYOD circuit model. */
+  setDriveModel(model: string): void {
+    const index = DRIVE_MODEL_INDEX[model as DriveModel]
+    this.param('driveModel').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
+  }
+
+  /** Returns the current model's kind string (e.g. "tube-screamer"). */
+  getDriveModel(): DriveModel {
+    const index = Math.round(this.param('driveModel').value)
+    return DRIVE_MODELS[index] ?? DRIVE_MODELS[0]
+  }
+
+  // ── Diode Clipper params (model 0) ──
+
   setCutoff(cutoff: number): void {
     this.param('cutoff').setValueAtTime(cutoff, this.node.context.currentTime)
   }
 
-  /** Input drive amount, [0, 1] - Diode Clipper's own native range/units. */
   setDrive(drive: number): void {
     this.param('drive').setValueAtTime(drive, this.node.context.currentTime)
   }
 
-  /** Diode type - GZ34, 1N34, or 1N4148 (each has a different clipping character). */
+  // ── Shared params (Diode Clipper + Tube Screamer) ──
+
   setDiodeType(diodeType: string): void {
     const index = DIODE_TYPES.indexOf(diodeType as DiodeType)
     this.param('diodeType').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
   }
 
-  /** Series diode count, [0.3, 3] - Diode Clipper's own native range/units. */
   setNumDiodes(numDiodes: number): void {
     this.param('numDiodes').setValueAtTime(numDiodes, this.node.context.currentTime)
+  }
+
+  // ── Tube Screamer / Zen Drive shared gain ──
+
+  setGain(gain: number): void {
+    this.param('gain').setValueAtTime(gain, this.node.context.currentTime)
+  }
+
+  // ── Zen Drive voice ──
+
+  setVoice(voice: number): void {
+    this.param('voice').setValueAtTime(voice, this.node.context.currentTime)
+  }
+
+  // ── MXR Distortion params ──
+
+  setDist(dist: number): void {
+    this.param('dist').setValueAtTime(dist, this.node.context.currentTime)
+  }
+
+  setOutputLevel(outputLevel: number): void {
+    this.param('outputLevel').setValueAtTime(outputLevel, this.node.context.currentTime)
   }
 
   private param(name: string): AudioParam {
@@ -94,22 +126,68 @@ export class Drive extends BaseEffect {
   }
 
   getParams(): EffectParams {
+    const model = this.getDriveModel()
     const diodeTypeIndex = Math.round(this.param('diodeType').value)
-    return {
+    const base: EffectParams = {
       ...this.baseParams(),
-      cutoff: this.param('cutoff').value,
-      drive: this.param('drive').value,
-      diodeType: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
-      numDiodes: this.param('numDiodes').value,
+      driveModel: model,
+    }
+    switch (model) {
+      case 'diode-clipper':
+        return {
+          ...base,
+          cutoff: this.param('cutoff').value,
+          drive: this.param('drive').value,
+          diodeType: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
+          numDiodes: this.param('numDiodes').value,
+        }
+      case 'tube-screamer':
+        return {
+          ...base,
+          gain: this.param('gain').value,
+          diodeType: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
+          numDiodes: this.param('numDiodes').value,
+        }
+      case 'zen-drive':
+        return {
+          ...base,
+          voice: this.param('voice').value,
+          gain: this.param('gain').value,
+        }
+      case 'mxr-distortion':
+        return {
+          ...base,
+          dist: this.param('dist').value,
+          outputLevel: this.param('outputLevel').value,
+        }
     }
   }
 
   setParams(params: EffectParams): void {
+    if (typeof params.driveModel === 'string') this.setDriveModel(params.driveModel)
     this.applyBaseParams(params)
-    if (typeof params.cutoff === 'number') this.setCutoff(params.cutoff)
-    if (typeof params.drive === 'number') this.setDrive(params.drive)
-    if (typeof params.diodeType === 'string') this.setDiodeType(params.diodeType)
-    if (typeof params.numDiodes === 'number') this.setNumDiodes(params.numDiodes)
+    const model = this.getDriveModel()
+    switch (model) {
+      case 'diode-clipper':
+        if (typeof params.cutoff === 'number') this.setCutoff(params.cutoff)
+        if (typeof params.drive === 'number') this.setDrive(params.drive)
+        if (typeof params.diodeType === 'string') this.setDiodeType(params.diodeType)
+        if (typeof params.numDiodes === 'number') this.setNumDiodes(params.numDiodes)
+        break
+      case 'tube-screamer':
+        if (typeof params.gain === 'number') this.setGain(params.gain)
+        if (typeof params.diodeType === 'string') this.setDiodeType(params.diodeType)
+        if (typeof params.numDiodes === 'number') this.setNumDiodes(params.numDiodes)
+        break
+      case 'zen-drive':
+        if (typeof params.voice === 'number') this.setVoice(params.voice)
+        if (typeof params.gain === 'number') this.setGain(params.gain)
+        break
+      case 'mxr-distortion':
+        if (typeof params.dist === 'number') this.setDist(params.dist)
+        if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
+        break
+    }
   }
 
   dispose(): void {
