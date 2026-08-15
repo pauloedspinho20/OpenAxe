@@ -32,12 +32,24 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     discrete early-reflection pattern). Stereo. Replaces the app's current
     basic Freeverb effect with a full modulated, frequency-dependent-decay
     reverb suite.
-- **`extern "C"` API** (`include/nam_studio/api.h` + `src/api.cpp`) — opaque
-  `NamStudioGraph` handle, lifecycle only (`nam_studio_graph_create`/
-  `_destroy`). Real-time entrypoints (`nam_studio_process`,
-  `nam_studio_load_nam_model`, etc.) aren't declared yet — that needs a
-  real-time audio wiring design this PR doesn't attempt, and declaring an
-  ABI before that design exists would just be something to break later.
+- **Real-time audio engine + full `extern "C"` API** (issue #14's follow-up
+  PR): `include/nam_studio/engine.h` + `src/engine.cpp` add
+  `nam_studio::engine::AudioEngine`, a layer on top of `GraphRig` that gives
+  each block a live DSP object (NAM for the 5 amp-family kinds, one of the
+  4 Dragonfly algorithms for `kReverb`, passthrough for kinds LSP/BYOD/
+  AnalogTapeModel haven't wrapped yet), pre-allocated buffers, and real
+  column-ordered signal routing. `include/nam_studio/api.h` + `src/api.cpp`
+  expose it as a 20-function `extern "C"` surface (int32 ids, not
+  `GraphRig`'s strings — portable across C/WASM/FFI): topology, `reset`/
+  `process`, generic param get/set/info, NAM model management, reverb
+  algorithm choice, and metering.
+- **Diode Clipper** (`include/nam_studio/dsp/diode_clipper.h` +
+  `src/dsp/diode_clipper.cpp`) — a wave digital filter model of a diode pair
+  clamping a first-order RC lowpass (cutoff, drive, diode type [GZ34/1N34/
+  1N4148], diode count), reimplemented from BYOD's `DiodeClipperWDF` using
+  `chowdsp_wdf`'s header-only WDF primitives directly. Not a vendored
+  `#include` of BYOD's own file — see "BYOD" below for why. Mono per
+  channel, run independently per channel like the Dragonfly reverbs.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -54,7 +66,11 @@ stereo impulse through it, asserting a genuine non-silent, finite reverb
 tail comes out. `dragonfly_all_algorithms_test` constructs and processes
 audio through all four algorithms in one executable - the actual regression
 test for the symbol-isolation fix described below (linking any two would
-have failed with duplicate symbols before that fix).
+have failed with duplicate symbols before that fix). `diode_clipper_test`
+sweeps every parameter and processes a loud sine through it, asserting the
+output stays finite and its peak is genuinely compressed below the linear
+input level (proof the nonlinearity actually engages, not just that nothing
+crashed) and that channels don't leak into each other.
 
 ## Vendored third-party DSP libraries
 
@@ -62,33 +78,61 @@ All added as git submodules under `third_party/`. Two of the five URLs in
 issue #14's original text were wrong/renamed — corrected here after
 verifying each repo directly on GitHub:
 
-| Path                | Upstream                                                                                  | License | Wired into the build?                           |
-| ------------------- | ----------------------------------------------------------------------------------------- | ------- | ----------------------------------------------- |
-| `nam-core`          | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore)   | MIT     | **Yes** — see `nam_amp.cpp` above               |
-| `dragonfly-reverb`  | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)     | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above |
-| `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                              |
-| `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | No                                              |
-| `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                              |
+| Path                | Upstream                                                                                  | License | Wired into the build?                                         |
+| ------------------- | ----------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
+| `nam-core`          | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore)   | MIT     | **Yes** — see `nam_amp.cpp` above                             |
+| `dragonfly-reverb`  | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)     | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above               |
+| `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | **Partially** — `chowdsp_wdf` only (Diode Clipper), see below |
+| `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                                            |
+| `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                                            |
 
-Two of the five wired/pending libraries additionally vendor their own
-nested submodules — after cloning this repo, run:
+Three of these libraries additionally vendor their own nested submodules —
+after cloning this repo, run:
 
 ```bash
 git submodule update --init --recursive -- packages/core/third_party/nam-core
 git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+git -C packages/core/third_party/byod submodule update --init --depth 1 -- modules/chowdsp_wdf
 ```
 
 `nam-core`'s nested submodules are Eigen (`gitlab.com/libeigen/eigen`) and
 `AudioDSPTools`. `dragonfly-reverb`'s is `dpf` (DISTRHO Plugin Framework) —
 only two of its header-only utilities are actually used
 (`DistrhoPlugin.hpp` for a couple of macros, `extra/ScopedDenormalDisable.hpp`),
-never its actual plugin runtime.
+never its actual plugin runtime. `byod`'s own repo is checked out directly
+(not itself a submodule init gap), but **all 10 of BYOD's own nested
+submodules start uninitialized** — only `chowdsp_wdf` (a standalone,
+header-only WDF circuit-modeling library, no JUCE/RTNeural dependency of
+its own) is actually needed, for the reason below. `math_approx` (another
+of BYOD's nested submodules) is not used: `chowdsp_wdf` has its own
+built-in Wright-Omega approximation, which `diode_clipper.cpp` uses
+instead of pulling in a second one for no accuracy gain.
 
-The other three libraries are registered but not initialized/built — no
-`third_party/CMakeLists.txt` exists yet, since each has real build-flag
-decisions (BYOD/AnalogTapeModel both being JUCE-based plugins whose DSP
-classes need extracting independently of their surrounding plugin/app
-scaffolding) that belong with whichever PR actually wraps each one.
+**BYOD itself can't be compiled directly, at all — not even its simplest
+file.** Every one of its 249 DSP processor source files gets a global
+`pch.h` force-included by BYOD's own CMake
+(`target_precompile_headers(BYOD PRIVATE pch.h)`), and that header
+unconditionally pulls in JUCE, RTNeural, and Eigen — there's no
+`#ifdef`-guarded path around it, even for a processor as simple as the
+diode clipper. `diode_clipper.cpp` is therefore a hand-written
+reimplementation of BYOD's `DiodeClipperWDF`
+(`src/processors/drive/diode_circuits/DiodeClipperWDF.h`), built directly
+on `chowdsp_wdf`'s dependency-free WDF primitives (`ResistorT`,
+`CapacitorT`, `WDFParallelT`, `DiodePairT` — all header-only, no JUCE) —
+the same pattern this file's own "Non-goals" section already anticipated
+for AnalogTapeModel turning out messier than it looked (see below), which
+turned out to apply here too, just for a different reason (a force-included
+PCH rather than one runtime-switch branch). One simplification versus the
+original: BYOD's parameter smoothing (`SmoothedValue`) is JUCE-only and
+dropped rather than reimplemented — every other DSP wrapper in this
+codebase (NamAmp, the Dragonfly reverbs) also applies parameter changes
+immediately with no internal ramping, so adding it back just for this one
+class would be inconsistent with the rest of the library, not a missing
+feature.
+
+The remaining two libraries (`analog-tape-model`, `lsp-plugins`) are
+registered but not initialized/built — no `third_party/CMakeLists.txt`
+exists yet for either.
 
 **`lsp-plugins/lsp-plugins` (vendored here) is the wrong repo to wrap
 against — investigated, not yet fixed.** Since its 1.2.0 release the
@@ -108,14 +152,23 @@ three build wrinkles were. Whoever picks up LSP Suite next should swap the
 vendored submodule for `lsp-dsp-units` (+ its two dependencies) rather than
 trying to use what's currently checked out.
 
-AnalogTapeModel was also scouted: its top-level `HysteresisProcessor` is
-deeply JUCE-bound (`AudioProcessorValueTreeState`, `AudioBuffer<float>`),
-but the inner `HysteresisProcessing` class underneath is templated on
-plain `double`s and much closer to standalone — modulo an optional `xsimd`
-SIMD path (togglable via a `HYSTERESIS_USE_SIMD` define), one
-`juce::FloatVectorOperations::multiply` call in its STN solver branch, and
-a JUCE leak-detector macro. Smaller lift than LSP, still not zero. BYOD
-hasn't been investigated yet.
+**AnalogTapeModel was scouted more deeply and turned out messier than the
+original pass suggested — investigated, not fixed.** Its top-level
+`HysteresisProcessor` is deeply JUCE-bound, but the inner
+`HysteresisProcessing` class is much closer to standalone — except its
+`process()` picks a solver via a **runtime `switch`, not `if constexpr`**,
+so the `STN` branch is compiled into every instantiation regardless of
+which solver actually gets called. That branch alone pulls in RTNeural (a
+full neural-net template library), `nlohmann::json`, and JUCE's
+`BinaryData`/`String`/`MemoryInputStream` to load 231 pretrained model
+files — none of which can be avoided just by never selecting `STN` at
+runtime, since the compiler still needs it all resolved to build at all.
+Getting a clean build means either patching the vendored header (`switch`
+→ `if constexpr`, so only the self-contained RK2/RK4/NR4/NR8 solvers ever
+get compiled) or vendoring RTNeural + `chowdsp_utils`/`xsimd` just to
+satisfy a code path this project likely never calls. Whoever picks this up
+next should budget for that decision, not treat it as a quick wrap like
+Dragonfly's or the Diode Clipper's own turned out to be.
 
 **RTNeural was evaluated and deliberately dropped, not vendored.** It's a
 generic neural-inference engine (no built-in amp/pedal-specific behavior at
@@ -142,31 +195,37 @@ git submodules at all) doesn't raise this concern in the first place.
 
 ## Non-goals (not yet — tracked for follow-up work)
 
-- DSP wrappers for the other three libraries (tape delay/drive,
-  compression/EQ). All four Dragonfly Reverb algorithms are now wrapped.
-- `extern "C"` audio-processing entrypoints (process, load-model,
-  parameters) — needs a real-time wiring design first.
-- Wiring the graph engine and the NAM wrapper together (they're independent,
-  both tested, but not yet unified behind one API).
+- DSP wrappers for the rest of AnalogTapeModel (tape delay), BYOD (BYOD has
+  43+ other effects beyond Diode Clipper — distortion/fuzz/modulation), and
+  all of LSP Suite (compression/EQ). Their block kinds pass audio through
+  unchanged in `AudioEngine` until they're wrapped. Diode Clipper isn't
+  wired into `AudioEngine`/`api.h` yet either — no `BlockKind` exists for it
+  (unlike Reverb, which already had one from #13's original scaffold) — see
+  its own section above.
 - Preset/JSON (de)serialization.
-- WASM/browser UI wiring — Emscripten isn't installed in the environment
-  this was built in (see below), so there's nothing to wire yet.
+- Full lock-free concurrency: `Process()` itself is allocation-free and its
+  params are lock-free atomics, but topology mutation
+  (add/remove/connect/disconnect) and NAM model loading are not claimed safe
+  to call concurrently with `Process()` — no real host drives this from an
+  audio thread yet (native tests only).
+- WASM/browser UI wiring — a separate follow-up PR builds this on top of
+  the ABI here (see the `nam_studio_core_wasm` CMake target's own PR).
+- iOS/Android: still unverified, those toolchains aren't installed in this
+  environment.
 
 ## Build verification status
 
 **Native (macOS, this environment): verified, not just authored.** CMake
-4.4.2 (installed via CMake.app, not on `PATH` — use the full path,
-`/Applications/CMake.app/Contents/bin/cmake`) configures, builds, and runs
-the full CTest suite (9/9 passing, including the real NAM model
-load-and-process test, all four Dragonfly Reverb algorithms' real
-impulse-response tests, and the combined-binary symbol-isolation
-regression test) against Debug builds:
+4.4.2 configures, builds, and runs the full CTest suite (12/12 passing,
+including the real NAM model load-and-process test, all four Dragonfly
+Reverb algorithms' real impulse-response tests, the combined-binary
+symbol-isolation regression test, and the Diode Clipper's real nonlinear-
+clipping test) against Debug builds:
 
 ```bash
-CMAKE=/Applications/CMake.app/Contents/bin/cmake
-$CMAKE -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-$CMAKE --build packages/core/build
-$CMAKE --build packages/core/build --target test  # or: ctest --test-dir packages/core/build
+cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build packages/core/build
+ctest --test-dir packages/core/build --output-on-failure
 ```
 
 **Emscripten/iOS/Android: still unverified** — those toolchains aren't
