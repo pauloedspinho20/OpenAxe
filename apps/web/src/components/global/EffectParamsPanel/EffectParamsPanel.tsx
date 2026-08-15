@@ -46,6 +46,8 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
     setValues((prev) => ({ ...prev, [key]: value }))
   }
 
+  console.log('groupFields(schema)', groupFields(schema), 'schema', schema)
+
   return (
     <div className={styles.panel}>
       {groupFields(schema).map(([groupName, fields]) => (
