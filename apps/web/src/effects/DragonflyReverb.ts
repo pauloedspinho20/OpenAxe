@@ -31,10 +31,14 @@ function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
 
 /**
  * Real Dragonfly Hall Reverb (via packages/core compiled to WASM - see
- * scripts/build-core-wasm.sh) behind the exact same 2-knob interface the
- * app's original Freeverb.ts exposed, so it's a drop-in swap in
- * effectRegistry.ts: same `kind`/`getParams()`/`setParams()` shape, zero
- * changes needed to paramSchema.ts, EffectParamsPanel, or saved presets.
+ * scripts/build-core-wasm.sh), replacing the app's original Freeverb.ts.
+ * `roomSize`/`damping` keep Freeverb's original names/ranges (remapped onto
+ * Dragonfly's native decay/high_cut internally - see dragonflyReverbWorklet.js)
+ * so old saved preset values still land somewhere sensible; `width`/
+ * `predelay`/`spin`/`wander`/`earlySend` are new knobs exposing Dragonfly's
+ * own character controls (stereo width, early-reflection timing, and the
+ * tail modulation that's one of its real advantages over Freeverb) in their
+ * native units, added to `paramSchema.ts`'s `reverb` schema alongside them.
  * Freeverb.ts itself stays in the tree, unused, as the fallback issue #22's
  * own migration plan calls for.
  */
@@ -70,6 +74,31 @@ export class DragonflyReverb extends BaseEffect {
     this.param('damping').setValueAtTime(damping, this.node.context.currentTime)
   }
 
+  /** Stereo width, [50, 150]% - Dragonfly's own native range/units, no remapping. */
+  setWidth(width: number): void {
+    this.param('width').setValueAtTime(width, this.node.context.currentTime)
+  }
+
+  /** Delay before the reverb tail starts, [0, 100]ms - Dragonfly's own native range/units. */
+  setPredelay(predelay: number): void {
+    this.param('predelay').setValueAtTime(predelay, this.node.context.currentTime)
+  }
+
+  /** Modulation rate, [0, 10]Hz - Dragonfly's own native range/units. */
+  setSpin(spin: number): void {
+    this.param('spin').setValueAtTime(spin, this.node.context.currentTime)
+  }
+
+  /** Modulation depth, [0, 40]ms - Dragonfly's own native range/units. */
+  setWander(wander: number): void {
+    this.param('wander').setValueAtTime(wander, this.node.context.currentTime)
+  }
+
+  /** Early-reflections send level, [0, 100]% - Dragonfly's own native range/units. */
+  setEarlySend(earlySend: number): void {
+    this.param('earlySend').setValueAtTime(earlySend, this.node.context.currentTime)
+  }
+
   private param(name: string): AudioParam {
     const param = this.node.parameters.get(name)
     if (!param) throw new Error(`DragonflyReverb: unknown AudioParam '${name}'`)
@@ -81,6 +110,11 @@ export class DragonflyReverb extends BaseEffect {
       ...this.baseParams(),
       roomSize: this.param('roomSize').value,
       damping: this.param('damping').value,
+      width: this.param('width').value,
+      predelay: this.param('predelay').value,
+      spin: this.param('spin').value,
+      wander: this.param('wander').value,
+      earlySend: this.param('earlySend').value,
     }
   }
 
@@ -88,6 +122,11 @@ export class DragonflyReverb extends BaseEffect {
     this.applyBaseParams(params)
     if (typeof params.roomSize === 'number') this.setRoomSize(params.roomSize)
     if (typeof params.damping === 'number') this.setDamping(params.damping)
+    if (typeof params.width === 'number') this.setWidth(params.width)
+    if (typeof params.predelay === 'number') this.setPredelay(params.predelay)
+    if (typeof params.spin === 'number') this.setSpin(params.spin)
+    if (typeof params.wander === 'number') this.setWander(params.wander)
+    if (typeof params.earlySend === 'number') this.setEarlySend(params.earlySend)
   }
 
   dispose(): void {
