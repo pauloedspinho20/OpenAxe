@@ -392,7 +392,25 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     },
     ...MIX_LEVEL_FIELDS,
   ],
+  // Four Dragonfly Reverb algorithms (packages/core): Hall, Room, Plate,
+  // Early Reflections. Each algorithm exposes a different subset of the
+  // 7 user-facing knobs — roomSize/damping (Freeverb-compatible) and width
+  // are universal; predelay/spin/wander/earlySend vary by algorithm. Per-
+  // field `visible` predicates hide knobs the current algorithm doesn't
+  // support (the C++ side harmlessly ignores out-of-range indices).
   reverb: [
+    {
+      key: 'reverbAlgorithm',
+      label: 'Algorithm',
+      control: 'select',
+      options: [
+        { value: 'hall', label: 'Hall' },
+        { value: 'room', label: 'Room' },
+        { value: 'plate', label: 'Plate' },
+        { value: 'early-reflections', label: 'Early Reflections' },
+      ],
+      defaultValue: 'hall',
+    },
     {
       key: 'roomSize',
       label: 'Size',
@@ -402,6 +420,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.84,
       formatValue: percent,
+      visible: (v) => v.reverbAlgorithm !== 'early-reflections',
     },
     {
       key: 'damping',
@@ -413,9 +432,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
     },
-    // Dragonfly Reverb's own character controls (packages/core/src/dsp/
-    // dragonfly_hall_reverb.cpp), not present in the original Freeverb -
-    // native units/ranges, no remapping (see DragonflyReverb.ts).
     {
       key: 'width',
       label: 'Width',
@@ -435,6 +451,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 20,
       formatValue: msRaw,
+      visible: (v) => v.reverbAlgorithm !== 'early-reflections',
     },
     {
       key: 'spin',
@@ -445,6 +462,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 0.6,
       formatValue: hzPrecise,
+      visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
     },
     {
       key: 'wander',
@@ -455,6 +473,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 8,
       formatValue: msRaw,
+      visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
     },
     {
       key: 'earlySend',
@@ -465,6 +484,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 20,
       formatValue: percentRaw,
+      visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
     },
     ...MIX_LEVEL_FIELDS,
   ],
