@@ -24,8 +24,15 @@ export function AddBlockMenu({ open, onPick, onClose }: AddBlockMenuProps) {
                 key={option.kind}
                 type="button"
                 role="menuitem"
-                className={styles.option}
-                onClick={() => onPick(option.kind)}
+                className={`${styles.option} ${option.disabled ? styles.optionDisabled : ''}`}
+                disabled={option.disabled}
+                aria-label={
+                  option.disabled
+                    ? `${option.label} - not yet available (${option.vendor})`
+                    : undefined
+                }
+                title={option.disabled ? option.vendor : undefined}
+                onClick={() => !option.disabled && onPick(option.kind)}
               >
                 <BlockIcon kind={option.kind} size={12} />
                 {option.label}

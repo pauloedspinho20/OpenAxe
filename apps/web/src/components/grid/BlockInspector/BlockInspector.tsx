@@ -11,7 +11,7 @@ import { AssetScreenButton, type AssetGearType } from '../AssetScreenButton/Asse
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { getParamSchema } from '../../../effects/paramSchema'
-import { BLOCK_KIND_LABELS } from '../blockOptions'
+import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDORS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
 
 export interface BlockInspectorProps {
@@ -58,6 +58,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const block = rig?.getBlock(instance.id) ?? null
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
+  const vendor = BLOCK_KIND_VENDORS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
   const isEffect = EFFECT_KINDS.has(instance.kind)
   const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
@@ -82,6 +83,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
       }
     >
       <div className={styles.content}>
+        <p className={styles.vendor}>{vendor}</p>
         {!block && <p className={styles.empty}>Power on to edit this block.</p>}
 
         {block && isAssetKind && (

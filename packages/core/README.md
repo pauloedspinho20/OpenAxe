@@ -207,9 +207,12 @@ git submodules at all) doesn't raise this concern in the first place.
   params are lock-free atomics, but topology mutation
   (add/remove/connect/disconnect) and NAM model loading are not claimed safe
   to call concurrently with `Process()` — no real host drives this from an
-  audio thread yet (native tests only).
-- WASM/browser UI wiring — a separate follow-up PR builds this on top of
-  the ABI here (see the `nam_studio_core_wasm` CMake target's own PR).
+  audio thread yet (native tests + one browser AudioWorklet, see below).
+- WASM/browser UI wiring beyond Reverb — issue #22's first slice
+  (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`) only calls
+  `create`/`add_block`/`connect`/`reset`/`process`/`set_param`; NAM model
+  loading, metering, and reverb algorithm switching aren't wired into the
+  web app yet. Diode Clipper isn't wired into it at all (see above).
 - iOS/Android: still unverified, those toolchains aren't installed in this
   environment.
 
@@ -228,10 +231,22 @@ cmake --build packages/core/build
 ctest --test-dir packages/core/build --output-on-failure
 ```
 
-**Emscripten/iOS/Android: still unverified** — those toolchains aren't
-installed in this environment. The `if(EMSCRIPTEN)`/iOS/Android branches in
-`CMakeLists.txt` are unchanged from #13's scaffold and remain
-authored-but-untested.
+**Emscripten: verified for issue #22's first slice.** `nam_studio_core`
+itself stays a plain `STATIC` library (Emscripten's export/link flags only
+apply to a final linked module); a small `nam_studio_core_wasm` executable
+target (empty `src/wasm_entry.cpp`, no `main()` needed for the
+`MODULARIZE=1` factory-function pattern) links it and gets the actual
+Emscripten treatment. `scripts/build-core-wasm.sh` builds it and copies the
+output into `apps/web/public/wasm-core/`, where
+`dragonflyReverbWorklet.js` (a real `AudioWorkletProcessor`) calls into it.
+Only 7 of the 20 `extern "C"` functions are exported so far (see
+`CMakeLists.txt`'s `EXPORTED_FUNCTIONS` list) — enough for one graph with
+one Reverb block; extend that list as more of the ABI gets used from the
+browser.
+
+**iOS/Android: still unverified** — those toolchains aren't installed in
+this environment. The iOS/Android branches in `CMakeLists.txt` are unchanged
+from #13's scaffold and remain authored-but-untested.
 
 ### A gotcha worth knowing if you extend this
 
@@ -291,9 +306,11 @@ to build it:**
 cmake -B build/native -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native
 
-# WASM (web, via Emscripten) - unverified, emcc not installed here
+# WASM (web, via Emscripten) - verified for issue #22's first slice; use
+# scripts/build-core-wasm.sh instead, which also copies the output into
+# apps/web/public/wasm-core/
 emcmake cmake -B build/wasm -DCMAKE_BUILD_TYPE=Release
-cmake --build build/wasm
+cmake --build build/wasm --target nam_studio_core_wasm
 
 # iOS - unverified
 cmake -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS
