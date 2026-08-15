@@ -32,12 +32,17 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     discrete early-reflection pattern). Stereo. Replaces the app's current
     basic Freeverb effect with a full modulated, frequency-dependent-decay
     reverb suite.
-- **`extern "C"` API** (`include/nam_studio/api.h` + `src/api.cpp`) — opaque
-  `NamStudioGraph` handle, lifecycle only (`nam_studio_graph_create`/
-  `_destroy`). Real-time entrypoints (`nam_studio_process`,
-  `nam_studio_load_nam_model`, etc.) aren't declared yet — that needs a
-  real-time audio wiring design this PR doesn't attempt, and declaring an
-  ABI before that design exists would just be something to break later.
+- **Real-time audio engine + full `extern "C"` API** (issue #14's follow-up
+  PR): `include/nam_studio/engine.h` + `src/engine.cpp` add
+  `nam_studio::engine::AudioEngine`, a layer on top of `GraphRig` that gives
+  each block a live DSP object (NAM for the 5 amp-family kinds, one of the
+  4 Dragonfly algorithms for `kReverb`, passthrough for kinds LSP/BYOD/
+  AnalogTapeModel haven't wrapped yet), pre-allocated buffers, and real
+  column-ordered signal routing. `include/nam_studio/api.h` + `src/api.cpp`
+  expose it as a 20-function `extern "C"` surface (int32 ids, not
+  `GraphRig`'s strings — portable across C/WASM/FFI): topology, `reset`/
+  `process`, generic param get/set/info, NAM model management, reverb
+  algorithm choice, and metering.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -143,14 +148,21 @@ git submodules at all) doesn't raise this concern in the first place.
 ## Non-goals (not yet — tracked for follow-up work)
 
 - DSP wrappers for the other three libraries (tape delay/drive,
-  compression/EQ). All four Dragonfly Reverb algorithms are now wrapped.
-- `extern "C"` audio-processing entrypoints (process, load-model,
-  parameters) — needs a real-time wiring design first.
-- Wiring the graph engine and the NAM wrapper together (they're independent,
-  both tested, but not yet unified behind one API).
+  compression/EQ) — AnalogTapeModel, BYOD, LSP Suite. Their block kinds pass
+  audio through unchanged in `AudioEngine` until they're wrapped.
 - Preset/JSON (de)serialization.
-- WASM/browser UI wiring — Emscripten isn't installed in the environment
-  this was built in (see below), so there's nothing to wire yet.
+- Full lock-free concurrency: `Process()` itself is allocation-free and its
+  params are lock-free atomics, but topology mutation
+  (add/remove/connect/disconnect) and NAM model loading are not claimed safe
+  to call concurrently with `Process()` — no real host drives this from an
+  audio thread yet (native tests + one browser AudioWorklet, see below).
+- WASM/browser UI wiring beyond Reverb — issue #22's first slice
+  (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`) only calls
+  `create`/`add_block`/`connect`/`reset`/`process`/`set_param`; NAM model
+  loading, metering, and reverb algorithm switching aren't wired into the
+  web app yet.
+- iOS/Android: still unverified, those toolchains aren't installed in this
+  environment.
 
 ## Build verification status
 
@@ -169,10 +181,22 @@ $CMAKE --build packages/core/build
 $CMAKE --build packages/core/build --target test  # or: ctest --test-dir packages/core/build
 ```
 
-**Emscripten/iOS/Android: still unverified** — those toolchains aren't
-installed in this environment. The `if(EMSCRIPTEN)`/iOS/Android branches in
-`CMakeLists.txt` are unchanged from #13's scaffold and remain
-authored-but-untested.
+**Emscripten: verified for issue #22's first slice.** `nam_studio_core`
+itself stays a plain `STATIC` library (Emscripten's export/link flags only
+apply to a final linked module); a small `nam_studio_core_wasm` executable
+target (empty `src/wasm_entry.cpp`, no `main()` needed for the
+`MODULARIZE=1` factory-function pattern) links it and gets the actual
+Emscripten treatment. `scripts/build-core-wasm.sh` builds it and copies the
+output into `apps/web/public/wasm-core/`, where
+`dragonflyReverbWorklet.js` (a real `AudioWorkletProcessor`) calls into it.
+Only 7 of the 20 `extern "C"` functions are exported so far (see
+`CMakeLists.txt`'s `EXPORTED_FUNCTIONS` list) — enough for one graph with
+one Reverb block; extend that list as more of the ABI gets used from the
+browser.
+
+**iOS/Android: still unverified** — those toolchains aren't installed in
+this environment. The iOS/Android branches in `CMakeLists.txt` are unchanged
+from #13's scaffold and remain authored-but-untested.
 
 ### A gotcha worth knowing if you extend this
 
@@ -232,9 +256,11 @@ to build it:**
 cmake -B build/native -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native
 
-# WASM (web, via Emscripten) - unverified, emcc not installed here
+# WASM (web, via Emscripten) - verified for issue #22's first slice; use
+# scripts/build-core-wasm.sh instead, which also copies the output into
+# apps/web/public/wasm-core/
 emcmake cmake -B build/wasm -DCMAKE_BUILD_TYPE=Release
-cmake --build build/wasm
+cmake --build build/wasm --target nam_studio_core_wasm
 
 # iOS - unverified
 cmake -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS

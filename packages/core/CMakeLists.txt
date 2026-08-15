@@ -133,8 +133,29 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CMakeLists.txt")
 endif()
 
 if(EMSCRIPTEN)
-  # Web target (issue #14): compiled to WASM, consumed by apps/web via AudioWorklet.
-  set_target_properties(nam_studio_core PROPERTIES SUFFIX ".js")
+  # Web target (issue #22): compiled to WASM, consumed by apps/web via
+  # AudioWorklet. Emscripten's exports/link flags only apply to a final
+  # linked module, not a static archive - nam_studio_core itself stays a
+  # plain STATIC library (as every other target links it), and this small
+  # executable is what actually gets Emscripten's MODULARIZE treatment.
+  # wasm_entry.cpp is deliberately empty; nothing needs a main() for the
+  # MODULARIZE=1 factory-function pattern used here.
+  add_executable(nam_studio_core_wasm src/wasm_entry.cpp)
+  target_link_libraries(nam_studio_core_wasm PRIVATE nam_studio_core)
+  set_target_properties(nam_studio_core_wasm PROPERTIES OUTPUT_NAME "nam_studio_core")
+  target_link_options(nam_studio_core_wasm PRIVATE
+    "SHELL:-s MODULARIZE=1"
+    "SHELL:-s EXPORT_ES6=1"
+    "SHELL:-s ENVIRONMENT=worklet"
+    "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    # Only what apps/web's DragonflyReverb worklet (issue #22's first slice)
+    # actually calls - see apps/web/public/wasm-core/dragonflyReverbWorklet.js.
+    # Extend this list as more of the graph ABI gets used from the browser.
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_malloc','_free']"
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
+    -O3
+  )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # iOS target (issue #17): linked into apps/ios via an XCFramework.
   set_target_properties(nam_studio_core PROPERTIES
