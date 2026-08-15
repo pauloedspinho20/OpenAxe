@@ -181,6 +181,18 @@ void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
   graph->engine.SetDriveModel(block_id, ToDriveModel(model));
 }
 
+void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
+                                 NamStudioDelayModel model) {
+  using nam_studio::dsp::Delay;
+  Delay::Model m = Delay::Model::kDigital;
+  switch (model) {
+    case NAM_STUDIO_DELAY_DIGITAL: m = Delay::Model::kDigital; break;
+    case NAM_STUDIO_DELAY_ANALOG:  m = Delay::Model::kAnalog; break;
+    case NAM_STUDIO_DELAY_TAPE:    m = Delay::Model::kTape; break;
+  }
+  graph->engine.SetDelayModel(block_id, m);
+}
+
 float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
   return graph->engine.GetMeter(block_id);
 }

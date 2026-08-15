@@ -18,3 +18,6 @@
 	path = packages/core/third_party/nam-core
 	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
 	shallow = true
+[submodule "packages/core/third_party/signalsmith-dsp"]
+	path = packages/core/third_party/signalsmith-dsp
+	url = https://github.com/Signalsmith-Audio/dsp.git

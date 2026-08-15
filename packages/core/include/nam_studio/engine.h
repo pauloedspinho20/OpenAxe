@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "nam_studio/block.h"
+#include "nam_studio/dsp/delay.h"
 #include "nam_studio/dsp/nam_amp.h"
 #include "nam_studio/graph_rig.h"
 
@@ -125,6 +126,9 @@ class AudioEngine {
 
   // Only meaningful for kDrive blocks; no-op otherwise. Not real-time safe.
   void SetDriveModel(BlockId id, DriveModel model);
+
+  // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
+  void SetDelayModel(BlockId id, dsp::Delay::Model model);
 
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown

@@ -121,15 +121,13 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     kind: 'delay',
     label: 'Delay',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'ping-pong-delay',
     label: 'Ping-Pong Delay',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'reverb',

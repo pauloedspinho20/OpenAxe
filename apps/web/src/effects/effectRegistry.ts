@@ -6,7 +6,7 @@ import { Chorus } from './Chorus'
 import { Flanger } from './Flanger'
 import { Phaser } from './Phaser'
 import { Tremolo } from './Tremolo'
-import { Delay, type DelayCharacter } from './Delay'
+import { Delay } from './Delay'
 import { PingPongDelay } from './PingPongDelay'
 import { DragonflyReverb } from './DragonflyReverb'
 import { Drive } from './Drive'
@@ -48,16 +48,12 @@ async function buildEffect(
     case 'tremolo':
       return new Tremolo(context)
     case 'delay':
-      return new Delay(context, asDelayCharacter(params?.character))
+      return Delay.create(context)
     case 'ping-pong-delay':
-      return new PingPongDelay(context)
+      return PingPongDelay.create(context)
     case 'reverb':
       return DragonflyReverb.create(context)
     case 'drive':
       return Drive.create(context)
   }
-}
-
-function asDelayCharacter(value: unknown): DelayCharacter {
-  return value === 'tape' ? 'tape' : 'clean'
 }

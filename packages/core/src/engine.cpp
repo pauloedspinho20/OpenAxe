@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "nam_studio/dsp/chorus.h"
+#include "nam_studio/dsp/delay.h"
 #include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_early_reflections.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
@@ -16,6 +17,7 @@
 #include "nam_studio/dsp/flanger.h"
 #include "nam_studio/dsp/mxr_distortion.h"
 #include "nam_studio/dsp/phaser.h"
+#include "nam_studio/dsp/ping_pong_delay.h"
 #include "nam_studio/dsp/tube_screamer.h"
 #include "nam_studio/dsp/zen_drive.h"
 
@@ -54,7 +56,7 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallR
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
                                  dsp::DragonflyEarlyReflections, dsp::DiodeClipper, dsp::TubeScreamer,
                                  dsp::ZenDrive, dsp::MxrDistortion, dsp::Chorus, dsp::Flanger,
-                                 dsp::Phaser>;
+                                 dsp::Phaser, dsp::Delay, dsp::PingPongDelay>;
 
 }  // namespace
 
@@ -193,6 +195,14 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   } else if (kind == graph::BlockKind::kPhaser) {
     state->dsp.emplace<dsp::Phaser>();
     state->param_count = dsp::Phaser::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kDelay) {
+    state->dsp.emplace<dsp::Delay>();
+    state->param_count = dsp::Delay::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kPingPongDelay) {
+    state->dsp.emplace<dsp::PingPongDelay>();
+    state->param_count = dsp::PingPongDelay::ParamCount();
     SeedParamsFromDsp(*state);
   }
   // Every other kind stays std::monostate (passthrough) with param_count 0 -
@@ -579,6 +589,22 @@ void AudioEngine::SetDriveModel(BlockId id, DriveModel model) {
         },
         state->dsp);
   }
+  SeedParamsFromDsp(*state);
+}
+
+// ── Delay model choice ──────────────────────────────────────────────────
+
+void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kDelay) return;
+
+  auto* delay = std::get_if<dsp::Delay>(&state->dsp);
+  if (!delay) return;
+
+  delay->SetModel(model);
+  // Reset param_count in case it changes (it doesn't currently — same count
+  // for all models — but this matches SetDriveModel's pattern).
+  state->param_count = dsp::Delay::ParamCount();
   SeedParamsFromDsp(*state);
 }
 
