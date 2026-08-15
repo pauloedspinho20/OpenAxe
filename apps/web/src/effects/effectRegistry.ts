@@ -8,7 +8,7 @@ import { Phaser } from './Phaser'
 import { Tremolo } from './Tremolo'
 import { Delay, type DelayCharacter } from './Delay'
 import { PingPongDelay } from './PingPongDelay'
-import { Freeverb } from './Freeverb'
+import { DragonflyReverb } from './DragonflyReverb'
 
 /**
  * Builds an effect from its serialized `kind` (+ optional saved params),
@@ -51,7 +51,7 @@ async function buildEffect(
     case 'ping-pong-delay':
       return new PingPongDelay(context)
     case 'reverb':
-      return new Freeverb(context)
+      return DragonflyReverb.create(context)
   }
 }
 

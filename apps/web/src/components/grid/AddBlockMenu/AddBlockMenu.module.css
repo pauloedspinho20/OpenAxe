@@ -38,3 +38,13 @@
   color: var(--accent);
   border-color: var(--accent);
 }
+
+.optionDisabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.optionDisabled:hover {
+  color: var(--ink-1);
+  border-color: var(--seam);
+}
