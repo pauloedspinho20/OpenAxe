@@ -7,14 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(NAM_STUDIO_BUILD_TESTS "Build packages/core unit tests" OFF)
 
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
-# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and all 4
+# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, all 4
 # chowdsp_wdf-based drive wrappers (DiodeClipper/TubeScreamer/ZenDrive/
-# MxrDistortion) directly - it's the layer that makes those already-wrapped
-# families actually produce audio, so unlike the rest of this file it does
-# NOT degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/CHOWDSP_WDF_DIR below
-# turn out to be uninitialized; linking nam_studio_core will fail with
-# undefined symbols in that case. Run `git submodule update --init
-# --recursive` first if that happens.
+# MxrDistortion), and the 4 DSPark-based dynamics/EQ wrappers
+# (Compressor/Equalizer/NoiseGate/Tremolo) directly - it's the layer that
+# makes those already-wrapped families actually produce audio, so unlike the
+# rest of this file it does NOT degrade gracefully if
+# NAM_CORE_DIR/DRAGONFLY_DIR/CHOWDSP_WDF_DIR/DSPARK_DIR below turn out to be
+# uninitialized; linking nam_studio_core will fail with undefined symbols in
+# that case. Run `git submodule update --init --recursive` first if that
+# happens.
 add_library(nam_studio_core STATIC
   src/core.cpp
   src/graph_validation.cpp
@@ -26,6 +28,10 @@ add_library(nam_studio_core STATIC
   src/dsp/flanger.cpp
   src/dsp/phaser.cpp
   src/dsp/ping_pong_delay.cpp
+  src/dsp/compressor.cpp
+  src/dsp/equalizer.cpp
+  src/dsp/noise_gate.cpp
+  src/dsp/tremolo.cpp
 )
 
 target_include_directories(nam_studio_core PUBLIC
@@ -164,6 +170,25 @@ else()
     "the Diode Clipper/Tube Screamer/Zen Drive/MXR Distortion wrappers will "
     "not build. Run: git -C packages/core/third_party/byod submodule "
     "update --init --depth 1 -- modules/chowdsp_wdf")
+endif()
+
+# --- DSPark-based dynamics/EQ wrappers (issue #22) ---
+# DSPark (third_party/dspark) is a header-only, dependency-free C++20 DSP
+# framework. None of its source gets compiled - the wrappers (compressor.cpp/
+# equalizer.cpp/noise_gate.cpp/tremolo.cpp) just need its include path and
+# drive its processors through the shared DsparkEffect adapter
+# (src/dsp/internal/dspark_wrapper.h). Adding a new DSPark-backed block is
+# then just a Traits table + a thin concrete class (see compressor.cpp for the
+# minimal example); this include path is all the build wiring it needs.
+set(DSPARK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dspark")
+if(EXISTS "${DSPARK_DIR}/Effects/Compressor.h")
+  target_include_directories(nam_studio_core PRIVATE "${DSPARK_DIR}")
+  set(NAM_STUDIO_HAS_DSPARK TRUE)
+else()
+  message(WARNING
+    "packages/core/third_party/dspark isn't initialized - the Compressor/"
+    "Equalizer/NoiseGate/Tremolo wrappers will not build. Run: "
+    "git submodule update --init -- packages/core/third_party/dspark")
 endif()
 
 # The remaining two vendored DSP libraries (analog-tape-model, lsp-plugins)

@@ -36,7 +36,6 @@ const GEAR_LABELS: Record<AssetGearType, string> = {
 export function AssetScreenButton({ blockId, gearType, block, context }: AssetScreenButtonProps) {
   const isIr = gearType === 'cab'
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const openBrowser = useTone3000Browser((s) => s.openBrowser)
 

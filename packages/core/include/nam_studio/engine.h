@@ -18,15 +18,18 @@
 // one, adding a live DSP object per block, pre-allocated per-block buffers,
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
-// Three DSP families are wrapped anywhere in this codebase yet: NamAmp
+// Five DSP families are wrapped anywhere in this codebase yet: NamAmp
 // (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
 // algorithms (all back the single kReverb kind - algorithm choice is a
-// per-block setting this layer owns, see SetReverbAlgorithm), and Diode
-// Clipper (backs kDrive - model choice similarly owned here, see
-// SetDriveModel, though only one model exists so far). Every other kind
-// passes audio through unchanged rather than erroring, so a full rig is
-// buildable/testable today; wiring in real DSP as those libraries get
-// wrapped (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
+// per-block setting this layer owns, see SetReverbAlgorithm), the BYOD
+// wave-digital-filter drives (back kDrive - model choice similarly owned
+// here, see SetDriveModel), the hand-written modulation/delay wrappers
+// (kChorus/kFlanger/kPhaser/kDelay/kPingPongDelay), and the DSPark-based
+// dynamics/EQ wrappers (kCompressor/kEq/kNoiseGate/kTremolo - issue #22's
+// last four still-native effect kinds). Every other kind passes audio
+// through unchanged rather than erroring, so a full rig is buildable/
+// testable today; wiring in real DSP as those libraries get wrapped
+// (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
 namespace nam_studio::engine {
 
 // Int ids only at this layer - portable across C/WASM/FFI, no string

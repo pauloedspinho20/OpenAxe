@@ -14,8 +14,9 @@ import { Drive } from './Drive'
 /**
  * Builds an effect from its serialized `kind` (+ optional saved params),
  * for restoring a preset without the caller needing a big switch statement
- * of its own. NoiseGate is the only kind with an async constructor, hence
- * this function being async across the board.
+ * of its own. Every WASM-backed effect kind (NoiseGate, Compressor, EQ,
+ * Chorus, ...) has an async constructor that fetches and instantiates the
+ * packages/core module, hence this function being async across the board.
  */
 export async function createEffect(
   context: AudioContext,
@@ -30,15 +31,15 @@ export async function createEffect(
 async function buildEffect(
   context: AudioContext,
   kind: EffectKind,
-  params: EffectParams | undefined,
+  _params: EffectParams | undefined,
 ): Promise<Effect> {
   switch (kind) {
     case 'noise-gate':
       return NoiseGate.create(context)
     case 'compressor':
-      return new Compressor(context)
+      return Compressor.create(context)
     case 'eq':
-      return new ParametricEQ(context)
+      return ParametricEQ.create(context)
     case 'chorus':
       return Chorus.create(context)
     case 'flanger':
@@ -46,7 +47,7 @@ async function buildEffect(
     case 'phaser':
       return Phaser.create(context)
     case 'tremolo':
-      return new Tremolo(context)
+      return Tremolo.create(context)
     case 'delay':
       return Delay.create(context)
     case 'ping-pong-delay':

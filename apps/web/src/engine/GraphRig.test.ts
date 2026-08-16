@@ -51,13 +51,13 @@ describe('GraphRig', () => {
   })
 
   it('adds a block at a given position and can look it up', async () => {
-    const id = await rig.addBlock('eq', 1, 2)
+    const id = await rig.addBlock('mixer', 1, 2)
     expect(rig.getBlockPosition(id)).toEqual({ row: 1, col: 2 })
-    expect(rig.getBlock(id)?.kind).toBe('eq')
+    expect(rig.getBlock(id)?.kind).toBe('mixer')
   })
 
   it('getBlockAnalyser lazily creates and caches one tap per block, null for an unknown id', async () => {
-    const id = await rig.addBlock('eq', 0, 0)
+    const id = await rig.addBlock('mixer', 0, 0)
     expect(rig.getBlockAnalyser('nope')).toBeNull()
     const first = rig.getBlockAnalyser(id)
     const second = rig.getBlockAnalyser(id)
@@ -72,48 +72,48 @@ describe('GraphRig', () => {
   })
 
   it('connects two blocks in increasing column order', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
     const result = rig.connect(jack(a), jack(b))
     expect(result.ok).toBe(true)
     expect(rig.listEdgeIds()).toHaveLength(1)
   })
 
   it('rejects a backward connection', async () => {
-    const a = await rig.addBlock('eq', 0, 1)
-    const b = await rig.addBlock('eq', 0, 0)
+    const a = await rig.addBlock('mixer', 0, 1)
+    const b = await rig.addBlock('mixer', 0, 0)
     const result = rig.connect(jack(a), jack(b))
     expect(result.ok).toBe(false)
   })
 
   it('rejects a second cable into an already-occupied jack', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
-    const c = await rig.addBlock('eq', 0, 1)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
+    const c = await rig.addBlock('mixer', 0, 1)
     expect(rig.connect(jack(a), jack(b)).ok).toBe(true)
     expect(rig.connect(jack(c), jack(b)).ok).toBe(false)
   })
 
   it('honors an explicit edge id, so a store-generated id can be mirrored', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
     const result = rig.connect(jack(a), jack(b), 'my-edge')
     expect(result).toEqual({ ok: true, id: 'my-edge' })
     expect(rig.listEdgeIds()).toEqual(['my-edge'])
   })
 
   it('disconnects an edge by id', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
     const { id } = rig.connect(jack(a), jack(b)) as { ok: true; id: string }
     rig.disconnect(id)
     expect(rig.listEdgeIds()).toEqual([])
   })
 
   it('removing a block also drops every edge that touched it', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
-    const c = await rig.addBlock('eq', 0, 2)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
+    const c = await rig.addBlock('mixer', 0, 2)
     rig.connect(jack(a), jack(b))
     rig.connect(jack(b), jack(c))
 
@@ -125,8 +125,8 @@ describe('GraphRig', () => {
   })
 
   it('moving a block auto-drops a cable that would now go backward', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
     const { id: edgeId } = rig.connect(jack(a), jack(b)) as { ok: true; id: string }
 
     const { droppedEdgeIds } = rig.moveBlock(a, 0, 5)
@@ -136,8 +136,8 @@ describe('GraphRig', () => {
   })
 
   it('routes multiple cables into distinct Mixer ports', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 1, 0)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 1, 0)
     const mixer = await rig.addBlock('mixer', 0, 1)
     expect(rig.connect(jack(a), jack(mixer, 0)).ok).toBe(true)
     expect(rig.connect(jack(b), jack(mixer, 1)).ok).toBe(true)
@@ -145,7 +145,7 @@ describe('GraphRig', () => {
   })
 
   it('connects the IN rail to a block and the block to the OUT rail', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
+    const a = await rig.addBlock('mixer', 0, 0)
     expect(rig.connect(jack('IN'), jack(a)).ok).toBe(true)
     expect(rig.connect(jack(a), jack('OUT')).ok).toBe(true)
   })
@@ -156,8 +156,8 @@ describe('GraphRig', () => {
   })
 
   it('dispose is idempotent and clears blocks/edges', async () => {
-    const a = await rig.addBlock('eq', 0, 0)
-    const b = await rig.addBlock('eq', 0, 1)
+    const a = await rig.addBlock('mixer', 0, 0)
+    const b = await rig.addBlock('mixer', 0, 1)
     rig.connect(jack(a), jack(b))
 
     await rig.dispose()
@@ -184,7 +184,7 @@ describe('GraphRig', () => {
   it('counts only Amp/Cab blocks with an actual model/IR loaded', async () => {
     const ampId = await rig.addBlock('amp', 0, 0)
     await rig.addBlock('cab', 0, 1)
-    await rig.addBlock('eq', 0, 2)
+    await rig.addBlock('mixer', 0, 2)
     expect(rig.countActiveHeavyBlocks()).toBe(0)
 
     const amp = rig.getBlock(ampId) as AmpBlock

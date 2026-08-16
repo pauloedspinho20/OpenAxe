@@ -69,10 +69,10 @@ void TestEndToEndAmpAndReverbRig() {
 void TestUnwrappedKindPassesAudioThrough() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
-  const int32_t compressor = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_COMPRESSOR, 0, 0);
-  NAM_EXPECT(nam_studio_block_param_count(graph, compressor) == 0);  // LSP Suite isn't wrapped yet
-  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, compressor, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(graph, compressor, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  const int32_t cab = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_CAB, 0, 0);
+  NAM_EXPECT(nam_studio_block_param_count(graph, cab) == 0);  // no wrapped DSP behind Cab
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, cab, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, cab, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
   nam_studio_reset(graph, kSampleRate, kBlockSize);
 
   std::vector<float> input(kBlockSize, 0.3f);
@@ -82,6 +82,66 @@ void TestUnwrappedKindPassesAudioThrough() {
   nam_studio_process(graph, in_ptrs, 1, out_ptrs, 1, kBlockSize);
 
   for (float sample : output) NAM_EXPECT(sample == 0.3f);
+
+  nam_studio_graph_destroy(graph);
+}
+
+void TestEndToEndDsparkRig() {
+  // The four DSPark-backed kinds (issue #22's last still-native effect
+  // blocks) wired IN -> Compressor -> EQ -> NoiseGate -> Tremolo -> OUT
+  // through the full extern "C" surface. Every block must report its DSP
+  // param table and the chain must pass real audio finitely.
+  NamStudioGraph* graph = nam_studio_graph_create();
+
+  const int32_t compressor = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_COMPRESSOR, 0, 0);
+  const int32_t eq = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_EQ, 0, 1);
+  const int32_t gate = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_NOISE_GATE, 0, 2);
+  const int32_t tremolo = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_TREMOLO, 0, 3);
+
+  NAM_EXPECT(nam_studio_block_param_count(graph, compressor) == 7);
+  NAM_EXPECT(nam_studio_block_param_count(graph, eq) == 12);
+  NAM_EXPECT(nam_studio_block_param_count(graph, gate) == 6);
+  NAM_EXPECT(nam_studio_block_param_count(graph, tremolo) == 3);
+
+  const char* name = nullptr;
+  NAM_EXPECT(nam_studio_block_param_info(graph, compressor, 0, &name, nullptr, nullptr, nullptr,
+                                          nullptr) == 1);
+  NAM_EXPECT(name != nullptr);
+
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, compressor, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, compressor, 0, eq, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, eq, 0, gate, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, gate, 0, tremolo, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, tremolo, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  nam_studio_reset(graph, kSampleRate, kBlockSize);
+
+  // Aggressive compressor: pin a loud sine down so the "is any DSP actually
+  // running?" check can't pass on a silent passthrough.
+  nam_studio_set_param(graph, compressor, 0 /* threshold */, -60.0f);
+  nam_studio_set_param(graph, compressor, 1 /* ratio */, 20.0f);
+  nam_studio_set_param(graph, compressor, 2 /* attack */, 0.1f);
+
+  std::vector<float> input(kBlockSize);
+  for (int32_t i = 0; i < kBlockSize; ++i) {
+    input[static_cast<size_t>(i)] =
+        1.0f * std::sin(static_cast<float>(i) / static_cast<float>(kSampleRate) * 200.0f * 6.283185307179586f);
+  }
+  std::vector<float> output(kBlockSize, 0.0f);
+  const float* in_ptrs[1] = {input.data()};
+  float* out_ptrs[1] = {output.data()};
+
+  bool all_finite = true;
+  float max_abs_out = 0.0f;
+  for (int pass = 0; pass < 8; ++pass) {
+    nam_studio_process(graph, in_ptrs, 1, out_ptrs, 1, kBlockSize);
+    for (float sample : output) {
+      if (!std::isfinite(sample)) all_finite = false;
+      max_abs_out = std::max(max_abs_out, std::fabs(sample));
+    }
+  }
+  NAM_EXPECT(all_finite);
+  NAM_EXPECT(max_abs_out > 0.0f);
+  NAM_EXPECT(max_abs_out < 0.5f);
 
   nam_studio_graph_destroy(graph);
 }
@@ -186,6 +246,7 @@ int main() {
   TestReverbAlgorithmSwitchOnlyAffectsThatBlock();
   TestEndToEndDriveRig();
   TestDriveModelSwitchOnlyAffectsThatBlock();
+  TestEndToEndDsparkRig();
   TestUnknownBlockCallsAreSafeNoOps();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

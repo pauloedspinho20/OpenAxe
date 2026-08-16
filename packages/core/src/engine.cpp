@@ -8,16 +8,20 @@
 #include <variant>
 
 #include "nam_studio/dsp/chorus.h"
+#include "nam_studio/dsp/compressor.h"
 #include "nam_studio/dsp/delay.h"
 #include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_early_reflections.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
 #include "nam_studio/dsp/dragonfly_room_reverb.h"
+#include "nam_studio/dsp/equalizer.h"
 #include "nam_studio/dsp/flanger.h"
 #include "nam_studio/dsp/mxr_distortion.h"
+#include "nam_studio/dsp/noise_gate.h"
 #include "nam_studio/dsp/phaser.h"
 #include "nam_studio/dsp/ping_pong_delay.h"
+#include "nam_studio/dsp/tremolo.h"
 #include "nam_studio/dsp/tube_screamer.h"
 #include "nam_studio/dsp/zen_drive.h"
 
@@ -56,7 +60,8 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallR
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
                                  dsp::DragonflyEarlyReflections, dsp::DiodeClipper, dsp::TubeScreamer,
                                  dsp::ZenDrive, dsp::MxrDistortion, dsp::Chorus, dsp::Flanger,
-                                 dsp::Phaser, dsp::Delay, dsp::PingPongDelay>;
+                                 dsp::Phaser, dsp::Delay, dsp::PingPongDelay, dsp::Compressor,
+                                 dsp::Equalizer, dsp::NoiseGate, dsp::Tremolo>;
 
 }  // namespace
 
@@ -204,9 +209,25 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->dsp.emplace<dsp::PingPongDelay>();
     state->param_count = dsp::PingPongDelay::ParamCount();
     SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kCompressor) {
+    state->dsp.emplace<dsp::Compressor>();
+    state->param_count = dsp::Compressor::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kEq) {
+    state->dsp.emplace<dsp::Equalizer>();
+    state->param_count = dsp::Equalizer::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kNoiseGate) {
+    state->dsp.emplace<dsp::NoiseGate>();
+    state->param_count = dsp::NoiseGate::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kTremolo) {
+    state->dsp.emplace<dsp::Tremolo>();
+    state->param_count = dsp::Tremolo::ParamCount();
+    SeedParamsFromDsp(*state);
   }
   // Every other kind stays std::monostate (passthrough) with param_count 0 -
-  // the remaining LSP/AnalogTapeModel wrappers aren't written yet (see
+  // the remaining AnalogTapeModel/LSP wrappers aren't written yet (see
   // packages/core/README.md).
 
   if (max_block_size_ > 0) EnsureBuffers(*state);

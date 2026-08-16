@@ -36,7 +36,9 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   PR): `include/nam_studio/engine.h` + `src/engine.cpp` add
   `nam_studio::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
-  4 Dragonfly algorithms for `kReverb`, passthrough for kinds LSP/BYOD/
+  4 Dragonfly algorithms for `kReverb`, one of 4 BYOD drive models for
+  `kDrive`, one of the 4 DSPark effects for `kCompressor`/`kEq`/`kNoiseGate`/
+  `kTremolo`, and passthrough for the kinds LSP/BYOD's other circuits/
   AnalogTapeModel haven't wrapped yet), pre-allocated buffers, and real
   column-ordered signal routing. `include/nam_studio/api.h` + `src/api.cpp`
   expose it as a 20-function `extern "C"` surface (int32 ids, not
@@ -82,6 +84,20 @@ effects/Drive.ts`, `apps/web/public/wasm-core/driveWorklet.js`) - the
     tests warm up on silence before measuring steady-state behavior, and
     check stereo independence by comparing two instances' left-channel output
     rather than asserting a silent channel stays silent.
+- **Compressor, EQ, Noise Gate, Tremolo** (`include/nam_studio/dsp/{compressor,equalizer,noise_gate,tremolo}.h`
+  - matching `src/dsp/*.cpp`) — four DSPark processors wrapped behind the same
+    thin-class interface as the Dragonfly reverbs, via a generic adapter
+    (`src/dsp/internal/dspark_wrapper.h`) that any future DSPark effect plugs
+    into with just a param table. `Compressor` (7 params: threshold/ratio/
+    attack/release/knee/makeup_gain/character — Clean/Opto/FET/Varimu),
+    `Equalizer` (12 params: 4 bands × frequency/gain/Q, low-shelf/2 mid
+    peaks/high-shelf), `NoiseGate` (6 params: threshold/hysteresis/attack/
+    hold/release/range), `Tremolo` (3 params: rate/depth/shape — Sine/
+    Triangle/Square, stereo with the right LFO 180°-offset). Envelope times
+    are in ms. These are the last four kinds issue #22 had still running on
+    native Web Audio nodes — wired to the web app via `apps/web/public/
+wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
+    TS classes.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -112,7 +128,13 @@ doing the same real-nonlinearity check through the engine layer and the
 full `extern "C"` surface respectively (not just the `DiodeClipper` class
 directly), plus confirming `SetDriveModel`/`nam_studio_set_drive_model`
 switches models independently per-block and is a safe no-op on a block of
-the wrong kind.
+the wrong kind. `compressor_test`/`equalizer_test`/`noise_gate_test`/
+`tremolo_test` do the same parameter-sweep + real-audio pattern for the four
+DSPark wrappers (a loud sine comes out measurably compressed/gated/modulated,
+a band boost measurably louder than a cut, silence measurably crushed), and
+`engine_test`'s DSPark case + `api_realtime_test`'s `TestEndToEndDsparkRig`
+run all four kinds in a chain through the engine and the full `extern "C"`
+surface.
 
 ## Vendored third-party DSP libraries
 
@@ -125,6 +147,7 @@ verifying each repo directly on GitHub:
 | `nam-core`          | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore)   | MIT     | **Yes** — see `nam_amp.cpp` above                              |
 | `dragonfly-reverb`  | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)     | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above                |
 | `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | **Partially** — `chowdsp_wdf` only (4 drive models), see below |
+| `dspark`            | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                       | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above    |
 | `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                                             |
 | `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                                             |
 

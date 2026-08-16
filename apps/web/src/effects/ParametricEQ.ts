@@ -1,67 +1,79 @@
 import { BaseEffect, type EffectParams } from './Effect'
 
-export interface EqBandConfig {
-  type: BiquadFilterType
-  frequency: number
-  gain?: number
-  q?: number
+const PROCESSOR_NAME = 'eq-processor'
+const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
+const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+
+const BAND_COUNT = 4
+
+function ensureWorkletRegistered(context: AudioContext): Promise<void> {
+  let promise = registeredContexts.get(context)
+  if (!promise) {
+    promise = context.audioWorklet.addModule('/wasm-core/eqWorklet.js')
+    registeredContexts.set(context, promise)
+  }
+  return promise
 }
 
-/** Guitar/bass-oriented default: low-shelf, two sweepable mid peaks, high-shelf. */
-const DEFAULT_BANDS: EqBandConfig[] = [
-  { type: 'lowshelf', frequency: 100, gain: 0 },
-  { type: 'peaking', frequency: 500, gain: 0, q: 1 },
-  { type: 'peaking', frequency: 2000, gain: 0, q: 1 },
-  { type: 'highshelf', frequency: 6000, gain: 0 },
-]
+function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
+  let promise = wasmBytesByContext.get(context)
+  if (!promise) {
+    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    wasmBytesByContext.set(context, promise)
+  }
+  return promise
+}
 
-/** A chain of BiquadFilterNodes in series - no third-party DSP needed, native nodes are already good EQ. */
+/**
+ * 4-band parametric EQ compiled to WASM (packages/core/src/dsp/equalizer.cpp,
+ * DSPark): low-shelf, two mid peaks, high-shelf, each with frequency/gain/Q -
+ * the same band layout the old BiquadFilterNode chain used, now running in
+ * the shared C++ DSP core. Band types are fixed by the wrapper (see
+ * equalizer.cpp's kBandType); only the per-band frequency/gain/Q knobs are
+ * exposed.
+ */
 export class ParametricEQ extends BaseEffect {
-  private readonly bands: BiquadFilterNode[]
+  private readonly node: AudioWorkletNode
 
-  constructor(context: BaseAudioContext, bandConfigs: EqBandConfig[] = DEFAULT_BANDS) {
-    if (bandConfigs.length === 0) {
-      throw new RangeError('ParametricEQ needs at least one band')
-    }
-    const bands = bandConfigs.map(
-      (config) =>
-        new BiquadFilterNode(context, {
-          type: config.type,
-          frequency: config.frequency,
-          gain: config.gain ?? 0,
-          Q: config.q ?? 1,
-        }),
-    )
-    for (let i = 0; i < bands.length - 1; i++) bands[i]!.connect(bands[i + 1]!)
+  private constructor(context: AudioContext, node: AudioWorkletNode) {
+    super(context, 'eq', 'EQ', node, node)
+    this.node = node
+  }
 
-    super(context, 'eq', 'EQ', bands[0]!, bands[bands.length - 1]!)
-    this.bands = bands
+  static async create(context: AudioContext): Promise<ParametricEQ> {
+    const [, wasmBytes] = await Promise.all([
+      ensureWorkletRegistered(context),
+      fetchWasmBytes(context),
+    ])
+    const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      processorOptions: { wasmBytes },
+    })
+    return new ParametricEQ(context, node)
   }
 
   get bandCount(): number {
-    return this.bands.length
+    return BAND_COUNT
   }
 
   setBandFrequency(index: number, hz: number): void {
-    this.band(index).frequency.setTargetAtTime(hz, this.context().currentTime, 0.01)
+    this.param(`band${index}_frequency`).setValueAtTime(hz, this.node.context.currentTime)
   }
 
   setBandGain(index: number, dB: number): void {
-    this.band(index).gain.setTargetAtTime(dB, this.context().currentTime, 0.01)
+    this.param(`band${index}_gain`).setValueAtTime(dB, this.node.context.currentTime)
   }
 
   setBandQ(index: number, q: number): void {
-    this.band(index).Q.setTargetAtTime(q, this.context().currentTime, 0.01)
+    this.param(`band${index}_q`).setValueAtTime(q, this.node.context.currentTime)
   }
 
-  private band(index: number): BiquadFilterNode {
-    const band = this.bands[index]
-    if (!band) throw new RangeError(`EQ band ${index} out of range (${this.bands.length} bands)`)
-    return band
-  }
-
-  private context(): BaseAudioContext {
-    return this.bands[0]!.context
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`ParametricEQ: unknown AudioParam '${name}'`)
+    return param
   }
 
   /**
@@ -69,29 +81,29 @@ export class ParametricEQ extends BaseEffect {
    * a nested structure, since EffectParams is a flat record shared by every effect kind.
    */
   getParams(): EffectParams {
-    const params: EffectParams = { ...this.baseParams(), bandCount: this.bands.length }
-    this.bands.forEach((band, i) => {
-      params[`band${i}_frequency`] = band.frequency.value
-      params[`band${i}_gain`] = band.gain.value
-      params[`band${i}_q`] = band.Q.value
-    })
+    const params: EffectParams = { ...this.baseParams(), bandCount: BAND_COUNT }
+    for (let i = 0; i < BAND_COUNT; i++) {
+      params[`band${i}_frequency`] = this.param(`band${i}_frequency`).value
+      params[`band${i}_gain`] = this.param(`band${i}_gain`).value
+      params[`band${i}_q`] = this.param(`band${i}_q`).value
+    }
     return params
   }
 
   setParams(params: EffectParams): void {
     this.applyBaseParams(params)
-    this.bands.forEach((_, i) => {
+    for (let i = 0; i < BAND_COUNT; i++) {
       const frequency = params[`band${i}_frequency`]
       const gain = params[`band${i}_gain`]
       const q = params[`band${i}_q`]
       if (typeof frequency === 'number') this.setBandFrequency(i, frequency)
       if (typeof gain === 'number') this.setBandGain(i, gain)
       if (typeof q === 'number') this.setBandQ(i, q)
-    })
+    }
   }
 
   dispose(): void {
     this.disposeBase()
-    for (const band of this.bands) band.disconnect()
+    this.node.disconnect()
   }
 }

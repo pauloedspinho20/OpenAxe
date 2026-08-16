@@ -21,3 +21,7 @@
 [submodule "packages/core/third_party/signalsmith-dsp"]
 	path = packages/core/third_party/signalsmith-dsp
 	url = https://github.com/Signalsmith-Audio/dsp.git
+[submodule "packages/core/third_party/dspark"]
+	path = packages/core/third_party/dspark
+	url = https://github.com/CristianMoresi/DSPark
+	shallow = true

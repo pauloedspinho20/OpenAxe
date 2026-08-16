@@ -63,7 +63,22 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove Mixer' }).click()
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
-  const FX_KINDS = ['Reverb', 'Drive', 'Chorus', 'Flanger', 'Phaser', 'Delay', 'Ping-Pong Delay']
+  // All 11 effect kinds: the four DSPark-backed ones (issue #22's last
+  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the seven that
+  // already ran on packages/core.
+  const FX_KINDS = [
+    'Noise Gate',
+    'Compressor',
+    'EQ',
+    'Tremolo',
+    'Reverb',
+    'Drive',
+    'Chorus',
+    'Flanger',
+    'Phaser',
+    'Delay',
+    'Ping-Pong Delay',
+  ]
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x
   // GRID_COLS, and spread across rows so the semi-auto wiring (see

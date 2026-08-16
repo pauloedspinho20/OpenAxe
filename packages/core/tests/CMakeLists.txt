@@ -27,12 +27,12 @@ else()
   message(WARNING "Skipping nam_amp_test - packages/core/third_party/nam-core not initialized")
 endif()
 
-if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_CHOWDSP_WDF)
+if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_CHOWDSP_WDF AND NAM_STUDIO_HAS_DSPARK)
   # engine.cpp (issue #14's real-time ABI) instantiates NamAmp, all 4
-  # Dragonfly wrappers, and all 4 chowdsp_wdf-based drive wrappers
-  # unconditionally - see CMakeLists.txt's comment on nam_studio_core - so
-  # anything that links it needs all three families present, unlike the
-  # single-DSP-family tests above.
+  # Dragonfly wrappers, all 4 chowdsp_wdf-based drive wrappers, and the 4
+  # DSPark-based wrappers unconditionally - see CMakeLists.txt's comment on
+  # nam_studio_core - so anything that links it needs all four families
+  # present, unlike the single-DSP-family tests above.
   add_executable(engine_test engine_test.cpp)
   target_link_libraries(engine_test PRIVATE nam_studio_core)
   add_test(NAME engine_test COMMAND engine_test)
@@ -95,4 +95,24 @@ if(NAM_STUDIO_HAS_CHOWDSP_WDF)
   add_test(NAME mxr_distortion_test COMMAND mxr_distortion_test)
 else()
   message(WARNING "Skipping diode_clipper_test/tube_screamer_test/zen_drive_test/mxr_distortion_test - byod's chowdsp_wdf submodule not initialized")
+endif()
+
+if(NAM_STUDIO_HAS_DSPARK)
+  add_executable(compressor_test compressor_test.cpp)
+  target_link_libraries(compressor_test PRIVATE nam_studio_core)
+  add_test(NAME compressor_test COMMAND compressor_test)
+
+  add_executable(equalizer_test equalizer_test.cpp)
+  target_link_libraries(equalizer_test PRIVATE nam_studio_core)
+  add_test(NAME equalizer_test COMMAND equalizer_test)
+
+  add_executable(noise_gate_test noise_gate_test.cpp)
+  target_link_libraries(noise_gate_test PRIVATE nam_studio_core)
+  add_test(NAME noise_gate_test COMMAND noise_gate_test)
+
+  add_executable(tremolo_test tremolo_test.cpp)
+  target_link_libraries(tremolo_test PRIVATE nam_studio_core)
+  add_test(NAME tremolo_test COMMAND tremolo_test)
+else()
+  message(WARNING "Skipping compressor_test/equalizer_test/noise_gate_test/tremolo_test - packages/core/third_party/dspark not initialized")
 endif()
