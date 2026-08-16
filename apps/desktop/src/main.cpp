@@ -1,6 +1,7 @@
 #include "webview/webview.h"
 
 #include "bridge.h"
+#include "debug_log.h"
 #include "http_server.h"
 
 #include <cstdlib>
@@ -262,7 +263,15 @@ int main(int argc, char** argv) {
   std::string argv0 = argc > 0 ? argv[0] : "";
 #endif
   try {
-    webview::webview w(false, nullptr);
+    // Log to a file + install a crash backtrace handler (NAM_DESKTOP_DEBUG=1
+    // also turns on the webview devtools / remote inspector). Log lives next
+    // to the executable by default.
+    const std::string exe_dir =
+        argv0.empty() ? std::filesystem::current_path().string()
+                      : std::filesystem::weakly_canonical(argv0).parent_path().string();
+    nam_desktop::InstallDebugLogging(exe_dir);
+
+    webview::webview w(nam_desktop::DebugEnabled(), nullptr);
     w.set_title("NAM Web Studio");
     w.set_size(1280, 800, WEBVIEW_HINT_NONE);
 

@@ -85,7 +85,7 @@ FetchContent_MakeAvailable(nlohmann_json portable_file_dialogs)
 # nam_desktop_lib: the app logic (audio I/O now; the JS bridge in M2), built
 # independently of the webview so the C++ tests can link it without pulling
 # in an Objective-C++ window. nam_desktop is the thin WIN32 entry point.
-add_library(nam_desktop_lib STATIC src/audio.cpp src/bridge.cpp src/latency.cpp)
+add_library(nam_desktop_lib STATIC src/audio.cpp src/bridge.cpp src/latency.cpp src/debug_log.cpp)
 
 add_executable(nam_desktop WIN32 src/main.cpp src/http_server.cpp)
 
