@@ -36,6 +36,56 @@ cmake --build apps/desktop/build
 
 Binary output: `apps/desktop/build/bin/nam_desktop`.
 
+## Useful commands
+
+```sh
+pnpm --filter @nam/desktop dev                 # Debug build + bundle UI + launch the window
+pnpm --filter @nam/desktop build               # Release build + bundle UI
+pnpm --filter @nam/desktop package             # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+pnpm --filter @nam/desktop exec tsc -b         # typecheck (the shared apps/web TS)
+pnpm --filter @nam/web test:run src/native     # run the NativeGraphRig unit tests
+```
+
+### C++ tests
+
+```sh
+cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build apps/desktop/build
+ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
+```
+
+### Editor
+
+The same build/test/package/dev commands are also exposed as VSCode tasks
+(`Cmd/Ctrl+Shift+P → Run Task → "Desktop: …"`) in `.vscode/tasks.json`, plus a
+"Desktop: Full check" that runs build + C++ tests + web tests.
+
+## Debugging
+
+A random crash is usually one of three things: a Web Audio / bridge call in the
+React UI, a race between the audio callback and a graph mutation, or the
+real-time thread blocking. These tools tell you which:
+
+```sh
+# 1. Log file - mirrors stderr and gets a backtrace appended on a segfault/abort.
+cat apps/desktop/build/bin/nam_desktop.log
+
+# 2. Webview devtools + verbose logging (WKWebView remote inspector).
+NAM_DESKTOP_DEBUG=1 pnpm --filter @nam/desktop dev
+#    Then in Safari: Develop -> your Mac -> the WKWebView page, for JS console errors.
+
+# 3. macOS crash report (crashing thread + full stack, captured by the OS).
+ls -t ~/Library/Logs/DiagnosticReports/nam_desktop-*.crash
+
+# 4. lldb live backtrace.
+cd apps/desktop && lldb -- build/bin/nam_desktop   # run -> (crash) -> bt
+```
+
+Env vars: `NAM_DESKTOP_DEBUG=1` enables the webview inspector and verbose
+logging; `NAM_DESKTOP_LOG=<path>` overrides the log file location (default:
+`<exeDir>/nam_desktop.log`); `NAM_STUDIO_UI_DIR=<dir>` overrides where the
+bundled UI is found.
+
 ## Status
 
 - [x] M0 — shell scaffold: window + webview + core link + `namVersion` JS
@@ -79,9 +129,6 @@ and tells CPack to skip the generated install target). The web UI ships inside
 the bundle (`Contents/Resources/ui` on macOS, `ui/` beside the exe on Windows,
 `share/nam-studio-desktop/ui` on Linux); the app finds it at runtime and serves
 it over loopback HTTP (see `UiIndexPath` in `src/main.cpp`).
-
-- [ ] M4 — CPack packaging (.app/.msi/.deb/AppImage), CI.
-- [ ] M5 — loopback latency verification (<5ms target).
 
 ## Bridge surface (`window.namStudio.*`)
 
