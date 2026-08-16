@@ -98,7 +98,7 @@ void TestEndToEndDsparkRig() {
   const int32_t gate = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_NOISE_GATE, 0, 2);
   const int32_t tremolo = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_TREMOLO, 0, 3);
 
-  NAM_EXPECT(nam_studio_block_param_count(graph, compressor) == 7);
+  NAM_EXPECT(nam_studio_block_param_count(graph, compressor) == 8);
   NAM_EXPECT(nam_studio_block_param_count(graph, eq) == 12);
   NAM_EXPECT(nam_studio_block_param_count(graph, gate) == 6);
   NAM_EXPECT(nam_studio_block_param_count(graph, tremolo) == 3);
