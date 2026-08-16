@@ -1,0 +1,25 @@
+# CPack install script (issue #15 M4): populates the package staging area with
+# the app, since CMAKE_SKIP_INSTALL_RULES suppresses the generated install()
+# rules (including those of FetchContent subprojects). Runs in cmake -P mode
+# with CMAKE_INSTALL_PREFIX set to the CPack staging dir.
+#
+# @NAM_DESKTOP_BINARY@ and @NAM_DESKTOP_UI_DIR@ are baked in at configure time;
+# the web UI is bundled into build/ui by scripts/build.mjs before cpack runs.
+
+if(APPLE)
+  set(app "${CMAKE_INSTALL_PREFIX}/nam-studio-desktop.app")
+  file(MAKE_DIRECTORY "${app}/Contents/MacOS")
+  file(MAKE_DIRECTORY "${app}/Contents/Resources")
+  file(COPY "@NAM_DESKTOP_BINARY@" DESTINATION "${app}/Contents/MacOS")
+  # file(COPY <dir> DESTINATION <dest>) nests the dir under its basename -> Resources/ui
+  file(COPY "@NAM_DESKTOP_UI_DIR@" DESTINATION "${app}/Contents/Resources")
+  file(COPY "@NAM_DESKTOP_PLIST@" DESTINATION "${app}/Contents")
+elseif(WIN32)
+  file(COPY "@NAM_DESKTOP_BINARY@" DESTINATION "${CMAKE_INSTALL_PREFIX}")
+  file(COPY "@NAM_DESKTOP_UI_DIR@" DESTINATION "${CMAKE_INSTALL_PREFIX}")
+else()
+  file(MAKE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/bin")
+  file(MAKE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/share/nam-studio-desktop")
+  file(COPY "@NAM_DESKTOP_BINARY@" DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
+  file(COPY "@NAM_DESKTOP_UI_DIR@" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/nam-studio-desktop")
+endif()

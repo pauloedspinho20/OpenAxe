@@ -181,6 +181,61 @@
       ],
       "group": "build",
       "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Configure (with tests)",
+      "type": "shell",
+      "command": "cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
+      "detail": "Configures the apps/desktop C++ shell (webview + RtAudio + core) with the CTest suite enabled",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Build",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop build",
+      "detail": "Release build of the native desktop app + bundles the React UI into build/ui (scripts/build.mjs)",
+      "group": { "kind": "build", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["Desktop: Configure (with tests)"]
+    },
+    {
+      "label": "Desktop: Dev (Debug build + launch)",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop dev",
+      "detail": "Debug-builds the desktop app and launches the window against the bundled web UI",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: C++ tests",
+      "type": "shell",
+      "command": "ctest --test-dir apps/desktop/build --output-on-failure",
+      "detail": "Runs the desktop CTest suite (audio I/O, JS bridge, latency) - needs Configure (with tests) + Build first",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "dependsOn": ["Desktop: Build"]
+    },
+    {
+      "label": "Desktop: Package",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop package",
+      "detail": "Builds the app + UI and runs CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Full check (build + C++ tests + web tests)",
+      "detail": "Desktop C++ tests + the web suite the UI reuse depends on",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Desktop: Build", "Desktop: C++ tests", "Test (run once)"],
+      "group": "test",
+      "problemMatcher": []
     }
   ]
 }

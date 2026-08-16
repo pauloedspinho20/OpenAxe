@@ -22,6 +22,12 @@ public/dev-test/
 # in-repo. packages/core/build/ itself stays ignored.
 packages/core/build/
 
+# Native desktop build tree (apps/desktop/CMakeLists.txt + FetchContent deps)
+apps/desktop/build/
+
+# CPack intermediate staging dir (repopulated on every `cpack` run)
+apps/desktop/_CPack_Packages/
+
 # Playwright e2e output
 test-results/
 playwright-report/

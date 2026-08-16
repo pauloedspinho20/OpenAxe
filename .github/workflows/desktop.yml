@@ -1,0 +1,60 @@
+# Unsigned dev artifacts for the native desktop app (issue #15 M4): build the
+# React UI + C++ shell on each OS and upload the platform package. Signing /
+# notarization is deliberately deferred - these are development artifacts.
+name: Desktop Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: dmg
+          - os: windows-latest
+            artifact: zip
+          - os: ubuntu-24.04
+            artifact: deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # packages/core uses git submodules for its DSP dependencies
+          submodules: recursive
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libasound2-dev libpulse-dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Package desktop app
+        run: pnpm --filter @nam/desktop package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nam-studio-desktop-${{ matrix.os }}
+          path: apps/desktop/build/nam-studio-desktop-*.${{ matrix.artifact }}
+          if-no-files-found: error

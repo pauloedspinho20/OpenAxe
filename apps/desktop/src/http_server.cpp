@@ -1,0 +1,186 @@
+#include "http_server.h"
+
+#include <sys/socket.h>
+#include <sys/types.h>
+
+#include <array>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <utility>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+typedef int socklen_t;
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#endif
+
+namespace nam_desktop {
+
+namespace {
+
+constexpr size_t kMaxRequest = 8192;
+
+#ifdef _WIN32
+int CloseSocket(int fd) {
+  return closesocket(fd);
+}
+#else
+int CloseSocket(int fd) {
+  return close(fd);
+}
+#endif
+
+void SetContentType(const std::string& path, std::string& out) {
+  const std::string ext = std::filesystem::path(path).extension().string();
+  if (ext == ".html") out = "text/html; charset=utf-8";
+  else if (ext == ".js" || ext == ".mjs") out = "application/javascript; charset=utf-8";
+  else if (ext == ".css") out = "text/css; charset=utf-8";
+  else if (ext == ".wasm") out = "application/wasm";
+  else if (ext == ".json") out = "application/json; charset=utf-8";
+  else if (ext == ".png") out = "image/png";
+  else if (ext == ".svg") out = "image/svg+xml";
+  else if (ext == ".woff2") out = "font/woff2";
+  else if (ext == ".woff") out = "font/woff";
+  else if (ext == ".ttf") out = "font/ttf";
+  else out = "application/octet-stream";
+}
+
+// Sends a minimal HTTP/1.1 response; returns false on write error.
+bool SendAll(int fd, const char* data, size_t len) {
+  size_t sent = 0;
+  while (sent < len) {
+#ifdef _WIN32
+    const int n = send(fd, data + sent, static_cast<int>(len - sent), 0);
+#else
+    const ssize_t n = ::send(fd, data + sent, len - sent, 0);
+#endif
+    if (n <= 0) return false;
+    sent += static_cast<size_t>(n);
+  }
+  return true;
+}
+
+bool SendHeader(int fd, int status, const char* reason, size_t content_length,
+                const std::string& content_type) {
+  const std::string head = "HTTP/1.1 " + std::to_string(status) + " " + reason +
+                           "\r\nContent-Type: " + content_type +
+                           "\r\nContent-Length: " + std::to_string(content_length) +
+                           "\r\nConnection: close\r\n\r\n";
+  return SendAll(fd, head.data(), head.size());
+}
+
+void HandleClient(int fd, const std::string& root) {
+  std::array<char, kMaxRequest> buf;
+#ifdef _WIN32
+  const int n = recv(fd, buf.data(), static_cast<int>(buf.size()) - 1, 0);
+#else
+  const ssize_t n = recv(fd, buf.data(), buf.size() - 1, 0);
+#endif
+  if (n <= 0) return;
+  buf[static_cast<size_t>(n)] = '\0';
+
+  // Parse the request target from the request line: "GET <path> HTTP/1.x".
+  std::string req(buf.data());
+  const size_t sp1 = req.find(' ');
+  if (req.compare(0, 4, "GET ") != 0 || sp1 == std::string::npos) {
+    SendHeader(fd, 405, "Method Not Allowed", 0, "text/plain");
+    return;
+  }
+  const size_t sp2 = req.find(' ', sp1 + 1);
+  const std::string target = req.substr(sp1 + 1, sp2 == std::string::npos ? std::string::npos
+                                                                          : sp2 - sp1 - 1);
+  // Keep only the path (strip query), default to index.html.
+  std::string path = target.substr(0, target.find('?'));
+  if (path.empty() || path == "/") path = "/index.html";
+
+  // Resolve under root, rejecting traversal and non-files.
+  std::error_code ec;
+  std::filesystem::path full = (std::filesystem::path(root) / path.substr(1)).lexically_normal();
+  const std::filesystem::path root_norm = std::filesystem::path(root).lexically_normal();
+  if (!full.string().starts_with(root_norm.string()) || !std::filesystem::is_regular_file(full, ec)) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain");
+    return;
+  }
+
+  std::ifstream ifs(full, std::ios::binary);
+  if (!ifs) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain");
+    return;
+  }
+  std::string body((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  std::string content_type;
+  SetContentType(full.string(), content_type);
+  if (!SendHeader(fd, 200, "OK", body.size(), content_type)) return;
+  SendAll(fd, body.data(), body.size());
+}
+
+}  // namespace
+
+bool HttpServer::Start(const std::string& root, unsigned short& out_port) {
+#ifdef _WIN32
+  WSADATA wsa;
+  if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+#endif
+  listen_fd_ = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
+  if (listen_fd_ < 0) return false;
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;  // ephemeral
+  if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
+      listen(listen_fd_, 8) != 0) {
+    CloseSocket(listen_fd_);
+    listen_fd_ = -1;
+    return false;
+  }
+
+  sockaddr_in bound{};
+  socklen_t len = sizeof(bound);
+  getsockname(listen_fd_, reinterpret_cast<sockaddr*>(&bound), &len);
+  out_port = ntohs(bound.sin_port);
+
+  running_.store(true, std::memory_order_release);
+  thread_ = std::thread(&HttpServer::ServeLoop, this, root);
+  return true;
+}
+
+void HttpServer::ServeLoop(const std::string& root) {
+  while (running_.load(std::memory_order_acquire)) {
+#ifdef _WIN32
+    SOCKET client = accept(listen_fd_, nullptr, nullptr);
+    if (client == INVALID_SOCKET) break;
+    const int fd = static_cast<int>(client);
+#else
+    const int fd = accept(listen_fd_, nullptr, nullptr);
+    if (fd < 0) break;
+#endif
+    HandleClient(fd, root);
+    CloseSocket(fd);
+  }
+}
+
+void HttpServer::Stop() {
+  running_.store(false, std::memory_order_release);
+  if (listen_fd_ >= 0) {
+    CloseSocket(listen_fd_);
+    listen_fd_ = -1;
+  }
+  if (thread_.joinable()) thread_.join();
+}
+
+HttpServer::~HttpServer() {
+  Stop();
+}
+
+}  // namespace nam_desktop

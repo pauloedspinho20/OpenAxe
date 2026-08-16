@@ -4,6 +4,8 @@
  * auto-resets input selection to default if the chosen device disappears.
  */
 import { useCallback, useEffect, useRef } from 'react'
+import { getNamStudio } from '../native/namStudio'
+import type { NamStudioDevice } from '../native/namStudio'
 import { useIOStore } from '../state/ioStore'
 
 function mapDevice(device: MediaDeviceInfo) {
@@ -14,10 +16,40 @@ function mapDevice(device: MediaDeviceInfo) {
   }
 }
 
+function mapNativeDevice(device: NamStudioDevice) {
+  return {
+    deviceId: String(device.id),
+    label: device.name || 'Default',
+    groupId: device.api,
+  }
+}
+
+/** Populate ioStore from the native bridge's RtAudio devices. Returns true if handled. */
+async function enumerateNative(): Promise<boolean> {
+  const bridge = getNamStudio()
+  if (!bridge) return false
+  try {
+    const devices = await bridge.listDevices()
+    useIOStore
+      .getState()
+      .setDeviceLists(
+        devices.filter((d) => d.isInput).map(mapNativeDevice),
+        devices.filter((d) => d.isOutput).map(mapNativeDevice),
+      )
+    return true
+  } catch (err) {
+    console.warn('[useAudioIO] native device enumeration failed:', err)
+    return false
+  }
+}
+
 export function useAudioIO() {
   const enumeratedRef = useRef(false)
 
   const enumerate = useCallback(async () => {
+    // In the desktop shell the device list comes from RtAudio (window.namStudio),
+    // not the browser's MediaDevices.
+    if (await enumerateNative()) return
     try {
       const all = await navigator.mediaDevices.enumerateDevices()
       const inputs = all.filter((d) => d.kind === 'audioinput').map(mapDevice)
@@ -41,6 +73,7 @@ export function useAudioIO() {
   }, [])
 
   useEffect(() => {
+    if (getNamStudio()) return // native devices don't emit devicechange; no hot-plug listener
     if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return
     if (!enumeratedRef.current) {
       enumeratedRef.current = true
@@ -58,10 +91,10 @@ export function useAudioIO() {
 
   /**
    * Whether the output device selector is usable in the current browser.
-   * AudioContext.setSinkId is supported in Chrome 110+ and Edge.
+   * Native output routing is owned by the C++ shell, so this is false there.
    */
   const outputSelectionSupported =
-    typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype
+    !getNamStudio() && typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype
 
   return { outputSelectionSupported }
 }

@@ -4,6 +4,8 @@ import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
+import { getNamStudio } from '../native/namStudio'
+import { useNativeAudioEngine } from './useNativeAudioEngine'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
 
@@ -33,7 +35,7 @@ const IDLE_STATE: AudioEngineState = {
   micGranted: false,
 }
 
-export function useAudioEngine() {
+export function useWebAudioEngine() {
   const [state, setState] = useState<AudioEngineState>(IDLE_STATE)
   const startingRef = useRef(false)
   const unbindRef = useRef<(() => void) | null>(null)
@@ -209,6 +211,22 @@ export function useAudioEngine() {
   }, [state.rig, state.context, state.analyser, state.tunerAnalyser])
 
   return { ...state, powerOn, powerOff }
+}
+
+/**
+ * Engine dispatcher (issue #15 M3): in the desktop shell the audio runs in the
+ * C++ core via window.namStudio, so we return the native engine hook; in the
+ * browser we keep the Web Audio one. Both hooks are called unconditionally
+ * (hook rules); the inactive variant stays 'off' and only the returned one's
+ * powerOn/powerOff ever run. The union is cast to the web shape so App.tsx and
+ * every component consume the same AudioEngineState - NativeGraphRig satisfies
+ * the GraphRigControls/PresetRig surface they actually use.
+ */
+export function useAudioEngine(): AudioEngineState & AudioEngineActions {
+  const web = useWebAudioEngine()
+  const native = useNativeAudioEngine()
+  const [isNative] = useState(() => getNamStudio() !== null)
+  return (isNative ? native : web) as AudioEngineState & AudioEngineActions
 }
 
 /**
