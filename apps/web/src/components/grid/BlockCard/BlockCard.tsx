@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
+import { toast } from '@nam/ui'
 import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
 import { useEngineVersion } from '../../../state/engineVersion'
 import { useSelection } from '../../../state/selection'
-import { showToast } from '../../../state/toast'
+import { canMoveTo } from '../../../engine/graphValidation'
 import type { GraphRig } from '../../../engine/GraphRig'
 import { GRID_ROWS, GRID_COLS, jack } from '../../../engine/gridConfig'
 import { resolveGridCell } from '../gridGeometry'
@@ -20,8 +21,19 @@ import styles from './BlockCard.module.css'
 export interface BlockCardProps {
   instance: BlockInstance
   rig: GraphRig | null
-  /** Reports the grid cell currently under the pointer while this card is being dragged, or null once the drag ends. */
-  onDragCellChange?: (cell: { row: number; col: number } | null) => void
+  /**
+   * Reports the dragged card's live state up to GridEditor: the cell under
+   * the pointer, the pixel offset (so cables can follow the card), and
+   * whether dropping there is a valid move. Null once the drag ends.
+   */
+  onDragChange?: (info: BlockDragInfo | null) => void
+}
+
+export interface BlockDragInfo {
+  id: string
+  cell: { row: number; col: number } | null
+  offset: { x: number; y: number }
+  valid: boolean
 }
 
 /** A click barely moves the pointer; anything past this is a drag, not a select. */
@@ -67,10 +79,11 @@ function statusText(instance: BlockInstance, loaded: { name: string } | null): s
  * asset load/browse controls live in BlockInspector instead - click the card
  * to select it there, rather than crowding every detail into a small tile.
  */
-export function BlockCard({ instance, rig, onDragCellChange }: BlockCardProps) {
+export function BlockCard({ instance, rig, onDragChange }: BlockCardProps) {
   const dragState = useRef<{ startX: number; startY: number } | null>(null)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
+  const blocks = useGraphStore((s) => s.blocks)
   const edges = useGraphStore((s) => s.edges)
 
   // Re-render once async block creation inside bindGraphRig's reconcile
@@ -101,16 +114,29 @@ export function BlockCard({ instance, rig, onDragCellChange }: BlockCardProps) {
     }
     dragState.current = { startX: e.clientX, startY: e.clientY }
     setDragOffset({ x: 0, y: 0 })
+    onDragChange?.({ id: instance.id, cell: null, offset: { x: 0, y: 0 }, valid: false })
   }
 
   const handleCardPointerMove = (e: React.PointerEvent) => {
     if (!dragState.current) return
-    setDragOffset({
+    const offset = {
       x: e.clientX - dragState.current.startX,
       y: e.clientY - dragState.current.startY,
-    })
+    }
+    setDragOffset(offset)
     const gridEl = (e.currentTarget as Element).closest('[data-grid-bounds]') as HTMLElement | null
-    onDragCellChange?.(gridEl ? resolveGridCell(gridEl, e.clientX, e.clientY) : null)
+    const cell = gridEl ? resolveGridCell(gridEl, e.clientX, e.clientY) : null
+    if (!cell) {
+      onDragChange?.({ id: instance.id, offset, valid: false, cell })
+      return
+    }
+    const valid = canMoveTo(
+      new Map(blocks.map((b) => [b.id, { id: b.id, kind: b.kind, col: b.col }])),
+      edges,
+      instance.id,
+      cell.col,
+    ).ok
+    onDragChange?.({ id: instance.id, cell, offset, valid })
   }
 
   const handleCardPointerUp = (e: React.PointerEvent) => {
@@ -136,19 +162,15 @@ export function BlockCard({ instance, rig, onDragCellChange }: BlockCardProps) {
           (b) => b.id !== instance.id && b.row === row && b.col === col,
         )
         if (!occupied && (row !== instance.row || col !== instance.col)) {
-          const { droppedEdgeIds } = store.moveBlock(instance.id, row, col)
-          if (droppedEdgeIds.length > 0) {
-            showToast(
-              droppedEdgeIds.length === 1
-                ? 'Moving that block removed 1 connection that would have gone backward'
-                : `Moving that block removed ${droppedEdgeIds.length} connections that would have gone backward`,
-            )
+          const result = store.moveBlock(instance.id, row, col)
+          if (!result.ok) {
+            toast.error("Can't move there", { description: result.reason })
           }
         }
       }
     }
 
-    onDragCellChange?.(null)
+    onDragChange?.(null)
     dragState.current = null
     setDragOffset(null)
   }
@@ -183,13 +205,9 @@ export function BlockCard({ instance, rig, onDragCellChange }: BlockCardProps) {
     e.preventDefault()
     const store = useGraphStore.getState()
     if (store.blocks.some((b) => b.id !== instance.id && b.row === row && b.col === col)) return
-    const { droppedEdgeIds } = store.moveBlock(instance.id, row, col)
-    if (droppedEdgeIds.length > 0) {
-      showToast(
-        droppedEdgeIds.length === 1
-          ? 'Moving that block removed 1 connection that would have gone backward'
-          : `Moving that block removed ${droppedEdgeIds.length} connections that would have gone backward`,
-      )
+    const result = store.moveBlock(instance.id, row, col)
+    if (!result.ok) {
+      toast.error("Can't move there", { description: result.reason })
     }
   }
 

@@ -4,6 +4,7 @@ import { useEngineVersion } from '../state/engineVersion'
 import type { Block, BlockKind, EffectParams } from './blocks/Block'
 import type { Jack } from './gridConfig'
 import type { ConnectResult } from './GraphRig'
+import type { ConnectResult as ValidatableConnectResult } from './graphValidation'
 
 /**
  * The subset of GraphRig's imperative API bindGraphRig needs, kept narrow
@@ -14,7 +15,7 @@ import type { ConnectResult } from './GraphRig'
 export interface GraphRigControls {
   addBlock(kind: BlockKind, row: number, col: number, id?: string): Promise<string>
   removeBlock(id: string): Promise<void>
-  moveBlock(id: string, row: number, col: number): { droppedEdgeIds: string[] }
+  moveBlock(id: string, row: number, col: number): ValidatableConnectResult
   setBlockParams(id: string, params: EffectParams): void
   getBlock(id: string): Block | null
   connect(from: Jack, to: Jack, id?: string): ConnectResult

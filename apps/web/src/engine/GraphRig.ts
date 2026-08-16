@@ -4,7 +4,12 @@ import { createBlock } from './blocks/blockRegistry'
 import { MixerBlock } from './blocks/MixerBlock'
 import { SplitterBlock } from './blocks/SplitterBlock'
 import { IN_RAIL, OUT_RAIL, type Jack } from './gridConfig'
-import { canConnect, isEdgeOrderValid, type ValidatableBlock } from './graphValidation'
+import {
+  canConnect,
+  canMoveTo,
+  type ConnectResult as ValidatableConnectResult,
+  type ValidatableBlock,
+} from './graphValidation'
 
 export { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, type Jack } from './gridConfig'
 
@@ -110,26 +115,19 @@ export class GraphRig {
   }
 
   /**
-   * Reposition a block. If the new column would invalidate one of its
-   * existing cables' left-to-right ordering, that cable is auto-dropped
-   * (report `droppedEdgeIds` to the user) rather than blocking the move.
+   * Reposition a block. Rejects (does not move) if the target column would
+   * break one of the block's cables' left-to-right ordering - the UI keeps a
+   * block's cables intact rather than silently dropping them. reconcile in
+   * bindGraphRig then mirrors the (already-validated) store position here.
    */
-  moveBlock(id: string, row: number, col: number): { droppedEdgeIds: string[] } {
+  moveBlock(id: string, row: number, col: number): ValidatableConnectResult {
     const entry = this.blocks.get(id)
-    if (!entry) return { droppedEdgeIds: [] }
+    if (!entry) return { ok: false, reason: 'Unknown block' }
+    const move = canMoveTo(this.validatableBlocks(), this.edges.values(), id, col)
+    if (!move.ok) return move
     entry.row = row
     entry.col = col
-    const validatable = this.validatableBlocks()
-    const dropped: string[] = []
-    for (const [edgeId, edge] of [...this.edges]) {
-      if (edge.from.blockId !== id && edge.to.blockId !== id) continue
-      if (!isEdgeOrderValid(validatable, edge)) {
-        this.unwireEdge(edge)
-        this.edges.delete(edgeId)
-        dropped.push(edgeId)
-      }
-    }
-    return { droppedEdgeIds: dropped }
+    return { ok: true }
   }
 
   getBlock(id: string): Block | null {

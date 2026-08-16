@@ -11,7 +11,7 @@ function createMockRig(): {
   return {
     addBlock: vi.fn(async (_kind, _row, _col, id) => id ?? `block-${++nextId}`),
     removeBlock: vi.fn(async () => undefined),
-    moveBlock: vi.fn(() => ({ droppedEdgeIds: [] })),
+    moveBlock: vi.fn(() => ({ ok: true })),
     setBlockParams: vi.fn(),
     getBlock: vi.fn(() => null),
     connect: vi.fn((_from, _to, id) => ({ ok: true, id: id ?? `edge-${++nextId}` })),

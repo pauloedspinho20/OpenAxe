@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { canConnect, isEdgeOrderValid, type ValidatableBlock } from './graphValidation'
+import { canConnect, canMoveTo, isEdgeOrderValid, type ValidatableBlock } from './graphValidation'
 import { jack } from './gridConfig'
 
 function blocks(entries: Array<[string, ValidatableBlock['kind'], number]>) {
@@ -162,5 +162,48 @@ describe('isEdgeOrderValid', () => {
       ['b', 'eq', 1],
     ])
     expect(isEdgeOrderValid(map, { from: jack('a'), to: jack('b') })).toBe(false)
+  })
+})
+
+describe('canMoveTo', () => {
+  it('allows a block with no cables to move to any column', () => {
+    const map = blocks([['a', 'compressor', 0]])
+    expect(canMoveTo(map, [], 'a', 7).ok).toBe(true)
+  })
+
+  it("rejects a move that would put an input's source cable on or to its right", () => {
+    const map = blocks([
+      ['a', 'compressor', 0],
+      ['b', 'eq', 5],
+    ])
+    const edge = { from: jack('a'), to: jack('b') }
+    expect(canMoveTo(map, [edge], 'b', 0).ok).toBe(false)
+    expect(canMoveTo(map, [edge], 'b', 1).ok).toBe(true)
+  })
+
+  it("rejects a move that would put an output's target cable on or to its left", () => {
+    const map = blocks([
+      ['a', 'compressor', 0],
+      ['b', 'eq', 5],
+    ])
+    const edge = { from: jack('a'), to: jack('b') }
+    expect(canMoveTo(map, [edge], 'a', 5).ok).toBe(false)
+    expect(canMoveTo(map, [edge], 'a', 3).ok).toBe(true)
+  })
+
+  it('leaves a mid-chain block free to move within its cable band', () => {
+    const map = blocks([
+      ['a', 'compressor', 1],
+      ['b', 'eq', 3],
+      ['c', 'delay', 6],
+    ])
+    const edges = [
+      { from: jack('a'), to: jack('b') },
+      { from: jack('b'), to: jack('c') },
+    ]
+    expect(canMoveTo(map, edges, 'b', 2).ok).toBe(true)
+    expect(canMoveTo(map, edges, 'b', 4).ok).toBe(true)
+    expect(canMoveTo(map, edges, 'b', 1).ok).toBe(false)
+    expect(canMoveTo(map, edges, 'b', 6).ok).toBe(false)
   })
 })
