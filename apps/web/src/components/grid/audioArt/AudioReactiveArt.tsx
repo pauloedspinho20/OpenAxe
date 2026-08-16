@@ -4,6 +4,21 @@ import { createArtDrawer, type ArtVariant, type DrawFn } from './sketches'
 import { readThemeColors } from './theme'
 import styles from './AudioReactiveArt.module.css'
 
+// p5's Friendly Error System "sketch checker" fetches the LAST <script> on the
+// page and parses it as if it were a single p5 sketch, flagging any top-level
+// declaration whose name collides with a p5 constant (e.g. `PI`). With a
+// bundler the last script is the whole production bundle, so this throws a
+// spurious "Constant PI is being redeclared" error in prod even though we use
+// p5 purely in instance mode. The sketch checker is a dev-time lint that makes
+// no sense for bundled apps - turn it off (and friendly errors with it) so the
+// bundle is never parsed for const/function conflicts.
+;(
+  p5 as unknown as { disableFriendlyErrors: boolean; disableSketchChecker: boolean }
+).disableFriendlyErrors = true
+;(
+  p5 as unknown as { disableFriendlyErrors: boolean; disableSketchChecker: boolean }
+).disableSketchChecker = true
+
 export interface AudioReactiveArtProps {
   /** The signal to react to - a block's own output tap, or the master/post-graph tap as the default. */
   analyser: AnalyserNode | null
