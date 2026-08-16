@@ -35,11 +35,11 @@ const CHARACTER_INDEX: Record<Character, number> = {
 
 /**
  * DSPark compressor compiled to WASM (packages/core/src/dsp/compressor.cpp):
- * threshold/ratio/attack/release with a knee, manual makeup gain, and four
+ * threshold/ratio/attack/release with a knee, manual makeup gain, four
  * character models (Clean/Opto/FET/Varimu) that re-voice the detector
- * ballistics the way the named hardware lines do. Envelope times are in
- * milliseconds (the DSP core's unit), not seconds like the old native
- * DynamicsCompressorNode wrapper.
+ * ballistics the way the named hardware lines do, and DSPark's native dry/wet
+ * Mix. Envelope times are in milliseconds (the DSP core's unit), not seconds
+ * like the old native DynamicsCompressorNode wrapper.
  */
 export class Compressor extends BaseEffect {
   private readonly node: AudioWorkletNode
@@ -104,6 +104,15 @@ export class Compressor extends BaseEffect {
     return CHARACTERS[index] ?? CHARACTERS[0]
   }
 
+  /** DSPark's native dry/wet mix, [0, 1] - 0 = fully dry, 1 = fully wet. */
+  setWetMix(wet: number): void {
+    this.param('mix').setValueAtTime(wet, this.node.context.currentTime)
+  }
+
+  getWetMix(): number {
+    return this.param('mix').value
+  }
+
   private param(name: string): AudioParam {
     const param = this.node.parameters.get(name)
     if (!param) throw new Error(`Compressor: unknown AudioParam '${name}'`)
@@ -112,7 +121,6 @@ export class Compressor extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      ...this.baseParams(),
       threshold: this.param('threshold').value,
       ratio: this.param('ratio').value,
       attack: this.param('attack').value,
@@ -120,11 +128,11 @@ export class Compressor extends BaseEffect {
       knee: this.param('knee').value,
       makeup_gain: this.param('makeup_gain').value,
       character: this.getCharacter(),
+      mix: this.getWetMix(),
     }
   }
 
   setParams(params: EffectParams): void {
-    this.applyBaseParams(params)
     if (typeof params.threshold === 'number') this.setThreshold(params.threshold)
     if (typeof params.ratio === 'number') this.setRatio(params.ratio)
     if (typeof params.attack === 'number') this.setAttack(params.attack)
@@ -132,6 +140,7 @@ export class Compressor extends BaseEffect {
     if (typeof params.knee === 'number') this.setKnee(params.knee)
     if (typeof params.makeup_gain === 'number') this.setMakeupGain(params.makeup_gain)
     if (typeof params.character === 'string') this.setCharacter(params.character)
+    if (typeof params.mix === 'number') this.setWetMix(params.mix)
   }
 
   dispose(): void {

@@ -96,7 +96,6 @@ export class Delay extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      ...this.baseParams(),
       delayModel: this.getDelayModel(),
       time: this.param('time').value,
       feedback: this.param('feedback').value,
@@ -108,7 +107,6 @@ export class Delay extends BaseEffect {
 
   setParams(params: EffectParams): void {
     if (typeof params.delayModel === 'string') this.setDelayModel(params.delayModel)
-    this.applyBaseParams(params)
     if (typeof params.time === 'number') this.setTime(params.time)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
     if (typeof params.tone === 'number') this.setTone(params.tone)

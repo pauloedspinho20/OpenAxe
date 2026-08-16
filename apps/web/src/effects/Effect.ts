@@ -141,22 +141,13 @@ export abstract class BaseEffect implements Effect {
   }
 
   /**
-   * Mix and Level are common to every effect kind - concrete subclasses
-   * spread `...this.baseParams()` into their own getParams() and call
-   * `this.applyBaseParams(params)` from their own setParams(), so both
-   * round-trip through presets exactly like any other param instead of
-   * needing a bespoke UI path (see paramSchema.ts's MIX_LEVEL_FIELDS).
+   * Mix and Level are not original DSP parameters - they're the app's
+   * dry/wet crossfade and output trim, shared plumbing every effect needs
+   * for bypass. They deliberately do NOT round-trip through getParams()/
+   * setParams(): presets store only each effect's real parameters, so an
+   * effect always runs fully wet (mix = 1) unless a native dry/wet control
+   * (e.g. Reverb's Dry Level, Compressor's Mix) is exposed in its schema.
    */
-  protected baseParams(): EffectParams {
-    return { mix: this.mix, level: this.level }
-  }
-
-  protected applyBaseParams(params: EffectParams): void {
-    if (typeof params.mix === 'number') this.setMix(params.mix)
-    if (typeof params.level === 'number') this.setLevel(params.level)
-  }
-
-  /** Disconnects the shared crossfade nodes. Subclasses must dispose their own wet subgraph. */
   protected disposeBase(): void {
     this.inputNode.disconnect()
     this.outputNode.disconnect()
