@@ -90,7 +90,7 @@ Two hardware finishes: **Carbon** (dark, TX-6-style) and **Aluminum** (light, OP
 
 ## Project structure
 
-pnpm + Turborepo monorepo (#13). `apps/desktop`, `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#15, #17, #17, #16); `packages/core` has a real, tested C++ audio graph engine, full NAM inference wrapper, and all four Dragonfly Reverb algorithms, with three more DSP libraries still to wrap (#14).
+pnpm + Turborepo monorepo (#13). `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#17, #17, #16); `apps/desktop` is a working native shell (see above); `packages/core` has a real, tested C++ audio graph engine, full NAM inference wrapper, and all four Dragonfly Reverb algorithms, with three more DSP libraries still to wrap (#14).
 
 ```
 NAM-Web-Studio/
@@ -111,7 +111,7 @@ NAM-Web-Studio/
 │   │   │   ├── tone3000/         # Tone3000 API
 │   │   │   └── tuner/            # Pitch detection
 │   │   └── e2e/                  # Playwright E2E tests
-│   ├── desktop/               # Placeholder — C++ + webview.h (or Tauri v2) + React UI (#15)
+│   ├── desktop/               # Native desktop shell — C++ + webview.h + React UI (#15), see apps/desktop/README.md
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
@@ -173,6 +173,23 @@ ctest --test-dir packages/core/build --output-on-failure
 VS Code users: the same steps are available as tasks (**Terminal → Run Task**) — `C++: Init submodules`, `C++: Configure`, `C++: Build`, `C++: Test`, each depending on the previous.
 
 See [packages/core/README.md](./packages/core/README.md) for what's implemented so far (audio graph engine, NAM inference, all four Dragonfly Reverb algorithms), vendored-library licensing, and known build gotchas.
+
+### Desktop app (`apps/desktop`, issue #15)
+
+The native desktop shell reuses the web UI and drives `packages/core` directly (no Web Audio in the audio path). See [apps/desktop/README.md](./apps/desktop/README.md) for architecture, the full command list, and a debugging guide.
+
+```bash
+pnpm --filter @nam/desktop dev      # Debug build + bundle UI + launch the window
+pnpm --filter @nam/desktop build    # Release build + bundle UI
+pnpm --filter @nam/desktop package  # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+
+# C++ tests (configure once with NAM_DESKTOP_BUILD_TESTS=ON):
+cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build apps/desktop/build
+ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
+```
+
+Debugging a random crash: read `apps/desktop/build/bin/nam_desktop.log` (mirrors stderr, appends a backtrace on a segfault/abort), run with `NAM_DESKTOP_DEBUG=1` to enable the webview inspector, or grab the OS crash report from `~/Library/Logs/DiagnosticReports/nam_desktop-*.crash`. Full details in the [desktop README](./apps/desktop/README.md#debugging).
 
 ## Roadmap
 
