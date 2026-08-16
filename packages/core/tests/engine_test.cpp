@@ -12,9 +12,16 @@
 #include <cmath>
 #include <vector>
 
+#include "nam_studio/dsp/compressor.h"
 #include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
+#include "nam_studio/dsp/equalizer.h"
+#include "nam_studio/dsp/mxr_distortion.h"
+#include "nam_studio/dsp/noise_gate.h"
+#include "nam_studio/dsp/tremolo.h"
+#include "nam_studio/dsp/tube_screamer.h"
+#include "nam_studio/dsp/zen_drive.h"
 #include "test_harness.h"
 
 using nam_studio::engine::AudioEngine;
@@ -41,7 +48,7 @@ std::vector<float> RunMono(AudioEngine& engine, float input_value) {
 
 void TestPassthroughForUnwrappedKind() {
   AudioEngine engine;
-  const BlockId block = engine.AddBlock(BlockKind::kNoiseGate, 0, 0);
+  const BlockId block = engine.AddBlock(BlockKind::kCab, 0, 0);
   NAM_EXPECT(engine.Connect(kInRailId, 0, block, 0).ok);
   NAM_EXPECT(engine.Connect(block, 0, kOutRailId, 0).ok);
   engine.Reset(48000.0, kFrames);
@@ -52,8 +59,8 @@ void TestPassthroughForUnwrappedKind() {
 
 void TestMixerSumsBothConnectedPorts() {
   AudioEngine engine;
-  const BlockId a = engine.AddBlock(BlockKind::kNoiseGate, 0, 0);
-  const BlockId b = engine.AddBlock(BlockKind::kNoiseGate, 1, 0);
+  const BlockId a = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId b = engine.AddBlock(BlockKind::kCab, 1, 0);
   const BlockId mixer = engine.AddBlock(BlockKind::kMixer, 0, 1);
   NAM_EXPECT(engine.Connect(kInRailId, 0, a, 0).ok);
   NAM_EXPECT(engine.Connect(kInRailId, 0, b, 0).ok);
@@ -68,7 +75,7 @@ void TestMixerSumsBothConnectedPorts() {
 
 void TestUnconnectedOutputIsSilent() {
   AudioEngine engine;
-  engine.AddBlock(BlockKind::kNoiseGate, 0, 0);  // never wired to OUT
+  engine.AddBlock(BlockKind::kCab, 0, 0);  // never wired to OUT
   engine.Reset(48000.0, kFrames);
 
   const auto output = RunMono(engine, 1.0f);
@@ -122,6 +129,66 @@ void TestDriveDefaultsToDiodeClipperAndProcessesRealAudio() {
   NAM_EXPECT(engine.ParamCount(reverb) == nam_studio::dsp::DragonflyHallReverb::ParamCount());
 }
 
+void TestDriveModelSwitchOnlyAffectsThatBlock() {
+  AudioEngine engine;
+  const BlockId drive_a = engine.AddBlock(BlockKind::kDrive, 0, 0);
+  const BlockId drive_b = engine.AddBlock(BlockKind::kDrive, 1, 0);
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::DiodeClipper::ParamCount());
+  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::DiodeClipper::ParamCount());
+
+  engine.SetDriveModel(drive_a, DriveModel::kTubeScreamer);
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::TubeScreamer::ParamCount());
+  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::DiodeClipper::ParamCount());  // untouched
+
+  engine.SetDriveModel(drive_b, DriveModel::kZenDrive);
+  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::ZenDrive::ParamCount());
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::TubeScreamer::ParamCount());  // untouched
+
+  engine.SetDriveModel(drive_a, DriveModel::kMxrDistortion);
+  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::MxrDistortion::ParamCount());
+}
+
+void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
+  AudioEngine engine;
+  const BlockId compressor = engine.AddBlock(BlockKind::kCompressor, 0, 0);
+  const BlockId eq = engine.AddBlock(BlockKind::kEq, 0, 1);
+  const BlockId noise_gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 2);
+  const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
+
+  NAM_EXPECT(engine.ParamCount(compressor) == nam_studio::dsp::Compressor::ParamCount());
+  NAM_EXPECT(engine.ParamCount(eq) == nam_studio::dsp::Equalizer::ParamCount());
+  NAM_EXPECT(engine.ParamCount(noise_gate) == nam_studio::dsp::NoiseGate::ParamCount());
+  NAM_EXPECT(engine.ParamCount(tremolo) == nam_studio::dsp::Tremolo::ParamCount());
+
+  NAM_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
+  NAM_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);
+  NAM_EXPECT(engine.Connect(eq, 0, noise_gate, 0).ok);
+  NAM_EXPECT(engine.Connect(noise_gate, 0, tremolo, 0).ok);
+  NAM_EXPECT(engine.Connect(tremolo, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // A loud sine through the full chain: every stage engaged, output must stay
+  // finite and non-silent (same real-DSP-actually-ran check the drive test
+  // does for its own family).
+  std::vector<float> input(kFrames);
+  for (int i = 0; i < kFrames; ++i) {
+    input[i] = 0.5f * std::sin(static_cast<float>(i) / 48000.0f * 200.0f * 6.283185307179586f);
+  }
+  std::vector<float> output(kFrames, 0.0f);
+  const float* in_ptrs[1] = {input.data()};
+  float* out_ptrs[1] = {output.data()};
+  for (int pass = 0; pass < 4; ++pass) engine.Process(in_ptrs, 1, out_ptrs, 1, kFrames);
+
+  bool all_finite = true;
+  float max_abs_out = 0.0f;
+  for (float sample : output) {
+    if (!std::isfinite(sample)) all_finite = false;
+    max_abs_out = std::max(max_abs_out, std::fabs(sample));
+  }
+  NAM_EXPECT(all_finite);
+  NAM_EXPECT(max_abs_out > 0.0f);
+}
+
 void TestUnknownBlockIsSafeNoOp() {
   AudioEngine engine;
   constexpr BlockId kUnknown = 999;
@@ -142,6 +209,8 @@ int main() {
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
   TestDriveDefaultsToDiodeClipperAndProcessesRealAudio();
+  TestDriveModelSwitchOnlyAffectsThatBlock();
+  TestDsparkKindsDefaultParamsAndProcessRealAudio();
   TestUnknownBlockIsSafeNoOp();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

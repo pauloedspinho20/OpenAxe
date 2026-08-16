@@ -12,6 +12,10 @@ export interface BlockOption {
    */
   vendor: string
   /**
+   * The URL to the vendor's website.
+   */
+  vendorUrl?: string
+  /**
    * True for effect kinds still on their original hand-rolled Web Audio
    * implementation, awaiting migration to packages/core (see issue #22) -
    * not placeable yet (BlockPalette/AddBlockMenu both disable these) so a
@@ -33,32 +37,37 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     kind: 'amp',
     label: 'Amp',
     group: 'Core',
-    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+    vendor: 'Neural Amp Modeler',
+    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   {
     kind: 'amp-cab',
     label: 'Amp+Cab',
     group: 'Core',
-    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+    vendor: 'Neural Amp Modeler',
+    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   { kind: 'cab', label: 'Cab', group: 'Core', vendor: 'Web Audio ConvolverNode (native)' },
   {
     kind: 'pedal',
     label: 'Pedal',
     group: 'Core',
-    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+    vendor: 'Neural Amp Modeler',
+    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   {
     kind: 'outboard',
     label: 'Outboard',
     group: 'Core',
-    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+    vendor: 'Neural Amp Modeler',
+    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   {
     kind: 'space',
     label: 'Space',
     group: 'Core',
-    vendor: 'NeuralAmpModelerCore (neural-amp-modeler-wasm)',
+    vendor: 'Neural Amp Modeler',
+    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   { kind: 'mixer', label: 'Mixer', group: 'Core', vendor: 'Native routing (no DSP)' },
   { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' },
@@ -66,76 +75,73 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     kind: 'noise-gate',
     label: 'Noise Gate',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM) — DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'compressor',
     label: 'Compressor',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM) — DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'eq',
     label: 'EQ',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM) — DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'chorus',
     label: 'Chorus',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'flanger',
     label: 'Flanger',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'phaser',
     label: 'Phaser',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'tremolo',
     label: 'Tremolo',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM) — DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'delay',
     label: 'Delay',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'ping-pong-delay',
     label: 'Ping-Pong Delay',
     group: 'Effects',
-    vendor: 'Web Audio (native) - packages/core migration pending',
-    disabled: true,
+    vendor: 'packages/core (C++ WASM)',
   },
   {
     kind: 'reverb',
     label: 'Reverb',
     group: 'Effects',
-    vendor: 'Dragonfly Hall Reverb (packages/core)',
+    vendor: 'Dragonfly Reverb',
+    vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
   },
   {
     kind: 'drive',
     label: 'Drive',
     group: 'Effects',
-    vendor: 'BYOD Diode Clipper (packages/core)',
+    vendor: 'BYOD',
+    vendorUrl: 'https://github.com/Chowdhury-DSP/BYOD',
   },
 ]
 
@@ -146,3 +152,7 @@ export const BLOCK_KIND_LABELS: Record<BlockKind, string> = Object.fromEntries(
 export const BLOCK_KIND_VENDORS: Record<BlockKind, string> = Object.fromEntries(
   BLOCK_OPTIONS.map((o) => [o.kind, o.vendor]),
 ) as Record<BlockKind, string>
+
+export const BLOCK_KIND_VENDOR_URLS: Record<BlockKind, string | undefined> = Object.fromEntries(
+  BLOCK_OPTIONS.map((o) => [o.kind, o.vendorUrl]),
+) as Record<BlockKind, string | undefined>

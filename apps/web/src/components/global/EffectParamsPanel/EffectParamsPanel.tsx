@@ -39,12 +39,14 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  */
 export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   const [values, setValues] = useState<EffectParams>(() => block.getParams())
-  const schema = getParamSchema(block.kind)
+  const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
 
   const setParam = (key: string, value: number | string) => {
     useGraphStore.getState().setBlockParams(blockId, { [key]: value })
     setValues((prev) => ({ ...prev, [key]: value }))
   }
+
+  console.log('groupFields(schema)', groupFields(schema), 'schema', schema)
 
   return (
     <div className={styles.panel}>

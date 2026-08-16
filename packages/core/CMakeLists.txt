@@ -7,19 +7,31 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(NAM_STUDIO_BUILD_TESTS "Build packages/core unit tests" OFF)
 
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
-# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and DiodeClipper
-# directly - it's the layer that makes those already-wrapped families
-# actually produce audio, so unlike the rest of this file it does NOT
-# degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/CHOWDSP_WDF_DIR below turn
-# out to be uninitialized; linking nam_studio_core will fail with undefined
-# symbols in that case. Run `git submodule update --init --recursive` first
-# if that happens.
+# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, all 4
+# chowdsp_wdf-based drive wrappers (DiodeClipper/TubeScreamer/ZenDrive/
+# MxrDistortion), and the 4 DSPark-based dynamics/EQ wrappers
+# (Compressor/Equalizer/NoiseGate/Tremolo) directly - it's the layer that
+# makes those already-wrapped families actually produce audio, so unlike the
+# rest of this file it does NOT degrade gracefully if
+# NAM_CORE_DIR/DRAGONFLY_DIR/CHOWDSP_WDF_DIR/DSPARK_DIR below turn out to be
+# uninitialized; linking nam_studio_core will fail with undefined symbols in
+# that case. Run `git submodule update --init --recursive` first if that
+# happens.
 add_library(nam_studio_core STATIC
   src/core.cpp
   src/graph_validation.cpp
   src/graph_rig.cpp
   src/engine.cpp
   src/api.cpp
+  src/dsp/chorus.cpp
+  src/dsp/delay.cpp
+  src/dsp/flanger.cpp
+  src/dsp/phaser.cpp
+  src/dsp/ping_pong_delay.cpp
+  src/dsp/compressor.cpp
+  src/dsp/equalizer.cpp
+  src/dsp/noise_gate.cpp
+  src/dsp/tremolo.cpp
 )
 
 target_include_directories(nam_studio_core PUBLIC
@@ -127,29 +139,56 @@ else()
     "--init --depth 1 -- dpf")
 endif()
 
-# --- BYOD: Diode Clipper wrapper (issue #14) ---
-# Unlike NAMCore/Dragonfly, this doesn't compile any of BYOD's own source -
+# --- BYOD: chowdsp_wdf-based drive wrappers (issue #14) ---
+# Unlike NAMCore/Dragonfly, none of these compile any of BYOD's own source -
 # BYOD force-includes a global pch.h (JUCE + RTNeural + Eigen) into every
 # one of its 249 processor files via CMake's target_precompile_headers, so
-# even its simplest class can't be built standalone as-is. diode_clipper.cpp
-# is a hand-written reimplementation of BYOD's DiodeClipperWDF using
-# chowdsp_wdf's WDF circuit primitives directly (chowdsp_wdf is itself
-# header-only and dependency-free - see diode_clipper.cpp's own doc
-# comments for exactly what was and wasn't ported). Only chowdsp_wdf's
+# even its simplest class can't be built standalone as-is. Each of these
+# four wrapper .cpp files is a hand-written reimplementation of the
+# corresponding BYOD WDF circuit (DiodeClipperWDF, TubeScreamerWDF,
+# ZenDriveWDF, MXRDistWDF) using chowdsp_wdf's WDF circuit primitives
+# directly (chowdsp_wdf is itself header-only and dependency-free - see
+# diode_clipper.cpp's own doc comments for exactly what was and wasn't
+# ported, and src/dsp/internal/wdf_common.h for the small pieces of logic
+# genuinely shared across more than one of them). Only chowdsp_wdf's
 # include path is needed; math_approx isn't used (chowdsp_wdf has its own
 # built-in Wright-Omega approximation, so pulling in a second one for BYOD's
 # externally-injected OmegaProvider wasn't worth it for no accuracy gain).
 set(CHOWDSP_WDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/byod/modules/chowdsp_wdf")
 if(EXISTS "${CHOWDSP_WDF_DIR}/include/chowdsp_wdf/chowdsp_wdf.h")
-  target_sources(nam_studio_core PRIVATE src/dsp/diode_clipper.cpp)
+  target_sources(nam_studio_core PRIVATE
+    src/dsp/diode_clipper.cpp
+    src/dsp/tube_screamer.cpp
+    src/dsp/zen_drive.cpp
+    src/dsp/mxr_distortion.cpp
+  )
   target_include_directories(nam_studio_core PRIVATE "${CHOWDSP_WDF_DIR}/include")
-  set(NAM_STUDIO_HAS_DIODE_CLIPPER TRUE)
+  set(NAM_STUDIO_HAS_CHOWDSP_WDF TRUE)
 else()
   message(WARNING
     "packages/core/third_party/byod/modules/chowdsp_wdf isn't initialized - "
-    "the Diode Clipper wrapper will not build. Run: git -C "
-    "packages/core/third_party/byod submodule update --init --depth 1 -- "
-    "modules/chowdsp_wdf")
+    "the Diode Clipper/Tube Screamer/Zen Drive/MXR Distortion wrappers will "
+    "not build. Run: git -C packages/core/third_party/byod submodule "
+    "update --init --depth 1 -- modules/chowdsp_wdf")
+endif()
+
+# --- DSPark-based dynamics/EQ wrappers (issue #22) ---
+# DSPark (third_party/dspark) is a header-only, dependency-free C++20 DSP
+# framework. None of its source gets compiled - the wrappers (compressor.cpp/
+# equalizer.cpp/noise_gate.cpp/tremolo.cpp) just need its include path and
+# drive its processors through the shared DsparkEffect adapter
+# (src/dsp/internal/dspark_wrapper.h). Adding a new DSPark-backed block is
+# then just a Traits table + a thin concrete class (see compressor.cpp for the
+# minimal example); this include path is all the build wiring it needs.
+set(DSPARK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dspark")
+if(EXISTS "${DSPARK_DIR}/Effects/Compressor.h")
+  target_include_directories(nam_studio_core PRIVATE "${DSPARK_DIR}")
+  set(NAM_STUDIO_HAS_DSPARK TRUE)
+else()
+  message(WARNING
+    "packages/core/third_party/dspark isn't initialized - the Compressor/"
+    "Equalizer/NoiseGate/Tremolo wrappers will not build. Run: "
+    "git submodule update --init -- packages/core/third_party/dspark")
 endif()
 
 # The remaining two vendored DSP libraries (analog-tape-model, lsp-plugins)
@@ -176,10 +215,8 @@ if(EMSCRIPTEN)
     "SHELL:-s ENVIRONMENT=worklet"
     "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
-    # Only what apps/web's DragonflyReverb worklet (issue #22's first slice)
-    # actually calls - see apps/web/public/wasm-core/dragonflyReverbWorklet.js.
     # Extend this list as more of the graph ABI gets used from the browser.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_malloc','_free']"
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_set_reverb_algorithm','_nam_studio_set_drive_model','_nam_studio_set_delay_model','_malloc','_free']"
     "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
     -O3
   )

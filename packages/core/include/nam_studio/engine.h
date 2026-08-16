@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "nam_studio/block.h"
+#include "nam_studio/dsp/delay.h"
 #include "nam_studio/dsp/nam_amp.h"
 #include "nam_studio/graph_rig.h"
 
@@ -17,15 +18,18 @@
 // one, adding a live DSP object per block, pre-allocated per-block buffers,
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
-// Three DSP families are wrapped anywhere in this codebase yet: NamAmp
+// Five DSP families are wrapped anywhere in this codebase yet: NamAmp
 // (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
 // algorithms (all back the single kReverb kind - algorithm choice is a
-// per-block setting this layer owns, see SetReverbAlgorithm), and Diode
-// Clipper (backs kDrive - model choice similarly owned here, see
-// SetDriveModel, though only one model exists so far). Every other kind
-// passes audio through unchanged rather than erroring, so a full rig is
-// buildable/testable today; wiring in real DSP as those libraries get
-// wrapped (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
+// per-block setting this layer owns, see SetReverbAlgorithm), the BYOD
+// wave-digital-filter drives (back kDrive - model choice similarly owned
+// here, see SetDriveModel), the hand-written modulation/delay wrappers
+// (kChorus/kFlanger/kPhaser/kDelay/kPingPongDelay), and the DSPark-based
+// dynamics/EQ wrappers (kCompressor/kEq/kNoiseGate/kTremolo - issue #22's
+// last four still-native effect kinds). Every other kind passes audio
+// through unchanged rather than erroring, so a full rig is buildable/
+// testable today; wiring in real DSP as those libraries get wrapped
+// (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
 namespace nam_studio::engine {
 
 // Int ids only at this layer - portable across C/WASM/FFI, no string
@@ -46,13 +50,17 @@ enum class ReverbAlgorithm {
   kEarlyReflections,
 };
 
-// Only one model so far (Diode Clipper) - this exists so future BYOD
-// drive/fuzz wraps (Big Muff, Tube Screamer, etc., once each is
-// individually verified buildable the way Diode Clipper was) have a seam
-// to plug into without a new BlockKind or ABI shape, mirroring
-// ReverbAlgorithm's own role for kReverb.
+// The seam future BYOD drive/fuzz wraps plug into without a new BlockKind
+// or ABI shape, mirroring ReverbAlgorithm's own role for kReverb. Tube
+// Screamer, Zen Drive, and MXR Distortion joined Diode Clipper here once
+// each was individually verified buildable the same way (see their own
+// wrapper .cpp files) - Big Muff and the rest of BYOD's 43+ effects are
+// still candidates for follow-up additions.
 enum class DriveModel {
   kDiodeClipper,
+  kTubeScreamer,
+  kZenDrive,
+  kMxrDistortion,
 };
 
 struct ParamDescriptor {
@@ -121,6 +129,9 @@ class AudioEngine {
 
   // Only meaningful for kDrive blocks; no-op otherwise. Not real-time safe.
   void SetDriveModel(BlockId id, DriveModel model);
+
+  // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
+  void SetDelayModel(BlockId id, dsp::Delay::Model model);
 
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown

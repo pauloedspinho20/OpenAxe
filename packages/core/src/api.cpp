@@ -71,6 +71,12 @@ nam_studio::engine::DriveModel ToDriveModel(NamStudioDriveModel model) {
   switch (model) {
     case NAM_STUDIO_DRIVE_DIODE_CLIPPER:
       return DriveModel::kDiodeClipper;
+    case NAM_STUDIO_DRIVE_TUBE_SCREAMER:
+      return DriveModel::kTubeScreamer;
+    case NAM_STUDIO_DRIVE_ZEN_DRIVE:
+      return DriveModel::kZenDrive;
+    case NAM_STUDIO_DRIVE_MXR_DISTORTION:
+      return DriveModel::kMxrDistortion;
   }
   return DriveModel::kDiodeClipper;  // unreachable for a valid enum value
 }
@@ -173,6 +179,18 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
 void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDriveModel model) {
   graph->engine.SetDriveModel(block_id, ToDriveModel(model));
+}
+
+void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
+                                 NamStudioDelayModel model) {
+  using nam_studio::dsp::Delay;
+  Delay::Model m = Delay::Model::kDigital;
+  switch (model) {
+    case NAM_STUDIO_DELAY_DIGITAL: m = Delay::Model::kDigital; break;
+    case NAM_STUDIO_DELAY_ANALOG:  m = Delay::Model::kAnalog; break;
+    case NAM_STUDIO_DELAY_TAPE:    m = Delay::Model::kTape; break;
+  }
+  graph->engine.SetDelayModel(block_id, m);
 }
 
 float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {

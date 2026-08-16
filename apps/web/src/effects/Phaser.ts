@@ -1,76 +1,84 @@
 import { BaseEffect, type EffectParams } from './Effect'
 
-const STAGE_COUNT = 4
-const MIN_FREQ = 200
-const MAX_FREQ = 2000
+const PROCESSOR_NAME = 'phaser-processor'
+const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
+const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+
+function ensureWorkletRegistered(context: AudioContext): Promise<void> {
+  let promise = registeredContexts.get(context)
+  if (!promise) {
+    promise = context.audioWorklet.addModule('/wasm-core/phaserWorklet.js')
+    registeredContexts.set(context, promise)
+  }
+  return promise
+}
+
+function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
+  let promise = wasmBytesByContext.get(context)
+  if (!promise) {
+    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    wasmBytesByContext.set(context, promise)
+  }
+  return promise
+}
 
 /**
- * Cascaded allpass filters swept by a shared LFO, with feedback for
- * resonance - the classic phaser topology.
+ * Classic feedback phaser (packages/core/src/dsp/phaser.cpp compiled to
+ * WASM): a cascade of LFO-swept first-order all-pass filters with feedback
+ * for resonant notch sweeps. The `stages` param sets the number of all-pass
+ * stages (2–8).
  */
 export class Phaser extends BaseEffect {
-  private readonly stages: BiquadFilterNode[]
-  private readonly lfo: OscillatorNode
-  private readonly depthGain: GainNode
-  private readonly feedbackGain: GainNode
-  private readonly input: GainNode
+  private readonly node: AudioWorkletNode
 
-  constructor(context: BaseAudioContext) {
-    const input = new GainNode(context)
-    const output = new GainNode(context)
-    const stages = Array.from(
-      { length: STAGE_COUNT },
-      () =>
-        new BiquadFilterNode(context, { type: 'allpass', frequency: (MIN_FREQ + MAX_FREQ) / 2 }),
-    )
-    for (let i = 0; i < stages.length - 1; i++) stages[i]!.connect(stages[i + 1]!)
-    const lastStage = stages[stages.length - 1]!
-
-    const feedbackGain = new GainNode(context, { gain: 0.5 })
-    input.connect(stages[0]!)
-    lastStage.connect(output)
-    lastStage.connect(feedbackGain)
-    feedbackGain.connect(stages[0]!)
-
-    const lfo = new OscillatorNode(context, { type: 'sine', frequency: 0.4 })
-    const depthGain = new GainNode(context, { gain: (MAX_FREQ - MIN_FREQ) / 2 })
-    // Center each stage's frequency, then let the shared LFO sweep them together.
-    for (const stage of stages) {
-      stage.frequency.value = (MIN_FREQ + MAX_FREQ) / 2
-      depthGain.connect(stage.frequency)
-    }
-    lfo.connect(depthGain)
-    lfo.start()
-
-    super(context, 'phaser', 'Phaser', input, output)
-    this.input = input
-    this.stages = stages
-    this.lfo = lfo
-    this.depthGain = depthGain
-    this.feedbackGain = feedbackGain
+  private constructor(context: AudioContext, node: AudioWorkletNode) {
+    super(context, 'phaser', 'Phaser', node, node)
+    this.node = node
   }
 
-  /** Sweep speed in Hz. */
-  setRate(hz: number): void {
-    this.lfo.frequency.setTargetAtTime(hz, this.input.context.currentTime, 0.01)
+  static async create(context: AudioContext): Promise<Phaser> {
+    const [, wasmBytes] = await Promise.all([
+      ensureWorkletRegistered(context),
+      fetchWasmBytes(context),
+    ])
+    const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      processorOptions: { wasmBytes },
+    })
+    return new Phaser(context, node)
   }
 
-  /** Sweep width in Hz around the center frequency. */
-  setDepth(hz: number): void {
-    this.depthGain.gain.setTargetAtTime(hz, this.input.context.currentTime, 0.01)
+  setRate(rate: number): void {
+    this.param('rate').setValueAtTime(rate, this.node.context.currentTime)
   }
 
-  /** Resonance / regeneration amount, [0, ~0.9]. */
-  setFeedback(amount: number): void {
-    this.feedbackGain.gain.setTargetAtTime(amount, this.input.context.currentTime, 0.01)
+  setDepth(depth: number): void {
+    this.param('depth').setValueAtTime(depth, this.node.context.currentTime)
+  }
+
+  setFeedback(feedback: number): void {
+    this.param('feedback').setValueAtTime(feedback, this.node.context.currentTime)
+  }
+
+  setStages(stages: number): void {
+    this.param('stages').setValueAtTime(stages, this.node.context.currentTime)
+  }
+
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`Phaser: unknown AudioParam '${name}'`)
+    return param
   }
 
   getParams(): EffectParams {
     return {
       ...this.baseParams(),
-      rate: this.lfo.frequency.value,
-      depth: this.depthGain.gain.value,
-      feedback: this.feedbackGain.gain.value,
+      rate: this.param('rate').value,
+      depth: this.param('depth').value,
+      feedback: this.param('feedback').value,
+      stages: this.param('stages').value,
     }
   }
 
@@ -79,15 +87,11 @@ export class Phaser extends BaseEffect {
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
+    if (typeof params.stages === 'number') this.setStages(params.stages)
   }
 
   dispose(): void {
     this.disposeBase()
-    this.input.disconnect()
-    this.lfo.stop()
-    this.lfo.disconnect()
-    this.depthGain.disconnect()
-    this.feedbackGain.disconnect()
-    for (const stage of this.stages) stage.disconnect()
+    this.node.disconnect()
   }
 }

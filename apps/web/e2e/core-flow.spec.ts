@@ -125,11 +125,16 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
   await expect(reopenedDialog.getByText(presetName)).toBeVisible()
   await reopenedDialog.getByRole('button', { name: `Load ${presetName}` }).click()
 
+  // Reverb is now backed by packages/core compiled to WASM (see
+  // DragonflyReverb.ts) - restoring it from a preset re-fetches and
+  // re-instantiates that WASM module, same "generous under parallel
+  // cross-browser CI load" category as POWER_ON_TIMEOUT above, so it needs
+  // the same headroom rather than Playwright's 5s default.
   await expect(
     page.getByRole('button', {
       name: 'Reverb block - click or Enter to edit, arrow keys to move',
     }),
-  ).toBeVisible()
+  ).toBeVisible({ timeout: POWER_ON_TIMEOUT })
 })
 
 // No fixture .nam/IR files ship in this repo (third-party assets aren't ours

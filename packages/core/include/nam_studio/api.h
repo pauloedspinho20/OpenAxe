@@ -56,11 +56,23 @@ typedef enum NamStudioReverbAlgorithm {
 } NamStudioReverbAlgorithm;
 
 // Only meaningful for NAM_STUDIO_BLOCK_DRIVE blocks - selects which wrapped
-// BYOD drive/fuzz model backs the block. Only one model exists so far; new
-// drive blocks default to it.
+// BYOD drive/fuzz model backs the block. New drive blocks default to
+// NAM_STUDIO_DRIVE_DIODE_CLIPPER.
 typedef enum NamStudioDriveModel {
   NAM_STUDIO_DRIVE_DIODE_CLIPPER,
+  NAM_STUDIO_DRIVE_TUBE_SCREAMER,
+  NAM_STUDIO_DRIVE_ZEN_DRIVE,
+  NAM_STUDIO_DRIVE_MXR_DISTORTION,
 } NamStudioDriveModel;
+
+// Only meaningful for NAM_STUDIO_BLOCK_DELAY blocks - selects which delay
+// character backs the block. New delay blocks default to
+// NAM_STUDIO_DELAY_DIGITAL.
+typedef enum NamStudioDelayModel {
+  NAM_STUDIO_DELAY_DIGITAL,
+  NAM_STUDIO_DELAY_ANALOG,
+  NAM_STUDIO_DELAY_TAPE,
+} NamStudioDelayModel;
 
 // nam_studio_load_nam_model's result - mirrors nam_studio::dsp::NamLoadError.
 typedef enum NamStudioLoadResult {
@@ -145,11 +157,16 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
 // ── Drive model choice ──────────────────────────────────────────────────
 
 // No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DRIVE block. Not
-// real-time safe - reconstructs the underlying wrapper instance. Not yet
-// exported from the WASM build (packages/core/CMakeLists.txt) - nothing
-// calls it with only one model available.
+// real-time safe - reconstructs the underlying wrapper instance.
 void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDriveModel model);
+
+// ── Delay model choice ──────────────────────────────────────────────────
+
+// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Not
+// real-time safe.
+void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
+                                 NamStudioDelayModel model);
 
 // ── Metering ────────────────────────────────────────────────────────────
 
