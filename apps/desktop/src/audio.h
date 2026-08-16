@@ -57,6 +57,13 @@ struct RtCallbackState {
   std::atomic<unsigned int> callbacks{0};
   std::atomic<unsigned int> frames_processed{0};
 
+  // Actual channel counts of the open stream, set by AudioIO::Open before the
+  // stream starts. The callback reads exactly these many channel pointers (a
+  // mono input, e.g. a built-in mic, is 1 - reading a second pointer would be
+  // out of bounds).
+  int input_channels = 2;
+  int output_channels = 2;
+
   // Monitor tap: ring buffers holding the most recent input (pre-graph) and
   // output (post-graph) stereo frames, captured by the audio thread and read
   // by the UI/control thread to drive facade analysers (block/input meters,

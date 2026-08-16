@@ -82,21 +82,25 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   state->callbacks.fetch_add(1, std::memory_order_relaxed);
   state->frames_processed.fetch_add(n_frames, std::memory_order_relaxed);
 
-  // RtAudio was opened with RTAUDIO_NONINTERLEAVED, so input_buffer and
-  // output_buffer are arrays of 2 channel pointers (2 in / 2 out).
+  // RtAudio was opened with RTAUDIO_NONINTERLEAVED, so input_buffer/output_buffer
+  // are arrays of `input_channels`/`output_channels` pointers. Read exactly that
+  // many - a mono input (built-in mic) is a 1-element array, so a second read
+  // would be out of bounds.
+  const int in_ch = state->input_channels;
+  const int out_ch = state->output_channels;
   const float* in_l = nullptr;
   const float* in_r = nullptr;
   float* out_l = nullptr;
   float* out_r = nullptr;
-  if (input_buffer) {
+  if (input_buffer && in_ch >= 1) {
     auto** in = static_cast<float**>(input_buffer);
     in_l = in[0];
-    in_r = in[1];
+    if (in_ch >= 2) in_r = in[1];
   }
-  if (output_buffer) {
+  if (output_buffer && out_ch >= 1) {
     auto** out = static_cast<float**>(output_buffer);
     out_l = out[0];
-    out_r = out[1];
+    if (out_ch >= 2) out_r = out[1];
   }
   const float* in_ptrs[2] = {in_l, in_r};
   float* out_ptrs[2] = {out_l, out_r};
@@ -112,13 +116,13 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   }
 
   if (state->graph_ready.load(std::memory_order_acquire) && state->graph && n_frames > 0 &&
-      output_buffer) {
-    if (input_buffer) {
-      nam_studio_process(state->graph, in_ptrs, 2, out_ptrs, 2,
+      out_l) {
+    if (in_l) {
+      nam_studio_process(state->graph, in_ptrs, in_ch, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     } else {
       // Output-only stream: feed silence into the graph.
-      nam_studio_process(state->graph, nullptr, 0, out_ptrs, 2,
+      nam_studio_process(state->graph, nullptr, 0, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     }
   } else if (out_l) {
@@ -185,6 +189,23 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
   options.flags |= RTAUDIO_SCHEDULE_REALTIME;
   options.numberOfBuffers = 0;  // backend default
   options.priority = 0;         // backend default
+
+  // Clamp channels to what each device actually provides: a mono built-in mic
+  // has 1 input channel, stereo speakers have 2 output channels. Requesting
+  // more than a device offers makes RtAudio fail with "does not support the
+  // requested channel count". Never exceed 2 (the rig is stereo internally).
+  const RtAudio::DeviceInfo in_info = audio_.getDeviceInfo(input_id);
+  const RtAudio::DeviceInfo out_info = audio_.getDeviceInfo(output_id);
+  const int in_ch = std::min(2, static_cast<int>(in_info.inputChannels));
+  const int out_ch = std::min(2, static_cast<int>(out_info.outputChannels));
+  if (in_ch <= 0 || out_ch <= 0) {
+    last_error_ = "input/output device has no usable channels";
+    return false;
+  }
+  in.nChannels = in_ch;
+  out.nChannels = out_ch;
+  state_.input_channels = in_ch;
+  state_.output_channels = out_ch;
 
   unsigned int frames = buffer_frames;
   const RtAudioErrorType result =
