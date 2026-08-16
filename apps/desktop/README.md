@@ -149,6 +149,12 @@ a control thread. Rail jacks are the numbers `-1` (IN) / `-2` (OUT).
 The desktop reuses the apps/web UI, but a few things are UI-state-only or
 deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
 
+- The desktop uses **no Web Audio at all**. `engine.context`, `engine.analyser` /
+  `tunerAnalyser`, and `getBlockAnalyser` are plain-JS shims
+  (`NativeAudioContext` / `NativeAnalyser` in apps/web/src/native) fed from the
+  C++ monitor taps; there is no `AudioContext`, `AudioNode`, or
+  `ScriptProcessorNode` anywhere in the native path.
+
 - Bypass and master level/mute are UI state only - the core has no bypass or
   master bus, so toggling them doesn't change the native DSP.
 - IR/Cab blocks pass audio through unchanged - the core has no convolution DSP

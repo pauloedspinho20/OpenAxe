@@ -21,7 +21,7 @@ function makeBridge() {
 describe('NativeGraphRig', () => {
   it('addBlock creates a block and mirrors it to the bridge with the given id', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
 
     const id = await rig.addBlock('delay', 0, 2, 'd1')
     expect(id).toBe('d1')
@@ -32,7 +32,7 @@ describe('NativeGraphRig', () => {
 
   it('auto-generates an id when none is given', async () => {
     const { bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     const id = await rig.addBlock('mixer', 0, 0)
     expect(id).toMatch(/^block-/)
     expect(rig.listBlockIds()).toEqual([id])
@@ -40,7 +40,7 @@ describe('NativeGraphRig', () => {
 
   it('connects a valid IN->block->OUT chain, mapping rails to core sentinels', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('mixer', 0, 1, 'm1')
 
     const inEdge = rig.connect(jack(IN_RAIL), jack('m1'))
@@ -67,7 +67,7 @@ describe('NativeGraphRig', () => {
 
   it('rejects an invalid connect without touching the bridge', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('mixer', 0, 1, 'm1')
 
     // Same block (self-connect) - invalid.
@@ -78,7 +78,7 @@ describe('NativeGraphRig', () => {
 
   it('disconnect removes an edge', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('mixer', 0, 1, 'm1')
     const edge = rig.connect(jack(IN_RAIL), jack('m1'))
     expect(edge.ok && edge.id).toBeTruthy()
@@ -91,7 +91,7 @@ describe('NativeGraphRig', () => {
 
   it('removeBlock drops touching edges', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('mixer', 0, 1, 'm1')
     rig.connect(jack(IN_RAIL), jack('m1'))
     rig.connect(jack('m1'), jack(OUT_RAIL))
@@ -104,7 +104,7 @@ describe('NativeGraphRig', () => {
 
   it('moveBlock validates against cable ordering before mirroring', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('eq', 0, 1, 'e1')
     await rig.addBlock('delay', 0, 3, 'd1')
     rig.connect(jack('e1'), jack('d1'))
@@ -121,7 +121,7 @@ describe('NativeGraphRig', () => {
 
   it('setBlockParams delegates each entry to the bridge by symbol', async () => {
     const { calls, bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('reverb', 0, 0, 'r1')
 
     rig.setBlockParams('r1', { mix: 0.5, decay: '3.2' })
@@ -131,7 +131,7 @@ describe('NativeGraphRig', () => {
 
   it('countActiveHeavyBlocks reflects loaded NAM models', async () => {
     const { bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('amp', 0, 0, 'a1')
     await rig.addBlock('delay', 0, 1, 'd1')
 
@@ -143,10 +143,32 @@ describe('NativeGraphRig', () => {
     expect(rig.countActiveHeavyBlocks()).toBe(1)
   })
 
-  it('getBlockAnalyser returns null without a facade context', async () => {
+  it('getBlockAnalyser returns a Web-Audio-free analyser reflecting the native peak', async () => {
     const { bridge } = makeBridge()
-    const rig = new NativeGraphRig(bridge, null)
+    const rig = new NativeGraphRig(bridge)
     await rig.addBlock('mixer', 0, 0, 'm1')
-    expect(rig.getBlockAnalyser('m1')).toBeNull()
+
+    const analyser = rig.getBlockAnalyser('m1')
+    expect(analyser).not.toBeNull()
+    expect(analyser).toHaveProperty('fftSize')
+    expect(analyser!.getFloatTimeDomainData).toBeTypeOf('function')
+
+    // Silent block -> meter reads near-zero peak.
+    rig.updateMeter('m1', 0)
+    const bytes = new Uint8Array(256)
+    analyser!.getByteTimeDomainData(bytes)
+    let peak = 0
+    for (const b of bytes) peak = Math.max(peak, Math.abs(b - 128) / 128)
+    expect(peak).toBeLessThan(0.1)
+
+    // Full-scale block -> meter reads ~full.
+    rig.updateMeter('m1', 1)
+    analyser!.getByteTimeDomainData(bytes)
+    peak = 0
+    for (const b of bytes) peak = Math.max(peak, Math.abs(b - 128) / 128)
+    expect(peak).toBeGreaterThan(0.9)
+
+    // Unknown block -> null.
+    expect(rig.getBlockAnalyser('nope')).toBeNull()
   })
 })

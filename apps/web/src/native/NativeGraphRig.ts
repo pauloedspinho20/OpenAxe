@@ -8,6 +8,7 @@ import {
   type ValidatableBlock,
 } from '../engine/graphValidation'
 import type { PresetRig } from '../presets/types'
+import { NativeAnalyser, peakSineSource } from './NativeAnalyser'
 import { NativeBlock } from './NativeBlock'
 import type { NamStudioBridge } from './namStudio'
 
@@ -26,24 +27,23 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * map to the core sentinels -1/-2.
  *
  * The actual audio device I/O is owned by the C++ side (RtAudio). The rig
- * holds no AudioNodes; `getBlockAnalyser` returns a facade `AnalyserNode`
- * (fed a sine scaled to the block's real native meter peak by the native
- * engine, so the existing meter widgets animate from true levels). Master
- * level/mute are UI state only - the core has no master bus (see NativeBlock
- * for the same caveats on bypass and IR).
+ * holds no AudioNodes; `getBlockAnalyser` returns a Web-Audio-free
+ * `NativeAnalyser` (fed a sine scaled to the block's real native meter peak by
+ * the native engine, so the existing meter widgets animate from true levels).
+ * Master level/mute are UI state only - the core has no master bus (see
+ * NativeBlock for the same caveats on bypass and IR).
  */
 export class NativeGraphRig implements GraphRigControls, PresetRig {
   private readonly bridge: NamStudioBridge
-  private readonly context: AudioContext | null
   private readonly blocks = new Map<string, { block: NativeBlock; row: number; col: number }>()
   private readonly edges = new Map<string, { from: Jack; to: Jack }>()
-  private readonly analysers = new Map<string, { analyser: AnalyserNode; gain: GainNode }>()
+  private readonly analysers = new Map<string, NativeAnalyser>()
+  private readonly peaks = new Map<string, number>()
   private disposed = false
   private nextId = 0
 
-  constructor(bridge: NamStudioBridge, context: AudioContext | null) {
+  constructor(bridge: NamStudioBridge) {
     this.bridge = bridge
-    this.context = context
   }
 
   private genId(prefix: string): string {
@@ -75,7 +75,8 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
         this.edges.delete(edgeId)
       }
     }
-    this.disposeAnalyser(id)
+    this.analysers.delete(id)
+    this.peaks.delete(id)
     this.blocks.delete(id)
     await this.bridge.removeBlock({ blockId: id })
   }
@@ -156,44 +157,30 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   // ── Facade meters ───────────────────────────────────────────────────────
 
   /**
-   * A live meter tap for this block's output: a facade AnalyserNode fed a
-   * sine whose amplitude the native engine drives to the block's real peak
-   * (updateMeter). The existing meter widgets read getByteTimeDomainData and
-   * see the true level, just not the true waveform. Null without a facade
-   * context or for an unknown block.
+   * A live meter tap for this block's output: a Web-Audio-free `NativeAnalyser`
+   * fed a sine whose amplitude the native engine drives to the block's real
+   * peak (updateMeter). The existing meter widgets read getByteTimeDomainData
+   * and see the true level, just not the true waveform. Null for an unknown
+   * block.
    */
-  getBlockAnalyser(id: string): AnalyserNode | null {
-    if (!this.context) return null
+  getBlockAnalyser(id: string): NativeAnalyser | null {
     const entry = this.blocks.get(id)
     if (!entry) return null
     let cached = this.analysers.get(id)
     if (!cached) {
-      const analyser = new AnalyserNode(this.context)
-      const osc = new OscillatorNode(this.context, { type: 'sine', frequency: 440 })
-      const gain = new GainNode(this.context, { gain: 0 })
-      osc.connect(gain)
-      gain.connect(analyser)
-      osc.start()
-      cached = { analyser, gain }
+      cached = new NativeAnalyser({
+        fftSize: 256,
+        sampleRate: 48000,
+        read: peakSineSource(256, 48000, () => this.peaks.get(id) ?? 0),
+      })
       this.analysers.set(id, cached)
     }
-    return cached.analyser
+    return cached
   }
 
   /** Drive a block's facade meter to a peak level (0..1). Safe to call often. */
   updateMeter(id: string, peak: number): void {
-    const cached = this.analysers.get(id)
-    if (cached && this.context) {
-      cached.gain.gain.setTargetAtTime(peak, this.context.currentTime, 0.05)
-    }
-  }
-
-  private disposeAnalyser(id: string): void {
-    const cached = this.analysers.get(id)
-    if (!cached) return
-    cached.gain.disconnect()
-    cached.analyser.disconnect()
-    this.analysers.delete(id)
+    this.peaks.set(id, peak)
   }
 
   private validatableBlocks(): Map<string, ValidatableBlock> {
@@ -209,7 +196,8 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
-    for (const id of [...this.analysers.keys()]) this.disposeAnalyser(id)
+    this.analysers.clear()
+    this.peaks.clear()
     this.blocks.clear()
     this.edges.clear()
   }
