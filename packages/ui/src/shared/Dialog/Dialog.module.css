@@ -71,4 +71,7 @@
   overflow-y: auto;
   padding: var(--sp-4);
   flex: 1;
+  flex-direction: column;
+  display: flex;
+  gap: var(--sp-4);
 }

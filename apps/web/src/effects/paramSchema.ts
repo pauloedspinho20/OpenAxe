@@ -28,6 +28,13 @@ interface SelectField {
   group?: string
   /** If set, the field is only rendered when this returns true for the current values. */
   visible?: (values: EffectParams) => boolean
+  /**
+   * Model/character-style selector (Reverb's Algorithm, Delay's Model,
+   * Tremolo's Shape, Compressor's Character, ...). Rendered in its own row
+   * above the knob cluster instead of mixed into it, so the "which model is
+   * this?" choice reads first.
+   */
+  primary?: boolean
 }
 
 export type ParamFieldSchema = KnobField | SelectField
@@ -256,6 +263,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'varimu', label: 'Varimu' },
       ],
       defaultValue: 'clean',
+      primary: true,
     },
     ...MIX_LEVEL_FIELDS,
   ],
@@ -426,6 +434,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'square', label: 'Square' },
       ],
       defaultValue: 'sine',
+      primary: true,
     },
     ...MIX_LEVEL_FIELDS,
   ],
@@ -442,6 +451,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'tape', label: 'Tape' },
       ],
       defaultValue: 'digital',
+      primary: true,
     },
     {
       key: 'time',
@@ -548,6 +558,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'early-reflections', label: 'Early Reflections' },
       ],
       defaultValue: 'hall',
+      primary: true,
     },
     {
       key: 'roomSize',
@@ -644,6 +655,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'mxr-distortion', label: 'MXR Distortion+' },
       ],
       defaultValue: 'diode-clipper',
+      primary: true,
     },
     {
       key: 'cutoff',

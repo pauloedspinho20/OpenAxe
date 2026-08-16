@@ -46,60 +46,64 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
     setValues((prev) => ({ ...prev, [key]: value }))
   }
 
-  console.log('groupFields(schema)', groupFields(schema), 'schema', schema)
+  const renderField = (field: ParamFieldSchema) => {
+    if (field.control === 'select') {
+      const current =
+        typeof values[field.key] === 'string' ? (values[field.key] as string) : field.defaultValue
+      return (
+        <label key={field.key} className={styles.selectField}>
+          <span className="label">{field.label}</span>
+          <select
+            className={styles.select}
+            value={current}
+            onChange={(e) => setParam(field.key, e.target.value)}
+          >
+            {field.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )
+    }
+
+    const current =
+      typeof values[field.key] === 'number' ? (values[field.key] as number) : field.defaultValue
+    return (
+      <Knob
+        key={field.key}
+        label={field.label}
+        value={current}
+        min={field.min}
+        max={field.max}
+        step={field.step}
+        defaultValue={field.defaultValue}
+        formatValue={field.formatValue}
+        size={40}
+        onChange={(value) => setParam(field.key, value)}
+      />
+    )
+  }
 
   return (
     <div className={styles.panel}>
-      {groupFields(schema).map(([groupName, fields]) => (
-        <div key={groupName || '_'} className={styles.group}>
-          {groupName && <span className={`label ${styles.groupLabel}`}>{groupName}</span>}
-          <div className={styles.fields}>
-            {fields.map((field) => {
-              if (field.control === 'select') {
-                const current =
-                  typeof values[field.key] === 'string'
-                    ? (values[field.key] as string)
-                    : field.defaultValue
-                return (
-                  <label key={field.key} className={styles.selectField}>
-                    <span className="label">{field.label}</span>
-                    <select
-                      className={styles.select}
-                      value={current}
-                      onChange={(e) => setParam(field.key, e.target.value)}
-                    >
-                      {field.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )
-              }
-
-              const current =
-                typeof values[field.key] === 'number'
-                  ? (values[field.key] as number)
-                  : field.defaultValue
-              return (
-                <Knob
-                  key={field.key}
-                  label={field.label}
-                  value={current}
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  defaultValue={field.defaultValue}
-                  formatValue={field.formatValue}
-                  size={40}
-                  onChange={(value) => setParam(field.key, value)}
-                />
-              )
-            })}
+      {groupFields(schema).map(([groupName, fields]) => {
+        // Model/character-style selectors (primary) get their own row above
+        // the knob cluster (and any non-primary selects like Drive's Diode),
+        // so the "which model is this?" choice reads first.
+        const selectors = fields.filter((f) => f.control === 'select' && f.primary)
+        const mainFields = fields.filter((f) => !(f.control === 'select' && f.primary))
+        return (
+          <div key={groupName || '_'} className={styles.group}>
+            {groupName && <span className={`label ${styles.groupLabel}`}>{groupName}</span>}
+            {selectors.length > 0 && (
+              <div className={styles.selectRow}>{selectors.map(renderField)}</div>
+            )}
+            <div className={styles.fields}>{mainFields.map(renderField)}</div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
