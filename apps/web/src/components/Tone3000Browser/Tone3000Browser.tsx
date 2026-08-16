@@ -57,7 +57,7 @@ export function Tone3000Browser({ target, context }: Props) {
   const auth = useTone3000Auth()
   const library = useTone3000Library((s) => s.entries)
   const [scope, setScope] = useState<Scope>('browse')
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [search, setSearch] = useState<SearchState>(DEFAULT_SEARCH)
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [tones, setTones] = useState<Tone[]>([])
@@ -363,21 +363,21 @@ export function Tone3000Browser({ target, context }: Props) {
           <span className={styles.viewToggle} role="group" aria-label="View mode">
             <button
               type="button"
-              className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
-              onClick={() => setViewMode('list')}
-              aria-label="List view"
-              title="List view"
-            >
-              ☰
-            </button>
-            <button
-              type="button"
               className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
               onClick={() => setViewMode('cards')}
               aria-label="Card view"
               title="Card view"
             >
               ▦
+            </button>
+            <button
+              type="button"
+              className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
+              onClick={() => setViewMode('list')}
+              aria-label="List view"
+              title="List view"
+            >
+              ☰
             </button>
           </span>
         </div>
@@ -398,7 +398,7 @@ export function Tone3000Browser({ target, context }: Props) {
               className={styles.input}
             />
             {scope === 'browse' && (
-              <>
+              <div className={styles.filterRow}>
                 <select
                   value={search.format}
                   onChange={(e) =>
@@ -425,40 +425,40 @@ export function Tone3000Browser({ target, context }: Props) {
                   <option value="downloads-all-time">Most downloaded</option>
                   <option value="best-match">Best match</option>
                 </select>
-              </>
+              </div>
+            )}
+
+            {scope === 'browse' && (
+              <div className={styles.filterRow}>
+                <input
+                  type="text"
+                  list="t3k-makes"
+                  placeholder="Makes…"
+                  value={makesValue}
+                  onChange={(e) => setMakesValue(e.target.value)}
+                  className={styles.input}
+                />
+                <datalist id="t3k-makes">
+                  {makes.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+                <input
+                  type="text"
+                  list="t3k-tags"
+                  placeholder="Tags…"
+                  value={tagsValue}
+                  onChange={(e) => setTagsValue(e.target.value)}
+                  className={styles.input}
+                />
+                <datalist id="t3k-tags">
+                  {tags.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
             )}
           </div>
-
-          {scope === 'browse' && (
-            <div className={styles.filterRow}>
-              <input
-                type="text"
-                list="t3k-makes"
-                placeholder="Makes…"
-                value={makesValue}
-                onChange={(e) => setMakesValue(e.target.value)}
-                className={styles.input}
-              />
-              <datalist id="t3k-makes">
-                {makes.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-              <input
-                type="text"
-                list="t3k-tags"
-                placeholder="Tags…"
-                value={tagsValue}
-                onChange={(e) => setTagsValue(e.target.value)}
-                className={styles.input}
-              />
-              <datalist id="t3k-tags">
-                {tags.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-            </div>
-          )}
 
           {scope === 'favorites' && (
             <p className={styles.hint}>
@@ -511,15 +511,11 @@ export function Tone3000Browser({ target, context }: Props) {
                             className={styles.cardImage}
                             loading="lazy"
                           />
+                          {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
                         </div>
                       )}
                       <span className={styles.cardInfo}>
-                        <span className={styles.cardTitle}>
-                          {tone.title}
-                          {inLibrary && (
-                            <span className={`label ${styles.inLibraryBadge}`}>IN LIBRARY</span>
-                          )}
-                        </span>
+                        <span className={styles.cardTitle}>{tone.title}</span>
                         <span className={`label ${styles.cardMeta}`}>
                           {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
                         </span>

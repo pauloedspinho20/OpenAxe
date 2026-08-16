@@ -1,101 +1,123 @@
 import { BaseEffect, type EffectParams } from './Effect'
 
-export type DelayCharacter = 'clean' | 'tape'
+const PROCESSOR_NAME = 'delay-processor'
+const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
+const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
-const SATURATION_CURVE_SIZE = 1024
+const DELAY_MODELS = ['digital', 'analog', 'tape'] as const
+type DelayModel = (typeof DELAY_MODELS)[number]
+const DELAY_MODEL_INDEX: Record<DelayModel, number> = { digital: 0, analog: 1, tape: 2 }
 
-/** Gentle, fixed saturation for the tape-delay feedback loop - repeats warm up as they build. */
-function tapeSaturationCurve(): Float32Array<ArrayBuffer> {
-  const curve = new Float32Array(SATURATION_CURVE_SIZE)
-  for (let i = 0; i < SATURATION_CURVE_SIZE; i++) {
-    const x = (i * 2) / SATURATION_CURVE_SIZE - 1
-    curve[i] = Math.tanh(1.5 * x) / Math.tanh(1.5)
+function ensureWorkletRegistered(context: AudioContext): Promise<void> {
+  let promise = registeredContexts.get(context)
+  if (!promise) {
+    promise = context.audioWorklet.addModule('/wasm-core/delayWorklet.js')
+    registeredContexts.set(context, promise)
   }
-  return curve as Float32Array<ArrayBuffer>
+  return promise
+}
+
+function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
+  let promise = wasmBytesByContext.get(context)
+  if (!promise) {
+    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    wasmBytesByContext.set(context, promise)
+  }
+  return promise
 }
 
 /**
- * Feedback delay with a tone-shaping filter in the loop. 'tape' character
- * adds a lower cutoff and gentle saturation so repeats darken and warm up
- * over time, like a tape echo; 'clean' is a standard digital delay.
+ * Stereo delay with 3 character models (packages/core/src/dsp/delay.cpp
+ * compiled to WASM):
+ *   Digital — clean pristine repeats
+ *   Analog  — BBD-style: heavier lowpass + soft saturation in feedback path
+ *   Tape    — Analog + wow/flutter pitch modulation on the read tap
+ *
+ * The `delayModel` AudioParam switches between models; Tape adds wow depth
+ * and rate controls that are ignored in other modes.
  */
 export class Delay extends BaseEffect {
-  private readonly delayNode: DelayNode
-  private readonly feedbackGain: GainNode
-  private readonly toneFilter: BiquadFilterNode
-  private readonly wetOut: GainNode
-  private readonly saturator: WaveShaperNode | null
-  private readonly character: DelayCharacter
+  private readonly node: AudioWorkletNode
 
-  constructor(context: BaseAudioContext, character: DelayCharacter = 'clean') {
-    const delayNode = new DelayNode(context, { delayTime: 0.35, maxDelayTime: 5 })
-    const feedbackGain = new GainNode(context, { gain: 0.35 })
-    const toneFilter = new BiquadFilterNode(context, {
-      type: 'lowpass',
-      frequency: character === 'tape' ? 3500 : 12000,
-    })
-    const wetOut = new GainNode(context)
-
-    delayNode.connect(wetOut)
-    delayNode.connect(toneFilter)
-    let saturator: WaveShaperNode | null = null
-    if (character === 'tape') {
-      saturator = new WaveShaperNode(context, {
-        curve: tapeSaturationCurve(),
-        oversample: '2x',
-      })
-      toneFilter.connect(saturator)
-      saturator.connect(feedbackGain)
-    } else {
-      toneFilter.connect(feedbackGain)
-    }
-    feedbackGain.connect(delayNode)
-
-    super(context, 'delay', character === 'tape' ? 'Tape Delay' : 'Delay', delayNode, wetOut)
-    this.delayNode = delayNode
-    this.feedbackGain = feedbackGain
-    this.toneFilter = toneFilter
-    this.wetOut = wetOut
-    this.saturator = saturator
-    this.character = character
+  private constructor(context: AudioContext, node: AudioWorkletNode) {
+    super(context, 'delay', 'Delay', node, node)
+    this.node = node
   }
 
-  setTime(seconds: number): void {
-    this.delayNode.delayTime.setTargetAtTime(seconds, this.delayNode.context.currentTime, 0.01)
+  static async create(context: AudioContext): Promise<Delay> {
+    const [, wasmBytes] = await Promise.all([
+      ensureWorkletRegistered(context),
+      fetchWasmBytes(context),
+    ])
+    const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      processorOptions: { wasmBytes },
+    })
+    return new Delay(context, node)
+  }
+
+  setDelayModel(model: string): void {
+    const index = DELAY_MODEL_INDEX[model as DelayModel]
+    this.param('delayModel').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
+  }
+
+  getDelayModel(): DelayModel {
+    const index = Math.round(this.param('delayModel').value)
+    return DELAY_MODELS[index] ?? DELAY_MODELS[0]
+  }
+
+  setTime(ms: number): void {
+    this.param('time').setValueAtTime(ms, this.node.context.currentTime)
   }
 
   setFeedback(amount: number): void {
-    this.feedbackGain.gain.setTargetAtTime(amount, this.delayNode.context.currentTime, 0.01)
+    this.param('feedback').setValueAtTime(amount, this.node.context.currentTime)
   }
 
   setTone(hz: number): void {
-    this.toneFilter.frequency.setTargetAtTime(hz, this.delayNode.context.currentTime, 0.01)
+    this.param('tone').setValueAtTime(hz, this.node.context.currentTime)
   }
 
-  /** `character` is fixed at construction (it changes the node topology) - reported so a preset can reconstruct with the right one, but setParams() can't change it on a live instance. */
+  setWowDepth(ms: number): void {
+    this.param('wowDepth').setValueAtTime(ms, this.node.context.currentTime)
+  }
+
+  setWowRate(hz: number): void {
+    this.param('wowRate').setValueAtTime(hz, this.node.context.currentTime)
+  }
+
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`Delay: unknown AudioParam '${name}'`)
+    return param
+  }
+
   getParams(): EffectParams {
     return {
       ...this.baseParams(),
-      character: this.character,
-      time: this.delayNode.delayTime.value,
-      feedback: this.feedbackGain.gain.value,
-      tone: this.toneFilter.frequency.value,
+      delayModel: this.getDelayModel(),
+      time: this.param('time').value,
+      feedback: this.param('feedback').value,
+      tone: this.param('tone').value,
+      wowDepth: this.param('wowDepth').value,
+      wowRate: this.param('wowRate').value,
     }
   }
 
   setParams(params: EffectParams): void {
+    if (typeof params.delayModel === 'string') this.setDelayModel(params.delayModel)
     this.applyBaseParams(params)
     if (typeof params.time === 'number') this.setTime(params.time)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
     if (typeof params.tone === 'number') this.setTone(params.tone)
+    if (typeof params.wowDepth === 'number') this.setWowDepth(params.wowDepth)
+    if (typeof params.wowRate === 'number') this.setWowRate(params.wowRate)
   }
 
   dispose(): void {
     this.disposeBase()
-    this.delayNode.disconnect()
-    this.feedbackGain.disconnect()
-    this.toneFilter.disconnect()
-    this.wetOut.disconnect()
-    this.saturator?.disconnect()
+    this.node.disconnect()
   }
 }

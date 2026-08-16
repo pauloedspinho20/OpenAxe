@@ -1,42 +1,83 @@
 import { BaseEffect, type EffectParams } from './Effect'
-import { createModulatedDelay, type ModulatedDelay } from './modulatedDelay'
 
-/** LFO-modulated delay with a long-ish base delay and light feedback - a classic chorus. */
+const PROCESSOR_NAME = 'chorus-processor'
+const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
+const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+
+function ensureWorkletRegistered(context: AudioContext): Promise<void> {
+  let promise = registeredContexts.get(context)
+  if (!promise) {
+    promise = context.audioWorklet.addModule('/wasm-core/chorusWorklet.js')
+    registeredContexts.set(context, promise)
+  }
+  return promise
+}
+
+function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
+  let promise = wasmBytesByContext.get(context)
+  if (!promise) {
+    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    wasmBytesByContext.set(context, promise)
+  }
+  return promise
+}
+
+/**
+ * Classic stereo chorus (packages/core/src/dsp/chorus.cpp compiled to WASM):
+ * a modulated delay line with sine LFO, stereo widening via 90° phase-
+ * offset LFOs per channel, and optional feedback.
+ */
 export class Chorus extends BaseEffect {
-  private readonly modDelay: ModulatedDelay
+  private readonly node: AudioWorkletNode
 
-  constructor(context: BaseAudioContext) {
-    const modDelay = createModulatedDelay(context, {
-      baseDelayMs: 20,
-      depthMs: 4,
-      rateHz: 1.2,
-      feedback: 0.15,
+  private constructor(context: AudioContext, node: AudioWorkletNode) {
+    super(context, 'chorus', 'Chorus', node, node)
+    this.node = node
+  }
+
+  static async create(context: AudioContext): Promise<Chorus> {
+    const [, wasmBytes] = await Promise.all([
+      ensureWorkletRegistered(context),
+      fetchWasmBytes(context),
+    ])
+    const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      processorOptions: { wasmBytes },
     })
-    super(context, 'chorus', 'Chorus', modDelay.input, modDelay.output)
-    this.modDelay = modDelay
+    return new Chorus(context, node)
   }
 
-  /** LFO speed in Hz. */
-  setRate(hz: number): void {
-    this.modDelay.setRate(hz)
+  setRate(rate: number): void {
+    this.param('rate').setValueAtTime(rate, this.node.context.currentTime)
   }
 
-  /** Modulation depth in ms. */
-  setDepth(ms: number): void {
-    this.modDelay.setDepth(ms)
+  setDepth(depth: number): void {
+    this.param('depth').setValueAtTime(depth, this.node.context.currentTime)
   }
 
-  /** Regeneration amount, [0, ~0.5] before it starts sounding flangey. */
-  setFeedback(amount: number): void {
-    this.modDelay.setFeedback(amount)
+  setDelay(delay: number): void {
+    this.param('delay').setValueAtTime(delay, this.node.context.currentTime)
+  }
+
+  setFeedback(feedback: number): void {
+    this.param('feedback').setValueAtTime(feedback, this.node.context.currentTime)
+  }
+
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`Chorus: unknown AudioParam '${name}'`)
+    return param
   }
 
   getParams(): EffectParams {
     return {
       ...this.baseParams(),
-      rate: this.modDelay.lfo.frequency.value,
-      depth: this.modDelay.depthGain.gain.value * 1000,
-      feedback: this.modDelay.feedbackGain.gain.value,
+      rate: this.param('rate').value,
+      depth: this.param('depth').value,
+      delay: this.param('delay').value,
+      feedback: this.param('feedback').value,
     }
   }
 
@@ -44,11 +85,12 @@ export class Chorus extends BaseEffect {
     this.applyBaseParams(params)
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
+    if (typeof params.delay === 'number') this.setDelay(params.delay)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
   }
 
   dispose(): void {
     this.disposeBase()
-    this.modDelay.dispose()
+    this.node.disconnect()
   }
 }

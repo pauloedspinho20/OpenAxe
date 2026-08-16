@@ -7,10 +7,23 @@
 #include <type_traits>
 #include <variant>
 
+#include "nam_studio/dsp/chorus.h"
+#include "nam_studio/dsp/compressor.h"
+#include "nam_studio/dsp/delay.h"
+#include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_early_reflections.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
 #include "nam_studio/dsp/dragonfly_room_reverb.h"
+#include "nam_studio/dsp/equalizer.h"
+#include "nam_studio/dsp/flanger.h"
+#include "nam_studio/dsp/mxr_distortion.h"
+#include "nam_studio/dsp/noise_gate.h"
+#include "nam_studio/dsp/phaser.h"
+#include "nam_studio/dsp/ping_pong_delay.h"
+#include "nam_studio/dsp/tremolo.h"
+#include "nam_studio/dsp/tube_screamer.h"
+#include "nam_studio/dsp/zen_drive.h"
 
 namespace nam_studio::engine {
 namespace {
@@ -45,7 +58,10 @@ int PortCountFor(graph::BlockKind kind) {
 
 using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallReverb,
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
-                                 dsp::DragonflyEarlyReflections>;
+                                 dsp::DragonflyEarlyReflections, dsp::DiodeClipper, dsp::TubeScreamer,
+                                 dsp::ZenDrive, dsp::MxrDistortion, dsp::Chorus, dsp::Flanger,
+                                 dsp::Phaser, dsp::Delay, dsp::PingPongDelay, dsp::Compressor,
+                                 dsp::Equalizer, dsp::NoiseGate, dsp::Tremolo>;
 
 }  // namespace
 
@@ -169,9 +185,50 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->dsp.emplace<dsp::DragonflyHallReverb>();  // default algorithm; see SetReverbAlgorithm
     state->param_count = dsp::DragonflyHallReverb::ParamCount();
     SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kDrive) {
+    state->dsp.emplace<dsp::DiodeClipper>();  // default model; see SetDriveModel
+    state->param_count = dsp::DiodeClipper::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kChorus) {
+    state->dsp.emplace<dsp::Chorus>();
+    state->param_count = dsp::Chorus::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kFlanger) {
+    state->dsp.emplace<dsp::Flanger>();
+    state->param_count = dsp::Flanger::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kPhaser) {
+    state->dsp.emplace<dsp::Phaser>();
+    state->param_count = dsp::Phaser::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kDelay) {
+    state->dsp.emplace<dsp::Delay>();
+    state->param_count = dsp::Delay::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kPingPongDelay) {
+    state->dsp.emplace<dsp::PingPongDelay>();
+    state->param_count = dsp::PingPongDelay::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kCompressor) {
+    state->dsp.emplace<dsp::Compressor>();
+    state->param_count = dsp::Compressor::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kEq) {
+    state->dsp.emplace<dsp::Equalizer>();
+    state->param_count = dsp::Equalizer::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kNoiseGate) {
+    state->dsp.emplace<dsp::NoiseGate>();
+    state->param_count = dsp::NoiseGate::ParamCount();
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kTremolo) {
+    state->dsp.emplace<dsp::Tremolo>();
+    state->param_count = dsp::Tremolo::ParamCount();
+    SeedParamsFromDsp(*state);
   }
   // Every other kind stays std::monostate (passthrough) with param_count 0 -
-  // LSP/BYOD/AnalogTapeModel aren't wrapped yet (see packages/core/README.md).
+  // the remaining AnalogTapeModel/LSP wrappers aren't written yet (see
+  // packages/core/README.md).
 
   if (max_block_size_ > 0) EnsureBuffers(*state);
   block_states_.emplace(id, std::move(state));
@@ -515,6 +572,60 @@ void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
         },
         state->dsp);
   }
+  SeedParamsFromDsp(*state);
+}
+
+// ── Drive model choice ──────────────────────────────────────────────────
+
+void AudioEngine::SetDriveModel(BlockId id, DriveModel model) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kDrive) return;
+
+  switch (model) {
+    case DriveModel::kDiodeClipper:
+      state->dsp.emplace<dsp::DiodeClipper>();
+      state->param_count = dsp::DiodeClipper::ParamCount();
+      break;
+    case DriveModel::kTubeScreamer:
+      state->dsp.emplace<dsp::TubeScreamer>();
+      state->param_count = dsp::TubeScreamer::ParamCount();
+      break;
+    case DriveModel::kZenDrive:
+      state->dsp.emplace<dsp::ZenDrive>();
+      state->param_count = dsp::ZenDrive::ParamCount();
+      break;
+    case DriveModel::kMxrDistortion:
+      state->dsp.emplace<dsp::MxrDistortion>();
+      state->param_count = dsp::MxrDistortion::ParamCount();
+      break;
+  }
+
+  if (max_block_size_ > 0) {
+    std::visit(
+        [&](auto& d) {
+          using T = std::decay_t<decltype(d)>;
+          if constexpr (!std::is_same_v<T, std::monostate> && !std::is_same_v<T, dsp::NamAmp>) {
+            d.Reset(sample_rate_);
+          }
+        },
+        state->dsp);
+  }
+  SeedParamsFromDsp(*state);
+}
+
+// ── Delay model choice ──────────────────────────────────────────────────
+
+void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kDelay) return;
+
+  auto* delay = std::get_if<dsp::Delay>(&state->dsp);
+  if (!delay) return;
+
+  delay->SetModel(model);
+  // Reset param_count in case it changes (it doesn't currently — same count
+  // for all models — but this matches SetDriveModel's pattern).
+  state->param_count = dsp::Delay::ParamCount();
   SeedParamsFromDsp(*state);
 }
 

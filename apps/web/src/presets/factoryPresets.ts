@@ -24,7 +24,15 @@ export interface RowEffect {
 export function compressor(): RowEffect {
   return {
     kind: 'compressor',
-    params: { threshold: -24, knee: 6, ratio: 3, attack: 0.01, release: 0.2 },
+    params: {
+      threshold: -18,
+      ratio: 4,
+      attack: 5,
+      release: 100,
+      knee: 0,
+      makeup_gain: 0,
+      character: 'clean',
+    },
   }
 }
 
@@ -35,16 +43,16 @@ export function eq(): RowEffect {
       bandCount: 4,
       band0_frequency: 100,
       band0_gain: 0,
-      band0_q: 1,
+      band0_q: 0.707,
       band1_frequency: 500,
       band1_gain: 0,
-      band1_q: 1,
+      band1_q: 0.707,
       band2_frequency: 2000,
       band2_gain: 2,
-      band2_q: 1,
+      band2_q: 0.707,
       band3_frequency: 6000,
       band3_gain: 1,
-      band3_q: 1,
+      band3_q: 0.707,
     },
   }
 }

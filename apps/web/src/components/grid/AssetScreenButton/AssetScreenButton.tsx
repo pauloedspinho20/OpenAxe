@@ -36,7 +36,6 @@ const GEAR_LABELS: Record<AssetGearType, string> = {
 export function AssetScreenButton({ blockId, gearType, block, context }: AssetScreenButtonProps) {
   const isIr = gearType === 'cab'
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const openBrowser = useTone3000Browser((s) => s.openBrowser)
 
@@ -86,34 +85,14 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
         }}
       />
       <div className={styles.screenRow}>
-        <button
-          type="button"
-          className={`${styles.screen} ${dragOver ? styles.screenDragOver : ''}`}
+        <HardwareButton
           onClick={() => openBrowser({ blockId, slot: isIr ? 'ir' : 'model', gear: gearType })}
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragOver(true)
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragOver(false)
-            const file = e.dataTransfer.files[0]
-            if (file) void loadFromFile(file)
-          }}
           title={`Browse Tone3000 ${label.toLowerCase()}s - or drop a ${isIr ? 'cabinet IR' : '.nam model'} file here`}
-        >
-          {/*    {libraryEntry?.imageUrl && (
-            <img src={libraryEntry.imageUrl} alt="" className={styles.screenImage} loading="lazy" />
-          )} */}
-          <span className={styles.screenMeta}>
-            {/* <span className={`label ${styles.screenLabel}`}>{label}</span> */}
-            <span className={styles.screenValue}>{loaded?.name ?? emptyText}</span>
-          </span>
-        </button>
+          label={loaded?.name ?? emptyText}
+        ></HardwareButton>
         <HardwareButton
           onClick={() => fileInputRef.current?.click()}
-          label={`Load ${isIr ? 'IR' : '.nam'} file`}
+          label={`Upload ${isIr ? 'IR' : '.nam'}`}
         ></HardwareButton>
       </div>
       {loadError && <p className={styles.screenError}>{loadError}</p>}

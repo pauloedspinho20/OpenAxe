@@ -3,18 +3,30 @@ import styles from './Panel.module.css'
 
 export interface PanelProps {
   label?: string
+  url?: string
+  labelUrl?: string
   corner?: ReactNode
   children: ReactNode
   className?: string
 }
 
 /** A rack-module container - the base unit every control group sits in. */
-export function Panel({ label, corner, children, className }: PanelProps) {
+export function Panel({ label, labelUrl, url, corner, children, className }: PanelProps) {
   return (
     <section className={`${styles.panel} ${className ?? ''}`}>
       {(label ?? corner) && (
         <header className={styles.header}>
-          {label && <span className="label">{label}</span>}
+          <div className={styles.labelContainer}>
+            {label && <span className="label">{label}</span>}
+            {url && labelUrl && (
+              <span className="label">
+                By{' '}
+                <a href={url} target="_blank">
+                  {labelUrl}
+                </a>
+              </span>
+            )}
+          </div>
           {corner}
         </header>
       )}

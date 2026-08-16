@@ -45,6 +45,8 @@ nam_studio::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
       return BlockKind::kMixer;
     case NAM_STUDIO_BLOCK_SPLITTER:
       return BlockKind::kSplitter;
+    case NAM_STUDIO_BLOCK_DRIVE:
+      return BlockKind::kDrive;
   }
   return BlockKind::kCab;  // unreachable for a valid enum value
 }
@@ -62,6 +64,21 @@ nam_studio::engine::ReverbAlgorithm ToReverbAlgorithm(NamStudioReverbAlgorithm a
       return ReverbAlgorithm::kEarlyReflections;
   }
   return ReverbAlgorithm::kHall;  // unreachable for a valid enum value
+}
+
+nam_studio::engine::DriveModel ToDriveModel(NamStudioDriveModel model) {
+  using nam_studio::engine::DriveModel;
+  switch (model) {
+    case NAM_STUDIO_DRIVE_DIODE_CLIPPER:
+      return DriveModel::kDiodeClipper;
+    case NAM_STUDIO_DRIVE_TUBE_SCREAMER:
+      return DriveModel::kTubeScreamer;
+    case NAM_STUDIO_DRIVE_ZEN_DRIVE:
+      return DriveModel::kZenDrive;
+    case NAM_STUDIO_DRIVE_MXR_DISTORTION:
+      return DriveModel::kMxrDistortion;
+  }
+  return DriveModel::kDiodeClipper;  // unreachable for a valid enum value
 }
 
 NamStudioLoadResult ToLoadResult(std::optional<nam_studio::dsp::NamLoadError> error) {
@@ -157,6 +174,23 @@ int32_t nam_studio_block_has_model(NamStudioGraph* graph, int32_t block_id) {
 void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
                                       NamStudioReverbAlgorithm algorithm) {
   graph->engine.SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
+}
+
+void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
+                                 NamStudioDriveModel model) {
+  graph->engine.SetDriveModel(block_id, ToDriveModel(model));
+}
+
+void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
+                                 NamStudioDelayModel model) {
+  using nam_studio::dsp::Delay;
+  Delay::Model m = Delay::Model::kDigital;
+  switch (model) {
+    case NAM_STUDIO_DELAY_DIGITAL: m = Delay::Model::kDigital; break;
+    case NAM_STUDIO_DELAY_ANALOG:  m = Delay::Model::kAnalog; break;
+    case NAM_STUDIO_DELAY_TAPE:    m = Delay::Model::kTape; break;
+  }
+  graph->engine.SetDelayModel(block_id, m);
 }
 
 float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {

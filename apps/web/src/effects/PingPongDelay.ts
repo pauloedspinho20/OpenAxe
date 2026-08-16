@@ -1,70 +1,78 @@
 import { BaseEffect, type EffectParams } from './Effect'
 
+const PROCESSOR_NAME = 'ping-pong-processor'
+const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
+const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+
+function ensureWorkletRegistered(context: AudioContext): Promise<void> {
+  let promise = registeredContexts.get(context)
+  if (!promise) {
+    promise = context.audioWorklet.addModule('/wasm-core/pingPongWorklet.js')
+    registeredContexts.set(context, promise)
+  }
+  return promise
+}
+
+function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
+  let promise = wasmBytesByContext.get(context)
+  if (!promise) {
+    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    wasmBytesByContext.set(context, promise)
+  }
+  return promise
+}
+
 /**
- * Stereo delay that alternates repeats left/right: input feeds the left
- * delay line, whose output pans hard left AND feeds the right delay line,
- * which pans hard right and feeds back into the left line, and so on.
+ * Stereo ping-pong delay (packages/core/src/dsp/ping_pong_delay.cpp compiled
+ * to WASM): two delay lines alternating left/right per repeat with a tone
+ * filter in the feedback path.
  */
 export class PingPongDelay extends BaseEffect {
-  private readonly input: GainNode
-  private readonly wetOut: GainNode
-  private readonly delayL: DelayNode
-  private readonly delayR: DelayNode
-  private readonly feedbackLtoR: GainNode
-  private readonly feedbackRtoL: GainNode
-  private readonly pannerL: StereoPannerNode
-  private readonly pannerR: StereoPannerNode
+  private readonly node: AudioWorkletNode
 
-  constructor(context: BaseAudioContext) {
-    const input = new GainNode(context)
-    const wetOut = new GainNode(context)
-    const delayL = new DelayNode(context, { delayTime: 0.3, maxDelayTime: 5 })
-    const delayR = new DelayNode(context, { delayTime: 0.3, maxDelayTime: 5 })
-    const feedbackLtoR = new GainNode(context, { gain: 0.35 })
-    const feedbackRtoL = new GainNode(context, { gain: 0.35 })
-    const pannerL = new StereoPannerNode(context, { pan: -1 })
-    const pannerR = new StereoPannerNode(context, { pan: 1 })
-
-    input.connect(delayL)
-    delayL.connect(pannerL)
-    pannerL.connect(wetOut)
-    delayL.connect(feedbackLtoR)
-    feedbackLtoR.connect(delayR)
-
-    delayR.connect(pannerR)
-    pannerR.connect(wetOut)
-    delayR.connect(feedbackRtoL)
-    feedbackRtoL.connect(delayL)
-
-    super(context, 'ping-pong-delay', 'Ping-Pong Delay', input, wetOut)
-    this.input = input
-    this.wetOut = wetOut
-    this.delayL = delayL
-    this.delayR = delayR
-    this.feedbackLtoR = feedbackLtoR
-    this.feedbackRtoL = feedbackRtoL
-    this.pannerL = pannerL
-    this.pannerR = pannerR
+  private constructor(context: AudioContext, node: AudioWorkletNode) {
+    super(context, 'ping-pong-delay', 'Ping-Pong Delay', node, node)
+    this.node = node
   }
 
-  /** Time between the left and right repeats, in seconds. */
-  setTime(seconds: number): void {
-    const now = this.delayL.context.currentTime
-    this.delayL.delayTime.setTargetAtTime(seconds, now, 0.01)
-    this.delayR.delayTime.setTargetAtTime(seconds, now, 0.01)
+  static async create(context: AudioContext): Promise<PingPongDelay> {
+    const [, wasmBytes] = await Promise.all([
+      ensureWorkletRegistered(context),
+      fetchWasmBytes(context),
+    ])
+    const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      processorOptions: { wasmBytes },
+    })
+    return new PingPongDelay(context, node)
+  }
+
+  setTime(ms: number): void {
+    this.param('time').setValueAtTime(ms, this.node.context.currentTime)
   }
 
   setFeedback(amount: number): void {
-    const now = this.delayL.context.currentTime
-    this.feedbackLtoR.gain.setTargetAtTime(amount, now, 0.01)
-    this.feedbackRtoL.gain.setTargetAtTime(amount, now, 0.01)
+    this.param('feedback').setValueAtTime(amount, this.node.context.currentTime)
+  }
+
+  setTone(hz: number): void {
+    this.param('tone').setValueAtTime(hz, this.node.context.currentTime)
+  }
+
+  private param(name: string): AudioParam {
+    const param = this.node.parameters.get(name)
+    if (!param) throw new Error(`PingPongDelay: unknown AudioParam '${name}'`)
+    return param
   }
 
   getParams(): EffectParams {
     return {
       ...this.baseParams(),
-      time: this.delayL.delayTime.value,
-      feedback: this.feedbackLtoR.gain.value,
+      time: this.param('time').value,
+      feedback: this.param('feedback').value,
+      tone: this.param('tone').value,
     }
   }
 
@@ -72,17 +80,11 @@ export class PingPongDelay extends BaseEffect {
     this.applyBaseParams(params)
     if (typeof params.time === 'number') this.setTime(params.time)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
+    if (typeof params.tone === 'number') this.setTone(params.tone)
   }
 
   dispose(): void {
     this.disposeBase()
-    this.input.disconnect()
-    this.wetOut.disconnect()
-    this.delayL.disconnect()
-    this.delayR.disconnect()
-    this.feedbackLtoR.disconnect()
-    this.feedbackRtoL.disconnect()
-    this.pannerL.disconnect()
-    this.pannerR.disconnect()
+    this.node.disconnect()
   }
 }

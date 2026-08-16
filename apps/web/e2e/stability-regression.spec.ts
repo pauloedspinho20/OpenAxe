@@ -16,6 +16,13 @@ import { test, expect } from '@playwright/test'
 test('builds a full FX chain, toggles every bypass, and tears it down without errors', async ({
   page,
 }) => {
+  // Heaviest test in the suite: it sequentially builds 11 WASM-backed effect
+  // blocks, each of which compiles/instantiates an AudioWorklet + fetches the
+  // core .wasm. Under the parallel 4-worker matrix that routinely exceeds the
+  // 30s default on a loaded machine (the grid reflows as blocks land, so a
+  // "+" button can move mid-click), so give it a real budget. It passes in
+  // ~6s in isolation; this is headroom, not a per-test norm.
+  test.setTimeout(180_000)
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
   page.on('pageerror', (err) => pageErrors.push(err.message))
@@ -63,17 +70,21 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove Mixer' }).click()
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
+  // All 11 effect kinds: the four DSPark-backed ones (issue #22's last
+  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the seven that
+  // already ran on packages/core.
   const FX_KINDS = [
     'Noise Gate',
     'Compressor',
     'EQ',
+    'Tremolo',
+    'Reverb',
+    'Drive',
     'Chorus',
     'Flanger',
     'Phaser',
-    'Tremolo',
     'Delay',
     'Ping-Pong Delay',
-    'Reverb',
   ]
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x
