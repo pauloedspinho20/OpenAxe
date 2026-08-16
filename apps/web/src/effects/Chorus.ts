@@ -73,7 +73,6 @@ export class Chorus extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      ...this.baseParams(),
       rate: this.param('rate').value,
       depth: this.param('depth').value,
       delay: this.param('delay').value,
@@ -82,7 +81,6 @@ export class Chorus extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
-    this.applyBaseParams(params)
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
     if (typeof params.delay === 'number') this.setDelay(params.delay)

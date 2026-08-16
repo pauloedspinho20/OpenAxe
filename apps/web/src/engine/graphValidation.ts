@@ -83,3 +83,31 @@ export function isEdgeOrderValid(
 ): boolean {
   return columnOf(blocks, edge.from.blockId) < columnOf(blocks, edge.to.blockId)
 }
+
+/**
+ * True if moving `blockId` to column `newCol` keeps every cable touching it
+ * left-to-right. A block with an incoming cable must stay to the right of its
+ * source, and one with an outgoing cable must stay to the left of its target,
+ * so the block is only free to move within that column band (rows are
+ * unconstrained - ordering is column-based). Used both to reject invalid moves
+ * and to drive the drag-drop validity highlight.
+ */
+export function canMoveTo(
+  blocks: ReadonlyMap<string, ValidatableBlock>,
+  edges: Iterable<ValidatableEdge>,
+  blockId: string,
+  newCol: number,
+): ConnectResult {
+  for (const edge of edges) {
+    if (edge.from.blockId === blockId) {
+      if (!(newCol < columnOf(blocks, edge.to.blockId))) {
+        return { ok: false, reason: 'Moving here would break a cable to the right of this block' }
+      }
+    } else if (edge.to.blockId === blockId) {
+      if (!(columnOf(blocks, edge.from.blockId) < newCol)) {
+        return { ok: false, reason: 'Moving here would break a cable from the left of this block' }
+      }
+    }
+  }
+  return { ok: true }
+}

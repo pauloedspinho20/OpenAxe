@@ -177,14 +177,39 @@ describe('graphStore', () => {
     expect(useGraphStore.getState().edges).toEqual([])
   })
 
-  it('moveBlock repositions a block and auto-drops a cable that would go backward', () => {
+  it('moveBlock refuses to move a block somewhere its cable would go backward', () => {
     loadGraph([block('a', 'compressor', 0, 0), block('b', 'eq', 0, 1)], [edge('ab', 'a', 'b')])
 
-    const { droppedEdgeIds } = useGraphStore.getState().moveBlock('a', 0, 5)
+    const result = useGraphStore.getState().moveBlock('a', 0, 5)
 
-    expect(droppedEdgeIds).toEqual(['ab'])
-    expect(useGraphStore.getState().edges).toEqual([])
-    expect(useGraphStore.getState().blocks.find((x) => x.id === 'a')?.col).toBe(5)
+    expect(result.ok).toBe(false)
+    expect(useGraphStore.getState().blocks.find((x) => x.id === 'a')?.col).toBe(0)
+    expect(useGraphStore.getState().edges).toHaveLength(1)
+  })
+
+  it("moveBlock still allows a move within a block's cable column band", () => {
+    loadGraph([block('a', 'compressor', 0, 1), block('b', 'eq', 0, 5)], [edge('ab', 'a', 'b')])
+
+    const result = useGraphStore.getState().moveBlock('a', 1, 2)
+
+    expect(result.ok).toBe(true)
+    expect(useGraphStore.getState().blocks.find((x) => x.id === 'a')?.row).toBe(1)
+    expect(useGraphStore.getState().blocks.find((x) => x.id === 'a')?.col).toBe(2)
+    expect(useGraphStore.getState().edges).toHaveLength(1)
+  })
+
+  // ── Bug 3: place-block wiring prefers a neighbouring unconnected output ──
+
+  it('wires a new block into an unconnected preceding output instead of the IN rail', () => {
+    loadGraph([block('a', 'compressor', 0, 1)], [])
+    const id = useGraphStore.getState().addBlock('eq', 0, 3)
+    expectEdges(`a->${id}`, `${id}->OUT`)
+  })
+
+  it('prioritizes the preceding block in the same row over a nearer one on another row', () => {
+    loadGraph([block('same-row', 'compressor', 1, 2), block('other-row', 'eq', 0, 5)], [])
+    const id = useGraphStore.getState().addBlock('delay', 1, 4)
+    expectEdges(`same-row->${id}`, `${id}->OUT`)
   })
 
   it('setMasterLevel, setMasterMuted and setTunerMuted set independent fields', () => {

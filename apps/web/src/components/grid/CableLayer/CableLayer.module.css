@@ -32,9 +32,3 @@
   stroke-dasharray: 4 3;
   stroke-linecap: round;
 }
-
-.rejectText {
-  font-family: var(--font-display);
-  font-size: 10px;
-  fill: var(--led-hot);
-}

@@ -18,8 +18,18 @@
 
 .fields {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-4);
   align-items: flex-start;
+}
+
+/* Primary (model/character) selectors, rendered in their own row above the
+   knob cluster. */
+.selectRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  align-items: flex-end;
 }
 
 .selectField {

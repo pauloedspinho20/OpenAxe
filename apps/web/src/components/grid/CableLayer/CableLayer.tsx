@@ -16,10 +16,12 @@ export interface DragPreview {
 
 export interface CableLayerProps {
   edges: EdgeInstance[]
-  /** Any value that changes when block positions/count change, to trigger a recompute. */
+  /**
+   * Any value that changes when block positions/count change (or a block is
+   * being dragged, so its cables follow) - drives a recompute.
+   */
   recomputeKey: unknown
   dragPreview: DragPreview | null
-  rejectMessage: string | null
   /** Called when the user clicks one of the drawn cables to unhook it. */
   onDisconnect: (edgeId: string) => void
 }
@@ -37,13 +39,7 @@ function cablePath(from: Point, to: Point): string {
  * All pointer interaction (drag-to-connect) is owned by GridEditor, which is
  * the nearest common ancestor of both the jacks and this layer.
  */
-export function CableLayer({
-  edges,
-  recomputeKey,
-  dragPreview,
-  rejectMessage,
-  onDisconnect,
-}: CableLayerProps) {
+export function CableLayer({ edges, recomputeKey, dragPreview, onDisconnect }: CableLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [paths, setPaths] = useState<Array<{ id: string; d: string }>>([])
   const [previewD, setPreviewD] = useState<string | null>(null)
@@ -118,11 +114,6 @@ export function CableLayer({
         </g>
       ))}
       {previewD && <path className={styles.cablePreview} d={previewD} />}
-      {rejectMessage && (
-        <text className={styles.rejectText} x="8" y="16">
-          {rejectMessage}
-        </text>
-      )}
     </svg>
   )
 }

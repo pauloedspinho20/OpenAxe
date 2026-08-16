@@ -27,10 +27,10 @@ class TestEffect extends BaseEffect {
     super(context, 'compressor', 'Test', wetNode, wetNode)
   }
   getParams(): EffectParams {
-    return this.baseParams()
+    return {}
   }
   setParams(params: EffectParams): void {
-    this.applyBaseParams(params)
+    void params
   }
   dispose(): void {
     this.disposeBase()
@@ -45,7 +45,9 @@ describe('BaseEffect', () => {
     // values (dry=1, wet=0) and nothing ever synced them - so every effect
     // silently passed its input straight through unprocessed until
     // something explicitly called setMix(), which nothing in the app does
-    // (mix isn't a param in paramSchema.ts for any effect).
+    // (mix/level aren't params in paramSchema.ts anymore — see Effect.ts).
+    // Effects expose their own native dry/wet control only where the DSP
+    // provides one (Compressor's Mix, Reverb's Dry, Drive's Output Level).
     const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
 
     expect(effect.getMix()).toBe(1)
@@ -110,17 +112,15 @@ describe('BaseEffect', () => {
     expect(dryGain.gain.value).toBeCloseTo(1 - 0.1)
   })
 
-  it('getParams/setParams round-trip mix and level via baseParams/applyBaseParams', () => {
+  it("getParams/setParams are the concrete class's job - base defines no shared params", () => {
     const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
-    effect.setMix(0.6)
+    expect(effect.getParams()).toEqual({})
+
+    // setParams with empty params is a no-op: mix/level stay whatever they are.
     effect.setLevel(0.8)
-
-    const saved = effect.getParams()
-    expect(saved).toEqual({ mix: 0.6, level: 0.8 })
-
-    const restored = new TestEffect({ currentTime: 0 } as BaseAudioContext)
-    restored.setParams(saved)
-    expect(restored.getMix()).toBe(0.6)
-    expect(restored.getLevel()).toBe(0.8)
+    effect.setMix(0.6)
+    effect.setParams({})
+    expect(effect.getMix()).toBe(0.6)
+    expect(effect.getLevel()).toBe(0.8)
   })
 })

@@ -1,9 +1,9 @@
 /**
  * AudioWorkletProcessor for the Compressor effect: a DSPark compressor
- * (packages/core/src/dsp/compressor.cpp) with 7 params — threshold, ratio,
- * attack, release, knee, makeup_gain, and a character model selector
- * (Clean/Opto/FET/Varimu). See namStudioEffectBase.js for shared
- * WASM/buffer plumbing.
+ * (packages/core/src/dsp/compressor.cpp) with 8 params — threshold, ratio,
+ * attack, release, knee, makeup_gain, a character model selector
+ * (Clean/Opto/FET/Varimu), and a native dry/wet Mix. See
+ * namStudioEffectBase.js for shared WASM/buffer plumbing.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
 
@@ -16,6 +16,7 @@ const RELEASE_PARAM = 3
 const KNEE_PARAM = 4
 const MAKEUP_PARAM = 5
 const CHARACTER_PARAM = 6
+const MIX_PARAM = 7
 
 class CompressorProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -27,6 +28,7 @@ class CompressorProcessor extends NamStudioEffectProcessor {
       { name: 'knee', defaultValue: 0, minValue: 0, maxValue: 20 },
       { name: 'makeup_gain', defaultValue: 0, minValue: 0, maxValue: 24 },
       { name: 'character', defaultValue: 0, minValue: 0, maxValue: 3 },
+      { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
     ]
   }
 
@@ -42,6 +44,7 @@ class CompressorProcessor extends NamStudioEffectProcessor {
     module._nam_studio_set_param(this.graph, block, KNEE_PARAM, parameters.knee[0])
     module._nam_studio_set_param(this.graph, block, MAKEUP_PARAM, parameters.makeup_gain[0])
     module._nam_studio_set_param(this.graph, block, CHARACTER_PARAM, parameters.character[0])
+    module._nam_studio_set_param(this.graph, block, MIX_PARAM, parameters.mix[0])
   }
 }
 

@@ -2,7 +2,7 @@
 
 Local-first (IndexedDB, no backend/accounts - see the scaffolding epic's decision), capturing the
 full dual-chain state: both chains' model/IR identity, level/pan/mute/solo, pre/post FX chains
-(each effect's kind, bypass, mix, and parameters), plus master level and the link toggle.
+(each effect's kind, bypass, and parameters), plus master level and the link toggle.
 
 This module builds the data layer end to end. The preset **browser UI** (grid/list, thumbnails,
 search/filter, favoriting) is the UI/UX epic's job, same as the drag-and-drop reordering UI in the
@@ -43,7 +43,7 @@ Preset
 │   ├── modelId/modelName, irId/irName, irMix   - references into assetCache, not raw bytes
 │   ├── level, pan, mute, solo
 │   └── preFx / postFx: EffectPresetData[]
-│       └── kind, bypass, mix, params
+│       └── kind, bypass, params
 ```
 
 `PresetRig`/`PresetAmpChain`/`PresetEffectsChain` (also in `types.ts`) are narrow interfaces

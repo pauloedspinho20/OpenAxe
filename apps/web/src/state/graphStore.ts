@@ -1,7 +1,12 @@
 import { create } from 'zustand'
 import type { BlockKind, EffectParams } from '../engine/blocks/Block'
 import { GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey, type Jack } from '../engine/gridConfig'
-import { canConnect, isEdgeOrderValid, type ValidatableBlock } from '../engine/graphValidation'
+import {
+  canConnect,
+  canMoveTo,
+  type ConnectResult,
+  type ValidatableBlock,
+} from '../engine/graphValidation'
 
 export interface BlockInstance {
   id: string
@@ -31,7 +36,7 @@ export interface GraphState {
 
   addBlock: (kind: BlockKind, row: number, col: number) => string
   removeBlock: (id: string) => void
-  moveBlock: (id: string, row: number, col: number) => { droppedEdgeIds: string[] }
+  moveBlock: (id: string, row: number, col: number) => ConnectResult
   setBlockParams: (id: string, params: EffectParams) => void
   setBlockBypass: (id: string, bypass: boolean) => void
   connect: (from: Jack, to: Jack) => GraphConnectResult
@@ -64,19 +69,22 @@ function blockTo(blockId: string, port = 0): Jack {
 }
 
 /**
- * Semi-auto wiring for a freshly placed block (see addBlock). Three rules,
- * applied in order:
+ * Semi-auto wiring for a freshly placed block (see addBlock). Rules, applied
+ * in order:
  *
  * 1. First block ever - anchor it to both rails: IN -> block -> OUT.
- * 2. A cable that straddles the new cell's column gets spliced in half so
- *    the new block sits between its endpoints. Rails count as endpoints, so
- *    placing left of the first block or right of the last block in a chain
- *    extends the chain too. The best candidate is the one with endpoints on
- *    the row nearest the new cell (rails match any row), ties broken by the
- *    tightest column span.
- * 3. Nothing straddles (e.g. a previously-disconnected grid) - anchor to the
- *    rails, each add individually validated so an OUT jack already taken by
- *    another chain never breaks the add.
+ * 2. Input: connect to the nearest preceding block's *unconnected* output,
+ *    prioritizing the block in the same row, then the closest column. This
+ *    is what keeps a new block chained after its neighbour instead of being
+ *    anchored to the grid's IN rail - IN is only used when no such
+ *    unconnected output exists to the left.
+ * 3. Otherwise splice: a cable that straddles the new cell's column gets cut
+ *    in half so the new block sits between its endpoints (this also extends a
+ *    chain left/right of the ends, since the IN/OUT rails count as
+ *    endpoints). Best candidate is the one with endpoints nearest the new
+ *    cell's row, ties broken by the tightest column span.
+ * 4. Output: anchor to the OUT rail, each add validated so an OUT jack
+ *    already taken by another chain never breaks the add.
  *
  * Returns the complete next edge list; addBlock applies it in one `set`.
  */
@@ -102,8 +110,27 @@ function autoWireEdges(
     ]
   }
 
-  let best: EdgeInstance | null = null
-  let bestScore = Infinity
+  const validatable = toValidatable(nextBlocks)
+  const next: EdgeInstance[] = [...edges]
+  const mayConnect = (from: Jack, to: Jack) => canConnect(validatable, next, from, to).ok
+
+  // 2. Preferred input: a preceding block with an unconnected output - same
+  //    row first (weight 1000 dominates), then nearest (largest column).
+  const usedOut = new Set(edges.map((e) => e.from.blockId))
+  let bestIn: string | null = null
+  let bestInScore = Infinity
+  for (const b of nextBlocks) {
+    if (b.id === newId || b.col >= col || usedOut.has(b.id)) continue
+    const score = (b.row === row ? 0 : 1) * 1000 - b.col
+    if (score < bestInScore) {
+      bestInScore = score
+      bestIn = b.id
+    }
+  }
+
+  // 3. Otherwise splice a cable straddling the new column.
+  let bestEdge: EdgeInstance | null = null
+  let bestEdgeScore = Infinity
   for (const edge of edges) {
     if (!(colOf(edge.from.blockId) < col && col < colOf(edge.to.blockId))) continue
     const fromRow = rowOf(edge.from.blockId)
@@ -111,27 +138,31 @@ function autoWireEdges(
     const rowDist =
       (fromRow < 0 ? 0 : Math.abs(fromRow - row)) + (toRow < 0 ? 0 : Math.abs(toRow - row))
     const score = rowDist * 1000 + (colOf(edge.to.blockId) - colOf(edge.from.blockId))
-    if (score < bestScore) {
-      bestScore = score
-      best = edge
+    if (score < bestEdgeScore) {
+      bestEdgeScore = score
+      bestEdge = edge
     }
   }
 
-  if (best) {
-    return edges
-      .filter((e) => e.id !== best!.id)
+  if (bestEdge) {
+    return next
+      .filter((e) => e.id !== bestEdge!.id)
       .concat(
-        { id: newEdgeId(), from: best.from, to: blockTo(newId) },
-        { id: newEdgeId(), from: blockTo(newId), to: best.to },
+        { id: newEdgeId(), from: bestEdge.from, to: blockTo(newId) },
+        { id: newEdgeId(), from: blockTo(newId), to: bestEdge.to },
       )
   }
 
-  const validatable = toValidatable(nextBlocks)
-  const next: EdgeInstance[] = [...edges]
-  const mayConnect = (from: Jack, to: Jack) => canConnect(validatable, next, from, to).ok
-  if (mayConnect(jack(IN_RAIL), blockTo(newId))) {
+  // 2b. Wire the input to the chosen preceding block, or the IN rail only if
+  //     no unconnected output exists anywhere to the left.
+  const inSource = bestIn ? blockTo(bestIn) : jack(IN_RAIL)
+  if (mayConnect(inSource, blockTo(newId))) {
+    next.push({ id: newEdgeId(), from: inSource, to: blockTo(newId) })
+  } else if (!bestIn && mayConnect(jack(IN_RAIL), blockTo(newId))) {
     next.push({ id: newEdgeId(), from: jack(IN_RAIL), to: blockTo(newId) })
   }
+
+  // 4. Output to the OUT rail (validated).
   if (mayConnect(blockTo(newId), jack(OUT_RAIL))) {
     next.push({ id: newEdgeId(), from: blockTo(newId), to: jack(OUT_RAIL) })
   }
@@ -171,17 +202,14 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
 
   moveBlock: (id, row, col) => {
     const state = get()
-    const nextBlocks = state.blocks.map((b) => (b.id === id ? { ...b, row, col } : b))
-    const validatable = toValidatable(nextBlocks)
-    const dropped: string[] = []
-    const nextEdges = state.edges.filter((edge) => {
-      if (edge.from.blockId !== id && edge.to.blockId !== id) return true
-      const valid = isEdgeOrderValid(validatable, edge)
-      if (!valid) dropped.push(edge.id)
-      return valid
+    const target = state.blocks.find((b) => b.id === id)
+    if (!target) return { ok: false, reason: 'Unknown block' }
+    const move = canMoveTo(toValidatable(state.blocks), state.edges, id, col)
+    if (!move.ok) return move
+    set({
+      blocks: state.blocks.map((b) => (b.id === id ? { ...b, row, col } : b)),
     })
-    set({ blocks: nextBlocks, edges: nextEdges })
-    return { droppedEdgeIds: dropped }
+    return { ok: true }
   },
 
   setBlockParams: (id, params) => {

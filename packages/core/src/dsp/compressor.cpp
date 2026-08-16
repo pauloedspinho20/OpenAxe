@@ -14,7 +14,8 @@ constexpr int kReleaseParam = 3;
 constexpr int kKneeParam = 4;
 constexpr int kMakeupParam = 5;
 constexpr int kCharacterParam = 6;
-constexpr int kParamCount = 7;
+constexpr int kMixParam = 7;
+constexpr int kParamCount = 8;
 
 const DsparkParamInfo kParamInfo[kParamCount] = {
     {"Threshold", "threshold", -60.0f, 0.0f, "dB"},
@@ -24,6 +25,7 @@ const DsparkParamInfo kParamInfo[kParamCount] = {
     {"Knee", "knee", 0.0f, 20.0f, "dB"},
     {"Makeup", "makeup_gain", 0.0f, 24.0f, "dB"},
     {"Character", "character", 0.0f, 3.0f, "x"},
+    {"Mix", "mix", 0.0f, 1.0f, "x"},
 };
 
 constexpr float kDefaults[kParamCount] = {
@@ -34,12 +36,13 @@ constexpr float kDefaults[kParamCount] = {
     0.0f,    // knee
     0.0f,    // makeup
     0.0f,    // character (Clean)
+    1.0f,    // mix (fully wet)
 };
 
 using Character = dspark::Compressor<float>::Character;
 
 struct CompressorTraits {
-  static constexpr int kParamCount = 7;
+  static constexpr int kParamCount = 8;
   static constexpr const DsparkParamInfo* kInfo = kParamInfo;
   static constexpr const float* kDefaults = nam_studio::dsp::kDefaults;
 
@@ -66,6 +69,9 @@ struct CompressorTraits {
         break;
       case kCharacterParam:
         proc.setCharacter(static_cast<Character>(static_cast<int>(value)));
+        break;
+      case kMixParam:
+        proc.setMix(value);
         break;
       default:
         break;

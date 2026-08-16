@@ -88,7 +88,6 @@ export class Tremolo extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      ...this.baseParams(),
       rate: this.param('rate').value,
       depth: this.param('depth').value,
       shape: this.getShape(),
@@ -96,7 +95,6 @@ export class Tremolo extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
-    this.applyBaseParams(params)
     if (typeof params.rate === 'number') this.setRate(params.rate)
     if (typeof params.depth === 'number') this.setDepth(params.depth)
     if (typeof params.shape === 'string') this.setShape(params.shape)
