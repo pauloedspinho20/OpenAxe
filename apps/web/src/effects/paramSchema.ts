@@ -28,6 +28,13 @@ interface SelectField {
   group?: string
   /** If set, the field is only rendered when this returns true for the current values. */
   visible?: (values: EffectParams) => boolean
+  /**
+   * Model/character-style selector (Reverb's Algorithm, Delay's Model,
+   * Tremolo's Shape, Compressor's Character, ...). Rendered in its own row
+   * above the knob cluster instead of mixed into it, so the "which model is
+   * this?" choice reads first.
+   */
+  primary?: boolean
 }
 
 export type ParamFieldSchema = KnobField | SelectField
@@ -88,37 +95,13 @@ function eqBand(index: number, freqRange: [number, number], freqDefault: number)
 }
 
 /**
- * Mix (dry/wet blend) and Level (post-effect output trim) - every effect
- * kind has both, backed by BaseEffect's own setMix/setLevel (see Effect.ts),
- * so they're appended to every entry below rather than repeated per kind.
- */
-const MIX_LEVEL_FIELDS: KnobField[] = [
-  {
-    key: 'mix',
-    label: 'Mix',
-    control: 'knob',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    defaultValue: 1,
-    formatValue: percent,
-  },
-  {
-    key: 'level',
-    label: 'Level',
-    control: 'knob',
-    min: 0,
-    max: 1.5,
-    step: 0.01,
-    defaultValue: 1,
-    formatValue: percent,
-  },
-]
-
-/**
  * Declarative per-effect-kind field list, driving one generic renderer
  * (EffectParamsPanel) instead of bespoke UI per effect. Ranges/defaults
- * mirror each effect class's own constructor/setter defaults.
+ * mirror each effect class's own constructor/setter defaults. Fields only
+ * expose each effect's real DSP parameters - the app's shared dry/wet Mix
+ * and output Level are deliberately not here (see Effect.ts); effects that
+ * ship a native dry/wet or output control (Compressor's Mix, Reverb's Dry,
+ * Drive's Output Level) declare that original param in its own place below.
  */
 export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   'noise-gate': [
@@ -182,7 +165,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: -80,
       formatValue: dB,
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   compressor: [
     {
@@ -256,15 +238,24 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'varimu', label: 'Varimu' },
       ],
       defaultValue: 'clean',
+      primary: true,
     },
-    ...MIX_LEVEL_FIELDS,
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
+    },
   ],
   eq: [
     ...eqBand(0, [20, 20000], 100),
     ...eqBand(1, [20, 20000], 500),
     ...eqBand(2, [20, 20000], 2000),
     ...eqBand(3, [20, 20000], 6000),
-    ...MIX_LEVEL_FIELDS,
   ],
   chorus: [
     {
@@ -307,7 +298,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.2,
       formatValue: percent,
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   flanger: [
     {
@@ -350,7 +340,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   phaser: [
     {
@@ -393,7 +382,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 4,
       formatValue: plain,
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   tremolo: [
     {
@@ -426,8 +414,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'square', label: 'Square' },
       ],
       defaultValue: 'sine',
+      primary: true,
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   // 3 character models: Digital (clean), Analog (BBD-style filtering +
   // saturation), Tape (Analog + wow/flutter pitch modulation).
@@ -442,6 +430,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'tape', label: 'Tape' },
       ],
       defaultValue: 'digital',
+      primary: true,
     },
     {
       key: 'time',
@@ -495,7 +484,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: hz,
       visible: (v) => v.delayModel === 'tape',
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   'ping-pong-delay': [
     {
@@ -528,7 +516,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 6000,
       formatValue: hz,
     },
-    ...MIX_LEVEL_FIELDS,
   ],
   // Four Dragonfly Reverb algorithms (packages/core): Hall, Room, Plate,
   // Early Reflections. Each algorithm exposes a different subset of the
@@ -548,6 +535,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'early-reflections', label: 'Early Reflections' },
       ],
       defaultValue: 'hall',
+      primary: true,
     },
     {
       key: 'roomSize',
@@ -624,7 +612,16 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percentRaw,
       visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
     },
-    ...MIX_LEVEL_FIELDS,
+    {
+      key: 'dryLevel',
+      label: 'Dry',
+      control: 'knob',
+      min: 0,
+      max: 100,
+      step: 1,
+      defaultValue: 0,
+      formatValue: percentRaw,
+    },
   ],
   // Four BYOD wave-digital-filter circuit models (packages/core):
   // Diode Clipper, Tube Screamer, Zen Drive, MXR Distortion+. The
@@ -644,6 +641,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'mxr-distortion', label: 'MXR Distortion+' },
       ],
       defaultValue: 'diode-clipper',
+      primary: true,
     },
     {
       key: 'cutoff',
@@ -734,7 +732,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       visible: (v) => v.driveModel === 'mxr-distortion',
     },
-    ...MIX_LEVEL_FIELDS,
   ],
 }
 

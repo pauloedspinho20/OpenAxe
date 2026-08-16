@@ -56,16 +56,6 @@
   font-size: 13px;
 }
 
-.noticeBanner {
-  margin: var(--sp-4) var(--sp-6) 0;
-  padding: var(--sp-3) var(--sp-4);
-  background: rgba(255, 90, 31, 0.1);
-  border: 1px solid rgba(255, 90, 31, 0.3);
-  border-radius: var(--r-md);
-  color: var(--ink-2);
-  font-size: 13px;
-}
-
 .main {
   flex: 1;
   display: flex;

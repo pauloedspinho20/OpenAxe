@@ -1,6 +1,6 @@
 /** Provisional grid size - see the app's grid rearchitecture plan for why this may change. */
-export const GRID_ROWS = 3
-export const GRID_COLS = 8
+export const GRID_ROWS = 4
+export const GRID_COLS = 10
 
 /** The fixed rail sentinels - not real blocks, never occupy a grid cell. */
 export const IN_RAIL = 'IN'

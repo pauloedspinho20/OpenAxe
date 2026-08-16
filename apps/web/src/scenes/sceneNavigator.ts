@@ -41,9 +41,9 @@ import { getPreset } from '../presets/presetStore'
 import type { PresetRig } from '../presets/types'
 import { useCurrentPresetStore } from '../state/currentPresetStore'
 import { useGraphStore } from '../state/graphStore'
+import { toast } from '@nam/ui'
 import { useSceneStore } from '../state/sceneStore'
 import { useEngineVersion } from '../state/engineVersion'
-import { showToast } from '../state/toast'
 import { SCENE_COUNT, SLOTS_PER_SCENE } from './types'
 
 export type SceneNavSource = 'ui' | 'keyboard' | 'midi' | 'boot'
@@ -148,14 +148,15 @@ async function applySlot(scene: number, slot: number, mySeq: number): Promise<Sc
     if (mySeq !== seq) return { ok: false, reason: 'superseded', scene, slot, presetId }
     useEngineVersion.getState().bump()
     if (result.missingAssets.length > 0) {
-      showToast(
-        `Loaded, but ${result.missingAssets.length} model/IR reference(s) aren't cached on this device: ` +
+      toast.warning(
+        `${result.missingAssets.length} model/IR reference(s) aren't cached on this device: ` +
           result.missingAssets.map((a) => a.name).join(', '),
+        { description: 'The scene loaded, but those assets are missing locally.' },
       )
     }
     return { ok: true, scene, slot, presetId, missingAssets: result.missingAssets }
   } catch (err) {
-    showToast(err instanceof Error ? err.message : String(err))
+    toast.error(err instanceof Error ? err.message : String(err))
     return { ok: false, reason: 'error', scene, slot, presetId }
   } finally {
     useSceneStore.getState().setSwitching(false)

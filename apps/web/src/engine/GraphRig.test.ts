@@ -124,15 +124,16 @@ describe('GraphRig', () => {
     expect(rig.listEdgeIds()).toEqual([])
   })
 
-  it('moving a block auto-drops a cable that would now go backward', async () => {
+  it('moving a block to a column that would break a cable is rejected and the block does not move', async () => {
     const a = await rig.addBlock('mixer', 0, 0)
     const b = await rig.addBlock('mixer', 0, 1)
-    const { id: edgeId } = rig.connect(jack(a), jack(b)) as { ok: true; id: string }
+    rig.connect(jack(a), jack(b))
 
-    const { droppedEdgeIds } = rig.moveBlock(a, 0, 5)
+    const result = rig.moveBlock(a, 0, 5)
 
-    expect(droppedEdgeIds).toEqual([edgeId])
-    expect(rig.listEdgeIds()).toEqual([])
+    expect(result.ok).toBe(false)
+    expect(rig.listEdgeIds()).toHaveLength(1)
+    expect(rig.getBlockPosition(a)).toEqual({ row: 0, col: 0 })
   })
 
   it('routes multiple cables into distinct Mixer ports', async () => {
@@ -152,7 +153,7 @@ describe('GraphRig', () => {
 
   it('is a no-op to remove or move a block that does not exist', async () => {
     await expect(rig.removeBlock('ghost')).resolves.toBeUndefined()
-    expect(rig.moveBlock('ghost', 0, 0)).toEqual({ droppedEdgeIds: [] })
+    expect(rig.moveBlock('ghost', 0, 0)).toEqual({ ok: false, reason: 'Unknown block' })
   })
 
   it('dispose is idempotent and clears blocks/edges', async () => {

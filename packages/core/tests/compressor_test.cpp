@@ -16,12 +16,16 @@ using nam_studio::dsp::Compressor;
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(Compressor::ParamCount() == 7);
+  NAM_EXPECT(Compressor::ParamCount() == 8);
   const auto& threshold = Compressor::GetParamInfo(0);
   NAM_EXPECT(std::string(threshold.symbol) == "threshold");
   const auto& character = Compressor::GetParamInfo(6);
   NAM_EXPECT(std::string(character.symbol) == "character");
   NAM_EXPECT(character.min_value == 0.0f && character.max_value == 3.0f);
+  // Mix (dry/wet) is the native DSPark control added at index 7.
+  const auto& mix = Compressor::GetParamInfo(7);
+  NAM_EXPECT(std::string(mix.symbol) == "mix");
+  NAM_EXPECT(mix.min_value == 0.0f && mix.max_value == 1.0f);
 }
 
 void TestGetSetEveryParam() {

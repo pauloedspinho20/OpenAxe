@@ -28,9 +28,9 @@ describe('BlockInspector', () => {
     // once via useState(() => block.getParams()). Without a `key` tied to
     // the block's identity, React reuses the same component instance
     // across a selection change instead of remounting it, so the panel
-    // kept showing the *previous* block's Mix/Level (and every other
-    // param) no matter which block was actually selected - reported as
-    // "changing Mix on one effect changes it for the other too".
+    // kept showing the *previous* block's params (e.g. a Mix knob) no
+    // matter which block was actually selected - reported as "changing Mix
+    // on one effect changes it for the other too".
     const delayBlock: BlockInstance = { id: 'delay-1', kind: 'delay', row: 0, col: 0, params: {} }
     const reverbBlock: BlockInstance = {
       id: 'reverb-1',
@@ -43,13 +43,11 @@ describe('BlockInspector', () => {
 
     const blocksById: Record<string, Block> = {
       'delay-1': fakeEffectBlock('delay', {
-        mix: 0.3,
-        level: 0.7,
         time: 0.35,
         feedback: 0.35,
         tone: 12000,
       }),
-      'reverb-1': fakeEffectBlock('reverb', { mix: 0.9, level: 0.4, roomSize: 0.84, damping: 0.5 }),
+      'reverb-1': fakeEffectBlock('reverb', { roomSize: 0.84, damping: 0.5 }),
     }
     const rig = {
       getBlock: (id: string) => blocksById[id] ?? null,
@@ -60,10 +58,10 @@ describe('BlockInspector', () => {
 
     useSelection.getState().select('delay-1')
     rerender(<BlockInspector rig={rig} context={null} />)
-    expect(screen.getByRole('slider', { name: 'Mix' })).toHaveAttribute('aria-valuenow', '0.3')
+    expect(screen.getByRole('slider', { name: 'Time' })).toHaveAttribute('aria-valuenow', '0.35')
 
     useSelection.getState().select('reverb-1')
     rerender(<BlockInspector rig={rig} context={null} />)
-    expect(screen.getByRole('slider', { name: 'Mix' })).toHaveAttribute('aria-valuenow', '0.9')
+    expect(screen.getByRole('slider', { name: 'Size' })).toHaveAttribute('aria-valuenow', '0.84')
   })
 })

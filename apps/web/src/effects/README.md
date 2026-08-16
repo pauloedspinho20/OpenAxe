@@ -48,6 +48,12 @@ subgraph and passes its first/last node to `super(context, name, wetInput, wetOu
 "mix forced to 0, previous mix remembered" rather than rewiring the graph - simpler, and it means
 parallel-processing techniques (e.g. blending a compressor or drive in at 40% wet) work for free.
 
+Mix/Level are deliberately **not** exposed as effect params (no `baseParams`/`applyBaseParams`
+round-trip into presets) - the shared dry/wet crossfade and output trim stay internal plumbing for
+bypass. Where an effect's DSP has its own native control it is surfaced instead: Compressor's Mix
+(`setWetMix`/`getWetMix` → DSPark `setMix`), Reverb's Dry (`setDryLevel`/`getDryLevel` → Dragonfly
+`dry_level`), and Drive's Output Level (MXR native).
+
 ## `EffectsChain`
 
 An ordered list wired `input -> effect[0] -> effect[1] -> ... -> output`. `insert(effect, index?)`,

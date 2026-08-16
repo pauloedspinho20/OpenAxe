@@ -112,6 +112,15 @@ export class DragonflyReverb extends BaseEffect {
     this.param('earlySend').setValueAtTime(earlySend, this.node.context.currentTime)
   }
 
+  /** Dragonfly's native dry level, [0, 100]% - 0% dry = fully wet reverb. */
+  setDryLevel(dry: number): void {
+    this.param('dryLevel').setValueAtTime(dry, this.node.context.currentTime)
+  }
+
+  getDryLevel(): number {
+    return this.param('dryLevel').value
+  }
+
   private param(name: string): AudioParam {
     const param = this.node.parameters.get(name)
     if (!param) throw new Error(`DragonflyReverb: unknown AudioParam '${name}'`)
@@ -120,7 +129,6 @@ export class DragonflyReverb extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      ...this.baseParams(),
       reverbAlgorithm: this.getReverbAlgorithm(),
       roomSize: this.param('roomSize').value,
       damping: this.param('damping').value,
@@ -129,12 +137,12 @@ export class DragonflyReverb extends BaseEffect {
       spin: this.param('spin').value,
       wander: this.param('wander').value,
       earlySend: this.param('earlySend').value,
+      dryLevel: this.getDryLevel(),
     }
   }
 
   setParams(params: EffectParams): void {
     if (typeof params.reverbAlgorithm === 'string') this.setReverbAlgorithm(params.reverbAlgorithm)
-    this.applyBaseParams(params)
     if (typeof params.roomSize === 'number') this.setRoomSize(params.roomSize)
     if (typeof params.damping === 'number') this.setDamping(params.damping)
     if (typeof params.width === 'number') this.setWidth(params.width)
@@ -142,6 +150,7 @@ export class DragonflyReverb extends BaseEffect {
     if (typeof params.spin === 'number') this.setSpin(params.spin)
     if (typeof params.wander === 'number') this.setWander(params.wander)
     if (typeof params.earlySend === 'number') this.setEarlySend(params.earlySend)
+    if (typeof params.dryLevel === 'number') this.setDryLevel(params.dryLevel)
   }
 
   dispose(): void {

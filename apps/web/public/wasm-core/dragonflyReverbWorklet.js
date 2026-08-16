@@ -10,8 +10,9 @@
  * The 7 user-facing knobs (roomSize/damping/width/predelay/spin/wander/
  * earlySend) are the union of every algorithm's available controls; knobs
  * that don't exist for the current algorithm are harmlessly ignored by the
- * C++ side (SetParam no-ops for out-of-range indices). Dry Level is forced to
- * 0 on every algorithm — the Effect's own dry/wet crossfade handles mix.
+ * C++ side (SetParam no-ops for out-of-range indices). The native Dry Level
+ * (param index 0 on every algorithm) is exposed as the `dryLevel` AudioParam
+ * - Dragonfly's own dry/wet control - 0% dry (fully wet) to 100% dry.
  *
  * WASM instantiation and buffer marshaling are shared via namStudioEffectBase.js.
  */
@@ -74,6 +75,7 @@ class DragonflyReverbProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
     return [
       { name: 'reverbAlgorithm', defaultValue: ALGORITHM_HALL, minValue: 0, maxValue: 3 },
+      { name: 'dryLevel', defaultValue: 0, minValue: 0, maxValue: 100 },
       { name: 'roomSize', defaultValue: 0.84, minValue: 0, maxValue: 0.97 },
       { name: 'damping', defaultValue: 0.5, minValue: 0, maxValue: 1 },
       { name: 'width', defaultValue: 100, minValue: 50, maxValue: 150 },
@@ -99,12 +101,13 @@ class DragonflyReverbProcessor extends NamStudioEffectProcessor {
     if (algorithm !== this.currentAlgorithm) {
       this.currentAlgorithm = algorithm
       module._nam_studio_set_reverb_algorithm(this.graph, block, algorithm)
-      // Re-force dry level after algorithm switch (new DSP has its own defaults).
+      // Re-apply dry level after algorithm switch (new DSP has its own defaults).
       const params = ALGO_PARAMS[algorithm]
-      module._nam_studio_set_param(this.graph, block, params.dryLevel, 0)
+      module._nam_studio_set_param(this.graph, block, params.dryLevel, parameters.dryLevel[0])
     }
 
     const params = ALGO_PARAMS[this.currentAlgorithm]
+    module._nam_studio_set_param(this.graph, block, params.dryLevel, parameters.dryLevel[0])
     const decay = DECAY_MIN + (parameters.roomSize[0] / 0.97) * (DECAY_MAX - DECAY_MIN)
     const highCut = HIGH_CUT_MAX - parameters.damping[0] * (HIGH_CUT_MAX - HIGH_CUT_MIN)
 

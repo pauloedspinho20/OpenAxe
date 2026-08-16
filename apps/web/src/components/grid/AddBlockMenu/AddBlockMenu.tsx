@@ -14,7 +14,7 @@ export function AddBlockMenu({ open, onPick, onClose }: AddBlockMenuProps) {
   const groups = Array.from(new Set(BLOCK_OPTIONS.map((o) => o.group)))
 
   return (
-    <Dialog open={open} onClose={onClose} title="Add a block" width="min(220px, 90vw)">
+    <Dialog open={open} onClose={onClose} title="Add a block">
       {groups.map((group) => (
         <div key={group} className={styles.group}>
           <span className={`label ${styles.groupLabel}`}>{group}</span>

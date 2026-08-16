@@ -69,7 +69,6 @@ export class PingPongDelay extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      ...this.baseParams(),
       time: this.param('time').value,
       feedback: this.param('feedback').value,
       tone: this.param('tone').value,
@@ -77,7 +76,6 @@ export class PingPongDelay extends BaseEffect {
   }
 
   setParams(params: EffectParams): void {
-    this.applyBaseParams(params)
     if (typeof params.time === 'number') this.setTime(params.time)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
     if (typeof params.tone === 'number') this.setTone(params.tone)

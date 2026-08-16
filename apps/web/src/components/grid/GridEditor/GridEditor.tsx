@@ -4,7 +4,7 @@ import { useIOStore } from '../../../state/ioStore'
 import type { GraphRig } from '../../../engine/GraphRig'
 import { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey } from '../../../engine/gridConfig'
 import type { BlockKind } from '../../../engine/blocks/Block'
-import { BlockCard } from '../BlockCard/BlockCard'
+import { BlockCard, type BlockDragInfo } from '../BlockCard/BlockCard'
 import { BlockPalette } from '../BlockPalette/BlockPalette'
 import { BlockHighlight } from '../BlockHighlight/BlockHighlight'
 import { CableLayer, type DragPreview } from '../CableLayer/CableLayer'
@@ -14,7 +14,7 @@ import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
-import { HardwareButton, Knob } from '@nam/ui'
+import { HardwareButton, Knob, toast } from '@nam/ui'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
@@ -59,8 +59,7 @@ export function GridEditor({
   const setInputGain = useIOStore((s) => s.setInputGain)
   const [addMenuCell, setAddMenuCell] = useState<{ row: number; col: number } | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
-  const [rejectMessage, setRejectMessage] = useState<string | null>(null)
-  const [blockDragCell, setBlockDragCell] = useState<{ row: number; col: number } | null>(null)
+  const [blockDrag, setBlockDrag] = useState<BlockDragInfo | null>(null)
   const [inputDialogOpen, setInputDialogOpen] = useState(false)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
   const draggingJackRef = useRef<string | null>(null)
@@ -125,8 +124,7 @@ export function GridEditor({
     const { jack: toJack } = parseJackElementId(targetEl.dataset.jackId!)
     const result = useGraphStore.getState().connect(fromJack, toJack)
     if (!result.ok) {
-      setRejectMessage(result.reason)
-      window.setTimeout(() => setRejectMessage(null), 600)
+      toast.warning("Can't connect those", { description: result.reason })
     }
   }
 
@@ -134,7 +132,12 @@ export function GridEditor({
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const block = blocks.find((b) => b.row === row && b.col === col)
-      const isDragTarget = blockDragCell?.row === row && blockDragCell?.col === col
+      const isDragTarget = blockDrag?.cell?.row === row && blockDrag?.cell?.col === col
+      const dragClass = isDragTarget
+        ? blockDrag.valid
+          ? styles.addCellDragOver
+          : styles.addCellDragOverInvalid
+        : ''
       cells.push(
         <div
           key={`${row}-${col}`}
@@ -142,11 +145,11 @@ export function GridEditor({
           style={{ gridRow: row + 1, gridColumn: col + 1 }}
         >
           {block ? (
-            <BlockCard instance={block} rig={rig} onDragCellChange={setBlockDragCell} />
+            <BlockCard instance={block} rig={rig} onDragChange={setBlockDrag} />
           ) : (
             <button
               type="button"
-              className={`${styles.addCell} ${isDragTarget ? styles.addCellDragOver : ''}`}
+              className={`${styles.addCell} ${dragClass}`}
               onClick={() => setAddMenuCell({ row, col })}
               aria-label={`Add a block at row ${row + 1}, column ${col + 1}`}
             >
@@ -179,9 +182,8 @@ export function GridEditor({
       >
         <CableLayer
           edges={edges}
-          recomputeKey={blocks}
+          recomputeKey={[blocks, blockDrag?.offset, blockDrag?.id]}
           dragPreview={dragPreview}
-          rejectMessage={rejectMessage}
           onDisconnect={(edgeId) => useGraphStore.getState().disconnect(edgeId)}
         />
 

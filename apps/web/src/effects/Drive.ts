@@ -129,7 +129,6 @@ export class Drive extends BaseEffect {
     const model = this.getDriveModel()
     const diodeTypeIndex = Math.round(this.param('diodeType').value)
     const base: EffectParams = {
-      ...this.baseParams(),
       driveModel: model,
     }
     switch (model) {
@@ -165,7 +164,6 @@ export class Drive extends BaseEffect {
 
   setParams(params: EffectParams): void {
     if (typeof params.driveModel === 'string') this.setDriveModel(params.driveModel)
-    this.applyBaseParams(params)
     const model = this.getDriveModel()
     switch (model) {
       case 'diode-clipper':

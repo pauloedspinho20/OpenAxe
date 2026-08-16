@@ -9,7 +9,7 @@ import { OnboardingModal } from './components/global/OnboardingModal/OnboardingM
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
-import { HardwareButton, Led, Toggle, Wordmark } from '@nam/ui'
+import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@nam/ui'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useMidiEngine } from './hooks/useMidiEngine'
@@ -26,7 +26,6 @@ import { useIOStore } from './state/ioStore'
 import { useSettingsStore } from './state/settingsStore'
 import { useMidiManager } from './state/midiManager'
 import { useMidiStore } from './state/midiStore'
-import { useToast } from './state/toast'
 import { useEngineVersion } from './state/engineVersion'
 import { hydrateSceneStore } from './state/sceneStore'
 import { installFactoryPresets } from './presets/factoryPresets'
@@ -52,7 +51,6 @@ function App() {
   const auth = useTone3000Auth()
   const io = useIOStore()
   const { outputSelectionSupported } = useAudioIO()
-  const toastMessage = useToast((s) => s.message)
   // Re-render when the engine's live block state changes (model/IR loads) -
   // graphStore doesn't track that, see engineVersion.ts.
   const engineVersion = useEngineVersion((s) => s.version)
@@ -148,8 +146,6 @@ function App() {
             : `Mic error: ${io.micError}`}
         </div>
       )}
-      {toastMessage && <div className={styles.noticeBanner}>{toastMessage}</div>}
-
       <SceneBar rig={engine.rig} context={engine.context} />
 
       <main className={styles.main}>
@@ -211,6 +207,7 @@ function App() {
         onPowerOn={() => void engine.powerOn()}
       />
       <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
+      <Toaster />
     </div>
   )
 }
