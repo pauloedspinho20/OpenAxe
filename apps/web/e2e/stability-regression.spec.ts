@@ -16,6 +16,13 @@ import { test, expect } from '@playwright/test'
 test('builds a full FX chain, toggles every bypass, and tears it down without errors', async ({
   page,
 }) => {
+  // Heaviest test in the suite: it sequentially builds 11 WASM-backed effect
+  // blocks, each of which compiles/instantiates an AudioWorklet + fetches the
+  // core .wasm. Under the parallel 4-worker matrix that routinely exceeds the
+  // 30s default on a loaded machine (the grid reflows as blocks land, so a
+  // "+" button can move mid-click), so give it a real budget. It passes in
+  // ~6s in isolation; this is headroom, not a per-test norm.
+  test.setTimeout(180_000)
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
   page.on('pageerror', (err) => pageErrors.push(err.message))
