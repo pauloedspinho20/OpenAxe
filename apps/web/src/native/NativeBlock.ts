@@ -26,8 +26,10 @@ function toNumber(v: number | string | boolean): number {
  * - IR/Cab loading is a no-op: the core has no cab (convolution) DSP yet, so
  *   cab blocks pass audio through unchanged and `getLoadedIr()` is always null.
  * - Params apply by core param *symbol*; effect params whose symbol doesn't
- *   match the core's table are silently ignored (a cross-reference for the
- *   effect kinds is a follow-up).
+ *   match the core's table are rejected by the bridge (issue #41). That
+ *   rejection is surfaced as a one-time console warning per block+key (see
+ *   setParams) rather than silently dropped, ahead of the real fix - a single
+ *   param schema shared by web/core/WASM (issue #51).
  */
 export class NativeBlock implements PresetBlock {
   readonly kind: BlockKind
@@ -36,6 +38,7 @@ export class NativeBlock implements PresetBlock {
   private params: EffectParams = {}
   private bypassed = false
   private loadedModel: { id: string; name: string } | null = null
+  private readonly unmappedParamsWarned = new Set<string>()
 
   constructor(bridge: NamStudioBridge, id: string, kind: BlockKind) {
     this.bridge = bridge
@@ -50,7 +53,19 @@ export class NativeBlock implements PresetBlock {
   setParams(params: EffectParams): void {
     this.params = { ...params }
     for (const [key, value] of Object.entries(params)) {
-      void this.bridge.setParam({ blockId: this.id, key, value: toNumber(value) })
+      void this.bridge
+        .setParam({ blockId: this.id, key, value: toNumber(value) })
+        .then((result) => {
+          if (result.ok || this.unmappedParamsWarned.has(key)) return
+          // The core rejected this symbol - the knob change never reached the
+          // DSP. Warn once per key (a knob drag fires this constantly) so the
+          // gap is visible instead of a silent no-op (issue #41).
+          this.unmappedParamsWarned.add(key)
+          console.warn(
+            `[native] "${key}" on ${this.kind} block ${this.id} has no matching core param - ` +
+              `the knob has no audible effect on desktop.${result.error ? ` (${result.error})` : ''}`,
+          )
+        })
     }
   }
 
