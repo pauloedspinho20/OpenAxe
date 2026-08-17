@@ -20,13 +20,19 @@ void InitTap(RtCallbackState& state) {
 }
 
 // Captures the most recent in/out frames into the ring buffer. Runs on the
-// audio thread; only ever a memcpy-sized critical section.
+// audio thread; wait-free (seqlock write side - see RtCallbackState::tap_seq).
 void CaptureTap(RtCallbackState& state, const float* const* in, float* const* out,
                 unsigned int n_frames) {
   // Uninitialized tap buffers (e.g. in unit tests that don't go through
   // SetGraph) are never written - the audio thread must not allocate.
   if (state.tap_in[0].size() != RtCallbackState::kTapCapacity) return;
-  std::lock_guard<std::mutex> lock(state.tap_mutex);
+  // Mark "write in progress" (odd) before touching the ring buffer, and
+  // "stable" (even) after. release ordering keeps these two updates from
+  // being reordered around the plain writes between them, so a reader who
+  // observes an even sequence either side of its own read is guaranteed a
+  // consistent snapshot. No lock is ever taken here - this thread never waits
+  // on a reader, no matter how long the reader takes.
+  state.tap_seq.fetch_add(1, std::memory_order_release);
   const unsigned int cap = RtCallbackState::kTapCapacity;
   for (unsigned int i = 0; i < n_frames; ++i) {
     const unsigned int idx = (state.tap_write_pos + i) % cap;
@@ -37,23 +43,33 @@ void CaptureTap(RtCallbackState& state, const float* const* in, float* const* ou
   }
   state.tap_write_pos = (state.tap_write_pos + n_frames) % cap;
   state.tap_count = std::min(cap, state.tap_count + n_frames);
+  state.tap_seq.fetch_add(1, std::memory_order_release);
 }
 }  // namespace
 
 TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_frames) {
-  std::lock_guard<std::mutex> lock(state.tap_mutex);
   const unsigned int cap = RtCallbackState::kTapCapacity;
   const auto& src = input ? state.tap_in : state.tap_out;
-  const unsigned int n = std::min({max_frames, state.tap_count, cap});
   TapFrame out;
-  out.l.resize(n);
-  out.r.resize(n);
-  out.frames = n;
-  for (unsigned int i = 0; i < n; ++i) {
-    // Oldest of the window is `write_pos - n`; read forward from there.
-    const unsigned int idx = (state.tap_write_pos + cap - n + i) % cap;
-    out.l[i] = src[0][idx];
-    out.r[i] = src[1][idx];
+  // Seqlock read side: retry if the writer (the audio thread) was mid-update
+  // either at the start or end of this copy. The writer never sees or waits
+  // on this loop - only this reader ever retries.
+  for (;;) {
+    const uint64_t s1 = state.tap_seq.load(std::memory_order_acquire);
+    if (s1 & 1u) continue;
+    const unsigned int write_pos = state.tap_write_pos;
+    const unsigned int n = std::min({max_frames, state.tap_count, cap});
+    out.l.resize(n);
+    out.r.resize(n);
+    out.frames = n;
+    for (unsigned int i = 0; i < n; ++i) {
+      // Oldest of the window is `write_pos - n`; read forward from there.
+      const unsigned int idx = (write_pos + cap - n + i) % cap;
+      out.l[i] = src[0][idx];
+      out.r[i] = src[1][idx];
+    }
+    const uint64_t s2 = state.tap_seq.load(std::memory_order_acquire);
+    if (s1 == s2) break;
   }
   return out;
 }

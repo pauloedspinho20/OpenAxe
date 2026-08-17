@@ -4,6 +4,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -68,10 +69,16 @@ struct RtCallbackState {
   // output (post-graph) stereo frames, captured by the audio thread and read
   // by the UI/control thread to drive facade analysers (block/input meters,
   // the tuner). Capacity is a full FFT window - the tuner's autocorrelation
-  // needs ~4096 samples at 48kHz to resolve low bass. tap_mutex is taken
-  // briefly by the audio thread (a memcpy) and by readers.
+  // needs ~4096 samples at 48kHz to resolve low bass.
+  //
+  // Guarded by a seqlock (tap_seq), not a mutex: the audio thread is the sole
+  // writer and must never block on anything a non-real-time thread could hold
+  // (a reader's resize()/copy behind a plain mutex is exactly the kind of
+  // unbounded work that can stall or glitch the audio callback - see issue
+  // #43). tap_seq is odd while a write is in progress, even otherwise; readers
+  // retry if they observe odd or see the value change mid-read.
   static constexpr unsigned int kTapCapacity = 4096;
-  mutable std::mutex tap_mutex;
+  std::atomic<uint64_t> tap_seq{0};
   std::array<std::vector<float>, 2> tap_in;   // [0]=L, [1]=R, pre-graph
   std::array<std::vector<float>, 2> tap_out;  // [0]=L, [1]=R, post-graph
   unsigned int tap_write_pos = 0;             // ring write index
@@ -86,8 +93,9 @@ struct TapFrame {
 };
 
 // Read up to `max_frames` of the most recent input (`input=true`) or output
-// (`input=false`) frames from the ring buffer, oldest-to-newest. Never blocks
-// the audio thread for more than a mutex + memcpy.
+// (`input=false`) frames from the ring buffer, oldest-to-newest. Lock-free
+// (seqlock): never blocks, and never blocks the audio thread either - it only
+// retries its own copy if the writer was mid-update.
 TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_frames);
 
 // RtAudio callback. Runs on the real-time audio thread: allocates nothing,

@@ -9,6 +9,7 @@
 #include <system_error>
 #include <utility>
 
+#include "debug_log.h"
 #include "nam_studio/api.h"
 #include "nam_studio/core.h"
 
@@ -145,10 +146,22 @@ void StudioBridge::ControlLoop() {
 }
 
 void StudioBridge::Mutate(const std::function<void()>& mutation, bool reset_after) {
-  audio_.BeginSuspend();
+  const bool suspended_cleanly = audio_.BeginSuspend();
   mutation();
   if (reset_after) nam_studio_reset(graph_, graph_sample_rate_, graph_block_);
   audio_.EndSuspend();
+  if (!suspended_cleanly) {
+    // BeginSuspend timed out waiting for the callback to observe the pause and
+    // force-stopped the stream so this mutation could still run safely. The
+    // stream is now open but not running - without this, audio would stay
+    // silently (and permanently) dead until something else happened to call
+    // Start() again (issue #43).
+    WriteLog("bridge: suspend handshake timed out; restarting the audio stream");
+    if (!audio_.Start()) {
+      WriteLog("bridge: failed to restart audio stream after suspend timeout: " +
+               audio_.LastError());
+    }
+  }
 }
 
 // Resolves a JS jack endpoint to a core block id: a number rail sentinel

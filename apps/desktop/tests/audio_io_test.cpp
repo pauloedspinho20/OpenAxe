@@ -88,6 +88,77 @@ void TestCallbackSilenceWhenNoGraph() {
   }
 }
 
+// Issue #43: hammer the tap's writer (CaptureTap, via RtProcessCallback) and
+// its seqlock reader (ReadTap) concurrently for a bounded time. The writer
+// must never block (no locks anywhere in its path) and the reader must never
+// observe a torn snapshot.
+//
+// Each simulated callback stamps its whole buffer with one value `v` on the
+// left channel and `2v` on the right (a passthrough graph carries that
+// straight to the output tap too), so `r[i] == 2 * l[i]` at every index is an
+// invariant that holds for any single completed write - and is exactly what a
+// torn read (mixing two different writes within one snapshot) would break.
+void TestTapConcurrentReadWrite() {
+  constexpr double kRate = 48000.0;
+  constexpr int kFrames = 128;
+  constexpr int kBlock = 512;
+
+  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  nam_desktop::RtCallbackState state;
+  for (auto& ch : state.tap_in) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.tap_out) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  state.graph = graph;
+  state.graph_ready.store(true, std::memory_order_release);
+
+  std::atomic<bool> stop{false};
+  std::atomic<bool> reader_failed{false};
+  std::atomic<unsigned int> reads_done{0};
+  std::atomic<unsigned int> callbacks_done{0};
+
+  std::thread writer([&] {
+    float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+    float* in[2] = {in0, in1};
+    float* out[2] = {out0, out1};
+    unsigned int k = 0;
+    while (!stop.load(std::memory_order_relaxed)) {
+      const float value = static_cast<float>(k % 1000);
+      for (int i = 0; i < kFrames; ++i) {
+        in0[i] = value;
+        in1[i] = value * 2.0f;
+      }
+      nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR,
+                                     &state);
+      ++k;
+      callbacks_done.fetch_add(1, std::memory_order_relaxed);
+    }
+  });
+
+  std::thread reader([&] {
+    while (!stop.load(std::memory_order_relaxed)) {
+      for (const bool input : {true, false}) {
+        const nam_desktop::TapFrame tap = nam_desktop::ReadTap(state, input, kFrames * 4);
+        for (unsigned int i = 0; i < tap.frames; ++i) {
+          if (tap.r[i] != tap.l[i] * 2.0f) reader_failed.store(true, std::memory_order_relaxed);
+        }
+      }
+      reads_done.fetch_add(1, std::memory_order_relaxed);
+    }
+  });
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  stop.store(true, std::memory_order_relaxed);
+  writer.join();
+  reader.join();
+
+  CHECK(!reader_failed.load());
+  CHECK(callbacks_done.load() > 0);
+  CHECK(reads_done.load() > 0);
+  std::printf("  TestTapConcurrentReadWrite: %u callbacks, %u reads, no torn read\n",
+              callbacks_done.load(), reads_done.load());
+
+  nam_studio_graph_destroy(graph);
+}
+
 void TestDeviceEnumeration() {
   nam_desktop::AudioIO io;
   std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
@@ -152,6 +223,7 @@ void TestOpenStartStop() {
 int main() {
   TestCallbackPassthrough();
   TestCallbackSilenceWhenNoGraph();
+  TestTapConcurrentReadWrite();
   TestDeviceEnumeration();
   TestOpenStartStop();
 
