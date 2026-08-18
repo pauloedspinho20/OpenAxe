@@ -1,17 +1,26 @@
 #include <nlohmann/json.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "audio.h"
 #include "bridge.h"
 
 // Tests the window.namStudio bridge through its public Handle* interface -
 // the exact entry points webview::bind calls - so the whole round-trip (JSON
-// request -> control-thread mutation -> JSON response) is exercised. No audio
-// hardware is needed: the graph runs without an open stream. The suspend flag
-// on the callback is tested directly with fake buffers.
+// request -> control-thread mutation -> JSON response) is exercised. Most
+// tests need no audio hardware: the graph runs without an open stream. The
+// suspend flag on the callback is tested directly with fake buffers in
+// isolation; TestConcurrentMutationsWhileStreamRunning (issue #52) instead
+// drives a real open+running stream so BeginSuspend/Mutate/EndSuspend and the
+// control-thread executor are stressed against a genuine concurrently-running
+// audio callback, not just the flag on its own - it skips itself on hosts
+// with no audio device, same as audio_io_test.cpp's TestOpenStartStop.
 //
 // loadModel is deliberately not exercised (it opens a native modal dialog).
 
@@ -219,6 +228,124 @@ void TestSuspendCallbackSilencesOutput() {
   }
 }
 
+// issue #52: the suspend handshake and the control-thread executor have only
+// ever been tested in isolation (the flag directly above; add/remove/connect
+// one at a time elsewhere in this file). This drives a real open+running
+// audio stream and hammers the bridge with concurrent graph mutations from
+// several threads at once - each one a genuine BeginSuspend/Mutate/EndSuspend
+// round trip racing a real RtAudio callback, and several threads' Call()s
+// racing each other into the same control-thread queue. Success is simply
+// completing without crashing or hanging, plus the bridge's own bookkeeping
+// (blocks_) coming out exactly as populated - a leak there would mean the
+// concurrent add/remove pairs didn't all land.
+//
+// Deliberately opens a single device that supports both input and output
+// (e.g. an audio interface, or a loopback device like BlackHole), rather
+// than RtAudio's separate-default-devices resolution. Two independent
+// physical devices (this host's own default pairing is the MacBook's
+// built-in mic + built-in speakers) hit an unrelated, still-reproducible-on-
+// current-upstream RtAudio CoreAudio bug where the very first callback(s)
+// can dereference a garbage input pointer during its internal duplex
+// bridging - a real, serious, separate finding, but not what this test is
+// trying to isolate (see the session notes for issue #52). Skips if no
+// single duplex-capable device exists.
+void TestConcurrentMutationsWhileStreamRunning() {
+  nam_desktop::StudioBridge bridge;
+
+  const auto devices = Parse(bridge.HandleListDevices(""));
+  if (!devices.is_array() || devices.empty()) {
+    std::printf("  Skipping concurrent-mutation stress test: no audio devices on this host\n");
+    return;
+  }
+  int duplex_id = -1;
+  for (const auto& d : devices) {
+    if (d.value("isInput", false) && d.value("isOutput", false)) {
+      duplex_id = d.value("id", -1);
+      break;
+    }
+  }
+  if (duplex_id < 0) {
+    std::printf(
+        "  Skipping concurrent-mutation stress test: no single input+output device on this "
+        "host (separate mic/speaker devices hit an unrelated RtAudio duplex bug - see issue "
+        "#52's notes)\n");
+    return;
+  }
+
+  const auto opened = Parse(bridge.HandleOpen(
+      Arr((std::string(R"([{"inputDeviceId":)") + std::to_string(duplex_id) +
+           R"(,"outputDeviceId":)" + std::to_string(duplex_id) + "}]")
+              .c_str())));
+  if (opened["ok"] != true) {
+    std::printf("  Skipping concurrent-mutation stress test: open failed (%s)\n",
+                opened.value("error", "").c_str());
+    return;
+  }
+  const auto started = Parse(bridge.HandleStart(""));
+  if (started["ok"] != true) {
+    std::printf("  Skipping concurrent-mutation stress test: start failed (%s)\n",
+                started.value("error", "").c_str());
+    bridge.HandleClose("");
+    return;
+  }
+
+  // One long-lived, wired block so the audio callback always has real DSP to
+  // run while the worker threads add/remove others around it.
+  auto anchor = Parse(bridge.HandleAddBlock(Arr(
+      R"([{"kind":"mixer","row":0,"col":0,"id":"anchor"}])")));
+  CHECK(anchor["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"IN","toId":"anchor"}])")))["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"anchor","toId":"OUT"}])")))["ok"] == true);
+
+  std::atomic<bool> stop{false};
+  std::atomic<int> mutations{0};
+  static const char* const kKinds[] = {"delay", "reverb", "compressor", "chorus"};
+
+  auto worker = [&](int seed) {
+    int i = 0;
+    while (!stop.load(std::memory_order_relaxed)) {
+      const std::string id = "w" + std::to_string(seed) + "-" + std::to_string(i);
+      const std::string kind = kKinds[i % 4];
+      ++i;
+      const auto add = Parse(bridge.HandleAddBlock(Arr(
+          (std::string(R"([{"kind":")") + kind + R"(","row":1,"col":0,"id":")" + id + R"("}])")
+              .c_str())));
+      if (add["ok"] == true) {
+        Parse(bridge.HandleSetParam(
+            Arr((std::string(R"([{"blockId":")") + id + R"(","key":0,"value":0.3}])").c_str())));
+        Parse(bridge.HandleRemoveBlock(
+            Arr((std::string(R"([{"blockId":")") + id + R"("}])").c_str())));
+      }
+      mutations.fetch_add(1, std::memory_order_relaxed);
+    }
+  };
+
+  std::vector<std::thread> workers;
+  for (int t = 0; t < 4; ++t) workers.emplace_back(worker, t);
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  stop.store(true, std::memory_order_relaxed);
+  for (auto& w : workers) w.join();
+
+  CHECK(mutations.load() > 0);
+
+  // The bridge must still be in a sane, queryable state: every worker's
+  // add/remove pair completed, so only the anchor block should remain.
+  const auto blocks = Parse(bridge.HandleListBlocks(""));
+  CHECK(blocks.is_array());
+  CHECK(blocks.size() == 1);
+  if (blocks.is_array() && blocks.size() == 1) CHECK(blocks[0]["id"] == "anchor");
+
+  const auto config = Parse(bridge.HandleGetConfig(""));
+  CHECK(config["ok"] == true);
+  CHECK(config["running"] == true);
+
+  Parse(bridge.HandleStop(""));
+  bridge.HandleClose("");
+
+  std::printf("  TestConcurrentMutationsWhileStreamRunning: %d mutations across 4 threads, no crash\n",
+              mutations.load());
+}
+
 // issue #42: bypass and the master bus were UI-only no-ops on desktop - this
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
@@ -259,6 +386,7 @@ int main() {
   TestMonitorTap();
   TestSuspendCallbackSilencesOutput();
   TestSetBypassAndMasterBus();
+  TestConcurrentMutationsWhileStreamRunning();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

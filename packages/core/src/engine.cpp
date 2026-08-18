@@ -131,6 +131,18 @@ const AudioEngine::BlockState* AudioEngine::FindBlock(BlockId id) const {
   return it != block_states_.end() ? it->second.get() : nullptr;
 }
 
+AudioEngine::BlockState* AudioEngine::FindBlockThreadSafe(BlockId id) {
+  std::shared_lock lock(block_states_mutex_);
+  auto it = block_states_.find(id);
+  return it != block_states_.end() ? it->second.get() : nullptr;
+}
+
+const AudioEngine::BlockState* AudioEngine::FindBlockThreadSafe(BlockId id) const {
+  std::shared_lock lock(block_states_mutex_);
+  auto it = block_states_.find(id);
+  return it != block_states_.end() ? it->second.get() : nullptr;
+}
+
 void AudioEngine::EnsureBuffers(BlockState& state) {
   const int ports = PortCountFor(state.kind);
   state.input_l.assign(ports, std::vector<float>(static_cast<size_t>(max_block_size_), 0.0f));
@@ -235,14 +247,23 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   // packages/core/README.md).
 
   if (max_block_size_ > 0) EnsureBuffers(*state);
-  block_states_.emplace(id, std::move(state));
+  {
+    // Excludes FindBlockThreadSafe's readers (issue #52) - never the audio
+    // thread, which is excluded from touching block_states_ at all here by
+    // the suspend handshake around this call (see StudioBridge::Mutate).
+    std::unique_lock lock(block_states_mutex_);
+    block_states_.emplace(id, std::move(state));
+  }
   RecomputeRouting();
   return id;
 }
 
 void AudioEngine::RemoveBlock(BlockId id) {
   rig_.RemoveBlock(GraphIdOf(id));
-  block_states_.erase(id);
+  {
+    std::unique_lock lock(block_states_mutex_);
+    block_states_.erase(id);
+  }
   RecomputeRouting();
 }
 
@@ -452,12 +473,12 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
 // ── Params ──────────────────────────────────────────────────────────────
 
 int AudioEngine::ParamCount(BlockId id) const {
-  const BlockState* state = FindBlock(id);
+  const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->param_count : 0;
 }
 
 std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) const {
-  const BlockState* state = FindBlock(id);
+  const BlockState* state = FindBlockThreadSafe(id);
   if (!state || index < 0 || index >= state->param_count) return std::nullopt;
 
   return std::visit(
@@ -483,13 +504,13 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
 }
 
 float AudioEngine::GetParam(BlockId id, int index) const {
-  const BlockState* state = FindBlock(id);
+  const BlockState* state = FindBlockThreadSafe(id);
   if (!state || index < 0 || index >= state->param_count) return 0.0f;
   return state->params[static_cast<size_t>(index)].load(std::memory_order_relaxed);
 }
 
 void AudioEngine::SetParam(BlockId id, int index, float value) {
-  BlockState* state = FindBlock(id);
+  BlockState* state = FindBlockThreadSafe(id);
   if (!state || index < 0 || index >= state->param_count) return;
   state->params[static_cast<size_t>(index)].store(value, std::memory_order_relaxed);
 
@@ -673,7 +694,7 @@ bool AudioEngine::IsTunerMuted() const { return tuner_muted_.load(std::memory_or
 // ── Metering ────────────────────────────────────────────────────────────
 
 float AudioEngine::GetMeter(BlockId id) const {
-  const BlockState* state = FindBlock(id);
+  const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->meter.load(std::memory_order_relaxed) : 0.0f;
 }
 

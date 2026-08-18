@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -168,8 +169,22 @@ class AudioEngine {
     int to_port;
   };
 
+  // Unguarded: only for Process()'s routing loop (the audio thread), which
+  // relies on the suspend handshake around AddBlock/RemoveBlock (not this
+  // mutex) to guarantee block_states_ never mutates while Process() runs.
   BlockState* FindBlock(BlockId id);
   const BlockState* FindBlock(BlockId id) const;
+  // Guarded by block_states_mutex_: for the generic param/meter accessors
+  // (ParamCount/ParamInfo/GetParam/SetParam/GetMeter), which the bridge calls
+  // directly from the webview thread - bypassing the control-thread executor
+  // entirely for latency - so they need their own protection against
+  // AddBlock/RemoveBlock running concurrently on the control thread (issue
+  // #52: found by a stress test hammering both at once under ThreadSanitizer).
+  // Only guards the map lookup itself (a shared/read lock either way); the
+  // returned pointer's atomic members are safe to mutate concurrently on
+  // their own.
+  BlockState* FindBlockThreadSafe(BlockId id);
+  const BlockState* FindBlockThreadSafe(BlockId id) const;
   void EnsureBuffers(BlockState& state);
   void SeedParamsFromDsp(BlockState& state);
   void ApplyRealtimeParams(BlockState& state);
@@ -185,6 +200,10 @@ class AudioEngine {
 
   graph::GraphRig rig_;
   std::unordered_map<BlockId, std::unique_ptr<BlockState>> block_states_;
+  // Guards block_states_ against AddBlock/RemoveBlock (control thread, write)
+  // racing FindBlockThreadSafe (webview thread, read) - see its doc comment.
+  // Never taken by Process()/FindBlock() on the audio thread.
+  mutable std::shared_mutex block_states_mutex_;
   BlockId next_block_id_ = 0;
   EdgeId next_edge_id_ = 0;
   double sample_rate_ = 48000.0;
