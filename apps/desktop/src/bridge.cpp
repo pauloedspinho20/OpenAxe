@@ -710,6 +710,58 @@ std::string StudioBridge::HandleSetDelayModel(const std::string& req) {
   }
 }
 
+std::string StudioBridge::HandleSetBypass(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string js_id = o.value("blockId", "");
+    const bool bypassed = o.value("bypassed", false);
+    // Real-time-safe atomic - no Mutate()/suspend handshake needed, only the
+    // Call() to safely resolve js_id against blocks_ (control-thread only).
+    Call([&] {
+      const auto it = blocks_.find(js_id);
+      if (it == blocks_.end()) return;
+      nam_studio_set_bypass(graph_, it->second.core_id, bypassed ? 1 : 0);
+    });
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setBypass: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSetMasterLevel(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_set_master_level(graph_, o.value("level", 1.0f));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setMasterLevel: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSetMasterMuted(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_set_master_muted(graph_, o.value("muted", false) ? 1 : 0);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setMasterMuted: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSetTunerMuted(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_set_tuner_muted(graph_, o.value("muted", false) ? 1 : 0);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setTunerMuted: ") + e.what());
+  }
+}
+
 std::string StudioBridge::HandleMeters(const std::string&) {
   json out = json::array();
   Call([&] {

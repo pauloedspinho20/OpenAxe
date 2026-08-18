@@ -133,6 +133,23 @@ class AudioEngine {
   // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
   void SetDelayModel(BlockId id, dsp::Delay::Model model);
 
+  // ── Bypass / master bus (real-time safe, lock-free) ──────────────────
+  // No-op if id is unknown. While bypassed, the block's DSP is skipped and
+  // its port-0 input passes through to its output unchanged.
+  void SetBypass(BlockId id, bool bypassed);
+  bool IsBypassed(BlockId id) const;
+
+  // Scales the final output bus (post-graph, pre-host). 1.0 = unity.
+  void SetMasterLevel(float level);
+  float GetMasterLevel() const;
+  // Independent of master level and of SetTunerMuted - the output bus is
+  // silent while either mute source is set, so toggling one off doesn't
+  // clobber the other's state.
+  void SetMasterMuted(bool muted);
+  bool IsMasterMuted() const;
+  void SetTunerMuted(bool muted);
+  bool IsTunerMuted() const;
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
@@ -173,6 +190,9 @@ class AudioEngine {
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   std::atomic<float> cpu_load_{0.0f};
+  std::atomic<float> master_level_{1.0f};
+  std::atomic<bool> master_muted_{false};
+  std::atomic<bool> tuner_muted_{false};
 
   std::vector<BlockId> exec_order_;
   std::vector<RoutingEdge> routing_;

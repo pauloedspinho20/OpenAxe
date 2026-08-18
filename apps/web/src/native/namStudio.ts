@@ -148,6 +148,11 @@ export interface NamStudioBridge {
   setDriveModel(args: { blockId: string; model: string }): Promise<NamStudioOk>
   setDelayModel(args: { blockId: string; model: string }): Promise<NamStudioOk>
 
+  setBypass(args: { blockId: string; bypassed: boolean }): Promise<NamStudioOk>
+  setMasterLevel(args: { level: number }): Promise<NamStudioOk>
+  setMasterMuted(args: { muted: boolean }): Promise<NamStudioOk>
+  setTunerMuted(args: { muted: boolean }): Promise<NamStudioOk>
+
   meters(): Promise<Array<{ id: string; value: number }>>
   cpuLoad(): Promise<number>
   getTap(args: { side: 'in' | 'out'; frames?: number }): Promise<NamStudioTap>
@@ -249,6 +254,18 @@ class NativeBridge implements NamStudioBridge {
   }
   setDelayModel(args: { blockId: string; model: string }) {
     return this.call<NamStudioOk>('setDelayModel', args)
+  }
+  setBypass(args: { blockId: string; bypassed: boolean }) {
+    return this.call<NamStudioOk>('setBypass', args)
+  }
+  setMasterLevel(args: { level: number }) {
+    return this.call<NamStudioOk>('setMasterLevel', args)
+  }
+  setMasterMuted(args: { muted: boolean }) {
+    return this.call<NamStudioOk>('setMasterMuted', args)
+  }
+  setTunerMuted(args: { muted: boolean }) {
+    return this.call<NamStudioOk>('setTunerMuted', args)
   }
   meters() {
     return this.call<Array<{ id: string; value: number }>>('meters')

@@ -14,6 +14,10 @@ function makeBridge() {
     setParam: vi.fn(async () => ({ ok: true })),
     loadModelJson: vi.fn(async () => ({ ok: true, result: 0 })),
     unloadModel: vi.fn(async () => ({ ok: true })),
+    setBypass: vi.fn(async () => ({ ok: true })),
+    setMasterLevel: vi.fn(async () => ({ ok: true })),
+    setMasterMuted: vi.fn(async () => ({ ok: true })),
+    setTunerMuted: vi.fn(async () => ({ ok: true })),
   }
   return { calls, bridge: calls as unknown as NamStudioBridge }
 }
@@ -170,5 +174,32 @@ describe('NativeGraphRig', () => {
 
     // Unknown block -> null.
     expect(rig.getBlockAnalyser('nope')).toBeNull()
+  })
+
+  it('setBypass forwards to the bridge (issue #42)', async () => {
+    const { calls, bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('delay', 0, 0, 'd1')
+
+    const block = rig.getBlock('d1') as unknown as { setBypass(bypassed: boolean): void }
+    block.setBypass(true)
+    expect(calls.setBypass).toHaveBeenCalledWith({ blockId: 'd1', bypassed: true })
+
+    block.setBypass(false)
+    expect(calls.setBypass).toHaveBeenCalledWith({ blockId: 'd1', bypassed: false })
+  })
+
+  it('master level/mute and tuner mute forward to the bridge (issue #42)', () => {
+    const { calls, bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+
+    rig.setMasterLevel(0.5)
+    expect(calls.setMasterLevel).toHaveBeenCalledWith({ level: 0.5 })
+
+    rig.setMasterMuted(true)
+    expect(calls.setMasterMuted).toHaveBeenCalledWith({ muted: true })
+
+    rig.setTunerMuted(true)
+    expect(calls.setTunerMuted).toHaveBeenCalledWith({ muted: true })
   })
 })

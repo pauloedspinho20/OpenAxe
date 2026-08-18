@@ -168,6 +168,26 @@ void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
 void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDelayModel model);
 
+// ── Bypass / master bus ─────────────────────────────────────────────────
+// Real-time safe (lock-free atomics) - no graph mutation, safe to call from
+// any thread including concurrently with nam_studio_process.
+
+// No-op if block_id is unknown. While bypassed, the block's DSP is skipped
+// and its port-0 input passes through to its output unchanged.
+void nam_studio_set_bypass(NamStudioGraph* graph, int32_t block_id, int32_t bypassed);
+int32_t nam_studio_is_bypassed(NamStudioGraph* graph, int32_t block_id);
+
+// Scales the final output bus (post-graph, pre-host). 1.0 = unity.
+void nam_studio_set_master_level(NamStudioGraph* graph, float level);
+float nam_studio_get_master_level(NamStudioGraph* graph);
+// Independent of master level and of the tuner mute below - the output bus
+// is silent while either mute source is set, so toggling one off doesn't
+// clobber the other's state.
+void nam_studio_set_master_muted(NamStudioGraph* graph, int32_t muted);
+int32_t nam_studio_is_master_muted(NamStudioGraph* graph);
+void nam_studio_set_tuner_muted(NamStudioGraph* graph, int32_t muted);
+int32_t nam_studio_is_tuner_muted(NamStudioGraph* graph);
+
 // ── Metering ────────────────────────────────────────────────────────────
 
 // Peak |sample| over the last nam_studio_process call, 0 for an unknown block.

@@ -199,6 +199,84 @@ void TestUnknownBlockIsSafeNoOp() {
   engine.RemoveBlock(kUnknown);                                  // must not crash
   engine.SetReverbAlgorithm(kUnknown, ReverbAlgorithm::kRoom);   // must not crash
   engine.SetDriveModel(kUnknown, DriveModel::kDiodeClipper);     // must not crash
+  engine.SetBypass(kUnknown, true);                              // must not crash
+  NAM_EXPECT(!engine.IsBypassed(kUnknown));
+}
+
+// issue #42: bypass and the master bus were UI-state-only no-ops on desktop -
+// these prove the core side that backs them actually affects Process().
+
+void TestBypassSkipsDspAndPassesInputThrough() {
+  AudioEngine engine;
+  const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 0);
+  NAM_EXPECT(engine.Connect(kInRailId, 0, tremolo, 0).ok);
+  NAM_EXPECT(engine.Connect(tremolo, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+  NAM_EXPECT(!engine.IsBypassed(tremolo));
+
+  // Default tremolo (4Hz rate, 50% depth) modulates a constant input - at
+  // least one sample in a 64-frame block must differ from the dry value.
+  const auto processed = RunMono(engine, 0.5f);
+  bool any_modulated = false;
+  for (float sample : processed) {
+    if (std::fabs(sample - 0.5f) > 1e-6f) any_modulated = true;
+  }
+  NAM_EXPECT(any_modulated);
+
+  engine.SetBypass(tremolo, true);
+  NAM_EXPECT(engine.IsBypassed(tremolo));
+  for (float sample : RunMono(engine, 0.5f)) NAM_EXPECT(sample == 0.5f);
+
+  engine.SetBypass(tremolo, false);
+  NAM_EXPECT(!engine.IsBypassed(tremolo));
+}
+
+void TestMasterLevelScalesOutput() {
+  AudioEngine engine;
+  const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 0);  // pure passthrough
+  NAM_EXPECT(engine.Connect(kInRailId, 0, cab, 0).ok);
+  NAM_EXPECT(engine.Connect(cab, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+  NAM_EXPECT(engine.GetMasterLevel() == 1.0f);
+
+  for (float sample : RunMono(engine, 0.4f)) NAM_EXPECT(std::fabs(sample - 0.4f) < 1e-6f);
+
+  engine.SetMasterLevel(0.5f);
+  NAM_EXPECT(engine.GetMasterLevel() == 0.5f);
+  for (float sample : RunMono(engine, 0.4f)) NAM_EXPECT(std::fabs(sample - 0.2f) < 1e-6f);
+
+  engine.SetMasterLevel(1.0f);
+}
+
+void TestMasterAndTunerMuteAreIndependentAndBothSilence() {
+  AudioEngine engine;
+  const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 0);
+  NAM_EXPECT(engine.Connect(kInRailId, 0, cab, 0).ok);
+  NAM_EXPECT(engine.Connect(cab, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+  NAM_EXPECT(!engine.IsMasterMuted());
+  NAM_EXPECT(!engine.IsTunerMuted());
+
+  engine.SetMasterMuted(true);
+  NAM_EXPECT(engine.IsMasterMuted());
+  for (float sample : RunMono(engine, 0.7f)) NAM_EXPECT(sample == 0.0f);
+
+  engine.SetMasterMuted(false);
+  for (float sample : RunMono(engine, 0.7f)) NAM_EXPECT(std::fabs(sample - 0.7f) < 1e-6f);
+
+  // Tuner mute silences independently of master mute.
+  engine.SetTunerMuted(true);
+  NAM_EXPECT(engine.IsTunerMuted());
+  for (float sample : RunMono(engine, 0.7f)) NAM_EXPECT(sample == 0.0f);
+
+  // Toggling master mute while tuner-muted must not clear the tuner's mute.
+  engine.SetMasterMuted(true);
+  engine.SetMasterMuted(false);
+  NAM_EXPECT(engine.IsTunerMuted());
+  for (float sample : RunMono(engine, 0.7f)) NAM_EXPECT(sample == 0.0f);
+
+  engine.SetTunerMuted(false);
+  for (float sample : RunMono(engine, 0.7f)) NAM_EXPECT(std::fabs(sample - 0.7f) < 1e-6f);
 }
 
 }  // namespace
@@ -212,6 +290,9 @@ int main() {
   TestDriveModelSwitchOnlyAffectsThatBlock();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();
   TestUnknownBlockIsSafeNoOp();
+  TestBypassSkipsDspAndPassesInputThrough();
+  TestMasterLevelScalesOutput();
+  TestMasterAndTunerMuteAreIndependentAndBothSilence();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;
 }

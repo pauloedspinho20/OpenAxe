@@ -89,6 +89,10 @@ struct AudioEngine::BlockState {
   std::atomic<bool> amp_input_level_active{false};
   std::atomic<bool> amp_output_level_active{false};
 
+  // Real-time safe: when true, Process() skips ApplyRealtimeParams/RunDsp
+  // for this block entirely and passes port-0 input straight to output.
+  std::atomic<bool> bypassed{false};
+
   // input_l/input_r[port][frame]; most kinds use only port 0. kMixer uses
   // kMixerInputCount independent ports, summed together into port 0 right
   // before RunDsp (see AudioEngine::Process) - the block's single logical
@@ -392,8 +396,13 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       }
     }
 
-    ApplyRealtimeParams(state);
-    RunDsp(state, num_frames);
+    if (state.bypassed.load(std::memory_order_relaxed)) {
+      std::copy_n(state.input_l[0].data(), num_frames, state.output_l.data());
+      std::copy_n(state.input_r[0].data(), num_frames, state.output_r.data());
+    } else {
+      ApplyRealtimeParams(state);
+      RunDsp(state, num_frames);
+    }
 
     float peak = 0.0f;
     for (int i = 0; i < num_frames; ++i) {
@@ -418,9 +427,13 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
     break;
   }
 
+  const bool silent = master_muted_.load(std::memory_order_relaxed) ||
+                      tuner_muted_.load(std::memory_order_relaxed);
+  const float master_gain = silent ? 0.0f : master_level_.load(std::memory_order_relaxed);
+
   for (int i = 0; i < num_frames; ++i) {
-    const float l = final_l ? final_l[i] : 0.0f;
-    const float r = final_r ? final_r[i] : 0.0f;
+    const float l = (final_l ? final_l[i] : 0.0f) * master_gain;
+    const float r = (final_r ? final_r[i] : 0.0f) * master_gain;
     if (output_channels == 1 && output && output[0]) {
       output[0][i] = 0.5f * (l + r);
     } else if (output_channels >= 2 && output && output[0] && output[1]) {
@@ -628,6 +641,34 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   state->param_count = dsp::Delay::ParamCount();
   SeedParamsFromDsp(*state);
 }
+
+// ── Bypass / master bus ────────────────────────────────────────────────
+
+void AudioEngine::SetBypass(BlockId id, bool bypassed) {
+  BlockState* state = FindBlock(id);
+  if (state) state->bypassed.store(bypassed, std::memory_order_relaxed);
+}
+
+bool AudioEngine::IsBypassed(BlockId id) const {
+  const BlockState* state = FindBlock(id);
+  return state && state->bypassed.load(std::memory_order_relaxed);
+}
+
+void AudioEngine::SetMasterLevel(float level) {
+  master_level_.store(level, std::memory_order_relaxed);
+}
+
+float AudioEngine::GetMasterLevel() const { return master_level_.load(std::memory_order_relaxed); }
+
+void AudioEngine::SetMasterMuted(bool muted) {
+  master_muted_.store(muted, std::memory_order_relaxed);
+}
+
+bool AudioEngine::IsMasterMuted() const { return master_muted_.load(std::memory_order_relaxed); }
+
+void AudioEngine::SetTunerMuted(bool muted) { tuner_muted_.store(muted, std::memory_order_relaxed); }
+
+bool AudioEngine::IsTunerMuted() const { return tuner_muted_.load(std::memory_order_relaxed); }
 
 // ── Metering ────────────────────────────────────────────────────────────
 

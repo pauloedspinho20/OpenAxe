@@ -30,8 +30,6 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * holds no AudioNodes; `getBlockAnalyser` returns a Web-Audio-free
  * `NativeAnalyser` (fed a sine scaled to the block's real native meter peak by
  * the native engine, so the existing meter widgets animate from true levels).
- * Master level/mute are UI state only - the core has no master bus (see
- * NativeBlock for the same caveats on bypass and IR).
  */
 export class NativeGraphRig implements GraphRigControls, PresetRig {
   private readonly bridge: NamStudioBridge
@@ -146,13 +144,19 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     void this.bridge.disconnect({ edgeId })
   }
 
-  // ── Master (no core master bus on native - setters are UI no-ops) ───────
+  // ── Master bus ───────────────────────────────────────────────────────────
 
-  setMasterLevel(_level: number): void {}
+  setMasterLevel(level: number): void {
+    void this.bridge.setMasterLevel({ level })
+  }
 
-  setMasterMuted(_muted: boolean): void {}
+  setMasterMuted(muted: boolean): void {
+    void this.bridge.setMasterMuted({ muted })
+  }
 
-  setTunerMuted(_muted: boolean): void {}
+  setTunerMuted(muted: boolean): void {
+    void this.bridge.setTunerMuted({ muted })
+  }
 
   // ── Facade meters ───────────────────────────────────────────────────────
 

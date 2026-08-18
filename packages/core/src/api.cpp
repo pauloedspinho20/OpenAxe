@@ -193,6 +193,36 @@ void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
   graph->engine.SetDelayModel(block_id, m);
 }
 
+void nam_studio_set_bypass(NamStudioGraph* graph, int32_t block_id, int32_t bypassed) {
+  graph->engine.SetBypass(block_id, bypassed != 0);
+}
+
+int32_t nam_studio_is_bypassed(NamStudioGraph* graph, int32_t block_id) {
+  return graph->engine.IsBypassed(block_id) ? 1 : 0;
+}
+
+void nam_studio_set_master_level(NamStudioGraph* graph, float level) {
+  graph->engine.SetMasterLevel(level);
+}
+
+float nam_studio_get_master_level(NamStudioGraph* graph) { return graph->engine.GetMasterLevel(); }
+
+void nam_studio_set_master_muted(NamStudioGraph* graph, int32_t muted) {
+  graph->engine.SetMasterMuted(muted != 0);
+}
+
+int32_t nam_studio_is_master_muted(NamStudioGraph* graph) {
+  return graph->engine.IsMasterMuted() ? 1 : 0;
+}
+
+void nam_studio_set_tuner_muted(NamStudioGraph* graph, int32_t muted) {
+  graph->engine.SetTunerMuted(muted != 0);
+}
+
+int32_t nam_studio_is_tuner_muted(NamStudioGraph* graph) {
+  return graph->engine.IsTunerMuted() ? 1 : 0;
+}
+
 float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
   return graph->engine.GetMeter(block_id);
 }

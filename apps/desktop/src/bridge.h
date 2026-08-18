@@ -94,6 +94,10 @@ class StudioBridge {
   std::string HandleMeters(const std::string& req);
   std::string HandleCpuLoad(const std::string& req);
   std::string HandleGetTap(const std::string& req);
+  std::string HandleSetBypass(const std::string& req);
+  std::string HandleSetMasterLevel(const std::string& req);
+  std::string HandleSetMasterMuted(const std::string& req);
+  std::string HandleSetTunerMuted(const std::string& req);
 
  private:
   // Control executor ------------------------------------------------------

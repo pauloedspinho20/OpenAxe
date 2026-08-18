@@ -219,6 +219,33 @@ void TestSuspendCallbackSilencesOutput() {
   }
 }
 
+// issue #42: bypass and the master bus were UI-only no-ops on desktop - this
+// exercises the actual bridge handlers (JSON round-trip), not just the
+// underlying AudioEngine methods (see engine_test.cpp in packages/core).
+void TestSetBypassAndMasterBus() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
+
+  auto r = Parse(bridge.HandleSetBypass(Arr(R"([{"blockId":"d1","bypassed":true}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleSetBypass(Arr(R"([{"blockId":"d1","bypassed":false}])")));
+  CHECK(r["ok"] == true);
+  // Unknown block id is a silent no-op, matching removeBlock/moveBlock.
+  r = Parse(bridge.HandleSetBypass(Arr(R"([{"blockId":"missing","bypassed":true}])")));
+  CHECK(r["ok"] == true);
+
+  r = Parse(bridge.HandleSetMasterLevel(Arr(R"([{"level":0.5}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleSetMasterMuted(Arr(R"([{"muted":true}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleSetMasterMuted(Arr(R"([{"muted":false}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleSetTunerMuted(Arr(R"([{"muted":true}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleSetTunerMuted(Arr(R"([{"muted":false}])")));
+  CHECK(r["ok"] == true);
+}
+
 }  // namespace
 
 int main() {
@@ -231,6 +258,7 @@ int main() {
   TestBadInputs();
   TestMonitorTap();
   TestSuspendCallbackSilencesOutput();
+  TestSetBypassAndMasterBus();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

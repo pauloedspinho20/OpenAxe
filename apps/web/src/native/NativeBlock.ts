@@ -21,8 +21,6 @@ function toNumber(v: number | string | boolean): number {
  * rig boundary is the only concession needed.
  *
  * Limitations (documented, issue #15 M3):
- * - Bypass is UI state only - the core has no bypass; toggling it does not
- *   change the native DSP.
  * - IR/Cab loading is a no-op: the core has no cab (convolution) DSP yet, so
  *   cab blocks pass audio through unchanged and `getLoadedIr()` is always null.
  * - Params apply by core param *symbol*; effect params whose symbol doesn't
@@ -75,6 +73,7 @@ export class NativeBlock implements PresetBlock {
 
   setBypass(bypassed: boolean): void {
     this.bypassed = bypassed
+    void this.bridge.setBypass({ blockId: this.id, bypassed })
   }
 
   getLoadedModel(): { id: string; name: string } | null {
