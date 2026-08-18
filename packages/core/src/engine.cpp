@@ -4,6 +4,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <mutex>
 #include <type_traits>
 #include <variant>
 
