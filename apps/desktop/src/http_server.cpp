@@ -1,8 +1,5 @@
 #include "http_server.h"
 
-#include <sys/socket.h>
-#include <sys/types.h>
-
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -21,6 +18,8 @@ typedef int socklen_t;
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 
