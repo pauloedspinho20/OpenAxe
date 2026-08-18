@@ -50,7 +50,10 @@ Useful scripts (run at the repo root; Turborepo fans them out to the relevant pa
   first to fetch the browser binaries. These hit a real browser's Web Audio API against the actual
   Vite dev server, which Vitest's jsdom environment can't reach - use them for anything that needs
   a real AudioContext, not as a substitute for unit tests.
-- `pnpm build` — typecheck + production build
+- `pnpm build` — typecheck + production build (web app + `packages/ui`; the native desktop app is
+  opt-in via `pnpm build:desktop` / `pnpm build:all`)
+- `pnpm dev:desktop` / `pnpm dev:all` — run the native desktop app, or web + desktop side by side
+  (see [README.md](./README.md#development))
 - `pnpm storybook` / `pnpm build-storybook` — Storybook dev server / static build, scanning
   `packages/ui`'s component stories
 

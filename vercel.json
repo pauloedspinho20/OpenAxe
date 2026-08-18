@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm turbo run build --filter=@nam/web",
+  "buildCommand": "pnpm build:web",
   "outputDirectory": "apps/web/dist"
 }

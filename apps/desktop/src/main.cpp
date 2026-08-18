@@ -19,7 +19,9 @@
 
 namespace {
 
-// Path to the bundled React UI (apps/web build). Resolved, in order, from:
+// Path to the bundled React UI (apps/web build). Skipped entirely when
+// NAM_STUDIO_UI_URL is set (dev-server mode, see below). Resolved, in order,
+// from:
 //   1. the NAM_STUDIO_UI_DIR env override,
 //   2. <exeDir>/ui/index.html               (Windows ZIP: exe + ui in same dir),
 //   3. <exeDir>/../ui/index.html            (dev: build/bin + build/ui),
@@ -312,13 +314,24 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "namStudio.setMasterMuted", &nam_desktop::StudioBridge::HandleSetMasterMuted);
     Bind(w, bridge, "namStudio.setTunerMuted", &nam_desktop::StudioBridge::HandleSetTunerMuted);
 
-    // Serve the bundled React UI over loopback HTTP when present (WKWebView
-    // sandboxes file:// subresources, so file:// navigation would leave a
-    // blank page), else the M3 placeholder console which still exercises the
-    // full bridge against the C++ core.
-    const std::string ui = UiIndexPath(argv0);
+    // NAM_STUDIO_UI_URL wins over the bundled copy: it points the webview at
+    // an already-running dev server (Vite, http://127.0.0.1:5173) so the
+    // native shell can run against `pnpm dev:web` with HMR - the bridge binds
+    // above are installed on the webview itself, so window.namStudio is there
+    // whichever URL the UI comes from.
+    const char* ui_url = std::getenv("NAM_STUDIO_UI_URL");
+    const bool use_dev_server = ui_url && *ui_url;
+
+    // Otherwise serve the bundled React UI over loopback HTTP when present
+    // (WKWebView sandboxes file:// subresources, so file:// navigation would
+    // leave a blank page), else the M3 placeholder console which still
+    // exercises the full bridge against the C++ core.
+    const std::string ui = use_dev_server ? std::string() : UiIndexPath(argv0);
     nam_desktop::HttpServer uiServer;
-    if (!ui.empty()) {
+    if (use_dev_server) {
+      std::cerr << "nam_desktop: loading UI from " << ui_url << " (dev server)\n";
+      w.navigate(ui_url);
+    } else if (!ui.empty()) {
       const std::string uiDir = std::filesystem::path(ui).parent_path().string();
       unsigned short port = 0;
       if (uiServer.Start(uiDir, port)) {

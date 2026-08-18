@@ -20,10 +20,10 @@
       "problemMatcher": []
     },
     {
-      "label": "Dev server",
+      "label": "Web: Dev server",
       "type": "shell",
-      "command": "pnpm dev",
-      "detail": "Starts the Vite dev server (apps/web)",
+      "command": "pnpm dev:web",
+      "detail": "Starts the Vite dev server (apps/web) - web app only, no C++ toolchain needed",
       "isBackground": true,
       "group": "build",
       "presentation": { "reveal": "always", "panel": "dedicated" },
@@ -40,7 +40,7 @@
       "label": "Build",
       "type": "shell",
       "command": "pnpm build",
-      "detail": "Typecheck + production build, via Turborepo",
+      "detail": "Typecheck + production build of the web app and packages/ui (excludes the native desktop app), via Turborepo",
       "group": { "kind": "build", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": ["$tsc"]
@@ -177,7 +177,7 @@
         "C++: Configure",
         "C++: Build",
         "C++: Test",
-        "Dev server"
+        "Web: Dev server"
       ],
       "group": "build",
       "problemMatcher": []
@@ -209,6 +209,40 @@
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Dev (fast - skip the UI rebuild)",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop dev:fast",
+      "detail": "Debug-builds and launches the desktop app reusing the UI already in build/ui - for C++-only changes",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Dev (attach to the web dev server)",
+      "type": "shell",
+      "command": "pnpm dev:desktop:attach",
+      "detail": "Debug-builds and launches the desktop app pointed at http://localhost:5173 (NAM_STUDIO_UI_URL) - needs \"Web: Dev server\" running, gives the native shell Vite HMR",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev: web + desktop (parallel)",
+      "detail": "Runs the Vite dev server and the native desktop app side by side, each in its own terminal - two independent apps, one command",
+      "dependsOn": ["Web: Dev server", "Desktop: Dev (Debug build + launch)"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build: web + desktop",
+      "type": "shell",
+      "command": "pnpm build:all",
+      "detail": "Production build of everything: web app, packages/ui, and the native desktop app (needs CMake + a C++20 compiler)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$tsc"]
     },
     {
       "label": "Desktop: C++ tests",

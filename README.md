@@ -142,17 +142,25 @@ pnpm install
 pnpm dev
 ```
 
-Scripts run at the repo root via Turborepo, fanning out to the relevant workspace package (currently `apps/web`, `packages/ui`):
+Scripts run at the repo root via Turborepo, fanning out to the relevant workspace package (`apps/web`, `apps/desktop`, `packages/ui`):
 
-| Script                                    | Purpose                                             |
-| ----------------------------------------- | --------------------------------------------------- |
-| `pnpm dev`                                | Start Vite dev server (`apps/web`)                  |
-| `pnpm build`                              | Typecheck + production build                        |
-| `pnpm lint`                               | oxlint                                              |
-| `pnpm format` / `pnpm format:check`       | Prettier                                            |
-| `pnpm test` / `pnpm test:run`             | Vitest                                              |
-| `pnpm test:e2e`                           | Playwright E2E                                      |
-| `pnpm storybook` / `pnpm build-storybook` | Storybook dev server / static build (`packages/ui`) |
+| Script                                    | Purpose                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------- |
+| `pnpm dev` / `pnpm dev:web`               | Start the Vite dev server (`apps/web`) — no C++ toolchain needed |
+| `pnpm dev:desktop`                        | Debug-build and launch the native desktop app (`apps/desktop`)   |
+| `pnpm dev:desktop:attach`                 | Same, but pointed at the running Vite dev server (HMR)           |
+| `pnpm dev:all`                            | Both dev targets at once, in parallel                            |
+| `pnpm build` / `pnpm build:web`           | Typecheck + production build of the web app and `packages/ui`    |
+| `pnpm build:desktop`                      | Release build of the native desktop app + its bundled UI         |
+| `pnpm build:all`                          | Web + desktop                                                    |
+| `pnpm package:desktop`                    | Desktop build + CPack installer (`.dmg` / `.zip` / `.deb`)       |
+| `pnpm lint`                               | oxlint                                                           |
+| `pnpm format` / `pnpm format:check`       | Prettier                                                         |
+| `pnpm test` / `pnpm test:run`             | Vitest                                                           |
+| `pnpm test:e2e`                           | Playwright E2E                                                   |
+| `pnpm storybook` / `pnpm build-storybook` | Storybook dev server / static build (`packages/ui`)              |
+
+`pnpm dev` and `pnpm build` cover the web app only, so pure web work never needs CMake or a C++ compiler; the `:desktop` / `:all` variants opt into the native build. The two apps are fully independent processes — run them side by side (`pnpm dev:all`, or two terminals) and both work at once; the desktop app serves its own UI copy on an ephemeral loopback port, so it never collides with Vite's 5173.
 
 ### C++ DSP core (`packages/core`)
 
@@ -178,9 +186,16 @@ See [packages/core/README.md](./packages/core/README.md) for what's implemented 
 The native desktop shell reuses the web UI and drives `packages/core` directly (no Web Audio in the audio path). See [apps/desktop/README.md](./apps/desktop/README.md) for architecture, the full command list, and a debugging guide.
 
 ```bash
-pnpm --filter @nam/desktop dev      # Debug build + bundle UI + launch the window
-pnpm --filter @nam/desktop build    # Release build + bundle UI
-pnpm --filter @nam/desktop package  # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+pnpm dev:desktop          # Debug build + bundle UI + launch the window
+pnpm build:desktop        # Release build + bundle UI
+pnpm package:desktop      # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+
+# Web + desktop side by side. Either run both dev targets in parallel...
+pnpm dev:all
+# ...or start the web dev server and attach the native shell to it, so the
+# desktop window gets Vite HMR instead of a rebuilt-and-bundled UI copy:
+pnpm dev:web              # terminal 1
+pnpm dev:desktop:attach   # terminal 2 (NAM_STUDIO_UI_URL=http://localhost:5173)
 
 # C++ tests (configure once with NAM_DESKTOP_BUILD_TESTS=ON):
 cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug

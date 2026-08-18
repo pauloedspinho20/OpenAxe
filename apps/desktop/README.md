@@ -23,8 +23,8 @@ Requires CMake 3.24+ and a C++20 compiler (Xcode Command Line Tools on
 macOS; WebKitGTK dev packages on Linux; VS2022 / MinGW-w64 on Windows).
 
 ```sh
-pnpm --filter @nam/desktop dev        # Debug build + launch
-pnpm --filter @nam/desktop build      # Release build only
+pnpm dev:desktop        # Debug build + launch
+pnpm build:desktop      # Release build only
 ```
 
 The CMake project is also self-contained:
@@ -39,12 +39,38 @@ Binary output: `apps/desktop/build/bin/nam_desktop`.
 ## Useful commands
 
 ```sh
-pnpm --filter @nam/desktop dev                 # Debug build + bundle UI + launch the window
-pnpm --filter @nam/desktop build               # Release build + bundle UI
-pnpm --filter @nam/desktop package             # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+pnpm dev:desktop                               # Debug build + bundle UI + launch the window
+pnpm --filter @nam/desktop dev:fast            # same, reusing the UI already in build/ui (C++-only changes)
+pnpm dev:desktop:attach                        # launch against the Vite dev server (HMR) - see "Running alongside the web app"
+pnpm build:desktop                             # Release build + bundle UI
+pnpm package:desktop                           # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
 pnpm --filter @nam/desktop exec tsc -b         # typecheck (the shared apps/web TS)
 pnpm --filter @nam/web test:run src/native     # run the NativeGraphRig unit tests
 ```
+
+### Running alongside the web app
+
+The two apps are independent processes and can run at the same time — the
+desktop app serves its bundled UI on an _ephemeral_ loopback port, so it never
+competes with Vite's 5173:
+
+```sh
+pnpm dev:all            # Vite dev server + native app, in parallel
+```
+
+For UI work, skip the bundle step entirely and point the webview at the running
+dev server, which gives the native window Vite HMR while still talking to the
+real C++ engine over `window.namStudio` (the bridge binds live on the webview,
+not on the page's origin):
+
+```sh
+pnpm dev:web            # terminal 1 - http://localhost:5173
+pnpm dev:desktop:attach # terminal 2 - NAM_STUDIO_UI_URL=http://localhost:5173
+```
+
+Any URL works: `NAM_STUDIO_UI_URL=<url> ./build/bin/nam_desktop`, or
+`node scripts/dev.mjs --ui-url=<url>`. When it is set, the bundled-UI lookup and
+the built-in HTTP server are skipped.
 
 ### C++ tests
 
@@ -57,8 +83,9 @@ ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, la
 ### Editor
 
 The same build/test/package/dev commands are also exposed as VSCode tasks
-(`Cmd/Ctrl+Shift+P → Run Task → "Desktop: …"`) in `.vscode/tasks.json`, plus a
-"Desktop: Full check" that runs build + C++ tests + web tests.
+(`Cmd/Ctrl+Shift+P → Run Task → "Desktop: …"`) in `.vscode/tasks.json`, plus
+"Desktop: Full check" (build + C++ tests + web tests) and "Dev: web + desktop
+(parallel)" / "Build: web + desktop" for running or building both apps at once.
 
 ## Debugging
 
@@ -71,7 +98,7 @@ real-time thread blocking. These tools tell you which:
 cat apps/desktop/build/bin/nam_desktop.log
 
 # 2. Webview devtools + verbose logging (WKWebView remote inspector).
-NAM_DESKTOP_DEBUG=1 pnpm --filter @nam/desktop dev
+NAM_DESKTOP_DEBUG=1 pnpm dev:desktop
 #    Then in Safari: Develop -> your Mac -> the WKWebView page, for JS console errors.
 
 # 3. macOS crash report (crashing thread + full stack, captured by the OS).
@@ -84,7 +111,8 @@ cd apps/desktop && lldb -- build/bin/nam_desktop   # run -> (crash) -> bt
 Env vars: `NAM_DESKTOP_DEBUG=1` enables the webview inspector and verbose
 logging; `NAM_DESKTOP_LOG=<path>` overrides the log file location (default:
 `<exeDir>/nam_desktop.log`); `NAM_STUDIO_UI_DIR=<dir>` overrides where the
-bundled UI is found.
+bundled UI is found; `NAM_STUDIO_UI_URL=<url>` loads the UI from a URL (dev
+server) instead of the bundled copy.
 
 ## Status
 
@@ -119,7 +147,7 @@ bundled UI is found.
 ## Packaging
 
 ```sh
-pnpm --filter @nam/desktop package   # build web UI + native app, then CPack
+pnpm package:desktop   # build web UI + native app, then CPack
 ```
 
 Produces `apps/desktop/build/nam-studio-desktop-<v>.dmg|.zip|.deb`. The package

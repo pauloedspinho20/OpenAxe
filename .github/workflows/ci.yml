@@ -30,14 +30,15 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
-      # @nam/desktop is deliberately excluded: its build shells out to a full
-      # native CMake/webview compile (Linux needs WebKitGTK + GTK dev
-      # packages this runner doesn't have, plus packages/core's git
-      # submodules checked out - neither of which this job is provisioned
-      # for). That's exactly what the dedicated Desktop Build workflow
-      # (desktop.yml) already covers correctly across all three OSes.
+      # `pnpm build` covers the web app + packages/ui and deliberately excludes
+      # @nam/desktop (use `pnpm build:desktop` / `build:all` for that): the
+      # desktop build shells out to a full native CMake/webview compile (Linux
+      # needs WebKitGTK + GTK dev packages this runner doesn't have, plus
+      # packages/core's git submodules checked out - neither of which this job
+      # is provisioned for). That's exactly what the dedicated Desktop Build
+      # workflow (desktop.yml) already covers across all three OSes.
       - name: Typecheck & build
-        run: pnpm turbo run build --filter='!@nam/desktop'
+        run: pnpm build
 
       - name: Test
         run: pnpm test:run
