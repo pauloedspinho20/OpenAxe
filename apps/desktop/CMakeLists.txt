@@ -142,7 +142,14 @@ set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}")
 
 set(NAM_DESKTOP_UI_DIR "${CMAKE_BINARY_DIR}/ui")
 if(WIN32)
-  set(NAM_DESKTOP_BINARY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/nam_desktop.exe")
+  # Windows has no -G passed anywhere in this project's build scripts, so
+  # CMake defaults to a Visual Studio generator - the one multi-config
+  # generator this project actually hits (Makefiles/Ninja on macOS/Linux are
+  # single-config). Multi-config generators append a $<CONFIG> subdirectory
+  # to the runtime output dir that CMAKE_BUILD_TYPE alone doesn't capture;
+  # scripts/build.mjs always keeps -DCMAKE_BUILD_TYPE=<x> and --config <x> in
+  # sync, so CMAKE_BUILD_TYPE's cached value is a safe stand-in for it here.
+  set(NAM_DESKTOP_BINARY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_BUILD_TYPE}/nam_desktop.exe")
 else()
   set(NAM_DESKTOP_BINARY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/nam_desktop")
 endif()
