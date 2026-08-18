@@ -113,6 +113,14 @@ target_link_libraries(nam_desktop PRIVATE
   nam_desktop_lib
 )
 
+# http_server.cpp (compiled directly into this target, not nam_desktop_lib)
+# calls raw Winsock functions on Windows (accept/bind/socket/...) - unlike
+# POSIX sockets, those live in a separate import library that must be linked
+# explicitly rather than coming for free with libc.
+if(WIN32)
+  target_link_libraries(nam_desktop PRIVATE ws2_32)
+endif()
+
 # ── Tests ─────────────────────────────────────────────────────────────────
 option(NAM_DESKTOP_BUILD_TESTS "Build the desktop app's C++ tests" OFF)
 if(NAM_DESKTOP_BUILD_TESTS)
