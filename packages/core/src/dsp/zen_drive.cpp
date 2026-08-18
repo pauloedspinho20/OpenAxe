@@ -13,9 +13,10 @@ constexpr int kParamCount = 2;
 constexpr int kVoiceParam = 0;
 constexpr int kGainParam = 1;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const ZenDrive::ParamInfo kParamInfo[kParamCount] = {
-    {"Voice", "voice", 0.0f, 1.0f, "%"},
-    {"Gain", "gain", 0.0f, 1.0f, "%"},
+#include "generated/zen_drive_params.inc"
 };
 
 // One channel's Zen Drive circuit - hand-copied from BYOD's ZenDriveWDF.h

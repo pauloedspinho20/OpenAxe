@@ -15,13 +15,10 @@ constexpr int kReleaseParam = 4;
 constexpr int kRangeParam = 5;
 constexpr int kParamCount = 6;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DsparkParamInfo kParamInfo[kParamCount] = {
-    {"Threshold", "threshold", -80.0f, 0.0f, "dB"},
-    {"Hysteresis", "hysteresis", 0.0f, 20.0f, "dB"},
-    {"Attack", "attack", 0.01f, 50.0f, "ms"},
-    {"Hold", "hold", 0.0f, 500.0f, "ms"},
-    {"Release", "release", 1.0f, 1000.0f, "ms"},
-    {"Range", "range", -100.0f, 0.0f, "dB"},
+#include "generated/noise_gate_params.inc"
 };
 
 constexpr float kDefaults[kParamCount] = {

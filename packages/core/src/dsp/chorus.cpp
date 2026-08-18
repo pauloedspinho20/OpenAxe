@@ -15,11 +15,10 @@ constexpr int kDelayParam = 2;
 constexpr int kFeedbackParam = 3;
 constexpr int kParamCount = 4;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const Chorus::ParamInfo kParamInfo[kParamCount] = {
-    {"Rate", "rate", 0.1f, 10.0f, "Hz"},
-    {"Depth", "depth", 0.2f, 10.0f, "ms"},
-    {"Delay", "delay", 5.0f, 30.0f, "ms"},
-    {"Feedback", "feedback", 0.0f, 0.5f, "%"},
+#include "generated/chorus_params.inc"
 };
 
 constexpr float kStereoPhaseOffset = 1.57079632679f;  // π/2

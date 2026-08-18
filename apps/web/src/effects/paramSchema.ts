@@ -421,7 +421,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   // saturation), Tape (Analog + wow/flutter pitch modulation).
   delay: [
     {
-      key: 'delayModel',
+      key: 'model',
       label: 'Model',
       control: 'select',
       options: [
@@ -463,7 +463,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: hz,
     },
     {
-      key: 'wowDepth',
+      key: 'wow_depth',
       label: 'Wow Depth',
       control: 'knob',
       min: 0,
@@ -471,10 +471,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 1.5,
       formatValue: msRaw,
-      visible: (v) => v.delayModel === 'tape',
+      visible: (v) => v.model === 'tape',
     },
     {
-      key: 'wowRate',
+      key: 'wow_rate',
       label: 'Wow Rate',
       control: 'knob',
       min: 0.1,
@@ -482,7 +482,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.05,
       defaultValue: 0.5,
       formatValue: hz,
-      visible: (v) => v.delayModel === 'tape',
+      visible: (v) => v.model === 'tape',
     },
   ],
   'ping-pong-delay': [
@@ -677,7 +677,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       visible: (v) => v.driveModel === 'tube-screamer' || v.driveModel === 'zen-drive',
     },
     {
-      key: 'diodeType',
+      key: 'diode_type',
       label: 'Diode',
       control: 'select',
       options: [
@@ -689,7 +689,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       visible: (v) => v.driveModel === 'diode-clipper' || v.driveModel === 'tube-screamer',
     },
     {
-      key: 'numDiodes',
+      key: 'num_diodes',
       label: 'Diode Count',
       control: 'knob',
       min: 0.3,
@@ -722,7 +722,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       visible: (v) => v.driveModel === 'mxr-distortion',
     },
     {
-      key: 'outputLevel',
+      key: 'level',
       label: 'Output Level',
       control: 'knob',
       min: 0,
@@ -786,7 +786,7 @@ const AMP_TONE_STACK: KnobField[] = [
 /** Pre/post trims - shared by every NAM model block kind and Cab (see AmpBlock/CabBlock's own input/output gain stages). */
 const IN_OUT_LEVEL_FIELDS: KnobField[] = [
   {
-    key: 'inputLevel',
+    key: 'input_level',
     label: 'Input',
     control: 'knob',
     min: 0,
@@ -797,7 +797,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     group: 'I/O',
   },
   {
-    key: 'outputLevel',
+    key: 'output_level',
     label: 'Output',
     control: 'knob',
     min: 0,

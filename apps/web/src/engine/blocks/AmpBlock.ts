@@ -262,8 +262,8 @@ export class AmpBlock implements Block {
       mid: this.midGain,
       treble: this.trebleGain,
       presence: this.presenceGain,
-      inputLevel: this.inputLevel,
-      outputLevel: this.outputLevel,
+      input_level: this.inputLevel,
+      output_level: this.outputLevel,
     }
   }
 
@@ -273,8 +273,8 @@ export class AmpBlock implements Block {
     if (typeof params.mid === 'number') this.setMid(params.mid)
     if (typeof params.treble === 'number') this.setTreble(params.treble)
     if (typeof params.presence === 'number') this.setPresence(params.presence)
-    if (typeof params.inputLevel === 'number') this.setInputLevel(params.inputLevel)
-    if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
+    if (typeof params.input_level === 'number') this.setInputLevel(params.input_level)
+    if (typeof params.output_level === 'number') this.setOutputLevel(params.output_level)
   }
 
   async dispose(): Promise<void> {

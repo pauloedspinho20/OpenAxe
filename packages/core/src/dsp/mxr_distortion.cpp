@@ -13,9 +13,10 @@ constexpr int kParamCount = 2;
 constexpr int kDistParam = 0;
 constexpr int kLevelParam = 1;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const MxrDistortion::ParamInfo kParamInfo[kParamCount] = {
-    {"Distortion", "dist", 0.0f, 1.0f, "%"},
-    {"Level", "level", 0.0f, 1.0f, "%"},
+#include "generated/mxr_distortion_params.inc"
 };
 
 float DecibelsToGain(float db) { return std::pow(10.0f, db / 20.0f); }

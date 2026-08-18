@@ -4,12 +4,9 @@
  * ping_pong_delay.cpp). See namStudioEffectBase.js for shared WASM plumbing.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { PINGPONGDELAY_PARAMS } from './generatedParams.js'
 
 const PING_PONG_KIND = 8
-
-const TIME_PARAM = 0
-const FEEDBACK_PARAM = 1
-const TONE_PARAM = 2
 
 class PingPongProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -25,9 +22,14 @@ class PingPongProcessor extends NamStudioEffectProcessor {
   }
 
   applyParams(module, block, parameters) {
-    module._nam_studio_set_param(this.graph, block, TIME_PARAM, parameters.time[0])
-    module._nam_studio_set_param(this.graph, block, FEEDBACK_PARAM, parameters.feedback[0])
-    module._nam_studio_set_param(this.graph, block, TONE_PARAM, parameters.tone[0])
+    module._nam_studio_set_param(this.graph, block, PINGPONGDELAY_PARAMS.time, parameters.time[0])
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      PINGPONGDELAY_PARAMS.feedback,
+      parameters.feedback[0],
+    )
+    module._nam_studio_set_param(this.graph, block, PINGPONGDELAY_PARAMS.tone, parameters.tone[0])
   }
 }
 

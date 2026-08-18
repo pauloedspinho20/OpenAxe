@@ -105,13 +105,13 @@ export class CabBlock implements Block {
   }
 
   getParams(): EffectParams {
-    return { irMix: this.irMix, inputLevel: this.inputLevel, outputLevel: this.outputLevel }
+    return { irMix: this.irMix, input_level: this.inputLevel, output_level: this.outputLevel }
   }
 
   setParams(params: EffectParams): void {
     if (typeof params.irMix === 'number') this.setIrMix(params.irMix)
-    if (typeof params.inputLevel === 'number') this.setInputLevel(params.inputLevel)
-    if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
+    if (typeof params.input_level === 'number') this.setInputLevel(params.input_level)
+    if (typeof params.output_level === 'number') this.setOutputLevel(params.output_level)
   }
 
   dispose(): void {

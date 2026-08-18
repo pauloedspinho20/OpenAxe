@@ -20,19 +20,10 @@ const dspark::Equalizer<float, kBandCount>::BandType kBandType[kBandCount] = {
     dspark::Equalizer<float, kBandCount>::BandType::HighShelf,
 };
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DsparkParamInfo kParamInfo[kParamCount] = {
-    {"Band 1 Freq", "band0_frequency", 20.0f, 20000.0f, "Hz"},
-    {"Band 1 Gain", "band0_gain", -15.0f, 15.0f, "dB"},
-    {"Band 1 Q", "band0_q", 0.1f, 10.0f, "x"},
-    {"Band 2 Freq", "band1_frequency", 20.0f, 20000.0f, "Hz"},
-    {"Band 2 Gain", "band1_gain", -15.0f, 15.0f, "dB"},
-    {"Band 2 Q", "band1_q", 0.1f, 10.0f, "x"},
-    {"Band 3 Freq", "band2_frequency", 20.0f, 20000.0f, "Hz"},
-    {"Band 3 Gain", "band2_gain", -15.0f, 15.0f, "dB"},
-    {"Band 3 Q", "band2_q", 0.1f, 10.0f, "x"},
-    {"Band 4 Freq", "band3_frequency", 20.0f, 20000.0f, "Hz"},
-    {"Band 4 Gain", "band3_gain", -15.0f, 15.0f, "dB"},
-    {"Band 4 Q", "band3_q", 0.1f, 10.0f, "x"},
+#include "generated/equalizer_params.inc"
 };
 
 // Same frequencies as ParametricEQ.ts's DEFAULT_BANDS.

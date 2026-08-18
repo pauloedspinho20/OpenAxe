@@ -13,10 +13,10 @@ constexpr int kGainParam = 0;
 constexpr int kDiodeTypeParam = 1;
 constexpr int kNumDiodesParam = 2;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const TubeScreamer::ParamInfo kParamInfo[kParamCount] = {
-    {"Gain", "gain", 0.0f, 1.0f, "%"},
-    {"Diode Type", "diode_type", 0.0f, 2.0f, "x"},
-    {"Diode Count", "num_diodes", 0.3f, 3.0f, "x"},
+#include "generated/tube_screamer_params.inc"
 };
 
 // Reverse saturation current per diode type - BYOD's own

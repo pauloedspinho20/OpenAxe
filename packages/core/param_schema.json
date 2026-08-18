@@ -1,0 +1,912 @@
+{
+  "$comment": "Single source of truth for effect-param names/symbols/ranges across the web app, packages/core's DSP wrappers, and the WASM AudioWorkletProcessors (issue #51). Generated C++ .inc fragments and the JS index-map module are produced from this file by scripts/gen-param-schema.mjs - never hand-edit the generated output. Canonical symbol casing is snake_case, matching packages/core's existing GetParamInfo() tables (those were kept as-is; the web side was renamed to match - see issue #41). Scope: only the 11 effect kinds with real DSP backing in packages/core today, plus the 3 real params (input_level/output_level/slim_size) shared by the 5 NAM-model block kinds (amp/amp-cab/pedal/outboard/space). The amp tone stack (bass/mid/treble/presence), cab's irMix, and mixer/splitter have no packages/core DSP behind them yet and are intentionally NOT in this schema - see issue #51's discussion.",
+  "effects": {
+    "compressor": {
+      "cppFile": "compressor.cpp",
+      "params": [
+        {
+          "symbol": "threshold",
+          "label": "Threshold",
+          "min": -60.0,
+          "max": 0.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "ratio",
+          "label": "Ratio",
+          "min": 1.0,
+          "max": 20.0,
+          "unit": ":1"
+        },
+        {
+          "symbol": "attack",
+          "label": "Attack",
+          "min": 0.1,
+          "max": 100.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "release",
+          "label": "Release",
+          "min": 1.0,
+          "max": 2000.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "knee",
+          "label": "Knee",
+          "min": 0.0,
+          "max": 20.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "makeup_gain",
+          "label": "Makeup",
+          "min": 0.0,
+          "max": 24.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "character",
+          "label": "Character",
+          "min": 0.0,
+          "max": 3.0,
+          "unit": "x"
+        },
+        {
+          "symbol": "mix",
+          "label": "Mix",
+          "min": 0.0,
+          "max": 1.0,
+          "unit": "x"
+        }
+      ]
+    },
+    "noise-gate": {
+      "cppFile": "noise_gate.cpp",
+      "params": [
+        {
+          "symbol": "threshold",
+          "label": "Threshold",
+          "min": -80.0,
+          "max": 0.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "hysteresis",
+          "label": "Hysteresis",
+          "min": 0.0,
+          "max": 20.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "attack",
+          "label": "Attack",
+          "min": 0.01,
+          "max": 50.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "hold",
+          "label": "Hold",
+          "min": 0.0,
+          "max": 500.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "release",
+          "label": "Release",
+          "min": 1.0,
+          "max": 1000.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "range",
+          "label": "Range",
+          "min": -100.0,
+          "max": 0.0,
+          "unit": "dB"
+        }
+      ]
+    },
+    "eq": {
+      "cppFile": "equalizer.cpp",
+      "params": [
+        {
+          "symbol": "band0_frequency",
+          "label": "Band 1 Freq",
+          "min": 20.0,
+          "max": 20000.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "band0_gain",
+          "label": "Band 1 Gain",
+          "min": -15.0,
+          "max": 15.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "band0_q",
+          "label": "Band 1 Q",
+          "min": 0.1,
+          "max": 10.0,
+          "unit": "x"
+        },
+        {
+          "symbol": "band1_frequency",
+          "label": "Band 2 Freq",
+          "min": 20.0,
+          "max": 20000.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "band1_gain",
+          "label": "Band 2 Gain",
+          "min": -15.0,
+          "max": 15.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "band1_q",
+          "label": "Band 2 Q",
+          "min": 0.1,
+          "max": 10.0,
+          "unit": "x"
+        },
+        {
+          "symbol": "band2_frequency",
+          "label": "Band 3 Freq",
+          "min": 20.0,
+          "max": 20000.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "band2_gain",
+          "label": "Band 3 Gain",
+          "min": -15.0,
+          "max": 15.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "band2_q",
+          "label": "Band 3 Q",
+          "min": 0.1,
+          "max": 10.0,
+          "unit": "x"
+        },
+        {
+          "symbol": "band3_frequency",
+          "label": "Band 4 Freq",
+          "min": 20.0,
+          "max": 20000.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "band3_gain",
+          "label": "Band 4 Gain",
+          "min": -15.0,
+          "max": 15.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "band3_q",
+          "label": "Band 4 Q",
+          "min": 0.1,
+          "max": 10.0,
+          "unit": "x"
+        }
+      ]
+    },
+    "chorus": {
+      "cppFile": "chorus.cpp",
+      "params": [
+        {
+          "symbol": "rate",
+          "label": "Rate",
+          "min": 0.1,
+          "max": 10.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "depth",
+          "label": "Depth",
+          "min": 0.2,
+          "max": 10.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "delay",
+          "label": "Delay",
+          "min": 5.0,
+          "max": 30.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "feedback",
+          "label": "Feedback",
+          "min": 0.0,
+          "max": 0.5,
+          "unit": "%"
+        }
+      ]
+    },
+    "flanger": {
+      "cppFile": "flanger.cpp",
+      "params": [
+        {
+          "symbol": "rate",
+          "label": "Rate",
+          "min": 0.1,
+          "max": 10.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "depth",
+          "label": "Depth",
+          "min": 0.1,
+          "max": 5.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "feedback",
+          "label": "Feedback",
+          "min": 0.0,
+          "max": 0.9,
+          "unit": "%"
+        },
+        {
+          "symbol": "delay",
+          "label": "Delay",
+          "min": 0.1,
+          "max": 3.0,
+          "unit": "ms"
+        }
+      ]
+    },
+    "phaser": {
+      "cppFile": "phaser.cpp",
+      "params": [
+        {
+          "symbol": "rate",
+          "label": "Rate",
+          "min": 0.1,
+          "max": 5.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "depth",
+          "label": "Depth",
+          "min": 0.1,
+          "max": 1.0,
+          "unit": "%"
+        },
+        {
+          "symbol": "feedback",
+          "label": "Feedback",
+          "min": 0.0,
+          "max": 0.9,
+          "unit": "%"
+        },
+        {
+          "symbol": "stages",
+          "label": "Stages",
+          "min": 2.0,
+          "max": 8.0,
+          "unit": ""
+        }
+      ]
+    },
+    "tremolo": {
+      "cppFile": "tremolo.cpp",
+      "params": [
+        {
+          "symbol": "rate",
+          "label": "Rate",
+          "min": 0.1,
+          "max": 20.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "depth",
+          "label": "Depth",
+          "min": 0.0,
+          "max": 1.0,
+          "unit": "%"
+        },
+        {
+          "symbol": "shape",
+          "label": "Shape",
+          "min": 0.0,
+          "max": 2.0,
+          "unit": "x"
+        }
+      ]
+    },
+    "ping-pong-delay": {
+      "cppFile": "ping_pong_delay.cpp",
+      "params": [
+        {
+          "symbol": "time",
+          "label": "Time",
+          "min": 50.0,
+          "max": 1000.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "feedback",
+          "label": "Feedback",
+          "min": 0.0,
+          "max": 0.9,
+          "unit": "%"
+        },
+        {
+          "symbol": "tone",
+          "label": "Tone",
+          "min": 200.0,
+          "max": 12000.0,
+          "unit": "Hz"
+        }
+      ]
+    },
+    "delay": {
+      "cppFile": "delay.cpp",
+      "params": [
+        {
+          "symbol": "time",
+          "label": "Time",
+          "min": 10.0,
+          "max": 1000.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "feedback",
+          "label": "Feedback",
+          "min": 0.0,
+          "max": 0.9,
+          "unit": "%"
+        },
+        {
+          "symbol": "tone",
+          "label": "Tone",
+          "min": 200.0,
+          "max": 12000.0,
+          "unit": "Hz"
+        },
+        {
+          "symbol": "model",
+          "label": "Model",
+          "min": 0.0,
+          "max": 2.0,
+          "unit": ""
+        },
+        {
+          "symbol": "wow_depth",
+          "label": "Wow Depth",
+          "min": 0.0,
+          "max": 5.0,
+          "unit": "ms"
+        },
+        {
+          "symbol": "wow_rate",
+          "label": "Wow Rate",
+          "min": 0.1,
+          "max": 3.0,
+          "unit": "Hz"
+        }
+      ]
+    },
+    "amp": {
+      "cppFile": "engine_amp.cpp",
+      "params": [
+        {
+          "symbol": "input_level",
+          "label": "Input",
+          "min": -100.0,
+          "max": 100.0,
+          "unit": "dBu"
+        },
+        {
+          "symbol": "output_level",
+          "label": "Output",
+          "min": -100.0,
+          "max": 100.0,
+          "unit": "dBu"
+        },
+        {
+          "symbol": "slim_size",
+          "label": "Slim Size",
+          "min": 0.0,
+          "max": 1.0,
+          "unit": "x"
+        }
+      ],
+      "comment": "The 3-entry table engine.cpp bolts onto NamAmp (which has no GetParamInfo of its own) - shared by amp/amp-cab/pedal/outboard/space. Generated fragment name is synthetic (engine_amp_params.inc) since these params live inside engine.cpp itself, not a dedicated DSP wrapper file."
+    },
+    "reverb": {
+      "comment": "Algorithm choice is a structural block-level swap (nam_studio_set_reverb_algorithm), not a generic param - see paramSchema.ts's reverbAlgorithm field. roomSize/damping are web-only UI abstractions computed via per-algorithm formulas in dragonflyReverbWorklet.js into decay/high_cut; they have no 1:1 core symbol and are listed under derived, not variants.",
+      "variants": {
+        "hall": {
+          "cppFile": "dragonfly_hall_reverb.cpp",
+          "params": [
+            {
+              "symbol": "dry_level",
+              "label": "Dry Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "early_level",
+              "label": "Early Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "late_level",
+              "label": "Late Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "size",
+              "label": "Size",
+              "min": 10.0,
+              "max": 60.0,
+              "unit": "m"
+            },
+            {
+              "symbol": "width",
+              "label": "Width",
+              "min": 50.0,
+              "max": 150.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "delay",
+              "label": "Predelay",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "ms"
+            },
+            {
+              "symbol": "diffuse",
+              "label": "Diffuse",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "low_cut",
+              "label": "Low Cut",
+              "min": 0.0,
+              "max": 200.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "low_xo",
+              "label": "Low Cross",
+              "min": 200.0,
+              "max": 1200.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "low_mult",
+              "label": "Low Mult",
+              "min": 0.5,
+              "max": 2.5,
+              "unit": "X"
+            },
+            {
+              "symbol": "high_cut",
+              "label": "High Cut",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "high_xo",
+              "label": "High Cross",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "high_mult",
+              "label": "High Mult",
+              "min": 0.2,
+              "max": 1.2,
+              "unit": "X"
+            },
+            {
+              "symbol": "spin",
+              "label": "Spin",
+              "min": 0.0,
+              "max": 10.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "wander",
+              "label": "Wander",
+              "min": 0.0,
+              "max": 40.0,
+              "unit": "ms"
+            },
+            {
+              "symbol": "decay",
+              "label": "Decay",
+              "min": 0.1,
+              "max": 10.0,
+              "unit": "s"
+            },
+            {
+              "symbol": "early_send",
+              "label": "Early Send",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "modulation",
+              "label": "Modulation",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            }
+          ]
+        },
+        "room": {
+          "cppFile": "dragonfly_room_reverb.cpp",
+          "params": [
+            {
+              "symbol": "dry_level",
+              "label": "Dry Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "early_level",
+              "label": "Early Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "early_send",
+              "label": "Early Send",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "late_level",
+              "label": "Late Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "size",
+              "label": "Size",
+              "min": 8.0,
+              "max": 32.0,
+              "unit": "m"
+            },
+            {
+              "symbol": "width",
+              "label": "Width",
+              "min": 50.0,
+              "max": 150.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "predelay",
+              "label": "Predelay",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "ms"
+            },
+            {
+              "symbol": "decay",
+              "label": "Decay",
+              "min": 0.1,
+              "max": 10.0,
+              "unit": "s"
+            },
+            {
+              "symbol": "diffuse",
+              "label": "Diffuse",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "spin",
+              "label": "Spin",
+              "min": 0.0,
+              "max": 5.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "wander",
+              "label": "Wander",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "in_high_cut",
+              "label": "High Cut",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "early_damp",
+              "label": "Early Damp",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "late_damp",
+              "label": "Late Damp",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "low_boost",
+              "label": "Low Boost",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "boost_freq",
+              "label": "Boost Freq",
+              "min": 50.0,
+              "max": 1050.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "in_low_cut",
+              "label": "Low Cut",
+              "min": 0.0,
+              "max": 200.0,
+              "unit": "Hz"
+            }
+          ]
+        },
+        "plate": {
+          "cppFile": "dragonfly_plate_reverb.cpp",
+          "params": [
+            {
+              "symbol": "dry_level",
+              "label": "Dry Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "early_level",
+              "label": "Wet Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "algorithm",
+              "label": "Algorithm",
+              "min": 0.0,
+              "max": 2.0,
+              "unit": ""
+            },
+            {
+              "symbol": "width",
+              "label": "Width",
+              "min": 50.0,
+              "max": 150.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "predelay",
+              "label": "Predelay",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "ms"
+            },
+            {
+              "symbol": "decay",
+              "label": "Decay",
+              "min": 0.1,
+              "max": 10.0,
+              "unit": "s"
+            },
+            {
+              "symbol": "low_cut",
+              "label": "Low Cut",
+              "min": 0.0,
+              "max": 200.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "high_cut",
+              "label": "High Cut",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "early_damp",
+              "label": "Dampen",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            }
+          ]
+        },
+        "early-reflections": {
+          "cppFile": "dragonfly_early_reflections.cpp",
+          "params": [
+            {
+              "symbol": "dry_level",
+              "label": "Dry Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "early_level",
+              "label": "Wet Level",
+              "min": 0.0,
+              "max": 100.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "program",
+              "label": "Program",
+              "min": 0.0,
+              "max": 7.0,
+              "unit": ""
+            },
+            {
+              "symbol": "size",
+              "label": "Size",
+              "min": 10.0,
+              "max": 60.0,
+              "unit": "m"
+            },
+            {
+              "symbol": "width",
+              "label": "Width",
+              "min": 50.0,
+              "max": 150.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "low_cut",
+              "label": "Low Cut",
+              "min": 0.0,
+              "max": 200.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "high_cut",
+              "label": "High Cut",
+              "min": 1000.0,
+              "max": 16000.0,
+              "unit": "Hz"
+            }
+          ]
+        }
+      },
+      "derived": ["roomSize", "damping"]
+    },
+    "drive": {
+      "comment": "driveModel is a structural block-level swap (nam_studio_set_drive_model), not a generic param.",
+      "variants": {
+        "diode-clipper": {
+          "cppFile": "diode_clipper.cpp",
+          "params": [
+            {
+              "symbol": "cutoff",
+              "label": "Cutoff",
+              "min": 200.0,
+              "max": 20000.0,
+              "unit": "Hz"
+            },
+            {
+              "symbol": "drive",
+              "label": "Drive",
+              "min": 0.0,
+              "max": 1.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "diode_type",
+              "label": "Diode Type",
+              "min": 0.0,
+              "max": 2.0,
+              "unit": "x"
+            },
+            {
+              "symbol": "num_diodes",
+              "label": "Diode Count",
+              "min": 0.3,
+              "max": 3.0,
+              "unit": "x"
+            }
+          ]
+        },
+        "tube-screamer": {
+          "cppFile": "tube_screamer.cpp",
+          "params": [
+            {
+              "symbol": "gain",
+              "label": "Gain",
+              "min": 0.0,
+              "max": 1.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "diode_type",
+              "label": "Diode Type",
+              "min": 0.0,
+              "max": 2.0,
+              "unit": "x"
+            },
+            {
+              "symbol": "num_diodes",
+              "label": "Diode Count",
+              "min": 0.3,
+              "max": 3.0,
+              "unit": "x"
+            }
+          ]
+        },
+        "zen-drive": {
+          "cppFile": "zen_drive.cpp",
+          "params": [
+            {
+              "symbol": "voice",
+              "label": "Voice",
+              "min": 0.0,
+              "max": 1.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "gain",
+              "label": "Gain",
+              "min": 0.0,
+              "max": 1.0,
+              "unit": "%"
+            }
+          ]
+        },
+        "mxr-distortion": {
+          "cppFile": "mxr_distortion.cpp",
+          "params": [
+            {
+              "symbol": "dist",
+              "label": "Distortion",
+              "min": 0.0,
+              "max": 1.0,
+              "unit": "%"
+            },
+            {
+              "symbol": "level",
+              "label": "Output Level",
+              "min": 0.0,
+              "max": 1.0,
+              "unit": "%"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

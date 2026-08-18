@@ -32,14 +32,10 @@ namespace nam_studio {
 namespace dsp {
 namespace {
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DragonflyEarlyReflections::ParamInfo kParamInfo[paramCount] = {
-    {"Dry Level", "dry_level", 0.0f, 100.0f, "%"},
-    {"Wet Level", "early_level", 0.0f, 100.0f, "%"},
-    {"Program", "program", 0.0f, 7.0f, ""},
-    {"Size", "size", 10.0f, 60.0f, "m"},
-    {"Width", "width", 50.0f, 150.0f, "%"},
-    {"Low Cut", "low_cut", 0.0f, 200.0f, "Hz"},
-    {"High Cut", "high_cut", 1000.0f, 16000.0f, "Hz"},
+#include "generated/dragonfly_early_reflections_params.inc"
 };
 
 }  // namespace

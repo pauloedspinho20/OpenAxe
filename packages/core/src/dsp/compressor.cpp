@@ -17,15 +17,10 @@ constexpr int kCharacterParam = 6;
 constexpr int kMixParam = 7;
 constexpr int kParamCount = 8;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DsparkParamInfo kParamInfo[kParamCount] = {
-    {"Threshold", "threshold", -60.0f, 0.0f, "dB"},
-    {"Ratio", "ratio", 1.0f, 20.0f, ":1"},
-    {"Attack", "attack", 0.1f, 100.0f, "ms"},
-    {"Release", "release", 1.0f, 2000.0f, "ms"},
-    {"Knee", "knee", 0.0f, 20.0f, "dB"},
-    {"Makeup", "makeup_gain", 0.0f, 24.0f, "dB"},
-    {"Character", "character", 0.0f, 3.0f, "x"},
-    {"Mix", "mix", 0.0f, 1.0f, "x"},
+#include "generated/compressor_params.inc"
 };
 
 constexpr float kDefaults[kParamCount] = {

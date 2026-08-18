@@ -13,10 +13,10 @@ constexpr int kFeedbackParam = 1;
 constexpr int kToneParam = 2;
 constexpr int kParamCount = 3;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const PingPongDelay::ParamInfo kParamInfo[kParamCount] = {
-    {"Time", "time", 50.0f, 1000.0f, "ms"},
-    {"Feedback", "feedback", 0.0f, 0.9f, "%"},
-    {"Tone", "tone", 200.0f, 12000.0f, "Hz"},
+#include "generated/ping_pong_delay_params.inc"
 };
 
 constexpr float kMaxDelaySeconds = 1.1f;

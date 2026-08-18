@@ -7,12 +7,9 @@
  * plumbing.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { TREMOLO_PARAMS } from './generatedParams.js'
 
 const TREMOLO_KIND = 6
-
-const RATE_PARAM = 0
-const DEPTH_PARAM = 1
-const SHAPE_PARAM = 2
 
 class TremoloProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -28,9 +25,9 @@ class TremoloProcessor extends NamStudioEffectProcessor {
   }
 
   applyParams(module, block, parameters) {
-    module._nam_studio_set_param(this.graph, block, RATE_PARAM, parameters.rate[0])
-    module._nam_studio_set_param(this.graph, block, DEPTH_PARAM, parameters.depth[0])
-    module._nam_studio_set_param(this.graph, block, SHAPE_PARAM, parameters.shape[0])
+    module._nam_studio_set_param(this.graph, block, TREMOLO_PARAMS.rate, parameters.rate[0])
+    module._nam_studio_set_param(this.graph, block, TREMOLO_PARAMS.depth, parameters.depth[0])
+    module._nam_studio_set_param(this.graph, block, TREMOLO_PARAMS.shape, parameters.shape[0])
   }
 }
 

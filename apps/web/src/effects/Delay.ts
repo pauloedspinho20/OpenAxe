@@ -33,7 +33,7 @@ function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
  *   Analog  — BBD-style: heavier lowpass + soft saturation in feedback path
  *   Tape    — Analog + wow/flutter pitch modulation on the read tap
  *
- * The `delayModel` AudioParam switches between models; Tape adds wow depth
+ * The `model` AudioParam switches between models; Tape adds wow depth
  * and rate controls that are ignored in other modes.
  */
 export class Delay extends BaseEffect {
@@ -60,11 +60,11 @@ export class Delay extends BaseEffect {
 
   setDelayModel(model: string): void {
     const index = DELAY_MODEL_INDEX[model as DelayModel]
-    this.param('delayModel').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
+    this.param('model').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
   }
 
   getDelayModel(): DelayModel {
-    const index = Math.round(this.param('delayModel').value)
+    const index = Math.round(this.param('model').value)
     return DELAY_MODELS[index] ?? DELAY_MODELS[0]
   }
 
@@ -81,11 +81,11 @@ export class Delay extends BaseEffect {
   }
 
   setWowDepth(ms: number): void {
-    this.param('wowDepth').setValueAtTime(ms, this.node.context.currentTime)
+    this.param('wow_depth').setValueAtTime(ms, this.node.context.currentTime)
   }
 
   setWowRate(hz: number): void {
-    this.param('wowRate').setValueAtTime(hz, this.node.context.currentTime)
+    this.param('wow_rate').setValueAtTime(hz, this.node.context.currentTime)
   }
 
   private param(name: string): AudioParam {
@@ -96,22 +96,22 @@ export class Delay extends BaseEffect {
 
   getParams(): EffectParams {
     return {
-      delayModel: this.getDelayModel(),
+      model: this.getDelayModel(),
       time: this.param('time').value,
       feedback: this.param('feedback').value,
       tone: this.param('tone').value,
-      wowDepth: this.param('wowDepth').value,
-      wowRate: this.param('wowRate').value,
+      wow_depth: this.param('wow_depth').value,
+      wow_rate: this.param('wow_rate').value,
     }
   }
 
   setParams(params: EffectParams): void {
-    if (typeof params.delayModel === 'string') this.setDelayModel(params.delayModel)
+    if (typeof params.model === 'string') this.setDelayModel(params.model)
     if (typeof params.time === 'number') this.setTime(params.time)
     if (typeof params.feedback === 'number') this.setFeedback(params.feedback)
     if (typeof params.tone === 'number') this.setTone(params.tone)
-    if (typeof params.wowDepth === 'number') this.setWowDepth(params.wowDepth)
-    if (typeof params.wowRate === 'number') this.setWowRate(params.wowRate)
+    if (typeof params.wow_depth === 'number') this.setWowDepth(params.wow_depth)
+    if (typeof params.wow_rate === 'number') this.setWowRate(params.wow_rate)
   }
 
   dispose(): void {

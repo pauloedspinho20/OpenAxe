@@ -18,14 +18,13 @@ constexpr float kTwoPi = 6.283185307179586f;
 constexpr float kThermalVoltage = 0.02585f;
 constexpr float kCapValue = 47.0e-9f;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema. Diode type is a
+// discrete choice (GZ34/1N34/1N4148) encoded as a float index - same
+// convention DragonflyPlateReverb already uses for its own algorithm-choice
+// parameter.
 const DiodeClipper::ParamInfo kParamInfo[kParamCount] = {
-    {"Cutoff", "cutoff", 200.0f, 20000.0f, "Hz"},
-    {"Drive", "drive", 0.0f, 1.0f, "%"},
-    // Diode type is a discrete choice (GZ34/1N34/1N4148) encoded as a float
-    // index - same convention DragonflyPlateReverb already uses for its own
-    // algorithm-choice parameter.
-    {"Diode Type", "diode_type", 0.0f, 2.0f, "x"},
-    {"Diode Count", "num_diodes", 0.3f, 3.0f, "x"},
+#include "generated/diode_clipper_params.inc"
 };
 
 // Reverse saturation current per diode type - BYOD's own

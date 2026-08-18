@@ -90,11 +90,11 @@ export class Drive extends BaseEffect {
 
   setDiodeType(diodeType: string): void {
     const index = DIODE_TYPES.indexOf(diodeType as DiodeType)
-    this.param('diodeType').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
+    this.param('diode_type').setValueAtTime(index >= 0 ? index : 0, this.node.context.currentTime)
   }
 
   setNumDiodes(numDiodes: number): void {
-    this.param('numDiodes').setValueAtTime(numDiodes, this.node.context.currentTime)
+    this.param('num_diodes').setValueAtTime(numDiodes, this.node.context.currentTime)
   }
 
   // ── Tube Screamer / Zen Drive shared gain ──
@@ -116,7 +116,7 @@ export class Drive extends BaseEffect {
   }
 
   setOutputLevel(outputLevel: number): void {
-    this.param('outputLevel').setValueAtTime(outputLevel, this.node.context.currentTime)
+    this.param('level').setValueAtTime(outputLevel, this.node.context.currentTime)
   }
 
   private param(name: string): AudioParam {
@@ -127,7 +127,7 @@ export class Drive extends BaseEffect {
 
   getParams(): EffectParams {
     const model = this.getDriveModel()
-    const diodeTypeIndex = Math.round(this.param('diodeType').value)
+    const diodeTypeIndex = Math.round(this.param('diode_type').value)
     const base: EffectParams = {
       driveModel: model,
     }
@@ -137,15 +137,15 @@ export class Drive extends BaseEffect {
           ...base,
           cutoff: this.param('cutoff').value,
           drive: this.param('drive').value,
-          diodeType: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
-          numDiodes: this.param('numDiodes').value,
+          diode_type: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
+          num_diodes: this.param('num_diodes').value,
         }
       case 'tube-screamer':
         return {
           ...base,
           gain: this.param('gain').value,
-          diodeType: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
-          numDiodes: this.param('numDiodes').value,
+          diode_type: DIODE_TYPES[diodeTypeIndex] ?? DIODE_TYPES[0],
+          num_diodes: this.param('num_diodes').value,
         }
       case 'zen-drive':
         return {
@@ -157,7 +157,7 @@ export class Drive extends BaseEffect {
         return {
           ...base,
           dist: this.param('dist').value,
-          outputLevel: this.param('outputLevel').value,
+          level: this.param('level').value,
         }
     }
   }
@@ -169,13 +169,13 @@ export class Drive extends BaseEffect {
       case 'diode-clipper':
         if (typeof params.cutoff === 'number') this.setCutoff(params.cutoff)
         if (typeof params.drive === 'number') this.setDrive(params.drive)
-        if (typeof params.diodeType === 'string') this.setDiodeType(params.diodeType)
-        if (typeof params.numDiodes === 'number') this.setNumDiodes(params.numDiodes)
+        if (typeof params.diode_type === 'string') this.setDiodeType(params.diode_type)
+        if (typeof params.num_diodes === 'number') this.setNumDiodes(params.num_diodes)
         break
       case 'tube-screamer':
         if (typeof params.gain === 'number') this.setGain(params.gain)
-        if (typeof params.diodeType === 'string') this.setDiodeType(params.diodeType)
-        if (typeof params.numDiodes === 'number') this.setNumDiodes(params.numDiodes)
+        if (typeof params.diode_type === 'string') this.setDiodeType(params.diode_type)
+        if (typeof params.num_diodes === 'number') this.setNumDiodes(params.num_diodes)
         break
       case 'zen-drive':
         if (typeof params.voice === 'number') this.setVoice(params.voice)
@@ -183,7 +183,7 @@ export class Drive extends BaseEffect {
         break
       case 'mxr-distortion':
         if (typeof params.dist === 'number') this.setDist(params.dist)
-        if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
+        if (typeof params.level === 'number') this.setOutputLevel(params.level)
         break
     }
   }

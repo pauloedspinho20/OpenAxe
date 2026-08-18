@@ -17,13 +17,10 @@ constexpr int kWowDepthParam = 4;
 constexpr int kWowRateParam = 5;
 constexpr int kParamCount = 6;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const Delay::ParamInfo kParamInfo[kParamCount] = {
-    {"Time", "time", 10.0f, 1000.0f, "ms"},
-    {"Feedback", "feedback", 0.0f, 0.9f, "%"},
-    {"Tone", "tone", 200.0f, 12000.0f, "Hz"},
-    {"Model", "model", 0.0f, 2.0f, ""},
-    {"Wow Depth", "wow_depth", 0.0f, 5.0f, "ms"},
-    {"Wow Rate", "wow_rate", 0.1f, 3.0f, "Hz"},
+#include "generated/delay_params.inc"
 };
 
 constexpr float kMaxDelaySeconds = 1.1f;  // 1.1s max buffer (covers 1000ms + wow)

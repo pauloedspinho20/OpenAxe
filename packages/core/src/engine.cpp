@@ -453,10 +453,10 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
         if constexpr (std::is_same_v<T, dsp::NamAmp>) {
           // Approximate/normalized ranges - NamAmp's own calibration units
           // are dBu/x, not a fixed hardware surface with published bounds.
+          // Generated from packages/core/param_schema.json (issue #51) - run
+          // scripts/gen-param-schema.mjs after editing the schema.
           static constexpr ParamDescriptor kAmpParams[3] = {
-              {"Input Level", "input_level", -100.0f, 100.0f, "dBu"},
-              {"Output Level", "output_level", -100.0f, 100.0f, "dBu"},
-              {"Slim Size", "slim_size", 0.0f, 1.0f, "x"},
+#include "dsp/generated/engine_amp_params.inc"
           };
           return kAmpParams[index];
         } else if constexpr (std::is_same_v<T, std::monostate>) {

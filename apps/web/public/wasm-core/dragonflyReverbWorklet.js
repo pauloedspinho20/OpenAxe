@@ -17,6 +17,7 @@
  * WASM instantiation and buffer marshaling are shared via namStudioEffectBase.js.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { REVERB_PARAMS } from './generatedParams.js'
 
 const REVERB_KIND = 9
 
@@ -26,41 +27,46 @@ const ALGORITHM_PLATE = 2
 const ALGORITHM_EARLY_REFLECTIONS = 3
 
 // Per-algorithm param index maps for the 7 user-facing knobs + dry level.
+// This is a genuine semantic remap, not a 1:1 symbol pass-through - the same
+// web-facing concept lives at a different core symbol per algorithm (e.g.
+// "predelay" is Hall's `delay` param but Room/Plate's own `predelay`; the
+// generated REVERB_PARAMS.<algorithm> map is what pins each one to the right
+// index, so a core param-table reorder can't silently desync this worklet.
 // Ranges differ slightly across algorithms (e.g. spin is [0,10]Hz in Hall
 // but [0,5]Hz in Room), but the AudioParam ranges are generous enough to
 // cover all cases.
 const ALGO_PARAMS = {
   [ALGORITHM_HALL]: {
-    dryLevel: 0,
-    width: 4,
-    predelay: 5,
-    highCut: 10,
-    spin: 13,
-    wander: 14,
-    decay: 15,
-    earlySend: 16,
+    dryLevel: REVERB_PARAMS.hall.dry_level,
+    width: REVERB_PARAMS.hall.width,
+    predelay: REVERB_PARAMS.hall.delay,
+    highCut: REVERB_PARAMS.hall.high_cut,
+    spin: REVERB_PARAMS.hall.spin,
+    wander: REVERB_PARAMS.hall.wander,
+    decay: REVERB_PARAMS.hall.decay,
+    earlySend: REVERB_PARAMS.hall.early_send,
   },
   [ALGORITHM_ROOM]: {
-    dryLevel: 0,
-    width: 5,
-    predelay: 6,
-    highCut: 11,
-    spin: 9,
-    wander: 10,
-    decay: 7,
-    earlySend: 2,
+    dryLevel: REVERB_PARAMS.room.dry_level,
+    width: REVERB_PARAMS.room.width,
+    predelay: REVERB_PARAMS.room.predelay,
+    highCut: REVERB_PARAMS.room.in_high_cut,
+    spin: REVERB_PARAMS.room.spin,
+    wander: REVERB_PARAMS.room.wander,
+    decay: REVERB_PARAMS.room.decay,
+    earlySend: REVERB_PARAMS.room.early_send,
   },
   [ALGORITHM_PLATE]: {
-    dryLevel: 0,
-    width: 3,
-    predelay: 4,
-    highCut: 7,
-    decay: 5,
+    dryLevel: REVERB_PARAMS.plate.dry_level,
+    width: REVERB_PARAMS.plate.width,
+    predelay: REVERB_PARAMS.plate.predelay,
+    highCut: REVERB_PARAMS.plate.high_cut,
+    decay: REVERB_PARAMS.plate.decay,
   },
   [ALGORITHM_EARLY_REFLECTIONS]: {
-    dryLevel: 0,
-    width: 4,
-    highCut: 6,
+    dryLevel: REVERB_PARAMS['early-reflections'].dry_level,
+    width: REVERB_PARAMS['early-reflections'].width,
+    highCut: REVERB_PARAMS['early-reflections'].high_cut,
   },
 }
 

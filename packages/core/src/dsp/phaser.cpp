@@ -15,11 +15,10 @@ constexpr int kFeedbackParam = 2;
 constexpr int kStagesParam = 3;
 constexpr int kParamCount = 4;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const Phaser::ParamInfo kParamInfo[kParamCount] = {
-    {"Rate", "rate", 0.1f, 5.0f, "Hz"},
-    {"Depth", "depth", 0.1f, 1.0f, "%"},
-    {"Feedback", "feedback", 0.0f, 0.9f, "%"},
-    {"Stages", "stages", 2.0f, 8.0f, ""},
+#include "generated/phaser_params.inc"
 };
 
 constexpr int kMaxStages = 8;

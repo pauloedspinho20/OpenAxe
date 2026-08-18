@@ -15,11 +15,10 @@ constexpr int kFeedbackParam = 2;
 constexpr int kDelayParam = 3;
 constexpr int kParamCount = 4;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const Flanger::ParamInfo kParamInfo[kParamCount] = {
-    {"Rate", "rate", 0.1f, 10.0f, "Hz"},
-    {"Depth", "depth", 0.1f, 5.0f, "ms"},
-    {"Feedback", "feedback", 0.0f, 0.9f, "%"},
-    {"Delay", "delay", 0.1f, 3.0f, "ms"},
+#include "generated/flanger_params.inc"
 };
 
 struct Channel {

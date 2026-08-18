@@ -4,13 +4,9 @@
  * for shared WASM/buffer plumbing.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { CHORUS_PARAMS } from './generatedParams.js'
 
 const CHORUS_KIND = 3
-
-const RATE_PARAM = 0
-const DEPTH_PARAM = 1
-const DELAY_PARAM = 2
-const FEEDBACK_PARAM = 3
 
 class ChorusProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -27,10 +23,10 @@ class ChorusProcessor extends NamStudioEffectProcessor {
   }
 
   applyParams(module, block, parameters) {
-    module._nam_studio_set_param(this.graph, block, RATE_PARAM, parameters.rate[0])
-    module._nam_studio_set_param(this.graph, block, DEPTH_PARAM, parameters.depth[0])
-    module._nam_studio_set_param(this.graph, block, DELAY_PARAM, parameters.delay[0])
-    module._nam_studio_set_param(this.graph, block, FEEDBACK_PARAM, parameters.feedback[0])
+    module._nam_studio_set_param(this.graph, block, CHORUS_PARAMS.rate, parameters.rate[0])
+    module._nam_studio_set_param(this.graph, block, CHORUS_PARAMS.depth, parameters.depth[0])
+    module._nam_studio_set_param(this.graph, block, CHORUS_PARAMS.delay, parameters.delay[0])
+    module._nam_studio_set_param(this.graph, block, CHORUS_PARAMS.feedback, parameters.feedback[0])
   }
 }
 

@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Param schema drift check
+        run: node scripts/gen-param-schema.mjs --check
+
       - name: Lint
         run: pnpm lint
 

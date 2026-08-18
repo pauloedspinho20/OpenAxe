@@ -12,10 +12,10 @@ constexpr int kDepthParam = 1;
 constexpr int kShapeParam = 2;
 constexpr int kParamCount = 3;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DsparkParamInfo kParamInfo[kParamCount] = {
-    {"Rate", "rate", 0.1f, 20.0f, "Hz"},
-    {"Depth", "depth", 0.0f, 1.0f, "%"},
-    {"Shape", "shape", 0.0f, 2.0f, "x"},
+#include "generated/tremolo_params.inc"
 };
 
 constexpr float kDefaults[kParamCount] = {
