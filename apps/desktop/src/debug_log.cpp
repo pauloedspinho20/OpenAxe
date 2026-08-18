@@ -46,6 +46,12 @@ void WriteBacktraceTo(FILE* f) {
 #endif
 }
 
+// Only ever installed/called via the #ifndef _WIN32 block in
+// InstallDebugLogging below, but the function body itself must still be
+// guarded out on Windows too - SIGSEGV/SIGBUS/std::signal/std::raise aren't
+// POSIX-only symbols MSVC has, so this fails to compile there otherwise even
+// though nothing on that platform ever calls it.
+#ifndef _WIN32
 void CrashHandler(int sig) {
   char msg[128];
   std::snprintf(msg, sizeof(msg), "===== crash: signal %d (%s) =====", sig,
@@ -59,6 +65,7 @@ void CrashHandler(int sig) {
   std::signal(sig, SIG_DFL);  // restore so the crash report is also captured
   std::raise(sig);
 }
+#endif
 
 }  // namespace
 
