@@ -58,6 +58,17 @@ struct RtCallbackState {
   std::atomic<unsigned int> callbacks{0};
   std::atomic<unsigned int> frames_processed{0};
 
+  // Set by AudioIO's RtAudio error callback (a different thread - see
+  // AudioIO::HandleStreamError) when the stream hits a runtime error after
+  // opening, most commonly RTAUDIO_DEVICE_DISCONNECT: a second process (e.g.
+  // a browser tab also using the same physical mic/speakers) forcing the OS
+  // to reconfigure a device this stream is mid-callback on. The callback
+  // checks this exactly like `suspend` - writes silence and stops calling
+  // nam_studio_process - so it never keeps reading/writing buffers against
+  // input_channels/output_channels that may no longer match what the backend
+  // is actually handing it. Cleared only by the next successful Open().
+  std::atomic<bool> stream_error{false};
+
   // Actual channel counts of the open stream, set by AudioIO::Open before the
   // stream starts. The callback reads exactly these many channel pointers (a
   // mono input, e.g. a built-in mic, is 1 - reading a second pointer would be
@@ -152,6 +163,14 @@ class AudioIO {
   unsigned int BufferFrames() const;
   std::string LastError() const;
 
+  // True (and clears the flag) if the stream hit a runtime error since the
+  // last call - see RtCallbackState::stream_error. The caller (the bridge,
+  // polled from the JS layer) is expected to Stop()/Close() the now-silent
+  // stream and surface `message`; it must not call Stop/Close from inside
+  // the RtAudio error callback itself (may run on a non-owning thread mid
+  // teardown - see HandleStreamError).
+  bool TakeStreamError(std::string* message);
+
   // Diagnostics (also surfaced to the UI via the M2 bridge): number of
   // callbacks and sample frames processed since the stream opened.
   unsigned int CallbackCount() const { return state_.callbacks.load(); }
@@ -166,6 +185,13 @@ class AudioIO {
   long StreamLatencyFrames() const;
 
  private:
+  // Registered once in the constructor (RtAudio invokes it from whichever
+  // internal thread noticed the problem - not necessarily the audio thread,
+  // and not synchronized with io_mutex_). Never opens/closes/starts/stops
+  // the stream itself - only records the error for TakeStreamError to pick
+  // up later from a normal caller thread.
+  void HandleStreamError(RtAudioErrorType type, const std::string& text);
+
   // RtAudio 6.x marks none of its query methods const; mutable lets
   // ListDevices() stay const even though it walks the device list.
   mutable RtAudio audio_;
@@ -179,6 +205,13 @@ class AudioIO {
   double sample_rate_ = 48000.0;
   unsigned int buffer_frames_ = 128;
   std::string last_error_;
+
+  // Separate from io_mutex_ - HandleStreamError must never risk blocking on
+  // a lock an Open()/Close() call already holds while tearing the stream
+  // down, since RtAudio may invoke it from within that same teardown.
+  mutable std::mutex error_mutex_;
+  bool has_pending_stream_error_ = false;
+  std::string pending_stream_error_;
 };
 
 }  // namespace nam_desktop

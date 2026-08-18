@@ -88,9 +88,10 @@ describe('ioStore', () => {
     expect(useIOStore.getState().outputDevices).toEqual(outputs)
   })
 
-  it('partialize excludes device selections but keeps gain and latencyHint', () => {
+  it('partialize keeps device selections, gain, and latencyHint, but not the ephemeral lists', () => {
     // Set both persisted and non-persisted fields.
     useIOStore.getState().setInputDevice('some-mic')
+    useIOStore.getState().setOutputDevice('some-speaker')
     useIOStore.getState().setInputGain(0.75)
     useIOStore.getState().setLatencyHint('balanced')
     useIOStore
@@ -103,13 +104,15 @@ describe('ioStore', () => {
     const persisted = localStorage.getItem('nam-web-studio-io')
     expect(persisted).not.toBeNull()
     const parsed = JSON.parse(persisted!)
-    // Persisted fields.
+    // Persisted fields - device IDs survive reload so a chosen device (or the
+    // native duplex pick) is remembered; the enumerated lists themselves are
+    // re-populated fresh every launch since hardware ids can change.
+    expect(parsed.state.inputDeviceId).toBe('some-mic')
+    expect(parsed.state.outputDeviceId).toBe('some-speaker')
     expect(parsed.state.inputGain).toBe(0.75)
     expect(parsed.state.latencyHint).toBe('balanced')
     expect(parsed.state.inputChannel).toBe('l')
     // NOT persisted.
-    expect(parsed.state.inputDeviceId).toBeUndefined()
-    expect(parsed.state.outputDeviceId).toBeUndefined()
     expect(parsed.state.inputDevices).toBeUndefined()
     expect(parsed.state.outputDevices).toBeUndefined()
     expect(parsed.state.micError).toBeUndefined()

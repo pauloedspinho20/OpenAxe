@@ -1,6 +1,7 @@
 import { HardwareButton, Wordmark } from '@nam/ui'
-import type { EngineStatus } from '@/hooks/useAudioEngine'
-import type { LatencyHint } from '@/state/ioStore'
+import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
+import { getDuplexDevices, useIOStore, type LatencyHint } from '@/state/ioStore'
+import { getNamStudio } from '@/native/namStudio'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import styles from './PowerGate.module.css'
 
@@ -9,7 +10,11 @@ export interface PowerGateProps {
   error: string | null
   latencyHint: LatencyHint
   onLatencyChange: (hint: LatencyHint) => void
-  onPowerOn: () => void
+  /** Output device selection isn't supported by every browser (no setSinkId) -
+   * and is never applicable in the desktop shell, where output routing is
+   * owned by the native RtAudio device picker below instead. */
+  outputSelectionSupported: boolean
+  onPowerOn: (opts?: AudioEnginePowerOnOptions) => void
 }
 
 const LATENCY_OPTIONS: Array<{ value: LatencyHint; label: string }> = [
@@ -33,13 +38,26 @@ export function PowerGate({
   error,
   latencyHint,
   onLatencyChange,
+  outputSelectionSupported,
   onPowerOn,
 }: PowerGateProps) {
   const auth = useTone3000Auth()
+  const io = useIOStore()
+  const isNative = getNamStudio() !== null
 
   if (status === 'ready') return null
 
   const starting = status === 'starting'
+  // Native (desktop): RtAudio rejects a mismatched input/output pair (issue
+  // #53 - the built-in-mic-plus-speakers feedback loop this exists to
+  // prevent), so only devices capable of both are offered, one choice
+  // driving both `inputDeviceId`/`outputDeviceId`.
+  const duplexDevices = getDuplexDevices(io)
+
+  const selectNativeDevice = (id: string) => {
+    io.setInputDevice(id)
+    io.setOutputDevice(id)
+  }
 
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
@@ -77,6 +95,63 @@ export function PowerGate({
           </p>
         )}
 
+        {isNative ? (
+          <div className={styles.deviceRow}>
+            <select
+              className={styles.latencySelect}
+              value={io.inputDeviceId}
+              onChange={(e) => selectNativeDevice(e.target.value)}
+              disabled={starting}
+              aria-label="Audio device"
+            >
+              <option value="">Default device</option>
+              {duplexDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            {duplexDevices.length === 0 && (
+              <p className={styles.deviceHint}>
+                No audio interface found - plug one in, or continue without sound below.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className={styles.deviceRow}>
+            <select
+              className={styles.latencySelect}
+              value={io.inputDeviceId}
+              onChange={(e) => io.setInputDevice(e.target.value)}
+              disabled={starting}
+              aria-label="Input device"
+            >
+              <option value="">Default input</option>
+              {io.inputDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            {outputSelectionSupported && (
+              <select
+                className={styles.latencySelect}
+                value={io.outputDeviceId}
+                onChange={(e) => io.setOutputDevice(e.target.value)}
+                disabled={starting}
+                aria-label="Output device"
+              >
+                <option value="">Default output</option>
+                {io.outputDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
         <select
           className={styles.latencySelect}
           value={latencyHint}
@@ -93,9 +168,21 @@ export function PowerGate({
 
         <HardwareButton
           label={starting ? 'Starting…' : 'POWER ON'}
-          onClick={onPowerOn}
+          onClick={() => onPowerOn()}
           disabled={starting}
+          fullWidth
         />
+        <HardwareButton
+          label="Continue without sound"
+          onClick={() => onPowerOn({ noSound: true })}
+          disabled={starting}
+          fullWidth
+        />
+        <p className={styles.tone3000Hint}>
+          No sound mode skips the audio device entirely - the grid, presets, and editing all still
+          work. The app switches back to normal audio automatically the moment a usable device is
+          available.
+        </p>
       </div>
     </div>
   )

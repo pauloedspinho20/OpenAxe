@@ -762,4 +762,10 @@ std::string StudioBridge::HandleGetTap(const std::string& req) {
   }
 }
 
+std::string StudioBridge::HandleTakeStreamError(const std::string&) {
+  std::string message;
+  const bool errored = audio_.TakeStreamError(&message);
+  return (json{{"error", errored ? json(message) : json()}}).dump();
+}
+
 }  // namespace nam_desktop

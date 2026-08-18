@@ -155,6 +155,10 @@ export interface NamStudioBridge {
   meters(): Promise<Array<{ id: string; value: number }>>
   cpuLoad(): Promise<number>
   getTap(args: { side: 'in' | 'out'; frames?: number }): Promise<NamStudioTap>
+  /** Reports (and clears) a pending RtAudio stream-level error - e.g. a
+   * second process forcing a mid-stream reconfiguration on a shared device.
+   * `error` is null when nothing is pending. */
+  takeStreamError(): Promise<{ error: string | null }>
 }
 
 type Args = Record<string, unknown> | undefined
@@ -271,6 +275,9 @@ class NativeBridge implements NamStudioBridge {
   }
   getTap(args: { side: 'in' | 'out'; frames?: number }) {
     return this.call<NamStudioTap>('getTap', args)
+  }
+  takeStreamError() {
+    return this.call<{ error: string | null }>('takeStreamError')
   }
 }
 

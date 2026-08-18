@@ -159,6 +159,65 @@ void TestTapConcurrentReadWrite() {
   nam_studio_graph_destroy(graph);
 }
 
+// A second process touching the same shared audio device (e.g. a browser tab
+// also open on the built-in mic/speakers) can force RtAudio's CoreAudio
+// backend to reconfigure the device mid-stream, which is exactly what the
+// mismatched-device rejection above already knows can crash that backend.
+// Once AudioIO's RtAudio error callback observes that (see
+// AudioIO::HandleStreamError), RtProcessCallback must stop touching
+// input_channels/output_channels against buffers whose real shape may have
+// just changed - checked here without needing real hardware, since the
+// callback takes RtCallbackState directly.
+void TestCallbackHoldsSilenceOnStreamError() {
+  constexpr double kRate = 48000.0;
+  constexpr int kFrames = 32;
+  constexpr int kBlock = 512;
+
+  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  nam_desktop::RtCallbackState state;
+  state.graph = graph;
+  state.graph_ready.store(true, std::memory_order_release);
+  state.stream_error.store(true, std::memory_order_release);
+
+  // Sentinel values the callback must never touch - not zeroed (that would
+  // still mean it read/wrote the buffer, just not through nam_studio_process)
+  // and not passed through either.
+  float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+  for (int i = 0; i < kFrames; ++i) {
+    in0[i] = 1.0f;
+    in1[i] = 1.0f;
+    out0[i] = -1.0f;
+    out1[i] = -1.0f;
+  }
+  float* in[2] = {in0, in1};
+  float* out[2] = {out0, out1};
+
+  const unsigned int callbacks_before = state.callbacks.load();
+  nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR,
+                                 &state);
+
+  // Still counted as a callback (diagnostics keep working)...
+  CHECK(state.callbacks.load() == callbacks_before + 1);
+  // ...but the output buffer is untouched - proof nam_studio_process was
+  // never called with it, and nothing else wrote to it either.
+  for (int i = 0; i < kFrames; ++i) {
+    CHECK(out0[i] == -1.0f);
+    CHECK(out1[i] == -1.0f);
+  }
+
+  nam_studio_graph_destroy(graph);
+}
+
+// A fresh AudioIO (or one that just reopened successfully) must report no
+// pending stream error - otherwise the JS layer's poll would immediately
+// treat a perfectly healthy stream as broken.
+void TestTakeStreamErrorDefaultsToNoError() {
+  nam_desktop::AudioIO io;
+  std::string message;
+  CHECK(!io.TakeStreamError(&message));
+  CHECK(message.empty());
+}
+
 void TestDeviceEnumeration() {
   nam_desktop::AudioIO io;
   std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
@@ -246,6 +305,8 @@ void TestOpenRejectsMismatchedDevices() {
 int main() {
   TestCallbackPassthrough();
   TestCallbackSilenceWhenNoGraph();
+  TestCallbackHoldsSilenceOnStreamError();
+  TestTakeStreamErrorDefaultsToNoError();
   TestTapConcurrentReadWrite();
   TestDeviceEnumeration();
   TestOpenStartStop();

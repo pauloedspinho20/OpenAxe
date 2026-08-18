@@ -93,6 +93,13 @@ class StudioBridge {
   std::string HandleMeters(const std::string& req);
   std::string HandleCpuLoad(const std::string& req);
   std::string HandleGetTap(const std::string& req);
+  // Polled from the JS layer's regular meter/tap poll: reports (and clears) a
+  // pending RtAudio stream-level error, e.g. a second process touching the
+  // same shared device forcing a mid-stream reconfiguration. The caller is
+  // expected to Stop()/Close() and surface the message - see
+  // AudioIO::TakeStreamError's own doc comment for why this can't be done
+  // from inside the RtAudio error callback itself.
+  std::string HandleTakeStreamError(const std::string& req);
   std::string HandleSetBypass(const std::string& req);
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);

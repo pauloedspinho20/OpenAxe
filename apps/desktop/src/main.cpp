@@ -306,6 +306,7 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "namStudio.meters", &nam_desktop::StudioBridge::HandleMeters);
     Bind(w, bridge, "namStudio.cpuLoad", &nam_desktop::StudioBridge::HandleCpuLoad);
     Bind(w, bridge, "namStudio.getTap", &nam_desktop::StudioBridge::HandleGetTap);
+    Bind(w, bridge, "namStudio.takeStreamError", &nam_desktop::StudioBridge::HandleTakeStreamError);
     Bind(w, bridge, "namStudio.setBypass", &nam_desktop::StudioBridge::HandleSetBypass);
     Bind(w, bridge, "namStudio.setMasterLevel", &nam_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "namStudio.setMasterMuted", &nam_desktop::StudioBridge::HandleSetMasterMuted);

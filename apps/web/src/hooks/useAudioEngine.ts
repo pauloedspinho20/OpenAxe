@@ -10,6 +10,13 @@ import { useNativeAudioEngine } from './useNativeAudioEngine'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
 
+export interface AudioEnginePowerOnOptions {
+  /** Skip the initial mic connection attempt (no permission prompt). The
+   * device-list watcher below retries automatically once a real input
+   * device appears - no user confirmation needed. */
+  noSound?: boolean
+}
+
 export interface AudioEngineState {
   status: EngineStatus
   error: string | null
@@ -19,10 +26,14 @@ export interface AudioEngineState {
   /** Taps the raw input (post-trim, pre-graph) for the tuner - never touches the signal path itself. */
   tunerAnalyser: AnalyserNode | null
   micGranted: boolean
+  /** True once the user chose "Continue without sound" - cleared the moment
+   * a mic connects successfully, whether that's this initial no-sound skip
+   * recovering on its own or a later manual device change. */
+  noSound: boolean
 }
 
 export interface AudioEngineActions {
-  powerOn: () => Promise<void>
+  powerOn: (opts?: AudioEnginePowerOnOptions) => Promise<void>
   powerOff: () => Promise<void>
 }
 
@@ -34,6 +45,7 @@ const IDLE_STATE: AudioEngineState = {
   analyser: null,
   tunerAnalyser: null,
   micGranted: false,
+  noSound: false,
 }
 
 /**
@@ -176,7 +188,11 @@ export function useWebAudioEngine() {
       if (tunerAnalyserRef.current) trim.connect(tunerAnalyserRef.current)
 
       const micGranted = true
-      setState((s) => (s.context === ctx ? { ...s, micGranted } : s))
+      // A successful connection always means we're no longer in a deliberate
+      // no-sound state, whether this was the explicit initial attempt, a
+      // manual device change, or the auto-recovery watcher below finding a
+      // device on its own.
+      setState((s) => (s.context === ctx ? { ...s, micGranted, noSound: false } : s))
     } catch (micError: unknown) {
       const msg = micError instanceof Error ? micError.message : String(micError)
       useIOStore.getState().setMicError(msg)
@@ -188,62 +204,100 @@ export function useWebAudioEngine() {
   }, [])
 
   // Reconnect mic when the input device or channel routing changes live.
+  // Skipped once right after a no-sound power-on (see powerOn below) so
+  // choosing "Continue without sound" doesn't immediately trigger the very
+  // permission prompt it was meant to skip; any later device/channel change -
+  // manual or auto-detected - clears the skip and reconnects normally.
+  const skipNextAutoConnectRef = useRef(false)
   useEffect(() => {
     if (state.status !== 'ready' || connectingRef.current) return
+    if (skipNextAutoConnectRef.current) {
+      skipNextAutoConnectRef.current = false
+      return
+    }
     void connectMic()
   }, [inputDeviceId, inputChannel, state.status, connectMic])
 
+  // No-sound recovery: while deliberately running without a mic, re-attempt
+  // connectMic() whenever the enumerated input device list changes (a device
+  // was plugged in). Switches back to normal mode automatically on success -
+  // no user confirmation - and silently stays in no-sound mode if permission
+  // is denied, without spamming the browser's permission prompt on every
+  // unrelated devicechange.
+  const inputDevices = useIOStore((s) => s.inputDevices)
+  const inputDevicesSignature = inputDevices.map((d) => d.deviceId).join(',')
+  const lastRecoveryAttemptRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (state.status !== 'ready' || !state.noSound) {
+      lastRecoveryAttemptRef.current = null
+      return
+    }
+    if (inputDevicesSignature === '' || lastRecoveryAttemptRef.current === inputDevicesSignature)
+      return
+    lastRecoveryAttemptRef.current = inputDevicesSignature
+    void connectMic()
+  }, [inputDevicesSignature, state.status, state.noSound, connectMic])
+
   // ── Power on / off ──────────────────────────────────────────────────────
 
-  const powerOn = useCallback(async () => {
-    if (startingRef.current || state.status === 'ready') return
-    startingRef.current = true
-    setState((s) => ({ ...s, status: 'starting', error: null }))
+  const powerOn = useCallback(
+    async (opts?: AudioEnginePowerOnOptions) => {
+      if (startingRef.current || state.status === 'ready') return
+      startingRef.current = true
+      setState((s) => ({ ...s, status: 'starting', error: null }))
 
-    try {
-      const io = useIOStore.getState()
-      const context = new AudioContext({ latencyHint: io.latencyHint })
-      const engine = await NamEngine.attach(context)
-      const rig = await GraphRig.create(context, engine)
-      contextRef.current = context
-      rigRef.current = rig
+      try {
+        const io = useIOStore.getState()
+        const context = new AudioContext({ latencyHint: io.latencyHint })
+        const engine = await NamEngine.attach(context)
+        const rig = await GraphRig.create(context, engine)
+        contextRef.current = context
+        rigRef.current = rig
 
-      unbindRef.current = bindGraphRig(useGraphStore, rig)
+        unbindRef.current = bindGraphRig(useGraphStore, rig)
 
-      const analyser = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
-      rig.outputNode.connect(analyser)
-      analyser.connect(context.destination)
+        const analyser = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
+        rig.outputNode.connect(analyser)
+        analyser.connect(context.destination)
 
-      // Large fftSize: the tuner's autocorrelation needs a wide enough
-      // time-domain window to resolve low frequencies (a 5-string bass's
-      // low B is ~31Hz, needing >1500 samples per cycle at 48kHz).
-      const tunerAnalyser = new AnalyserNode(context, { fftSize: 4096, smoothingTimeConstant: 0 })
-      tunerAnalyserRef.current = tunerAnalyser
+        // Large fftSize: the tuner's autocorrelation needs a wide enough
+        // time-domain window to resolve low frequencies (a 5-string bass's
+        // low B is ~31Hz, needing >1500 samples per cycle at 48kHz).
+        const tunerAnalyser = new AnalyserNode(context, { fftSize: 4096, smoothingTimeConstant: 0 })
+        tunerAnalyserRef.current = tunerAnalyser
 
-      setState({
-        status: 'ready',
-        error: null,
-        rig,
-        context,
-        analyser,
-        tunerAnalyser,
-        micGranted: false,
-      })
+        const noSound = opts?.noSound ?? false
+        setState({
+          status: 'ready',
+          error: null,
+          rig,
+          context,
+          analyser,
+          tunerAnalyser,
+          micGranted: false,
+          noSound,
+        })
 
-      // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
-      void connectMic()
-    } catch (error) {
-      const message = describePowerOnError(error)
-      toast.error('Audio engine failed to start', { description: message })
-      setState({
-        ...IDLE_STATE,
-        status: 'error',
-        error: message,
-      })
-    } finally {
-      startingRef.current = false
-    }
-  }, [state.status, connectMic])
+        if (noSound) {
+          skipNextAutoConnectRef.current = true
+        } else {
+          // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
+          void connectMic()
+        }
+      } catch (error) {
+        const message = describePowerOnError(error)
+        toast.error('Audio engine failed to start', { description: message })
+        setState({
+          ...IDLE_STATE,
+          status: 'error',
+          error: message,
+        })
+      } finally {
+        startingRef.current = false
+      }
+    },
+    [state.status, connectMic],
+  )
 
   const powerOff = useCallback(async () => {
     unbindRef.current?.()

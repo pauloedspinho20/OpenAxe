@@ -9,6 +9,8 @@
 #include <thread>
 #include <utility>
 
+#include "debug_log.h"
+
 namespace nam_desktop {
 
 namespace {
@@ -98,6 +100,18 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   state->callbacks.fetch_add(1, std::memory_order_relaxed);
   state->frames_processed.fetch_add(n_frames, std::memory_order_relaxed);
 
+  // The stream errored since it opened (see AudioIO::HandleStreamError,
+  // typically RTAUDIO_DEVICE_DISCONNECT from a second process touching the
+  // same shared hardware mid-stream). Checked before touching
+  // input_buffer/output_buffer at all - once the backend has reported a
+  // stream-level error there is no guarantee left that those buffers still
+  // match input_channels/output_channels (or are even valid), so this
+  // returns without reading or writing anything, rather than risk an
+  // out-of-bounds access on data whose shape may have changed underneath it.
+  // The app-level Stop()/Close() (driven by TakeStreamError, polled from the
+  // JS layer) tears the stream down properly shortly after.
+  if (state->stream_error.load(std::memory_order_acquire)) return 0;
+
   // RtAudio was opened with RTAUDIO_NONINTERLEAVED, so input_buffer/output_buffer
   // are arrays of `input_channels`/`output_channels` pointers. Read exactly that
   // many - a mono input (built-in mic) is a 1-element array, so a second read
@@ -149,10 +163,51 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   return 0;
 }
 
-AudioIO::AudioIO() = default;
+AudioIO::AudioIO() {
+  // Registered once for the object's lifetime - RtAudio invokes this from
+  // whichever internal thread noticed the problem, which is not necessarily
+  // the audio callback thread and is not synchronized with io_mutex_. See
+  // HandleStreamError's own doc comment for why it only records the error
+  // rather than acting on it directly.
+  audio_.setErrorCallback(
+      [this](RtAudioErrorType type, const std::string& text) { HandleStreamError(type, text); });
+}
 
 AudioIO::~AudioIO() {
   if (audio_.isStreamOpen()) audio_.closeStream();
+}
+
+void AudioIO::HandleStreamError(RtAudioErrorType type, const std::string& text) {
+  // RTAUDIO_WARNING covers routine, non-fatal notices (e.g. stopStream()
+  // called on an already-stopped stream) - only genuine stream-breaking
+  // errors need to silence the callback and hand control back to the app.
+  // RTAUDIO_DEVICE_DISCONNECT is the one a second process touching the same
+  // shared hardware mid-stream actually triggers (see Open()'s mismatched-
+  // device comment above for the related, already-known crash class this
+  // guards against).
+  if (type == RTAUDIO_WARNING) return;
+
+  WriteLog("audio: stream error (type " + std::to_string(static_cast<int>(type)) +
+            "): " + text);
+
+  // Do this first and unconditionally - even if a racing Close() flips the
+  // stream shut right after, an audio callback that's already in flight (or
+  // one more that sneaks in before the backend fully tears down) must not
+  // keep trusting input_channels/output_channels against buffers whose real
+  // shape may have just changed.
+  state_.stream_error.store(true, std::memory_order_release);
+
+  std::lock_guard<std::mutex> lock(error_mutex_);
+  pending_stream_error_ = text.empty() ? "audio stream error" : text;
+  has_pending_stream_error_ = true;
+}
+
+bool AudioIO::TakeStreamError(std::string* message) {
+  std::lock_guard<std::mutex> lock(error_mutex_);
+  if (!has_pending_stream_error_) return false;
+  has_pending_stream_error_ = false;
+  if (message) *message = pending_stream_error_;
+  return true;
 }
 
 std::vector<AudioDeviceInfo> AudioIO::ListDevices() const {
@@ -185,6 +240,11 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
                    unsigned int buffer_frames) {
   std::lock_guard<std::mutex> lock(io_mutex_);
   last_error_.clear();
+  state_.stream_error.store(false, std::memory_order_release);
+  {
+    std::lock_guard<std::mutex> error_lock(error_mutex_);
+    has_pending_stream_error_ = false;
+  }
   if (audio_.isStreamOpen()) audio_.closeStream();
 
   const unsigned int input_id = ResolveDevice(input_device, /*input=*/true, audio_);
