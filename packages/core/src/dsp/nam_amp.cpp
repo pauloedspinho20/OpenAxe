@@ -11,6 +11,17 @@ namespace nam_studio::dsp {
 NamAmp::NamAmp() = default;
 NamAmp::~NamAmp() = default;
 
+// Load a .nam capture and cache everything the rest of the system needs to
+// know about it. Returns an error code instead of throwing, since this crosses
+// the extern "C" ABI; std::nullopt means success.
+//
+// NAMCore picks the architecture parser (WaveNet / LSTM / ConvNet / Linear)
+// itself from the file's contents - which is exactly why nam_studio_core must be
+// linked whole-archive: those parsers self-register through static
+// initializers, and a plain static link drops them, making every load fail.
+//
+// Not real-time safe (file IO, allocation, and it replaces the live DSP object).
+// The caller suspends audio around it - see the engine's LoadNamModel.
 std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) {
   if (!std::filesystem::exists(nam_file_path)) return NamLoadError::kFileNotFound;
 
@@ -29,6 +40,10 @@ std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) 
   dsp_ = std::move(loaded);
   slim_size_ = 1.0;
 
+  // Snapshot the model's own metadata. `input_level`/`output_level` are the
+  // capture's dBu calibration figures, not user gain: the engine seeds its amp
+  // params from them, and a UI's Input/Output knobs go to the block trims
+  // instead (see nam_studio_set_block_input_trim).
   info_ = NamModelInfo{};
   info_.version = config.version;
   info_.sample_rate = dsp_->GetExpectedSampleRate();
@@ -39,6 +54,8 @@ std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) 
   info_.has_output_level = dsp_->HasOutputLevel();
   if (info_.has_output_level) info_.output_level_dbu = dsp_->GetOutputLevel();
 
+  // Slimmable captures can trade fidelity for CPU at a set of discrete sizes;
+  // report the breakpoints so a UI can offer them (see SetSlimSize).
   if (auto* slimmable = dynamic_cast<nam::SlimmableModel*>(dsp_.get())) {
     info_.is_slimmable = true;
     info_.slim_size_breakpoints = slimmable->GetSlimmableSizeBreakpoints();
@@ -47,18 +64,30 @@ std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) 
   return std::nullopt;
 }
 
+// Drop the model and forget its metadata; the block then passes audio through
+// unchanged. Frees - not real-time safe.
 void NamAmp::UnloadModel() {
   dsp_.reset();
   info_ = NamModelInfo{};
   slim_size_ = 1.0;
 }
 
+// Whether a capture is currently loaded (a block with none is a passthrough).
 bool NamAmp::HasModel() const { return dsp_ != nullptr; }
 
+// Prepare the loaded model for a sample rate and maximum block size. NAMCore
+// resamples internally when the host rate differs from the capture's expected
+// rate (info_.sample_rate), so any rate is valid - it just costs more CPU.
+// Allocates; not real-time safe. No-op without a model.
 void NamAmp::Reset(double sample_rate, int max_buffer_size) {
   if (dsp_) dsp_->Reset(sample_rate, max_buffer_size);
 }
 
+// Run `num_frames` of mono audio through the model in place of the input.
+// Mono because a NAM capture models one amp channel; the engine's stereo path
+// runs the same model over both channels. Real-time safe, and a no-op (leaving
+// `output` untouched) when no model is loaded - the engine treats that as
+// passthrough. num_frames must not exceed the size passed to Reset.
 void NamAmp::Process(const float* input, float* output, int num_frames) {
   if (!dsp_) return;
   // NAMCore's process() takes channel-indexed pointers even for mono, and
@@ -68,6 +97,10 @@ void NamAmp::Process(const float* input, float* output, int num_frames) {
   dsp_->process(in_ptrs, out_ptrs, num_frames);
 }
 
+// Pick a slimmed variant of a slimmable capture (see
+// info_.slim_size_breakpoints). Rebuilds internal state, so it is NOT
+// real-time safe - the engine applies it outside Process(), and it is a no-op
+// for models that aren't slimmable.
 void NamAmp::SetSlimSize(double value) {
   if (!dsp_ || !info_.is_slimmable) return;
   if (auto* slimmable = dynamic_cast<nam::SlimmableModel*>(dsp_.get())) {
@@ -76,6 +109,10 @@ void NamAmp::SetSlimSize(double value) {
   }
 }
 
+// Override the capture's input calibration, in dBu. Note NAMCore flips its own
+// "has input level" flag as a side effect, which is why the engine only forwards
+// this when the value is genuinely the model's or was explicitly set - see
+// BlockState::amp_input_level_active. This is calibration, not a volume knob.
 void NamAmp::SetInputLevel(double dbu) {
   if (!dsp_) return;
   dsp_->SetInputLevel(dbu);
@@ -83,6 +120,8 @@ void NamAmp::SetInputLevel(double dbu) {
   info_.input_level_dbu = dbu;
 }
 
+// Override the capture's output calibration, in dBu. Same caveat as
+// SetInputLevel: calibration, not a level control.
 void NamAmp::SetOutputLevel(double dbu) {
   if (!dsp_) return;
   dsp_->SetOutputLevel(dbu);

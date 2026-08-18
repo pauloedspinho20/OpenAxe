@@ -19,14 +19,21 @@ const PingPongDelay::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/ping_pong_delay_params.inc"
 };
 
+// Buffer length, covering the 1000ms maximum delay with headroom to spare.
 constexpr float kMaxDelaySeconds = 1.1f;
 
+// Butterworth (Q = 0.707) lowpass in the feedback path, so each repeat is
+// darker than the last. Same RBJ-cookbook biquad as delay.cpp's - duplicated
+// rather than shared because the two effects are independent wrappers, and a
+// shared internal filter header is a refactor for when a third one appears.
 struct ToneFilter {
   float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
   float a1 = 0.0f, a2 = 0.0f;
   float x1 = 0.0f, x2 = 0.0f;
   float y1 = 0.0f, y2 = 0.0f;
 
+  // Coefficients via the bilinear transform, or a pass-through at Nyquist.
+  // Recomputed once per block, not per sample.
   void SetCutoff(float freq, float sample_rate) {
     if (freq >= sample_rate * 0.49f) {
       b0 = 1.0f; b1 = 0.0f; b2 = 0.0f;
@@ -44,6 +51,7 @@ struct ToneFilter {
     a2 = (1.0f - alpha) * a0_inv;
   }
 
+  // Direct Form I biquad step.
   float Process(float x) {
     const float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
     x2 = x1; x1 = x;
@@ -51,19 +59,23 @@ struct ToneFilter {
     return y;
   }
 
+  // Clear the filter history.
   void Reset() { x1 = x2 = y1 = y2 = 0.0f; }
 };
 
+// One circular delay line with a fractionally-interpolated read tap.
 struct DelayLine {
   std::vector<float> buffer;
   int write_pos = 0;
 
+  // Allocate for the maximum delay at this sample rate and clear it.
   void Resize(float sample_rate) {
     const int size = static_cast<int>(std::ceil(sample_rate * kMaxDelaySeconds)) + 1;
     buffer.assign(static_cast<size_t>(size), 0.0f);
     write_pos = 0;
   }
 
+  // Read `delay_ms` in the past, interpolating between neighbouring samples.
   float ReadTap(float delay_ms, float sample_rate) const {
     const float delay_samples = delay_ms * sample_rate / 1000.0f;
     const float read_pos = static_cast<float>(write_pos) - delay_samples;
@@ -77,7 +89,8 @@ struct DelayLine {
            buffer[static_cast<size_t>(idx1)] * frac;
   }
 
-  void Advance() { write_pos = (write_pos + 1) % static_cast<int>(buffer.size()); }
+  // Step the write cursor one sample, wrapping at the end of the buffer.
+    void Advance() { write_pos = (write_pos + 1) % static_cast<int>(buffer.size()); }
 };
 
 }  // namespace
@@ -94,6 +107,7 @@ struct PingPongDelay::Impl {
   float tone = 6000.0f;
   float sample_rate = 48000.0f;
 
+  // Re-allocate both lines and clear the shared tone filter.
   void ApplySampleRate() {
     left.Resize(sample_rate);
     right.Resize(sample_rate);
@@ -101,15 +115,27 @@ struct PingPongDelay::Impl {
   }
 };
 
+// Buffers are allocated here and on Reset(), never in Process().
 PingPongDelay::PingPongDelay() : impl_(std::make_unique<Impl>()) { impl_->ApplySampleRate(); }
 
 PingPongDelay::~PingPongDelay() = default;
 
+// Adopt a new sample rate and re-allocate. Not real-time safe.
 void PingPongDelay::Reset(double sample_rate) {
   impl_->sample_rate = static_cast<float>(sample_rate);
   impl_->ApplySampleRate();
 }
 
+// The cross-coupling described on Impl above, per sample: the input is summed
+// to mono (a ping-pong's repeats alternate hard left/right, so a stereo input
+// image would fight the effect), then each line's tap is filtered and written
+// into the *other* line. The left output therefore carries the even repeats and
+// the right the odd ones, and one delay time drives both.
+//
+// Note both writes run the same filter instance, so its state is shared between
+// the two feedback paths - deliberate: it is one tape/BBD-style tone stage in a
+// single feedback loop that happens to cross channels, not two independent ones.
+// Output is wet-only; the dry/wet mix belongs to the caller.
 void PingPongDelay::Process(const float* const* input, float* const* output, int num_frames) {
   const float sr = impl_->sample_rate;
   const float fb = impl_->feedback;
@@ -133,12 +159,16 @@ void PingPongDelay::Process(const float* const* input, float* const* output, int
   }
 }
 
+// Param surface: time (ms, shared by both lines), feedback (0..0.9), tone
+// (Hz cutoff in the feedback path).
 int PingPongDelay::ParamCount() { return kParamCount; }
 
+// Name/symbol/range/unit for one param index.
 const PingPongDelay::ParamInfo& PingPongDelay::GetParamInfo(int index) {
   return kParamInfo[static_cast<size_t>(index)];
 }
 
+// Current value of one param, 0 for an unknown index.
 float PingPongDelay::GetParam(int index) const {
   switch (index) {
     case kTimeParam:     return impl_->time_ms;
@@ -148,6 +178,8 @@ float PingPongDelay::GetParam(int index) const {
   }
 }
 
+// Store one param - all three real-time safe (the buffers are already sized
+// for the maximum delay, so a time change only moves the read taps).
 void PingPongDelay::SetParam(int index, float value) {
   switch (index) {
     case kTimeParam:     impl_->time_ms = value; break;

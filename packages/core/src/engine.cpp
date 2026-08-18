@@ -38,6 +38,9 @@ constexpr int kAmpInputLevelParam = 0;
 constexpr int kAmpOutputLevelParam = 1;
 constexpr int kAmpSlimSizeParam = 2;
 
+// The five block kinds backed by a NAM capture. They are structurally
+// identical - only the UI's gear category and labelling differ - so everything
+// model-related in this file keys off this rather than a specific kind.
 bool IsAmpFamily(graph::BlockKind kind) {
   switch (kind) {
     case graph::BlockKind::kAmp:
@@ -51,10 +54,18 @@ bool IsAmpFamily(graph::BlockKind kind) {
   }
 }
 
+// How many independent input ports a kind exposes. Only the mixer has more
+// than one; a splitter's several *outputs* are edges from its single output, so
+// it needs no extra buffers.
 int PortCountFor(graph::BlockKind kind) {
   return kind == graph::BlockKind::kMixer ? graph::kMixerInputCount : 1;
 }
 
+// The closed set of DSP objects a block can hold. std::monostate is a block
+// with no DSP at all (cab/mixer/splitter, or an amp with no model loaded yet),
+// which Process() treats as passthrough. A variant rather than virtual
+// dispatch: every alternative is known here, so RunDsp's std::visit inlines
+// instead of paying an indirect call per block per buffer.
 using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallReverb,
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
                                  dsp::DragonflyEarlyReflections, dsp::Chorus, dsp::Flanger,
@@ -113,40 +124,56 @@ struct AudioEngine::BlockState {
 AudioEngine::AudioEngine() = default;
 AudioEngine::~AudioEngine() = default;
 
+// This layer speaks int ids (portable across C/WASM/FFI); GraphRig speaks
+// strings. These two convert between them, mapping the rail sentinels onto
+// GraphRig's reserved rail names.
 std::string AudioEngine::GraphIdOf(BlockId id) {
   if (id == kInRailId) return graph::kInRail;
   if (id == kOutRailId) return graph::kOutRail;
   return std::to_string(id);
 }
 
+// The inverse: a GraphRig string id back to this layer's int id.
 BlockId AudioEngine::ParseGraphId(const std::string& graph_id) {
   if (graph_id == graph::kInRail) return kInRailId;
   if (graph_id == graph::kOutRail) return kOutRailId;
   return static_cast<BlockId>(std::stoi(graph_id));
 }
 
+// Look up a block without locking. Only safe on the control thread while no
+// mutation is in flight - Process() and the public API use the ThreadSafe
+// variants below instead.
 AudioEngine::BlockState* AudioEngine::FindBlock(BlockId id) {
   auto it = block_states_.find(id);
   return it != block_states_.end() ? it->second.get() : nullptr;
 }
 
+// const overload of the unlocked lookup above.
 const AudioEngine::BlockState* AudioEngine::FindBlock(BlockId id) const {
   auto it = block_states_.find(id);
   return it != block_states_.end() ? it->second.get() : nullptr;
 }
 
+// Look up a block under a shared (reader) lock, so a concurrent AddBlock /
+// RemoveBlock can't rehash the map underneath us (issue #52). Returns a raw
+// pointer: BlockStates are heap-allocated and never moved, and removal only
+// happens on the control thread, which takes the unique lock.
 AudioEngine::BlockState* AudioEngine::FindBlockThreadSafe(BlockId id) {
   std::shared_lock lock(block_states_mutex_);
   auto it = block_states_.find(id);
   return it != block_states_.end() ? it->second.get() : nullptr;
 }
 
+// const overload of the locked lookup above.
 const AudioEngine::BlockState* AudioEngine::FindBlockThreadSafe(BlockId id) const {
   std::shared_lock lock(block_states_mutex_);
   auto it = block_states_.find(id);
   return it != block_states_.end() ? it->second.get() : nullptr;
 }
 
+// (Re)allocate a block's scratch buffers for the current max_block_size_ and
+// its port count. Called from AddBlock and Reset - never from Process(), which
+// is what keeps the audio path allocation-free.
 void AudioEngine::EnsureBuffers(BlockState& state) {
   const int ports = PortCountFor(state.kind);
   state.input_l.assign(ports, std::vector<float>(static_cast<size_t>(max_block_size_), 0.0f));
@@ -155,6 +182,12 @@ void AudioEngine::EnsureBuffers(BlockState& state) {
   state.output_r.assign(static_cast<size_t>(max_block_size_), 0.0f);
 }
 
+// Copy a freshly-constructed DSP object's own defaults into the atomic param
+// mirror, so GetParam reports real values before anything is set and
+// ApplyRealtimeParams doesn't overwrite good defaults with zeroes on the first
+// block. Skipped for NamAmp, whose "params" are model calibration seeded by
+// LoadNamModel instead (and whose param count isn't even known until a model
+// loads).
 void AudioEngine::SeedParamsFromDsp(BlockState& state) {
   std::visit(
       [&](auto& d) {
@@ -168,6 +201,11 @@ void AudioEngine::SeedParamsFromDsp(BlockState& state) {
       state.dsp);
 }
 
+// Grid column of a block, with the rails placed outside the grid on either
+// side (IN before column 0, OUT after the last). That ordering is the whole
+// cycle-prevention story: signal only ever flows to a higher column, so a
+// left-to-right execution order is always a valid topological order and no
+// cycle can exist to detect.
 int AudioEngine::ColumnOfBlock(BlockId id) const {
   if (id == kInRailId) return -1;
   if (id == kOutRailId) return graph::kGridCols;
@@ -175,6 +213,11 @@ int AudioEngine::ColumnOfBlock(BlockId id) const {
   return pos ? pos->col : graph::kGridCols;
 }
 
+// Rebuild the two things Process() walks: exec_order_ (blocks sorted by
+// column, so a block always runs after whatever feeds it) and routing_ (the
+// edge list flattened into int ids). Called after every topology change rather
+// than resolved per buffer - Process() must not touch the string-keyed rig or
+// allocate.
 void AudioEngine::RecomputeRouting() {
   exec_order_.clear();
   for (const auto& [id, state] : block_states_) exec_order_.push_back(id);
@@ -192,6 +235,13 @@ void AudioEngine::RecomputeRouting() {
 
 // ── Topology ────────────────────────────────────────────────────────────
 
+// Place a block on the grid and construct the DSP object its kind calls for.
+// Ids are handed out monotonically and never reused, so a stale id from a UI
+// can only ever miss, never hit the wrong block.
+//
+// Not real-time safe (it allocates the DSP object and the block's buffers) and
+// it mutates block_states_/routing, so callers suspend the audio thread around
+// it - see StudioBridge::Mutate for the handshake.
 BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   const BlockId id = next_block_id_++;
   rig_.AddBlock(kind, row, col, GraphIdOf(id));
@@ -258,6 +308,8 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   return id;
 }
 
+// Remove a block and, through the rig, every edge that touched it. Not
+// real-time safe: it frees the DSP object and rewrites the routing tables.
 void AudioEngine::RemoveBlock(BlockId id) {
   rig_.RemoveBlock(GraphIdOf(id));
   {
@@ -267,11 +319,18 @@ void AudioEngine::RemoveBlock(BlockId id) {
   RecomputeRouting();
 }
 
+// Move a block on the grid. Column changes are what make this more than
+// cosmetic: they change execution order, hence the RecomputeRouting. Not
+// real-time safe.
 void AudioEngine::MoveBlock(BlockId id, int row, int col) {
   rig_.MoveBlock(GraphIdOf(id), row, col);
   RecomputeRouting();
 }
 
+// Wire one jack to another, subject to the rig's validation rules (left to
+// right by column, one cable per input jack). Returns {false, 0} when the rig
+// rejects the connection, and only then does the edge id counter stay put, so
+// ids stay dense across rejected attempts. Not real-time safe.
 ConnectOutcome AudioEngine::Connect(BlockId from_block, int from_port, BlockId to_block, int to_port) {
   const graph::Jack from{GraphIdOf(from_block), from_port};
   const graph::Jack to{GraphIdOf(to_block), to_port};
@@ -283,6 +342,7 @@ ConnectOutcome AudioEngine::Connect(BlockId from_block, int from_port, BlockId t
   return ConnectOutcome{true, id};
 }
 
+// Drop one edge by id; unknown ids are a no-op. Not real-time safe.
 void AudioEngine::Disconnect(EdgeId id) {
   rig_.Disconnect(GraphIdOf(id));
   RecomputeRouting();
@@ -290,6 +350,10 @@ void AudioEngine::Disconnect(EdgeId id) {
 
 // ── Lifecycle / processing ─────────────────────────────────────────────
 
+// Arm the engine for a given sample rate and maximum block size: re-prepare
+// every block's DSP, re-allocate all scratch buffers, and rebuild the routing.
+// Must be called at least once before Process(), and again whenever either
+// value changes. Allocates - not real-time safe.
 void AudioEngine::Reset(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
@@ -313,6 +377,17 @@ void AudioEngine::Reset(double sample_rate, int max_block_size) {
   RecomputeRouting();
 }
 
+// Push the block's atomic param mirror into its DSP object. Called from
+// Process() (i.e. on the audio thread) every buffer, which is why params are
+// stored as plain atomics that any thread may write: the write itself is
+// lock-free, and this is where it actually reaches the DSP.
+//
+// Reapplying every param every buffer sounds wasteful but is deliberate - it
+// keeps the audio thread from needing a "which params changed" structure
+// (which would need its own synchronization), and the setters are cheap
+// arithmetic. The two exceptions that aren't cheap are handled above: the amp
+// calibration levels are gated on having a real value, and slim size is
+// applied synchronously by SetParam instead, because it can reallocate.
 void AudioEngine::ApplyRealtimeParams(BlockState& state) {
   std::visit(
       [&](auto& d) {
@@ -337,6 +412,9 @@ void AudioEngine::ApplyRealtimeParams(BlockState& state) {
       state.dsp);
 }
 
+// Run one block's DSP over its input buffers into its output buffers. The
+// std::visit inlines to a switch over the variant's alternatives - no virtual
+// dispatch on the audio path. Real-time safe.
 void AudioEngine::RunDsp(BlockState& state, int num_frames) {
   std::visit(
       [&](auto& d) {
@@ -360,6 +438,26 @@ void AudioEngine::RunDsp(BlockState& state, int num_frames) {
       state.dsp);
 }
 
+// The audio callback. Runs the whole graph for one buffer and must stay
+// real-time safe end to end: no allocation, no locking, no file or system IO.
+// Everything it reads was prepared by Reset()/RecomputeRouting() on the control
+// thread, and every value a UI can change reaches it through a plain atomic.
+//
+// Per buffer:
+//   1. Fan the host's input into the IN rail's stereo scratch (mono is
+//      duplicated to both sides).
+//   2. Walk exec_order_ - blocks sorted by grid column, so a block always runs
+//      after everything feeding it. For each: clear its input ports, sum every
+//      incoming edge into them, fold a mixer's extra ports into port 0, apply
+//      the input trim, run the DSP (or copy through when bypassed), apply the
+//      output trim, and store the block's peak for metering.
+//   3. Take whatever edge feeds the OUT rail, apply master level/mute, and
+//      write the host's output (folding to mono if it only wants one channel).
+//   4. Record how much of the buffer's real-time budget this took (cpu_load_).
+//
+// num_frames is clamped to max_block_size_ rather than trusted: every scratch
+// buffer was sized for that maximum, and a host handing us a larger block must
+// not become an out-of-bounds write.
 void AudioEngine::Process(const float* const* input, int input_channels, float* const* output,
                            int output_channels, int num_frames) {
   const auto start = std::chrono::steady_clock::now();
@@ -489,11 +587,18 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
 
 // ── Params ──────────────────────────────────────────────────────────────
 
+// How many params the block currently exposes. "Currently" matters for the amp
+// family: loading a slimmable model adds the slim-size param, so this can grow
+// (see LoadNamModel). 0 for unknown blocks and for the kinds with no DSP.
 int AudioEngine::ParamCount(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->param_count : 0;
 }
 
+// Name/symbol/range/unit for one param, or nullopt for an unknown block, an
+// out-of-range index, or a block with no DSP. The descriptor's strings are
+// static storage owned by the DSP wrappers, so they outlive any caller - which
+// is what lets them cross the extern "C" boundary as bare const char*.
 std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) const {
   const BlockState* state = FindBlockThreadSafe(id);
   if (!state || index < 0 || index >= state->param_count) return std::nullopt;
@@ -520,12 +625,24 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
       state->dsp);
 }
 
+// Read one param from the atomic mirror (not from the DSP object, which may
+// have transformed it). Real-time safe, callable from any thread.
 float AudioEngine::GetParam(BlockId id, int index) const {
   const BlockState* state = FindBlockThreadSafe(id);
   if (!state || index < 0 || index >= state->param_count) return 0.0f;
   return state->params[static_cast<size_t>(index)].load(std::memory_order_relaxed);
 }
 
+// Write one param into the atomic mirror; Process() applies it to the DSP on
+// the next buffer. Real-time safe and callable from any thread - with one
+// documented exception, the amp's slim size, which reallocates inside NAMCore
+// and is therefore applied here, synchronously, instead of on the audio thread.
+// (That one call must not be made concurrently with Process; the bridge routes
+// it through its suspend handshake.)
+//
+// Out-of-range indices and unknown blocks are silently ignored: param tables
+// change shape when a model loads or a reverb algorithm switches, so a UI can
+// legitimately be one message behind.
 void AudioEngine::SetParam(BlockId id, int index, float value) {
   BlockState* state = FindBlockThreadSafe(id);
   if (!state || index < 0 || index >= state->param_count) return;
@@ -546,6 +663,14 @@ void AudioEngine::SetParam(BlockId id, int index, float value) {
 
 // ── NAM model management ───────────────────────────────────────────────
 
+// Load a .nam capture into an amp-family block and re-arm it at the engine's
+// current rate/block size. Returns an error code on failure (kFileNotFound also
+// covers "no such block" and "block isn't an amp kind" - the caller can't act
+// differently on those anyway), std::nullopt on success.
+//
+// The model's own calibration and slim-size surface become the block's params
+// here, which is why param_count can grow after a load. Not real-time safe:
+// file IO plus allocation inside NAMCore, so the caller suspends audio first.
 std::optional<dsp::NamLoadError> AudioEngine::LoadNamModel(BlockId id, const std::string& file_path) {
   BlockState* state = FindBlock(id);
   if (!state) return dsp::NamLoadError::kFileNotFound;
@@ -570,6 +695,8 @@ std::optional<dsp::NamLoadError> AudioEngine::LoadNamModel(BlockId id, const std
   return std::nullopt;
 }
 
+// Drop the block's model; it becomes a passthrough and its param surface
+// shrinks back to the two calibration slots. Frees - not real-time safe.
 void AudioEngine::UnloadNamModel(BlockId id) {
   BlockState* state = FindBlock(id);
   if (!state) return;
@@ -581,6 +708,8 @@ void AudioEngine::UnloadNamModel(BlockId id) {
   state->amp_output_level_active.store(false, std::memory_order_relaxed);
 }
 
+// Whether an amp-family block currently has a capture loaded. False for every
+// other kind and for unknown ids. Control-thread only (unlocked lookup).
 bool AudioEngine::BlockHasModel(BlockId id) const {
   const BlockState* state = FindBlock(id);
   if (!state) return false;
@@ -630,6 +759,11 @@ std::span<const char* const> ReverbControlSymbols(ReverbControl control) {
 
 }  // namespace
 
+// Apply one user-facing reverb control to whatever algorithm currently backs
+// the block: scale the two abstractions (room size -> decay, damping -> high
+// cut) and then resolve the control to the first symbol this algorithm actually
+// has, clamped into that param's declared range. Real-time safe - it ends in
+// the same atomic SetParam a raw index write would.
 void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float value) {
   const BlockState* state = FindBlockThreadSafe(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
@@ -653,6 +787,12 @@ void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float valu
   }
 }
 
+// Swap which Dragonfly algorithm backs a reverb block. This *replaces* the DSP
+// object, so it allocates and is not real-time safe - algorithm choice is a
+// deliberate user action, not automation. The new object is re-prepared at the
+// engine's current sample rate and its own defaults are seeded into the param
+// mirror, because each algorithm has a different param table (which is also why
+// a UI should drive reverb through SetReverbControl rather than raw indices).
 void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
@@ -691,6 +831,10 @@ void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
 
 // ── Delay model choice ──────────────────────────────────────────────────
 
+// Switch a delay block's model (Digital / Tape / Analog). Unlike the reverb
+// algorithms this keeps the same DSP object - only what happens inside the
+// feedback loop changes - so the delay buffer's contents survive and a repeat
+// in flight isn't cut off. No-op for other kinds.
 void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kDelay) return;
@@ -707,59 +851,86 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
 
 // ── Bypass / master bus ────────────────────────────────────────────────
 
+// Skip a block's DSP, passing its port-0 input through to its output. The
+// block's I/O trims still apply (they stage the block, not its DSP), and the
+// DSP object keeps its state, so unbypassing doesn't re-prepare anything.
+// Real-time safe, callable from any thread.
 void AudioEngine::SetBypass(BlockId id, bool bypassed) {
   BlockState* state = FindBlock(id);
   if (state) state->bypassed.store(bypassed, std::memory_order_relaxed);
 }
 
+// Per-block I/O staging gain, 1.0 = unity. These four are the user-facing
+// Input/Output knobs for every block kind, and are deliberately separate from
+// the amp family's input_level/output_level params, which carry the loaded NAM
+// capture's dBu calibration (see engine.h). Lock-free; any thread.
 void AudioEngine::SetInputTrim(BlockId id, float gain) {
   BlockState* state = FindBlockThreadSafe(id);
   if (state) state->input_trim.store(gain, std::memory_order_relaxed);
 }
 
+// Current input trim, 1.0 (unity) for unknown blocks.
 float AudioEngine::GetInputTrim(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->input_trim.load(std::memory_order_relaxed) : 1.0f;
 }
 
+// Output-side trim, applied after the block's DSP (or after the bypass copy).
 void AudioEngine::SetOutputTrim(BlockId id, float gain) {
   BlockState* state = FindBlockThreadSafe(id);
   if (state) state->output_trim.store(gain, std::memory_order_relaxed);
 }
 
+// Current output trim, 1.0 (unity) for unknown blocks.
 float AudioEngine::GetOutputTrim(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->output_trim.load(std::memory_order_relaxed) : 1.0f;
 }
 
+// Whether a block is bypassed; false for unknown ids.
 bool AudioEngine::IsBypassed(BlockId id) const {
   const BlockState* state = FindBlock(id);
   return state && state->bypassed.load(std::memory_order_relaxed);
 }
 
+// The output bus, applied after the graph and before the host's buffers.
+// All four of these are lock-free and callable from any thread.
 void AudioEngine::SetMasterLevel(float level) {
   master_level_.store(level, std::memory_order_relaxed);
 }
 
+// Current master level.
 float AudioEngine::GetMasterLevel() const { return master_level_.load(std::memory_order_relaxed); }
 
+// Master mute - independent of the tuner mute, so neither clears the other.
 void AudioEngine::SetMasterMuted(bool muted) {
   master_muted_.store(muted, std::memory_order_relaxed);
 }
 
+// Whether the master mute is engaged.
 bool AudioEngine::IsMasterMuted() const { return master_muted_.load(std::memory_order_relaxed); }
 
+// A second, independent mute source, so a tuner overlay can silence the output
+// without disturbing whatever the user set the master mute to.
 void AudioEngine::SetTunerMuted(bool muted) { tuner_muted_.store(muted, std::memory_order_relaxed); }
 
+// Whether the tuner mute is engaged.
 bool AudioEngine::IsTunerMuted() const { return tuner_muted_.load(std::memory_order_relaxed); }
 
 // ── Metering ────────────────────────────────────────────────────────────
 
+// Peak |sample| across the block's output over the last Process() call, 0 for
+// unknown ids. Peak rather than RMS because this drives clip-aware level
+// meters; a UI that wants ballistics smooths it itself.
 float AudioEngine::GetMeter(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->meter.load(std::memory_order_relaxed) : 0.0f;
 }
 
+// What fraction of one buffer's real-time budget the last Process() call used
+// (0.5 = half the available time). Measured with a steady_clock read at each
+// end of Process, so it includes everything the audio thread did, and it is the
+// number a UI should surface as "CPU" - not a process-wide figure.
 float AudioEngine::GetCpuLoad() const { return cpu_load_.load(std::memory_order_relaxed); }
 
 }  // namespace nam_studio::engine

@@ -74,11 +74,19 @@ class DsparkEffect {
   DsparkEffect(const DsparkEffect&) = delete;
   DsparkEffect& operator=(const DsparkEffect&) = delete;
 
+  // Prepare the processor for a new sample rate. DSPark allocates its
+  // block-sized scratch here, so this is not real-time safe - and it is
+  // prepared for kDsparkMaxBlock regardless of the engine's block size, which
+  // is what lets Process() chunk any size below that.
   void Reset(double sample_rate) {
     impl_->sample_rate = sample_rate;
     impl_->proc.prepare(dspark::AudioSpec{impl_->sample_rate, kDsparkMaxBlock, kDsparkChannels});
   }
 
+  // Bridge the engine's planar float buffers to DSPark's in-place
+  // AudioBufferView: copy input into the output buffers, then process them in
+  // place, in kDsparkMaxBlock-sized slices. Real-time safe - no allocation, and
+  // the copy is the price of DSPark's in-place-only block interface.
   void Process(const float* const* input, float* const* output, int num_frames) {
     if (num_frames <= 0) return;
     int offset = 0;
@@ -93,18 +101,25 @@ class DsparkEffect {
     }
   }
 
+  // Param surface, straight from the Traits (see the file header).
   static int ParamCount() { return Traits::kParamCount; }
   static const ParamInfo& GetParamInfo(int index) { return Traits::kInfo[static_cast<size_t>(index)]; }
   float GetParam(int index) const { return impl_->params[static_cast<size_t>(index)]; }
 
+  // Store into the mirror first, then apply - Traits::Apply reads the mirror,
+  // so multi-field processors see the new value alongside its siblings.
+  // Callers bound-check the index (the engine does).
   void SetParam(int index, float value) {
     impl_->params[static_cast<size_t>(index)] = value;
     ApplyParam(index, value);
   }
 
  private:
+  // Push one mirrored value into the DSPark processor via the Traits.
   void ApplyParam(int index, float value) { Traits::Apply(impl_->proc, impl_->params.data(), index, value); }
 
+  // Heap-allocated so the vendored processor (which can be large and is not
+  // movable) has a stable address for the lifetime of the wrapper.
   struct Impl {
     Processor proc;
     std::array<float, Traits::kParamCount> params{};
