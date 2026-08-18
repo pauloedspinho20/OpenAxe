@@ -122,10 +122,3 @@ export const REVERB_PARAMS = Object.freeze({
     high_cut: 6,
   }),
 })
-
-export const DRIVE_PARAMS = Object.freeze({
-  'diode-clipper': Object.freeze({ cutoff: 0, drive: 1, diode_type: 2, num_diodes: 3 }),
-  'tube-screamer': Object.freeze({ gain: 0, diode_type: 1, num_diodes: 2 }),
-  'zen-drive': Object.freeze({ voice: 0, gain: 1 }),
-  'mxr-distortion': Object.freeze({ dist: 0, level: 1 }),
-})

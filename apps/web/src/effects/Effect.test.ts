@@ -47,7 +47,7 @@ describe('BaseEffect', () => {
     // something explicitly called setMix(), which nothing in the app does
     // (mix/level aren't params in paramSchema.ts anymore — see Effect.ts).
     // Effects expose their own native dry/wet control only where the DSP
-    // provides one (Compressor's Mix, Reverb's Dry, Drive's Output Level).
+    // provides one (Compressor's Mix, Reverb's Dry).
     const effect = new TestEffect({ currentTime: 0 } as BaseAudioContext)
 
     expect(effect.getMix()).toBe(1)

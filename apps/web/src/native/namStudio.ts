@@ -145,7 +145,6 @@ export interface NamStudioBridge {
   loadModelJson(args: { blockId: string; json: string }): Promise<NamStudioLoadModelResult>
   unloadModel(args: { blockId: string }): Promise<NamStudioOk>
   setReverbAlgorithm(args: { blockId: string; algorithm: string }): Promise<NamStudioOk>
-  setDriveModel(args: { blockId: string; model: string }): Promise<NamStudioOk>
   setDelayModel(args: { blockId: string; model: string }): Promise<NamStudioOk>
 
   setBypass(args: { blockId: string; bypassed: boolean }): Promise<NamStudioOk>
@@ -248,9 +247,6 @@ class NativeBridge implements NamStudioBridge {
   }
   setReverbAlgorithm(args: { blockId: string; algorithm: string }) {
     return this.call<NamStudioOk>('setReverbAlgorithm', args)
-  }
-  setDriveModel(args: { blockId: string; model: string }) {
-    return this.call<NamStudioOk>('setDriveModel', args)
   }
   setDelayModel(args: { blockId: string; model: string }) {
     return this.call<NamStudioOk>('setDelayModel', args)

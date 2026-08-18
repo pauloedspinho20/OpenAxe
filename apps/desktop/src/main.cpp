@@ -110,7 +110,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
         <option>noise-gate</option><option>compressor</option><option>eq</option>
         <option>chorus</option><option>flanger</option><option>phaser</option>
         <option>tremolo</option><option>delay</option><option>ping-pong-delay</option>
-        <option>reverb</option><option>drive</option><option>amp</option>
+        <option>reverb</option><option>amp</option>
         <option>amp-cab</option><option>pedal</option><option>outboard</option>
         <option>space</option><option>cab</option><option>mixer</option><option>splitter</option>
       </select>
@@ -302,7 +302,6 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "namStudio.unloadModel", &nam_desktop::StudioBridge::HandleUnloadModel);
     Bind(w, bridge, "namStudio.setReverbAlgorithm",
          &nam_desktop::StudioBridge::HandleSetReverbAlgorithm);
-    Bind(w, bridge, "namStudio.setDriveModel", &nam_desktop::StudioBridge::HandleSetDriveModel);
     Bind(w, bridge, "namStudio.setDelayModel", &nam_desktop::StudioBridge::HandleSetDelayModel);
     Bind(w, bridge, "namStudio.meters", &nam_desktop::StudioBridge::HandleMeters);
     Bind(w, bridge, "namStudio.cpuLoad", &nam_desktop::StudioBridge::HandleCpuLoad);

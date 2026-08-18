@@ -61,7 +61,7 @@ function buildTargets(schema) {
   // Each target is one generated C++ .inc fragment: {fragmentName, params}.
   const cppTargets = []
   // One JS symbol->index map per effect kind, keyed by variant name where the
-  // effect has model variants (drive, reverb), or a flat map otherwise.
+  // effect has model variants (reverb), or a flat map otherwise.
   const jsMaps = {}
 
   for (const [kind, def] of Object.entries(schema.effects)) {

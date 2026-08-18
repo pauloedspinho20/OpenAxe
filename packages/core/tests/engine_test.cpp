@@ -1,11 +1,11 @@
 // Tests the real-time audio wiring layer built on top of GraphRig for issue
 // #14's extern "C" ABI: buffer routing, mixer summing, passthrough for
-// not-yet-wrapped block kinds, reverb algorithm switching, and drive model
-// switching. Exercises nam_studio::engine::AudioEngine directly (not the
-// extern "C" surface - see api_realtime_test.cpp for that). Needs
-// NAM_CORE_DIR/DRAGONFLY_DIR/CHOWDSP_WDF_DIR initialized, same as the rest
-// of nam_studio_core - see CMakeLists.txt's comment on why engine.cpp
-// doesn't degrade gracefully like the rest of this file.
+// not-yet-wrapped block kinds, and reverb algorithm switching. Exercises
+// nam_studio::engine::AudioEngine directly (not the extern "C" surface - see
+// api_realtime_test.cpp for that). Needs NAM_CORE_DIR/DRAGONFLY_DIR
+// initialized, same as the rest of nam_studio_core - see CMakeLists.txt's
+// comment on why engine.cpp doesn't degrade gracefully like the rest of
+// this file.
 #include "nam_studio/engine.h"
 
 #include <algorithm>
@@ -13,20 +13,15 @@
 #include <vector>
 
 #include "nam_studio/dsp/compressor.h"
-#include "nam_studio/dsp/diode_clipper.h"
 #include "nam_studio/dsp/dragonfly_hall_reverb.h"
 #include "nam_studio/dsp/dragonfly_plate_reverb.h"
 #include "nam_studio/dsp/equalizer.h"
-#include "nam_studio/dsp/mxr_distortion.h"
 #include "nam_studio/dsp/noise_gate.h"
 #include "nam_studio/dsp/tremolo.h"
-#include "nam_studio/dsp/tube_screamer.h"
-#include "nam_studio/dsp/zen_drive.h"
 #include "test_harness.h"
 
 using nam_studio::engine::AudioEngine;
 using nam_studio::engine::BlockId;
-using nam_studio::engine::DriveModel;
 using nam_studio::engine::kInRailId;
 using nam_studio::engine::kOutRailId;
 using nam_studio::engine::ReverbAlgorithm;
@@ -91,63 +86,6 @@ void TestReverbDefaultsToHallThenSwitchesAlgorithm() {
   NAM_EXPECT(engine.ParamCount(reverb) == nam_studio::dsp::DragonflyPlateReverb::ParamCount());
 }
 
-void TestDriveDefaultsToDiodeClipperAndProcessesRealAudio() {
-  AudioEngine engine;
-  const BlockId drive = engine.AddBlock(BlockKind::kDrive, 0, 0);
-  NAM_EXPECT(engine.ParamCount(drive) == nam_studio::dsp::DiodeClipper::ParamCount());
-  NAM_EXPECT(engine.Connect(kInRailId, 0, drive, 0).ok);
-  NAM_EXPECT(engine.Connect(drive, 0, kOutRailId, 0).ok);
-  engine.Reset(48000.0, kFrames);
-
-  // Max drive should clip a loud sine's peak well below linear - same
-  // nonlinearity-actually-engages check diode_clipper_test.cpp does, this
-  // time through the full engine (routing + param application), not the
-  // DiodeClipper class directly.
-  engine.SetParam(drive, 1 /* drive */, 1.0f);
-  std::vector<float> input(kFrames);
-  for (int i = 0; i < kFrames; ++i) {
-    input[i] = 5.0f * std::sin(static_cast<float>(i) / 48000.0f * 200.0f * 6.283185307179586f);
-  }
-  std::vector<float> output(kFrames, 0.0f);
-  const float* in_ptrs[1] = {input.data()};
-  float* out_ptrs[1] = {output.data()};
-  engine.Process(in_ptrs, 1, out_ptrs, 1, kFrames);
-
-  bool all_finite = true;
-  float max_abs_out = 0.0f;
-  for (float sample : output) {
-    if (!std::isfinite(sample)) all_finite = false;
-    max_abs_out = std::max(max_abs_out, std::fabs(sample));
-  }
-  NAM_EXPECT(all_finite);
-  NAM_EXPECT(max_abs_out > 0.0f);
-  NAM_EXPECT(max_abs_out < 5.0f);
-
-  // SetDriveModel is a documented no-op on a block of the wrong kind.
-  const BlockId reverb = engine.AddBlock(BlockKind::kReverb, 1, 0);
-  engine.SetDriveModel(reverb, DriveModel::kDiodeClipper);
-  NAM_EXPECT(engine.ParamCount(reverb) == nam_studio::dsp::DragonflyHallReverb::ParamCount());
-}
-
-void TestDriveModelSwitchOnlyAffectsThatBlock() {
-  AudioEngine engine;
-  const BlockId drive_a = engine.AddBlock(BlockKind::kDrive, 0, 0);
-  const BlockId drive_b = engine.AddBlock(BlockKind::kDrive, 1, 0);
-  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::DiodeClipper::ParamCount());
-  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::DiodeClipper::ParamCount());
-
-  engine.SetDriveModel(drive_a, DriveModel::kTubeScreamer);
-  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::TubeScreamer::ParamCount());
-  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::DiodeClipper::ParamCount());  // untouched
-
-  engine.SetDriveModel(drive_b, DriveModel::kZenDrive);
-  NAM_EXPECT(engine.ParamCount(drive_b) == nam_studio::dsp::ZenDrive::ParamCount());
-  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::TubeScreamer::ParamCount());  // untouched
-
-  engine.SetDriveModel(drive_a, DriveModel::kMxrDistortion);
-  NAM_EXPECT(engine.ParamCount(drive_a) == nam_studio::dsp::MxrDistortion::ParamCount());
-}
-
 void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   AudioEngine engine;
   const BlockId compressor = engine.AddBlock(BlockKind::kCompressor, 0, 0);
@@ -168,8 +106,7 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   engine.Reset(48000.0, kFrames);
 
   // A loud sine through the full chain: every stage engaged, output must stay
-  // finite and non-silent (same real-DSP-actually-ran check the drive test
-  // does for its own family).
+  // finite and non-silent.
   std::vector<float> input(kFrames);
   for (int i = 0; i < kFrames; ++i) {
     input[i] = 0.5f * std::sin(static_cast<float>(i) / 48000.0f * 200.0f * 6.283185307179586f);
@@ -198,7 +135,6 @@ void TestUnknownBlockIsSafeNoOp() {
   NAM_EXPECT(engine.GetMeter(kUnknown) == 0.0f);
   engine.RemoveBlock(kUnknown);                                  // must not crash
   engine.SetReverbAlgorithm(kUnknown, ReverbAlgorithm::kRoom);   // must not crash
-  engine.SetDriveModel(kUnknown, DriveModel::kDiodeClipper);     // must not crash
   engine.SetBypass(kUnknown, true);                              // must not crash
   NAM_EXPECT(!engine.IsBypassed(kUnknown));
 }
@@ -286,8 +222,6 @@ int main() {
   TestMixerSumsBothConnectedPorts();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
-  TestDriveDefaultsToDiodeClipperAndProcessesRealAudio();
-  TestDriveModelSwitchOnlyAffectsThatBlock();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();
   TestUnknownBlockIsSafeNoOp();
   TestBypassSkipsDspAndPassesInputThrough();

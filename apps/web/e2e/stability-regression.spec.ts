@@ -70,8 +70,8 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove Mixer' }).click()
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
-  // All 11 effect kinds: the four DSPark-backed ones (issue #22's last
-  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the seven that
+  // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
+  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the six that
   // already ran on packages/core.
   const FX_KINDS = [
     'Noise Gate',
@@ -79,7 +79,6 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     'EQ',
     'Tremolo',
     'Reverb',
-    'Drive',
     'Chorus',
     'Flanger',
     'Phaser',

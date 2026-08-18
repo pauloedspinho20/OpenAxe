@@ -19,18 +19,16 @@
 // one, adding a live DSP object per block, pre-allocated per-block buffers,
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
-// Five DSP families are wrapped anywhere in this codebase yet: NamAmp
+// Four DSP families are wrapped anywhere in this codebase yet: NamAmp
 // (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
 // algorithms (all back the single kReverb kind - algorithm choice is a
-// per-block setting this layer owns, see SetReverbAlgorithm), the BYOD
-// wave-digital-filter drives (back kDrive - model choice similarly owned
-// here, see SetDriveModel), the hand-written modulation/delay wrappers
-// (kChorus/kFlanger/kPhaser/kDelay/kPingPongDelay), and the DSPark-based
-// dynamics/EQ wrappers (kCompressor/kEq/kNoiseGate/kTremolo - issue #22's
-// last four still-native effect kinds). Every other kind passes audio
-// through unchanged rather than erroring, so a full rig is buildable/
-// testable today; wiring in real DSP as those libraries get wrapped
-// (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
+// per-block setting this layer owns, see SetReverbAlgorithm), the
+// hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay/
+// kPingPongDelay), and the DSPark-based dynamics/EQ wrappers (kCompressor/
+// kEq/kNoiseGate/kTremolo - issue #22's last four still-native effect
+// kinds). kCab/kMixer/kSplitter pass audio through unchanged rather than
+// erroring - none of them are a DSP effect kind, so a full rig is
+// buildable/testable today with no gap to fill in.
 namespace nam_studio::engine {
 
 // Int ids only at this layer - portable across C/WASM/FFI, no string
@@ -49,19 +47,6 @@ enum class ReverbAlgorithm {
   kRoom,
   kPlate,
   kEarlyReflections,
-};
-
-// The seam future BYOD drive/fuzz wraps plug into without a new BlockKind
-// or ABI shape, mirroring ReverbAlgorithm's own role for kReverb. Tube
-// Screamer, Zen Drive, and MXR Distortion joined Diode Clipper here once
-// each was individually verified buildable the same way (see their own
-// wrapper .cpp files) - Big Muff and the rest of BYOD's 43+ effects are
-// still candidates for follow-up additions.
-enum class DriveModel {
-  kDiodeClipper,
-  kTubeScreamer,
-  kZenDrive,
-  kMxrDistortion,
 };
 
 struct ParamDescriptor {
@@ -127,9 +112,6 @@ class AudioEngine {
   // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
   // safe - reconstructs the underlying wrapper instance.
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);
-
-  // Only meaningful for kDrive blocks; no-op otherwise. Not real-time safe.
-  void SetDriveModel(BlockId id, DriveModel model);
 
   // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
   void SetDelayModel(BlockId id, dsp::Delay::Model model);

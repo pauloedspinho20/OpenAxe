@@ -86,7 +86,7 @@ that the Effects Suite epic exists to fill those `[FX]` slots (they were placeho
 ```ts
 import { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { DualChainRig } from '@/engine/DualChainRig'
-import { Drive } from '@/effects/Drive'
+import { Compressor } from '@/effects/Compressor'
 import { Freeverb } from '@/effects/Freeverb'
 
 const context = new AudioContext()
@@ -98,7 +98,7 @@ await rig.amp('B').loadModel(ampBJson)
 rig.amp('A').loadIR(cabAIr)
 rig.amp('B').loadIR(cabBIr)
 
-rig.preFx('A').insert(new Drive(context, 'overdrive')) // before the amp
+rig.preFx('A').insert(await Compressor.create(context)) // before the amp
 rig.postFx('A').insert(new Freeverb(context)) // after the amp+cab
 
 rig.connectInput(instrumentSource, 'mono-to-both') // or 'stereo-split' for a stereo source

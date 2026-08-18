@@ -18,7 +18,7 @@ export type BlockKind =
  * The minimal shape the graph engine needs from any block - a strict subset
  * of the existing `Effect` interface (no bypass/mix, which is an
  * effect-specific concept). `Effect` already satisfies this shape as-is, so
- * none of the 11 existing effect classes need to change to participate in
+ * none of the 10 existing effect classes need to change to participate in
  * the grid.
  */
 export interface Block {

@@ -24,7 +24,7 @@
 //     (setParam/getParam/meters/cpuLoad) and AudioIO device/stream queries run
 //     straight here.
 //   - control thread: owns every graph mutation - topology edits, NAM model
-//     loads, reverb/drive/delay algorithm swaps, and the post-Open reset.
+//     loads, reverb/delay algorithm swaps, and the post-Open reset.
 //     Handlers Call() into it so these serialize against each other and never
 //     run on the audio thread.
 //   - audio (real-time) thread: only ever nam_studio_process. Before touching
@@ -89,7 +89,6 @@ class StudioBridge {
   std::string HandleLoadModelJson(const std::string& req);
   std::string HandleUnloadModel(const std::string& req);
   std::string HandleSetReverbAlgorithm(const std::string& req);
-  std::string HandleSetDriveModel(const std::string& req);
   std::string HandleSetDelayModel(const std::string& req);
   std::string HandleMeters(const std::string& req);
   std::string HandleCpuLoad(const std::string& req);

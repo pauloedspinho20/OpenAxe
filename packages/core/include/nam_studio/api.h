@@ -39,10 +39,6 @@ typedef enum NamStudioBlockKind {
   NAM_STUDIO_BLOCK_CAB,
   NAM_STUDIO_BLOCK_MIXER,
   NAM_STUDIO_BLOCK_SPLITTER,
-  // Appended here (not grouped with the other effect kinds above) so
-  // NAM_STUDIO_BLOCK_REVERB's ordinal (9) - hardcoded in the web app's
-  // AudioWorkletProcessor - never shifts as new kinds get added.
-  NAM_STUDIO_BLOCK_DRIVE,
 } NamStudioBlockKind;
 
 // Only meaningful for NAM_STUDIO_BLOCK_REVERB blocks - selects which of the
@@ -54,16 +50,6 @@ typedef enum NamStudioReverbAlgorithm {
   NAM_STUDIO_REVERB_PLATE,
   NAM_STUDIO_REVERB_EARLY_REFLECTIONS,
 } NamStudioReverbAlgorithm;
-
-// Only meaningful for NAM_STUDIO_BLOCK_DRIVE blocks - selects which wrapped
-// BYOD drive/fuzz model backs the block. New drive blocks default to
-// NAM_STUDIO_DRIVE_DIODE_CLIPPER.
-typedef enum NamStudioDriveModel {
-  NAM_STUDIO_DRIVE_DIODE_CLIPPER,
-  NAM_STUDIO_DRIVE_TUBE_SCREAMER,
-  NAM_STUDIO_DRIVE_ZEN_DRIVE,
-  NAM_STUDIO_DRIVE_MXR_DISTORTION,
-} NamStudioDriveModel;
 
 // Only meaningful for NAM_STUDIO_BLOCK_DELAY blocks - selects which delay
 // character backs the block. New delay blocks default to
@@ -153,13 +139,6 @@ int32_t nam_studio_block_has_model(NamStudioGraph* graph, int32_t block_id);
 // real-time safe - reconstructs the underlying wrapper instance.
 void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
                                       NamStudioReverbAlgorithm algorithm);
-
-// ── Drive model choice ──────────────────────────────────────────────────
-
-// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DRIVE block. Not
-// real-time safe - reconstructs the underlying wrapper instance.
-void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
-                                 NamStudioDriveModel model);
 
 // ── Delay model choice ──────────────────────────────────────────────────
 

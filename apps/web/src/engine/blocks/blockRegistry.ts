@@ -18,7 +18,6 @@ export const EFFECT_KINDS = new Set<BlockKind>([
   'delay',
   'ping-pong-delay',
   'reverb',
-  'drive',
 ])
 
 /** Every gear kind that's a NAM model capture rather than an IR - see CabBlock/AmpBlock's doc comments. */
@@ -28,8 +27,7 @@ export const NAM_MODEL_KINDS = new Set<BlockKind>(['amp', 'amp-cab', 'pedal', 'o
  * Builds any grid block from its serialized `kind` (+ optional saved
  * params) - one factory the graph engine and preset restore both call into,
  * one level up from effectRegistry's `createEffect` (which this delegates
- * to for the 11 effect kinds - 'drive', BYOD's Diode Clipper, is the first
- * one added since #13's original scaffold).
+ * to for the 10 effect kinds).
  */
 export async function createBlock(
   context: AudioContext,

@@ -47,7 +47,6 @@ constexpr KindEntry kKinds[] = {
     {"delay", NAM_STUDIO_BLOCK_DELAY},
     {"ping-pong-delay", NAM_STUDIO_BLOCK_PING_PONG_DELAY},
     {"reverb", NAM_STUDIO_BLOCK_REVERB},
-    {"drive", NAM_STUDIO_BLOCK_DRIVE},
     {"amp", NAM_STUDIO_BLOCK_AMP},
     {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},
     {"pedal", NAM_STUDIO_BLOCK_PEDAL},
@@ -656,32 +655,6 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setReverbAlgorithm: ") + e.what());
-  }
-}
-
-std::string StudioBridge::HandleSetDriveModel(const std::string& req) {
-  try {
-    const json args = ParseArgs(req);
-    const json& o = args.empty() ? json::object() : args[0];
-    const std::string js_id = o.value("blockId", "");
-    const std::string name = o.value("model", "");
-    static const std::pair<const char*, NamStudioDriveModel> kModels[] = {
-        {"diodeClipper", NAM_STUDIO_DRIVE_DIODE_CLIPPER},
-        {"tubeScreamer", NAM_STUDIO_DRIVE_TUBE_SCREAMER},
-        {"zenDrive", NAM_STUDIO_DRIVE_ZEN_DRIVE},
-        {"mxrDistortion", NAM_STUDIO_DRIVE_MXR_DISTORTION},
-    };
-    const auto model = MapByName(name, kModels, std::size(kModels));
-    if (!model) return JsonError("unknown drive model: " + name);
-    Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_set_drive_model(graph_, it->second.core_id, *model); },
-             /*reset_after=*/false);
-    });
-    return (json{{"ok", true}}).dump();
-  } catch (const std::exception& e) {
-    return JsonError(std::string("setDriveModel: ") + e.what());
   }
 }
 

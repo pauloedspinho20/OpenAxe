@@ -186,14 +186,6 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
       <path d="M10 20c.8-2.7 3.2-2.7 4 0" />
     </>
   ),
-  // A clipped (flat-topped) waveform - visually distinct from the smooth
-  // curves used by chorus/tremolo/reverb, matching what a diode clipper
-  // actually does to the signal.
-  drive: (
-    <>
-      <path d="M3 12h2l1.5-5h1.5v5M8 7l1.5 5h1.5v-5M11 12h2l1.5-5h1.5v5M16 7l1.5 5H21" />
-    </>
-  ),
 }
 
 export function BlockIcon({ kind, ...rest }: { kind: BlockKind } & IconProps) {

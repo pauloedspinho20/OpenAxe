@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for effect-param names/symbols/ranges across the web app, packages/core's DSP wrappers, and the WASM AudioWorkletProcessors (issue #51). Generated C++ .inc fragments and the JS index-map module are produced from this file by scripts/gen-param-schema.mjs - never hand-edit the generated output. Canonical symbol casing is snake_case, matching packages/core's existing GetParamInfo() tables (those were kept as-is; the web side was renamed to match - see issue #41). Scope: only the 11 effect kinds with real DSP backing in packages/core today, plus the 3 real params (input_level/output_level/slim_size) shared by the 5 NAM-model block kinds (amp/amp-cab/pedal/outboard/space). The amp tone stack (bass/mid/treble/presence), cab's irMix, and mixer/splitter have no packages/core DSP behind them yet and are intentionally NOT in this schema - see issue #51's discussion.",
+  "$comment": "Single source of truth for effect-param names/symbols/ranges across the web app, packages/core's DSP wrappers, and the WASM AudioWorkletProcessors (issue #51). Generated C++ .inc fragments and the JS index-map module are produced from this file by scripts/gen-param-schema.mjs - never hand-edit the generated output. Canonical symbol casing is snake_case, matching packages/core's existing GetParamInfo() tables (those were kept as-is; the web side was renamed to match - see issue #41). Scope: only the 10 effect kinds with real DSP backing in packages/core today, plus the 3 real params (input_level/output_level/slim_size) shared by the 5 NAM-model block kinds (amp/amp-cab/pedal/outboard/space). The amp tone stack (bass/mid/treble/presence), cab's irMix, and mixer/splitter have no packages/core DSP behind them yet and are intentionally NOT in this schema - see issue #51's discussion.",
   "effects": {
     "compressor": {
       "cppFile": "compressor.cpp",
@@ -805,108 +805,6 @@
         }
       },
       "derived": ["roomSize", "damping"]
-    },
-    "drive": {
-      "comment": "driveModel is a structural block-level swap (nam_studio_set_drive_model), not a generic param.",
-      "variants": {
-        "diode-clipper": {
-          "cppFile": "diode_clipper.cpp",
-          "params": [
-            {
-              "symbol": "cutoff",
-              "label": "Cutoff",
-              "min": 200.0,
-              "max": 20000.0,
-              "unit": "Hz"
-            },
-            {
-              "symbol": "drive",
-              "label": "Drive",
-              "min": 0.0,
-              "max": 1.0,
-              "unit": "%"
-            },
-            {
-              "symbol": "diode_type",
-              "label": "Diode Type",
-              "min": 0.0,
-              "max": 2.0,
-              "unit": "x"
-            },
-            {
-              "symbol": "num_diodes",
-              "label": "Diode Count",
-              "min": 0.3,
-              "max": 3.0,
-              "unit": "x"
-            }
-          ]
-        },
-        "tube-screamer": {
-          "cppFile": "tube_screamer.cpp",
-          "params": [
-            {
-              "symbol": "gain",
-              "label": "Gain",
-              "min": 0.0,
-              "max": 1.0,
-              "unit": "%"
-            },
-            {
-              "symbol": "diode_type",
-              "label": "Diode Type",
-              "min": 0.0,
-              "max": 2.0,
-              "unit": "x"
-            },
-            {
-              "symbol": "num_diodes",
-              "label": "Diode Count",
-              "min": 0.3,
-              "max": 3.0,
-              "unit": "x"
-            }
-          ]
-        },
-        "zen-drive": {
-          "cppFile": "zen_drive.cpp",
-          "params": [
-            {
-              "symbol": "voice",
-              "label": "Voice",
-              "min": 0.0,
-              "max": 1.0,
-              "unit": "%"
-            },
-            {
-              "symbol": "gain",
-              "label": "Gain",
-              "min": 0.0,
-              "max": 1.0,
-              "unit": "%"
-            }
-          ]
-        },
-        "mxr-distortion": {
-          "cppFile": "mxr_distortion.cpp",
-          "params": [
-            {
-              "symbol": "dist",
-              "label": "Distortion",
-              "min": 0.0,
-              "max": 1.0,
-              "unit": "%"
-            },
-            {
-              "symbol": "level",
-              "label": "Output Level",
-              "min": 0.0,
-              "max": 1.0,
-              "unit": "%"
-            }
-          ]
-        }
-      }
     }
   }
 }
