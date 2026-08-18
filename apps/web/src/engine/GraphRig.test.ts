@@ -32,6 +32,7 @@ vi.mock('./NamAmpNode', () => ({
   NamAmpNode: {
     create: async () => ({
       node: { connect: vi.fn(), disconnect: vi.fn() },
+      setToneGainDb: vi.fn(),
       loadModel: async () => ({ slimmable: false, slimmableBreakpoints: [] }),
       unloadModel: async () => undefined,
       setSlimSize: async () => undefined,

@@ -5,3 +5,7 @@
     {"Input", "input_level", -100.0f, 100.0f, "dBu"},
     {"Output", "output_level", -100.0f, 100.0f, "dBu"},
     {"Slim Size", "slim_size", 0.0f, 1.0f, "x"},
+    {"Bass", "bass", -12.0f, 12.0f, "dB"},
+    {"Mid", "mid", -12.0f, 12.0f, "dB"},
+    {"Treble", "treble", -12.0f, 12.0f, "dB"},
+    {"Presence", "presence", -12.0f, 12.0f, "dB"},

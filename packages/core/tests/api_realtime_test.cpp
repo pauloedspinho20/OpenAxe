@@ -247,9 +247,10 @@ void TestSlimBreakpointsOverAbi() {
 
   // A smaller buffer is truncated, not overrun.
   NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, amp, values.data(), 1) == 1);
-  // Loading a slimmable model grows the param surface (slim size joins the two
-  // calibration params).
-  NAM_EXPECT(nam_studio_block_param_count(graph, amp) == 3);
+  // The amp param surface is fixed at 7 (two calibration values, slim size, and
+  // the four tone-stack bands) whether or not the capture is slimmable -
+  // "is this slimmable?" is model metadata, not a param-count change.
+  NAM_EXPECT(nam_studio_block_param_count(graph, amp) == 7);
 
   nam_studio_graph_destroy(graph);
 }

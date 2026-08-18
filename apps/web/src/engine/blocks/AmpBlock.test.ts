@@ -11,6 +11,9 @@ vi.mock('../NamAmpNode', () => ({
       // `node` is the AudioWorkletNode the block wires into its chain; the
       // model calls are the wrapper's own async port messages.
       node: { connect: vi.fn(), disconnect: vi.fn() },
+      // The tone stack is a core param behind the worklet now, not a Web Audio
+      // filter chain, so the block just forwards knob values here.
+      setToneGainDb: vi.fn(),
       loadModel: vi.fn(),
       unloadModel: vi.fn(),
       setSlimSize: vi.fn(),

@@ -144,6 +144,17 @@ export class NamAmpNode {
   }
 
   /**
+   * One of the amp's four tone bands, in dB. These are AudioParams rather than
+   * messages (the stack is continuous automation, not a load), and the DSP is the
+   * core's own `ToneStack` - the web app used to run its own Web Audio biquad
+   * chain here, which the desktop app had no equivalent of.
+   */
+  setToneGainDb(band: 'bass' | 'mid' | 'treble' | 'presence', db: number): void {
+    const param = this.node.parameters.get(band)
+    if (param) param.setTargetAtTime(db, this.node.context.currentTime, 0.01)
+  }
+
+  /**
    * Release the worklet's WASM graph - which holds the loaded capture, often
    * several megabytes - instead of leaving it until the AudioContext closes.
    * The processor ends itself once it has done so.

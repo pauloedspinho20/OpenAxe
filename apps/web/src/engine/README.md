@@ -26,6 +26,7 @@ amp.node.connect(destination)
 
 const info = await amp.loadModel(namFileJsonText) // { sampleRate, loudnessDb, slimmable, ... }
 if (info.slimmable) await amp.setSlimSize(0.5) // trade fidelity for CPU
+amp.setToneGainDb('bass', 6) // the core's 4-band tone stack, ±12dB per band
 await amp.dispose() // frees the capture in WASM instead of waiting for context close
 ```
 
@@ -37,6 +38,9 @@ Notes worth knowing:
 - **Parsing happens on the audio thread**, inside the core's load call, which briefly blocks
   rendering for large captures. The upstream npm engine had the same characteristic; the desktop
   app pays the same cost on its control thread with audio suspended.
+- The **tone stack runs in the core too** (`dsp/tone_stack.cpp`), driven through the worklet's
+  AudioParams. `AmpBlock` used to implement it with four Web Audio `BiquadFilterNode`s, which is why
+  the desktop app - on the same core - had no working Bass/Mid/Treble/Presence at all.
 - Each node holds its own WASM instance and one-block graph (`IN -> amp -> OUT`), like every
   effect worklet — see `public/wasm-core/namStudioEffectBase.js`.
 - The core's `input_level`/`output_level` params are the **capture's own dBu calibration**, not
@@ -49,7 +53,8 @@ Notes worth knowing:
 (level/mute, plus a limiter before the destination, since arbitrary user-built parallel merges can
 sum much hotter than a fixed two-chain mix). `blocks/blockRegistry.ts` builds any block from its
 serialized `kind`; `blocks/AmpBlock.ts` wraps `NamAmpNode` with the block's own staging (input and
-output trims, the 4-band tone stack, true bypass), and `blocks/CabBlock.ts` does IR convolution
+output trims, true bypass) and forwards the Bass/Mid/Treble/Presence knobs to the
+core's tone stack through the worklet, and `blocks/CabBlock.ts` does IR convolution
 with a `ConvolverNode`.
 
 `graphValidation.ts` holds the connection rules — left-to-right by column (which makes cycles

@@ -61,6 +61,7 @@ meters, and CPU load.
 | ---------------------------- | --------------------------------------------------- | ---------------------------------- | ---- | ------------------------------------ |
 | DSP effects                  | core via WASM worklets                              | core, in-process                   | —    | core ✅                              |
 | Amp (NAM inference)          | core's `NamAmp` via WASM (`ampWorklet.js`)          | core's `NamAmp`                    | —    | core ✅                              |
+| Amp tone stack               | core (`tone_stack.cpp`) via the amp worklet         | core                               | —    | core ✅                              |
 | Signal graph + routing rules | TS `GraphRig` + `graphValidation`                   | core `graph_rig`                   | —    | **core** ❌ (core already has both)  |
 | Reverb control mapping       | core (`set_reverb_control`)                         | core                               | —    | core ✅                              |
 | Block I/O trims              | Web Audio `GainNode`s                               | core trims                         | —    | **core** ⚠️ (web still to move)      |

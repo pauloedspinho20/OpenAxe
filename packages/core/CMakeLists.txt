@@ -30,6 +30,7 @@ add_library(nam_studio_core STATIC
   src/dsp/equalizer.cpp
   src/dsp/noise_gate.cpp
   src/dsp/tremolo.cpp
+  src/dsp/tone_stack.cpp
 )
 
 target_include_directories(nam_studio_core PUBLIC

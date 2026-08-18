@@ -59,6 +59,13 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
+- **Tone stack** (`include/nam_studio/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
+  — the 4-band Bass/Mid/Treble/Presence stack the engine runs after every NAM
+  model (low shelf 100Hz, peaking 1kHz Q0.7, high shelf 5kHz, peaking 8kHz Q0.5,
+  each ±12dB). Frequencies and slopes match the Web Audio `BiquadFilterNode`
+  chain the web app used to own privately, so moving it here didn't change how
+  the web app sounds - and the desktop app, which had no tone controls at all,
+  now matches it. Flat is bit-exact passthrough, so an un-EQ'd amp costs nothing.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -69,6 +76,9 @@ port the boundary-value matrix from `graphValidation.test.ts`/
 bundled with the vendored NeuralAmpModelerCore submodule
 (`third_party/nam-core/example_models/lstm.nam`), resets it, processes an
 impulse through it, and asserts every output sample is finite.
+`tone_stack_test` measures the stack's actual frequency response - each band
+boosting and cutting its own region while leaving the others alone, holding at
+96kHz, and staying bit-exact while flat.
 `dragonfly_{hall,room,plate,early_reflections}_reverb_test` each sweep every
 one of that algorithm's parameters to their min/max and process a real
 stereo impulse through it, asserting a genuine non-silent, finite reverb

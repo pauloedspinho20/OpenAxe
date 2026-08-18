@@ -59,7 +59,15 @@ export const DELAY_PARAMS = Object.freeze({
   wow_rate: 5,
 })
 
-export const AMP_PARAMS = Object.freeze({ input_level: 0, output_level: 1, slim_size: 2 })
+export const AMP_PARAMS = Object.freeze({
+  input_level: 0,
+  output_level: 1,
+  slim_size: 2,
+  bass: 3,
+  mid: 4,
+  treble: 5,
+  presence: 6,
+})
 
 export const REVERB_PARAMS = Object.freeze({
   hall: Object.freeze({

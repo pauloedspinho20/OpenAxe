@@ -22,6 +22,7 @@
 #include "nam_studio/dsp/noise_gate.h"
 #include "nam_studio/dsp/phaser.h"
 #include "nam_studio/dsp/ping_pong_delay.h"
+#include "nam_studio/dsp/tone_stack.h"
 #include "nam_studio/dsp/tremolo.h"
 
 namespace nam_studio::engine {
@@ -37,6 +38,15 @@ constexpr int kMaxParamsPerBlock = 18;
 constexpr int kAmpInputLevelParam = 0;
 constexpr int kAmpOutputLevelParam = 1;
 constexpr int kAmpSlimSizeParam = 2;
+// The 4-band tone stack the engine runs after the model - contiguous so
+// Process() can loop them (see ApplyRealtimeParams).
+constexpr int kAmpBassParam = 3;
+constexpr int kAmpToneBandCount = 4;
+// Every amp-family block exposes the same 7: two calibration values, slim size,
+// and the four tone bands. Fixed rather than growing with the loaded model -
+// whether slim size does anything is a property of the capture
+// (nam_studio_block_model_info reports it), not of the param surface.
+constexpr int kAmpParamCount = 7;
 
 // The five block kinds backed by a NAM capture. They are structurally
 // identical - only the UI's gear category and labelling differ - so everything
@@ -107,6 +117,12 @@ struct AudioEngine::BlockState {
   // block costs nothing.
   std::atomic<float> input_trim{1.0f};
   std::atomic<float> output_trim{1.0f};
+
+  // Amp-family only: the 4-band tone stack that runs after the model, driven
+  // from the bass/mid/treble/presence params. Held here rather than inside
+  // DspVariant because it is not an alternative to NamAmp - it is always in
+  // series with one (and it stays flat, and free, until a knob moves).
+  dsp::ToneStack tone;
 
   // input_l/input_r[port][frame]; most kinds use only port 0. kMixer uses
   // kMixerInputCount independent ports, summed together into port 0 right
@@ -250,7 +266,7 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   state->kind = kind;
   if (IsAmpFamily(kind)) {
     state->dsp.emplace<dsp::NamAmp>();
-    state->param_count = 2;  // input level, output level; +1 (slim size) once a slimmable model loads
+    state->param_count = kAmpParamCount;
   } else if (kind == graph::BlockKind::kReverb) {
     state->dsp.emplace<dsp::DragonflyHallReverb>();  // default algorithm; see SetReverbAlgorithm
     state->param_count = dsp::DragonflyHallReverb::ParamCount();
@@ -360,6 +376,7 @@ void AudioEngine::Reset(double sample_rate, int max_block_size) {
 
   for (auto& [id, state] : block_states_) {
     EnsureBuffers(*state);
+    if (IsAmpFamily(state->kind)) state->tone.Reset(sample_rate);
     std::visit(
         [&](auto& d) {
           using T = std::decay_t<decltype(d)>;
@@ -403,6 +420,16 @@ void AudioEngine::ApplyRealtimeParams(BlockState& state) {
           // is documented as not real-time safe (NAMCore may reallocate).
           // SetParam() below applies it synchronously and immediately
           // instead, off this hot path.
+          //
+          // The tone stack is real-time safe, so it is driven from here like
+          // any other param: SetGainDb early-returns when a band's value
+          // hasn't changed, so re-asserting all four per buffer is free.
+          for (int band = 0; band < kAmpToneBandCount; ++band) {
+            state.tone.SetGainDb(
+                static_cast<dsp::ToneStack::Band>(band),
+                state.params[static_cast<size_t>(kAmpBassParam + band)].load(
+                    std::memory_order_relaxed));
+          }
         } else if constexpr (!std::is_same_v<T, std::monostate>) {
           for (int i = 0; i < state.param_count; ++i) {
             d.SetParam(i, state.params[static_cast<size_t>(i)].load(std::memory_order_relaxed));
@@ -420,9 +447,22 @@ void AudioEngine::RunDsp(BlockState& state, int num_frames) {
       [&](auto& d) {
         using T = std::decay_t<decltype(d)>;
         if constexpr (std::is_same_v<T, dsp::NamAmp>) {
-          // Mono model, stereo internal representation: process channel 0,
-          // duplicate to both output channels.
-          d.Process(state.input_l[0].data(), state.output_l.data(), num_frames);
+          // Mono model, stereo internal representation: process channel 0, run
+          // the tone stack over that same mono signal (where a real amp's tone
+          // controls sit - after the amp, before the speaker), then duplicate to
+          // both output channels. Mono for the same reason the web app's Web
+          // Audio chain was mono here: the model's output is.
+          //
+          // With no model loaded the block passes audio through instead, like
+          // every other DSP-less kind. NamAmp::Process leaves the output buffer
+          // untouched in that case, so without this copy the block would repeat
+          // whatever it produced on the previous buffer.
+          if (d.HasModel()) {
+            d.Process(state.input_l[0].data(), state.output_l.data(), num_frames);
+          } else {
+            std::copy_n(state.input_l[0].data(), num_frames, state.output_l.data());
+          }
+          state.tone.Process(state.output_l.data(), num_frames);
           std::copy_n(state.output_l.data(), num_frames, state.output_r.data());
         } else if constexpr (std::is_same_v<T, std::monostate>) {
           // Passthrough: unwrapped effect kinds, Mixer (already summed into
@@ -611,7 +651,7 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
           // are dBu/x, not a fixed hardware surface with published bounds.
           // Generated from packages/core/param_schema.json (issue #51) - run
           // scripts/gen-param-schema.mjs after editing the schema.
-          static constexpr ParamDescriptor kAmpParams[3] = {
+          static constexpr ParamDescriptor kAmpParams[kAmpParamCount] = {
 #include "dsp/generated/engine_amp_params.inc"
           };
           return kAmpParams[index];
@@ -713,7 +753,6 @@ void AudioEngine::AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp) {
   state.params[kAmpOutputLevelParam].store(
       info.has_output_level ? static_cast<float>(info.output_level_dbu) : 0.0f,
       std::memory_order_relaxed);
-  state.param_count = info.is_slimmable ? 3 : 2;
   if (info.is_slimmable) {
     state.params[kAmpSlimSizeParam].store(static_cast<float>(amp.SlimSize()), std::memory_order_relaxed);
   }
@@ -727,7 +766,6 @@ void AudioEngine::UnloadNamModel(BlockId id) {
   auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
   if (!amp) return;
   amp->UnloadModel();
-  state->param_count = 2;
   state->amp_input_level_active.store(false, std::memory_order_relaxed);
   state->amp_output_level_active.store(false, std::memory_order_relaxed);
 }

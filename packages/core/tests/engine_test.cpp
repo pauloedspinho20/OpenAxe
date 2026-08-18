@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "nam_studio/dsp/compressor.h"
@@ -276,6 +277,58 @@ void TestReverbControlsResolvePerAlgorithm() {
   engine.SetReverbControl(cab, ReverbControl::kRoomSize, 0.5f);  // must not crash
 }
 
+// The amp family's tone stack and its model-less behaviour. The 4-band stack
+// used to exist only as Web Audio biquads in the web app, so the desktop path
+// had no working Bass/Mid/Treble/Presence at all - the knobs resolved to no core
+// param and were rejected by the bridge.
+void TestAmpToneStackAndPassthroughWithoutModel() {
+  AudioEngine engine;
+  const BlockId amp = engine.AddBlock(BlockKind::kAmp, 0, 0);
+  NAM_EXPECT(engine.Connect(kInRailId, 0, amp, 0).ok);
+  NAM_EXPECT(engine.Connect(amp, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Fixed 7-param surface: two calibration values, slim size, four tone bands.
+  NAM_EXPECT(engine.ParamCount(amp) == 7);
+  const auto symbolAt = [&](int index) {
+    const auto info = engine.ParamInfo(amp, index);
+    return info && info->symbol ? std::string(info->symbol) : std::string();
+  };
+  NAM_EXPECT(symbolAt(3) == "bass");
+  NAM_EXPECT(symbolAt(4) == "mid");
+  NAM_EXPECT(symbolAt(5) == "treble");
+  NAM_EXPECT(symbolAt(6) == "presence");
+
+  // No model loaded: the block passes audio through rather than repeating its
+  // previous output buffer (which is what an untouched output buffer meant).
+  for (float sample : RunMono(engine, 0.25f)) NAM_EXPECT(std::fabs(sample - 0.25f) < 1e-6f);
+  for (float sample : RunMono(engine, 0.0f)) NAM_EXPECT(sample == 0.0f);
+
+  // Flat tone stack is bit-exact, so a DC input comes back untouched.
+  for (float sample : RunMono(engine, 0.5f)) NAM_EXPECT(sample == 0.5f);
+
+  // A bass boost lifts DC (the low shelf's passband extends down to 0Hz), which
+  // is enough to prove the params actually reach the stack from Process(). The
+  // 100Hz shelf takes longer than one 64-frame buffer to settle, so measure the
+  // steady state rather than the transient.
+  const auto settled = [&](float input) {
+    std::vector<float> output;
+    for (int i = 0; i < 60; ++i) output = RunMono(engine, input);
+    return output.back();
+  };
+
+  engine.SetParam(amp, 3, 12.0f);
+  NAM_EXPECT(settled(0.5f) > 0.9f);  // +12dB on a 0.5 DC level
+
+  // ...and a cut pulls it well below unity.
+  engine.SetParam(amp, 3, -12.0f);
+  NAM_EXPECT(settled(0.5f) < 0.25f);
+
+  // Values outside ±12dB are clamped by the stack rather than rejected.
+  engine.SetParam(amp, 3, 100.0f);
+  for (float sample : RunMono(engine, 0.1f)) NAM_EXPECT(std::isfinite(sample));
+}
+
 void TestMasterLevelScalesOutput() {
   AudioEngine engine;
   const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 0);  // pure passthrough
@@ -336,6 +389,7 @@ int main() {
   TestBypassSkipsDspAndPassesInputThrough();
   TestBlockTrimsScaleInputAndOutput();
   TestReverbControlsResolvePerAlgorithm();
+  TestAmpToneStackAndPassthroughWithoutModel();
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
 

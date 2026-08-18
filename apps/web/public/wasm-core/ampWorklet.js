@@ -27,8 +27,26 @@ const AMP_KIND = 10
 // is loaded. Deliberately no knob params here - the user-facing Input/Output
 // trims are block trims, not these (see nam_studio_set_block_input_trim).
 const PARAM_SLIM_SIZE = 2
+// The 4-band tone stack the engine runs after the model
+// (packages/core/src/dsp/tone_stack.cpp), contiguous from index 3.
+const PARAM_BASS = 3
+const PARAM_MID = 4
+const PARAM_TREBLE = 5
+const PARAM_PRESENCE = 6
 
 class NamAmpProcessor extends NamStudioEffectProcessor {
+  // The tone stack is continuous automation, so unlike model loading it is
+  // AudioParams rather than messages - identical ranges to the core's own clamp
+  // (±12dB) and to the knobs the UI draws.
+  static get parameterDescriptors() {
+    return [
+      { name: 'bass', defaultValue: 0, minValue: -12, maxValue: 12 },
+      { name: 'mid', defaultValue: 0, minValue: -12, maxValue: 12 },
+      { name: 'treble', defaultValue: 0, minValue: -12, maxValue: 12 },
+      { name: 'presence', defaultValue: 0, minValue: -12, maxValue: 12 },
+    ]
+  }
+
   constructor(options) {
     super(options, AMP_KIND)
     this.disposed = false
@@ -78,6 +96,13 @@ class NamAmpProcessor extends NamStudioEffectProcessor {
       reply.error = String(error)
     }
     this.port.postMessage(reply)
+  }
+
+  applyParams(module, block, parameters) {
+    module._nam_studio_set_param(this.graph, block, PARAM_BASS, parameters.bass[0])
+    module._nam_studio_set_param(this.graph, block, PARAM_MID, parameters.mid[0])
+    module._nam_studio_set_param(this.graph, block, PARAM_TREBLE, parameters.treble[0])
+    module._nam_studio_set_param(this.graph, block, PARAM_PRESENCE, parameters.presence[0])
   }
 
   // Once disposed the graph pointer is dangling, so nothing may touch it -

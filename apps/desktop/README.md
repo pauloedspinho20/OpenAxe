@@ -187,7 +187,8 @@ deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
   `ScriptProcessorNode` anywhere in the native path.
 
 - IR/Cab blocks pass audio through unchanged - the core has no convolution DSP
-  yet, so `loadIR` is a no-op and cab meters stay silent.
+  yet, so `loadIR` is a no-op and cab meters stay silent. This is the last piece
+  of the audio path that exists only in the web app (see ARCHITECTURE.md).
 - Effect params apply by core param _symbol_; a symbol the core's table doesn't
   have is rejected by the bridge and warned about once per block+key
   (issue #41), rather than silently dropped.

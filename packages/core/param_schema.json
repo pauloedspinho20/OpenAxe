@@ -419,9 +419,37 @@
           "min": 0.0,
           "max": 1.0,
           "unit": "x"
+        },
+        {
+          "symbol": "bass",
+          "label": "Bass",
+          "min": -12.0,
+          "max": 12.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "mid",
+          "label": "Mid",
+          "min": -12.0,
+          "max": 12.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "treble",
+          "label": "Treble",
+          "min": -12.0,
+          "max": 12.0,
+          "unit": "dB"
+        },
+        {
+          "symbol": "presence",
+          "label": "Presence",
+          "min": -12.0,
+          "max": 12.0,
+          "unit": "dB"
         }
       ],
-      "comment": "The 3-entry table engine.cpp bolts onto NamAmp (which has no GetParamInfo of its own) - shared by amp/amp-cab/pedal/outboard/space. Generated fragment name is synthetic (engine_amp_params.inc) since these params live inside engine.cpp itself, not a dedicated DSP wrapper file."
+      "comment": "The 7-entry table engine.cpp bolts onto NamAmp (which has no GetParamInfo of its own) - shared by amp/amp-cab/pedal/outboard/space. input_level/output_level are the loaded capture's own dBu calibration, not user levels (a UI's Input/Output knobs are block trims - see nam_studio_set_block_input_trim); slim_size only does anything for a slimmable capture; bass/mid/treble/presence are the 4-band tone stack the engine runs after the model (dsp/tone_stack.cpp), which the web app used to implement with its own Web Audio biquads. Generated fragment name is synthetic (engine_amp_params.inc) since these params live inside engine.cpp itself, not a dedicated DSP wrapper file."
     },
     "reverb": {
       "comment": "Algorithm choice is a structural block-level swap (nam_studio_set_reverb_algorithm), not a generic param - see paramSchema.ts's reverbAlgorithm field. roomSize/damping are web-only UI abstractions computed via per-algorithm formulas in dragonflyReverbWorklet.js into decay/high_cut; they have no 1:1 core symbol and are listed under derived, not variants.",

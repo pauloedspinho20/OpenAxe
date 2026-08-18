@@ -410,6 +410,35 @@ void TestReverbControlKeys() {
   CHECK(r["ok"] == false);
 }
 
+// The amp block's full param surface over the bridge: the tone stack (which used
+// to exist only as Web Audio biquads in the web app, so these four knobs did
+// nothing on desktop) and the camelCase `slimSize` key, which resolved to no
+// core symbol before the alias existed.
+void TestAmpToneStackAndSlimSizeKeys() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
+
+  for (const char* key : {"bass", "mid", "treble", "presence"}) {
+    const std::string set = std::string(R"([{"blockId":"a1","key":")") + key + R"(","value":6.0}])";
+    auto r = Parse(bridge.HandleSetParam(Arr(set.c_str())));
+    CHECK(r["ok"] == true);
+    const std::string get = std::string(R"([{"blockId":"a1","key":")") + key + R"("}])";
+    auto value = Parse(bridge.HandleGetParam(Arr(get.c_str())));
+    CHECK(value["ok"] == true);
+    CHECK(std::fabs(value["value"].get<double>() - 6.0) < 1e-6);
+  }
+
+  // The UI sends camelCase here; the core symbol is slim_size.
+  auto r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"a1","key":"slimSize","value":0.5}])")));
+  CHECK(r["ok"] == true);
+  auto slim = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"a1","key":"slim_size"}])")));
+  CHECK(std::fabs(slim["value"].get<double>() - 0.5) < 1e-6);
+
+  // An unknown key is still reported rather than silently accepted.
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"a1","key":"nonsense","value":1.0}])")));
+  CHECK(r["ok"] == false);
+}
+
 // issue #42: bypass and the master bus were UI-only no-ops on desktop - this
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
@@ -452,6 +481,7 @@ int main() {
   TestSetBypassAndMasterBus();
   TestSetBlockTrim();
   TestReverbControlKeys();
+  TestAmpToneStackAndSlimSizeKeys();
   TestConcurrentMutationsWhileStreamRunning();
 
   if (g_failures > 0) {

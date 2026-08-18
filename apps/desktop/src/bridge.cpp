@@ -428,12 +428,24 @@ std::string StudioBridge::HandleDisconnect(const std::string& req) {
 
 // Resolves a param key (index number or symbol string) to an index, reading
 // the block's param table on the control thread.
+// A handful of the web UI's param keys are camelCase where the core's symbol is
+// snake_case (the canonical casing - see packages/core/param_schema.json). The
+// effect params were renamed on the web side to match (issue #41), but the amp's
+// slim-size control kept its camelCase key, so it silently resolved to nothing
+// on desktop. Translate here rather than renaming the web key, which would
+// invalidate every saved preset.
+const char* CoreSymbolAliasFor(const std::string& key) {
+  if (key == "slimSize") return "slim_size";
+  return nullptr;
+}
+
 int32_t ResolveParamIndex(const json& key, int32_t core_id, NamStudioGraph* graph,
                           const std::map<std::string, BlockRecord>& blocks,
                           const std::string& js_id) {
   if (key.is_number()) return key.get<int32_t>();
   if (!key.is_string()) return -1;
-  const std::string symbol = key.get<std::string>();
+  std::string symbol = key.get<std::string>();
+  if (const char* alias = CoreSymbolAliasFor(symbol)) symbol = alias;
   const auto it = blocks.find(js_id);
   const int32_t count = it == blocks.end() ? 0 : nam_studio_block_param_count(graph, core_id);
   for (int32_t i = 0; i < count; ++i) {

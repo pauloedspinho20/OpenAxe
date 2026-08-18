@@ -6,6 +6,12 @@ add_executable(graph_rig_test graph_rig_test.cpp)
 target_link_libraries(graph_rig_test PRIVATE nam_studio_core)
 add_test(NAME graph_rig_test COMMAND graph_rig_test)
 
+# The tone stack is plain DSP with no vendored dependency, so it builds
+# unconditionally like the graph tests.
+add_executable(tone_stack_test tone_stack_test.cpp)
+target_link_libraries(tone_stack_test PRIVATE nam_studio_core)
+add_test(NAME tone_stack_test COMMAND tone_stack_test)
+
 add_executable(api_test api_test.cpp)
 target_link_libraries(api_test PRIVATE nam_studio_core)
 add_test(NAME api_test COMMAND api_test)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import coreSchema from '../../../../packages/core/param_schema.json'
-import { EFFECT_PARAM_SCHEMAS } from './paramSchema'
+import { BLOCK_PARAM_SCHEMAS, EFFECT_PARAM_SCHEMAS } from './paramSchema'
 import type { EffectKind } from './Effect'
 
 /**
@@ -74,6 +74,44 @@ const REVERB_CONTROLS = [
 ]
 
 describe('paramSchema vs packages/core/param_schema.json', () => {
+  it("the amp's tone stack matches the core's own ToneStack params", () => {
+    const core = coreParamsFor('amp')
+    const web = new Map(
+      (BLOCK_PARAM_SCHEMAS.amp ?? []).map((field) => [
+        field.key,
+        field.control === 'knob' ? { min: field.min, max: field.max } : {},
+      ]),
+    )
+    for (const symbol of ['bass', 'mid', 'treble', 'presence']) {
+      expect(core.has(symbol), `core has no ${symbol} param`).toBe(true)
+      expect({ symbol, ...web.get(symbol) }).toEqual({
+        symbol,
+        min: core.get(symbol)!.min,
+        max: core.get(symbol)!.max,
+      })
+    }
+  })
+
+  it("the amp's Input/Output knobs are trims, not the core's calibration params", () => {
+    // Both sides happen to use the symbols `input_level`/`output_level`, but they
+    // mean different things: in the core they are the loaded capture's dBu
+    // calibration (-100..100 dBu), while the UI's knobs are linear I/O trims
+    // (0..1.5) that route to nam_studio_set_block_{input,output}_trim instead.
+    // This asserts the mismatch is the known, deliberate one - if the ranges ever
+    // coincide, someone has conflated them.
+    const core = coreParamsFor('amp')
+    const web = new Map(
+      (BLOCK_PARAM_SCHEMAS.amp ?? []).map((field) => [
+        field.key,
+        field.control === 'knob' ? { min: field.min, max: field.max } : {},
+      ]),
+    )
+    for (const symbol of ['input_level', 'output_level']) {
+      expect(web.get(symbol)).toEqual({ min: 0, max: 1.5 })
+      expect(core.get(symbol)!.unit).toBe('dBu')
+    }
+  })
+
   it('covers every effect kind the core implements', () => {
     // Every core effect kind is either compared symbol-by-symbol below or is
     // one of the two documented exceptions (amp, reverb).
