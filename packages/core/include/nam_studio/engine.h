@@ -49,6 +49,27 @@ enum class ReverbAlgorithm {
   kEarlyReflections,
 };
 
+// The user-facing reverb controls, as a UI presents them - deliberately not a
+// 1:1 view of any single algorithm's param table. Dragonfly's four algorithms
+// expose overlapping but differently-named and differently-shaped controls
+// (Hall's pre-delay is `delay`, Room's is `predelay`, Early Reflections has
+// none; damping is `high_cut` on Hall/Plate/ER but `in_high_cut` on Room),
+// and two of the controls are abstractions with no core symbol at all
+// (kRoomSize maps onto decay time, kDamping onto the high cut). Resolving all
+// of that lives here, in one place, so every front end - the web worklet, the
+// desktop bridge, a future VST3 editor - drives the same mapping instead of
+// each reimplementing it. Controls an algorithm doesn't have are no-ops.
+enum class ReverbControl {
+  kRoomSize,   // 0..0.97, mapped onto the algorithm's decay time (0.1..10s)
+  kDamping,    // 0..1, mapped onto the algorithm's high cut (16000..1000Hz)
+  kWidth,      // percent
+  kPredelay,   // ms
+  kSpin,       // Hz
+  kWander,     // ms
+  kEarlySend,  // percent
+  kDryLevel,   // percent
+};
+
 struct ParamDescriptor {
   const char* name;
   const char* symbol;
@@ -113,6 +134,12 @@ class AudioEngine {
   // safe - reconstructs the underlying wrapper instance.
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);
 
+  // Apply one user-facing reverb control to whichever algorithm currently
+  // backs the block (see ReverbControl). No-op for non-reverb blocks and for
+  // controls the current algorithm doesn't have. Real-time safe: it resolves
+  // to the same atomic param store SetParam writes.
+  void SetReverbControl(BlockId id, ReverbControl control, float value);
+
   // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
   void SetDelayModel(BlockId id, dsp::Delay::Model model);
 
@@ -121,6 +148,18 @@ class AudioEngine {
   // its port-0 input passes through to its output unchanged.
   void SetBypass(BlockId id, bool bypassed);
   bool IsBypassed(BlockId id) const;
+
+  // Per-block I/O staging gain, 1.0 = unity. These are the user-facing
+  // Input/Output trims every block kind shows in the UI - deliberately NOT
+  // the Amp family's input_level/output_level params, which carry the NAM
+  // model's own dBu calibration and must not be repurposed as a volume
+  // control. Applied to the block's summed port-0 input and to its output
+  // whether or not the block is bypassed, since they stage what enters and
+  // leaves the block rather than what its DSP does.
+  void SetInputTrim(BlockId id, float gain);
+  float GetInputTrim(BlockId id) const;
+  void SetOutputTrim(BlockId id, float gain);
+  float GetOutputTrim(BlockId id) const;
 
   // Scales the final output bus (post-graph, pre-host). 1.0 = unity.
   void SetMasterLevel(float level);

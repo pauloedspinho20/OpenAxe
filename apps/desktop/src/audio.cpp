@@ -281,7 +281,17 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
   options.flags = RTAUDIO_NONINTERLEAVED;
   options.flags |= RTAUDIO_SCHEDULE_REALTIME;
   options.numberOfBuffers = 0;  // backend default
-  options.priority = 0;         // backend default
+  // Only consulted with RTAUDIO_SCHEDULE_REALTIME, and only by the backends
+  // that schedule their own callback thread (ALSA/JACK, where RtAudio clamps
+  // this into SCHED_RR's valid range - so asking high means "the top of the
+  // RT band", and the old 0 meant the bottom of it). CoreAudio and WASAPI
+  // ignore it: they set their own priority for the callback thread.
+  options.priority = 90;
+  // buffer_frames == 0 means "as small as this device allows" - the hardware
+  // minimum on CoreAudio, 2 periods instead of the default 4 on
+  // ALSA/WASAPI/DS. Opt-in, since a heavy NAM model can overrun a block that
+  // small (see the header).
+  if (buffer_frames == kLowestLatencyBuffer) options.flags |= RTAUDIO_MINIMIZE_LATENCY;
 
   // Clamp channels to what each device actually provides: a mono built-in mic
   // has 1 input channel, stereo speakers have 2 output channels. Requesting
@@ -300,9 +310,23 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
   state_.input_channels = in_ch;
   state_.output_channels = out_ch;
 
+  // Prefer a rate the device actually runs at: opening at an unsupported rate
+  // either fails outright or makes the OS resample around us, which costs both
+  // latency and fidelity for no benefit.
+  double rate = sample_rate;
+  const auto supports = [](const RtAudio::DeviceInfo& info, double r) {
+    return std::find(info.sampleRates.begin(), info.sampleRates.end(),
+                     static_cast<unsigned int>(r)) != info.sampleRates.end();
+  };
+  if (!supports(in_info, rate) || !supports(out_info, rate)) {
+    const unsigned int preferred =
+        out_info.preferredSampleRate != 0 ? out_info.preferredSampleRate : in_info.preferredSampleRate;
+    if (preferred != 0) rate = static_cast<double>(preferred);
+  }
+
   unsigned int frames = buffer_frames;
   const RtAudioErrorType result =
-      audio_.openStream(&out, &in, RTAUDIO_FLOAT32, sample_rate, &frames, &RtProcessCallback,
+      audio_.openStream(&out, &in, RTAUDIO_FLOAT32, rate, &frames, &RtProcessCallback,
                         &state_, &options);
   if (result != RTAUDIO_NO_ERROR) {
     last_error_ = audio_.getErrorText();

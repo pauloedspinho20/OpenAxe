@@ -4,7 +4,9 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <mutex>
+#include <span>
 #include <type_traits>
 #include <variant>
 
@@ -88,6 +90,12 @@ struct AudioEngine::BlockState {
   // Real-time safe: when true, Process() skips ApplyRealtimeParams/RunDsp
   // for this block entirely and passes port-0 input straight to output.
   std::atomic<bool> bypassed{false};
+
+  // Per-block I/O staging gain (see SetInputTrim). Unity by default, and
+  // Process() skips the multiply entirely at exactly 1.0f so an untouched
+  // block costs nothing.
+  std::atomic<float> input_trim{1.0f};
+  std::atomic<float> output_trim{1.0f};
 
   // input_l/input_r[port][frame]; most kinds use only port 0. kMixer uses
   // kMixerInputCount independent ports, summed together into port 0 right
@@ -409,12 +417,29 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       }
     }
 
+    // I/O trims stage what enters and leaves the block, so they apply on the
+    // bypassed path too - the DSP is what bypass skips, not the block's
+    // level staging.
+    if (const float in_trim = state.input_trim.load(std::memory_order_relaxed); in_trim != 1.0f) {
+      for (int i = 0; i < num_frames; ++i) {
+        state.input_l[0][static_cast<size_t>(i)] *= in_trim;
+        state.input_r[0][static_cast<size_t>(i)] *= in_trim;
+      }
+    }
+
     if (state.bypassed.load(std::memory_order_relaxed)) {
       std::copy_n(state.input_l[0].data(), num_frames, state.output_l.data());
       std::copy_n(state.input_r[0].data(), num_frames, state.output_r.data());
     } else {
       ApplyRealtimeParams(state);
       RunDsp(state, num_frames);
+    }
+
+    if (const float out_trim = state.output_trim.load(std::memory_order_relaxed); out_trim != 1.0f) {
+      for (int i = 0; i < num_frames; ++i) {
+        state.output_l[static_cast<size_t>(i)] *= out_trim;
+        state.output_r[static_cast<size_t>(i)] *= out_trim;
+      }
     }
 
     float peak = 0.0f;
@@ -565,6 +590,69 @@ bool AudioEngine::BlockHasModel(BlockId id) const {
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────
 
+namespace {
+
+// Room size (0..0.97) -> decay seconds, and damping (0..1) -> high-cut Hz.
+// These two ranges are the whole definition of the kRoomSize/kDamping
+// abstractions; they were previously duplicated as literals inside the web
+// app's reverb worklet, which is why the desktop path had no room size or
+// damping control at all.
+constexpr float kDecayMinSeconds = 0.1f;
+constexpr float kDecayMaxSeconds = 10.0f;
+constexpr float kRoomSizeMax = 0.97f;
+constexpr float kHighCutMinHz = 1000.0f;
+constexpr float kHighCutMaxHz = 16000.0f;
+
+// Ordered symbol candidates per control: the first symbol the current
+// algorithm's param table actually has wins, and nothing happens when it has
+// none of them (Early Reflections has no pre-delay, decay or spin).
+std::span<const char* const> ReverbControlSymbols(ReverbControl control) {
+  static constexpr const char* kRoomSize[] = {"decay"};
+  static constexpr const char* kDamping[] = {"high_cut", "in_high_cut"};
+  static constexpr const char* kWidth[] = {"width"};
+  static constexpr const char* kPredelay[] = {"predelay", "delay"};
+  static constexpr const char* kSpin[] = {"spin"};
+  static constexpr const char* kWander[] = {"wander"};
+  static constexpr const char* kEarlySend[] = {"early_send"};
+  static constexpr const char* kDryLevel[] = {"dry_level"};
+  switch (control) {
+    case ReverbControl::kRoomSize: return kRoomSize;
+    case ReverbControl::kDamping: return kDamping;
+    case ReverbControl::kWidth: return kWidth;
+    case ReverbControl::kPredelay: return kPredelay;
+    case ReverbControl::kSpin: return kSpin;
+    case ReverbControl::kWander: return kWander;
+    case ReverbControl::kEarlySend: return kEarlySend;
+    case ReverbControl::kDryLevel: return kDryLevel;
+  }
+  return {};
+}
+
+}  // namespace
+
+void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float value) {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || state->kind != graph::BlockKind::kReverb) return;
+
+  float scaled = value;
+  if (control == ReverbControl::kRoomSize) {
+    const float t = std::clamp(value, 0.0f, kRoomSizeMax) / kRoomSizeMax;
+    scaled = kDecayMinSeconds + t * (kDecayMaxSeconds - kDecayMinSeconds);
+  } else if (control == ReverbControl::kDamping) {
+    const float t = std::clamp(value, 0.0f, 1.0f);
+    scaled = kHighCutMaxHz - t * (kHighCutMaxHz - kHighCutMinHz);
+  }
+
+  for (const char* symbol : ReverbControlSymbols(control)) {
+    for (int i = 0; i < state->param_count; ++i) {
+      const std::optional<ParamDescriptor> info = ParamInfo(id, i);
+      if (!info || !info->symbol || std::strcmp(info->symbol, symbol) != 0) continue;
+      SetParam(id, i, std::clamp(scaled, info->min_value, info->max_value));
+      return;
+    }
+  }
+}
+
 void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
@@ -622,6 +710,26 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
 void AudioEngine::SetBypass(BlockId id, bool bypassed) {
   BlockState* state = FindBlock(id);
   if (state) state->bypassed.store(bypassed, std::memory_order_relaxed);
+}
+
+void AudioEngine::SetInputTrim(BlockId id, float gain) {
+  BlockState* state = FindBlockThreadSafe(id);
+  if (state) state->input_trim.store(gain, std::memory_order_relaxed);
+}
+
+float AudioEngine::GetInputTrim(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  return state ? state->input_trim.load(std::memory_order_relaxed) : 1.0f;
+}
+
+void AudioEngine::SetOutputTrim(BlockId id, float gain) {
+  BlockState* state = FindBlockThreadSafe(id);
+  if (state) state->output_trim.store(gain, std::memory_order_relaxed);
+}
+
+float AudioEngine::GetOutputTrim(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  return state ? state->output_trim.load(std::memory_order_relaxed) : 1.0f;
 }
 
 bool AudioEngine::IsBypassed(BlockId id) const {

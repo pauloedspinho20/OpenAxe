@@ -3,79 +3,35 @@
  * (Hall, Room, Plate, Early Reflections) compiled to WASM from
  * packages/core. The `reverbAlgorithm` AudioParam selects which algorithm
  * backs the block; switching algorithms reconstructs the underlying DSP
- * wrapper (not real-time safe, but algorithm choice is a user action). Each
- * algorithm has its own param-count and index layout, so per-algorithm index
- * maps route the UI's stable AudioParams to the correct C++ param slots.
+ * wrapper (not real-time safe, but algorithm choice is a user action).
  *
- * The 7 user-facing knobs (roomSize/damping/width/predelay/spin/wander/
- * earlySend) are the union of every algorithm's available controls; knobs
- * that don't exist for the current algorithm are harmlessly ignored by the
- * C++ side (SetParam no-ops for out-of-range indices). The native Dry Level
- * (param index 0 on every algorithm) is exposed as the `dryLevel` AudioParam
- * - Dragonfly's own dry/wet control - 0% dry (fully wet) to 100% dry.
+ * The 8 user-facing knobs (roomSize/damping/width/predelay/spin/wander/
+ * earlySend/dryLevel) are the union of every algorithm's available controls.
+ * Which core param each one resolves to per algorithm - and the room-size and
+ * damping abstractions, which have no core symbol of their own - is decided in
+ * C++ by nam_studio_set_reverb_control (packages/core's ReverbControl), not
+ * here: the desktop app and any future plugin editor drive the identical
+ * mapping through the same call. Controls the current algorithm doesn't have
+ * are no-ops on the C++ side.
  *
  * WASM instantiation and buffer marshaling are shared via namStudioEffectBase.js.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
-import { REVERB_PARAMS } from './generatedParams.js'
 
 const REVERB_KIND = 9
 
+// Algorithm ids, matching packages/core's NamStudioReverbAlgorithm order.
 const ALGORITHM_HALL = 0
-const ALGORITHM_ROOM = 1
-const ALGORITHM_PLATE = 2
-const ALGORITHM_EARLY_REFLECTIONS = 3
 
-// Per-algorithm param index maps for the 7 user-facing knobs + dry level.
-// This is a genuine semantic remap, not a 1:1 symbol pass-through - the same
-// web-facing concept lives at a different core symbol per algorithm (e.g.
-// "predelay" is Hall's `delay` param but Room/Plate's own `predelay`; the
-// generated REVERB_PARAMS.<algorithm> map is what pins each one to the right
-// index, so a core param-table reorder can't silently desync this worklet.
-// Ranges differ slightly across algorithms (e.g. spin is [0,10]Hz in Hall
-// but [0,5]Hz in Room), but the AudioParam ranges are generous enough to
-// cover all cases.
-const ALGO_PARAMS = {
-  [ALGORITHM_HALL]: {
-    dryLevel: REVERB_PARAMS.hall.dry_level,
-    width: REVERB_PARAMS.hall.width,
-    predelay: REVERB_PARAMS.hall.delay,
-    highCut: REVERB_PARAMS.hall.high_cut,
-    spin: REVERB_PARAMS.hall.spin,
-    wander: REVERB_PARAMS.hall.wander,
-    decay: REVERB_PARAMS.hall.decay,
-    earlySend: REVERB_PARAMS.hall.early_send,
-  },
-  [ALGORITHM_ROOM]: {
-    dryLevel: REVERB_PARAMS.room.dry_level,
-    width: REVERB_PARAMS.room.width,
-    predelay: REVERB_PARAMS.room.predelay,
-    highCut: REVERB_PARAMS.room.in_high_cut,
-    spin: REVERB_PARAMS.room.spin,
-    wander: REVERB_PARAMS.room.wander,
-    decay: REVERB_PARAMS.room.decay,
-    earlySend: REVERB_PARAMS.room.early_send,
-  },
-  [ALGORITHM_PLATE]: {
-    dryLevel: REVERB_PARAMS.plate.dry_level,
-    width: REVERB_PARAMS.plate.width,
-    predelay: REVERB_PARAMS.plate.predelay,
-    highCut: REVERB_PARAMS.plate.high_cut,
-    decay: REVERB_PARAMS.plate.decay,
-  },
-  [ALGORITHM_EARLY_REFLECTIONS]: {
-    dryLevel: REVERB_PARAMS['early-reflections'].dry_level,
-    width: REVERB_PARAMS['early-reflections'].width,
-    highCut: REVERB_PARAMS['early-reflections'].high_cut,
-  },
-}
-
-// Room size → decay (0.1–10s across all algorithms that have it).
-const DECAY_MIN = 0.1
-const DECAY_MAX = 10
-// Damping → high cut (1000–16000Hz across all algorithms that have it).
-const HIGH_CUT_MIN = 1000
-const HIGH_CUT_MAX = 16000
+// Control ids from packages/core's api.h (NamStudioReverbControl).
+const CONTROL_ROOM_SIZE = 0
+const CONTROL_DAMPING = 1
+const CONTROL_WIDTH = 2
+const CONTROL_PREDELAY = 3
+const CONTROL_SPIN = 4
+const CONTROL_WANDER = 5
+const CONTROL_EARLY_SEND = 6
+const CONTROL_DRY_LEVEL = 7
 
 class DragonflyReverbProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -98,8 +54,7 @@ class DragonflyReverbProcessor extends NamStudioEffectProcessor {
   }
 
   onReady(module, block) {
-    const params = ALGO_PARAMS[this.currentAlgorithm]
-    module._nam_studio_set_param(this.graph, block, params.dryLevel, 0)
+    module._nam_studio_set_reverb_control(this.graph, block, CONTROL_DRY_LEVEL, 0)
   }
 
   applyParams(module, block, parameters) {
@@ -107,33 +62,21 @@ class DragonflyReverbProcessor extends NamStudioEffectProcessor {
     if (algorithm !== this.currentAlgorithm) {
       this.currentAlgorithm = algorithm
       module._nam_studio_set_reverb_algorithm(this.graph, block, algorithm)
-      // Re-apply dry level after algorithm switch (new DSP has its own defaults).
-      const params = ALGO_PARAMS[algorithm]
-      module._nam_studio_set_param(this.graph, block, params.dryLevel, parameters.dryLevel[0])
     }
 
-    const params = ALGO_PARAMS[this.currentAlgorithm]
-    module._nam_studio_set_param(this.graph, block, params.dryLevel, parameters.dryLevel[0])
-    const decay = DECAY_MIN + (parameters.roomSize[0] / 0.97) * (DECAY_MAX - DECAY_MIN)
-    const highCut = HIGH_CUT_MAX - parameters.damping[0] * (HIGH_CUT_MAX - HIGH_CUT_MIN)
-
-    if (params.decay !== undefined) {
-      module._nam_studio_set_param(this.graph, block, params.decay, decay)
-    }
-    module._nam_studio_set_param(this.graph, block, params.highCut, highCut)
-    module._nam_studio_set_param(this.graph, block, params.width, parameters.width[0])
-    if (params.predelay !== undefined) {
-      module._nam_studio_set_param(this.graph, block, params.predelay, parameters.predelay[0])
-    }
-    if (params.spin !== undefined) {
-      module._nam_studio_set_param(this.graph, block, params.spin, parameters.spin[0])
-    }
-    if (params.wander !== undefined) {
-      module._nam_studio_set_param(this.graph, block, params.wander, parameters.wander[0])
-    }
-    if (params.earlySend !== undefined) {
-      module._nam_studio_set_param(this.graph, block, params.earlySend, parameters.earlySend[0])
-    }
+    const set = (control, value) =>
+      module._nam_studio_set_reverb_control(this.graph, block, control, value)
+    // Sent unconditionally on every render quantum, including right after an
+    // algorithm switch (the new DSP starts from its own defaults, so the knobs
+    // have to be reasserted anyway).
+    set(CONTROL_DRY_LEVEL, parameters.dryLevel[0])
+    set(CONTROL_ROOM_SIZE, parameters.roomSize[0])
+    set(CONTROL_DAMPING, parameters.damping[0])
+    set(CONTROL_WIDTH, parameters.width[0])
+    set(CONTROL_PREDELAY, parameters.predelay[0])
+    set(CONTROL_SPIN, parameters.spin[0])
+    set(CONTROL_WANDER, parameters.wander[0])
+    set(CONTROL_EARLY_SEND, parameters.earlySend[0])
   }
 }
 

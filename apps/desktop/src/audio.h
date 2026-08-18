@@ -132,6 +132,20 @@ class AudioIO {
   // default device id before calling openStream(). Channels are fixed at 2
   // in / 2 out for now (the M3 UI's channel-routing modes land with the
   // bridge). Returns false on failure (see LastError).
+  //
+  // Latency:
+  // - buffer_frames is the block size to request; the backend may adjust it
+  //   (read BufferFrames() afterwards for what it actually granted).
+  // - buffer_frames == kLowestLatencyBuffer (0) asks the backend for the
+  //   smallest block the device supports (RTAUDIO_MINIMIZE_LATENCY: the
+  //   hardware minimum on CoreAudio, 2 periods/buffers on ALSA/WASAPI/DS).
+  //   That is the lowest achievable round-trip, but a heavy NAM model can
+  //   overrun a very small block, so it stays an explicit opt-in rather than
+  //   the default.
+  // - sample_rate falls back to the device's preferred rate when the
+  //   requested one isn't in its supported list, which both avoids an open
+  //   failure and keeps the OS from resampling underneath us.
+  static constexpr unsigned int kLowestLatencyBuffer = 0;
   bool Open(unsigned int input_device, unsigned int output_device, double sample_rate,
             unsigned int buffer_frames);
   // Stop (if running) and close the stream.

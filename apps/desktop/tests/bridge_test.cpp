@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -346,6 +347,69 @@ void TestConcurrentMutationsWhileStreamRunning() {
               mutations.load());
 }
 
+// The UI's per-block Input/Output knobs. They used to be forwarded as the
+// core params `input_level`/`output_level`, which only exist on the Amp family
+// and hold the loaded model's dBu calibration - so the knobs either did
+// nothing or recalibrated the amp. They now drive real core I/O trims.
+void TestSetBlockTrim() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
+
+  auto r = Parse(bridge.HandleSetBlockTrim(Arr(R"([{"blockId":"a1","input":0.5,"output":1.2}])")));
+  CHECK(r["ok"] == true);
+
+  // One key at a time is fine (the other trim is left untouched).
+  r = Parse(bridge.HandleSetBlockTrim(Arr(R"([{"blockId":"a1","output":0.25}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleSetBlockTrim(Arr(R"([{"blockId":"a1","input":0}])")));
+  CHECK(r["ok"] == true);
+
+  // Unlike bypass, an unknown block is reported rather than silently accepted:
+  // a dropped trim is inaudible until someone wonders why a knob does nothing.
+  r = Parse(bridge.HandleSetBlockTrim(Arr(R"([{"blockId":"missing","input":0.5}])")));
+  CHECK(r["ok"] == false);
+
+  // Amp calibration params stay reachable by symbol, independent of the trims.
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"a1","key":"input_level","value":-12.0}])")));
+  CHECK(r["ok"] == true);
+}
+
+// The UI's reverb knobs (camelCase names, two of them abstractions with no core
+// symbol) used to resolve against nothing on desktop, so the reverb had no
+// working control but the algorithm selector. They now go through the core's
+// ReverbControl mapping.
+void TestReverbControlKeys() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"reverb","row":0,"col":0,"id":"r1"}])")));
+
+  for (const char* key : {"roomSize", "damping", "width", "predelay", "spin", "wander",
+                          "earlySend", "dryLevel"}) {
+    const std::string req = std::string(R"([{"blockId":"r1","key":")") + key + R"(","value":0.5}])";
+    auto r = Parse(bridge.HandleSetParam(Arr(req.c_str())));
+    CHECK(r["ok"] == true);
+  }
+
+  // Room size lands on the Hall algorithm's decay: 0.97 -> the 10s top of the
+  // mapped range, read back through the plain param surface by symbol.
+  Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"r1","key":"roomSize","value":0.97}])")));
+  auto decay = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"r1","key":"decay"}])")));
+  CHECK(decay["ok"] == true);
+  CHECK(std::fabs(decay["value"].get<double>() - 10.0) < 1e-3);
+
+  // Core param symbols still work unchanged on the same block.
+  auto r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"r1","key":"diffuse","value":0.4}])")));
+  CHECK(r["ok"] == true);
+
+  // A reverb control name on a non-reverb block still falls through to the
+  // normal symbol lookup, and is reported when that finds nothing.
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":1,"col":0,"id":"d1"}])")));
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"d1","key":"roomSize","value":0.5}])")));
+  CHECK(r["ok"] == false);
+
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"missing","key":"roomSize","value":0.5}])")));
+  CHECK(r["ok"] == false);
+}
+
 // issue #42: bypass and the master bus were UI-only no-ops on desktop - this
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
@@ -386,6 +450,8 @@ int main() {
   TestMonitorTap();
   TestSuspendCallbackSilencesOutput();
   TestSetBypassAndMasterBus();
+  TestSetBlockTrim();
+  TestReverbControlKeys();
   TestConcurrentMutationsWhileStreamRunning();
 
   if (g_failures > 0) {

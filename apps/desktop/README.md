@@ -170,6 +170,9 @@ a control thread. Rail jacks are the numbers `-1` (IN) / `-2` (OUT).
 - `blockInfo()`, `listBlocks()`, `listEdges()`
 - `loadModel()` (native open-file dialog), `unloadModel()`
 - `setReverbAlgorithm()`, `setDriveModel()`, `setDelayModel()`
+- `setBypass()`, `setBlockTrim()` (per-block Input/Output trim - _not_ the Amp
+  family's `input_level`/`output_level` params, which hold the loaded model's
+  dBu calibration)
 - `meters()`, `cpuLoad()`
 
 ## Native engine caveats (M3)
@@ -183,13 +186,11 @@ deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
   C++ monitor taps; there is no `AudioContext`, `AudioNode`, or
   `ScriptProcessorNode` anywhere in the native path.
 
-- Bypass and master level/mute are UI state only - the core has no bypass or
-  master bus, so toggling them doesn't change the native DSP.
 - IR/Cab blocks pass audio through unchanged - the core has no convolution DSP
   yet, so `loadIR` is a no-op and cab meters stay silent.
-- Effect params apply by core param _symbol_; web effect param symbols that
-  don't match the core's table are ignored (a cross-reference for the 11 effect
-  kinds is a follow-up).
+- Effect params apply by core param _symbol_; a symbol the core's table doesn't
+  have is rejected by the bridge and warned about once per block+key
+  (issue #41), rather than silently dropped.
 - Block meters show the real native peak level but a synthetic waveform (a sine
   scaled to it); the tuner/input meter use the real native input tap.
 

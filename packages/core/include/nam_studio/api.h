@@ -144,6 +144,27 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
 
 // No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Not
 // real-time safe.
+// The user-facing reverb controls (see nam_studio::engine::ReverbControl):
+// room size and damping are abstractions over the current algorithm's decay
+// and high cut, and the rest resolve to whichever symbol that algorithm uses
+// (Hall's pre-delay is `delay`, Room's is `predelay`, ...). No-op for
+// non-reverb blocks and for controls the current algorithm lacks. Every front
+// end should drive reverb through this rather than reimplementing the
+// per-algorithm mapping over nam_studio_set_param.
+typedef enum {
+  NAM_STUDIO_REVERB_ROOM_SIZE = 0,   // 0..0.97
+  NAM_STUDIO_REVERB_DAMPING = 1,     // 0..1
+  NAM_STUDIO_REVERB_WIDTH = 2,       // percent
+  NAM_STUDIO_REVERB_PREDELAY = 3,    // ms
+  NAM_STUDIO_REVERB_SPIN = 4,        // Hz
+  NAM_STUDIO_REVERB_WANDER = 5,      // ms
+  NAM_STUDIO_REVERB_EARLY_SEND = 6,  // percent
+  NAM_STUDIO_REVERB_DRY_LEVEL = 7,   // percent
+} NamStudioReverbControl;
+
+void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
+                                  NamStudioReverbControl control, float value);
+
 void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDelayModel model);
 
@@ -155,6 +176,18 @@ void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
 // and its port-0 input passes through to its output unchanged.
 void nam_studio_set_bypass(NamStudioGraph* graph, int32_t block_id, int32_t bypassed);
 int32_t nam_studio_is_bypassed(NamStudioGraph* graph, int32_t block_id);
+
+// Per-block Input/Output trim, 1.0 = unity, no-op if block_id is unknown.
+// This is what a UI's per-block Input/Output level knobs should drive on
+// every block kind. Do NOT use the Amp family's input_level/output_level
+// params for that: those carry the loaded NAM model's own dBu calibration
+// (nam_studio_load_nam_model seeds them from the model file), so writing a
+// volume value there silently recalibrates the amp instead of trimming it.
+// Applied whether or not the block is bypassed.
+void nam_studio_set_block_input_trim(NamStudioGraph* graph, int32_t block_id, float gain);
+float nam_studio_get_block_input_trim(NamStudioGraph* graph, int32_t block_id);
+void nam_studio_set_block_output_trim(NamStudioGraph* graph, int32_t block_id, float gain);
+float nam_studio_get_block_output_trim(NamStudioGraph* graph, int32_t block_id);
 
 // Scales the final output bus (post-graph, pre-host). 1.0 = unity.
 void nam_studio_set_master_level(NamStudioGraph* graph, float level);

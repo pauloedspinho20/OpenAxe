@@ -11,10 +11,11 @@ function makeBridge() {
     moveBlock: vi.fn(async () => ({ ok: true })),
     connect: vi.fn(async () => ({ ok: true, id: 'edge-x' })),
     disconnect: vi.fn(async () => ({ ok: true })),
-    setParam: vi.fn(async () => ({ ok: true })),
+    setParam: vi.fn(async (_args: { key: string }) => ({ ok: true })),
     loadModelJson: vi.fn(async () => ({ ok: true, result: 0 })),
     unloadModel: vi.fn(async () => ({ ok: true })),
     setBypass: vi.fn(async () => ({ ok: true })),
+    setBlockTrim: vi.fn(async () => ({ ok: true })),
     setMasterLevel: vi.fn(async () => ({ ok: true })),
     setMasterMuted: vi.fn(async () => ({ ok: true })),
     setTunerMuted: vi.fn(async () => ({ ok: true })),
@@ -187,6 +188,27 @@ describe('NativeGraphRig', () => {
 
     block.setBypass(false)
     expect(calls.setBypass).toHaveBeenCalledWith({ blockId: 'd1', bypassed: false })
+  })
+
+  it('the Input/Output knobs become core block trims, not amp calibration params', async () => {
+    const { calls, bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('amp', 0, 0, 'a1')
+
+    const block = rig.getBlock('a1') as unknown as { setParams(p: Record<string, number>): void }
+    block.setParams({ input_level: 0.5, output_level: 1.2, gain: 0.3 })
+
+    // Trims go to setBlockTrim in one call...
+    expect(calls.setBlockTrim).toHaveBeenCalledWith({ blockId: 'a1', input: 0.5, output: 1.2 })
+    // ...and never to setParam, where they would overwrite the loaded NAM
+    // model's dBu calibration instead of trimming the block.
+    const paramKeys = calls.setParam.mock.calls.map((c) => (c[0] as { key: string }).key)
+    expect(paramKeys).toEqual(['gain'])
+
+    // One knob moving alone leaves the other trim untouched.
+    calls.setBlockTrim.mockClear()
+    block.setParams({ output_level: 0.25 })
+    expect(calls.setBlockTrim).toHaveBeenCalledWith({ blockId: 'a1', output: 0.25 })
   })
 
   it('master level/mute and tuner mute forward to the bridge (issue #42)', () => {

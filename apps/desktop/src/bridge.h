@@ -101,6 +101,7 @@ class StudioBridge {
   // from inside the RtAudio error callback itself.
   std::string HandleTakeStreamError(const std::string& req);
   std::string HandleSetBypass(const std::string& req);
+  std::string HandleSetBlockTrim(const std::string& req);
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);

@@ -174,7 +174,11 @@ if(EMSCRIPTEN)
     "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
     # Extend this list as more of the graph ABI gets used from the browser.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_set_reverb_algorithm','_nam_studio_set_drive_model','_nam_studio_set_delay_model','_malloc','_free']"
+    # Every name here must exist in the linked archive: wasm-ld fails the build
+    # on an export it can't find, which is how _nam_studio_set_drive_model
+    # (removed with the Drive effect) went unnoticed - the compiled artifacts
+    # are checked in and nothing rebuilds them automatically.
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_malloc','_free']"
     "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
     -O3
   )

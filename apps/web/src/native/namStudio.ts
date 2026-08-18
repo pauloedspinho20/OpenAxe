@@ -32,6 +32,11 @@ export interface NamStudioConfig {
   running: boolean
   sampleRate: number
   bufferFrames: number
+  /** Device round-trip latency the audio backend reports, in frames; -1 when
+   * unknown or nothing is open. */
+  latencyFrames: number
+  /** Same figure in milliseconds, or -1 when unknown. */
+  latencyMs: number
   lastError: string
   cpuLoad: number
 }
@@ -82,8 +87,12 @@ export interface NamStudioOk {
 }
 
 export interface NamStudioOpenResult extends NamStudioOk {
+  /** What the backend actually granted, which can differ from the request. */
   sampleRate?: number
   bufferFrames?: number
+  /** Device round-trip latency in frames / ms, -1 when the backend can't report it. */
+  latencyFrames?: number
+  latencyMs?: number
 }
 
 export interface NamStudioIdResult extends NamStudioOk {
@@ -113,6 +122,9 @@ export interface NamStudioBridge {
     inputDeviceId?: number
     outputDeviceId?: number
     sampleRate?: number
+    /** Requested block size; the backend may grant a different one. Pass 0 for
+     * the smallest block the device supports (lowest possible round-trip -
+     * a heavy NAM model can overrun it, so it is an explicit choice). */
     bufferFrames?: number
   }): Promise<NamStudioOpenResult>
   close(): Promise<NamStudioOk>
@@ -148,6 +160,10 @@ export interface NamStudioBridge {
   setDelayModel(args: { blockId: string; model: string }): Promise<NamStudioOk>
 
   setBypass(args: { blockId: string; bypassed: boolean }): Promise<NamStudioOk>
+  /** Per-block Input/Output trim (1 = unity). Omitted keys are left alone.
+   * Not the same thing as the Amp family's `input_level`/`output_level`
+   * params, which carry the loaded NAM model's dBu calibration. */
+  setBlockTrim(args: { blockId: string; input?: number; output?: number }): Promise<NamStudioOk>
   setMasterLevel(args: { level: number }): Promise<NamStudioOk>
   setMasterMuted(args: { muted: boolean }): Promise<NamStudioOk>
   setTunerMuted(args: { muted: boolean }): Promise<NamStudioOk>
@@ -257,6 +273,9 @@ class NativeBridge implements NamStudioBridge {
   }
   setBypass(args: { blockId: string; bypassed: boolean }) {
     return this.call<NamStudioOk>('setBypass', args)
+  }
+  setBlockTrim(args: { blockId: string; input?: number; output?: number }) {
+    return this.call<NamStudioOk>('setBlockTrim', args)
   }
   setMasterLevel(args: { level: number }) {
     return this.call<NamStudioOk>('setMasterLevel', args)

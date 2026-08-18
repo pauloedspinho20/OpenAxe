@@ -159,6 +159,24 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
   graph->engine.SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
 }
 
+void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
+                                   NamStudioReverbControl control, float value) {
+  using nam_studio::engine::ReverbControl;
+  ReverbControl mapped = ReverbControl::kRoomSize;
+  switch (control) {
+    case NAM_STUDIO_REVERB_ROOM_SIZE: mapped = ReverbControl::kRoomSize; break;
+    case NAM_STUDIO_REVERB_DAMPING: mapped = ReverbControl::kDamping; break;
+    case NAM_STUDIO_REVERB_WIDTH: mapped = ReverbControl::kWidth; break;
+    case NAM_STUDIO_REVERB_PREDELAY: mapped = ReverbControl::kPredelay; break;
+    case NAM_STUDIO_REVERB_SPIN: mapped = ReverbControl::kSpin; break;
+    case NAM_STUDIO_REVERB_WANDER: mapped = ReverbControl::kWander; break;
+    case NAM_STUDIO_REVERB_EARLY_SEND: mapped = ReverbControl::kEarlySend; break;
+    case NAM_STUDIO_REVERB_DRY_LEVEL: mapped = ReverbControl::kDryLevel; break;
+    default: return;
+  }
+  graph->engine.SetReverbControl(block_id, mapped, value);
+}
+
 void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDelayModel model) {
   using nam_studio::dsp::Delay;
@@ -177,6 +195,22 @@ void nam_studio_set_bypass(NamStudioGraph* graph, int32_t block_id, int32_t bypa
 
 int32_t nam_studio_is_bypassed(NamStudioGraph* graph, int32_t block_id) {
   return graph->engine.IsBypassed(block_id) ? 1 : 0;
+}
+
+void nam_studio_set_block_input_trim(NamStudioGraph* graph, int32_t block_id, float gain) {
+  graph->engine.SetInputTrim(block_id, gain);
+}
+
+float nam_studio_get_block_input_trim(NamStudioGraph* graph, int32_t block_id) {
+  return graph->engine.GetInputTrim(block_id);
+}
+
+void nam_studio_set_block_output_trim(NamStudioGraph* graph, int32_t block_id, float gain) {
+  graph->engine.SetOutputTrim(block_id, gain);
+}
+
+float nam_studio_get_block_output_trim(NamStudioGraph* graph, int32_t block_id) {
+  return graph->engine.GetOutputTrim(block_id);
 }
 
 void nam_studio_set_master_level(NamStudioGraph* graph, float level) {

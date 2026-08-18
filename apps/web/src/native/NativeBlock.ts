@@ -20,6 +20,9 @@ function toNumber(v: number | string | boolean): number {
  * `PresetBlock`/`BlockLoadTarget` surface via duck-typing, so a cast at the
  * rig boundary is the only concession needed.
  *
+ * The per-block Input/Output knobs are routed to the core's own I/O trims
+ * (`setBlockTrim`), not to params - see setParams.
+ *
  * Limitations (documented, issue #15 M3):
  * - IR/Cab loading is a no-op: the core has no cab (convolution) DSP yet, so
  *   cab blocks pass audio through unchanged and `getLoadedIr()` is always null.
@@ -50,7 +53,25 @@ export class NativeBlock implements PresetBlock {
 
   setParams(params: EffectParams): void {
     this.params = { ...params }
+
+    // The Input/Output knobs are block I/O trims, not DSP params. They must
+    // not go through setParam: the core's `input_level`/`output_level` params
+    // exist only on the Amp family and hold the loaded model's dBu
+    // calibration, so forwarding a 0..1.5 gain there recalibrated the amp
+    // (and 0, meaning silence in the UI, read as "0 dBu" = unity) while every
+    // other block kind just rejected the symbol.
+    const input = params.input_level
+    const output = params.output_level
+    if (typeof input === 'number' || typeof output === 'number') {
+      void this.bridge.setBlockTrim({
+        blockId: this.id,
+        ...(typeof input === 'number' ? { input } : {}),
+        ...(typeof output === 'number' ? { output } : {}),
+      })
+    }
+
     for (const [key, value] of Object.entries(params)) {
+      if (key === 'input_level' || key === 'output_level') continue
       void this.bridge
         .setParam({ blockId: this.id, key, value: toNumber(value) })
         .then((result) => {

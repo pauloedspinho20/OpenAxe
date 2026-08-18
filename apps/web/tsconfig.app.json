@@ -6,6 +6,10 @@
     "module": "esnext",
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
+    /* packages/core/param_schema.json is imported directly by
+       paramSchema.coreDrift.test.ts - the core param table is the source of
+       truth the UI's knob ranges are checked against. */
+    "resolveJsonModule": true,
     "skipLibCheck": true,
 
     /* Bundler mode */

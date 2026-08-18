@@ -310,6 +310,7 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "namStudio.getTap", &nam_desktop::StudioBridge::HandleGetTap);
     Bind(w, bridge, "namStudio.takeStreamError", &nam_desktop::StudioBridge::HandleTakeStreamError);
     Bind(w, bridge, "namStudio.setBypass", &nam_desktop::StudioBridge::HandleSetBypass);
+    Bind(w, bridge, "namStudio.setBlockTrim", &nam_desktop::StudioBridge::HandleSetBlockTrim);
     Bind(w, bridge, "namStudio.setMasterLevel", &nam_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "namStudio.setMasterMuted", &nam_desktop::StudioBridge::HandleSetMasterMuted);
     Bind(w, bridge, "namStudio.setTunerMuted", &nam_desktop::StudioBridge::HandleSetTunerMuted);

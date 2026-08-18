@@ -228,11 +228,21 @@ std::string StudioBridge::HandleListDevices(const std::string&) {
 }
 
 std::string StudioBridge::HandleGetConfig(const std::string&) {
+  // latencyFrames is RtAudio's reported device round-trip (input + output
+  // buffering), -1 when the backend can't report it or nothing is open; the ms
+  // figure is derived from it so the UI can show real measured latency rather
+  // than an estimate from the block size alone.
+  const long latency_frames = audio_.IsOpen() ? audio_.StreamLatencyFrames() : -1;
+  const double rate = audio_.SampleRate();
   json out = {{"ok", true},
               {"open", audio_.IsOpen()},
               {"running", audio_.IsRunning()},
-              {"sampleRate", audio_.SampleRate()},
+              {"sampleRate", rate},
               {"bufferFrames", audio_.BufferFrames()},
+              {"latencyFrames", latency_frames},
+              {"latencyMs", latency_frames > 0 && rate > 0.0
+                                ? 1000.0 * static_cast<double>(latency_frames) / rate
+                                : -1.0},
               {"lastError", audio_.LastError()},
               {"cpuLoad", nam_studio_get_cpu_load(graph_)}};
   return out.dump();
@@ -245,6 +255,9 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     const unsigned int input_device = o.value("inputDeviceId", 0xFFFFFFFFu);
     const unsigned int output_device = o.value("outputDeviceId", 0xFFFFFFFFu);
     const double sample_rate = o.value("sampleRate", 48000.0);
+    // 0 asks the device for the smallest block it supports (lowest possible
+    // round-trip); anything else is a requested block size the backend may
+    // still adjust. The reply reports what was actually granted.
     const unsigned int buffer_frames = o.value("bufferFrames", 128u);
 
     if (!audio_.Open(input_device, output_device, sample_rate, buffer_frames)) {
@@ -255,9 +268,14 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     // Re-arm the graph at the stream's actual parameters. Stream is open but
     // not started, so no audio thread is touching the graph yet.
     Call([this] { audio_.SetGraph(graph_, graph_sample_rate_, graph_block_); });
+    const long latency_frames = audio_.StreamLatencyFrames();
     return (json{{"ok", true},
                  {"sampleRate", audio_.SampleRate()},
-                 {"bufferFrames", audio_.BufferFrames()}})
+                 {"bufferFrames", audio_.BufferFrames()},
+                 {"latencyFrames", latency_frames},
+                 {"latencyMs", latency_frames > 0 && audio_.SampleRate() > 0.0
+                                   ? 1000.0 * static_cast<double>(latency_frames) / audio_.SampleRate()
+                                   : -1.0}})
         .dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("open: ") + e.what());
@@ -432,6 +450,22 @@ int32_t ResolveParamIndex(const json& key, int32_t core_id, NamStudioGraph* grap
   return -1;
 }
 
+// The UI's reverb knobs are per-algorithm abstractions (roomSize/damping have
+// no core symbol at all, and pre-delay is `delay` on Hall but `predelay` on
+// Room), so they resolve through the core's own ReverbControl mapping rather
+// than a symbol lookup. Returns -1 for anything that isn't one of them.
+int32_t ReverbControlFor(const std::string& key) {
+  if (key == "roomSize") return NAM_STUDIO_REVERB_ROOM_SIZE;
+  if (key == "damping") return NAM_STUDIO_REVERB_DAMPING;
+  if (key == "width") return NAM_STUDIO_REVERB_WIDTH;
+  if (key == "predelay") return NAM_STUDIO_REVERB_PREDELAY;
+  if (key == "spin") return NAM_STUDIO_REVERB_SPIN;
+  if (key == "wander") return NAM_STUDIO_REVERB_WANDER;
+  if (key == "earlySend") return NAM_STUDIO_REVERB_EARLY_SEND;
+  if (key == "dryLevel") return NAM_STUDIO_REVERB_DRY_LEVEL;
+  return -1;
+}
+
 std::string StudioBridge::HandleSetParam(const std::string& req) {
   try {
     const json args = ParseArgs(req);
@@ -439,6 +473,30 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
     const std::string js_id = o.value("blockId", "");
     const json& key = o.at("key");
     const float value = o.value("value", 0.0f);
+
+    // Reverb blocks: route the UI's control names through the core mapping
+    // first. Before this, none of them resolved (the UI's camelCase names
+    // aren't core symbols, and roomSize/damping aren't params at all), so the
+    // desktop reverb had no working knobs beyond the algorithm selector.
+    if (key.is_string()) {
+      const int32_t control = ReverbControlFor(key.get<std::string>());
+      if (control >= 0) {
+        bool is_reverb = false;
+        int32_t reverb_core_id = kUnknownBlock;
+        Call([&] {
+          const auto it = blocks_.find(js_id);
+          if (it == blocks_.end()) return;
+          reverb_core_id = it->second.core_id;
+          is_reverb = it->second.kind == "reverb";
+        });
+        if (reverb_core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+        if (is_reverb) {
+          nam_studio_set_reverb_control(
+              graph_, reverb_core_id, static_cast<NamStudioReverbControl>(control), value);
+          return (json{{"ok", true}}).dump();
+        }
+      }
+    }
 
     int32_t core_id = kUnknownBlock;
     int32_t index = -1;
@@ -699,6 +757,38 @@ std::string StudioBridge::HandleSetBypass(const std::string& req) {
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setBypass: ") + e.what());
+  }
+}
+
+// { blockId, input?, output? } - the UI's per-block Input/Output knobs. These
+// are core I/O trims, deliberately not the Amp family's input_level/
+// output_level params: those hold the loaded model's dBu calibration, so
+// routing a volume knob there recalibrated the amp instead of trimming it
+// (and a knob at 0 meant "0 dBu" = unity, not silence). Omitted keys are left
+// untouched so a UI that only moves one knob doesn't reset the other.
+std::string StudioBridge::HandleSetBlockTrim(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string js_id = o.value("blockId", "");
+    const bool has_input = o.contains("input") && o["input"].is_number();
+    const bool has_output = o.contains("output") && o["output"].is_number();
+    const float input = has_input ? o["input"].get<float>() : 1.0f;
+    const float output = has_output ? o["output"].get<float>() : 1.0f;
+    bool found = false;
+    // Real-time-safe atomics - no Mutate()/suspend handshake needed, only the
+    // Call() to resolve js_id against blocks_ (control-thread only).
+    Call([&] {
+      const auto it = blocks_.find(js_id);
+      if (it == blocks_.end()) return;
+      found = true;
+      if (has_input) nam_studio_set_block_input_trim(graph_, it->second.core_id, input);
+      if (has_output) nam_studio_set_block_output_trim(graph_, it->second.core_id, output);
+    });
+    if (!found) return JsonError("setBlockTrim: unknown block " + js_id);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setBlockTrim: ") + e.what());
   }
 }
 
