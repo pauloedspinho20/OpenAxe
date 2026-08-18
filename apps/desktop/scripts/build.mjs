@@ -23,9 +23,15 @@ const buildDir = join(root, 'build')
 // from a file:// URL, then bundle it next to the native binary at build/ui.
 function bundleUi() {
   console.log('[nam/desktop] building web UI (apps/web build:desktop)...')
+  // shell: true - pnpm is a .cmd/.ps1 shim on Windows, not a directly
+  // executable binary; execFileSync's default CreateProcess spawn can't run
+  // it at all there (ENOENT) without going through a shell, unlike cmake
+  // below which is a real .exe. Node quotes command/args correctly for
+  // whichever shell this ends up running under either way.
   execFileSync('pnpm', ['--filter', '@nam/web', 'build:desktop'], {
     cwd: repoRoot,
     stdio: 'inherit',
+    shell: true,
   })
   const dist = join(repoRoot, 'apps/web/dist')
   const uiDir = join(buildDir, 'ui')
