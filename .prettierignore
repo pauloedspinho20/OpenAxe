@@ -2,3 +2,8 @@ dist
 node_modules
 coverage
 pnpm-lock.yaml
+# Emscripten's own generated glue code (scripts/build-core-wasm.sh) - never
+# hand-edited and not run through prettier when regenerated, unlike the other
+# checked-in files under wasm-core/ (hand-written worklets, our own codegen's
+# generatedParams.js, which is formatted through prettier's own API already).
+apps/web/public/wasm-core/nam_studio_core.js

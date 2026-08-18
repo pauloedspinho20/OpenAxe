@@ -7,6 +7,6 @@
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
     "package": "node scripts/package.mjs",
-    "format:check": "prettier --ignore-path ../../.prettierignore --check src package.json CMakeLists.txt README.md"
+    "format:check": "prettier --ignore-path ../../.prettierignore --check src package.json README.md"
   }
 }
