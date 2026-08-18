@@ -4,6 +4,10 @@ A free, open-source guitar/bass amp, cabinet, and effects suite — in the spiri
 
 Runs entirely in the browser: no native app required, no backend, no account. Works offline once installed as a PWA.
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the C++ core and the four front
+ends divide responsibility (what belongs in `packages/core` vs a front end, the
+per-target status of that split, the migration order, and the latency budget).
+
 ## Project decisions
 
 | Area             | Decision                                                                                                                                            |

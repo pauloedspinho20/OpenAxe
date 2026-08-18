@@ -1,0 +1,141 @@
+# Architecture: one C++ engine, four front ends
+
+NAM Web Studio ships (or plans to ship) as a web app, a native desktop app, a
+VST3/CLAP/AU plugin, and mobile apps. They are four shells around **one**
+audio engine: `packages/core`, C++20, no platform APIs, no UI.
+
+The rule this codebase is converging on:
+
+> **All application logic lives in `packages/core`. A front end owns
+> presentation, device/host integration, and persistence plumbing — nothing
+> that decides how the rig sounds or behaves.**
+
+"Logic" here means anything a second front end would otherwise have to
+reimplement: DSP, signal routing and its rules, param semantics and ranges,
+model/IR loading, metering, and the mapping between what a user sees and what
+the DSP does.
+
+## Layers
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Presentation      apps/web (React) · desktop webview · VST3 editor ·     │
+│                   iOS/Android views — all sharing packages/ui tokens     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Integration       Web Audio worklet · RtAudio + window.namStudio bridge  │
+│                   · iPlug2 processor · JNI / AVAudioEngine               │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Engine ABI        packages/core/include/nam_studio/api.h — extern "C",   │
+│                   int ids, float params, no exceptions, no allocation on │
+│                   the real-time path                                     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Core              graph_rig · graph_validation · engine · dsp/*          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+Every front end talks to the same `extern "C"` surface. It is deliberately
+narrow (int block ids, float params, out-params instead of exceptions) so it
+survives WASM, FFI, JNI, and a plugin host equally well.
+
+### What the ABI already covers
+
+Topology (`add_block`/`connect`/`move_block`, with validation), params by index
+plus metadata (`block_param_info`), NAM model load/unload, reverb algorithm
+choice **and** the user-facing reverb control mapping (`set_reverb_control`),
+delay models, per-block bypass and I/O trims, master level/mute, per-block
+meters, and CPU load.
+
+### What a front end is still allowed to own
+
+- Device and host integration: Web Audio graph plumbing, RtAudio streams, the
+  plugin's process callback.
+- Persistence _mechanism_: IndexedDB in the browser, files on desktop, host
+  state chunks in a plugin. The preset _model_ belongs in core (see below).
+- Rendering, layout, interaction, theming — `packages/ui` and the design
+  tokens.
+- Network services with no audio meaning (the Tone3000 model library client).
+
+## Per-target status
+
+| Concern                      | Web                                                 | Desktop                            | VST3 | Owner it should have                 |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------- | ---- | ------------------------------------ |
+| DSP effects                  | core via WASM worklets                              | core, in-process                   | —    | core ✅                              |
+| Amp (NAM inference)          | third-party `neural-amp-modeler-wasm` npm package   | core's `NamAmp`                    | —    | **core** ❌                          |
+| Signal graph + routing rules | TS `GraphRig` + `graphValidation`                   | core `graph_rig`                   | —    | **core** ❌ (core already has both)  |
+| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | —    | core ✅                              |
+| Block I/O trims              | Web Audio `GainNode`s                               | core trims                         | —    | **core** ⚠️ (web still to move)      |
+| Bypass / master bus          | Web Audio nodes                                     | core                               | —    | **core** ⚠️                          |
+| Cab / IR convolution         | `ConvolverNode`                                     | not implemented                    | —    | **core** ❌                          |
+| Tuner pitch detection        | TS autocorrelation, main thread                     | same TS code                       | —    | **core** ❌                          |
+| Metering                     | `AnalyserNode`                                      | core peak + a synthesized waveform | —    | **core** ⚠️                          |
+| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | —    | **generated from core** ⚠️           |
+| Presets / scenes             | TS model + IndexedDB                                | same TS code in the webview        | —    | **core model**, front-end storage ❌ |
+| MIDI mapping                 | TS Web MIDI                                         | —                                  | —    | **core** ❌                          |
+
+✅ done · ⚠️ core owns it, a front end still duplicates part · ❌ not in core yet
+
+## Migration order
+
+Each step is useful on its own and unblocks the plugin target.
+
+1. **Amp on one engine.** Replace the npm NAM package on the web path with
+   core's `NamAmp` through WASM. Today the web and desktop run _different_
+   inference code, so the same preset can sound different per platform.
+2. **One graph.** Drive core's `graph_rig` from the web path instead of the TS
+   `GraphRig` + Web Audio node graph: one worklet running the whole rig. This
+   collapses the trims, bypass, master bus, mixer/splitter levels and routing
+   validation into the engine in a single move — and it is the step the plugin
+   needs, since a VST3 has no Web Audio to fall back on.
+3. **Convolution in core.** Cab/IR is the one audio feature that exists only in
+   TS; the desktop passes cab blocks through untouched.
+4. **Tuner in core.** Pitch detection as a pure function over a buffer, called
+   from the UI thread (web) or the control thread (desktop/plugin). It is not
+   in the audio path, so it costs no latency either way.
+5. **Preset/scene model in core**, with front ends supplying only storage. This
+   is what lets a plugin save state into a host session and a desktop app write
+   a file, from one definition.
+6. **Generate the UI's param ranges** from `packages/core/param_schema.json`
+   instead of hand-maintaining them in `paramSchema.ts`
+   (`paramSchema.coreDrift.test.ts` guards the gap until then).
+7. **MIDI mapping in core**, so a plugin and the mobile apps inherit it.
+
+## Latency
+
+The engine's own contribution is zero: `latency_test` pushes an impulse through
+a rig and confirms the DSP path adds no delay — no lookahead, no latency
+compensation to report to a host. Everything a user feels comes from the I/O
+layer.
+
+| Target  | What sets latency                                                                           | Lowest available                                                                                                                                                                                                                              |
+| ------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop | RtAudio block size + the device's own buffering                                             | `bufferFrames: 0` asks the device for its smallest block (`RTAUDIO_MINIMIZE_LATENCY`); default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                               |
+| Web     | The 128-frame AudioWorklet render quantum, plus the context's `baseLatency`/`outputLatency` | Fixed by the platform. `latencyHint: 'interactive'` is what the app requests; chaining worklet nodes adds **no** extra latency (they all run inside one quantum), so the win from step 2 above is CPU and behaviour parity, not milliseconds. |
+| VST3    | The host's block size                                                                       | Nothing to add: report zero latency and process in place.                                                                                                                                                                                     |
+
+Rules that keep it that way:
+
+- **Never allocate, lock, or do IO on the audio thread.** Params reach the
+  audio thread as plain atomics; anything that allocates (model loading,
+  algorithm switches, buffer resizes) happens on the control thread with audio
+  suspended. Each core function's comment states which side it belongs on.
+- **Don't resample if you can avoid it.** Desktop falls back to the device's
+  preferred rate rather than forcing 48kHz through the OS resampler.
+- **Ask for real-time scheduling.** The desktop stream sets
+  `RTAUDIO_SCHEDULE_REALTIME` with an explicit high priority for the backends
+  that schedule their own callback thread.
+
+## Adding to the core
+
+- Put it in `packages/core`, with a test in `packages/core/tests`, before any
+  front end learns about it.
+- Extend `api.h` with the same shape as its neighbours (int ids, float values,
+  no exceptions) and note its threading contract in the comment.
+- If it's a user-facing control that doesn't map 1:1 onto a DSP param — like
+  the reverb's room size — resolve that **in core** (`ReverbControl` is the
+  pattern), not in each front end.
+- Params come from `packages/core/param_schema.json`; run
+  `node scripts/gen-param-schema.mjs` and commit the generated files (CI fails
+  on drift).
+- New ABI a browser needs must be added to `EXPORTED_FUNCTIONS` in
+  `packages/core/CMakeLists.txt`, then `scripts/build-core-wasm.sh` re-run and
+  the artifacts committed — nothing rebuilds them automatically.
