@@ -190,6 +190,23 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
   const unsigned int input_id = ResolveDevice(input_device, /*input=*/true, audio_);
   const unsigned int output_id = ResolveDevice(output_device, /*input=*/false, audio_);
 
+  // Two independent physical devices (this is the common case with no
+  // external interface: the built-in mic + built-in speakers are separate
+  // devices) hit two real problems - RtAudio's CoreAudio backend can crash
+  // bridging them into one "asynchronous duplex" stream (issue #53), and
+  // even when it doesn't, live mic monitoring straight into open speakers is
+  // an acoustic feedback loop with no fix at this layer. Refuse outright
+  // rather than let either happen - the user needs a single device that
+  // does both (an audio interface, aggregate device, or virtual loopback),
+  // not a silently degraded or crash-prone session.
+  if (input_id != output_id) {
+    last_error_ =
+        "Input and output must be the same audio device - pick a single "
+        "audio interface (or aggregate/loopback device) for both, not "
+        "separate input and output devices.";
+    return false;
+  }
+
   RtAudio::StreamParameters in;
   in.deviceId = input_id;
   in.nChannels = 2;

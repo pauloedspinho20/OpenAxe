@@ -167,9 +167,15 @@ void TestDeviceEnumeration() {
   std::printf("  AudioIO::ListDevices: %zu device(s)\n", devices.size());
 }
 
-// Opens a real duplex stream (preferring devices that support 2 in / 2 out)
-// and verifies the real-time callback actually fires. Skips silently when
-// the host has no audio devices.
+// Opens a real duplex stream on a single device that offers 2 in / 2 out and
+// verifies the real-time callback actually fires. Skips silently when the
+// host has no such device.
+//
+// Open() rejects two independent physical devices outright (issue #53: an
+// RtAudio CoreAudio crash, and even when it doesn't crash, an unfixable
+// acoustic feedback loop from mic straight into open speakers) - so this
+// deliberately looks for one device that can serve both directions, rather
+// than picking the best input and the best output independently.
 void TestOpenStartStop() {
   nam_desktop::AudioIO io;
   const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
@@ -178,22 +184,20 @@ void TestOpenStartStop() {
     return;
   }
 
-  unsigned int input_device = 0xFFFFFFFFu;
-  unsigned int output_device = 0xFFFFFFFFu;
+  unsigned int duplex_device = 0xFFFFFFFFu;
   for (const auto& d : devices) {
-    if (d.is_default && d.input_channels >= 2) input_device = d.id;
-    if (d.is_default && d.output_channels >= 2) output_device = d.id;
+    if (d.input_channels >= 2 && d.output_channels >= 2) {
+      duplex_device = d.id;
+      if (d.is_default) break;  // prefer a default duplex device if one exists
+    }
   }
-  for (const auto& d : devices) {
-    if (input_device == 0xFFFFFFFFu && d.input_channels >= 2) input_device = d.id;
-    if (output_device == 0xFFFFFFFFu && d.output_channels >= 2) output_device = d.id;
-  }
-  if (input_device == 0xFFFFFFFFu || output_device == 0xFFFFFFFFu) {
-    std::printf("  Skipping open/start/stop: no 2-channel in/out device on this host\n");
+  if (duplex_device == 0xFFFFFFFFu) {
+    std::printf(
+        "  Skipping open/start/stop: no single device offers 2-channel in+out on this host\n");
     return;
   }
 
-  const bool opened = io.Open(input_device, output_device, 48000.0, 128);
+  const bool opened = io.Open(duplex_device, duplex_device, 48000.0, 128);
   if (!opened) {
     std::printf("  Skipping open/start/stop: stream open failed (%s)\n", io.LastError().c_str());
     return;
@@ -218,6 +222,25 @@ void TestOpenStartStop() {
   nam_studio_graph_destroy(graph);
 }
 
+// issue #53: two independent physical devices for input/output can crash
+// RtAudio's CoreAudio backend and, even when they don't, cause an acoustic
+// feedback loop the app has no way to fix - Open() must refuse the pairing
+// outright rather than let either happen.
+void TestOpenRejectsMismatchedDevices() {
+  nam_desktop::AudioIO io;
+  const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
+  if (devices.size() < 2) {
+    std::printf("  Skipping mismatched-device rejection test: fewer than 2 devices on this host\n");
+    return;
+  }
+
+  const unsigned int a = devices[0].id;
+  const unsigned int b = devices[1].id;
+  CHECK(!io.Open(a, b, 48000.0, 128));
+  CHECK(!io.LastError().empty());
+  CHECK(!io.IsOpen());
+}
+
 }  // namespace
 
 int main() {
@@ -226,6 +249,7 @@ int main() {
   TestTapConcurrentReadWrite();
   TestDeviceEnumeration();
   TestOpenStartStop();
+  TestOpenRejectsMismatchedDevices();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);
