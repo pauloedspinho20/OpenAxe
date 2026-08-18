@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NamEngine } from 'neural-amp-modeler-wasm/engine'
+import { toast } from '@nam/ui'
 import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
@@ -35,6 +36,23 @@ const IDLE_STATE: AudioEngineState = {
   micGranted: false,
 }
 
+/**
+ * Turns a powerOn failure (AudioContext creation, WASM fetch/instantiation,
+ * GraphRig setup) into a message worth showing a guitarist, not a raw
+ * `TypeError: Failed to fetch`. Falls back to the original message for
+ * anything unrecognized so real detail is never hidden.
+ */
+export function describePowerOnError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+  if (error instanceof TypeError && /fetch/i.test(raw)) {
+    return "Couldn't load the audio engine — check your connection and press Power On again."
+  }
+  if (/NotAllowedError|permission/i.test(raw)) {
+    return 'Audio was blocked by the browser — check your site permissions and try again.'
+  }
+  return raw
+}
+
 export function useWebAudioEngine() {
   const [state, setState] = useState<AudioEngineState>(IDLE_STATE)
   const startingRef = useRef(false)
@@ -56,13 +74,8 @@ export function useWebAudioEngine() {
     }
   }, [inputGain])
 
-  // Reconnect mic when the input device or channel routing changes live.
   const inputDeviceId = useIOStore((s) => s.inputDeviceId)
   const inputChannel = useIOStore((s) => s.inputChannel)
-  useEffect(() => {
-    if (state.status !== 'ready' || connectingRef.current) return
-    void connectMic()
-  }, [inputDeviceId, inputChannel, state.status])
 
   // Re-route to the selected output device live, without recreating the context.
   const outputDeviceId = useIOStore((s) => s.outputDeviceId)
@@ -71,10 +84,38 @@ export function useWebAudioEngine() {
     if (state.status !== 'ready' || !ctx || !('setSinkId' in AudioContext.prototype)) return
     void (ctx as AudioContext & { setSinkId(id: string): Promise<void> })
       .setSinkId(outputDeviceId)
-      .catch(() => {
-        // setSinkId can fail if the device disappeared — continue with current output.
+      .catch((err: unknown) => {
+        // setSinkId fails if the device disappeared — keep playing on whatever
+        // output the context already has, but say so instead of going silent.
+        console.warn('[useAudioEngine] output device unavailable:', err)
+        toast.warning('Output device unavailable', {
+          description: 'Switched output disconnected — staying on the previous device.',
+        })
       })
   }, [outputDeviceId, state.status])
+
+  // Recover a suspended AudioContext: browsers/OSes can interrupt playback
+  // (a phone call, another app taking exclusive audio, a screen lock) without
+  // this app ever calling suspend() itself. Retry on the state's own
+  // statechange event and again whenever the tab regains visibility/focus,
+  // since resume() sometimes needs a fresh user-gesture-adjacent moment to
+  // succeed on strict autoplay policies.
+  useEffect(() => {
+    if (state.status !== 'ready' || !state.context) return
+    const ctx = state.context
+    const tryResume = () => {
+      if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
+    }
+    tryResume()
+    ctx.addEventListener('statechange', tryResume)
+    document.addEventListener('visibilitychange', tryResume)
+    window.addEventListener('focus', tryResume)
+    return () => {
+      ctx.removeEventListener('statechange', tryResume)
+      document.removeEventListener('visibilitychange', tryResume)
+      window.removeEventListener('focus', tryResume)
+    }
+  }, [state.status, state.context])
 
   // ── Mic connection ──────────────────────────────────────────────────────
 
@@ -146,6 +187,12 @@ export function useWebAudioEngine() {
     }
   }, [])
 
+  // Reconnect mic when the input device or channel routing changes live.
+  useEffect(() => {
+    if (state.status !== 'ready' || connectingRef.current) return
+    void connectMic()
+  }, [inputDeviceId, inputChannel, state.status, connectMic])
+
   // ── Power on / off ──────────────────────────────────────────────────────
 
   const powerOn = useCallback(async () => {
@@ -186,10 +233,12 @@ export function useWebAudioEngine() {
       // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
       void connectMic()
     } catch (error) {
+      const message = describePowerOnError(error)
+      toast.error('Audio engine failed to start', { description: message })
       setState({
         ...IDLE_STATE,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       })
     } finally {
       startingRef.current = false
