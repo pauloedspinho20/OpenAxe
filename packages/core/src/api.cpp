@@ -1,5 +1,7 @@
 #include "nam_studio/api.h"
 
+#include <algorithm>
+
 #include "nam_studio/engine.h"
 
 namespace {
@@ -174,6 +176,13 @@ NamStudioLoadResult nam_studio_load_nam_model(NamStudioGraph* graph, int32_t blo
   return ToLoadResult(graph->engine.LoadNamModel(block_id, file_path));
 }
 
+// Loads from the model's JSON content instead of a path - see api.h.
+NamStudioLoadResult nam_studio_load_nam_model_json(NamStudioGraph* graph, int32_t block_id,
+                                                   const char* json) {
+  if (!json) return NAM_STUDIO_LOAD_INVALID_FORMAT;
+  return ToLoadResult(graph->engine.LoadNamModelJson(block_id, json));
+}
+
 // Drops the block's model (it becomes a passthrough). Frees; suspend audio.
 void nam_studio_unload_nam_model(NamStudioGraph* graph, int32_t block_id) {
   graph->engine.UnloadNamModel(block_id);
@@ -217,6 +226,41 @@ void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
     case NAM_STUDIO_DELAY_TAPE:    m = Delay::Model::kTape; break;
   }
   graph->engine.SetDelayModel(block_id, m);
+}
+
+// Metadata of the block's loaded capture; every out-param is optional. See
+// api.h for what each field means and when it is meaningful.
+int32_t nam_studio_block_model_info(NamStudioGraph* graph, int32_t block_id, double* out_sample_rate,
+                                    int32_t* out_has_loudness, double* out_loudness_db,
+                                    int32_t* out_has_input_level, double* out_input_level_dbu,
+                                    int32_t* out_has_output_level, double* out_output_level_dbu,
+                                    int32_t* out_is_slimmable, int32_t* out_slim_breakpoint_count) {
+  const auto info = graph->engine.BlockModelInfo(block_id);
+  if (!info) return 0;
+  if (out_sample_rate) *out_sample_rate = info->sample_rate;
+  if (out_has_loudness) *out_has_loudness = info->has_loudness ? 1 : 0;
+  if (out_loudness_db) *out_loudness_db = info->loudness_db;
+  if (out_has_input_level) *out_has_input_level = info->has_input_level ? 1 : 0;
+  if (out_input_level_dbu) *out_input_level_dbu = info->input_level_dbu;
+  if (out_has_output_level) *out_has_output_level = info->has_output_level ? 1 : 0;
+  if (out_output_level_dbu) *out_output_level_dbu = info->output_level_dbu;
+  if (out_is_slimmable) *out_is_slimmable = info->is_slimmable ? 1 : 0;
+  if (out_slim_breakpoint_count) {
+    *out_slim_breakpoint_count = static_cast<int32_t>(info->slim_size_breakpoints.size());
+  }
+  return 1;
+}
+
+// Copies the slim-size breakpoints out into caller-owned storage; returns how
+// many were written.
+int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t block_id,
+                                                double* out_values, int32_t max_count) {
+  const auto info = graph->engine.BlockModelInfo(block_id);
+  if (!info || !out_values || max_count <= 0) return 0;
+  const int32_t count =
+      std::min(static_cast<int32_t>(info->slim_size_breakpoints.size()), max_count);
+  for (int32_t i = 0; i < count; ++i) out_values[i] = info->slim_size_breakpoints[static_cast<size_t>(i)];
+  return count;
 }
 
 // ── Bypass / trims / master bus ────────────────────────────────────────

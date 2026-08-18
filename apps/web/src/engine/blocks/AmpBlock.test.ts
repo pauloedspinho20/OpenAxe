@@ -1,7 +1,23 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
 import { AmpBlock } from './AmpBlock'
-import type { NamEngine, NamNode } from 'neural-amp-modeler-wasm/engine'
+
+// The NAM inference itself lives in packages/core behind an AudioWorklet (see
+// NamAmpNode); these tests cover the Web Audio staging AmpBlock puts around it,
+// so the node is stubbed rather than instantiated.
+vi.mock('../NamAmpNode', () => ({
+  NamAmpNode: {
+    create: vi.fn(async () => ({
+      // `node` is the AudioWorkletNode the block wires into its chain; the
+      // model calls are the wrapper's own async port messages.
+      node: { connect: vi.fn(), disconnect: vi.fn() },
+      loadModel: vi.fn(),
+      unloadModel: vi.fn(),
+      setSlimSize: vi.fn(),
+      dispose: vi.fn(),
+    })),
+  },
+}))
 
 function stubAudioParam(initial: number) {
   const param = {
@@ -38,27 +54,10 @@ class StubBiquadFilterNode {
 vi.stubGlobal('GainNode', StubGainNode)
 vi.stubGlobal('BiquadFilterNode', StubBiquadFilterNode)
 
-function createMockNamNode(): NamNode {
-  return {
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    loadModel: vi.fn(),
-    unloadModel: vi.fn(),
-    dispose: vi.fn(),
-  } as unknown as NamNode
-}
-
-function createMockEngine(context: BaseAudioContext): NamEngine {
-  return {
-    context,
-    createNode: vi.fn(async () => createMockNamNode()),
-  } as unknown as NamEngine
-}
-
 async function createAmp() {
   gainInstances.length = 0
   const context = { currentTime: 0 } as BaseAudioContext
-  const amp = await AmpBlock.create(createMockEngine(context), 'amp')
+  const amp = await AmpBlock.create(context, 'amp')
   // dryGain is the only node created with an initial gain of 0; wetMuteGain
   // is the last GainNode the constructor creates - see AmpBlock's wiring order.
   const dryGain = gainInstances.find((g) => g.gain.value === 0)!

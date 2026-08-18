@@ -3,8 +3,6 @@
 #include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>
 
-#include <filesystem>
-#include <fstream>
 #include <optional>
 #include <system_error>
 #include <utility>
@@ -654,17 +652,11 @@ std::string StudioBridge::HandleLoadModelJson(const std::string& req) {
     int result = -1;
     Call([&] {
       Mutate([&] {
-        // The core loads NAM models by file path, but the web UI hands us the
-        // model's JSON content - stage it in a temp file, load, then remove.
-        auto tmp =
-            std::filesystem::temp_directory_path() / ("nam_studio_" + std::to_string(core_id) + ".nam");
-        {
-          std::ofstream ofs(tmp, std::ios::binary);
-          ofs << content;
-        }
-        result = static_cast<int>(nam_studio_load_nam_model(graph_, core_id, tmp.string().c_str()));
-        std::error_code ec;
-        std::filesystem::remove(tmp, ec);
+        // Straight into the core from memory. This used to stage `content` in a
+        // temp file because the core could only load by path; it now has a JSON
+        // entry point (the one the web app's WASM build needs, since a browser
+        // has no filesystem), so the round-trip through disk is gone.
+        result = static_cast<int>(nam_studio_load_nam_model_json(graph_, core_id, content.c_str()));
       }, /*reset_after=*/false);
     });
     return (json{{"ok", result == 0}, {"result", result}}).dump();

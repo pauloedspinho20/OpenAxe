@@ -2,6 +2,11 @@
 
 #include <filesystem>
 
+// NAMCore's own bundled nlohmann (Dependencies/nlohmann, a PRIVATE include dir
+// on this target) - matching how NAM/dsp.h itself includes it, so there is only
+// ever one nlohmann in the translation unit.
+#include "json.hpp"
+
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include "NAM/slimmable.h"
@@ -37,6 +42,51 @@ std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) 
   }
   if (!loaded) return NamLoadError::kInvalidFormat;
 
+  AdoptModel(std::move(loaded), config);
+  return std::nullopt;
+}
+
+// Load from the .nam file's JSON content instead of a path - see the header for
+// why every front end other than the desktop app needs this form. NAMCore can
+// parse a nlohmann::json document directly, so nothing is staged to disk.
+// Not real-time safe (parses and allocates), same as LoadModel.
+std::optional<NamLoadError> NamAmp::LoadModelFromJson(const std::string& json_text) {
+  nlohmann::json parsed;
+  try {
+    parsed = nlohmann::json::parse(json_text);
+  } catch (const std::exception&) {
+    return NamLoadError::kInvalidFormat;
+  }
+
+  // NAMCore validates a .nam document only on its file-path entry point
+  // (nam::validate_nam_file); get_dsp(const nlohmann::json&) trusts what it is
+  // handed and indexes required keys directly, so an arbitrary document trips an
+  // assertion inside nlohmann instead of throwing. Apply the same minimum checks
+  // here first - deliberately mirroring nam_file.cpp's own required_keys list.
+  if (!parsed.is_object()) return NamLoadError::kInvalidFormat;
+  for (const char* key : {"version", "architecture", "config", "weights"}) {
+    if (parsed.find(key) == parsed.end()) return NamLoadError::kInvalidFormat;
+  }
+
+  std::unique_ptr<nam::DSP> loaded;
+  nam::dspData config;
+  try {
+    loaded = nam::get_dsp(parsed, config);
+  } catch (const std::exception&) {
+    // Well-formed JSON that isn't a NAM model, or whose architecture has no
+    // registered parser (see the whole-archive note on LoadModel).
+    return NamLoadError::kInvalidFormat;
+  }
+  if (!loaded) return NamLoadError::kInvalidFormat;
+
+  AdoptModel(std::move(loaded), config);
+  return std::nullopt;
+}
+
+// Take ownership of a freshly-parsed model and snapshot the metadata the rest
+// of the system reads. Shared by both load entry points so they can never
+// disagree about what a loaded model reports.
+void NamAmp::AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& config) {
   dsp_ = std::move(loaded);
   slim_size_ = 1.0;
 
@@ -60,8 +110,6 @@ std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) 
     info_.is_slimmable = true;
     info_.slim_size_breakpoints = slimmable->GetSlimmableSizeBreakpoints();
   }
-
-  return std::nullopt;
 }
 
 // Drop the model and forget its metadata; the block then passes audio through

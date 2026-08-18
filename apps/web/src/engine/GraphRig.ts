@@ -1,4 +1,3 @@
-import type { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import type { Block, BlockKind, EffectParams } from './blocks/Block'
 import { createBlock } from './blocks/blockRegistry'
 import { MixerBlock } from './blocks/MixerBlock'
@@ -44,7 +43,6 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  */
 export class GraphRig {
   private readonly context: AudioContext
-  private readonly engine: NamEngine
   private readonly blocks = new Map<string, BlockEntry>()
   private readonly edges = new Map<string, Edge>()
   /** Lazily-created per-block output taps for live meters - see getBlockAnalyser. */
@@ -59,9 +57,8 @@ export class GraphRig {
   private disposed = false
   private nextId = 0
 
-  private constructor(context: AudioContext, engine: NamEngine) {
+  private constructor(context: AudioContext) {
     this.context = context
-    this.engine = engine
     this.outSink = new GainNode(context)
     this.masterGain = new GainNode(context)
     // Fast, hot limiter before the destination - arbitrary user-built
@@ -77,8 +74,8 @@ export class GraphRig {
     this.masterGain.connect(this.limiter)
   }
 
-  static async create(context: AudioContext, engine: NamEngine): Promise<GraphRig> {
-    return new GraphRig(context, engine)
+  static async create(context: AudioContext): Promise<GraphRig> {
+    return new GraphRig(context)
   }
 
   /** The rig's stereo output - connect to your output device chain / AudioContext.destination. */
@@ -94,7 +91,7 @@ export class GraphRig {
   // ── Blocks ──────────────────────────────────────────────────────────────
 
   async addBlock(kind: BlockKind, row: number, col: number, id?: string): Promise<string> {
-    const block = await createBlock(this.context, this.engine, kind)
+    const block = await createBlock(this.context, kind)
     const blockId = id ?? this.genId('block')
     this.blocks.set(blockId, { block, row, col })
     return blockId

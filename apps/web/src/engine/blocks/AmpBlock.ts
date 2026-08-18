@@ -1,4 +1,4 @@
-import { NamEngine, NamNode, type NamModelInfo } from 'neural-amp-modeler-wasm/engine'
+import { NamAmpNode, type NamModelInfo } from '../NamAmpNode'
 import type { Block, EffectParams } from './Block'
 
 /** Which model is currently loaded, for saving into a preset. Null if none is loaded. */
@@ -34,7 +34,7 @@ const MAX_LEVEL = 1.5
 
 export class AmpBlock implements Block {
   readonly kind: NamModelBlockKind
-  private readonly namNode: NamNode
+  private readonly namNode: NamAmpNode
   private readonly context: BaseAudioContext
   private disposed = false
   private loadedModel: LoadedAssetInfo | null = null
@@ -71,7 +71,7 @@ export class AmpBlock implements Block {
   private inputLevel = 1
   private outputLevel = 1
 
-  private constructor(context: BaseAudioContext, namNode: NamNode, kind: NamModelBlockKind) {
+  private constructor(context: BaseAudioContext, namNode: NamAmpNode, kind: NamModelBlockKind) {
     this.context = context
     this.namNode = namNode
     this.kind = kind
@@ -97,8 +97,8 @@ export class AmpBlock implements Block {
       gain: 0,
     })
 
-    this.inputGain.connect(namNode)
-    namNode.connect(this.bassFilter)
+    this.inputGain.connect(namNode.node)
+    namNode.node.connect(this.bassFilter)
     this.bassFilter.connect(this.midFilter)
     this.midFilter.connect(this.trebleFilter)
     this.trebleFilter.connect(this.presenceFilter)
@@ -116,9 +116,17 @@ export class AmpBlock implements Block {
     this.dryGain.connect(this.output)
   }
 
-  static async create(engine: NamEngine, kind: NamModelBlockKind = 'amp'): Promise<AmpBlock> {
-    const namNode = await engine.createNode()
-    return new AmpBlock(engine.context, namNode, kind)
+  // The NAM inference itself runs in packages/core (see NamAmpNode); this class
+  // owns the Web Audio staging around it - the trims, the tone stack and true
+  // bypass. Those three are the web path's remaining local DSP; the desktop
+  // path gets trims and bypass from the core instead, and the tone stack not at
+  // all (see ARCHITECTURE.md).
+  static async create(
+    context: BaseAudioContext,
+    kind: NamModelBlockKind = 'amp',
+  ): Promise<AmpBlock> {
+    const namNode = await NamAmpNode.create(context)
+    return new AmpBlock(context, namNode, kind)
   }
 
   get inputNode(): AudioNode {
@@ -226,7 +234,7 @@ export class AmpBlock implements Block {
    * size hasn't actually changed - bindGraphRig's reconcile reapplies every
    * block's full params on every store change (see its doc comment), so this
    * runs far more often than the user actually touches a slim-size control.
-   * Uses NamNode.setSlimSize (a lightweight re-slim), not loadModel, which
+   * Uses NamAmpNode.setSlimSize (a lightweight re-slim), not loadModel, which
    * reparses the whole model and pauses rendering for ~100-300ms - calling
    * that on every reconcile pass was audible as the output cutting out
    * whenever *any* block's params changed, not just this one's.

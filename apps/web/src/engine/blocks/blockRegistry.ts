@@ -1,4 +1,3 @@
-import type { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { createEffect } from '../../effects/effectRegistry'
 import type { EffectKind } from '../../effects/Effect'
 import type { Block, BlockKind, EffectParams } from './Block'
@@ -31,18 +30,16 @@ export const NAM_MODEL_KINDS = new Set<BlockKind>(['amp', 'amp-cab', 'pedal', 'o
  */
 export async function createBlock(
   context: AudioContext,
-  engine: NamEngine,
   kind: BlockKind,
   params?: EffectParams,
 ): Promise<Block> {
-  const block = await buildBlock(context, engine, kind, params)
+  const block = await buildBlock(context, kind, params)
   if (params) block.setParams(params)
   return block
 }
 
 async function buildBlock(
   context: AudioContext,
-  engine: NamEngine,
   kind: BlockKind,
   params: EffectParams | undefined,
 ): Promise<Block> {
@@ -54,7 +51,7 @@ async function buildBlock(
     case 'splitter':
       return new SplitterBlock(context)
     default:
-      if (NAM_MODEL_KINDS.has(kind)) return AmpBlock.create(engine, kind as NamModelBlockKind)
+      if (NAM_MODEL_KINDS.has(kind)) return AmpBlock.create(context, kind as NamModelBlockKind)
       if (EFFECT_KINDS.has(kind)) return createEffect(context, kind as EffectKind, params)
       throw new Error(`Unknown block kind: ${kind}`)
   }

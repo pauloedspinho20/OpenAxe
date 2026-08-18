@@ -60,7 +60,7 @@ meters, and CPU load.
 | Concern                      | Web                                                 | Desktop                            | VST3 | Owner it should have                 |
 | ---------------------------- | --------------------------------------------------- | ---------------------------------- | ---- | ------------------------------------ |
 | DSP effects                  | core via WASM worklets                              | core, in-process                   | —    | core ✅                              |
-| Amp (NAM inference)          | third-party `neural-amp-modeler-wasm` npm package   | core's `NamAmp`                    | —    | **core** ❌                          |
+| Amp (NAM inference)          | core's `NamAmp` via WASM (`ampWorklet.js`)          | core's `NamAmp`                    | —    | core ✅                              |
 | Signal graph + routing rules | TS `GraphRig` + `graphValidation`                   | core `graph_rig`                   | —    | **core** ❌ (core already has both)  |
 | Reverb control mapping       | core (`set_reverb_control`)                         | core                               | —    | core ✅                              |
 | Block I/O trims              | Web Audio `GainNode`s                               | core trims                         | —    | **core** ⚠️ (web still to move)      |
@@ -78,9 +78,12 @@ meters, and CPU load.
 
 Each step is useful on its own and unblocks the plugin target.
 
-1. **Amp on one engine.** Replace the npm NAM package on the web path with
-   core's `NamAmp` through WASM. Today the web and desktop run _different_
-   inference code, so the same preset can sound different per platform.
+1. ~~**Amp on one engine.**~~ Done: the web path runs core's `NamAmp` in its own
+   worklet (`NamAmpNode` + `wasm-core/ampWorklet.js`), and the
+   `neural-amp-modeler-wasm` npm package is gone - web and desktop no longer run
+   different inference code. It also needed `nam_studio_load_nam_model_json` (a
+   browser has no filesystem to hand a path to), which the desktop bridge now
+   uses too rather than staging a temp file.
 2. **One graph.** Drive core's `graph_rig` from the web path instead of the TS
    `GraphRig` + Web Audio node graph: one worklet running the whole rig. This
    collapses the trims, bypass, master bus, mixer/splitter levels and routing
@@ -136,6 +139,13 @@ Rules that keep it that way:
 - Params come from `packages/core/param_schema.json`; run
   `node scripts/gen-param-schema.mjs` and commit the generated files (CI fails
   on drift).
+- Two WASM build requirements that fail _silently_ if forgotten: the module is
+  linked **whole-archive** (NAM's architecture parsers self-register via static
+  initializers, and a plain link drops them - every model load then fails with a
+  generic "bad model"), and it is compiled with **`-fexceptions`** (Emscripten
+  disables exceptions by default, so the `throw` NAMCore uses to report a bad
+  model aborts the whole AudioWorklet instead of being caught and turned into an
+  error code).
 - New ABI a browser needs must be added to `EXPORTED_FUNCTIONS` in
   `packages/core/CMakeLists.txt`, then `scripts/build-core-wasm.sh` re-run and
   the artifacts committed — nothing rebuilds them automatically.

@@ -129,9 +129,36 @@ void nam_studio_set_param(NamStudioGraph* graph, int32_t block_id, int32_t index
 
 NamStudioLoadResult nam_studio_load_nam_model(NamStudioGraph* graph, int32_t block_id,
                                                const char* file_path);
+// Same, from the .nam file's JSON content in memory rather than a path. This is
+// the entry point a browser needs (no filesystem) and the one a plugin uses when
+// restoring host state; the desktop app uses it too, so its webview never has to
+// stage a temp file. Same non-real-time contract as the path form.
+NamStudioLoadResult nam_studio_load_nam_model_json(NamStudioGraph* graph, int32_t block_id,
+                                                   const char* json);
+
 void nam_studio_unload_nam_model(NamStudioGraph* graph, int32_t block_id);
 // Returns 0/1; 0 for an unknown or non-Amp-family block.
 int32_t nam_studio_block_has_model(NamStudioGraph* graph, int32_t block_id);
+
+// Metadata of the capture loaded into a block: 1 on success, 0 for an unknown
+// block, a non-amp kind, or no model loaded. Every out-param is optional (pass
+// null to skip). Flags are 0/1; `sample_rate` is the model's trained rate (-1 if
+// it doesn't declare one); `loudness_db` and the two dBu levels are only
+// meaningful when their has_* flag is 1. A slimmable capture can trade fidelity
+// for CPU at `slim_breakpoint_count` discrete sizes - read them with
+// nam_studio_block_model_slim_breakpoints.
+int32_t nam_studio_block_model_info(NamStudioGraph* graph, int32_t block_id, double* out_sample_rate,
+                                    int32_t* out_has_loudness, double* out_loudness_db,
+                                    int32_t* out_has_input_level, double* out_input_level_dbu,
+                                    int32_t* out_has_output_level, double* out_output_level_dbu,
+                                    int32_t* out_is_slimmable, int32_t* out_slim_breakpoint_count);
+
+// Copies up to `max_count` slim-size breakpoints into `out_values` and returns
+// how many were written (0 when the block has no slimmable model). Split from
+// nam_studio_block_model_info so the ABI never has to hand back a pointer into
+// engine-owned storage.
+int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t block_id,
+                                                double* out_values, int32_t max_count);
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────
 

@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -167,6 +169,91 @@ void TestReverbAlgorithmSwitchOnlyAffectsThatBlock() {
   nam_studio_graph_destroy(graph);
 }
 
+// The JSON load path and the model-info accessors, over the ABI a browser and a
+// plugin actually call (the web app has no filesystem to hand a path to).
+void TestLoadModelJsonAndModelInfoOverAbi() {
+  NamStudioGraph* graph = nam_studio_graph_create();
+  const int32_t amp = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_AMP, 0, 0);
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, amp, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, amp, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  nam_studio_reset(graph, 48000.0, 512);
+
+  // No model yet: model info reports nothing rather than stale values.
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr) == 0);
+
+  std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/lstm.nam", std::ios::binary);
+  NAM_EXPECT(ifs.good());
+  const std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, json.c_str()) == NAM_STUDIO_LOAD_OK);
+  NAM_EXPECT(nam_studio_block_has_model(graph, amp) == 1);
+
+  double sample_rate = 0.0;
+  int32_t has_loudness = -1;
+  int32_t is_slimmable = -1;
+  int32_t breakpoints = -1;
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, &sample_rate, &has_loudness, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, &is_slimmable,
+                                         &breakpoints) == 1);
+  NAM_EXPECT(sample_rate > 0.0);
+  NAM_EXPECT(has_loudness == 0 || has_loudness == 1);
+  NAM_EXPECT(is_slimmable == 0);       // lstm.nam is not a slimmable capture
+  NAM_EXPECT(breakpoints == 0);
+
+  // And it actually produces audio through the graph.
+  std::vector<float> in_l(64, 0.0f), in_r(64, 0.0f), out_l(64, 0.0f), out_r(64, 0.0f);
+  in_l[0] = in_r[0] = 0.5f;
+  const float* in_ptrs[2] = {in_l.data(), in_r.data()};
+  float* out_ptrs[2] = {out_l.data(), out_r.data()};
+  nam_studio_process(graph, in_ptrs, 2, out_ptrs, 2, 64);
+  bool finite = true;
+  for (float sample : out_l) finite = finite && std::isfinite(sample);
+  NAM_EXPECT(finite);
+
+  // Bad JSON is a format error, not a crash, and leaves the previous model be.
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, "{}") == NAM_STUDIO_LOAD_INVALID_FORMAT);
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, nullptr) == NAM_STUDIO_LOAD_INVALID_FORMAT);
+  NAM_EXPECT(nam_studio_block_has_model(graph, amp) == 1);
+
+  nam_studio_unload_nam_model(graph, amp);
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr) == 0);
+  nam_studio_graph_destroy(graph);
+}
+
+// A slimmable capture's breakpoints come back through the two-call accessor.
+void TestSlimBreakpointsOverAbi() {
+  NamStudioGraph* graph = nam_studio_graph_create();
+  const int32_t amp = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_AMP, 0, 0);
+  nam_studio_reset(graph, 48000.0, 512);
+
+  std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/slimmable_wavenet.nam",
+                    std::ios::binary);
+  NAM_EXPECT(ifs.good());
+  const std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, json.c_str()) == NAM_STUDIO_LOAD_OK);
+
+  int32_t is_slimmable = 0;
+  int32_t count = 0;
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, &is_slimmable, &count) == 1);
+  NAM_EXPECT(is_slimmable == 1);
+  NAM_EXPECT(count > 0);
+
+  std::vector<double> values(static_cast<size_t>(count), 0.0);
+  NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, amp, values.data(), count) == count);
+  for (double v : values) NAM_EXPECT(v > 0.0);
+
+  // A smaller buffer is truncated, not overrun.
+  NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, amp, values.data(), 1) == 1);
+  // Loading a slimmable model grows the param surface (slim size joins the two
+  // calibration params).
+  NAM_EXPECT(nam_studio_block_param_count(graph, amp) == 3);
+
+  nam_studio_graph_destroy(graph);
+}
+
 void TestUnknownBlockCallsAreSafeNoOps() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
@@ -177,6 +264,10 @@ void TestUnknownBlockCallsAreSafeNoOps() {
   NAM_EXPECT(nam_studio_block_has_model(graph, 999) == 0);
   NAM_EXPECT(nam_studio_load_nam_model(graph, 999, "/does/not/matter.nam") ==
              NAM_STUDIO_LOAD_FILE_NOT_FOUND);
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, 999, "{}") == NAM_STUDIO_LOAD_FILE_NOT_FOUND);
+  NAM_EXPECT(nam_studio_block_model_info(graph, 999, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr) == 0);
+  NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, 999, nullptr, 0) == 0);
   nam_studio_remove_block(graph, 999);       // must not crash
   nam_studio_disconnect(graph, 999);         // must not crash
 
@@ -190,6 +281,8 @@ int main() {
   TestUnwrappedKindPassesAudioThrough();
   TestReverbAlgorithmSwitchOnlyAffectsThatBlock();
   TestEndToEndDsparkRig();
+  TestLoadModelJsonAndModelInfoOverAbi();
+  TestSlimBreakpointsOverAbi();
   TestUnknownBlockCallsAreSafeNoOps();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

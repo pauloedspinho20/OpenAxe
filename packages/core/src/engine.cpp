@@ -678,21 +678,45 @@ std::optional<dsp::NamLoadError> AudioEngine::LoadNamModel(BlockId id, const std
   if (!amp) return dsp::NamLoadError::kFileNotFound;
 
   if (auto err = amp->LoadModel(file_path)) return err;
-  if (max_block_size_ > 0) amp->Reset(sample_rate_, max_block_size_);
+  AdoptLoadedModel(*state, *amp);
+  return std::nullopt;
+}
 
-  const auto& info = amp->ModelInfo();
-  state->amp_input_level_active.store(info.has_input_level, std::memory_order_relaxed);
-  state->amp_output_level_active.store(info.has_output_level, std::memory_order_relaxed);
-  state->params[kAmpInputLevelParam].store(
+// Same, from the model's JSON content rather than a path. Identical contract to
+// LoadNamModel - including not being real-time safe, since NAMCore parses and
+// allocates either way.
+std::optional<dsp::NamLoadError> AudioEngine::LoadNamModelJson(BlockId id,
+                                                               const std::string& json_text) {
+  BlockState* state = FindBlock(id);
+  if (!state) return dsp::NamLoadError::kFileNotFound;
+  auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
+  if (!amp) return dsp::NamLoadError::kFileNotFound;
+
+  if (auto err = amp->LoadModelFromJson(json_text)) return err;
+  AdoptLoadedModel(*state, *amp);
+  return std::nullopt;
+}
+
+// Re-arm a block around its newly loaded model: prepare the DSP at the engine's
+// current rate/block size, seed the calibration params from the model's own
+// metadata, and grow the param surface if the capture is slimmable. Shared by
+// both load paths so a model loaded from JSON behaves exactly like one loaded
+// from a file.
+void AudioEngine::AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp) {
+  if (max_block_size_ > 0) amp.Reset(sample_rate_, max_block_size_);
+
+  const auto& info = amp.ModelInfo();
+  state.amp_input_level_active.store(info.has_input_level, std::memory_order_relaxed);
+  state.amp_output_level_active.store(info.has_output_level, std::memory_order_relaxed);
+  state.params[kAmpInputLevelParam].store(
       info.has_input_level ? static_cast<float>(info.input_level_dbu) : 0.0f, std::memory_order_relaxed);
-  state->params[kAmpOutputLevelParam].store(
+  state.params[kAmpOutputLevelParam].store(
       info.has_output_level ? static_cast<float>(info.output_level_dbu) : 0.0f,
       std::memory_order_relaxed);
-  state->param_count = info.is_slimmable ? 3 : 2;
+  state.param_count = info.is_slimmable ? 3 : 2;
   if (info.is_slimmable) {
-    state->params[kAmpSlimSizeParam].store(static_cast<float>(amp->SlimSize()), std::memory_order_relaxed);
+    state.params[kAmpSlimSizeParam].store(static_cast<float>(amp.SlimSize()), std::memory_order_relaxed);
   }
-  return std::nullopt;
 }
 
 // Drop the block's model; it becomes a passthrough and its param surface
@@ -715,6 +739,17 @@ bool AudioEngine::BlockHasModel(BlockId id) const {
   if (!state) return false;
   const auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
   return amp && amp->HasModel();
+}
+
+// Metadata of the block's loaded capture, or nullopt when there is none. A copy
+// rather than a reference: the next load replaces it, and the ABI layer hands
+// the values out one by one anyway.
+std::optional<dsp::NamModelInfo> AudioEngine::BlockModelInfo(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state) return std::nullopt;
+  const auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
+  if (!amp || !amp->HasModel()) return std::nullopt;
+  return amp->ModelInfo();
 }
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────

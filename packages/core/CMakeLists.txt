@@ -164,8 +164,26 @@ if(EMSCRIPTEN)
   # executable is what actually gets Emscripten's MODULARIZE treatment.
   # wasm_entry.cpp is deliberately empty; nothing needs a main() for the
   # MODULARIZE=1 factory-function pattern used here.
+  # C++ exceptions must be enabled for this target. Emscripten disables them by
+  # default, which turns any `throw` into an abort() that takes the whole
+  # AudioWorklet down - and the core relies on catching them: NAMCore signals a
+  # bad model by throwing, and nam_studio::dsp::NamAmp catches that to return a
+  # NamLoadError instead (the ABI can't propagate exceptions). Without this, a
+  # malformed .nam file killed the audio thread instead of returning an error.
+  # -fexceptions (the JS-based implementation) rather than -fwasm-exceptions:
+  # universally supported, and the cost lands on unwinding paths, not on
+  # nam_studio_process.
+  target_compile_options(nam_studio_core PRIVATE -fexceptions)
   add_executable(nam_studio_core_wasm src/wasm_entry.cpp)
-  target_link_libraries(nam_studio_core_wasm PRIVATE nam_studio_core)
+  target_compile_options(nam_studio_core_wasm PRIVATE -fexceptions)
+  # WHOLE_ARCHIVE for the same reason the desktop app and the tests need it:
+  # NAM's architecture parsers (LSTM/WaveNet/ConvNet/Linear) self-register via
+  # static initializers that nothing calls directly, so a plain archive link
+  # drops them and every model load fails - silently, with a "bad model" error.
+  # This only started to matter once the web app's amp block ran core's own NAM
+  # inference (ampWorklet.js) instead of a separate npm engine.
+  target_link_libraries(nam_studio_core_wasm PRIVATE
+    $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
   set_target_properties(nam_studio_core_wasm PROPERTIES OUTPUT_NAME "nam_studio_core")
   target_link_options(nam_studio_core_wasm PRIVATE
     "SHELL:-s MODULARIZE=1"
@@ -173,13 +191,17 @@ if(EMSCRIPTEN)
     "SHELL:-s ENVIRONMENT=worklet"
     "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    -fexceptions
     # Extend this list as more of the graph ABI gets used from the browser.
     # Every name here must exist in the linked archive: wasm-ld fails the build
     # on an export it can't find, which is how _nam_studio_set_drive_model
     # (removed with the Drive effect) went unnoticed - the compiled artifacts
     # are checked in and nothing rebuilds them automatically.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_malloc','_free']"
-    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_param_count','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_malloc','_free']"
+    # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
+    # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's
+    # double/int32 out-params back out.
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32','HEAPU8','HEAPF64','HEAP32']"
     -O3
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")

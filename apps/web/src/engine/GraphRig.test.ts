@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { GraphRig, jack } from './GraphRig'
 import type { AmpBlock } from './blocks/AmpBlock'
 
@@ -27,22 +26,25 @@ function createMockContext(): AudioContext {
   return { currentTime: 0 } as AudioContext
 }
 
-function createMockEngine(): NamEngine {
-  return {
-    createNode: async () => ({
+// Amp blocks now build their own core-backed worklet node (NamAmpNode) instead
+// of being handed a node by an engine object, so the rig needs no engine at all.
+vi.mock('./NamAmpNode', () => ({
+  NamAmpNode: {
+    create: async () => ({
+      node: { connect: vi.fn(), disconnect: vi.fn() },
       loadModel: async () => ({ slimmable: false, slimmableBreakpoints: [] }),
-      connect: vi.fn(),
-      disconnect: vi.fn(),
+      unloadModel: async () => undefined,
+      setSlimSize: async () => undefined,
       dispose: async () => undefined,
     }),
-  } as unknown as NamEngine
-}
+  },
+}))
 
 describe('GraphRig', () => {
   let rig: GraphRig
 
   beforeEach(async () => {
-    rig = await GraphRig.create(createMockContext(), createMockEngine())
+    rig = await GraphRig.create(createMockContext())
   })
 
   it('starts with no blocks or edges', () => {

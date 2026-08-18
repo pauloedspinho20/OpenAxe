@@ -127,8 +127,17 @@ class AudioEngine {
 
   // ── NAM model management (off the audio thread) ─────────────────────
   std::optional<dsp::NamLoadError> LoadNamModel(BlockId id, const std::string& file_path);
+
+  // Same, from the .nam file's JSON content in memory - the form a browser or a
+  // plugin restoring host state has (see dsp::NamAmp::LoadModelFromJson).
+  std::optional<dsp::NamLoadError> LoadNamModelJson(BlockId id, const std::string& json_text);
   void UnloadNamModel(BlockId id);
   bool BlockHasModel(BlockId id) const;
+
+  // Metadata of the capture loaded into an amp-family block, or nullopt for
+  // unknown blocks, non-amp kinds and blocks with no model. Returned by value:
+  // the caller may outlive the next load, and this crosses into the ABI layer.
+  std::optional<dsp::NamModelInfo> BlockModelInfo(BlockId id) const;
 
   // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
   // safe - reconstructs the underlying wrapper instance.
@@ -208,6 +217,8 @@ class AudioEngine {
   const BlockState* FindBlockThreadSafe(BlockId id) const;
   void EnsureBuffers(BlockState& state);
   void SeedParamsFromDsp(BlockState& state);
+  // Shared tail of LoadNamModel/LoadNamModelJson - see the definition.
+  void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int num_frames);
 

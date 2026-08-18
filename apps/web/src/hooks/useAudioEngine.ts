@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NamEngine } from 'neural-amp-modeler-wasm/engine'
 import { toast } from '@nam/ui'
 import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
@@ -249,8 +248,9 @@ export function useWebAudioEngine() {
       try {
         const io = useIOStore.getState()
         const context = new AudioContext({ latencyHint: io.latencyHint })
-        const engine = await NamEngine.attach(context)
-        const rig = await GraphRig.create(context, engine)
+        // No NAM engine to attach any more: amp blocks run packages/core's own
+        // inference in their own worklet (see NamAmpNode), same as every effect.
+        const rig = await GraphRig.create(context)
         contextRef.current = context
         rigRef.current = rig
 
