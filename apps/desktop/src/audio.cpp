@@ -196,6 +196,16 @@ AudioIO::AudioIO() : callback_(std::make_unique<Callback>(*this, state_)) {
 
 AudioIO::~AudioIO() {
   if (device_ && device_->isOpen()) device_->close();
+  // Tear the JUCE audio objects down first: they may still reference the
+  // MessageManager internally, so it must outlive them.
+  device_.reset();
+  type_.reset();
+  // Balances the getInstance() in the constructor. juce_audio_devices pulls in
+  // juce_events, which owns a process-wide MessageManager singleton; nothing
+  // else in this app creates or runs it, so we own its full lifecycle. Without
+  // this, the singleton leaks (caught by JUCE's LeakedObjectDetector) at process
+  // exit whenever a StudioBridge is destroyed.
+  juce::MessageManager::deleteInstance();
 }
 
 void AudioIO::HandleStreamError(const std::string& text) {
