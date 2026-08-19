@@ -198,6 +198,20 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
   graph->engine.SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
 }
 
+// Installs / clears / reports a cab block's impulse response - see api.h.
+void nam_studio_load_ir(NamStudioGraph* graph, int32_t block_id, const float* samples,
+                        int32_t frames) {
+  graph->engine.LoadIr(block_id, samples, frames);
+}
+
+void nam_studio_unload_ir(NamStudioGraph* graph, int32_t block_id) {
+  graph->engine.UnloadIr(block_id);
+}
+
+int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id) {
+  return graph->engine.IrLength(block_id);
+}
+
 void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
                                    NamStudioReverbControl control, float value) {
   using nam_studio::engine::ReverbControl;

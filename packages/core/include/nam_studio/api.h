@@ -171,6 +171,22 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
 
 // No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Not
 // real-time safe.
+// ── Cab impulse responses ──────────────────────────────────────────────
+// Install an IR on a NAM_STUDIO_BLOCK_CAB block: `samples` is mono float audio
+// at the graph's own sample rate, `frames` its length. Nothing is resampled here,
+// so a caller with a 44.1kHz IR in a 48kHz graph should resample first. Passing
+// null/0 clears it (the block returns to passthrough), and it is a no-op for
+// every other block kind. The samples are copied, so the caller may free them
+// immediately.
+//
+// Not real-time safe - it allocates and transforms the IR - so suspend audio
+// around it, exactly like model loading. Convolution itself adds no latency.
+void nam_studio_load_ir(NamStudioGraph* graph, int32_t block_id, const float* samples,
+                        int32_t frames);
+void nam_studio_unload_ir(NamStudioGraph* graph, int32_t block_id);
+// Length in samples of the IR installed on the block, 0 if none.
+int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id);
+
 // The user-facing reverb controls (see nam_studio::engine::ReverbControl):
 // room size and damping are abstractions over the current algorithm's decay
 // and high cut, and the rest resolve to whichever symbol that algorithm uses

@@ -139,6 +139,16 @@ class AudioEngine {
   // the caller may outlive the next load, and this crosses into the ABI layer.
   std::optional<dsp::NamModelInfo> BlockModelInfo(BlockId id) const;
 
+  // Install an impulse response on a kCab block: mono float samples at the
+  // engine's own sample rate (nothing is resampled here - a caller holding a
+  // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
+  // length <= 0 clears it, which returns the block to passthrough. No-op for
+  // every other kind. Not real-time safe: it allocates and transforms the IR.
+  void LoadIr(BlockId id, const float* samples, int length);
+  void UnloadIr(BlockId id);
+  // Length of the IR installed on the block, 0 if none (or not a cab).
+  int IrLength(BlockId id) const;
+
   // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
   // safe - reconstructs the underlying wrapper instance.
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);

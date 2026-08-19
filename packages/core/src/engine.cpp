@@ -11,6 +11,7 @@
 #include <variant>
 
 #include "nam_studio/dsp/chorus.h"
+#include "nam_studio/dsp/convolver.h"
 #include "nam_studio/dsp/compressor.h"
 #include "nam_studio/dsp/delay.h"
 #include "nam_studio/dsp/dragonfly_early_reflections.h"
@@ -47,6 +48,12 @@ constexpr int kAmpToneBandCount = 4;
 // whether slim size does anything is a property of the capture
 // (nam_studio_block_model_info reports it), not of the param surface.
 constexpr int kAmpParamCount = 7;
+
+// Cab blocks: a single wet/dry blend over the convolved signal. 1 = fully wet
+// (the IR alone), which is what a cabinet normally wants and what the web app's
+// ConvolverNode wiring defaulted to.
+constexpr int kCabMixParam = 0;
+constexpr int kCabParamCount = 1;
 
 // The five block kinds backed by a NAM capture. They are structurally
 // identical - only the UI's gear category and labelling differ - so everything
@@ -123,6 +130,12 @@ struct AudioEngine::BlockState {
   // DspVariant because it is not an alternative to NamAmp - it is always in
   // series with one (and it stays flat, and free, until a knob moves).
   dsp::ToneStack tone;
+
+  // Cab blocks only: one convolver per channel (the IR is mono, but the two
+  // channels carry independent audio and so need independent tails). Same
+  // reasoning as the tone stack for living here rather than in DspVariant - a
+  // cab is convolution plus a dry blend, not a single DSP object.
+  std::array<dsp::Convolver, 2> cab;
 
   // input_l/input_r[port][frame]; most kinds use only port 0. kMixer uses
   // kMixerInputCount independent ports, summed together into port 0 right
@@ -308,9 +321,15 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->param_count = dsp::Tremolo::ParamCount();
     SeedParamsFromDsp(*state);
   }
-  // Every other kind (kCab/kMixer/kSplitter) stays std::monostate
-  // (passthrough) with param_count 0 by design - none of them are a DSP
-  // effect kind.
+  if (kind == graph::BlockKind::kCab) {
+    // Cab stays std::monostate - its DSP is the pair of convolvers above, not a
+    // DspVariant alternative - but it does have a param, and its blend starts
+    // fully wet so loading an IR is immediately audible.
+    state->param_count = kCabParamCount;
+    state->params[kCabMixParam].store(1.0f, std::memory_order_relaxed);
+  }
+  // kMixer/kSplitter stay std::monostate with param_count 0 by design - neither
+  // is a DSP effect kind.
 
   if (max_block_size_ > 0) EnsureBuffers(*state);
   {
@@ -377,6 +396,11 @@ void AudioEngine::Reset(double sample_rate, int max_block_size) {
   for (auto& [id, state] : block_states_) {
     EnsureBuffers(*state);
     if (IsAmpFamily(state->kind)) state->tone.Reset(sample_rate);
+    if (state->kind == graph::BlockKind::kCab) {
+      // The IR itself is rate-independent data the caller supplied; only the
+      // tail state has to go.
+      for (auto& conv : state->cab) conv.ResetState();
+    }
     std::visit(
         [&](auto& d) {
           using T = std::decay_t<decltype(d)>;
@@ -465,10 +489,30 @@ void AudioEngine::RunDsp(BlockState& state, int num_frames) {
           state.tone.Process(state.output_l.data(), num_frames);
           std::copy_n(state.output_l.data(), num_frames, state.output_r.data());
         } else if constexpr (std::is_same_v<T, std::monostate>) {
-          // Passthrough: unwrapped effect kinds, Mixer (already summed into
-          // port 0 by the caller), Splitter, Cab.
           std::copy_n(state.input_l[0].data(), num_frames, state.output_l.data());
           std::copy_n(state.input_r[0].data(), num_frames, state.output_r.data());
+          if (state.kind == graph::BlockKind::kCab && state.cab[0].HasImpulseResponse()) {
+            // Convolve into the output buffers and blend the dry signal back in.
+            // Skipping the blend entirely at mix == 1 keeps the common
+            // fully-wet case free of a pointless pass over the buffer.
+            const float mix =
+                std::clamp(state.params[kCabMixParam].load(std::memory_order_relaxed), 0.0f, 1.0f);
+            state.cab[0].Process(state.output_l.data(), num_frames);
+            state.cab[1].Process(state.output_r.data(), num_frames);
+            if (mix != 1.0f) {
+              const float dry = 1.0f - mix;
+              for (int i = 0; i < num_frames; ++i) {
+                state.output_l[static_cast<size_t>(i)] =
+                    mix * state.output_l[static_cast<size_t>(i)] +
+                    dry * state.input_l[0][static_cast<size_t>(i)];
+                state.output_r[static_cast<size_t>(i)] =
+                    mix * state.output_r[static_cast<size_t>(i)] +
+                    dry * state.input_r[0][static_cast<size_t>(i)];
+              }
+            }
+          }
+          // Every other monostate kind (unwrapped effects, Mixer - already summed
+          // into port 0 by the caller - and Splitter) is a plain passthrough.
         } else {
           const float* in_ptrs[2] = {state.input_l[0].data(), state.input_r[0].data()};
           float* out_ptrs[2] = {state.output_l.data(), state.output_r.data()};
@@ -656,6 +700,14 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
           };
           return kAmpParams[index];
         } else if constexpr (std::is_same_v<T, std::monostate>) {
+          if (state->kind == graph::BlockKind::kCab) {
+            // Generated from packages/core/param_schema.json (issue #51) - run
+            // scripts/gen-param-schema.mjs after editing the schema.
+            static constexpr ParamDescriptor kCabParams[kCabParamCount] = {
+#include "dsp/generated/engine_cab_params.inc"
+            };
+            return kCabParams[index];
+          }
           return std::nullopt;
         } else {
           const auto& info = T::GetParamInfo(index);
@@ -788,6 +840,32 @@ std::optional<dsp::NamModelInfo> AudioEngine::BlockModelInfo(BlockId id) const {
   const auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
   if (!amp || !amp->HasModel()) return std::nullopt;
   return amp->ModelInfo();
+}
+
+// ── Cab impulse responses ──────────────────────────────────────────────
+
+// Install one IR on both of a cab block's channels. The two convolvers share the
+// same IR data but keep independent tails, since the channels carry different
+// audio. Not real-time safe (allocates and transforms); the caller suspends
+// audio, as with model loading.
+void AudioEngine::LoadIr(BlockId id, const float* samples, int length) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kCab) return;
+  for (auto& conv : state->cab) conv.SetImpulseResponse(samples, length);
+}
+
+// Drop the IR; the block goes back to passing audio through.
+void AudioEngine::UnloadIr(BlockId id) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kCab) return;
+  for (auto& conv : state->cab) conv.Clear();
+}
+
+// Length of the installed IR in samples, 0 when there is none.
+int AudioEngine::IrLength(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || state->kind != graph::BlockKind::kCab) return 0;
+  return state->cab[0].ImpulseResponseLength();
 }
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────

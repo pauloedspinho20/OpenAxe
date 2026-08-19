@@ -54,14 +54,32 @@ Notes worth knowing:
 sum much hotter than a fixed two-chain mix). `blocks/blockRegistry.ts` builds any block from its
 serialized `kind`; `blocks/AmpBlock.ts` wraps `NamAmpNode` with the block's own staging (input and
 output trims, true bypass) and forwards the Bass/Mid/Treble/Presence knobs to the
-core's tone stack through the worklet, and `blocks/CabBlock.ts` does IR convolution
-with a `ConvolverNode`.
+core's tone stack through the worklet, and `blocks/CabBlock.ts` runs its IR through the
+core's convolver (`CabIrNode` + `wasm-core/cabWorklet.js`), where it used to use a
+Web Audio `ConvolverNode`.
 
 `graphValidation.ts` holds the connection rules — left-to-right by column (which makes cycles
 impossible by construction), at most one cable per input jack, a mixer's several input ports and a
 splitter's several output ports each counting separately. The core has the same rules in
 `graph_validation.cpp`; that duplication is what step 2 of the migration in ARCHITECTURE.md
 removes.
+
+## `CabIrNode`
+
+Cabinet IR convolution as an `AudioWorkletNode`, over the core's own convolver -
+same shape as `NamAmpNode` (composition, async port messages for the things that
+aren't continuous automation).
+
+```ts
+const cab = await CabIrNode.create(context)
+const frames = await cab.loadIr(decodedIrAudioBuffer) // mono-folded, no resampling needed
+cab.setIrMix(0.8) // wet/dry blend, an AudioParam
+```
+
+Convolution was the last audio feature implemented only in the web app, which is
+why cab blocks did nothing on the desktop. The core's version is zero-latency (a
+direct FIR head plus FFT partitions), so moving to it doesn't shift the cab block
+in time.
 
 ## `bindGraphRig`
 

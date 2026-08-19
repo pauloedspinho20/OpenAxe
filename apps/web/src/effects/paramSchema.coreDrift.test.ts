@@ -57,8 +57,11 @@ function webFieldsFor(kind: EffectKind): Map<string, { min?: number; max?: numbe
 //   ReverbControl abstraction in packages/core (room size -> the current
 //   algorithm's decay, damping -> its high cut, pre-delay -> `delay` on Hall
 //   but `predelay` on Room, ...). Covered by its own case below.
+// - `cab`, whose single param also lives in BLOCK_PARAM_SCHEMAS, under a
+//   camelCase key. Covered by its own case below too.
+const EXCLUDED_KINDS = ['amp', 'reverb', 'cab']
 const SYMBOL_KINDS = Object.keys(coreEffects).filter(
-  (kind): kind is EffectKind => kind !== 'amp' && kind !== 'reverb' && kind in EFFECT_PARAM_SCHEMAS,
+  (kind): kind is EffectKind => !EXCLUDED_KINDS.includes(kind) && kind in EFFECT_PARAM_SCHEMAS,
 )
 
 // The controls packages/core's ReverbControl enum defines, in its order.
@@ -113,9 +116,22 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
   })
 
   it('covers every effect kind the core implements', () => {
-    // Every core effect kind is either compared symbol-by-symbol below or is
-    // one of the two documented exceptions (amp, reverb).
-    expect(SYMBOL_KINDS.length).toBe(Object.keys(coreEffects).length - 2)
+    // Every core effect kind is either compared symbol-by-symbol below or is one
+    // of the documented exceptions in EXCLUDED_KINDS.
+    expect(SYMBOL_KINDS.length).toBe(Object.keys(coreEffects).length - EXCLUDED_KINDS.length)
+  })
+
+  it("the cab's IR mix knob matches the core's ir_mix param", () => {
+    // The UI key is camelCase (`irMix`) where the core symbol is snake_case
+    // (`ir_mix`) - the bridge aliases it, the same way it does `slimSize`. The
+    // range has to agree either way.
+    const core = coreParamsFor('cab').get('ir_mix')
+    expect(core).toBeDefined()
+    const web = (BLOCK_PARAM_SCHEMAS.cab ?? []).find((field) => field.key === 'irMix')
+    expect(web?.control).toBe('knob')
+    if (web?.control === 'knob') {
+      expect({ min: web.min, max: web.max }).toEqual({ min: core!.min, max: core!.max })
+    }
   })
 
   it('reverb knobs are exactly the core ReverbControl set', () => {

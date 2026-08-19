@@ -24,8 +24,9 @@ function toNumber(v: number | string | boolean): number {
  * (`setBlockTrim`), not to params - see setParams.
  *
  * Limitations (documented, issue #15 M3):
- * - IR/Cab loading is a no-op: the core has no cab (convolution) DSP yet, so
- *   cab blocks pass audio through unchanged and `getLoadedIr()` is always null.
+ * - IR/Cab loading is a no-op: the core convolves (dsp/convolver.cpp) but this
+ *   path can't decode an IR file into samples to give it, so cab blocks pass
+ *   audio through and `getLoadedIr()` stays null.
  * - Params apply by core param *symbol*; effect params whose symbol doesn't
  *   match the core's table are rejected by the bridge (issue #41). That
  *   rejection is surfaced as a one-time console warning per block+key (see
@@ -135,7 +136,11 @@ export class NativeBlock implements PresetBlock {
   }
 
   loadIR(): void {
-    // No-op: the core has no cab/convolution DSP (see class doc).
+    // Still a no-op, but for a different reason than before: the core does have
+    // convolution now (nam_studio_load_ir), what's missing is a way to turn an
+    // IR *file* into samples on this path - the native AudioContext facade has
+    // no real decodeAudioData, so there is nothing to hand the core yet. See
+    // the class doc and ARCHITECTURE.md.
   }
 
   clearIR(): void {

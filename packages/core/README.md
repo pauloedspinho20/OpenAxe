@@ -59,6 +59,14 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
+- **Convolver** (`include/nam_studio/dsp/convolver.h` + `src/dsp/convolver.cpp`)
+  — cabinet/room impulse-response convolution, the DSP behind a Cab block.
+  Partitioned convolution in the standard two-part form: a direct time-domain FIR
+  for the first 64 taps, then FFT partitions through a frequency-domain delay
+  line (with a small hand-written radix-2 FFT, so no new third-party dependency).
+  That shape is what makes it **zero-latency for any block size** - a purely
+  block-based FFT scheme would either delay the stream or leave a gap in it. A
+  2048-tap cab IR costs roughly 40x less than a direct FIR would.
 - **Tone stack** (`include/nam_studio/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
   — the 4-band Bass/Mid/Treble/Presence stack the engine runs after every NAM
   model (low shelf 100Hz, peaking 1kHz Q0.7, high shelf 5kHz, peaking 8kHz Q0.5,
@@ -76,6 +84,11 @@ port the boundary-value matrix from `graphValidation.test.ts`/
 bundled with the vendored NeuralAmpModelerCore submodule
 (`third_party/nam-core/example_models/lstm.nam`), resets it, processes an
 impulse through it, and asserts every output sample is finite.
+`convolver_test` checks the convolver against brute-force direct convolution for
+every combination of IR length and block size (including block sizes that aren't a
+multiple of the partition), which is the only way to catch the off-by-one errors a
+frequency-domain delay line invites - they sound like a comb filter rather than an
+obvious failure.
 `tone_stack_test` measures the stack's actual frequency response - each band
 boosting and cutting its own region while leaving the others alone, holding at
 96kHz, and staying bit-exact while flat.

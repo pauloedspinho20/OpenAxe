@@ -130,3 +130,5 @@ export const REVERB_PARAMS = Object.freeze({
     high_cut: 6,
   }),
 })
+
+export const CAB_PARAMS = Object.freeze({ ir_mix: 0 })

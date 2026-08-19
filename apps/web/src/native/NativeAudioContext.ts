@@ -1,9 +1,10 @@
 /**
  * A Web Audio-free stand-in for `AudioContext` threaded into the shared UI as
  * `engine.context`. The desktop runs the DSP in C++, so it needs no real
- * AudioContext; components only use it for `decodeAudioData` (IR loading - a
- * no-op on native, since the core has no cab/convolution DSP) and a couple of
- * scalar reads (`currentTime`, `sampleRate`). Zero Web Audio.
+ * AudioContext; components only use it for `decodeAudioData` (a stub on native:
+ * the core convolves IRs now, but decoding an IR file into samples for it needs a
+ * decoder on the native side - see ARCHITECTURE.md) and a couple of scalar reads
+ * (`currentTime`, `sampleRate`). Zero Web Audio.
  */
 export class NativeAudioContext {
   readonly currentTime = 0

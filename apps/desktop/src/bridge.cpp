@@ -436,6 +436,7 @@ std::string StudioBridge::HandleDisconnect(const std::string& req) {
 // invalidate every saved preset.
 const char* CoreSymbolAliasFor(const std::string& key) {
   if (key == "slimSize") return "slim_size";
+  if (key == "irMix") return "ir_mix";
   return nullptr;
 }
 

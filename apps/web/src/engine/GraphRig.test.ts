@@ -26,6 +26,20 @@ function createMockContext(): AudioContext {
   return { currentTime: 0 } as AudioContext
 }
 
+// Cab blocks convolve in the core behind a worklet now (CabIrNode), same as amp
+// blocks - neither can be built against a plain object stub of an AudioContext.
+vi.mock('./CabIrNode', () => ({
+  CabIrNode: {
+    create: async () => ({
+      node: { connect: vi.fn(), disconnect: vi.fn() },
+      loadIr: async () => 0,
+      unloadIr: async () => undefined,
+      setIrMix: vi.fn(),
+      dispose: vi.fn(),
+    }),
+  },
+}))
+
 // Amp blocks now build their own core-backed worklet node (NamAmpNode) instead
 // of being handed a node by an engine object, so the rig needs no engine at all.
 vi.mock('./NamAmpNode', () => ({

@@ -70,7 +70,10 @@ void TestUnwrappedKindPassesAudioThrough() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
   const int32_t cab = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_CAB, 0, 0);
-  NAM_EXPECT(nam_studio_block_param_count(graph, cab) == 0);  // no wrapped DSP behind Cab
+  // One param (the IR wet/dry blend); with no IR loaded the block still passes
+  // audio straight through, which is what the rest of this test checks.
+  NAM_EXPECT(nam_studio_block_param_count(graph, cab) == 1);
+  NAM_EXPECT(nam_studio_block_ir_length(graph, cab) == 0);
   NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, cab, 0) >= 0);
   NAM_EXPECT(nam_studio_connect(graph, cab, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
   nam_studio_reset(graph, kSampleRate, kBlockSize);
@@ -255,6 +258,64 @@ void TestSlimBreakpointsOverAbi() {
   nam_studio_graph_destroy(graph);
 }
 
+// Cab IR convolution over the ABI: the feature that existed only as a Web Audio
+// ConvolverNode in the web app, so desktop cab blocks passed audio through.
+void TestCabIrConvolutionOverAbi() {
+  NamStudioGraph* graph = nam_studio_graph_create();
+  const int32_t cab = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_CAB, 0, 0);
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, cab, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, cab, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  nam_studio_reset(graph, 48000.0, 128);
+
+  // A two-tap IR: unity plus a half-strength echo 64 samples later. Easy to read
+  // in the output, and it spans a partition boundary.
+  std::vector<float> ir(65, 0.0f);
+  ir[0] = 1.0f;
+  ir[64] = 0.5f;
+  nam_studio_load_ir(graph, cab, ir.data(), static_cast<int32_t>(ir.size()));
+  NAM_EXPECT(nam_studio_block_ir_length(graph, cab) == 65);
+
+  const auto render = [&](float first_sample) {
+    std::vector<float> in_l(128, 0.0f), in_r(128, 0.0f), out_l(128, 0.0f), out_r(128, 0.0f);
+    in_l[0] = in_r[0] = first_sample;
+    const float* in_ptrs[2] = {in_l.data(), in_r.data()};
+    float* out_ptrs[2] = {out_l.data(), out_r.data()};
+    nam_studio_process(graph, in_ptrs, 2, out_ptrs, 2, 128);
+    return out_l;
+  };
+
+  const auto wet = render(1.0f);
+  NAM_EXPECT(std::fabs(wet[0] - 1.0f) < 1e-4f);    // dry tap, no latency
+  NAM_EXPECT(std::fabs(wet[64] - 0.5f) < 1e-4f);   // the echo, on time
+  NAM_EXPECT(std::fabs(wet[32]) < 1e-4f);          // nothing in between
+
+  // Mix at 0 is fully dry: the impulse survives, the echo doesn't.
+  nam_studio_set_param(graph, cab, 0, 0.0f);
+  const auto dry = render(1.0f);
+  NAM_EXPECT(std::fabs(dry[0] - 1.0f) < 1e-4f);
+  NAM_EXPECT(std::fabs(dry[64]) < 1e-4f);
+
+  // Half wet halves the echo.
+  nam_studio_set_param(graph, cab, 0, 0.5f);
+  const auto half = render(1.0f);
+  NAM_EXPECT(std::fabs(half[64] - 0.25f) < 1e-4f);
+
+  // Unloading returns the block to passthrough.
+  nam_studio_unload_ir(graph, cab);
+  NAM_EXPECT(nam_studio_block_ir_length(graph, cab) == 0);
+  nam_studio_set_param(graph, cab, 0, 1.0f);
+  const auto cleared = render(0.25f);
+  NAM_EXPECT(std::fabs(cleared[0] - 0.25f) < 1e-4f);
+  NAM_EXPECT(std::fabs(cleared[64]) < 1e-4f);
+
+  // Loading an IR onto a non-cab block is a no-op, not a crash.
+  const int32_t delay = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DELAY, 1, 0);
+  nam_studio_load_ir(graph, delay, ir.data(), static_cast<int32_t>(ir.size()));
+  NAM_EXPECT(nam_studio_block_ir_length(graph, delay) == 0);
+
+  nam_studio_graph_destroy(graph);
+}
+
 void TestUnknownBlockCallsAreSafeNoOps() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
@@ -269,6 +330,9 @@ void TestUnknownBlockCallsAreSafeNoOps() {
   NAM_EXPECT(nam_studio_block_model_info(graph, 999, nullptr, nullptr, nullptr, nullptr, nullptr,
                                          nullptr, nullptr, nullptr, nullptr) == 0);
   NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, 999, nullptr, 0) == 0);
+  nam_studio_load_ir(graph, 999, nullptr, 0);  // must not crash
+  nam_studio_unload_ir(graph, 999);
+  NAM_EXPECT(nam_studio_block_ir_length(graph, 999) == 0);
   nam_studio_remove_block(graph, 999);       // must not crash
   nam_studio_disconnect(graph, 999);         // must not crash
 
@@ -284,6 +348,7 @@ int main() {
   TestEndToEndDsparkRig();
   TestLoadModelJsonAndModelInfoOverAbi();
   TestSlimBreakpointsOverAbi();
+  TestCabIrConvolutionOverAbi();
   TestUnknownBlockCallsAreSafeNoOps();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;
