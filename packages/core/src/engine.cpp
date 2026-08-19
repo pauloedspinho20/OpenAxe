@@ -56,6 +56,19 @@ constexpr int kAmpParamCount = 7;
 constexpr int kCabMixParam = 0;
 constexpr int kCabParamCount = 1;
 
+// Mixer blocks expose per-input level and stereo pan for each of their
+// kMixerInputCount independent input jacks (interleaved: in{p}_level at p*2,
+// in{p}_pan at p*2+1), applied before the ports are summed into port 0 - the
+// core replacement for the web MixerBlock's per-input GainNode + StereoPanner.
+constexpr int kMixerParamsPerInput = 2;
+constexpr int kMixerParamCount = graph::kMixerInputCount * kMixerParamsPerInput;
+
+// Splitter blocks expose a per-output level for each of their
+// kSplitterOutputCount independent output jacks (out{p}_level at index p),
+// applied when an edge routes out of the splitter at that port - the core
+// replacement for the web SplitterBlock's per-output GainNode.
+constexpr int kSplitterParamCount = graph::kSplitterOutputCount;
+
 // The five block kinds backed by a NAM capture. They are structurally
 // identical - only the UI's gear category and labelling differ - so everything
 // model-related in this file keys off this rather than a specific kind.
@@ -329,8 +342,26 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->param_count = kCabParamCount;
     state->params[kCabMixParam].store(1.0f, std::memory_order_relaxed);
   }
-  // kMixer/kSplitter stay std::monostate with param_count 0 by design - neither
-  // is a DSP effect kind.
+  if (kind == graph::BlockKind::kMixer) {
+    // Mixer and splitter stay std::monostate - neither is a DSP effect kind -
+    // but both now expose per-port level/pan params the engine's Process()
+    // applies during routing. Unity level, centre pan by default.
+    state->param_count = kMixerParamCount;
+    for (int i = 0; i < kMixerParamCount; ++i) {
+      const bool is_pan = (i % kMixerParamsPerInput) == 1;
+      state->params[static_cast<size_t>(i)].store(is_pan ? 0.0f : 1.0f,
+                                                  std::memory_order_relaxed);
+    }
+  }
+  if (kind == graph::BlockKind::kSplitter) {
+    state->param_count = kSplitterParamCount;
+    for (int i = 0; i < kSplitterParamCount; ++i) {
+      state->params[static_cast<size_t>(i)].store(1.0f, std::memory_order_relaxed);
+    }
+  }
+  // kMixer/kSplitter are handled above - they keep std::monostate but now carry
+  // the per-port level/pan params, unlike the original design where neither was
+  // a DSP effect kind and both had param_count 0.
 
   if (max_block_size_ > 0) EnsureBuffers(*state);
   {
@@ -575,6 +606,7 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       if (edge.to != id) continue;
       const float* src_l = nullptr;
       const float* src_r = nullptr;
+      float src_gain = 1.0f;  // a splitter's per-output level, applied per fan-out port
       if (edge.from == kInRailId) {
         src_l = ext_in_l_.data();
         src_r = ext_in_r_.data();
@@ -583,15 +615,45 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
         if (!source || static_cast<int>(source->output_l.size()) < num_frames) continue;
         src_l = source->output_l.data();
         src_r = source->output_r.data();
+        if (source->kind == graph::BlockKind::kSplitter) {
+          const int out_port = std::clamp(edge.from_port, 0, kSplitterParamCount - 1);
+          src_gain =
+              source->params[static_cast<size_t>(out_port)].load(std::memory_order_relaxed);
+        }
       }
       const int port = std::clamp(edge.to_port, 0, ports - 1);
-      for (int i = 0; i < num_frames; ++i) {
-        state.input_l[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_l[i];
-        state.input_r[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_r[i];
+      if (src_gain == 1.0f) {
+        for (int i = 0; i < num_frames; ++i) {
+          state.input_l[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_l[i];
+          state.input_r[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_r[i];
+        }
+      } else {
+        for (int i = 0; i < num_frames; ++i) {
+          state.input_l[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_l[i] * src_gain;
+          state.input_r[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_r[i] * src_gain;
+        }
       }
     }
 
     if (state.kind == graph::BlockKind::kMixer) {
+      // Per-input level and equal-power pan (unity at centre), matching the
+      // web MixerBlock's per-input GainNode + StereoPanner and giving both
+      // paths identical DSP. Applied to each independent input jack before
+      // they're summed into port 0.
+      constexpr float kPanScale = 1.41421356f;  // sqrt(2) - normalises the equal-power law to unity at pan=0
+      for (int p = 0; p < ports; ++p) {
+        const int base = p * kMixerParamsPerInput;
+        const float level = state.params[static_cast<size_t>(base)].load(std::memory_order_relaxed);
+        const float pan = state.params[static_cast<size_t>(base + 1)].load(std::memory_order_relaxed);
+        if (level == 1.0f && pan == 0.0f) continue;  // untouched port - free
+        const float a = (pan + 1.0f) * 0.78539816f;  // (pan+1) * pi/4
+        const float gl = std::cos(a) * kPanScale;
+        const float gr = std::sin(a) * kPanScale;
+        for (int i = 0; i < num_frames; ++i) {
+          state.input_l[static_cast<size_t>(p)][static_cast<size_t>(i)] *= level * gl;
+          state.input_r[static_cast<size_t>(p)][static_cast<size_t>(i)] *= level * gr;
+        }
+      }
       for (int p = 1; p < ports; ++p) {
         for (int i = 0; i < num_frames; ++i) {
           state.input_l[0][static_cast<size_t>(i)] += state.input_l[static_cast<size_t>(p)][static_cast<size_t>(i)];
@@ -708,6 +770,18 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
 #include "dsp/generated/engine_cab_params.inc"
             };
             return kCabParams[index];
+          }
+          if (state->kind == graph::BlockKind::kMixer) {
+            static constexpr ParamDescriptor kMixerParams[kMixerParamCount] = {
+#include "dsp/generated/engine_mixer_params.inc"
+            };
+            return kMixerParams[index];
+          }
+          if (state->kind == graph::BlockKind::kSplitter) {
+            static constexpr ParamDescriptor kSplitterParams[kSplitterParamCount] = {
+#include "dsp/generated/engine_splitter_params.inc"
+            };
+            return kSplitterParams[index];
           }
           return std::nullopt;
         } else {

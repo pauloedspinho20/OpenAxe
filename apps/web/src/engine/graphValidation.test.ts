@@ -1,4 +1,13 @@
 // @vitest-environment node
+//
+// graphValidation.ts is the UI's pre-check for the connection rules; the core's
+// graph_validation.cpp is the source of truth the audio thread actually enforces
+// (issue #55). These two must never disagree - the audio thread rejects a cable
+// this test allows (or vice-versa) is a silent routing bug. So this file and
+// packages/core/tests/graph_validation_test.cpp are deliberate mirrors of each
+// other: every rule case here is ported there ("Ports every case in
+// apps/web/src/engine/graphValidation.test.ts") and vice-versa. If you change a
+// rule in either, port it to the other.
 import { describe, expect, it } from 'vitest'
 import { canConnect, canMoveTo, isEdgeOrderValid, type ValidatableBlock } from './graphValidation'
 import { jack } from './gridConfig'

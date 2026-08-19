@@ -1,65 +1,60 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GraphRig, jack } from './GraphRig'
-import type { AmpBlock } from './blocks/AmpBlock'
+import { IN_RAIL, OUT_RAIL } from './gridConfig'
+import { RigWorkletNode, type RigModelInfo } from './RigWorkletNode'
 
-function stubAudioNode() {
-  return class {
-    connect = vi.fn()
-    disconnect = vi.fn()
-    gain = { value: 1, setTargetAtTime: vi.fn() }
-    pan = { value: 0, setTargetAtTime: vi.fn() }
+/**
+ * The web GraphRig is a thin driver over the single rig worklet (issue #55) -
+ * it keeps block/edge bookkeeping and UI validation, then forwards every
+ * mutation to RigWorkletNode's message port. These tests drive it against a
+ * mock RigWorkletNode (mirroring NativeGraphRig.test.ts's mock bridge) so no
+ * AudioContext or Web Audio is involved.
+ */
+
+function makeWorklet() {
+  const node = { connect: vi.fn(), disconnect: vi.fn() }
+  const calls = {
+    addBlock: vi.fn(async () => undefined),
+    removeBlock: vi.fn(async () => undefined),
+    moveBlock: vi.fn(async () => undefined),
+    connect: vi.fn(async () => ({ ok: true })),
+    disconnect: vi.fn(async () => undefined),
+    setParam: vi.fn(),
+    setBypass: vi.fn(),
+    setTrim: vi.fn(),
+    setMasterLevel: vi.fn(),
+    setMasterMuted: vi.fn(),
+    setTunerMuted: vi.fn(),
+    loadModel: vi.fn(async () => ({ slimmable: false, slimmableBreakpoints: [] })),
+    unloadModel: vi.fn(async () => undefined),
+    setSlimSize: vi.fn(async () => undefined),
+    loadIr: vi.fn(async () => undefined),
+    unloadIr: vi.fn(async () => undefined),
+    meters: vi.fn(async () => ({})),
+    dispose: vi.fn(async () => undefined),
   }
+  const worklet = { node, ...calls } as unknown as RigWorkletNode
+  return { calls, worklet }
 }
 
-// None of GainNode/StereoPannerNode/DynamicsCompressorNode/ConvolverNode
-// exist in the `node` test environment - stub the ones GraphRig and the
-// block kinds used in these tests construct.
-vi.stubGlobal('GainNode', stubAudioNode())
-vi.stubGlobal('StereoPannerNode', stubAudioNode())
-vi.stubGlobal('BiquadFilterNode', stubAudioNode())
-vi.stubGlobal('DynamicsCompressorNode', stubAudioNode())
-vi.stubGlobal('ConvolverNode', stubAudioNode())
-vi.stubGlobal('AnalyserNode', stubAudioNode())
+vi.mock('./RigWorkletNode', () => ({
+  RigWorkletNode: { create: vi.fn() },
+}))
 
-function createMockContext(): AudioContext {
-  return { currentTime: 0 } as AudioContext
+async function createRig() {
+  const { calls, worklet } = makeWorklet()
+  vi.mocked(RigWorkletNode.create).mockResolvedValueOnce(worklet)
+  const rig = await GraphRig.create({ sampleRate: 48000 } as AudioContext)
+  return { calls, worklet, rig }
 }
-
-// Cab blocks convolve in the core behind a worklet now (CabIrNode), same as amp
-// blocks - neither can be built against a plain object stub of an AudioContext.
-vi.mock('./CabIrNode', () => ({
-  CabIrNode: {
-    create: async () => ({
-      node: { connect: vi.fn(), disconnect: vi.fn() },
-      loadIr: async () => 0,
-      unloadIr: async () => undefined,
-      setIrMix: vi.fn(),
-      dispose: vi.fn(),
-    }),
-  },
-}))
-
-// Amp blocks now build their own core-backed worklet node (NamAmpNode) instead
-// of being handed a node by an engine object, so the rig needs no engine at all.
-vi.mock('./NamAmpNode', () => ({
-  NamAmpNode: {
-    create: async () => ({
-      node: { connect: vi.fn(), disconnect: vi.fn() },
-      setToneGainDb: vi.fn(),
-      loadModel: async () => ({ slimmable: false, slimmableBreakpoints: [] }),
-      unloadModel: async () => undefined,
-      setSlimSize: async () => undefined,
-      dispose: async () => undefined,
-    }),
-  },
-}))
 
 describe('GraphRig', () => {
+  let calls: ReturnType<typeof makeWorklet>['calls']
   let rig: GraphRig
 
   beforeEach(async () => {
-    rig = await GraphRig.create(createMockContext())
+    ;({ calls, rig } = await createRig())
   })
 
   it('starts with no blocks or edges', () => {
@@ -67,40 +62,68 @@ describe('GraphRig', () => {
     expect(rig.listEdgeIds()).toEqual([])
   })
 
-  it('adds a block at a given position and can look it up', async () => {
-    const id = await rig.addBlock('mixer', 1, 2)
+  it('adds a block, mirrors it to the worklet, and can look it up', async () => {
+    const id = await rig.addBlock('mixer', 1, 2, 'm1')
+    expect(id).toBe('m1')
+    expect(calls.addBlock).toHaveBeenCalledWith('m1', 'mixer', 1, 2)
     expect(rig.getBlockPosition(id)).toEqual({ row: 1, col: 2 })
     expect(rig.getBlock(id)?.kind).toBe('mixer')
   })
 
-  it('getBlockAnalyser lazily creates and caches one tap per block, null for an unknown id', async () => {
+  it('auto-generates an id when none is given', async () => {
+    const id = await rig.addBlock('delay', 0, 0)
+    expect(id).toMatch(/^block-/)
+    expect(calls.addBlock).toHaveBeenCalledWith(id, 'delay', 0, 0)
+  })
+
+  it('getBlockAnalyser returns a Web-Audio-free analyser reflecting the block peak', async () => {
     const id = await rig.addBlock('mixer', 0, 0)
     expect(rig.getBlockAnalyser('nope')).toBeNull()
+
     const first = rig.getBlockAnalyser(id)
     const second = rig.getBlockAnalyser(id)
     expect(first).not.toBeNull()
     expect(second).toBe(first)
+    expect(first).toHaveProperty('fftSize')
+
+    const analyser = first as unknown as {
+      getByteTimeDomainData(bytes: Uint8Array): void
+    }
+    const bytes = new Uint8Array(256)
+    rig.updateMeter(id, 0)
+    analyser.getByteTimeDomainData(bytes)
+    let peak = 0
+    for (const b of bytes) peak = Math.max(peak, Math.abs(b - 128) / 128)
+    expect(peak).toBeLessThan(0.1)
+
+    rig.updateMeter(id, 1)
+    analyser.getByteTimeDomainData(bytes)
+    peak = 0
+    for (const b of bytes) peak = Math.max(peak, Math.abs(b - 128) / 128)
+    expect(peak).toBeGreaterThan(0.9)
   })
 
-  it('honors an explicit id when adding a block', async () => {
-    const id = await rig.addBlock('mixer', 0, 0, 'my-mixer')
-    expect(id).toBe('my-mixer')
-    expect(rig.listBlockIds()).toEqual(['my-mixer'])
+  it('connects a valid IN->block->OUT chain, mapping rails and forwarding to the worklet', async () => {
+    await rig.addBlock('mixer', 0, 1, 'm1')
+
+    const inEdge = rig.connect(jack(IN_RAIL), jack('m1'))
+    expect(inEdge.ok).toBe(true)
+    const outEdge = rig.connect(jack('m1'), jack(OUT_RAIL))
+    expect(outEdge.ok).toBe(true)
+
+    expect(calls.connect).toHaveBeenCalledWith(
+      { blockId: IN_RAIL, port: 0 },
+      { blockId: 'm1', port: 0 },
+      inEdge.ok ? inEdge.id : '',
+    )
+    expect(rig.listEdgeIds()).toHaveLength(2)
   })
 
-  it('connects two blocks in increasing column order', async () => {
-    const a = await rig.addBlock('mixer', 0, 0)
-    const b = await rig.addBlock('mixer', 0, 1)
-    const result = rig.connect(jack(a), jack(b))
-    expect(result.ok).toBe(true)
-    expect(rig.listEdgeIds()).toHaveLength(1)
-  })
-
-  it('rejects a backward connection', async () => {
-    const a = await rig.addBlock('mixer', 0, 1)
-    const b = await rig.addBlock('mixer', 0, 0)
-    const result = rig.connect(jack(a), jack(b))
+  it('rejects an invalid connect without forwarding to the worklet', async () => {
+    await rig.addBlock('mixer', 0, 1, 'm1')
+    const result = rig.connect(jack('m1'), jack('m1'))
     expect(result.ok).toBe(false)
+    expect(calls.connect).not.toHaveBeenCalled()
   })
 
   it('rejects a second cable into an already-occupied jack', async () => {
@@ -111,20 +134,14 @@ describe('GraphRig', () => {
     expect(rig.connect(jack(c), jack(b)).ok).toBe(false)
   })
 
-  it('honors an explicit edge id, so a store-generated id can be mirrored', async () => {
+  it('disconnect removes an edge and forwards to the worklet', async () => {
     const a = await rig.addBlock('mixer', 0, 0)
     const b = await rig.addBlock('mixer', 0, 1)
-    const result = rig.connect(jack(a), jack(b), 'my-edge')
-    expect(result).toEqual({ ok: true, id: 'my-edge' })
-    expect(rig.listEdgeIds()).toEqual(['my-edge'])
-  })
+    const edge = rig.connect(jack(a), jack(b)) as { ok: true; id: string }
 
-  it('disconnects an edge by id', async () => {
-    const a = await rig.addBlock('mixer', 0, 0)
-    const b = await rig.addBlock('mixer', 0, 1)
-    const { id } = rig.connect(jack(a), jack(b)) as { ok: true; id: string }
-    rig.disconnect(id)
-    expect(rig.listEdgeIds()).toEqual([])
+    rig.disconnect(edge.id)
+    expect(rig.listEdgeIds()).toHaveLength(0)
+    expect(calls.disconnect).toHaveBeenCalledWith(edge.id)
   })
 
   it('removing a block also drops every edge that touched it', async () => {
@@ -139,18 +156,21 @@ describe('GraphRig', () => {
 
     expect(rig.listBlockIds().sort()).toEqual([a, c].sort())
     expect(rig.listEdgeIds()).toEqual([])
+    expect(calls.removeBlock).toHaveBeenCalledWith(b)
   })
 
-  it('moving a block to a column that would break a cable is rejected and the block does not move', async () => {
+  it('moving a block to a column that would break a cable is rejected and not forwarded', async () => {
     const a = await rig.addBlock('mixer', 0, 0)
     const b = await rig.addBlock('mixer', 0, 1)
     rig.connect(jack(a), jack(b))
 
-    const result = rig.moveBlock(a, 0, 5)
+    const bad = rig.moveBlock(a, 0, 5)
+    expect(bad.ok).toBe(false)
+    expect(calls.moveBlock).not.toHaveBeenCalled()
 
-    expect(result.ok).toBe(false)
-    expect(rig.listEdgeIds()).toHaveLength(1)
-    expect(rig.getBlockPosition(a)).toEqual({ row: 0, col: 0 })
+    const good = rig.moveBlock(a, 1, 0)
+    expect(good.ok).toBe(true)
+    expect(calls.moveBlock).toHaveBeenCalledWith(a, 1, 0)
   })
 
   it('routes multiple cables into distinct Mixer ports', async () => {
@@ -162,41 +182,28 @@ describe('GraphRig', () => {
     expect(rig.listEdgeIds()).toHaveLength(2)
   })
 
-  it('connects the IN rail to a block and the block to the OUT rail', async () => {
-    const a = await rig.addBlock('mixer', 0, 0)
-    expect(rig.connect(jack('IN'), jack(a)).ok).toBe(true)
-    expect(rig.connect(jack(a), jack('OUT')).ok).toBe(true)
+  it('setBlockParams delegates each entry to the worklet by symbol', async () => {
+    await rig.addBlock('reverb', 0, 0, 'r1')
+    rig.setBlockParams('r1', { mix: 0.5, decay: '3.2' })
+    expect(calls.setParam).toHaveBeenCalledWith('r1', 'mix', 0.5)
+    expect(calls.setParam).toHaveBeenCalledWith('r1', 'decay', 3.2)
   })
 
-  it('is a no-op to remove or move a block that does not exist', async () => {
-    await expect(rig.removeBlock('ghost')).resolves.toBeUndefined()
-    expect(rig.moveBlock('ghost', 0, 0)).toEqual({ ok: false, reason: 'Unknown block' })
+  it('the Input/Output knobs become core block trims, not calibration params', async () => {
+    await rig.addBlock('amp', 0, 0, 'a1')
+    const block = rig.getBlock('a1') as unknown as { setParams(p: Record<string, unknown>): void }
+    block.setParams({ input_level: 0.5, output_level: 1.2, gain: 0.3 })
+
+    expect(calls.setTrim).toHaveBeenCalledWith('a1', 0.5, 1.2)
+    const paramKeys = calls.setParam.mock.calls.map((c) => c[1] as string)
+    expect(paramKeys).toEqual(['gain'])
   })
 
-  it('dispose is idempotent and clears blocks/edges', async () => {
-    const a = await rig.addBlock('mixer', 0, 0)
-    const b = await rig.addBlock('mixer', 0, 1)
-    rig.connect(jack(a), jack(b))
-
-    await rig.dispose()
-    await rig.dispose()
-
-    expect(rig.listBlockIds()).toEqual([])
-    expect(rig.listEdgeIds()).toEqual([])
-  })
-
-  it('silences the output while tuner-muted, restoring the saved level after', () => {
-    const masterGain = (
-      rig as unknown as { masterGain: { gain: { setTargetAtTime: ReturnType<typeof vi.fn> } } }
-    ).masterGain
-    rig.setMasterLevel(0.5)
-    const lastTarget = () => masterGain.gain.setTargetAtTime.mock.calls.at(-1)![0]
-
-    rig.setTunerMuted(true)
-    expect(lastTarget()).toBe(0)
-
-    rig.setTunerMuted(false)
-    expect(lastTarget()).toBe(0.5)
+  it('setBypass forwards to the worklet', async () => {
+    await rig.addBlock('delay', 0, 0, 'd1')
+    const block = rig.getBlock('d1') as unknown as { setBypass(b: boolean): void }
+    block.setBypass(true)
+    expect(calls.setBypass).toHaveBeenCalledWith('d1', true)
   })
 
   it('counts only Amp/Cab blocks with an actual model/IR loaded', async () => {
@@ -205,9 +212,32 @@ describe('GraphRig', () => {
     await rig.addBlock('mixer', 0, 2)
     expect(rig.countActiveHeavyBlocks()).toBe(0)
 
-    const amp = rig.getBlock(ampId) as AmpBlock
+    const amp = rig.getBlock(ampId) as unknown as {
+      loadModel(
+        json: string,
+        s: number | undefined,
+        i: { id: string; name: string },
+      ): Promise<RigModelInfo>
+    }
     await amp.loadModel('{}', undefined, { id: 'm1', name: 'Model' })
-
     expect(rig.countActiveHeavyBlocks()).toBe(1)
+  })
+
+  it('master level/mute and tuner mute forward to the worklet', () => {
+    rig.setMasterLevel(0.5)
+    expect(calls.setMasterLevel).toHaveBeenCalledWith(0.5)
+    rig.setMasterMuted(true)
+    expect(calls.setMasterMuted).toHaveBeenCalledWith(true)
+    rig.setTunerMuted(true)
+    expect(calls.setTunerMuted).toHaveBeenCalledWith(true)
+  })
+
+  it('dispose is idempotent, clears state, and disposes the worklet', async () => {
+    await rig.addBlock('mixer', 0, 0)
+    await rig.dispose()
+    await rig.dispose()
+    expect(rig.listBlockIds()).toEqual([])
+    expect(rig.listEdgeIds()).toEqual([])
+    expect(calls.dispose).toHaveBeenCalledTimes(1)
   })
 })
