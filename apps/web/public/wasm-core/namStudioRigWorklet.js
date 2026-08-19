@@ -199,7 +199,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
     try {
       switch (message.type) {
         case 'addBlock': {
-          if (this.blockByJs.has(message.id)) {
+          if (this.blockByJs.has(message.block)) {
             reply.ok = true
             break
           }
@@ -213,25 +213,25 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
             message.row,
             message.col,
           )
-          this.blockByJs.set(message.id, coreBlock)
-          this.kindByJs.set(message.id, message.kind)
-          this.meters.set(message.id, 0)
+          this.blockByJs.set(message.block, coreBlock)
+          this.kindByJs.set(message.block, message.kind)
+          this.meters.set(message.block, 0)
           reply.ok = true
           break
         }
         case 'removeBlock': {
-          const coreBlock = this.toCoreBlock(message.id)
+          const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
             module._nam_studio_remove_block(this.graph, coreBlock)
           }
-          this.blockByJs.delete(message.id)
-          this.kindByJs.delete(message.id)
-          this.meters.delete(message.id)
+          this.blockByJs.delete(message.block)
+          this.kindByJs.delete(message.block)
+          this.meters.delete(message.block)
           reply.ok = true
           break
         }
         case 'moveBlock': {
-          const coreBlock = this.toCoreBlock(message.id)
+          const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
             module._nam_studio_move_block(this.graph, coreBlock, message.row, message.col)
           }
@@ -256,15 +256,15 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
             reply.error = 'connection rejected by the core'
             break
           }
-          this.edgeByJs.set(message.id, edgeId)
+          this.edgeByJs.set(message.edgeId, edgeId)
           reply.ok = true
           break
         }
         case 'disconnect': {
-          const coreEdge = this.edgeByJs.get(message.id)
+          const coreEdge = this.edgeByJs.get(message.edgeId)
           if (coreEdge !== undefined) {
             module._nam_studio_disconnect(this.graph, coreEdge)
-            this.edgeByJs.delete(message.id)
+            this.edgeByJs.delete(message.edgeId)
           }
           reply.ok = true
           break

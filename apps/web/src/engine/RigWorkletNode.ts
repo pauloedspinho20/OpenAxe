@@ -43,9 +43,6 @@ const KIND_TO_CORE: Record<BlockKind, number> = {
   splitter: 17,
 }
 
-/** The web 'IN'/'OUT' rail sentinels, mapped to the core's -1/-2. */
-const RAIL_TO_CORE: Record<string, number> = { IN: -1, OUT: -2 }
-
 /** What the core reports about a loaded capture (`nam_studio_block_model_info`). */
 export interface RigModelInfo {
   sampleRate: number
@@ -138,26 +135,28 @@ export class RigWorkletNode {
     })
   }
 
-  private toCore(blockId: string): string | number {
-    return RAIL_TO_CORE[blockId] ?? blockId
-  }
-
   // ── Topology ────────────────────────────────────────────────────────────
 
   addBlock(id: string, kind: BlockKind, row: number, col: number): Promise<void> {
-    return this.request({ type: 'addBlock', id, kind: KIND_TO_CORE[kind], row, col }).then((r) => {
-      if (!r.ok) throw new Error(r.error ?? 'addBlock failed')
-    })
+    // The block id travels in a dedicated `block` field: `request` uses the
+    // message's `id` field for its own request/reply correlation counter, so any
+    // semantic id that rode in under `id` would be clobbered before the worklet
+    // saw it (which is how loadModel hit "unknown block" after the rig migration).
+    return this.request({ type: 'addBlock', block: id, kind: KIND_TO_CORE[kind], row, col }).then(
+      (r) => {
+        if (!r.ok) throw new Error(r.error ?? 'addBlock failed')
+      },
+    )
   }
 
   removeBlock(id: string): Promise<void> {
-    return this.request({ type: 'removeBlock', id }).then((r) => {
+    return this.request({ type: 'removeBlock', block: id }).then((r) => {
       if (!r.ok) throw new Error(r.error ?? 'removeBlock failed')
     })
   }
 
   moveBlock(id: string, row: number, col: number): Promise<void> {
-    return this.request({ type: 'moveBlock', id, row, col }).then((r) => {
+    return this.request({ type: 'moveBlock', block: id, row, col }).then((r) => {
       if (!r.ok) throw new Error(r.error ?? 'moveBlock failed')
     })
   }
@@ -167,19 +166,24 @@ export class RigWorkletNode {
     to: { blockId: string; port: number },
     id: string,
   ): Promise<RigConnectResult> {
+    // The worklet's `toCoreBlock` maps the 'IN'/'OUT' rail sentinels itself, so
+    // the raw block ids are forwarded untouched - converting them here (to -1/-2)
+    // would make the worklet's rail check (which compares against the strings)
+    // miss, and every IN/OUT rail edge would be rejected as an "unknown block",
+    // so signal never entered any block (only the pre-graph input/tuner moved).
     const reply = await this.request({
       type: 'connect',
-      fromId: this.toCore(from.blockId),
+      fromId: from.blockId,
       fromPort: from.port,
-      toId: this.toCore(to.blockId),
+      toId: to.blockId,
       toPort: to.port,
-      id,
+      edgeId: id,
     })
     return reply.ok ? { ok: true } : { ok: false, reason: reply.error ?? 'connection rejected' }
   }
 
   disconnect(edgeId: string): Promise<void> {
-    return this.request({ type: 'disconnect', id: edgeId }).then((r) => {
+    return this.request({ type: 'disconnect', edgeId }).then((r) => {
       if (!r.ok) throw new Error(r.error ?? 'disconnect failed')
     })
   }
