@@ -1,7 +1,24 @@
 import type { EffectParams } from '../effects/Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import type { PresetBlock } from '../presets/types'
+import { isNativeAudioBuffer } from './NativeAudioContext'
 import type { NamStudioBridge } from './namStudio'
+
+/**
+ * Base64-encode the IR's bytes for the JSON bridge. Binary can't cross a webview
+ * bind, and base64's 33% overhead is far cheaper than a JSON array of numbers -
+ * this runs once per IR load, not per buffer.
+ */
+function toBase64(bytes: ArrayBuffer): string {
+  const view = new Uint8Array(bytes)
+  let binary = ''
+  // Chunked so a multi-megabyte IR can't blow the argument limit of String.
+  const chunk = 0x8000
+  for (let i = 0; i < view.length; i += chunk) {
+    binary += String.fromCharCode(...view.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
 
 /** Coerce an EffectParams value (number | string | boolean) to a float the core expects. */
 function toNumber(v: number | string | boolean): number {
@@ -24,9 +41,9 @@ function toNumber(v: number | string | boolean): number {
  * (`setBlockTrim`), not to params - see setParams.
  *
  * Limitations (documented, issue #15 M3):
- * - IR/Cab loading is a no-op: the core convolves (dsp/convolver.cpp) but this
- *   path can't decode an IR file into samples to give it, so cab blocks pass
- *   audio through and `getLoadedIr()` stays null.
+ * - IR/Cab blocks convolve for real now (dsp/convolver.cpp): loadIR forwards the
+ *   file's bytes to the core, which decodes and resamples them
+ *   (nam_studio_load_ir_wav).
  * - Params apply by core param *symbol*; effect params whose symbol doesn't
  *   match the core's table are rejected by the bridge (issue #41). That
  *   rejection is surfaced as a one-time console warning per block+key (see
@@ -40,6 +57,7 @@ export class NativeBlock implements PresetBlock {
   private params: EffectParams = {}
   private bypassed = false
   private loadedModel: { id: string; name: string } | null = null
+  private loadedIr: { id: string; name: string } | null = null
   private readonly unmappedParamsWarned = new Set<string>()
 
   constructor(bridge: NamStudioBridge, id: string, kind: BlockKind) {
@@ -132,18 +150,33 @@ export class NativeBlock implements PresetBlock {
   }
 
   getLoadedIr(): { id: string; name: string } | null {
-    return null
+    return this.loadedIr
   }
 
-  loadIR(): void {
-    // Still a no-op, but for a different reason than before: the core does have
-    // convolution now (nam_studio_load_ir), what's missing is a way to turn an
-    // IR *file* into samples on this path - the native AudioContext facade has
-    // no real decodeAudioData, so there is nothing to hand the core yet. See
-    // the class doc and ARCHITECTURE.md.
+  /**
+   * Install a cab IR. The buffer carries the file's raw bytes rather than decoded
+   * samples (see NativeAudioBuffer) because nothing on this path can decode
+   * audio - the core does it, along with resampling to the stream's rate.
+   */
+  loadIR(buffer: AudioBuffer, _mix?: number, info?: { id: string; name: string }): void {
+    if (!isNativeAudioBuffer(buffer)) {
+      console.warn('[native] loadIR was given a decoded AudioBuffer with no file bytes; ignoring')
+      return
+    }
+    this.loadedIr = info ?? null
+    void this.bridge
+      .loadIrWav({ blockId: this.id, wavBase64: toBase64(buffer.nativeFileBytes) })
+      .then((result) => {
+        if (result.ok) return
+        this.loadedIr = null
+        console.warn(
+          `[native] the core could not load this impulse response${result.error ? `: ${result.error}` : ''}`,
+        )
+      })
   }
 
   clearIR(): void {
-    // No-op: see loadIR.
+    this.loadedIr = null
+    void this.bridge.unloadIr({ blockId: this.id })
   }
 }

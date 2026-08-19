@@ -32,6 +32,7 @@ add_library(nam_studio_core STATIC
   src/dsp/tremolo.cpp
   src/dsp/tone_stack.cpp
   src/dsp/convolver.cpp
+  src/dsp/wav.cpp
 )
 
 target_include_directories(nam_studio_core PUBLIC

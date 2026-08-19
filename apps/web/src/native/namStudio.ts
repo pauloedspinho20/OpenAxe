@@ -164,6 +164,14 @@ export interface NamStudioBridge {
    * Not the same thing as the Amp family's `input_level`/`output_level`
    * params, which carry the loaded NAM model's dBu calibration. */
   setBlockTrim(args: { blockId: string; input?: number; output?: number }): Promise<NamStudioOk>
+  /** Install a cab IR from the bytes of a WAV file, base64-encoded (binary can't
+   * cross the webview bridge). The core decodes and resamples it and reports how
+   * many samples it installed. */
+  loadIrWav(args: {
+    blockId: string
+    wavBase64: string
+  }): Promise<NamStudioOk & { frames?: number }>
+  unloadIr(args: { blockId: string }): Promise<NamStudioOk>
   setMasterLevel(args: { level: number }): Promise<NamStudioOk>
   setMasterMuted(args: { muted: boolean }): Promise<NamStudioOk>
   setTunerMuted(args: { muted: boolean }): Promise<NamStudioOk>
@@ -276,6 +284,12 @@ class NativeBridge implements NamStudioBridge {
   }
   setBlockTrim(args: { blockId: string; input?: number; output?: number }) {
     return this.call<NamStudioOk>('setBlockTrim', args)
+  }
+  loadIrWav(args: { blockId: string; wavBase64: string }) {
+    return this.call<NamStudioOk & { frames?: number }>('loadIrWav', args)
+  }
+  unloadIr(args: { blockId: string }) {
+    return this.call<NamStudioOk>('unloadIr', args)
   }
   setMasterLevel(args: { level: number }) {
     return this.call<NamStudioOk>('setMasterLevel', args)

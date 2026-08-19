@@ -16,6 +16,11 @@ function makeBridge() {
     unloadModel: vi.fn(async () => ({ ok: true })),
     setBypass: vi.fn(async () => ({ ok: true })),
     setBlockTrim: vi.fn(async () => ({ ok: true })),
+    loadIrWav: vi.fn(async (_args: { blockId: string; wavBase64: string }) => ({
+      ok: true,
+      frames: 128,
+    })),
+    unloadIr: vi.fn(async () => ({ ok: true })),
     setMasterLevel: vi.fn(async () => ({ ok: true })),
     setMasterMuted: vi.fn(async () => ({ ok: true })),
     setTunerMuted: vi.fn(async () => ({ ok: true })),
@@ -209,6 +214,50 @@ describe('NativeGraphRig', () => {
     calls.setBlockTrim.mockClear()
     block.setParams({ output_level: 0.25 })
     expect(calls.setBlockTrim).toHaveBeenCalledWith({ blockId: 'a1', output: 0.25 })
+  })
+
+  it('cab IR loading sends the file bytes to the core to decode', async () => {
+    const { calls, bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('cab', 0, 0, 'c1')
+
+    const block = rig.getBlock('c1') as unknown as {
+      loadIR(buffer: AudioBuffer, mix?: number, info?: { id: string; name: string }): void
+      getLoadedIr(): { id: string; name: string } | null
+      clearIR(): void
+    }
+
+    // What NativeAudioContext.decodeAudioData hands back: a stub carrying the
+    // undecoded file bytes, since nothing on this path can decode audio.
+    const bytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4])
+    block.loadIR({ nativeFileBytes: bytes.buffer } as unknown as AudioBuffer, 1, {
+      id: 'ir-1',
+      name: 'A Cab',
+    })
+    await vi.waitFor(() => expect(calls.loadIrWav).toHaveBeenCalled())
+
+    const args = calls.loadIrWav.mock.calls[0]?.[0]
+    expect(args?.blockId).toBe('c1')
+    expect(atob(args?.wavBase64 ?? '')).toBe('RIFF\x01\x02\x03\x04')
+    expect(block.getLoadedIr()).toEqual({ id: 'ir-1', name: 'A Cab' })
+
+    block.clearIR()
+    expect(calls.unloadIr).toHaveBeenCalledWith({ blockId: 'c1' })
+    expect(block.getLoadedIr()).toBeNull()
+  })
+
+  it('a decoded AudioBuffer with no file bytes is refused rather than sent', async () => {
+    const { calls, bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('cab', 0, 0, 'c2')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const block = rig.getBlock('c2') as unknown as { loadIR(buffer: AudioBuffer): void }
+    block.loadIR({ length: 128, numberOfChannels: 1 } as unknown as AudioBuffer)
+
+    expect(calls.loadIrWav).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('master level/mute and tuner mute forward to the bridge (issue #42)', () => {

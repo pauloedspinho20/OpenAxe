@@ -183,6 +183,18 @@ void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
 // around it, exactly like model loading. Convolution itself adds no latency.
 void nam_studio_load_ir(NamStudioGraph* graph, int32_t block_id, const float* samples,
                         int32_t frames);
+// Install an IR from the bytes of a WAV file. The core decodes it (8/16/24/32-bit
+// PCM or 32/64-bit float, any channel count, folded to mono) and resamples it to
+// the graph's rate when they differ, so every front end gets the same result from
+// the same file. Returns the number of samples installed, or 0 if the block isn't
+// a cab or the file can't be decoded - which is also how an unsupported or
+// corrupt file reports itself, rather than by throwing.
+//
+// This is what a desktop app or plugin uses: only a browser has
+// AudioContext.decodeAudioData to hand it float samples instead. Not real-time
+// safe; suspend audio around it.
+int32_t nam_studio_load_ir_wav(NamStudioGraph* graph, int32_t block_id, const uint8_t* bytes,
+                               int32_t size);
 void nam_studio_unload_ir(NamStudioGraph* graph, int32_t block_id);
 // Length in samples of the IR installed on the block, 0 if none.
 int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id);

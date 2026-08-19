@@ -8,6 +8,10 @@ add_test(NAME graph_rig_test COMMAND graph_rig_test)
 
 # The tone stack is plain DSP with no vendored dependency, so it builds
 # unconditionally like the graph tests.
+add_executable(wav_test wav_test.cpp)
+target_link_libraries(wav_test PRIVATE nam_studio_core)
+add_test(NAME wav_test COMMAND wav_test)
+
 add_executable(convolver_test convolver_test.cpp)
 target_link_libraries(convolver_test PRIVATE nam_studio_core)
 add_test(NAME convolver_test COMMAND convolver_test)

@@ -57,21 +57,21 @@ meters, and CPU load.
 
 ## Per-target status
 
-| Concern                      | Web                                                 | Desktop                                        | VST3 | Owner it should have                 |
-| ---------------------------- | --------------------------------------------------- | ---------------------------------------------- | ---- | ------------------------------------ |
-| DSP effects                  | core via WASM worklets                              | core, in-process                               | —    | core ✅                              |
-| Amp (NAM inference)          | core's `NamAmp` via WASM (`ampWorklet.js`)          | core's `NamAmp`                                | —    | core ✅                              |
-| Amp tone stack               | core (`tone_stack.cpp`) via the amp worklet         | core                                           | —    | core ✅                              |
-| Signal graph + routing rules | TS `GraphRig` + `graphValidation`                   | core `graph_rig`                               | —    | **core** ❌ (core already has both)  |
-| Reverb control mapping       | core (`set_reverb_control`)                         | core                                           | —    | core ✅                              |
-| Block I/O trims              | Web Audio `GainNode`s                               | core trims                                     | —    | **core** ⚠️ (web still to move)      |
-| Bypass / master bus          | Web Audio nodes                                     | core                                           | —    | **core** ⚠️                          |
-| Cab / IR convolution         | core (`convolver.cpp`) via the cab worklet          | core DSP ready; IR file decoding still missing | —    | core ⚠️                              |
-| Tuner pitch detection        | TS autocorrelation, main thread                     | same TS code                                   | —    | **core** ❌                          |
-| Metering                     | `AnalyserNode`                                      | core peak + a synthesized waveform             | —    | **core** ⚠️                          |
-| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                                     | —    | **generated from core** ⚠️           |
-| Presets / scenes             | TS model + IndexedDB                                | same TS code in the webview                    | —    | **core model**, front-end storage ❌ |
-| MIDI mapping                 | TS Web MIDI                                         | —                                              | —    | **core** ❌                          |
+| Concern                      | Web                                                 | Desktop                            | VST3 | Owner it should have                 |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------- | ---- | ------------------------------------ |
+| DSP effects                  | core via WASM worklets                              | core, in-process                   | —    | core ✅                              |
+| Amp (NAM inference)          | core's `NamAmp` via WASM (`ampWorklet.js`)          | core's `NamAmp`                    | —    | core ✅                              |
+| Amp tone stack               | core (`tone_stack.cpp`) via the amp worklet         | core                               | —    | core ✅                              |
+| Signal graph + routing rules | TS `GraphRig` + `graphValidation`                   | core `graph_rig`                   | —    | **core** ❌ (core already has both)  |
+| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | —    | core ✅                              |
+| Block I/O trims              | Web Audio `GainNode`s                               | core trims                         | —    | **core** ⚠️ (web still to move)      |
+| Bypass / master bus          | Web Audio nodes                                     | core                               | —    | **core** ⚠️                          |
+| Cab / IR convolution         | core (`convolver.cpp`) via the cab worklet          | core, IR decoded by `wav.cpp`      | —    | core ✅                              |
+| Tuner pitch detection        | TS autocorrelation, main thread                     | same TS code                       | —    | **core** ❌                          |
+| Metering                     | `AnalyserNode`                                      | core peak + a synthesized waveform | —    | **core** ⚠️                          |
+| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | —    | **generated from core** ⚠️           |
+| Presets / scenes             | TS model + IndexedDB                                | same TS code in the webview        | —    | **core model**, front-end storage ❌ |
+| MIDI mapping                 | TS Web MIDI                                         | —                                  | —    | **core** ❌                          |
 
 ✅ done · ⚠️ core owns it, a front end still duplicates part · ❌ not in core yet
 
@@ -90,14 +90,13 @@ Each step is useful on its own and unblocks the plugin target.
    collapses the trims, bypass, master bus, mixer/splitter levels and routing
    validation into the engine in a single move — and it is the step the plugin
    needs, since a VST3 has no Web Audio to fall back on.
-3. **Convolution in core.** Mostly done: `dsp/convolver.cpp` is a zero-latency
-   partitioned convolver, the web app's cab block drives it through
-   `wasm-core/cabWorklet.js`, and `nam_studio_load_ir` installs an IR from float
-   samples. What's left is the desktop side: its `AudioContext` facade has no
-   `decodeAudioData`, so nothing can turn an IR file into samples for the core.
-   A WAV decoder in the core - taking bytes, exactly like
-   `nam_studio_load_nam_model_json` does for models - closes it for the desktop
-   app and for a plugin.
+3. ~~**Convolution in core.**~~ Done: `dsp/convolver.cpp` is a zero-latency
+   partitioned convolver, the web app drives it through
+   `wasm-core/cabWorklet.js`, and `dsp/wav.cpp` decodes and resamples IR files
+   for the platforms with no `AudioContext.decodeAudioData` - so the desktop app
+   loads IRs by handing the core the file's bytes
+   (`nam_studio_load_ir_wav`), exactly as it loads NAM models. The audio path now
+   has no web-only DSP left.
 4. **Tuner in core.** Pitch detection as a pure function over a buffer, called
    from the UI thread (web) or the control thread (desktop/plugin). It is not
    in the audio path, so it costs no latency either way.

@@ -25,6 +25,7 @@
 #include "nam_studio/dsp/ping_pong_delay.h"
 #include "nam_studio/dsp/tone_stack.h"
 #include "nam_studio/dsp/tremolo.h"
+#include "nam_studio/dsp/wav.h"
 
 namespace nam_studio::engine {
 namespace {
@@ -852,6 +853,27 @@ void AudioEngine::LoadIr(BlockId id, const float* samples, int length) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kCab) return;
   for (auto& conv : state->cab) conv.SetImpulseResponse(samples, length);
+}
+
+// Decode a WAV file, match it to the engine's sample rate, and install it. The
+// decode and the resample both happen here rather than in each front end so a
+// 44.1kHz cab IR in a 48kHz session sounds the same everywhere.
+int AudioEngine::LoadIrWav(BlockId id, const uint8_t* bytes, size_t size) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kCab) return 0;
+
+  const auto decoded = dsp::DecodeWav(bytes, size);
+  if (!decoded || decoded->samples.empty()) return 0;
+
+  const std::vector<float> samples =
+      sample_rate_ > 0.0 ? dsp::ResampleMono(decoded->samples, decoded->sample_rate, sample_rate_)
+                         : decoded->samples;
+  if (samples.empty()) return 0;
+
+  for (auto& conv : state->cab) {
+    conv.SetImpulseResponse(samples.data(), static_cast<int>(samples.size()));
+  }
+  return static_cast<int>(samples.size());
 }
 
 // Drop the IR; the block goes back to passing audio through.

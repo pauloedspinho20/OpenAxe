@@ -170,6 +170,7 @@ a control thread. Rail jacks are the numbers `-1` (IN) / `-2` (OUT).
 - `blockInfo()`, `listBlocks()`, `listEdges()`
 - `loadModel()` (native open-file dialog), `unloadModel()`
 - `setReverbAlgorithm()`, `setDriveModel()`, `setDelayModel()`
+- `loadIrWav()` (base64 WAV bytes - the core decodes and resamples it), `unloadIr()`
 - `setBypass()`, `setBlockTrim()` (per-block Input/Output trim - _not_ the Amp
   family's `input_level`/`output_level` params, which hold the loaded model's
   dBu calibration)
@@ -186,15 +187,10 @@ deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
   C++ monitor taps; there is no `AudioContext`, `AudioNode`, or
   `ScriptProcessorNode` anywhere in the native path.
 
-- IR/Cab blocks pass audio through unchanged, but the reason has moved: the core
-  now has real convolution (`packages/core/src/dsp/convolver.cpp`, driven by
-  `nam_studio_load_ir`), and what's missing is decoding an IR _file_ into samples
-  on this path - the native `AudioContext` facade has no `decodeAudioData`. A WAV
-  decoder in the core (mirroring how NAM models load from bytes) closes it; see
-  ARCHITECTURE.md.
 - Effect params apply by core param _symbol_; a symbol the core's table doesn't
   have is rejected by the bridge and warned about once per block+key
-  (issue #41), rather than silently dropped.
+  (issue #41), rather than silently dropped. A small alias table covers the UI
+  keys that stayed camelCase (`slimSize`, `irMix`).
 - Block meters show the real native peak level but a synthetic waveform (a sine
   scaled to it); the tuner/input meter use the real native input tap.
 

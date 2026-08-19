@@ -145,6 +145,14 @@ class AudioEngine {
   // length <= 0 clears it, which returns the block to passthrough. No-op for
   // every other kind. Not real-time safe: it allocates and transforms the IR.
   void LoadIr(BlockId id, const float* samples, int length);
+
+  // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
+  // differs from the engine's - resampling it first. Returns the number of
+  // samples installed, or 0 if the block isn't a cab or the file can't be
+  // decoded. This is the entry point for every platform without an
+  // AudioContext.decodeAudioData to lean on (desktop, plugin, mobile). Not
+  // real-time safe.
+  int LoadIrWav(BlockId id, const uint8_t* bytes, size_t size);
   void UnloadIr(BlockId id);
   // Length of the IR installed on the block, 0 if none (or not a cab).
   int IrLength(BlockId id) const;

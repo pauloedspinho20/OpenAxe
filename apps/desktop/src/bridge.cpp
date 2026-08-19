@@ -3,9 +3,13 @@
 #include <nlohmann/json.hpp>
 #include <portable-file-dialogs.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "debug_log.h"
 #include "nam_studio/api.h"
@@ -794,6 +798,90 @@ std::string StudioBridge::HandleSetBlockTrim(const std::string& req) {
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setBlockTrim: ") + e.what());
+  }
+}
+
+// Decode standard base64 (RFC 4648, with or without padding). The webview bridge
+// marshals arguments as JSON, and an IR is a few hundred kilobytes of binary - a
+// JSON array of numbers would be several times larger and slower to parse, so the
+// UI sends base64 and this turns it back into bytes.
+std::vector<uint8_t> DecodeBase64(const std::string& text) {
+  static constexpr char kAlphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  int8_t table[256];
+  std::fill(std::begin(table), std::end(table), static_cast<int8_t>(-1));
+  for (int i = 0; i < 64; ++i) table[static_cast<unsigned char>(kAlphabet[i])] = static_cast<int8_t>(i);
+
+  std::vector<uint8_t> out;
+  out.reserve(text.size() * 3 / 4);
+  uint32_t accumulator = 0;
+  int bits = 0;
+  for (const char c : text) {
+    if (c == '=') break;
+    const int8_t value = table[static_cast<unsigned char>(c)];
+    if (value < 0) continue;  // skip whitespace/newlines rather than failing
+    accumulator = (accumulator << 6) | static_cast<uint32_t>(value);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push_back(static_cast<uint8_t>((accumulator >> bits) & 0xFF));
+    }
+  }
+  return out;
+}
+
+// { blockId, wavBase64 } - install a cab IR from the bytes of a WAV file. The
+// core decodes and resamples it (nam_studio_load_ir_wav), so this handler only
+// has to get the bytes across and serialize the mutation like any other.
+std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string js_id = o.value("blockId", "");
+    const std::string encoded = o.value("wavBase64", "");
+    if (encoded.empty()) return JsonError("loadIrWav: no wav data");
+
+    const std::vector<uint8_t> bytes = DecodeBase64(encoded);
+    if (bytes.empty()) return JsonError("loadIrWav: could not decode the base64 payload");
+
+    int32_t core_id = kUnknownBlock;
+    Call([&] {
+      const auto it = blocks_.find(js_id);
+      if (it != blocks_.end()) core_id = it->second.core_id;
+    });
+    if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+
+    int frames = 0;
+    Call([&] {
+      Mutate([&] {
+        frames = static_cast<int>(
+            nam_studio_load_ir_wav(graph_, core_id, bytes.data(), static_cast<int32_t>(bytes.size())));
+      }, /*reset_after=*/false);
+    });
+    if (frames == 0) return JsonError("loadIrWav: the core could not decode this file");
+    return (json{{"ok", true}, {"frames", frames}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("loadIrWav: ") + e.what());
+  }
+}
+
+// { blockId } - drop a cab block's IR; it passes audio through again.
+std::string StudioBridge::HandleUnloadIr(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string js_id = o.value("blockId", "");
+    bool found = false;
+    Call([&] {
+      const auto it = blocks_.find(js_id);
+      if (it == blocks_.end()) return;
+      found = true;
+      Mutate([&] { nam_studio_unload_ir(graph_, it->second.core_id); }, /*reset_after=*/false);
+    });
+    if (!found) return JsonError("unloadIr: unknown block " + js_id);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("unloadIr: ") + e.what());
   }
 }
 

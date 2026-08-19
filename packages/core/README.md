@@ -67,6 +67,13 @@ wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
   That shape is what makes it **zero-latency for any block size** - a purely
   block-based FFT scheme would either delay the stream or leave a gap in it. A
   2048-tap cab IR costs roughly 40x less than a direct FIR would.
+- **WAV decoder** (`include/nam_studio/dsp/wav.h` + `src/dsp/wav.cpp`) — decodes
+  a WAV file held in memory (8/16/24/32-bit PCM, 32/64-bit float, any channel
+  count folded to mono, WAVE_FORMAT_EXTENSIBLE, unknown chunks skipped) and
+  resamples with a windowed-sinc kernel. Only a browser gets audio decoding for
+  free, so this is what lets the desktop app and a plugin load an impulse response
+  at all - bytes in, samples out, the same shape as loading a NAM model from JSON.
+  A malformed or compressed file returns nullopt rather than throwing.
 - **Tone stack** (`include/nam_studio/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
   — the 4-band Bass/Mid/Treble/Presence stack the engine runs after every NAM
   model (low shelf 100Hz, peaking 1kHz Q0.7, high shelf 5kHz, peaking 8kHz Q0.5,
@@ -84,6 +91,10 @@ port the boundary-value matrix from `graphValidation.test.ts`/
 bundled with the vendored NeuralAmpModelerCore submodule
 (`third_party/nam-core/example_models/lstm.nam`), resets it, processes an
 impulse through it, and asserts every output sample is finite.
+`wav_test` builds WAV files byte by byte in memory to cover each sample format,
+stereo folding, 24-bit sign extension, extensible headers and the malformed cases
+(truncated, compressed, no data chunk), plus the resampler's length and frequency
+behaviour.
 `convolver_test` checks the convolver against brute-force direct convolution for
 every combination of IR length and block size (including block sizes that aren't a
 multiple of the partition), which is the only way to catch the off-by-one errors a

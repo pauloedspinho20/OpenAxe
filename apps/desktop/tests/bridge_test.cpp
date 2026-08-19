@@ -439,6 +439,80 @@ void TestAmpToneStackAndSlimSizeKeys() {
   CHECK(r["ok"] == false);
 }
 
+// Cab IR loading over the bridge: the core decodes the WAV bytes, so the desktop
+// app no longer needs an AudioContext to turn an IR file into audio. Builds a
+// minimal 16-bit mono WAV inline and sends it base64-encoded, exactly as the UI
+// does.
+void TestLoadIrWav() {
+  const auto push16 = [](std::string& out, uint16_t v) {
+    out.push_back(static_cast<char>(v & 0xFF));
+    out.push_back(static_cast<char>((v >> 8) & 0xFF));
+  };
+  const auto push32 = [](std::string& out, uint32_t v) {
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+  };
+
+  // A two-tap IR at the engine's own rate, so nothing is resampled.
+  std::string data;
+  push16(data, static_cast<uint16_t>(static_cast<int16_t>(32767)));  // tap at 0
+  for (int i = 0; i < 63; ++i) push16(data, 0);
+  push16(data, static_cast<uint16_t>(static_cast<int16_t>(16384)));  // tap at 64
+
+  std::string wav;
+  wav += "RIFF";
+  push32(wav, 0);
+  wav += "WAVE";
+  wav += "fmt ";
+  push32(wav, 16);
+  push16(wav, 1);       // PCM
+  push16(wav, 1);       // mono
+  push32(wav, 48000);
+  push32(wav, 96000);   // byte rate
+  push16(wav, 2);       // block align
+  push16(wav, 16);      // bits
+  wav += "data";
+  push32(wav, static_cast<uint32_t>(data.size()));
+  wav += data;
+
+  static constexpr char kAlphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string base64;
+  for (size_t i = 0; i < wav.size(); i += 3) {
+    const uint32_t b0 = static_cast<unsigned char>(wav[i]);
+    const uint32_t b1 = i + 1 < wav.size() ? static_cast<unsigned char>(wav[i + 1]) : 0;
+    const uint32_t b2 = i + 2 < wav.size() ? static_cast<unsigned char>(wav[i + 2]) : 0;
+    const uint32_t triple = (b0 << 16) | (b1 << 8) | b2;
+    base64.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+    base64.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+    base64.push_back(i + 1 < wav.size() ? kAlphabet[(triple >> 6) & 0x3F] : '=');
+    base64.push_back(i + 2 < wav.size() ? kAlphabet[triple & 0x3F] : '=');
+  }
+
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
+
+  const std::string req =
+      std::string(R"([{"blockId":"c1","wavBase64":")") + base64 + R"("}])";
+  auto r = Parse(bridge.HandleLoadIrWav(Arr(req.c_str())));
+  CHECK(r["ok"] == true);
+  CHECK(r["frames"].get<int>() == 65);
+
+  // The mix knob reaches the core through its camelCase UI key.
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"c1","key":"irMix","value":0.75}])")));
+  CHECK(r["ok"] == true);
+
+  r = Parse(bridge.HandleUnloadIr(Arr(R"([{"blockId":"c1"}])")));
+  CHECK(r["ok"] == true);
+
+  // Garbage in, error out - not a crash and not a silently-installed IR.
+  r = Parse(bridge.HandleLoadIrWav(Arr(R"([{"blockId":"c1","wavBase64":"bm90IGEgd2F2"}])")));
+  CHECK(r["ok"] == false);
+  r = Parse(bridge.HandleLoadIrWav(Arr(R"([{"blockId":"c1","wavBase64":""}])")));
+  CHECK(r["ok"] == false);
+  r = Parse(bridge.HandleUnloadIr(Arr(R"([{"blockId":"missing"}])")));
+  CHECK(r["ok"] == false);
+}
+
 // issue #42: bypass and the master bus were UI-only no-ops on desktop - this
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
@@ -482,6 +556,7 @@ int main() {
   TestSetBlockTrim();
   TestReverbControlKeys();
   TestAmpToneStackAndSlimSizeKeys();
+  TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
 
   if (g_failures > 0) {

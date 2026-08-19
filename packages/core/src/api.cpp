@@ -204,6 +204,12 @@ void nam_studio_load_ir(NamStudioGraph* graph, int32_t block_id, const float* sa
   graph->engine.LoadIr(block_id, samples, frames);
 }
 
+int32_t nam_studio_load_ir_wav(NamStudioGraph* graph, int32_t block_id, const uint8_t* bytes,
+                               int32_t size) {
+  if (!bytes || size <= 0) return 0;
+  return graph->engine.LoadIrWav(block_id, bytes, static_cast<size_t>(size));
+}
+
 void nam_studio_unload_ir(NamStudioGraph* graph, int32_t block_id) {
   graph->engine.UnloadIr(block_id);
 }
