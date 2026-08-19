@@ -13,6 +13,8 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "nam_studio/dsp/compressor.h"
@@ -329,6 +331,118 @@ void TestAmpToneStackAndPassthroughWithoutModel() {
   for (float sample : RunMono(engine, 0.1f)) NAM_EXPECT(std::isfinite(sample));
 }
 
+// Runs one stereo buffer through the engine and returns {left, right} outputs.
+// A constant input on both channels - mono source duplicated to both, so pan
+// behaviour is visible on the stereo output.
+std::pair<std::vector<float>, std::vector<float>> RunStereo(AudioEngine& engine,
+                                                            float input_value) {
+  std::vector<float> input_l(kFrames, input_value);
+  std::vector<float> input_r(kFrames, input_value);
+  std::vector<float> output_l(kFrames, 0.0f);
+  std::vector<float> output_r(kFrames, 0.0f);
+  const float* in_ptrs[2] = {input_l.data(), input_r.data()};
+  float* out_ptrs[2] = {output_l.data(), output_r.data()};
+  engine.Process(in_ptrs, 2, out_ptrs, 2, kFrames);
+  return {output_l, output_r};
+}
+
+// Mixer per-input level and pan: the DSP that used to live only in the web
+// MixerBlock's per-input GainNode + StereoPanner, now driven by core params so
+// web and desktop share the same summing/pan behaviour.
+void TestMixerPerInputLevelAndPan() {
+  AudioEngine engine;
+  const BlockId a = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId mixer = engine.AddBlock(BlockKind::kMixer, 0, 1);
+  NAM_EXPECT(engine.Connect(kInRailId, 0, a, 0).ok);
+  NAM_EXPECT(engine.Connect(a, 0, mixer, 0).ok);
+  NAM_EXPECT(engine.Connect(mixer, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Param surface: 4 inputs x (level + pan) = 8, first is in0_level (unity),
+  // second in0_pan (centre).
+  NAM_EXPECT(engine.ParamCount(mixer) == 8);
+  const auto info0 = engine.ParamInfo(mixer, 0);
+  const auto info1 = engine.ParamInfo(mixer, 1);
+  NAM_EXPECT(info0 && std::string(info0->symbol) == "in0_level");
+  NAM_EXPECT(info1 && std::string(info1->symbol) == "in0_pan");
+  NAM_EXPECT(engine.GetParam(mixer, 0) == 1.0f);  // unity level default
+  NAM_EXPECT(engine.GetParam(mixer, 1) == 0.0f);  // centre pan default
+
+  // Centre pan, unity level: both channels pass through untouched (equal-power
+  // law normalised to unity at centre).
+  auto [l, r] = RunStereo(engine, 0.5f);
+  for (int i = 0; i < kFrames; ++i) {
+    NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)] - 0.5f) < 1e-5f);
+    NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)] - 0.5f) < 1e-5f);
+  }
+
+  // Per-input level scales the summed signal (0.5 * 0.5 = 0.25).
+  engine.SetParam(mixer, 0, 0.5f);
+  std::tie(l, r) = RunStereo(engine, 0.5f);
+  for (int i = 0; i < kFrames; ++i) {
+    NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)] - 0.25f) < 1e-5f);
+    NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)] - 0.25f) < 1e-5f);
+  }
+
+  // Hard left: everything to the left channel, right silent (equal-power gain
+  // sqrt(2) at the extreme).
+  engine.SetParam(mixer, 0, 1.0f);
+  engine.SetParam(mixer, 1, -1.0f);
+  std::tie(l, r) = RunStereo(engine, 0.5f);
+  for (int i = 0; i < kFrames; ++i) {
+    NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)] - 0.5f * 1.41421356f) < 1e-5f);
+    NAM_EXPECT(r[static_cast<size_t>(i)] == 0.0f);
+  }
+
+  // Hard right: the reverse. cos(pi/2) is ~6e-17, so the left channel isn't
+  // bit-exact zero - assert it's negligible rather than exactly zero.
+  engine.SetParam(mixer, 1, 1.0f);
+  std::tie(l, r) = RunStereo(engine, 0.5f);
+  for (int i = 0; i < kFrames; ++i) {
+    NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)]) < 1e-6f);
+    NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)] - 0.5f * 1.41421356f) < 1e-5f);
+  }
+}
+
+// Splitter per-output level: each of the splitter's independent output jacks
+// carries its own gain, the DSP that used to live only in the web
+// SplitterBlock's per-output GainNodes. Both fan-out branches feed separate
+// cab blocks whose per-block meters report what each splitter output delivered.
+void TestSplitterPerOutputLevel() {
+  AudioEngine engine;
+  const BlockId splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
+  const BlockId a = engine.AddBlock(BlockKind::kCab, 0, 1);
+  const BlockId b = engine.AddBlock(BlockKind::kCab, 1, 1);
+  NAM_EXPECT(engine.Connect(kInRailId, 0, splitter, 0).ok);
+  NAM_EXPECT(engine.Connect(splitter, 0, a, 0).ok);
+  NAM_EXPECT(engine.Connect(splitter, 1, b, 0).ok);
+  NAM_EXPECT(engine.Connect(a, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Param surface: 4 outputs x level.
+  NAM_EXPECT(engine.ParamCount(splitter) == 4);
+  const auto info0 = engine.ParamInfo(splitter, 0);
+  NAM_EXPECT(info0 && std::string(info0->symbol) == "out0_level");
+  NAM_EXPECT(engine.GetParam(splitter, 0) == 1.0f);
+
+  // Unity defaults: both fan-out branches carry the input unchanged.
+  RunMono(engine, 0.5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(a) - 0.5f) < 1e-5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
+
+  // out0_level halves branch a; branch b stays full.
+  engine.SetParam(splitter, 0, 0.5f);
+  RunMono(engine, 0.5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
+
+  // out1_level on the second port scales only branch b.
+  engine.SetParam(splitter, 1, 0.25f);
+  RunMono(engine, 0.5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.125f) < 1e-5f);
+}
+
 void TestMasterLevelScalesOutput() {
   AudioEngine engine;
   const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 0);  // pure passthrough
@@ -382,6 +496,8 @@ void TestMasterAndTunerMuteAreIndependentAndBothSilence() {
 int main() {
   TestPassthroughForUnwrappedKind();
   TestMixerSumsBothConnectedPorts();
+  TestMixerPerInputLevelAndPan();
+  TestSplitterPerOutputLevel();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();

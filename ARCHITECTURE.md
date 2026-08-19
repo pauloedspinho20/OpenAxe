@@ -59,16 +59,16 @@ meters, and CPU load.
 
 | Concern                      | Web                                                 | Desktop                            | VST3 | Owner it should have                 |
 | ---------------------------- | --------------------------------------------------- | ---------------------------------- | ---- | ------------------------------------ |
-| DSP effects                  | core via WASM worklets                              | core, in-process                   | —    | core ✅                              |
-| Amp (NAM inference)          | core's `NamAmp` via WASM (`ampWorklet.js`)          | core's `NamAmp`                    | —    | core ✅                              |
-| Amp tone stack               | core (`tone_stack.cpp`) via the amp worklet         | core                               | —    | core ✅                              |
-| Signal graph + routing rules | TS `GraphRig` + `graphValidation`                   | core `graph_rig`                   | —    | **core** ❌ (core already has both)  |
+| DSP effects                  | core via the rig worklet                            | core, in-process                   | —    | core ✅                              |
+| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                 | core's `NamAmp`                    | —    | core ✅                              |
+| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet         | core                               | —    | core ✅                              |
+| Signal graph + routing rules | core `graph_rig` (single rig worklet)               | core `graph_rig`                   | —    | core ✅                              |
 | Reverb control mapping       | core (`set_reverb_control`)                         | core                               | —    | core ✅                              |
-| Block I/O trims              | Web Audio `GainNode`s                               | core trims                         | —    | **core** ⚠️ (web still to move)      |
-| Bypass / master bus          | Web Audio nodes                                     | core                               | —    | **core** ⚠️                          |
-| Cab / IR convolution         | core (`convolver.cpp`) via the cab worklet          | core, IR decoded by `wav.cpp`      | —    | core ✅                              |
+| Block I/O trims              | core trims via the rig worklet                      | core trims                         | —    | core ✅                              |
+| Bypass / master bus          | core via the rig worklet                            | core                               | —    | core ✅                              |
+| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | —    | core ✅                              |
 | Tuner pitch detection        | TS autocorrelation, main thread                     | same TS code                       | —    | **core** ❌                          |
-| Metering                     | `AnalyserNode`                                      | core peak + a synthesized waveform | —    | **core** ⚠️                          |
+| Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | —    | core ✅                              |
 | Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | —    | **generated from core** ⚠️           |
 | Presets / scenes             | TS model + IndexedDB                                | same TS code in the webview        | —    | **core model**, front-end storage ❌ |
 | MIDI mapping                 | TS Web MIDI                                         | —                                  | —    | **core** ❌                          |
@@ -79,20 +79,23 @@ meters, and CPU load.
 
 Each step is useful on its own and unblocks the plugin target.
 
-1. ~~**Amp on one engine.**~~ Done: the web path runs core's `NamAmp` in its own
-   worklet (`NamAmpNode` + `wasm-core/ampWorklet.js`), and the
+1. ~~**Amp on one engine.**~~ Done: the web path runs core's `NamAmp`, and the
    `neural-amp-modeler-wasm` npm package is gone - web and desktop no longer run
    different inference code. It also needed `nam_studio_load_nam_model_json` (a
    browser has no filesystem to hand a path to), which the desktop bridge now
    uses too rather than staging a temp file.
-2. **One graph.** Drive core's `graph_rig` from the web path instead of the TS
-   `GraphRig` + Web Audio node graph: one worklet running the whole rig. This
-   collapses the trims, bypass, master bus, mixer/splitter levels and routing
-   validation into the engine in a single move — and it is the step the plugin
-   needs, since a VST3 has no Web Audio to fall back on.
+2. ~~**One graph.**~~ Done: the web path drives core's `graph_rig` from a single
+   rig worklet (`wasm-core/namStudioRigWorklet.js`) that owns one `nam_studio_core`
+   module and one `nam_studio_graph` for the whole rig, replacing the per-effect
+   worklets and the TS Web Audio node graph. The trims, bypass, master bus,
+   mixer per-input level/pan, splitter per-output level, routing validation and
+   metering all collapsed into the engine in one move - `GraphRig.ts` is now a
+   thin driver (mirroring `NativeGraphRig`), `graphValidation.ts` is a UI
+   pre-check kept in lock-step with `graph_validation.cpp` by mirrored tests, and
+   the per-effect worklets are deleted. This is the step the plugin needs, since
+   a VST3 has no Web Audio to fall back on.
 3. ~~**Convolution in core.**~~ Done: `dsp/convolver.cpp` is a zero-latency
-   partitioned convolver, the web app drives it through
-   `wasm-core/cabWorklet.js`, and `dsp/wav.cpp` decodes and resamples IR files
+   partitioned convolver, and `dsp/wav.cpp` decodes and resamples IR files
    for the platforms with no `AudioContext.decodeAudioData` - so the desktop app
    loads IRs by handing the core the file's bytes
    (`nam_studio_load_ir_wav`), exactly as it loads NAM models. The audio path now

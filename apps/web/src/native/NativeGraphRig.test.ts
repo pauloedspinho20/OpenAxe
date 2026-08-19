@@ -21,6 +21,8 @@ function makeBridge() {
       frames: 128,
     })),
     unloadIr: vi.fn(async () => ({ ok: true })),
+    setReverbAlgorithm: vi.fn(async () => ({ ok: true })),
+    setDelayModel: vi.fn(async () => ({ ok: true })),
     setMasterLevel: vi.fn(async () => ({ ok: true })),
     setMasterMuted: vi.fn(async () => ({ ok: true })),
     setTunerMuted: vi.fn(async () => ({ ok: true })),
@@ -137,6 +139,27 @@ describe('NativeGraphRig', () => {
     rig.setBlockParams('r1', { mix: 0.5, decay: '3.2' })
     expect(calls.setParam).toHaveBeenCalledWith({ blockId: 'r1', key: 'mix', value: 0.5 })
     expect(calls.setParam).toHaveBeenCalledWith({ blockId: 'r1', key: 'decay', value: 3.2 })
+  })
+
+  it('routes the reverb algorithm and delay model selects to their dedicated bridge calls', async () => {
+    const { calls, bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('reverb', 0, 0, 'r1')
+    await rig.addBlock('delay', 0, 1, 'd1')
+
+    rig.setBlockParams('r1', { reverbAlgorithm: 'plate', width: 120 })
+    expect(calls.setReverbAlgorithm).toHaveBeenCalledWith({ blockId: 'r1', algorithm: 'plate' })
+    // The rest still goes through setParam.
+    expect(calls.setParam).toHaveBeenCalledWith({ blockId: 'r1', key: 'width', value: 120 })
+
+    rig.setBlockParams('d1', { model: 'tape', time: 300 })
+    expect(calls.setDelayModel).toHaveBeenCalledWith({ blockId: 'd1', model: 'tape' })
+    expect(calls.setParam).toHaveBeenCalledWith({ blockId: 'd1', key: 'time', value: 300 })
+
+    // Neither string select is sent through setParam (which would reject it).
+    const paramKeys = calls.setParam.mock.calls.map((c) => (c[0] as { key: string }).key)
+    expect(paramKeys).not.toContain('reverbAlgorithm')
+    expect(paramKeys).not.toContain('model')
   })
 
   it('countActiveHeavyBlocks reflects loaded NAM models', async () => {

@@ -1,14 +1,16 @@
 import type { Block, BlockKind, EffectParams } from './blocks/Block'
-import { createBlock } from './blocks/blockRegistry'
-import { MixerBlock } from './blocks/MixerBlock'
-import { SplitterBlock } from './blocks/SplitterBlock'
-import { IN_RAIL, OUT_RAIL, type Jack } from './gridConfig'
+import type { Jack } from './gridConfig'
 import {
   canConnect,
   canMoveTo,
   type ConnectResult as ValidatableConnectResult,
   type ValidatableBlock,
 } from './graphValidation'
+import type { GraphRigControls } from './bindGraphRig'
+import { RigWorkletNode } from './RigWorkletNode'
+import { RigBlock } from './RigBlock'
+import { NativeAnalyser, peakSineSource } from '../native/NativeAnalyser'
+import type { PresetRig } from '../presets/types'
 
 export { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, type Jack } from './gridConfig'
 
@@ -26,61 +28,51 @@ export interface Edge {
 export type ConnectResult = { ok: true; id: string } | { ok: false; reason: string }
 
 /**
- * The generic node-graph rig: blocks placed on a GRID_ROWS x GRID_COLS grid,
- * wired by cables, strictly left-to-right by column - column order is what
- * makes cycles impossible by construction, so Web Audio's native cycle
- * rejection never comes into play. Every jack accepts at most one incoming
- * cable; combining two signal paths always requires routing through a
- * Mixer block's several independent input jacks, and fanning one signal out
- * to several downstream chains always requires a Splitter's several
- * independent output jacks.
+ * The web rig: a thin driver over the single rig `AudioWorkletProcessor`
+ * (issue #55). It owns one `RigWorkletNode`, which in turn owns one
+ * nam_studio_core module and one nam_studio_graph holding the whole rig - every
+ * block kind, connection, param, trim, bypass, model/IR and the master bus
+ * live in the core. This class is the Web Audio path's analogue of the
+ * desktop's NativeGraphRig: it keeps the same block/edge bookkeeping and UI
+ * validation (`canConnect`/`canMoveTo` from graphValidation.ts), then forwards
+ * every mutation to the worklet's message port, which serialises it against
+ * process() on the audio thread.
  *
- * Replaces DualChainRig. `connectInput`/`outputNode` keep the same names as
- * before so useAudioEngine's mic/output-device wiring needs no changes;
- * `connectInput` drops the old 'mono-to-both'/'stereo-split' mode param,
- * since fan-out to multiple column-0 blocks is now just "draw more cables"
- * rather than a fixed rig-level policy.
+ * The web audio path therefore contains no signal routing: no `connect()`
+ * between DSP nodes, no mixer/splitter/master GainNodes, no wet/dry staging.
+ * The only Web Audio the rig owns is the single worklet node feeding the
+ * graph's IN rail from the mic and carrying the graph's OUT rail to the
+ * destination. Per-block meters come from `nam_studio_get_meter` (polled here)
+ * presented through a Web-Audio-free `NativeAnalyser` facade fed a sine scaled
+ * to each block's real peak - identical to the desktop path.
  */
-export class GraphRig {
+export class GraphRig implements GraphRigControls, PresetRig {
+  private readonly worklet: RigWorkletNode
   private readonly context: AudioContext
-  private readonly blocks = new Map<string, BlockEntry>()
+  private readonly blocks = new Map<string, { block: RigBlock; row: number; col: number }>()
   private readonly edges = new Map<string, Edge>()
-  /** Lazily-created per-block output taps for live meters - see getBlockAnalyser. */
-  private readonly analysers = new Map<string, AnalyserNode>()
-  private readonly outSink: GainNode
-  private readonly masterGain: GainNode
-  private readonly limiter: DynamicsCompressorNode
+  private readonly analysers = new Map<string, NativeAnalyser>()
+  private readonly peaks = new Map<string, number>()
   private inputSource: AudioNode | null = null
-  private masterLevel = 1
-  private masterMuted = false
-  private tunerMuted = false
   private disposed = false
   private nextId = 0
+  private pollTimer: ReturnType<typeof setInterval> | null = null
 
-  private constructor(context: AudioContext) {
+  private constructor(context: AudioContext, worklet: RigWorkletNode) {
     this.context = context
-    this.outSink = new GainNode(context)
-    this.masterGain = new GainNode(context)
-    // Fast, hot limiter before the destination - arbitrary user-built
-    // parallel merges can sum much hotter than the old fixed 2-chain mix.
-    this.limiter = new DynamicsCompressorNode(context, {
-      threshold: -3,
-      knee: 1,
-      ratio: 20,
-      attack: 0.001,
-      release: 0.05,
-    })
-    this.outSink.connect(this.masterGain)
-    this.masterGain.connect(this.limiter)
+    this.worklet = worklet
   }
 
   static async create(context: AudioContext): Promise<GraphRig> {
-    return new GraphRig(context)
+    const worklet = await RigWorkletNode.create(context)
+    const rig = new GraphRig(context, worklet)
+    rig.startMeterPolling()
+    return rig
   }
 
-  /** The rig's stereo output - connect to your output device chain / AudioContext.destination. */
+  /** The rig's single output - the worklet node carrying the core graph's OUT rail. Connect this to your output chain / AudioContext.destination. */
   get outputNode(): AudioNode {
-    return this.limiter
+    return this.worklet.node
   }
 
   private genId(prefix: string): string {
@@ -88,12 +80,23 @@ export class GraphRig {
     return `${prefix}-${this.nextId}`
   }
 
+  private startMeterPolling(): void {
+    this.pollTimer = setInterval(() => {
+      void this.worklet
+        .meters()
+        .then((meters) => {
+          for (const [id, peak] of Object.entries(meters)) this.peaks.set(id, peak)
+        })
+        .catch(() => {})
+    }, 50)
+  }
+
   // ── Blocks ──────────────────────────────────────────────────────────────
 
   async addBlock(kind: BlockKind, row: number, col: number, id?: string): Promise<string> {
-    const block = await createBlock(this.context, kind)
     const blockId = id ?? this.genId('block')
-    this.blocks.set(blockId, { block, row, col })
+    await this.worklet.addBlock(blockId, kind, row, col)
+    this.blocks.set(blockId, { block: new RigBlock(this.worklet, blockId, kind), row, col })
     return blockId
   }
 
@@ -101,22 +104,14 @@ export class GraphRig {
     const entry = this.blocks.get(id)
     if (!entry) return
     for (const [edgeId, edge] of [...this.edges]) {
-      if (edge.from.blockId === id || edge.to.blockId === id) {
-        this.unwireEdge(edge)
-        this.edges.delete(edgeId)
-      }
+      if (edge.from.blockId === id || edge.to.blockId === id) this.edges.delete(edgeId)
     }
-    this.blocks.delete(id)
     this.analysers.delete(id)
-    await entry.block.dispose()
+    this.peaks.delete(id)
+    this.blocks.delete(id)
+    await this.worklet.removeBlock(id)
   }
 
-  /**
-   * Reposition a block. Rejects (does not move) if the target column would
-   * break one of the block's cables' left-to-right ordering - the UI keeps a
-   * block's cables intact rather than silently dropping them. reconcile in
-   * bindGraphRig then mirrors the (already-validated) store position here.
-   */
   moveBlock(id: string, row: number, col: number): ValidatableConnectResult {
     const entry = this.blocks.get(id)
     if (!entry) return { ok: false, reason: 'Unknown block' }
@@ -124,28 +119,43 @@ export class GraphRig {
     if (!move.ok) return move
     entry.row = row
     entry.col = col
+    void this.worklet.moveBlock(id, row, col)
     return { ok: true }
   }
 
   getBlock(id: string): Block | null {
-    return this.blocks.get(id)?.block ?? null
+    // Consumers duck-type the PresetBlock/BlockLoadTarget surface RigBlock
+    // actually implements; the AudioNode members of `Block` are never touched.
+    return (this.blocks.get(id)?.block ?? null) as unknown as Block | null
+  }
+
+  /** Drive a block's meter facade to a peak level (0..1). Safe to call often. */
+  updateMeter(id: string, peak: number): void {
+    this.peaks.set(id, peak)
   }
 
   /**
-   * A live meter tap on this block's output - created and connected on
-   * first request, then cached (a fan-out tap, so it never touches the
-   * signal itself). Null for an unknown block id.
+   * A live meter tap for this block's output: a Web-Audio-free `NativeAnalyser`
+   * fed a sine whose amplitude tracks the block's real core peak
+   * (`nam_studio_get_meter`, polled via updateMeter). Cast to `AnalyserNode` at
+   * the boundary because the shared meter widgets consume the narrow
+   * getByteTimeDomainData surface - the same cast the desktop engine applies to
+   * its NativeAnalyser, so web and desktop present the same type. Null for an
+   * unknown block.
    */
   getBlockAnalyser(id: string): AnalyserNode | null {
     const entry = this.blocks.get(id)
     if (!entry) return null
-    let analyser = this.analysers.get(id)
-    if (!analyser) {
-      analyser = new AnalyserNode(this.context)
-      entry.block.outputNode.connect(analyser)
-      this.analysers.set(id, analyser)
+    let cached = this.analysers.get(id)
+    if (!cached) {
+      cached = new NativeAnalyser({
+        fftSize: 256,
+        sampleRate: this.context.sampleRate,
+        read: peakSineSource(256, this.context.sampleRate, () => this.peaks.get(id) ?? 0),
+      })
+      this.analysers.set(id, cached)
     }
-    return analyser
+    return cached as unknown as AnalyserNode
   }
 
   getBlockPosition(id: string): { row: number; col: number } | null {
@@ -169,18 +179,11 @@ export class GraphRig {
     return this.edges.get(id) ?? null
   }
 
-  /**
-   * Count of Amp/Cab blocks with a model/IR actually loaded - the real cost
-   * driver, not grid cell count (an empty Amp/Cab block costs ~nothing).
-   * No per-instance CPU number is documented upstream, so this isn't an
-   * enforced cap, just a number the UI can use for a soft advisory.
-   */
   countActiveHeavyBlocks(): number {
     let count = 0
-    for (const entry of this.blocks.values()) {
-      const block = entry.block as { getLoadedModel?(): unknown; getLoadedIr?(): unknown }
-      if (block.getLoadedModel?.() != null) count++
-      if (block.getLoadedIr?.() != null) count++
+    for (const { block } of this.blocks.values()) {
+      if (block.getLoadedModel() != null) count++
+      if (block.getLoadedIr() != null) count++
     }
     return count
   }
@@ -195,114 +198,68 @@ export class GraphRig {
     return map
   }
 
-  private resolveNode(j: Jack, side: 'from' | 'to'): AudioNode | null {
-    if (j.blockId === IN_RAIL) return side === 'from' ? this.inputSource : null
-    if (j.blockId === OUT_RAIL) return side === 'to' ? this.outSink : null
-    const entry = this.blocks.get(j.blockId)
-    if (!entry) return null
-    if (side === 'to' && entry.block instanceof MixerBlock) return entry.block.inputNodeAt(j.port)
-    if (side === 'from' && entry.block instanceof SplitterBlock) {
-      return entry.block.outputNodeAt(j.port)
-    }
-    return side === 'from' ? entry.block.outputNode : entry.block.inputNode
-  }
-
-  private wireEdge(edge: Edge): void {
-    const target = this.resolveNode(edge.to, 'to')
-    const source = this.resolveNode(edge.from, 'from')
-    source?.connect(target as AudioNode)
-  }
-
-  private unwireEdge(edge: Edge): void {
-    const target = this.resolveNode(edge.to, 'to')
-    const source = this.resolveNode(edge.from, 'from')
-    if (!source || !target) return
-    try {
-      source.disconnect(target)
-    } catch {
-      // Already disconnected (e.g. the other endpoint was already torn down) - fine.
-    }
-  }
-
-  /**
-   * Try to connect `from` -> `to`. Validates left-to-right column order and
-   * that the target jack isn't already occupied (at most one cable per
-   * jack; a Mixer's several ports each count separately). Returns a result
-   * rather than throwing so the UI can show inline rejection feedback.
-   */
   connect(from: Jack, to: Jack, id?: string): ConnectResult {
     const result = canConnect(this.validatableBlocks(), this.edges.values(), from, to)
     if (!result.ok) return result
 
     const edgeId = id ?? this.genId('edge')
-    const edge: Edge = { from, to }
-    this.edges.set(edgeId, edge)
-    this.wireEdge(edge)
+    this.edges.set(edgeId, { from, to })
+    // The worklet re-validates against the core's graph_validation rules; a
+    // rejected edge is dropped locally so the UI can't believe it exists.
+    void this.worklet.connect(from, to, edgeId).then((r) => {
+      if (!r.ok) this.edges.delete(edgeId)
+    })
     return { ok: true, id: edgeId }
   }
 
   disconnect(edgeId: string): void {
-    const edge = this.edges.get(edgeId)
-    if (!edge) return
-    this.unwireEdge(edge)
     this.edges.delete(edgeId)
+    void this.worklet.disconnect(edgeId)
   }
 
-  // ── External input / output (mic, output device) ───────────────────────
+  // ── External input / output (mic) ───────────────────────────────────────
 
-  /** Feed an external source (e.g. the mic trim node) into the graph's IN rail. */
+  /** Feed an external source (e.g. the mic trim node) into the rig worklet's input, which is the graph's IN rail. */
   connectInput(source: AudioNode): void {
     this.disconnectInput()
     this.inputSource = source
-    for (const edge of this.edges.values()) {
-      if (edge.from.blockId === IN_RAIL) this.wireEdge(edge)
-    }
+    source.connect(this.worklet.node)
   }
 
   disconnectInput(): void {
     if (!this.inputSource) return
-    for (const edge of this.edges.values()) {
-      if (edge.from.blockId === IN_RAIL) this.unwireEdge(edge)
+    try {
+      this.inputSource.disconnect(this.worklet.node)
+    } catch {
+      // Already disconnected - fine.
     }
     this.inputSource = null
   }
 
-  // ── Master utility (fixed, not a block) ─────────────────────────────────
+  // ── Master bus (forwarded to the core through the worklet) ──────────────
 
   setMasterLevel(level: number): void {
-    this.masterLevel = level
-    this.applyMasterGain()
+    this.worklet.setMasterLevel(level)
   }
 
   setMasterMuted(muted: boolean): void {
-    this.masterMuted = muted
-    this.applyMasterGain()
+    this.worklet.setMasterMuted(muted)
   }
 
-  /** Programmatic output silence (e.g. while the tuner dialog is open) - independent of the saved master mute. */
   setTunerMuted(muted: boolean): void {
-    this.tunerMuted = muted
-    this.applyMasterGain()
-  }
-
-  private applyMasterGain(): void {
-    const gain = this.masterMuted || this.tunerMuted ? 0 : this.masterLevel
-    this.masterGain.gain.setTargetAtTime(gain, this.context.currentTime, 0.01)
+    this.worklet.setTunerMuted(muted)
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    if (this.pollTimer !== null) clearInterval(this.pollTimer)
+    this.pollTimer = null
     this.disconnectInput()
-    for (const edge of this.edges.values()) this.unwireEdge(edge)
     this.edges.clear()
-    const disposals: Array<void | Promise<void>> = []
-    for (const entry of this.blocks.values()) disposals.push(entry.block.dispose())
     this.blocks.clear()
     this.analysers.clear()
-    this.outSink.disconnect()
-    this.masterGain.disconnect()
-    this.limiter.disconnect()
-    await Promise.all(disposals)
+    this.peaks.clear()
+    await this.worklet.dispose()
   }
 }

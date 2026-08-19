@@ -132,3 +132,21 @@ export const REVERB_PARAMS = Object.freeze({
 })
 
 export const CAB_PARAMS = Object.freeze({ ir_mix: 0 })
+
+export const MIXER_PARAMS = Object.freeze({
+  in0_level: 0,
+  in0_pan: 1,
+  in1_level: 2,
+  in1_pan: 3,
+  in2_level: 4,
+  in2_pan: 5,
+  in3_level: 6,
+  in3_pan: 7,
+})
+
+export const SPLITTER_PARAMS = Object.freeze({
+  out0_level: 0,
+  out1_level: 1,
+  out2_level: 2,
+  out3_level: 3,
+})

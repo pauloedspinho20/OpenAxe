@@ -2,9 +2,8 @@
 export type EffectParams = Record<string, number | string | boolean>
 
 /**
- * Stable machine-readable identifiers for each effect class - distinct from
- * `name` (a display label, which can vary: e.g. Delay's name changes to
- * "Tape Delay" depending on its character). Presets store `kind`, never
+ * Stable machine-readable identifiers for each effect kind - distinct from
+ * `name` (a display label, which can vary). Presets store `kind`, never
  * `name`, so renaming a display label never breaks saved presets.
  */
 export type EffectKind =
@@ -23,6 +22,12 @@ export type EffectKind =
  * Common interface every pedal/rack effect implements, so EffectsChain can
  * wire them together and expose bypass/wet-dry uniformly without knowing
  * anything about each effect's internal DSP.
+ *
+ * Note (issue #55): the web audio path no longer constructs these - all DSP
+ * lives in the core behind the single rig worklet. This interface and
+ * EffectsChain are kept only as the UI's param-plumbing type surface; the
+ * concrete effect classes (and their wet/dry staging, the old BaseEffect) were
+ * deleted once nothing used them.
  */
 export interface Effect {
   readonly kind: EffectKind
@@ -43,118 +48,4 @@ export interface Effect {
   /** Restore parameters previously returned by getParams(), e.g. when loading a preset. */
   setParams(params: EffectParams): void
   dispose(): void | Promise<void>
-}
-
-const clampUnit = (value: number) => Math.min(1, Math.max(0, value))
-/** Matches the Knob convention used for other post-gain trims (e.g. the master/mixer levels) - +3.5dB of headroom, not just unity. */
-const MAX_LEVEL = 1.5
-const clampLevel = (value: number) => Math.min(MAX_LEVEL, Math.max(0, value))
-
-/**
- * Handles the dry/wet crossfade and bypass plumbing shared by every effect,
- * so each concrete effect only has to build its own "wet" processing
- * subgraph (a chain from wetInput to wetOutput) instead of reimplementing
- * mix/bypass every time.
- */
-export abstract class BaseEffect implements Effect {
-  readonly kind: EffectKind
-  readonly name: string
-  readonly inputNode: GainNode
-  readonly outputNode: GainNode
-
-  private readonly dryGain: GainNode
-  private readonly wetGain: GainNode
-  private mix = 1
-  private bypassed = false
-  private level = 1
-
-  protected constructor(
-    context: BaseAudioContext,
-    kind: EffectKind,
-    name: string,
-    wetInput: AudioNode,
-    wetOutput: AudioNode,
-  ) {
-    this.kind = kind
-    this.name = name
-    this.inputNode = new GainNode(context)
-    this.outputNode = new GainNode(context)
-    // Mirrors the default `mix = 1` (fully wet) below - GainNode's own
-    // default gain is 1, so without this the dry path would carry the full
-    // signal and the wet path none, silently bypassing every effect no
-    // matter what its params were set to until something called setMix().
-    this.dryGain = new GainNode(context, { gain: 0 })
-    this.wetGain = new GainNode(context, { gain: 1 })
-
-    this.inputNode.connect(this.dryGain)
-    this.dryGain.connect(this.outputNode)
-    this.inputNode.connect(wetInput)
-    wetOutput.connect(this.wetGain)
-    this.wetGain.connect(this.outputNode)
-  }
-
-  setMix(wet: number): void {
-    this.mix = clampUnit(wet)
-    if (!this.bypassed) this.applyMix(this.mix)
-  }
-
-  getMix(): number {
-    return this.mix
-  }
-
-  setBypass(bypassed: boolean): void {
-    if (bypassed === this.bypassed) return
-    this.bypassed = bypassed
-    // `this.mix` is already kept current by setMix regardless of bypass
-    // state (only the graph write is gated on it below) - un-bypassing just
-    // re-applies whatever it currently is, correctly picking up any Mix/
-    // Level change made while bypassed instead of reverting it.
-    this.applyMix(bypassed ? 0 : this.mix)
-  }
-
-  isBypassed(): boolean {
-    return this.bypassed
-  }
-
-  /**
-   * Output trim - folded into the wet path's own gain (wetGain = mix *
-   * level) rather than the shared outputNode, which is also where the dry
-   * bypass signal sums in. Applying it there would mean Level (and Mix)
-   * still audibly scaled a bypassed pedal's passthrough - a real footswitch
-   * bypass is a hard, unaffected-by-any-knob unity passthrough, and
-   * `applyMix`'s `1 - wet` dry gain has no dependency on `level` at all.
-   */
-  setLevel(gain: number): void {
-    this.level = clampLevel(gain)
-    if (!this.bypassed) this.applyMix(this.mix)
-  }
-
-  getLevel(): number {
-    return this.level
-  }
-
-  private applyMix(wet: number): void {
-    const context = this.inputNode.context
-    this.wetGain.gain.setTargetAtTime(wet * this.level, context.currentTime, 0.01)
-    this.dryGain.gain.setTargetAtTime(1 - wet, context.currentTime, 0.01)
-  }
-
-  /**
-   * Mix and Level are not original DSP parameters - they're the app's
-   * dry/wet crossfade and output trim, shared plumbing every effect needs
-   * for bypass. They deliberately do NOT round-trip through getParams()/
-   * setParams(): presets store only each effect's real parameters, so an
-   * effect always runs fully wet (mix = 1) unless a native dry/wet control
-   * (e.g. Reverb's Dry Level, Compressor's Mix) is exposed in its schema.
-   */
-  protected disposeBase(): void {
-    this.inputNode.disconnect()
-    this.outputNode.disconnect()
-    this.dryGain.disconnect()
-    this.wetGain.disconnect()
-  }
-
-  abstract getParams(): EffectParams
-  abstract setParams(params: EffectParams): void
-  abstract dispose(): void | Promise<void>
 }

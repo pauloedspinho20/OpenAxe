@@ -59,7 +59,10 @@ function webFieldsFor(kind: EffectKind): Map<string, { min?: number; max?: numbe
 //   but `predelay` on Room, ...). Covered by its own case below.
 // - `cab`, whose single param also lives in BLOCK_PARAM_SCHEMAS, under a
 //   camelCase key. Covered by its own case below too.
-const EXCLUDED_KINDS = ['amp', 'reverb', 'cab']
+// - `mixer`/`splitter`, which are grid block kinds, not effects: their
+//   per-input level/pan and per-output level params are core DSP (issue #55)
+//   driven by MixerBlock/SplitterBlock's own param schemas, not effect knobs.
+const EXCLUDED_KINDS = ['amp', 'reverb', 'cab', 'mixer', 'splitter']
 const SYMBOL_KINDS = Object.keys(coreEffects).filter(
   (kind): kind is EffectKind => !EXCLUDED_KINDS.includes(kind) && kind in EFFECT_PARAM_SCHEMAS,
 )

@@ -200,11 +200,11 @@ if(EMSCRIPTEN)
     # on an export it can't find, which is how _nam_studio_set_drive_model
     # (removed with the Drive effect) went unnoticed - the compiled artifacts
     # are checked in and nothing rebuilds them automatically.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_param_count','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_malloc','_free']"
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_malloc','_free']"
     # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
     # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's
     # double/int32 out-params back out.
-    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32','HEAPU8','HEAPF64','HEAP32']"
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32','HEAPU8','HEAPF64','HEAP32','UTF8ToString']"
     -O3
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
