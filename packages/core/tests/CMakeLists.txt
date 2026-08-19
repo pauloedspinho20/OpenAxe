@@ -6,6 +6,20 @@ add_executable(graph_rig_test graph_rig_test.cpp)
 target_link_libraries(graph_rig_test PRIVATE nam_studio_core)
 add_test(NAME graph_rig_test COMMAND graph_rig_test)
 
+# The tone stack is plain DSP with no vendored dependency, so it builds
+# unconditionally like the graph tests.
+add_executable(wav_test wav_test.cpp)
+target_link_libraries(wav_test PRIVATE nam_studio_core)
+add_test(NAME wav_test COMMAND wav_test)
+
+add_executable(convolver_test convolver_test.cpp)
+target_link_libraries(convolver_test PRIVATE nam_studio_core)
+add_test(NAME convolver_test COMMAND convolver_test)
+
+add_executable(tone_stack_test tone_stack_test.cpp)
+target_link_libraries(tone_stack_test PRIVATE nam_studio_core)
+add_test(NAME tone_stack_test COMMAND tone_stack_test)
+
 add_executable(api_test api_test.cpp)
 target_link_libraries(api_test PRIVATE nam_studio_core)
 add_test(NAME api_test COMMAND api_test)
@@ -27,12 +41,12 @@ else()
   message(WARNING "Skipping nam_amp_test - packages/core/third_party/nam-core not initialized")
 endif()
 
-if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_CHOWDSP_WDF AND NAM_STUDIO_HAS_DSPARK)
+if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_DSPARK)
   # engine.cpp (issue #14's real-time ABI) instantiates NamAmp, all 4
-  # Dragonfly wrappers, all 4 chowdsp_wdf-based drive wrappers, and the 4
-  # DSPark-based wrappers unconditionally - see CMakeLists.txt's comment on
-  # nam_studio_core - so anything that links it needs all four families
-  # present, unlike the single-DSP-family tests above.
+  # Dragonfly wrappers, and the 4 DSPark-based wrappers unconditionally - see
+  # CMakeLists.txt's comment on nam_studio_core - so anything that links it
+  # needs all three families present, unlike the single-DSP-family tests
+  # above.
   add_executable(engine_test engine_test.cpp)
   target_link_libraries(engine_test PRIVATE nam_studio_core)
   add_test(NAME engine_test COMMAND engine_test)
@@ -47,7 +61,7 @@ if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_CHOWD
     NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
   add_test(NAME api_realtime_test COMMAND api_realtime_test)
 else()
-  message(WARNING "Skipping engine_test/api_realtime_test - nam-core, dragonfly-reverb, and byod's chowdsp_wdf submodules must all be initialized")
+  message(WARNING "Skipping engine_test/api_realtime_test - nam-core and dragonfly-reverb submodules must both be initialized")
 endif()
 
 if(NAM_STUDIO_HAS_DRAGONFLY)
@@ -75,26 +89,6 @@ if(NAM_STUDIO_HAS_DRAGONFLY)
   add_test(NAME dragonfly_all_algorithms_test COMMAND dragonfly_all_algorithms_test)
 else()
   message(WARNING "Skipping Dragonfly Reverb tests - dragonfly-reverb's dpf submodule not initialized")
-endif()
-
-if(NAM_STUDIO_HAS_CHOWDSP_WDF)
-  add_executable(diode_clipper_test diode_clipper_test.cpp)
-  target_link_libraries(diode_clipper_test PRIVATE nam_studio_core)
-  add_test(NAME diode_clipper_test COMMAND diode_clipper_test)
-
-  add_executable(tube_screamer_test tube_screamer_test.cpp)
-  target_link_libraries(tube_screamer_test PRIVATE nam_studio_core)
-  add_test(NAME tube_screamer_test COMMAND tube_screamer_test)
-
-  add_executable(zen_drive_test zen_drive_test.cpp)
-  target_link_libraries(zen_drive_test PRIVATE nam_studio_core)
-  add_test(NAME zen_drive_test COMMAND zen_drive_test)
-
-  add_executable(mxr_distortion_test mxr_distortion_test.cpp)
-  target_link_libraries(mxr_distortion_test PRIVATE nam_studio_core)
-  add_test(NAME mxr_distortion_test COMMAND mxr_distortion_test)
-else()
-  message(WARNING "Skipping diode_clipper_test/tube_screamer_test/zen_drive_test/mxr_distortion_test - byod's chowdsp_wdf submodule not initialized")
 endif()
 
 if(NAM_STUDIO_HAS_DSPARK)

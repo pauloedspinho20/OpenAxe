@@ -1,0 +1,14 @@
+{
+  "name": "@nam/desktop",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:fast": "node scripts/dev.mjs --skip-ui",
+    "dev:attach": "node scripts/dev.mjs --ui-url=http://localhost:5173",
+    "build": "node scripts/build.mjs",
+    "package": "node scripts/package.mjs",
+    "format:check": "prettier --ignore-path ../../.prettierignore --check src package.json README.md"
+  }
+}

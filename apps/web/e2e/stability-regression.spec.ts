@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
  * audio-glitch waveform analysis and CPU-load measurement aren't feasible
  * from Playwright (no fixture .nam/IR files ship in this repo, and there's
  * no way to record/inspect the actual audio graph's output samples from
- * here) - what this *can* verify, and does, is that building a full 11-
+ * here) - what this *can* verify, and does, is that building a full 10-
  * block chain, toggling every bypass, and tearing blocks back down again
  * doesn't throw, doesn't leave the UI stuck, and doesn't leave a single
  * console error behind. True glitch/CPU regression testing needs either a
@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test'
 test('builds a full FX chain, toggles every bypass, and tears it down without errors', async ({
   page,
 }) => {
-  // Heaviest test in the suite: it sequentially builds 11 WASM-backed effect
+  // Heaviest test in the suite: it sequentially builds 10 WASM-backed effect
   // blocks, each of which compiles/instantiates an AudioWorklet + fetches the
   // core .wasm. Under the parallel 4-worker matrix that routinely exceeds the
   // 30s default on a loaded machine (the grid reflows as blocks land, so a
@@ -70,8 +70,8 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove Mixer' }).click()
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
-  // All 11 effect kinds: the four DSPark-backed ones (issue #22's last
-  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the seven that
+  // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
+  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the six that
   // already ran on packages/core.
   const FX_KINDS = [
     'Noise Gate',
@@ -79,7 +79,6 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     'EQ',
     'Tremolo',
     'Reverb',
-    'Drive',
     'Chorus',
     'Flanger',
     'Phaser',
@@ -93,21 +92,23 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   for (let i = 0; i < FX_KINDS.length; i++) {
     const row = (i % 3) + 1
     const col = Math.floor(i / 3) + 1
-    await page.getByRole('button', { name: `Add a block at row ${row}, column ${col}` }).click()
+    await page
+      .getByRole('button', { name: `Add a block at row ${row}, column ${col}`, exact: true })
+      .click()
     await page.getByRole('menuitem', { name: FX_KINDS[i], exact: true }).click()
   }
-  await page.getByRole('button', { name: 'Add a block at row 1, column 5' }).click()
+  await page.getByRole('button', { name: 'Add a block at row 1, column 5', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Mixer', exact: true }).click()
 
   for (const kind of FX_KINDS) {
-    await page.getByRole('button', { name: `Bypass ${kind}` }).click()
+    await page.getByRole('button', { name: `Bypass ${kind}`, exact: true }).click()
   }
   for (const kind of FX_KINDS) {
-    await page.getByRole('button', { name: `Enable ${kind}` }).click()
+    await page.getByRole('button', { name: `Enable ${kind}`, exact: true }).click()
   }
 
   for (const kind of [...FX_KINDS, 'Mixer']) {
-    await page.getByRole('button', { name: `Remove ${kind}` }).click()
+    await page.getByRole('button', { name: `Remove ${kind}`, exact: true }).click()
   }
 
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)

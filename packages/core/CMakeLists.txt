@@ -7,16 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(NAM_STUDIO_BUILD_TESTS "Build packages/core unit tests" OFF)
 
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
-# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, all 4
-# chowdsp_wdf-based drive wrappers (DiodeClipper/TubeScreamer/ZenDrive/
-# MxrDistortion), and the 4 DSPark-based dynamics/EQ wrappers
-# (Compressor/Equalizer/NoiseGate/Tremolo) directly - it's the layer that
-# makes those already-wrapped families actually produce audio, so unlike the
-# rest of this file it does NOT degrade gracefully if
-# NAM_CORE_DIR/DRAGONFLY_DIR/CHOWDSP_WDF_DIR/DSPARK_DIR below turn out to be
-# uninitialized; linking nam_studio_core will fail with undefined symbols in
-# that case. Run `git submodule update --init --recursive` first if that
-# happens.
+# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and the 4
+# DSPark-based dynamics/EQ wrappers (Compressor/Equalizer/NoiseGate/Tremolo)
+# directly - it's the layer that makes those already-wrapped families
+# actually produce audio, so unlike the rest of this file it does NOT
+# degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/DSPARK_DIR below turn out
+# to be uninitialized; linking nam_studio_core will fail with undefined
+# symbols in that case. Run `git submodule update --init --recursive` first
+# if that happens.
 add_library(nam_studio_core STATIC
   src/core.cpp
   src/graph_validation.cpp
@@ -32,6 +30,9 @@ add_library(nam_studio_core STATIC
   src/dsp/equalizer.cpp
   src/dsp/noise_gate.cpp
   src/dsp/tremolo.cpp
+  src/dsp/tone_stack.cpp
+  src/dsp/convolver.cpp
+  src/dsp/wav.cpp
 )
 
 target_include_directories(nam_studio_core PUBLIC
@@ -139,39 +140,6 @@ else()
     "--init --depth 1 -- dpf")
 endif()
 
-# --- BYOD: chowdsp_wdf-based drive wrappers (issue #14) ---
-# Unlike NAMCore/Dragonfly, none of these compile any of BYOD's own source -
-# BYOD force-includes a global pch.h (JUCE + RTNeural + Eigen) into every
-# one of its 249 processor files via CMake's target_precompile_headers, so
-# even its simplest class can't be built standalone as-is. Each of these
-# four wrapper .cpp files is a hand-written reimplementation of the
-# corresponding BYOD WDF circuit (DiodeClipperWDF, TubeScreamerWDF,
-# ZenDriveWDF, MXRDistWDF) using chowdsp_wdf's WDF circuit primitives
-# directly (chowdsp_wdf is itself header-only and dependency-free - see
-# diode_clipper.cpp's own doc comments for exactly what was and wasn't
-# ported, and src/dsp/internal/wdf_common.h for the small pieces of logic
-# genuinely shared across more than one of them). Only chowdsp_wdf's
-# include path is needed; math_approx isn't used (chowdsp_wdf has its own
-# built-in Wright-Omega approximation, so pulling in a second one for BYOD's
-# externally-injected OmegaProvider wasn't worth it for no accuracy gain).
-set(CHOWDSP_WDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/byod/modules/chowdsp_wdf")
-if(EXISTS "${CHOWDSP_WDF_DIR}/include/chowdsp_wdf/chowdsp_wdf.h")
-  target_sources(nam_studio_core PRIVATE
-    src/dsp/diode_clipper.cpp
-    src/dsp/tube_screamer.cpp
-    src/dsp/zen_drive.cpp
-    src/dsp/mxr_distortion.cpp
-  )
-  target_include_directories(nam_studio_core PRIVATE "${CHOWDSP_WDF_DIR}/include")
-  set(NAM_STUDIO_HAS_CHOWDSP_WDF TRUE)
-else()
-  message(WARNING
-    "packages/core/third_party/byod/modules/chowdsp_wdf isn't initialized - "
-    "the Diode Clipper/Tube Screamer/Zen Drive/MXR Distortion wrappers will "
-    "not build. Run: git -C packages/core/third_party/byod submodule "
-    "update --init --depth 1 -- modules/chowdsp_wdf")
-endif()
-
 # --- DSPark-based dynamics/EQ wrappers (issue #22) ---
 # DSPark (third_party/dspark) is a header-only, dependency-free C++20 DSP
 # framework. None of its source gets compiled - the wrappers (compressor.cpp/
@@ -191,13 +159,6 @@ else()
     "git submodule update --init -- packages/core/third_party/dspark")
 endif()
 
-# The remaining two vendored DSP libraries (analog-tape-model, lsp-plugins)
-# are not wrapped or built yet - see README.md. BYOD's own effects beyond
-# Diode Clipper aren't wrapped either yet.
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CMakeLists.txt")
-  add_subdirectory(third_party)
-endif()
-
 if(EMSCRIPTEN)
   # Web target (issue #22): compiled to WASM, consumed by apps/web via
   # AudioWorklet. Emscripten's exports/link flags only apply to a final
@@ -206,8 +167,26 @@ if(EMSCRIPTEN)
   # executable is what actually gets Emscripten's MODULARIZE treatment.
   # wasm_entry.cpp is deliberately empty; nothing needs a main() for the
   # MODULARIZE=1 factory-function pattern used here.
+  # C++ exceptions must be enabled for this target. Emscripten disables them by
+  # default, which turns any `throw` into an abort() that takes the whole
+  # AudioWorklet down - and the core relies on catching them: NAMCore signals a
+  # bad model by throwing, and nam_studio::dsp::NamAmp catches that to return a
+  # NamLoadError instead (the ABI can't propagate exceptions). Without this, a
+  # malformed .nam file killed the audio thread instead of returning an error.
+  # -fexceptions (the JS-based implementation) rather than -fwasm-exceptions:
+  # universally supported, and the cost lands on unwinding paths, not on
+  # nam_studio_process.
+  target_compile_options(nam_studio_core PRIVATE -fexceptions)
   add_executable(nam_studio_core_wasm src/wasm_entry.cpp)
-  target_link_libraries(nam_studio_core_wasm PRIVATE nam_studio_core)
+  target_compile_options(nam_studio_core_wasm PRIVATE -fexceptions)
+  # WHOLE_ARCHIVE for the same reason the desktop app and the tests need it:
+  # NAM's architecture parsers (LSTM/WaveNet/ConvNet/Linear) self-register via
+  # static initializers that nothing calls directly, so a plain archive link
+  # drops them and every model load fails - silently, with a "bad model" error.
+  # This only started to matter once the web app's amp block ran core's own NAM
+  # inference (ampWorklet.js) instead of a separate npm engine.
+  target_link_libraries(nam_studio_core_wasm PRIVATE
+    $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
   set_target_properties(nam_studio_core_wasm PROPERTIES OUTPUT_NAME "nam_studio_core")
   target_link_options(nam_studio_core_wasm PRIVATE
     "SHELL:-s MODULARIZE=1"
@@ -215,9 +194,17 @@ if(EMSCRIPTEN)
     "SHELL:-s ENVIRONMENT=worklet"
     "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    -fexceptions
     # Extend this list as more of the graph ABI gets used from the browser.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_set_reverb_algorithm','_nam_studio_set_drive_model','_nam_studio_set_delay_model','_malloc','_free']"
-    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32']"
+    # Every name here must exist in the linked archive: wasm-ld fails the build
+    # on an export it can't find, which is how _nam_studio_set_drive_model
+    # (removed with the Drive effect) went unnoticed - the compiled artifacts
+    # are checked in and nothing rebuilds them automatically.
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_connect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_param_count','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_malloc','_free']"
+    # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
+    # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's
+    # double/int32 out-params back out.
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32','HEAPU8','HEAPF64','HEAP32']"
     -O3
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")

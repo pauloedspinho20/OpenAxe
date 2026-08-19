@@ -1,4 +1,4 @@
-import { NamEngine, NamNode, type NamModelInfo } from 'neural-amp-modeler-wasm/engine'
+import { NamAmpNode, type NamModelInfo } from '../NamAmpNode'
 import type { Block, EffectParams } from './Block'
 
 /** Which model is currently loaded, for saving into a preset. Null if none is loaded. */
@@ -27,14 +27,14 @@ export type NamModelBlockKind = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'spac
  * `inputNode`/`outputNode` are the underlying `NamNode` itself, which is
  * already mono-in/mono-out and stays the same instance across model swaps.
  */
-/** ±12dB, matching the old AmpCabChain tone stack's range. */
+/** ±12dB, matching the core ToneStack's own clamp and the UI's knob range. */
 const TONE_GAIN_LIMIT = 12
 /** Headroom above unity, matching the Mix/Level convention used everywhere else (master, mixer, effects). */
 const MAX_LEVEL = 1.5
 
 export class AmpBlock implements Block {
   readonly kind: NamModelBlockKind
-  private readonly namNode: NamNode
+  private readonly namNode: NamAmpNode
   private readonly context: BaseAudioContext
   private disposed = false
   private loadedModel: LoadedAssetInfo | null = null
@@ -59,11 +59,14 @@ export class AmpBlock implements Block {
   private readonly wetMuteGain: GainNode
   private bypassed = false
 
-  /** 4-band tone stack (Bass low-shelf, Mid peaking, Treble high-shelf, Presence peaking), wired after the model. */
-  private readonly bassFilter: BiquadFilterNode
-  private readonly midFilter: BiquadFilterNode
-  private readonly trebleFilter: BiquadFilterNode
-  private readonly presenceFilter: BiquadFilterNode
+  /**
+   * 4-band tone stack (Bass low-shelf, Mid peaking, Treble high-shelf, Presence
+   * peaking), applied after the model. The DSP lives in the core alongside the
+   * inference (`packages/core/src/dsp/tone_stack.cpp`) and is driven through the
+   * worklet's AudioParams; these fields are just the mirrored knob values the UI
+   * reads back. It used to be four Web Audio BiquadFilterNodes here, which meant
+   * the desktop app - driving the same core - had no tone controls at all.
+   */
   private bassGain = 0
   private midGain = 0
   private trebleGain = 0
@@ -71,38 +74,15 @@ export class AmpBlock implements Block {
   private inputLevel = 1
   private outputLevel = 1
 
-  private constructor(context: BaseAudioContext, namNode: NamNode, kind: NamModelBlockKind) {
+  private constructor(context: BaseAudioContext, namNode: NamAmpNode, kind: NamModelBlockKind) {
     this.context = context
     this.namNode = namNode
     this.kind = kind
 
     this.inputGain = new GainNode(context)
     this.outputGain = new GainNode(context)
-    this.bassFilter = new BiquadFilterNode(context, { type: 'lowshelf', frequency: 100, gain: 0 })
-    this.midFilter = new BiquadFilterNode(context, {
-      type: 'peaking',
-      frequency: 1000,
-      Q: 0.7,
-      gain: 0,
-    })
-    this.trebleFilter = new BiquadFilterNode(context, {
-      type: 'highshelf',
-      frequency: 5000,
-      gain: 0,
-    })
-    this.presenceFilter = new BiquadFilterNode(context, {
-      type: 'peaking',
-      frequency: 8000,
-      Q: 0.5,
-      gain: 0,
-    })
-
-    this.inputGain.connect(namNode)
-    namNode.connect(this.bassFilter)
-    this.bassFilter.connect(this.midFilter)
-    this.midFilter.connect(this.trebleFilter)
-    this.trebleFilter.connect(this.presenceFilter)
-    this.presenceFilter.connect(this.outputGain)
+    this.inputGain.connect(namNode.node)
+    namNode.node.connect(this.outputGain)
 
     this.input = new GainNode(context)
     this.output = new GainNode(context)
@@ -116,9 +96,17 @@ export class AmpBlock implements Block {
     this.dryGain.connect(this.output)
   }
 
-  static async create(engine: NamEngine, kind: NamModelBlockKind = 'amp'): Promise<AmpBlock> {
-    const namNode = await engine.createNode()
-    return new AmpBlock(engine.context, namNode, kind)
+  // The NAM inference itself runs in packages/core (see NamAmpNode); this class
+  // owns the Web Audio staging around it - the trims, the tone stack and true
+  // bypass. Those three are the web path's remaining local DSP; the desktop
+  // path gets trims and bypass from the core instead, and the tone stack not at
+  // all (see ARCHITECTURE.md).
+  static async create(
+    context: BaseAudioContext,
+    kind: NamModelBlockKind = 'amp',
+  ): Promise<AmpBlock> {
+    const namNode = await NamAmpNode.create(context)
+    return new AmpBlock(context, namNode, kind)
   }
 
   get inputNode(): AudioNode {
@@ -166,7 +154,7 @@ export class AmpBlock implements Block {
   /** Set Bass shelf gain in dB (±12). */
   setBass(gain: number): void {
     this.bassGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
-    this.bassFilter.gain.setTargetAtTime(this.bassGain, this.context.currentTime, 0.01)
+    this.namNode.setToneGainDb('bass', this.bassGain)
   }
 
   getBass(): number {
@@ -176,7 +164,7 @@ export class AmpBlock implements Block {
   /** Set Mid peaking gain in dB (±12). */
   setMid(gain: number): void {
     this.midGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
-    this.midFilter.gain.setTargetAtTime(this.midGain, this.context.currentTime, 0.01)
+    this.namNode.setToneGainDb('mid', this.midGain)
   }
 
   getMid(): number {
@@ -186,7 +174,7 @@ export class AmpBlock implements Block {
   /** Set Treble shelf gain in dB (±12). */
   setTreble(gain: number): void {
     this.trebleGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
-    this.trebleFilter.gain.setTargetAtTime(this.trebleGain, this.context.currentTime, 0.01)
+    this.namNode.setToneGainDb('treble', this.trebleGain)
   }
 
   getTreble(): number {
@@ -196,7 +184,7 @@ export class AmpBlock implements Block {
   /** Set Presence peaking gain in dB (±12). */
   setPresence(gain: number): void {
     this.presenceGain = Math.min(TONE_GAIN_LIMIT, Math.max(-TONE_GAIN_LIMIT, gain))
-    this.presenceFilter.gain.setTargetAtTime(this.presenceGain, this.context.currentTime, 0.01)
+    this.namNode.setToneGainDb('presence', this.presenceGain)
   }
 
   getPresence(): number {
@@ -226,7 +214,7 @@ export class AmpBlock implements Block {
    * size hasn't actually changed - bindGraphRig's reconcile reapplies every
    * block's full params on every store change (see its doc comment), so this
    * runs far more often than the user actually touches a slim-size control.
-   * Uses NamNode.setSlimSize (a lightweight re-slim), not loadModel, which
+   * Uses NamAmpNode.setSlimSize (a lightweight re-slim), not loadModel, which
    * reparses the whole model and pauses rendering for ~100-300ms - calling
    * that on every reconcile pass was audible as the output cutting out
    * whenever *any* block's params changed, not just this one's.
@@ -262,8 +250,8 @@ export class AmpBlock implements Block {
       mid: this.midGain,
       treble: this.trebleGain,
       presence: this.presenceGain,
-      inputLevel: this.inputLevel,
-      outputLevel: this.outputLevel,
+      input_level: this.inputLevel,
+      output_level: this.outputLevel,
     }
   }
 
@@ -273,8 +261,8 @@ export class AmpBlock implements Block {
     if (typeof params.mid === 'number') this.setMid(params.mid)
     if (typeof params.treble === 'number') this.setTreble(params.treble)
     if (typeof params.presence === 'number') this.setPresence(params.presence)
-    if (typeof params.inputLevel === 'number') this.setInputLevel(params.inputLevel)
-    if (typeof params.outputLevel === 'number') this.setOutputLevel(params.outputLevel)
+    if (typeof params.input_level === 'number') this.setInputLevel(params.input_level)
+    if (typeof params.output_level === 'number') this.setOutputLevel(params.output_level)
   }
 
   async dispose(): Promise<void> {
@@ -286,10 +274,6 @@ export class AmpBlock implements Block {
     this.wetMuteGain.disconnect()
     this.inputGain.disconnect()
     this.outputGain.disconnect()
-    this.bassFilter.disconnect()
-    this.midFilter.disconnect()
-    this.trebleFilter.disconnect()
-    this.presenceFilter.disconnect()
     await this.namNode.dispose()
   }
 }

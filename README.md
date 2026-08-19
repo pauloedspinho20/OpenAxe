@@ -4,20 +4,24 @@ A free, open-source guitar/bass amp, cabinet, and effects suite — in the spiri
 
 Runs entirely in the browser: no native app required, no backend, no account. Works offline once installed as a PWA.
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the C++ core and the four front
+ends divide responsibility (what belongs in `packages/core` vs a front end, the
+per-target status of that split, the migration order, and the latency budget).
+
 ## Project decisions
 
-| Area             | Decision                                                                                                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Distribution     | Free & open source, licensed [GPLv3](./LICENSE)                                                                                                                     |
-| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h (desktop) / iPlug2 (VST3) / native (mobile)                                                                   |
-| Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 3×8 grid, cabled left-to-right                                                                                     |
-| Audio (web)      | AudioWorklet + WASM (C++ compiled via Emscripten, migrating to SAB lock-free params)                                                                                |
-| Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                                             |
-| Shared DSP core  | **C++** — wraps Dragonfly Reverb, AnalogTapeModel, BYOD, LSP Suite, NeuralAmpModelerCore (pedals/outboard gear also modeled as NAM captures, not a separate engine) |
-| State management | [Zustand](https://github.com/pmndrs/zustand)                                                                                                                        |
-| CSS              | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                                             |
-| Persistence      | IndexedDB (web) / filesystem (desktop/mobile)                                                                                                                       |
-| Monorepo (#13)   | pnpm + Turborepo workspaces: `apps/web`, `apps/desktop`, `apps/ios`, `apps/android`, `packages/core` (C++), `packages/vst3` (iPlug2), `packages/ui`                 |
+| Area             | Decision                                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Distribution     | Free & open source, licensed [GPLv3](./LICENSE)                                                                                                     |
+| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h (desktop) / iPlug2 (VST3) / native (mobile)                                                   |
+| Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 3×8 grid, cabled left-to-right                                                                     |
+| Audio (web)      | AudioWorklet + WASM (C++ compiled via Emscripten, migrating to SAB lock-free params)                                                                |
+| Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                             |
+| Shared DSP core  | **C++** — wraps Dragonfly Reverb, DSPark, NeuralAmpModelerCore (pedals/outboard gear also modeled as NAM captures, not a separate engine)           |
+| State management | [Zustand](https://github.com/pmndrs/zustand)                                                                                                        |
+| CSS              | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                             |
+| Persistence      | IndexedDB (web) / filesystem (desktop/mobile)                                                                                                       |
+| Monorepo (#13)   | pnpm + Turborepo workspaces: `apps/web`, `apps/desktop`, `apps/ios`, `apps/android`, `packages/core` (C++), `packages/vst3` (iPlug2), `packages/ui` |
 
 ## Platform targets
 
@@ -34,7 +38,7 @@ Runs entirely in the browser: no native app required, no backend, no account. Wo
 
 ### Why these choices
 
-- **C++ for DSP core, not Rust** — All 5 DSP libraries are C++ (Dragonfly, AnalogTapeModel, BYOD, LSP, NAMCore). Wrapping them in Rust requires 5 FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
+- **C++ for DSP core, not Rust** — All 3 vendored DSP libraries are C++ (Dragonfly, DSPark, NAMCore). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
 - **Desktop: C++ + webview.h, not Electron** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. Tauri v2 kept as an alternative for its bundling/signing tooling.
 - **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. iOS/AUv3 for mobile. WebAudio Module (WAM) for browser.
 - **Mobile: Native shells, not Tauri v2 mobile or React Native** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
@@ -67,7 +71,6 @@ interface)
 | Noise Gate    | Custom AudioWorkletProcessor | LSP Gate (LGPLv3)                                                             | LSP → WASM        |
 | Compressor    | DynamicsCompressorNode       | LSP Compressor (LGPLv3) + Airwindows Pressure4 (MIT)                          | LSP → WASM        |
 | Parametric EQ | BiquadFilterNodes            | LSP Parametric EQ (LGPLv3, 16-band)                                           | LSP → WASM        |
-| Drive         | WaveShaperNode, 3 curves     | BYOD (GPLv3, 43+ models) + ChowCentaur (BSD-3)                                | BYOD → WASM       |
 | Chorus        | LFO-modulated DelayNode      | BYOD Chorus (GPLv3)                                                           | BYOD → WASM       |
 | Flanger       | LFO-modulated DelayNode      | BYOD Flanger (GPLv3)                                                          | BYOD → WASM       |
 | Phaser        | Allpass cascade              | ChowPhaser (BSD-3) or BYOD Phaser4/8 (GPLv3)                                  | ChowPhaser → WASM |
@@ -90,7 +93,7 @@ Two hardware finishes: **Carbon** (dark, TX-6-style) and **Aluminum** (light, OP
 
 ## Project structure
 
-pnpm + Turborepo monorepo (#13). `apps/desktop`, `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#15, #17, #17, #16); `packages/core` has a real, tested C++ audio graph engine, full NAM inference wrapper, and all four Dragonfly Reverb algorithms, with three more DSP libraries still to wrap (#14).
+pnpm + Turborepo monorepo (#13). `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#17, #17, #16); `apps/desktop` is a working native shell (see above); `packages/core` has a real, tested C++ audio graph engine, full NAM inference wrapper, and all four Dragonfly Reverb algorithms, with three more DSP libraries still to wrap (#14).
 
 ```
 NAM-Web-Studio/
@@ -111,14 +114,14 @@ NAM-Web-Studio/
 │   │   │   ├── tone3000/         # Tone3000 API
 │   │   │   └── tuner/            # Pitch detection
 │   │   └── e2e/                  # Playwright E2E tests
-│   ├── desktop/               # Placeholder — C++ + webview.h (or Tauri v2) + React UI (#15)
+│   ├── desktop/               # Native desktop shell — C++ + webview.h + React UI (#15), see apps/desktop/README.md
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
 │   ├── core/                  # C++ DSP library — graph engine, NAM, Dragonfly Reverb done (#14)
 │   │   ├── include/nam_studio/    # Graph engine, dsp/ wrappers, extern "C" lifecycle API
 │   │   ├── src/                   # Implementation + tests/ (CTest, all passing)
-│   │   └── third_party/           # Dragonfly (wired), NAMCore (wired), AnalogTapeModel/BYOD/LSP (vendored, not yet wrapped)
+│   │   └── third_party/           # Dragonfly (wired), NAMCore (wired), DSPark (wired)
 │   ├── vst3/                   # Placeholder — iPlug2 (C++) VST3/CLAP/AU/AAX plugin (#16)
 │   └── ui/                     # Shared React component library + design tokens
 │       ├── src/primitives/         # Knob, Fader, HardwareButton, Led, Meter, Toggle, Panel
@@ -143,17 +146,25 @@ pnpm install
 pnpm dev
 ```
 
-Scripts run at the repo root via Turborepo, fanning out to the relevant workspace package (currently `apps/web`, `packages/ui`):
+Scripts run at the repo root via Turborepo, fanning out to the relevant workspace package (`apps/web`, `apps/desktop`, `packages/ui`):
 
-| Script                                    | Purpose                                             |
-| ----------------------------------------- | --------------------------------------------------- |
-| `pnpm dev`                                | Start Vite dev server (`apps/web`)                  |
-| `pnpm build`                              | Typecheck + production build                        |
-| `pnpm lint`                               | oxlint                                              |
-| `pnpm format` / `pnpm format:check`       | Prettier                                            |
-| `pnpm test` / `pnpm test:run`             | Vitest                                              |
-| `pnpm test:e2e`                           | Playwright E2E                                      |
-| `pnpm storybook` / `pnpm build-storybook` | Storybook dev server / static build (`packages/ui`) |
+| Script                                    | Purpose                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------- |
+| `pnpm dev` / `pnpm dev:web`               | Start the Vite dev server (`apps/web`) — no C++ toolchain needed |
+| `pnpm dev:desktop`                        | Debug-build and launch the native desktop app (`apps/desktop`)   |
+| `pnpm dev:desktop:attach`                 | Same, but pointed at the running Vite dev server (HMR)           |
+| `pnpm dev:all`                            | Both dev targets at once, in parallel                            |
+| `pnpm build` / `pnpm build:web`           | Typecheck + production build of the web app and `packages/ui`    |
+| `pnpm build:desktop`                      | Release build of the native desktop app + its bundled UI         |
+| `pnpm build:all`                          | Web + desktop                                                    |
+| `pnpm package:desktop`                    | Desktop build + CPack installer (`.dmg` / `.zip` / `.deb`)       |
+| `pnpm lint`                               | oxlint                                                           |
+| `pnpm format` / `pnpm format:check`       | Prettier                                                         |
+| `pnpm test` / `pnpm test:run`             | Vitest                                                           |
+| `pnpm test:e2e`                           | Playwright E2E                                                   |
+| `pnpm storybook` / `pnpm build-storybook` | Storybook dev server / static build (`packages/ui`)              |
+
+`pnpm dev` and `pnpm build` cover the web app only, so pure web work never needs CMake or a C++ compiler; the `:desktop` / `:all` variants opt into the native build. The two apps are fully independent processes — run them side by side (`pnpm dev:all`, or two terminals) and both work at once; the desktop app serves its own UI copy on an ephemeral loopback port, so it never collides with Vite's 5173.
 
 ### C++ DSP core (`packages/core`)
 
@@ -173,6 +184,30 @@ ctest --test-dir packages/core/build --output-on-failure
 VS Code users: the same steps are available as tasks (**Terminal → Run Task**) — `C++: Init submodules`, `C++: Configure`, `C++: Build`, `C++: Test`, each depending on the previous.
 
 See [packages/core/README.md](./packages/core/README.md) for what's implemented so far (audio graph engine, NAM inference, all four Dragonfly Reverb algorithms), vendored-library licensing, and known build gotchas.
+
+### Desktop app (`apps/desktop`, issue #15)
+
+The native desktop shell reuses the web UI and drives `packages/core` directly (no Web Audio in the audio path). See [apps/desktop/README.md](./apps/desktop/README.md) for architecture, the full command list, and a debugging guide.
+
+```bash
+pnpm dev:desktop          # Debug build + bundle UI + launch the window
+pnpm build:desktop        # Release build + bundle UI
+pnpm package:desktop      # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+
+# Web + desktop side by side. Either run both dev targets in parallel...
+pnpm dev:all
+# ...or start the web dev server and attach the native shell to it, so the
+# desktop window gets Vite HMR instead of a rebuilt-and-bundled UI copy:
+pnpm dev:web              # terminal 1
+pnpm dev:desktop:attach   # terminal 2 (NAM_STUDIO_UI_URL=http://localhost:5173)
+
+# C++ tests (configure once with NAM_DESKTOP_BUILD_TESTS=ON):
+cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build apps/desktop/build
+ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
+```
+
+Debugging a random crash: read `apps/desktop/build/bin/nam_desktop.log` (mirrors stderr, appends a backtrace on a segfault/abort), run with `NAM_DESKTOP_DEBUG=1` to enable the webview inspector, or grab the OS crash report from `~/Library/Logs/DiagnosticReports/nam_desktop-*.crash`. Full details in the [desktop README](./apps/desktop/README.md#debugging).
 
 ## Roadmap
 

@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NamEngine } from 'neural-amp-modeler-wasm/engine'
+import { toast } from '@nam/ui'
 import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
+import { getNamStudio } from '../native/namStudio'
+import { useNativeAudioEngine } from './useNativeAudioEngine'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
+
+export interface AudioEnginePowerOnOptions {
+  /** Skip the initial mic connection attempt (no permission prompt). The
+   * device-list watcher below retries automatically once a real input
+   * device appears - no user confirmation needed. */
+  noSound?: boolean
+}
 
 export interface AudioEngineState {
   status: EngineStatus
@@ -16,10 +25,14 @@ export interface AudioEngineState {
   /** Taps the raw input (post-trim, pre-graph) for the tuner - never touches the signal path itself. */
   tunerAnalyser: AnalyserNode | null
   micGranted: boolean
+  /** True once the user chose "Continue without sound" - cleared the moment
+   * a mic connects successfully, whether that's this initial no-sound skip
+   * recovering on its own or a later manual device change. */
+  noSound: boolean
 }
 
 export interface AudioEngineActions {
-  powerOn: () => Promise<void>
+  powerOn: (opts?: AudioEnginePowerOnOptions) => Promise<void>
   powerOff: () => Promise<void>
 }
 
@@ -31,9 +44,27 @@ const IDLE_STATE: AudioEngineState = {
   analyser: null,
   tunerAnalyser: null,
   micGranted: false,
+  noSound: false,
 }
 
-export function useAudioEngine() {
+/**
+ * Turns a powerOn failure (AudioContext creation, WASM fetch/instantiation,
+ * GraphRig setup) into a message worth showing a guitarist, not a raw
+ * `TypeError: Failed to fetch`. Falls back to the original message for
+ * anything unrecognized so real detail is never hidden.
+ */
+export function describePowerOnError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+  if (error instanceof TypeError && /fetch/i.test(raw)) {
+    return "Couldn't load the audio engine — check your connection and press Power On again."
+  }
+  if (/NotAllowedError|permission/i.test(raw)) {
+    return 'Audio was blocked by the browser — check your site permissions and try again.'
+  }
+  return raw
+}
+
+export function useWebAudioEngine() {
   const [state, setState] = useState<AudioEngineState>(IDLE_STATE)
   const startingRef = useRef(false)
   const unbindRef = useRef<(() => void) | null>(null)
@@ -54,13 +85,8 @@ export function useAudioEngine() {
     }
   }, [inputGain])
 
-  // Reconnect mic when the input device or channel routing changes live.
   const inputDeviceId = useIOStore((s) => s.inputDeviceId)
   const inputChannel = useIOStore((s) => s.inputChannel)
-  useEffect(() => {
-    if (state.status !== 'ready' || connectingRef.current) return
-    void connectMic()
-  }, [inputDeviceId, inputChannel, state.status])
 
   // Re-route to the selected output device live, without recreating the context.
   const outputDeviceId = useIOStore((s) => s.outputDeviceId)
@@ -69,10 +95,38 @@ export function useAudioEngine() {
     if (state.status !== 'ready' || !ctx || !('setSinkId' in AudioContext.prototype)) return
     void (ctx as AudioContext & { setSinkId(id: string): Promise<void> })
       .setSinkId(outputDeviceId)
-      .catch(() => {
-        // setSinkId can fail if the device disappeared — continue with current output.
+      .catch((err: unknown) => {
+        // setSinkId fails if the device disappeared — keep playing on whatever
+        // output the context already has, but say so instead of going silent.
+        console.warn('[useAudioEngine] output device unavailable:', err)
+        toast.warning('Output device unavailable', {
+          description: 'Switched output disconnected — staying on the previous device.',
+        })
       })
   }, [outputDeviceId, state.status])
+
+  // Recover a suspended AudioContext: browsers/OSes can interrupt playback
+  // (a phone call, another app taking exclusive audio, a screen lock) without
+  // this app ever calling suspend() itself. Retry on the state's own
+  // statechange event and again whenever the tab regains visibility/focus,
+  // since resume() sometimes needs a fresh user-gesture-adjacent moment to
+  // succeed on strict autoplay policies.
+  useEffect(() => {
+    if (state.status !== 'ready' || !state.context) return
+    const ctx = state.context
+    const tryResume = () => {
+      if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
+    }
+    tryResume()
+    ctx.addEventListener('statechange', tryResume)
+    document.addEventListener('visibilitychange', tryResume)
+    window.addEventListener('focus', tryResume)
+    return () => {
+      ctx.removeEventListener('statechange', tryResume)
+      document.removeEventListener('visibilitychange', tryResume)
+      window.removeEventListener('focus', tryResume)
+    }
+  }, [state.status, state.context])
 
   // ── Mic connection ──────────────────────────────────────────────────────
 
@@ -133,7 +187,11 @@ export function useAudioEngine() {
       if (tunerAnalyserRef.current) trim.connect(tunerAnalyserRef.current)
 
       const micGranted = true
-      setState((s) => (s.context === ctx ? { ...s, micGranted } : s))
+      // A successful connection always means we're no longer in a deliberate
+      // no-sound state, whether this was the explicit initial attempt, a
+      // manual device change, or the auto-recovery watcher below finding a
+      // device on its own.
+      setState((s) => (s.context === ctx ? { ...s, micGranted, noSound: false } : s))
     } catch (micError: unknown) {
       const msg = micError instanceof Error ? micError.message : String(micError)
       useIOStore.getState().setMicError(msg)
@@ -144,55 +202,102 @@ export function useAudioEngine() {
     }
   }, [])
 
+  // Reconnect mic when the input device or channel routing changes live.
+  // Skipped once right after a no-sound power-on (see powerOn below) so
+  // choosing "Continue without sound" doesn't immediately trigger the very
+  // permission prompt it was meant to skip; any later device/channel change -
+  // manual or auto-detected - clears the skip and reconnects normally.
+  const skipNextAutoConnectRef = useRef(false)
+  useEffect(() => {
+    if (state.status !== 'ready' || connectingRef.current) return
+    if (skipNextAutoConnectRef.current) {
+      skipNextAutoConnectRef.current = false
+      return
+    }
+    void connectMic()
+  }, [inputDeviceId, inputChannel, state.status, connectMic])
+
+  // No-sound recovery: while deliberately running without a mic, re-attempt
+  // connectMic() whenever the enumerated input device list changes (a device
+  // was plugged in). Switches back to normal mode automatically on success -
+  // no user confirmation - and silently stays in no-sound mode if permission
+  // is denied, without spamming the browser's permission prompt on every
+  // unrelated devicechange.
+  const inputDevices = useIOStore((s) => s.inputDevices)
+  const inputDevicesSignature = inputDevices.map((d) => d.deviceId).join(',')
+  const lastRecoveryAttemptRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (state.status !== 'ready' || !state.noSound) {
+      lastRecoveryAttemptRef.current = null
+      return
+    }
+    if (inputDevicesSignature === '' || lastRecoveryAttemptRef.current === inputDevicesSignature)
+      return
+    lastRecoveryAttemptRef.current = inputDevicesSignature
+    void connectMic()
+  }, [inputDevicesSignature, state.status, state.noSound, connectMic])
+
   // ── Power on / off ──────────────────────────────────────────────────────
 
-  const powerOn = useCallback(async () => {
-    if (startingRef.current || state.status === 'ready') return
-    startingRef.current = true
-    setState((s) => ({ ...s, status: 'starting', error: null }))
+  const powerOn = useCallback(
+    async (opts?: AudioEnginePowerOnOptions) => {
+      if (startingRef.current || state.status === 'ready') return
+      startingRef.current = true
+      setState((s) => ({ ...s, status: 'starting', error: null }))
 
-    try {
-      const io = useIOStore.getState()
-      const context = new AudioContext({ latencyHint: io.latencyHint })
-      const engine = await NamEngine.attach(context)
-      const rig = await GraphRig.create(context, engine)
-      contextRef.current = context
-      rigRef.current = rig
+      try {
+        const io = useIOStore.getState()
+        const context = new AudioContext({ latencyHint: io.latencyHint })
+        // No NAM engine to attach any more: amp blocks run packages/core's own
+        // inference in their own worklet (see NamAmpNode), same as every effect.
+        const rig = await GraphRig.create(context)
+        contextRef.current = context
+        rigRef.current = rig
 
-      unbindRef.current = bindGraphRig(useGraphStore, rig)
+        unbindRef.current = bindGraphRig(useGraphStore, rig)
 
-      const analyser = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
-      rig.outputNode.connect(analyser)
-      analyser.connect(context.destination)
+        const analyser = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
+        rig.outputNode.connect(analyser)
+        analyser.connect(context.destination)
 
-      // Large fftSize: the tuner's autocorrelation needs a wide enough
-      // time-domain window to resolve low frequencies (a 5-string bass's
-      // low B is ~31Hz, needing >1500 samples per cycle at 48kHz).
-      const tunerAnalyser = new AnalyserNode(context, { fftSize: 4096, smoothingTimeConstant: 0 })
-      tunerAnalyserRef.current = tunerAnalyser
+        // Large fftSize: the tuner's autocorrelation needs a wide enough
+        // time-domain window to resolve low frequencies (a 5-string bass's
+        // low B is ~31Hz, needing >1500 samples per cycle at 48kHz).
+        const tunerAnalyser = new AnalyserNode(context, { fftSize: 4096, smoothingTimeConstant: 0 })
+        tunerAnalyserRef.current = tunerAnalyser
 
-      setState({
-        status: 'ready',
-        error: null,
-        rig,
-        context,
-        analyser,
-        tunerAnalyser,
-        micGranted: false,
-      })
+        const noSound = opts?.noSound ?? false
+        setState({
+          status: 'ready',
+          error: null,
+          rig,
+          context,
+          analyser,
+          tunerAnalyser,
+          micGranted: false,
+          noSound,
+        })
 
-      // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
-      void connectMic()
-    } catch (error) {
-      setState({
-        ...IDLE_STATE,
-        status: 'error',
-        error: error instanceof Error ? error.message : String(error),
-      })
-    } finally {
-      startingRef.current = false
-    }
-  }, [state.status, connectMic])
+        if (noSound) {
+          skipNextAutoConnectRef.current = true
+        } else {
+          // Start mic connection — the useEffect on inputDeviceId/inputChannel triggers this.
+          void connectMic()
+        }
+      } catch (error) {
+        const message = describePowerOnError(error)
+        toast.error('Audio engine failed to start', { description: message })
+        setState({
+          ...IDLE_STATE,
+          status: 'error',
+          error: message,
+        })
+      } finally {
+        startingRef.current = false
+      }
+    },
+    [state.status, connectMic],
+  )
 
   const powerOff = useCallback(async () => {
     unbindRef.current?.()
@@ -209,6 +314,22 @@ export function useAudioEngine() {
   }, [state.rig, state.context, state.analyser, state.tunerAnalyser])
 
   return { ...state, powerOn, powerOff }
+}
+
+/**
+ * Engine dispatcher (issue #15 M3): in the desktop shell the audio runs in the
+ * C++ core via window.namStudio, so we return the native engine hook; in the
+ * browser we keep the Web Audio one. Both hooks are called unconditionally
+ * (hook rules); the inactive variant stays 'off' and only the returned one's
+ * powerOn/powerOff ever run. The union is cast to the web shape so App.tsx and
+ * every component consume the same AudioEngineState - NativeGraphRig satisfies
+ * the GraphRigControls/PresetRig surface they actually use.
+ */
+export function useAudioEngine(): AudioEngineState & AudioEngineActions {
+  const web = useWebAudioEngine()
+  const native = useNativeAudioEngine()
+  const [isNative] = useState(() => getNamStudio() !== null)
+  return (isNative ? native : web) as AudioEngineState & AudioEngineActions
 }
 
 /**

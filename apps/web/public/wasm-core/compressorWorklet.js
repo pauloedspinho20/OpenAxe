@@ -6,17 +6,9 @@
  * namStudioEffectBase.js for shared WASM/buffer plumbing.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { COMPRESSOR_PARAMS } from './generatedParams.js'
 
 const COMPRESSOR_KIND = 1
-
-const THRESHOLD_PARAM = 0
-const RATIO_PARAM = 1
-const ATTACK_PARAM = 2
-const RELEASE_PARAM = 3
-const KNEE_PARAM = 4
-const MAKEUP_PARAM = 5
-const CHARACTER_PARAM = 6
-const MIX_PARAM = 7
 
 class CompressorProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -37,14 +29,34 @@ class CompressorProcessor extends NamStudioEffectProcessor {
   }
 
   applyParams(module, block, parameters) {
-    module._nam_studio_set_param(this.graph, block, THRESHOLD_PARAM, parameters.threshold[0])
-    module._nam_studio_set_param(this.graph, block, RATIO_PARAM, parameters.ratio[0])
-    module._nam_studio_set_param(this.graph, block, ATTACK_PARAM, parameters.attack[0])
-    module._nam_studio_set_param(this.graph, block, RELEASE_PARAM, parameters.release[0])
-    module._nam_studio_set_param(this.graph, block, KNEE_PARAM, parameters.knee[0])
-    module._nam_studio_set_param(this.graph, block, MAKEUP_PARAM, parameters.makeup_gain[0])
-    module._nam_studio_set_param(this.graph, block, CHARACTER_PARAM, parameters.character[0])
-    module._nam_studio_set_param(this.graph, block, MIX_PARAM, parameters.mix[0])
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      COMPRESSOR_PARAMS.threshold,
+      parameters.threshold[0],
+    )
+    module._nam_studio_set_param(this.graph, block, COMPRESSOR_PARAMS.ratio, parameters.ratio[0])
+    module._nam_studio_set_param(this.graph, block, COMPRESSOR_PARAMS.attack, parameters.attack[0])
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      COMPRESSOR_PARAMS.release,
+      parameters.release[0],
+    )
+    module._nam_studio_set_param(this.graph, block, COMPRESSOR_PARAMS.knee, parameters.knee[0])
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      COMPRESSOR_PARAMS.makeup_gain,
+      parameters.makeup_gain[0],
+    )
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      COMPRESSOR_PARAMS.character,
+      parameters.character[0],
+    )
+    module._nam_studio_set_param(this.graph, block, COMPRESSOR_PARAMS.mix, parameters.mix[0])
   }
 }
 

@@ -18,7 +18,6 @@ export type EffectKind =
   | 'delay'
   | 'ping-pong-delay'
   | 'reverb'
-  | 'drive'
 
 /**
  * Common interface every pedal/rack effect implements, so EffectsChain can

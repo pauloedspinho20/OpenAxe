@@ -32,46 +32,66 @@ namespace nam_studio {
 namespace dsp {
 namespace {
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DragonflyPlateReverb::ParamInfo kParamInfo[paramCount] = {
-    {"Dry Level", "dry_level", 0.0f, 100.0f, "%"},
-    {"Wet Level", "early_level", 0.0f, 100.0f, "%"},
-    {"Algorithm", "algorithm", 0.0f, 2.0f, ""},
-    {"Width", "width", 50.0f, 150.0f, "%"},
-    {"Predelay", "predelay", 0.0f, 100.0f, "ms"},
-    {"Decay", "decay", 0.1f, 10.0f, "s"},
-    {"Low Cut", "low_cut", 0.0f, 200.0f, "Hz"},
-    {"High Cut", "high_cut", 1000.0f, 16000.0f, "Hz"},
-    {"Dampen", "early_damp", 1000.0f, 16000.0f, "Hz"},
+#include "generated/dragonfly_plate_reverb_params.inc"
 };
 
 }  // namespace
 
+// An electromechanical plate emulation (freeverb3's strev): dense, bright,
+// early-reflection-free decay with several plate models selectable through its
+// `algorithm` param. The lightest of the four.
+//
+// The vendored DSP object is held as an opaque void* and cast at every use:
+// DragonflyReverbDSP has internal linkage (see the anonymous namespace above),
+// so its type cannot appear in the public header. Constructed at 48kHz and
+// re-prepared by Reset(); allocates, like every method here that isn't marked
+// real-time safe below.
 DragonflyPlateReverb::DragonflyPlateReverb() : dsp_(new DragonflyReverbDSP(48000.0)) {}
 
 DragonflyPlateReverb::~DragonflyPlateReverb() { delete static_cast<DragonflyReverbDSP*>(dsp_); }
 
+// Re-prepare for a new sample rate. Dragonfly rebuilds its delay networks
+// here, so this allocates and is not real-time safe.
 void DragonflyPlateReverb::Reset(double sample_rate) {
   static_cast<DragonflyReverbDSP*>(dsp_)->sampleRateChanged(sample_rate);
 }
 
+// Run one stereo block. The const_casts are Dragonfly's signature, not a
+// mutation: run() takes non-const pointers but only reads the input. Real-time
+// safe. Output is the algorithm's own dry/wet blend (its `dry_level` param),
+// which is why the engine leaves reverb mix to the DSP rather than staging it.
 void DragonflyPlateReverb::Process(const float* const* input, float* const* output, int num_frames) {
   static_cast<DragonflyReverbDSP*>(dsp_)->run(const_cast<const float**>(input),
                                                const_cast<float**>(output),
                                                static_cast<uint32_t>(num_frames));
 }
 
+// Flush the tail to silence without re-preparing - used when the graph is
+// rewired underneath the block, so a stale tail can't bleed into a new route.
 void DragonflyPlateReverb::Mute() { static_cast<DragonflyReverbDSP*>(dsp_)->mute(); }
 
+// Param count for this algorithm; each of the four differs, which is why
+// switching algorithms re-reads the whole param surface (see the engine's
+// SetReverbAlgorithm and SetReverbControl).
 int DragonflyPlateReverb::ParamCount() { return static_cast<int>(paramCount); }
 
+// Name/symbol/range/unit for one param index, from the generated table above
+// (which mirrors Dragonfly's own PARAMS metadata).
 const DragonflyPlateReverb::ParamInfo& DragonflyPlateReverb::GetParamInfo(int index) {
   return kParamInfo[index];
 }
 
+// Read one param straight out of the Dragonfly DSP object - unlike the DSPark
+// wrappers, these do expose getters, so no local mirror is needed.
 float DragonflyPlateReverb::GetParam(int index) const {
   return static_cast<DragonflyReverbDSP*>(dsp_)->getParameterValue(static_cast<uint32_t>(index));
 }
 
+// Write one param into the Dragonfly DSP object. Real-time safe: Dragonfly
+// smooths param changes internally rather than rebuilding its networks.
 void DragonflyPlateReverb::SetParam(int index, float value) {
   static_cast<DragonflyReverbDSP*>(dsp_)->setParameterValue(static_cast<uint32_t>(index), value);
 }

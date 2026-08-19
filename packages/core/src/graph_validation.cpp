@@ -62,6 +62,9 @@ ConnectResult CanConnect(const BlockMap& blocks, const std::vector<EdgeRecord>& 
   return {true, std::nullopt};
 }
 
+// Whether an existing edge still flows left to right. Used after a block moves
+// (CanConnect covers the same rule when a cable is first drawn) - the one
+// invariant that keeps the graph acyclic by construction.
 bool IsEdgeOrderValid(const BlockMap& blocks, const EdgeRecord& edge) {
   return ColumnOf(blocks, edge.from.block_id) < ColumnOf(blocks, edge.to.block_id);
 }

@@ -36,54 +36,15 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   PR): `include/nam_studio/engine.h` + `src/engine.cpp` add
   `nam_studio::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
-  4 Dragonfly algorithms for `kReverb`, one of 4 BYOD drive models for
-  `kDrive`, one of the 4 DSPark effects for `kCompressor`/`kEq`/`kNoiseGate`/
-  `kTremolo`, and passthrough for the kinds LSP/BYOD's other circuits/
-  AnalogTapeModel haven't wrapped yet), pre-allocated buffers, and real
-  column-ordered signal routing. `include/nam_studio/api.h` + `src/api.cpp`
-  expose it as a 20-function `extern "C"` surface (int32 ids, not
-  `GraphRig`'s strings — portable across C/WASM/FFI): topology, `reset`/
-  `process`, generic param get/set/info, NAM model management, reverb
-  algorithm choice, and metering.
-- **Diode Clipper** (`include/nam_studio/dsp/diode_clipper.h` +
-  `src/dsp/diode_clipper.cpp`) — a wave digital filter model of a diode pair
-  clamping a first-order RC lowpass (cutoff, drive, diode type [GZ34/1N34/
-  1N4148], diode count), reimplemented from BYOD's `DiodeClipperWDF` using
-  `chowdsp_wdf`'s header-only WDF primitives directly. Not a vendored
-  `#include` of BYOD's own file — see "BYOD" below for why. Mono per
-  channel, run independently per channel like the Dragonfly reverbs. Wired
-  into a new `kDrive` `BlockKind` (`block.h`) - the first effect kind added
-  since #13's original scaffold, since no "drive"/distortion kind existed
-  to plug into. A `DriveModel` enum + `AudioEngine::SetDriveModel` (mirrors
-  `ReverbAlgorithm`/`SetReverbAlgorithm`) is the seam future BYOD drive/fuzz
-  wraps plug into as additional models, without needing another new
-  `BlockKind`. Wired all the way through to the web app (`apps/web/src/
-effects/Drive.ts`, `apps/web/public/wasm-core/driveWorklet.js`) - the
-  app's first distortion/drive effect, no prior implementation replaced.
-- **Tube Screamer, Zen Drive, MXR Distortion+** (`include/nam_studio/dsp/{tube_screamer,zen_drive,mxr_distortion}.h`
-  - matching `src/dsp/*.cpp`) — three more BYOD WDF circuits reimplemented
-    the same way as Diode Clipper (own hand-copied `chowdsp_wdf` circuit, no
-    vendored BYOD source, no parameter smoothing), each individually verified
-    buildable and correct before being added. All three join `DiodeClipper`
-    as additional `DriveModel` enum values (`kTubeScreamer`/`kZenDrive`/
-    `kMxrDistortion`) on the existing `kDrive` `BlockKind` - no new `BlockKind`
-    or ABI shape needed, exactly the seam that enum was built for. Shared
-    helpers (`internal::LogPot`/`InverseLogPot`/`SkewedRange`/`DcBlocker`,
-    the `NonInvertingOpAmpRType` 3-port scattering matrix Tube Screamer and
-    Zen Drive both use) live in `src/dsp/internal/wdf_common.h`, extracted
-    once a second wrapper needed the same audio-taper/DC-blocking math Diode
-    Clipper had already hand-derived. Not yet exported from the WASM build's
-    `EXPORTED_FUNCTIONS` or reachable from the web app's model-selector UI -
-    same "only export what's currently used" deferral `nam_studio_set_drive_model`
-    itself already had with only one model available; still true with four.
-    Two circuit-accurate wrinkles worth knowing if you touch these: Zen Drive
-    and MXR Distortion+ both model a real single-supply op-amp bias network
-    (a `setVoltage(4.5f)` call in their `Prepare`), so a freshly-`Reset`
-    instance has a genuine power-on transient/DC bias in its first samples
-    that decays through `DcBlocker` rather than starting silent - their own
-    tests warm up on silence before measuring steady-state behavior, and
-    check stereo independence by comparing two instances' left-channel output
-    rather than asserting a silent channel stays silent.
+  4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
+  `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
+  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`/`kPingPongDelay`, and passthrough
+  for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
+  buffers, and real column-ordered signal routing.
+  `include/nam_studio/api.h` + `src/api.cpp`
+  expose it as an `extern "C"` surface (int32 ids, not `GraphRig`'s strings —
+  portable across C/WASM/FFI): topology, `reset`/`process`, generic param
+  get/set/info, NAM model management, reverb algorithm choice, and metering.
 - **Compressor, EQ, Noise Gate, Tremolo** (`include/nam_studio/dsp/{compressor,equalizer,noise_gate,tremolo}.h`
   - matching `src/dsp/*.cpp`) — four DSPark processors wrapped behind the same
     thin-class interface as the Dragonfly reverbs, via a generic adapter
@@ -98,6 +59,28 @@ effects/Drive.ts`, `apps/web/public/wasm-core/driveWorklet.js`) - the
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
+- **Convolver** (`include/nam_studio/dsp/convolver.h` + `src/dsp/convolver.cpp`)
+  — cabinet/room impulse-response convolution, the DSP behind a Cab block.
+  Partitioned convolution in the standard two-part form: a direct time-domain FIR
+  for the first 64 taps, then FFT partitions through a frequency-domain delay
+  line (with a small hand-written radix-2 FFT, so no new third-party dependency).
+  That shape is what makes it **zero-latency for any block size** - a purely
+  block-based FFT scheme would either delay the stream or leave a gap in it. A
+  2048-tap cab IR costs roughly 40x less than a direct FIR would.
+- **WAV decoder** (`include/nam_studio/dsp/wav.h` + `src/dsp/wav.cpp`) — decodes
+  a WAV file held in memory (8/16/24/32-bit PCM, 32/64-bit float, any channel
+  count folded to mono, WAVE_FORMAT_EXTENSIBLE, unknown chunks skipped) and
+  resamples with a windowed-sinc kernel. Only a browser gets audio decoding for
+  free, so this is what lets the desktop app and a plugin load an impulse response
+  at all - bytes in, samples out, the same shape as loading a NAM model from JSON.
+  A malformed or compressed file returns nullopt rather than throwing.
+- **Tone stack** (`include/nam_studio/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
+  — the 4-band Bass/Mid/Treble/Presence stack the engine runs after every NAM
+  model (low shelf 100Hz, peaking 1kHz Q0.7, high shelf 5kHz, peaking 8kHz Q0.5,
+  each ±12dB). Frequencies and slopes match the Web Audio `BiquadFilterNode`
+  chain the web app used to own privately, so moving it here didn't change how
+  the web app sounds - and the desktop app, which had no tone controls at all,
+  now matches it. Flat is bit-exact passthrough, so an un-EQ'd amp costs nothing.
 - `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
   placeholder (`nam_studio::core::version()`), unchanged.
 
@@ -108,27 +91,25 @@ port the boundary-value matrix from `graphValidation.test.ts`/
 bundled with the vendored NeuralAmpModelerCore submodule
 (`third_party/nam-core/example_models/lstm.nam`), resets it, processes an
 impulse through it, and asserts every output sample is finite.
+`wav_test` builds WAV files byte by byte in memory to cover each sample format,
+stereo folding, 24-bit sign extension, extensible headers and the malformed cases
+(truncated, compressed, no data chunk), plus the resampler's length and frequency
+behaviour.
+`convolver_test` checks the convolver against brute-force direct convolution for
+every combination of IR length and block size (including block sizes that aren't a
+multiple of the partition), which is the only way to catch the off-by-one errors a
+frequency-domain delay line invites - they sound like a comb filter rather than an
+obvious failure.
+`tone_stack_test` measures the stack's actual frequency response - each band
+boosting and cutting its own region while leaving the others alone, holding at
+96kHz, and staying bit-exact while flat.
 `dragonfly_{hall,room,plate,early_reflections}_reverb_test` each sweep every
 one of that algorithm's parameters to their min/max and process a real
 stereo impulse through it, asserting a genuine non-silent, finite reverb
 tail comes out. `dragonfly_all_algorithms_test` constructs and processes
 audio through all four algorithms in one executable - the actual regression
 test for the symbol-isolation fix described below (linking any two would
-have failed with duplicate symbols before that fix). `diode_clipper_test`
-sweeps every parameter and processes a loud sine through it, asserting the
-output stays finite and its peak is genuinely compressed below the linear
-input level (proof the nonlinearity actually engages, not just that nothing
-crashed) and that channels don't leak into each other. `tube_screamer_test`/
-`zen_drive_test`/`mxr_distortion_test` follow the identical pattern for the
-other three drive models (see the bias-network note above for why the
-latter two warm up on silence and check independence via two-instance
-comparison rather than a literal silent-in/silent-out assertion). `engine_test`
-and `api_realtime_test` each add a `kDrive`/`NAM_STUDIO_BLOCK_DRIVE` case
-doing the same real-nonlinearity check through the engine layer and the
-full `extern "C"` surface respectively (not just the `DiodeClipper` class
-directly), plus confirming `SetDriveModel`/`nam_studio_set_drive_model`
-switches models independently per-block and is a safe no-op on a block of
-the wrong kind. `compressor_test`/`equalizer_test`/`noise_gate_test`/
+have failed with duplicate symbols before that fix). `compressor_test`/`equalizer_test`/`noise_gate_test`/
 `tremolo_test` do the same parameter-sweep + real-audio pattern for the four
 DSPark wrappers (a loud sine comes out measurably compressed/gated/modulated,
 a band boost measurably louder than a cut, silence measurably crushed), and
@@ -138,102 +119,39 @@ surface.
 
 ## Vendored third-party DSP libraries
 
-All added as git submodules under `third_party/`. Two of the five URLs in
-issue #14's original text were wrong/renamed — corrected here after
-verifying each repo directly on GitHub:
+All added as git submodules under `third_party/`, and all wired into the
+build — every one backs a real effect kind:
 
-| Path                | Upstream                                                                                  | License | Wired into the build?                                          |
-| ------------------- | ----------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------- |
-| `nam-core`          | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore)   | MIT     | **Yes** — see `nam_amp.cpp` above                              |
-| `dragonfly-reverb`  | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)     | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above                |
-| `byod`              | [`Chowdhury-DSP/BYOD`](https://github.com/Chowdhury-DSP/BYOD)                             | GPLv3   | **Partially** — `chowdsp_wdf` only (4 drive models), see below |
-| `dspark`            | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                       | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above    |
-| `analog-tape-model` | [`jatinchowdhury18/AnalogTapeModel`](https://github.com/jatinchowdhury18/AnalogTapeModel) | GPLv3   | No                                                             |
-| `lsp-plugins`       | [`lsp-plugins/lsp-plugins`](https://github.com/lsp-plugins/lsp-plugins)                   | LGPLv3  | No                                                             |
+| Path               | Upstream                                                                                | License | Wired into the build?                                       |
+| ------------------ | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------- |
+| `nam-core`         | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                           |
+| `dragonfly-reverb` | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)   | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above             |
+| `dspark`           | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above |
 
-Three of these libraries additionally vendor their own nested submodules —
+Two of these libraries additionally vendor their own nested submodules —
 after cloning this repo, run:
 
 ```bash
 git submodule update --init --recursive -- packages/core/third_party/nam-core
 git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
-git -C packages/core/third_party/byod submodule update --init --depth 1 -- modules/chowdsp_wdf
 ```
 
 `nam-core`'s nested submodules are Eigen (`gitlab.com/libeigen/eigen`) and
 `AudioDSPTools`. `dragonfly-reverb`'s is `dpf` (DISTRHO Plugin Framework) —
 only two of its header-only utilities are actually used
 (`DistrhoPlugin.hpp` for a couple of macros, `extra/ScopedDenormalDisable.hpp`),
-never its actual plugin runtime. `byod`'s own repo is checked out directly
-(not itself a submodule init gap), but **all 10 of BYOD's own nested
-submodules start uninitialized** — only `chowdsp_wdf` (a standalone,
-header-only WDF circuit-modeling library, no JUCE/RTNeural dependency of
-its own) is actually needed, for the reason below. `math_approx` (another
-of BYOD's nested submodules) is not used: `chowdsp_wdf` has its own
-built-in Wright-Omega approximation, which `diode_clipper.cpp` uses
-instead of pulling in a second one for no accuracy gain.
+never its actual plugin runtime.
 
-**BYOD itself can't be compiled directly, at all — not even its simplest
-file.** Every one of its 249 DSP processor source files gets a global
-`pch.h` force-included by BYOD's own CMake
-(`target_precompile_headers(BYOD PRIVATE pch.h)`), and that header
-unconditionally pulls in JUCE, RTNeural, and Eigen — there's no
-`#ifdef`-guarded path around it, even for a processor as simple as the
-diode clipper. `diode_clipper.cpp` is therefore a hand-written
-reimplementation of BYOD's `DiodeClipperWDF`
-(`src/processors/drive/diode_circuits/DiodeClipperWDF.h`), built directly
-on `chowdsp_wdf`'s dependency-free WDF primitives (`ResistorT`,
-`CapacitorT`, `WDFParallelT`, `DiodePairT` — all header-only, no JUCE) —
-the same pattern this file's own "Non-goals" section already anticipated
-for AnalogTapeModel turning out messier than it looked (see below), which
-turned out to apply here too, just for a different reason (a force-included
-PCH rather than one runtime-switch branch). One simplification versus the
-original: BYOD's parameter smoothing (`SmoothedValue`) is JUCE-only and
-dropped rather than reimplemented — every other DSP wrapper in this
-codebase (NamAmp, the Dragonfly reverbs) also applies parameter changes
-immediately with no internal ramping, so adding it back just for this one
-class would be inconsistent with the rest of the library, not a missing
-feature.
-
-The remaining two libraries (`analog-tape-model`, `lsp-plugins`) are
-registered but not initialized/built — no `third_party/CMakeLists.txt`
-exists yet for either.
-
-**`lsp-plugins/lsp-plugins` (vendored here) is the wrong repo to wrap
-against — investigated, not yet fixed.** Since its 1.2.0 release the
-`lsp-plugins/lsp-plugins` repo was decomposed into separate subprojects;
-what's checked out at `third_party/lsp-plugins` is now just an empty
-orchestration shell with no DSP source in it (`src/` contains only a
-`Makefile`). The actual `Compressor`/`Equalizer`/`Gate` classes live in a
-separate repo, [`lsp-plugins/lsp-dsp-units`](https://github.com/lsp-plugins/lsp-dsp-units)
-(LGPLv3, clean `include/`+`src/main/` split, no JUCE), which itself depends
-on `lsp-common-lib` and `lsp-dsp-lib`. The latter is a genuine
-multi-architecture SIMD dispatch library (separate `x86`/`arm`/`aarch64`/
-`generic` source trees, functions bound as runtime function pointers via
-an explicit, idempotent `lsp::dsp::init()` call) that very likely needs
-different compiler flags per source file — reverse-engineering that from
-its own Makefile is real, open-ended work, not a quick fix like Dragonfly's
-three build wrinkles were. Whoever picks up LSP Suite next should swap the
-vendored submodule for `lsp-dsp-units` (+ its two dependencies) rather than
-trying to use what's currently checked out.
-
-**AnalogTapeModel was scouted more deeply and turned out messier than the
-original pass suggested — investigated, not fixed.** Its top-level
-`HysteresisProcessor` is deeply JUCE-bound, but the inner
-`HysteresisProcessing` class is much closer to standalone — except its
-`process()` picks a solver via a **runtime `switch`, not `if constexpr`**,
-so the `STN` branch is compiled into every instantiation regardless of
-which solver actually gets called. That branch alone pulls in RTNeural (a
-full neural-net template library), `nlohmann::json`, and JUCE's
-`BinaryData`/`String`/`MemoryInputStream` to load 231 pretrained model
-files — none of which can be avoided just by never selecting `STN` at
-runtime, since the compiler still needs it all resolved to build at all.
-Getting a clean build means either patching the vendored header (`switch`
-→ `if constexpr`, so only the self-contained RK2/RK4/NR4/NR8 solvers ever
-get compiled) or vendoring RTNeural + `chowdsp_utils`/`xsimd` just to
-satisfy a code path this project likely never calls. Whoever picks this up
-next should budget for that decision, not treat it as a quick wrap like
-Dragonfly's or the Diode Clipper's own turned out to be.
+`signalsmith-dsp`, `analog-tape-model`, and `lsp-plugins` were vendored
+early on for effect kinds that were never built (tape delay character,
+LSP-backed compression/EQ) and removed once it was clear nothing depended
+on them — `analog-tape-model` in particular was investigated in depth
+(a JUCE-bound `HysteresisProcessor`, plus a `switch`-not-`if constexpr`
+solver branch that unconditionally pulled in RTNeural) and never got past
+that scoping stage. If tape modeling or LSP-backed effects come back as a
+real feature, re-vendor from scratch rather than reviving these — `LSP
+Suite`'s upstream in particular had already been the wrong repo (post-1.2.0
+decomposition moved the actual DSP classes to `lsp-plugins/lsp-dsp-units`).
 
 **RTNeural was evaluated and deliberately dropped, not vendored.** It's a
 generic neural-inference engine (no built-in amp/pedal-specific behavior at
@@ -245,36 +163,18 @@ nonlinear audio device), reusing the same `NamAmp` wrapper and graph engine
 already built here rather than adding a second, narrower inference engine
 alongside it.
 
-This also means the remaining libraries' effect wrapping doesn't depend on
-RTNeural, despite two of them referencing it as their own nested submodule:
-BYOD (`modules/RTNeural`) and AnalogTapeModel (`Plugin/modules/RTNeural`)
-both pull it in for a few of their neural/Centaur-style optional modules,
-but the bulk of both libraries' effects (diode clippers, tube/transistor
-stages, tape hysteresis and wow/flutter) are pure DSP with no neural
-component. Wrapping those means extracting the specific DSP processor
-class(es) for the chosen effect directly — the same pattern already used
-for NAMCore and Dragonfly Reverb (glob just the DSP sources, skip the
-plugin/tool/test scaffolding) — which naturally avoids RTNeural, JUCE, and
-each library's other plugin-framework dependencies entirely. LSP Suite (no
-git submodules at all) doesn't raise this concern in the first place.
-
 ## Non-goals (not yet — tracked for follow-up work)
 
-- DSP wrappers for the rest of AnalogTapeModel (tape delay), BYOD (BYOD has
-  39+ other effects beyond the 4 drive models wrapped so far — modulation/
-  fuzz/EQ, e.g. Big Muff, still a candidate for follow-up), and all of LSP
-  Suite (compression/EQ). Their block kinds pass audio through unchanged in
-  `AudioEngine` until they're wrapped.
 - Preset/JSON (de)serialization.
 - Full lock-free concurrency: `Process()` itself is allocation-free and its
   params are lock-free atomics, but topology mutation
   (add/remove/connect/disconnect) and NAM model loading are not claimed safe
   to call concurrently with `Process()` — no real host drives this from an
   audio thread yet (native tests + two browser AudioWorklets, see below).
-- WASM/browser UI wiring beyond Reverb/Drive — NAM model loading, metering,
-  and reverb algorithm switching aren't wired into the web app yet
-  (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`/`driveWorklet.js`,
-  built on the shared `namStudioEffectBase.js`, only call
+- WASM/browser UI wiring beyond Reverb — NAM model loading, metering, and
+  reverb algorithm switching aren't wired into the web app yet
+  (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`, built on the
+  shared `namStudioEffectBase.js`, only calls
   `create`/`add_block`/`connect`/`reset`/`process`/`set_param`).
 - iOS/Android: still unverified, those toolchains aren't installed in this
   environment.
@@ -282,12 +182,10 @@ git submodules at all) doesn't raise this concern in the first place.
 ## Build verification status
 
 **Native (macOS, this environment): verified, not just authored.** CMake
-4.4.2 configures, builds, and runs the full CTest suite (15/15 passing,
-including the real NAM model load-and-process test, all four Dragonfly
-Reverb algorithms' real impulse-response tests, the combined-binary
-symbol-isolation regression test, and all four drive models' (Diode
-Clipper, Tube Screamer, Zen Drive, MXR Distortion+) real nonlinear-clipping
-tests) against Debug builds:
+4.4.2 configures, builds, and runs the full CTest suite, including the real
+NAM model load-and-process test, all four Dragonfly Reverb algorithms' real
+impulse-response tests, and the combined-binary symbol-isolation regression
+test, against Debug builds:
 
 ```bash
 cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug

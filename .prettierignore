@@ -2,3 +2,17 @@ dist
 node_modules
 coverage
 pnpm-lock.yaml
+# Playwright run artifacts (gitignored, but prettier only reads this file, so a
+# local `pnpm test:e2e` would otherwise break `pnpm format:check` afterwards).
+test-results
+playwright-report
+blob-report
+# CMake/CPack build trees (gitignored, same reason as above).
+packages/core/build
+apps/desktop/build
+apps/desktop/_CPack_Packages
+# Emscripten's own generated glue code (scripts/build-core-wasm.sh) - never
+# hand-edited and not run through prettier when regenerated, unlike the other
+# checked-in files under wasm-core/ (hand-written worklets, our own codegen's
+# generatedParams.js, which is formatted through prettier's own API already).
+apps/web/public/wasm-core/nam_studio_core.js

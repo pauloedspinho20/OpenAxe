@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { EngineStatus } from '../../../hooks/useAudioEngine'
-import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../state/ioStore'
+import {
+  getDuplexDevices,
+  useIOStore,
+  type InputChannelMode,
+  type LatencyHint,
+} from '../../../state/ioStore'
+import { getNamStudio } from '../../../native/namStudio'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Auth } from '../../../tone3000/authStore'
 import {
@@ -65,6 +71,12 @@ export function SettingsDialog({
   onPowerOn,
 }: SettingsDialogProps) {
   const io = useIOStore()
+  const isNative = getNamStudio() !== null
+  const duplexDevices = getDuplexDevices(io)
+  const selectNativeDevice = (id: string) => {
+    io.setInputDevice(id)
+    io.setOutputDevice(id)
+  }
   const namQuality = useSettingsStore((s) => s.namQuality)
   const setNamQuality = useSettingsStore((s) => s.setNamQuality)
   const auth = useTone3000Auth()
@@ -188,59 +200,23 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="Settings" width="min(520px, 90vw)">
-      {/* Audio input */}
-      <section className={styles.section}>
-        <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
-        <div className={styles.row}>
-          <label className={styles.field}>
-            <span className="label">Device</span>
-            <select
-              className={styles.select}
-              value={io.inputDeviceId}
-              onChange={(e) => io.setInputDevice(e.target.value)}
-              aria-label="Input device"
-            >
-              <option value="">Default input</option>
-              {io.inputDevices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.field}>
-            <span className="label">Channel</span>
-            <select
-              className={styles.select}
-              value={io.inputChannel}
-              onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
-              aria-label="Input channel"
-            >
-              <option value="l">Ch 1</option>
-              <option value="r">Ch 2</option>
-              <option value="stereo">Stereo</option>
-              <option value="sum">Ch 1+2</option>
-            </select>
-          </label>
-        </div>
-        {io.micError && <p className={styles.errorText}>{io.micError}</p>}
-      </section>
-
-      {/* Audio output */}
-      <section className={styles.section}>
-        <span className={`label ${styles.sectionLabel}`}>Audio Output</span>
-        {outputSelectionSupported ? (
+      {isNative ? (
+        /* Native: input and output must be the same physical device - RtAudio
+         * rejects a mismatched pair (issue #53's built-in-mic-plus-speakers
+         * feedback loop fix), so one selector drives both. */
+        <section className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>Audio Device</span>
           <div className={styles.row}>
             <label className={styles.field}>
               <span className="label">Device</span>
               <select
                 className={styles.select}
-                value={io.outputDeviceId}
-                onChange={(e) => io.setOutputDevice(e.target.value)}
-                aria-label="Output device"
+                value={io.inputDeviceId}
+                onChange={(e) => selectNativeDevice(e.target.value)}
+                aria-label="Audio device"
               >
-                <option value="">Default output</option>
-                {io.outputDevices.map((d) => (
+                <option value="">Default device</option>
+                {duplexDevices.map((d) => (
                   <option key={d.deviceId} value={d.deviceId}>
                     {d.label}
                   </option>
@@ -248,12 +224,83 @@ export function SettingsDialog({
               </select>
             </label>
           </div>
-        ) : (
-          <p className={styles.sectionHint}>
-            Output device selection isn't supported in this browser.
-          </p>
-        )}
-      </section>
+          {duplexDevices.length === 0 && (
+            <p className={styles.sectionHint}>
+              No audio interface found - plug one in to power on with sound.
+            </p>
+          )}
+          {io.micError && <p className={styles.errorText}>{io.micError}</p>}
+        </section>
+      ) : (
+        <>
+          {/* Audio input */}
+          <section className={styles.section}>
+            <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
+            <div className={styles.row}>
+              <label className={styles.field}>
+                <span className="label">Device</span>
+                <select
+                  className={styles.select}
+                  value={io.inputDeviceId}
+                  onChange={(e) => io.setInputDevice(e.target.value)}
+                  aria-label="Input device"
+                >
+                  <option value="">Default input</option>
+                  {io.inputDevices.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.field}>
+                <span className="label">Channel</span>
+                <select
+                  className={styles.select}
+                  value={io.inputChannel}
+                  onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
+                  aria-label="Input channel"
+                >
+                  <option value="l">Ch 1</option>
+                  <option value="r">Ch 2</option>
+                  <option value="stereo">Stereo</option>
+                  <option value="sum">Ch 1+2</option>
+                </select>
+              </label>
+            </div>
+            {io.micError && <p className={styles.errorText}>{io.micError}</p>}
+          </section>
+
+          {/* Audio output */}
+          <section className={styles.section}>
+            <span className={`label ${styles.sectionLabel}`}>Audio Output</span>
+            {outputSelectionSupported ? (
+              <div className={styles.row}>
+                <label className={styles.field}>
+                  <span className="label">Device</span>
+                  <select
+                    className={styles.select}
+                    value={io.outputDeviceId}
+                    onChange={(e) => io.setOutputDevice(e.target.value)}
+                    aria-label="Output device"
+                  >
+                    <option value="">Default output</option>
+                    {io.outputDevices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <p className={styles.sectionHint}>
+                Output device selection isn't supported in this browser.
+              </p>
+            )}
+          </section>
+        </>
+      )}
 
       {/* Buffer size / latency */}
       <section className={styles.section}>

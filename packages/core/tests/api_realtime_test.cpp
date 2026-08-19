@@ -1,11 +1,9 @@
 // Real end-to-end test of the extern "C" real-time ABI (issue #14): builds
 // an IN -> Amp -> Reverb -> OUT rig, loads an actual .nam model bundled with
-// the NeuralAmpModelerCore submodule, and processes real audio through it -
-// plus a separate IN -> Drive -> OUT rig proving the newer NAM_STUDIO_BLOCK_
-// DRIVE kind (backed by Diode Clipper) actually clips real audio through
-// the full extern "C" surface, not just the C++ class directly (see
-// diode_clipper_test.cpp) or the engine layer (see engine_test.cpp). Only
-// built if NAM_STUDIO_HAS_NAM_CORE && NAM_STUDIO_HAS_DRAGONFLY (see
+// the NeuralAmpModelerCore submodule, and processes real audio through it,
+// through the full extern "C" surface, not just the C++ class directly or
+// the engine layer (see engine_test.cpp). Only built if
+// NAM_STUDIO_HAS_NAM_CORE && NAM_STUDIO_HAS_DRAGONFLY (see
 // tests/CMakeLists.txt) - same WHOLE_ARCHIVE link requirement as
 // nam_amp_test (NAMCore's architecture parsers self-register via static
 // initializers with no other symbol referenced, so a plain static-archive
@@ -14,6 +12,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -70,7 +70,10 @@ void TestUnwrappedKindPassesAudioThrough() {
   NamStudioGraph* graph = nam_studio_graph_create();
 
   const int32_t cab = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_CAB, 0, 0);
-  NAM_EXPECT(nam_studio_block_param_count(graph, cab) == 0);  // no wrapped DSP behind Cab
+  // One param (the IR wet/dry blend); with no IR loaded the block still passes
+  // audio straight through, which is what the rest of this test checks.
+  NAM_EXPECT(nam_studio_block_param_count(graph, cab) == 1);
+  NAM_EXPECT(nam_studio_block_ir_length(graph, cab) == 0);
   NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, cab, 0) >= 0);
   NAM_EXPECT(nam_studio_connect(graph, cab, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
   nam_studio_reset(graph, kSampleRate, kBlockSize);
@@ -169,55 +172,146 @@ void TestReverbAlgorithmSwitchOnlyAffectsThatBlock() {
   nam_studio_graph_destroy(graph);
 }
 
-void TestEndToEndDriveRig() {
+// The JSON load path and the model-info accessors, over the ABI a browser and a
+// plugin actually call (the web app has no filesystem to hand a path to).
+void TestLoadModelJsonAndModelInfoOverAbi() {
   NamStudioGraph* graph = nam_studio_graph_create();
+  const int32_t amp = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_AMP, 0, 0);
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, amp, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, amp, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  nam_studio_reset(graph, 48000.0, 512);
 
-  const int32_t drive = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DRIVE, 0, 0);
-  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, drive, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(graph, drive, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
-  nam_studio_reset(graph, kSampleRate, kBlockSize);
-  nam_studio_set_param(graph, drive, 1 /* drive */, 1.0f);  // max drive
+  // No model yet: model info reports nothing rather than stale values.
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr) == 0);
 
-  std::vector<float> input(kBlockSize);
-  for (int32_t i = 0; i < kBlockSize; ++i) {
-    input[static_cast<size_t>(i)] =
-        5.0f * std::sin(static_cast<float>(i) / static_cast<float>(kSampleRate) * 200.0f * 6.283185307179586f);
-  }
-  std::vector<float> output(kBlockSize, 0.0f);
-  const float* in_ptrs[1] = {input.data()};
-  float* out_ptrs[1] = {output.data()};
-  nam_studio_process(graph, in_ptrs, 1, out_ptrs, 1, kBlockSize);
+  std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/lstm.nam", std::ios::binary);
+  NAM_EXPECT(ifs.good());
+  const std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 
-  bool all_finite = true;
-  float max_abs_out = 0.0f;
-  for (float sample : output) {
-    if (!std::isfinite(sample)) all_finite = false;
-    max_abs_out = std::max(max_abs_out, std::fabs(sample));
-  }
-  NAM_EXPECT(all_finite);
-  NAM_EXPECT(max_abs_out > 0.0f);
-  NAM_EXPECT(max_abs_out < 5.0f);  // the nonlinearity actually engages, not a straight passthrough
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, json.c_str()) == NAM_STUDIO_LOAD_OK);
+  NAM_EXPECT(nam_studio_block_has_model(graph, amp) == 1);
+
+  double sample_rate = 0.0;
+  int32_t has_loudness = -1;
+  int32_t is_slimmable = -1;
+  int32_t breakpoints = -1;
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, &sample_rate, &has_loudness, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, &is_slimmable,
+                                         &breakpoints) == 1);
+  NAM_EXPECT(sample_rate > 0.0);
+  NAM_EXPECT(has_loudness == 0 || has_loudness == 1);
+  NAM_EXPECT(is_slimmable == 0);       // lstm.nam is not a slimmable capture
+  NAM_EXPECT(breakpoints == 0);
+
+  // And it actually produces audio through the graph.
+  std::vector<float> in_l(64, 0.0f), in_r(64, 0.0f), out_l(64, 0.0f), out_r(64, 0.0f);
+  in_l[0] = in_r[0] = 0.5f;
+  const float* in_ptrs[2] = {in_l.data(), in_r.data()};
+  float* out_ptrs[2] = {out_l.data(), out_r.data()};
+  nam_studio_process(graph, in_ptrs, 2, out_ptrs, 2, 64);
+  bool finite = true;
+  for (float sample : out_l) finite = finite && std::isfinite(sample);
+  NAM_EXPECT(finite);
+
+  // Bad JSON is a format error, not a crash, and leaves the previous model be.
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, "{}") == NAM_STUDIO_LOAD_INVALID_FORMAT);
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, nullptr) == NAM_STUDIO_LOAD_INVALID_FORMAT);
+  NAM_EXPECT(nam_studio_block_has_model(graph, amp) == 1);
+
+  nam_studio_unload_nam_model(graph, amp);
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr) == 0);
+  nam_studio_graph_destroy(graph);
+}
+
+// A slimmable capture's breakpoints come back through the two-call accessor.
+void TestSlimBreakpointsOverAbi() {
+  NamStudioGraph* graph = nam_studio_graph_create();
+  const int32_t amp = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_AMP, 0, 0);
+  nam_studio_reset(graph, 48000.0, 512);
+
+  std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/slimmable_wavenet.nam",
+                    std::ios::binary);
+  NAM_EXPECT(ifs.good());
+  const std::string json((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, amp, json.c_str()) == NAM_STUDIO_LOAD_OK);
+
+  int32_t is_slimmable = 0;
+  int32_t count = 0;
+  NAM_EXPECT(nam_studio_block_model_info(graph, amp, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, &is_slimmable, &count) == 1);
+  NAM_EXPECT(is_slimmable == 1);
+  NAM_EXPECT(count > 0);
+
+  std::vector<double> values(static_cast<size_t>(count), 0.0);
+  NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, amp, values.data(), count) == count);
+  for (double v : values) NAM_EXPECT(v > 0.0);
+
+  // A smaller buffer is truncated, not overrun.
+  NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, amp, values.data(), 1) == 1);
+  // The amp param surface is fixed at 7 (two calibration values, slim size, and
+  // the four tone-stack bands) whether or not the capture is slimmable -
+  // "is this slimmable?" is model metadata, not a param-count change.
+  NAM_EXPECT(nam_studio_block_param_count(graph, amp) == 7);
 
   nam_studio_graph_destroy(graph);
 }
 
-void TestDriveModelSwitchOnlyAffectsThatBlock() {
+// Cab IR convolution over the ABI: the feature that existed only as a Web Audio
+// ConvolverNode in the web app, so desktop cab blocks passed audio through.
+void TestCabIrConvolutionOverAbi() {
   NamStudioGraph* graph = nam_studio_graph_create();
+  const int32_t cab = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_CAB, 0, 0);
+  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, cab, 0) >= 0);
+  NAM_EXPECT(nam_studio_connect(graph, cab, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  nam_studio_reset(graph, 48000.0, 128);
 
-  const int32_t drive_a = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DRIVE, 0, 0);
-  const int32_t drive_b = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DRIVE, 1, 0);
-  const int32_t diode_clipper_param_count = nam_studio_block_param_count(graph, drive_a);
-  NAM_EXPECT(diode_clipper_param_count == nam_studio_block_param_count(graph, drive_b));
+  // A two-tap IR: unity plus a half-strength echo 64 samples later. Easy to read
+  // in the output, and it spans a partition boundary.
+  std::vector<float> ir(65, 0.0f);
+  ir[0] = 1.0f;
+  ir[64] = 0.5f;
+  nam_studio_load_ir(graph, cab, ir.data(), static_cast<int32_t>(ir.size()));
+  NAM_EXPECT(nam_studio_block_ir_length(graph, cab) == 65);
 
-  nam_studio_set_drive_model(graph, drive_a, NAM_STUDIO_DRIVE_TUBE_SCREAMER);
-  NAM_EXPECT(nam_studio_block_param_count(graph, drive_a) != diode_clipper_param_count);
-  NAM_EXPECT(nam_studio_block_param_count(graph, drive_b) == diode_clipper_param_count);  // untouched
+  const auto render = [&](float first_sample) {
+    std::vector<float> in_l(128, 0.0f), in_r(128, 0.0f), out_l(128, 0.0f), out_r(128, 0.0f);
+    in_l[0] = in_r[0] = first_sample;
+    const float* in_ptrs[2] = {in_l.data(), in_r.data()};
+    float* out_ptrs[2] = {out_l.data(), out_r.data()};
+    nam_studio_process(graph, in_ptrs, 2, out_ptrs, 2, 128);
+    return out_l;
+  };
 
-  nam_studio_set_drive_model(graph, drive_b, NAM_STUDIO_DRIVE_ZEN_DRIVE);
-  NAM_EXPECT(nam_studio_block_param_count(graph, drive_b) != diode_clipper_param_count);
+  const auto wet = render(1.0f);
+  NAM_EXPECT(std::fabs(wet[0] - 1.0f) < 1e-4f);    // dry tap, no latency
+  NAM_EXPECT(std::fabs(wet[64] - 0.5f) < 1e-4f);   // the echo, on time
+  NAM_EXPECT(std::fabs(wet[32]) < 1e-4f);          // nothing in between
 
-  nam_studio_set_drive_model(graph, drive_a, NAM_STUDIO_DRIVE_MXR_DISTORTION);
-  NAM_EXPECT(nam_studio_block_param_count(graph, drive_a) != diode_clipper_param_count);
+  // Mix at 0 is fully dry: the impulse survives, the echo doesn't.
+  nam_studio_set_param(graph, cab, 0, 0.0f);
+  const auto dry = render(1.0f);
+  NAM_EXPECT(std::fabs(dry[0] - 1.0f) < 1e-4f);
+  NAM_EXPECT(std::fabs(dry[64]) < 1e-4f);
+
+  // Half wet halves the echo.
+  nam_studio_set_param(graph, cab, 0, 0.5f);
+  const auto half = render(1.0f);
+  NAM_EXPECT(std::fabs(half[64] - 0.25f) < 1e-4f);
+
+  // Unloading returns the block to passthrough.
+  nam_studio_unload_ir(graph, cab);
+  NAM_EXPECT(nam_studio_block_ir_length(graph, cab) == 0);
+  nam_studio_set_param(graph, cab, 0, 1.0f);
+  const auto cleared = render(0.25f);
+  NAM_EXPECT(std::fabs(cleared[0] - 0.25f) < 1e-4f);
+  NAM_EXPECT(std::fabs(cleared[64]) < 1e-4f);
+
+  // Loading an IR onto a non-cab block is a no-op, not a crash.
+  const int32_t delay = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DELAY, 1, 0);
+  nam_studio_load_ir(graph, delay, ir.data(), static_cast<int32_t>(ir.size()));
+  NAM_EXPECT(nam_studio_block_ir_length(graph, delay) == 0);
 
   nam_studio_graph_destroy(graph);
 }
@@ -232,6 +326,13 @@ void TestUnknownBlockCallsAreSafeNoOps() {
   NAM_EXPECT(nam_studio_block_has_model(graph, 999) == 0);
   NAM_EXPECT(nam_studio_load_nam_model(graph, 999, "/does/not/matter.nam") ==
              NAM_STUDIO_LOAD_FILE_NOT_FOUND);
+  NAM_EXPECT(nam_studio_load_nam_model_json(graph, 999, "{}") == NAM_STUDIO_LOAD_FILE_NOT_FOUND);
+  NAM_EXPECT(nam_studio_block_model_info(graph, 999, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr) == 0);
+  NAM_EXPECT(nam_studio_block_model_slim_breakpoints(graph, 999, nullptr, 0) == 0);
+  nam_studio_load_ir(graph, 999, nullptr, 0);  // must not crash
+  nam_studio_unload_ir(graph, 999);
+  NAM_EXPECT(nam_studio_block_ir_length(graph, 999) == 0);
   nam_studio_remove_block(graph, 999);       // must not crash
   nam_studio_disconnect(graph, 999);         // must not crash
 
@@ -244,9 +345,10 @@ int main() {
   TestEndToEndAmpAndReverbRig();
   TestUnwrappedKindPassesAudioThrough();
   TestReverbAlgorithmSwitchOnlyAffectsThatBlock();
-  TestEndToEndDriveRig();
-  TestDriveModelSwitchOnlyAffectsThatBlock();
   TestEndToEndDsparkRig();
+  TestLoadModelJsonAndModelInfoOverAbi();
+  TestSlimBreakpointsOverAbi();
+  TestCabIrConvolutionOverAbi();
   TestUnknownBlockCallsAreSafeNoOps();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;

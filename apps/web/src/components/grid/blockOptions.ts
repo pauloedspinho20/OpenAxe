@@ -141,13 +141,6 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Dragonfly Reverb',
     vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
   },
-  {
-    kind: 'drive',
-    label: 'Drive',
-    group: 'Effects',
-    vendor: 'BYOD',
-    vendorUrl: 'https://github.com/Chowdhury-DSP/BYOD',
-  },
 ]
 
 export const BLOCK_KIND_LABELS: Record<BlockKind, string> = Object.fromEntries(

@@ -53,7 +53,6 @@ const plain = (value: number) => value.toFixed(2)
 const msRaw = (value: number) => `${Math.round(value)}ms`
 const percentRaw = (value: number) => `${Math.round(value)}%`
 const hzPrecise = (value: number) => `${value.toFixed(1)}Hz`
-const factor = (value: number) => `${value.toFixed(1)}x`
 
 function eqBand(index: number, freqRange: [number, number], freqDefault: number): KnobField[] {
   const group = `Band ${index + 1}`
@@ -100,8 +99,8 @@ function eqBand(index: number, freqRange: [number, number], freqDefault: number)
  * mirror each effect class's own constructor/setter defaults. Fields only
  * expose each effect's real DSP parameters - the app's shared dry/wet Mix
  * and output Level are deliberately not here (see Effect.ts); effects that
- * ship a native dry/wet or output control (Compressor's Mix, Reverb's Dry,
- * Drive's Output Level) declare that original param in its own place below.
+ * ship a native dry/wet or output control (Compressor's Mix, Reverb's Dry)
+ * declare that original param in its own place below.
  */
 export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   'noise-gate': [
@@ -421,7 +420,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   // saturation), Tape (Analog + wow/flutter pitch modulation).
   delay: [
     {
-      key: 'delayModel',
+      key: 'model',
       label: 'Model',
       control: 'select',
       options: [
@@ -463,7 +462,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: hz,
     },
     {
-      key: 'wowDepth',
+      key: 'wow_depth',
       label: 'Wow Depth',
       control: 'knob',
       min: 0,
@@ -471,10 +470,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 1.5,
       formatValue: msRaw,
-      visible: (v) => v.delayModel === 'tape',
+      visible: (v) => v.model === 'tape',
     },
     {
-      key: 'wowRate',
+      key: 'wow_rate',
       label: 'Wow Rate',
       control: 'knob',
       min: 0.1,
@@ -482,7 +481,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.05,
       defaultValue: 0.5,
       formatValue: hz,
-      visible: (v) => v.delayModel === 'tape',
+      visible: (v) => v.model === 'tape',
     },
   ],
   'ping-pong-delay': [
@@ -623,116 +622,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percentRaw,
     },
   ],
-  // Four BYOD wave-digital-filter circuit models (packages/core):
-  // Diode Clipper, Tube Screamer, Zen Drive, MXR Distortion+. The
-  // driveModel select field chooses which model is active — only that
-  // model's params affect the sound (the C++ worklet ignores
-  // out-of-range indices). Per-field `visible` predicates filter knobs
-  // to only the current model's controls.
-  drive: [
-    {
-      key: 'driveModel',
-      label: 'Model',
-      control: 'select',
-      options: [
-        { value: 'diode-clipper', label: 'Diode Clipper' },
-        { value: 'tube-screamer', label: 'Tube Screamer' },
-        { value: 'zen-drive', label: 'Zen Drive' },
-        { value: 'mxr-distortion', label: 'MXR Distortion+' },
-      ],
-      defaultValue: 'diode-clipper',
-      primary: true,
-    },
-    {
-      key: 'cutoff',
-      label: 'Cutoff',
-      control: 'knob',
-      min: 200,
-      max: 20000,
-      step: 10,
-      defaultValue: 5000,
-      formatValue: hz,
-      visible: (v) => v.driveModel === 'diode-clipper',
-    },
-    {
-      key: 'drive',
-      label: 'Drive',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-      visible: (v) => v.driveModel === 'diode-clipper',
-    },
-    {
-      key: 'gain',
-      label: 'Gain',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-      visible: (v) => v.driveModel === 'tube-screamer' || v.driveModel === 'zen-drive',
-    },
-    {
-      key: 'diodeType',
-      label: 'Diode',
-      control: 'select',
-      options: [
-        { value: 'GZ34', label: 'GZ34' },
-        { value: '1N34', label: '1N34' },
-        { value: '1N4148', label: '1N4148' },
-      ],
-      defaultValue: 'GZ34',
-      visible: (v) => v.driveModel === 'diode-clipper' || v.driveModel === 'tube-screamer',
-    },
-    {
-      key: 'numDiodes',
-      label: 'Diode Count',
-      control: 'knob',
-      min: 0.3,
-      max: 3,
-      step: 0.1,
-      defaultValue: 1,
-      formatValue: factor,
-      visible: (v) => v.driveModel === 'diode-clipper' || v.driveModel === 'tube-screamer',
-    },
-    {
-      key: 'voice',
-      label: 'Voice',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-      visible: (v) => v.driveModel === 'zen-drive',
-    },
-    {
-      key: 'dist',
-      label: 'Distortion',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-      visible: (v) => v.driveModel === 'mxr-distortion',
-    },
-    {
-      key: 'outputLevel',
-      label: 'Output Level',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-      visible: (v) => v.driveModel === 'mxr-distortion',
-    },
-  ],
 }
 
 /** Bass/Mid/Treble/Presence tone stack, ±12dB - shared by every NAM model block kind (see AmpBlock). */
@@ -786,7 +675,7 @@ const AMP_TONE_STACK: KnobField[] = [
 /** Pre/post trims - shared by every NAM model block kind and Cab (see AmpBlock/CabBlock's own input/output gain stages). */
 const IN_OUT_LEVEL_FIELDS: KnobField[] = [
   {
-    key: 'inputLevel',
+    key: 'input_level',
     label: 'Input',
     control: 'knob',
     min: 0,
@@ -797,7 +686,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     group: 'I/O',
   },
   {
-    key: 'outputLevel',
+    key: 'output_level',
     label: 'Output',
     control: 'knob',
     min: 0,

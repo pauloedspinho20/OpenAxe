@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -18,18 +19,16 @@
 // one, adding a live DSP object per block, pre-allocated per-block buffers,
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
-// Five DSP families are wrapped anywhere in this codebase yet: NamAmp
+// Four DSP families are wrapped anywhere in this codebase yet: NamAmp
 // (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
 // algorithms (all back the single kReverb kind - algorithm choice is a
-// per-block setting this layer owns, see SetReverbAlgorithm), the BYOD
-// wave-digital-filter drives (back kDrive - model choice similarly owned
-// here, see SetDriveModel), the hand-written modulation/delay wrappers
-// (kChorus/kFlanger/kPhaser/kDelay/kPingPongDelay), and the DSPark-based
-// dynamics/EQ wrappers (kCompressor/kEq/kNoiseGate/kTremolo - issue #22's
-// last four still-native effect kinds). Every other kind passes audio
-// through unchanged rather than erroring, so a full rig is buildable/
-// testable today; wiring in real DSP as those libraries get wrapped
-// (AnalogTapeModel, the rest of BYOD, LSP) is purely additive later.
+// per-block setting this layer owns, see SetReverbAlgorithm), the
+// hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay/
+// kPingPongDelay), and the DSPark-based dynamics/EQ wrappers (kCompressor/
+// kEq/kNoiseGate/kTremolo - issue #22's last four still-native effect
+// kinds). kCab/kMixer/kSplitter pass audio through unchanged rather than
+// erroring - none of them are a DSP effect kind, so a full rig is
+// buildable/testable today with no gap to fill in.
 namespace nam_studio::engine {
 
 // Int ids only at this layer - portable across C/WASM/FFI, no string
@@ -50,17 +49,25 @@ enum class ReverbAlgorithm {
   kEarlyReflections,
 };
 
-// The seam future BYOD drive/fuzz wraps plug into without a new BlockKind
-// or ABI shape, mirroring ReverbAlgorithm's own role for kReverb. Tube
-// Screamer, Zen Drive, and MXR Distortion joined Diode Clipper here once
-// each was individually verified buildable the same way (see their own
-// wrapper .cpp files) - Big Muff and the rest of BYOD's 43+ effects are
-// still candidates for follow-up additions.
-enum class DriveModel {
-  kDiodeClipper,
-  kTubeScreamer,
-  kZenDrive,
-  kMxrDistortion,
+// The user-facing reverb controls, as a UI presents them - deliberately not a
+// 1:1 view of any single algorithm's param table. Dragonfly's four algorithms
+// expose overlapping but differently-named and differently-shaped controls
+// (Hall's pre-delay is `delay`, Room's is `predelay`, Early Reflections has
+// none; damping is `high_cut` on Hall/Plate/ER but `in_high_cut` on Room),
+// and two of the controls are abstractions with no core symbol at all
+// (kRoomSize maps onto decay time, kDamping onto the high cut). Resolving all
+// of that lives here, in one place, so every front end - the web worklet, the
+// desktop bridge, a future VST3 editor - drives the same mapping instead of
+// each reimplementing it. Controls an algorithm doesn't have are no-ops.
+enum class ReverbControl {
+  kRoomSize,   // 0..0.97, mapped onto the algorithm's decay time (0.1..10s)
+  kDamping,    // 0..1, mapped onto the algorithm's high cut (16000..1000Hz)
+  kWidth,      // percent
+  kPredelay,   // ms
+  kSpin,       // Hz
+  kWander,     // ms
+  kEarlySend,  // percent
+  kDryLevel,   // percent
 };
 
 struct ParamDescriptor {
@@ -120,18 +127,77 @@ class AudioEngine {
 
   // ── NAM model management (off the audio thread) ─────────────────────
   std::optional<dsp::NamLoadError> LoadNamModel(BlockId id, const std::string& file_path);
+
+  // Same, from the .nam file's JSON content in memory - the form a browser or a
+  // plugin restoring host state has (see dsp::NamAmp::LoadModelFromJson).
+  std::optional<dsp::NamLoadError> LoadNamModelJson(BlockId id, const std::string& json_text);
   void UnloadNamModel(BlockId id);
   bool BlockHasModel(BlockId id) const;
+
+  // Metadata of the capture loaded into an amp-family block, or nullopt for
+  // unknown blocks, non-amp kinds and blocks with no model. Returned by value:
+  // the caller may outlive the next load, and this crosses into the ABI layer.
+  std::optional<dsp::NamModelInfo> BlockModelInfo(BlockId id) const;
+
+  // Install an impulse response on a kCab block: mono float samples at the
+  // engine's own sample rate (nothing is resampled here - a caller holding a
+  // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
+  // length <= 0 clears it, which returns the block to passthrough. No-op for
+  // every other kind. Not real-time safe: it allocates and transforms the IR.
+  void LoadIr(BlockId id, const float* samples, int length);
+
+  // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
+  // differs from the engine's - resampling it first. Returns the number of
+  // samples installed, or 0 if the block isn't a cab or the file can't be
+  // decoded. This is the entry point for every platform without an
+  // AudioContext.decodeAudioData to lean on (desktop, plugin, mobile). Not
+  // real-time safe.
+  int LoadIrWav(BlockId id, const uint8_t* bytes, size_t size);
+  void UnloadIr(BlockId id);
+  // Length of the IR installed on the block, 0 if none (or not a cab).
+  int IrLength(BlockId id) const;
 
   // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
   // safe - reconstructs the underlying wrapper instance.
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);
 
-  // Only meaningful for kDrive blocks; no-op otherwise. Not real-time safe.
-  void SetDriveModel(BlockId id, DriveModel model);
+  // Apply one user-facing reverb control to whichever algorithm currently
+  // backs the block (see ReverbControl). No-op for non-reverb blocks and for
+  // controls the current algorithm doesn't have. Real-time safe: it resolves
+  // to the same atomic param store SetParam writes.
+  void SetReverbControl(BlockId id, ReverbControl control, float value);
 
   // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
   void SetDelayModel(BlockId id, dsp::Delay::Model model);
+
+  // ── Bypass / master bus (real-time safe, lock-free) ──────────────────
+  // No-op if id is unknown. While bypassed, the block's DSP is skipped and
+  // its port-0 input passes through to its output unchanged.
+  void SetBypass(BlockId id, bool bypassed);
+  bool IsBypassed(BlockId id) const;
+
+  // Per-block I/O staging gain, 1.0 = unity. These are the user-facing
+  // Input/Output trims every block kind shows in the UI - deliberately NOT
+  // the Amp family's input_level/output_level params, which carry the NAM
+  // model's own dBu calibration and must not be repurposed as a volume
+  // control. Applied to the block's summed port-0 input and to its output
+  // whether or not the block is bypassed, since they stage what enters and
+  // leaves the block rather than what its DSP does.
+  void SetInputTrim(BlockId id, float gain);
+  float GetInputTrim(BlockId id) const;
+  void SetOutputTrim(BlockId id, float gain);
+  float GetOutputTrim(BlockId id) const;
+
+  // Scales the final output bus (post-graph, pre-host). 1.0 = unity.
+  void SetMasterLevel(float level);
+  float GetMasterLevel() const;
+  // Independent of master level and of SetTunerMuted - the output bus is
+  // silent while either mute source is set, so toggling one off doesn't
+  // clobber the other's state.
+  void SetMasterMuted(bool muted);
+  bool IsMasterMuted() const;
+  void SetTunerMuted(bool muted);
+  bool IsTunerMuted() const;
 
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
@@ -151,10 +217,26 @@ class AudioEngine {
     int to_port;
   };
 
+  // Unguarded: only for Process()'s routing loop (the audio thread), which
+  // relies on the suspend handshake around AddBlock/RemoveBlock (not this
+  // mutex) to guarantee block_states_ never mutates while Process() runs.
   BlockState* FindBlock(BlockId id);
   const BlockState* FindBlock(BlockId id) const;
+  // Guarded by block_states_mutex_: for the generic param/meter accessors
+  // (ParamCount/ParamInfo/GetParam/SetParam/GetMeter), which the bridge calls
+  // directly from the webview thread - bypassing the control-thread executor
+  // entirely for latency - so they need their own protection against
+  // AddBlock/RemoveBlock running concurrently on the control thread (issue
+  // #52: found by a stress test hammering both at once under ThreadSanitizer).
+  // Only guards the map lookup itself (a shared/read lock either way); the
+  // returned pointer's atomic members are safe to mutate concurrently on
+  // their own.
+  BlockState* FindBlockThreadSafe(BlockId id);
+  const BlockState* FindBlockThreadSafe(BlockId id) const;
   void EnsureBuffers(BlockState& state);
   void SeedParamsFromDsp(BlockState& state);
+  // Shared tail of LoadNamModel/LoadNamModelJson - see the definition.
+  void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int num_frames);
 
@@ -168,11 +250,18 @@ class AudioEngine {
 
   graph::GraphRig rig_;
   std::unordered_map<BlockId, std::unique_ptr<BlockState>> block_states_;
+  // Guards block_states_ against AddBlock/RemoveBlock (control thread, write)
+  // racing FindBlockThreadSafe (webview thread, read) - see its doc comment.
+  // Never taken by Process()/FindBlock() on the audio thread.
+  mutable std::shared_mutex block_states_mutex_;
   BlockId next_block_id_ = 0;
   EdgeId next_edge_id_ = 0;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   std::atomic<float> cpu_load_{0.0f};
+  std::atomic<float> master_level_{1.0f};
+  std::atomic<bool> master_muted_{false};
+  std::atomic<bool> tuner_muted_{false};
 
   std::vector<BlockId> exec_order_;
   std::vector<RoutingEdge> routing_;

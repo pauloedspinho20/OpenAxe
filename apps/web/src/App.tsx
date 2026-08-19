@@ -97,7 +97,11 @@ function App() {
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
-            {isReady && !engine.micGranted ? ' · no mic' : ''}
+            {isReady && engine.noSound
+              ? ' · no sound'
+              : isReady && !engine.micGranted
+                ? ' · no mic'
+                : ''}
           </span>
           {isReady && activeHeavyBlocks > HEAVY_BLOCK_SOFT_THRESHOLD && (
             <span
@@ -204,7 +208,8 @@ function App() {
         error={engine.error}
         latencyHint={io.latencyHint}
         onLatencyChange={io.setLatencyHint}
-        onPowerOn={() => void engine.powerOn()}
+        outputSelectionSupported={outputSelectionSupported}
+        onPowerOn={(opts) => void engine.powerOn(opts)}
       />
       <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
       <Toaster />

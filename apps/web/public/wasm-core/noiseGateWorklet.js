@@ -6,15 +6,9 @@
  * src/effects/noiseGateWorklet.js (native Web Audio envelope follower).
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { NOISEGATE_PARAMS } from './generatedParams.js'
 
 const NOISE_GATE_KIND = 0
-
-const THRESHOLD_PARAM = 0
-const HYSTERESIS_PARAM = 1
-const ATTACK_PARAM = 2
-const HOLD_PARAM = 3
-const RELEASE_PARAM = 4
-const RANGE_PARAM = 5
 
 class NoiseGateProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -33,12 +27,22 @@ class NoiseGateProcessor extends NamStudioEffectProcessor {
   }
 
   applyParams(module, block, parameters) {
-    module._nam_studio_set_param(this.graph, block, THRESHOLD_PARAM, parameters.threshold[0])
-    module._nam_studio_set_param(this.graph, block, HYSTERESIS_PARAM, parameters.hysteresis[0])
-    module._nam_studio_set_param(this.graph, block, ATTACK_PARAM, parameters.attack[0])
-    module._nam_studio_set_param(this.graph, block, HOLD_PARAM, parameters.hold[0])
-    module._nam_studio_set_param(this.graph, block, RELEASE_PARAM, parameters.release[0])
-    module._nam_studio_set_param(this.graph, block, RANGE_PARAM, parameters.range[0])
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      NOISEGATE_PARAMS.threshold,
+      parameters.threshold[0],
+    )
+    module._nam_studio_set_param(
+      this.graph,
+      block,
+      NOISEGATE_PARAMS.hysteresis,
+      parameters.hysteresis[0],
+    )
+    module._nam_studio_set_param(this.graph, block, NOISEGATE_PARAMS.attack, parameters.attack[0])
+    module._nam_studio_set_param(this.graph, block, NOISEGATE_PARAMS.hold, parameters.hold[0])
+    module._nam_studio_set_param(this.graph, block, NOISEGATE_PARAMS.release, parameters.release[0])
+    module._nam_studio_set_param(this.graph, block, NOISEGATE_PARAMS.range, parameters.range[0])
   }
 }
 

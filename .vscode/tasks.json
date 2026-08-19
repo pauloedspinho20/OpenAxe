@@ -20,10 +20,10 @@
       "problemMatcher": []
     },
     {
-      "label": "Dev server",
+      "label": "Web: Dev server",
       "type": "shell",
-      "command": "pnpm dev",
-      "detail": "Starts the Vite dev server (apps/web)",
+      "command": "pnpm dev:web",
+      "detail": "Starts the Vite dev server (apps/web) - web app only, no C++ toolchain needed",
       "isBackground": true,
       "group": "build",
       "presentation": { "reveal": "always", "panel": "dedicated" },
@@ -40,7 +40,7 @@
       "label": "Build",
       "type": "shell",
       "command": "pnpm build",
-      "detail": "Typecheck + production build, via Turborepo",
+      "detail": "Typecheck + production build of the web app and packages/ui (excludes the native desktop app), via Turborepo",
       "group": { "kind": "build", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": ["$tsc"]
@@ -177,9 +177,98 @@
         "C++: Configure",
         "C++: Build",
         "C++: Test",
-        "Dev server"
+        "Web: Dev server"
       ],
       "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Configure (with tests)",
+      "type": "shell",
+      "command": "cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
+      "detail": "Configures the apps/desktop C++ shell (webview + RtAudio + core) with the CTest suite enabled",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Build",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop build",
+      "detail": "Release build of the native desktop app + bundles the React UI into build/ui (scripts/build.mjs)",
+      "group": { "kind": "build", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["Desktop: Configure (with tests)"]
+    },
+    {
+      "label": "Desktop: Dev (Debug build + launch)",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop dev",
+      "detail": "Debug-builds the desktop app and launches the window against the bundled web UI",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Dev (fast - skip the UI rebuild)",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop dev:fast",
+      "detail": "Debug-builds and launches the desktop app reusing the UI already in build/ui - for C++-only changes",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Dev (attach to the web dev server)",
+      "type": "shell",
+      "command": "pnpm dev:desktop:attach",
+      "detail": "Debug-builds and launches the desktop app pointed at http://localhost:5173 (NAM_STUDIO_UI_URL) - needs \"Web: Dev server\" running, gives the native shell Vite HMR",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev: web + desktop (parallel)",
+      "detail": "Runs the Vite dev server and the native desktop app side by side, each in its own terminal - two independent apps, one command",
+      "dependsOn": ["Web: Dev server", "Desktop: Dev (Debug build + launch)"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build: web + desktop",
+      "type": "shell",
+      "command": "pnpm build:all",
+      "detail": "Production build of everything: web app, packages/ui, and the native desktop app (needs CMake + a C++20 compiler)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Desktop: C++ tests",
+      "type": "shell",
+      "command": "ctest --test-dir apps/desktop/build --output-on-failure",
+      "detail": "Runs the desktop CTest suite (audio I/O, JS bridge, latency) - needs Configure (with tests) + Build first",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "dependsOn": ["Desktop: Build"]
+    },
+    {
+      "label": "Desktop: Package",
+      "type": "shell",
+      "command": "pnpm --filter @nam/desktop package",
+      "detail": "Builds the app + UI and runs CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Desktop: Full check (build + C++ tests + web tests)",
+      "detail": "Desktop C++ tests + the web suite the UI reuse depends on",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Desktop: Build", "Desktop: C++ tests", "Test (run once)"],
+      "group": "test",
       "problemMatcher": []
     }
   ]

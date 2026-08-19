@@ -39,10 +39,6 @@ typedef enum NamStudioBlockKind {
   NAM_STUDIO_BLOCK_CAB,
   NAM_STUDIO_BLOCK_MIXER,
   NAM_STUDIO_BLOCK_SPLITTER,
-  // Appended here (not grouped with the other effect kinds above) so
-  // NAM_STUDIO_BLOCK_REVERB's ordinal (9) - hardcoded in the web app's
-  // AudioWorkletProcessor - never shifts as new kinds get added.
-  NAM_STUDIO_BLOCK_DRIVE,
 } NamStudioBlockKind;
 
 // Only meaningful for NAM_STUDIO_BLOCK_REVERB blocks - selects which of the
@@ -54,16 +50,6 @@ typedef enum NamStudioReverbAlgorithm {
   NAM_STUDIO_REVERB_PLATE,
   NAM_STUDIO_REVERB_EARLY_REFLECTIONS,
 } NamStudioReverbAlgorithm;
-
-// Only meaningful for NAM_STUDIO_BLOCK_DRIVE blocks - selects which wrapped
-// BYOD drive/fuzz model backs the block. New drive blocks default to
-// NAM_STUDIO_DRIVE_DIODE_CLIPPER.
-typedef enum NamStudioDriveModel {
-  NAM_STUDIO_DRIVE_DIODE_CLIPPER,
-  NAM_STUDIO_DRIVE_TUBE_SCREAMER,
-  NAM_STUDIO_DRIVE_ZEN_DRIVE,
-  NAM_STUDIO_DRIVE_MXR_DISTORTION,
-} NamStudioDriveModel;
 
 // Only meaningful for NAM_STUDIO_BLOCK_DELAY blocks - selects which delay
 // character backs the block. New delay blocks default to
@@ -143,9 +129,36 @@ void nam_studio_set_param(NamStudioGraph* graph, int32_t block_id, int32_t index
 
 NamStudioLoadResult nam_studio_load_nam_model(NamStudioGraph* graph, int32_t block_id,
                                                const char* file_path);
+// Same, from the .nam file's JSON content in memory rather than a path. This is
+// the entry point a browser needs (no filesystem) and the one a plugin uses when
+// restoring host state; the desktop app uses it too, so its webview never has to
+// stage a temp file. Same non-real-time contract as the path form.
+NamStudioLoadResult nam_studio_load_nam_model_json(NamStudioGraph* graph, int32_t block_id,
+                                                   const char* json);
+
 void nam_studio_unload_nam_model(NamStudioGraph* graph, int32_t block_id);
 // Returns 0/1; 0 for an unknown or non-Amp-family block.
 int32_t nam_studio_block_has_model(NamStudioGraph* graph, int32_t block_id);
+
+// Metadata of the capture loaded into a block: 1 on success, 0 for an unknown
+// block, a non-amp kind, or no model loaded. Every out-param is optional (pass
+// null to skip). Flags are 0/1; `sample_rate` is the model's trained rate (-1 if
+// it doesn't declare one); `loudness_db` and the two dBu levels are only
+// meaningful when their has_* flag is 1. A slimmable capture can trade fidelity
+// for CPU at `slim_breakpoint_count` discrete sizes - read them with
+// nam_studio_block_model_slim_breakpoints.
+int32_t nam_studio_block_model_info(NamStudioGraph* graph, int32_t block_id, double* out_sample_rate,
+                                    int32_t* out_has_loudness, double* out_loudness_db,
+                                    int32_t* out_has_input_level, double* out_input_level_dbu,
+                                    int32_t* out_has_output_level, double* out_output_level_dbu,
+                                    int32_t* out_is_slimmable, int32_t* out_slim_breakpoint_count);
+
+// Copies up to `max_count` slim-size breakpoints into `out_values` and returns
+// how many were written (0 when the block has no slimmable model). Split from
+// nam_studio_block_model_info so the ABI never has to hand back a pointer into
+// engine-owned storage.
+int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t block_id,
+                                                double* out_values, int32_t max_count);
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────
 
@@ -154,19 +167,93 @@ int32_t nam_studio_block_has_model(NamStudioGraph* graph, int32_t block_id);
 void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
                                       NamStudioReverbAlgorithm algorithm);
 
-// ── Drive model choice ──────────────────────────────────────────────────
-
-// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DRIVE block. Not
-// real-time safe - reconstructs the underlying wrapper instance.
-void nam_studio_set_drive_model(NamStudioGraph* graph, int32_t block_id,
-                                 NamStudioDriveModel model);
-
 // ── Delay model choice ──────────────────────────────────────────────────
 
 // No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Not
 // real-time safe.
+// ── Cab impulse responses ──────────────────────────────────────────────
+// Install an IR on a NAM_STUDIO_BLOCK_CAB block: `samples` is mono float audio
+// at the graph's own sample rate, `frames` its length. Nothing is resampled here,
+// so a caller with a 44.1kHz IR in a 48kHz graph should resample first. Passing
+// null/0 clears it (the block returns to passthrough), and it is a no-op for
+// every other block kind. The samples are copied, so the caller may free them
+// immediately.
+//
+// Not real-time safe - it allocates and transforms the IR - so suspend audio
+// around it, exactly like model loading. Convolution itself adds no latency.
+void nam_studio_load_ir(NamStudioGraph* graph, int32_t block_id, const float* samples,
+                        int32_t frames);
+// Install an IR from the bytes of a WAV file. The core decodes it (8/16/24/32-bit
+// PCM or 32/64-bit float, any channel count, folded to mono) and resamples it to
+// the graph's rate when they differ, so every front end gets the same result from
+// the same file. Returns the number of samples installed, or 0 if the block isn't
+// a cab or the file can't be decoded - which is also how an unsupported or
+// corrupt file reports itself, rather than by throwing.
+//
+// This is what a desktop app or plugin uses: only a browser has
+// AudioContext.decodeAudioData to hand it float samples instead. Not real-time
+// safe; suspend audio around it.
+int32_t nam_studio_load_ir_wav(NamStudioGraph* graph, int32_t block_id, const uint8_t* bytes,
+                               int32_t size);
+void nam_studio_unload_ir(NamStudioGraph* graph, int32_t block_id);
+// Length in samples of the IR installed on the block, 0 if none.
+int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id);
+
+// The user-facing reverb controls (see nam_studio::engine::ReverbControl):
+// room size and damping are abstractions over the current algorithm's decay
+// and high cut, and the rest resolve to whichever symbol that algorithm uses
+// (Hall's pre-delay is `delay`, Room's is `predelay`, ...). No-op for
+// non-reverb blocks and for controls the current algorithm lacks. Every front
+// end should drive reverb through this rather than reimplementing the
+// per-algorithm mapping over nam_studio_set_param.
+typedef enum {
+  NAM_STUDIO_REVERB_ROOM_SIZE = 0,   // 0..0.97
+  NAM_STUDIO_REVERB_DAMPING = 1,     // 0..1
+  NAM_STUDIO_REVERB_WIDTH = 2,       // percent
+  NAM_STUDIO_REVERB_PREDELAY = 3,    // ms
+  NAM_STUDIO_REVERB_SPIN = 4,        // Hz
+  NAM_STUDIO_REVERB_WANDER = 5,      // ms
+  NAM_STUDIO_REVERB_EARLY_SEND = 6,  // percent
+  NAM_STUDIO_REVERB_DRY_LEVEL = 7,   // percent
+} NamStudioReverbControl;
+
+void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
+                                  NamStudioReverbControl control, float value);
+
 void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDelayModel model);
+
+// ── Bypass / master bus ─────────────────────────────────────────────────
+// Real-time safe (lock-free atomics) - no graph mutation, safe to call from
+// any thread including concurrently with nam_studio_process.
+
+// No-op if block_id is unknown. While bypassed, the block's DSP is skipped
+// and its port-0 input passes through to its output unchanged.
+void nam_studio_set_bypass(NamStudioGraph* graph, int32_t block_id, int32_t bypassed);
+int32_t nam_studio_is_bypassed(NamStudioGraph* graph, int32_t block_id);
+
+// Per-block Input/Output trim, 1.0 = unity, no-op if block_id is unknown.
+// This is what a UI's per-block Input/Output level knobs should drive on
+// every block kind. Do NOT use the Amp family's input_level/output_level
+// params for that: those carry the loaded NAM model's own dBu calibration
+// (nam_studio_load_nam_model seeds them from the model file), so writing a
+// volume value there silently recalibrates the amp instead of trimming it.
+// Applied whether or not the block is bypassed.
+void nam_studio_set_block_input_trim(NamStudioGraph* graph, int32_t block_id, float gain);
+float nam_studio_get_block_input_trim(NamStudioGraph* graph, int32_t block_id);
+void nam_studio_set_block_output_trim(NamStudioGraph* graph, int32_t block_id, float gain);
+float nam_studio_get_block_output_trim(NamStudioGraph* graph, int32_t block_id);
+
+// Scales the final output bus (post-graph, pre-host). 1.0 = unity.
+void nam_studio_set_master_level(NamStudioGraph* graph, float level);
+float nam_studio_get_master_level(NamStudioGraph* graph);
+// Independent of master level and of the tuner mute below - the output bus
+// is silent while either mute source is set, so toggling one off doesn't
+// clobber the other's state.
+void nam_studio_set_master_muted(NamStudioGraph* graph, int32_t muted);
+int32_t nam_studio_is_master_muted(NamStudioGraph* graph);
+void nam_studio_set_tuner_muted(NamStudioGraph* graph, int32_t muted);
+int32_t nam_studio_is_tuner_muted(NamStudioGraph* graph);
 
 // ── Metering ────────────────────────────────────────────────────────────
 

@@ -9,7 +9,6 @@ import { Tremolo } from './Tremolo'
 import { Delay } from './Delay'
 import { PingPongDelay } from './PingPongDelay'
 import { DragonflyReverb } from './DragonflyReverb'
-import { Drive } from './Drive'
 
 /**
  * Builds an effect from its serialized `kind` (+ optional saved params),
@@ -54,7 +53,5 @@ async function buildEffect(
       return PingPongDelay.create(context)
     case 'reverb':
       return DragonflyReverb.create(context)
-    case 'drive':
-      return Drive.create(context)
   }
 }

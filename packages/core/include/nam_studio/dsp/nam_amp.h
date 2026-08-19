@@ -11,6 +11,7 @@
 // target (see packages/core/CMakeLists.txt).
 namespace nam {
 class DSP;
+struct dspData;
 }  // namespace nam
 
 namespace nam_studio::dsp {
@@ -52,6 +53,14 @@ class NamAmp {
   // exceptions and translates them to NamLoadError rather than propagating
   // C++ exceptions across what will eventually be an extern "C" boundary.
   std::optional<NamLoadError> LoadModel(const std::string& nam_file_path);
+
+  // Same, from the .nam file's JSON content already in memory. This is the form
+  // every non-desktop front end needs: a browser has no filesystem to hand a
+  // path to (the model arrives over fetch or out of IndexedDB), and a plugin
+  // restoring host state has bytes, not a file. kInvalidFormat covers
+  // unparseable JSON, a document missing the fields a .nam file requires, and
+  // an architecture NAMCore has no parser for.
+  std::optional<NamLoadError> LoadModelFromJson(const std::string& json_text);
   void UnloadModel();
   bool HasModel() const;
   const NamModelInfo& ModelInfo() const { return info_; }
@@ -75,6 +84,10 @@ class NamAmp {
   void SetOutputLevel(double dbu);
 
  private:
+  // Shared tail of both load paths: adopt the parsed model and snapshot its
+  // metadata into info_.
+  void AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& config);
+
   std::unique_ptr<nam::DSP> dsp_;
   NamModelInfo info_;
   double slim_size_ = 1.0;

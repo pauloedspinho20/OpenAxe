@@ -8,11 +8,11 @@ audio graph - see [../engine/README.md](../engine/README.md) for how a chain fit
 
 > **Update (issue #22):** the DSP has since migrated to a shared C++ core
 > (`packages/core`), compiled to WASM and running in an `AudioWorkletNode`.
-> The reverb is Dragonfly Reverb, the drive is BYOD, and NoiseGate/Compressor/
-> EQ/Tremolo are DSPark - each with its own permissive (MIT/ISC/BSD) license
-> audited in `packages/core/README.md`. The section below describes the
-> _original_ v1 effects-suite decision and why the native-node implementations
-> existed; it is kept for that history, not as a description of what runs today.
+> The reverb is Dragonfly Reverb, and NoiseGate/Compressor/EQ/Tremolo are
+> DSPark - each with its own permissive (MIT/ISC/BSD) license audited in
+> `packages/core/README.md`. The section below describes the _original_ v1
+> effects-suite decision and why the native-node implementations existed; it
+> is kept for that history, not as a description of what runs today.
 
 The epic's initial candidate list (Airwindows, Dragonfly Reverb, ChowDSP, Guitarix/Rakarrack) was
 research-stage, not a commitment. Every effect below is instead built from **native Web Audio
@@ -52,7 +52,7 @@ Mix/Level are deliberately **not** exposed as effect params (no `baseParams`/`ap
 round-trip into presets) - the shared dry/wet crossfade and output trim stay internal plumbing for
 bypass. Where an effect's DSP has its own native control it is surfaced instead: Compressor's Mix
 (`setWetMix`/`getWetMix` → DSPark `setMix`), Reverb's Dry (`setDryLevel`/`getDryLevel` → Dragonfly
-`dry_level`), and Drive's Output Level (MXR native).
+`dry_level`).
 
 ## `EffectsChain`
 
@@ -64,34 +64,28 @@ it belongs to the UI/UX epic, which will call `move()`. Fully unit tested agains
 
 ## The effects
 
-| Class               | Category                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NoiseGate`         | Noise gate                | DSPark gate compiled to WASM (packages/core/src/dsp/noise_gate.cpp): threshold/hysteresis/attack/hold/release/range, times in ms. Migrated from the old hand-rolled `noiseGateWorklet.js` envelope follower (issue #22).                                                                                                                                                                                                                                                                                                                                       |
-| `Compressor`        | Dynamics                  | DSPark compressor compiled to WASM (packages/core/src/dsp/compressor.cpp): threshold/ratio/attack/release + knee/makeup/character models (Clean/Opto/FET/Varimu), times in ms. Migrated from the native `DynamicsCompressorNode` wrapper (issue #22).                                                                                                                                                                                                                                                                                                          |
-| `ParametricEQ`      | EQ                        | 4-band DSPark EQ compiled to WASM (packages/core/src/dsp/equalizer.cpp): low-shelf, 2 peaking mids, high-shelf, frequency/gain/Q per band. Migrated from the series-`BiquadFilterNode` chain (issue #22). Band count/type is fixed by the wrapper, matching the old `DEFAULT_BANDS`.                                                                                                                                                                                                                                                                           |
-| `Drive`             | Overdrive/distortion/fuzz | One `WaveShaperNode`-based class, `setType('overdrive' \| 'distortion' \| 'fuzz')` swaps the curve generator (tanh saturation / the classic Web Audio spec distortion formula / asymmetric hard clip).                                                                                                                                                                                                                                                                                                                                                         |
-| `Chorus`, `Flanger` | Modulation                | Both built on the shared `createModulatedDelay` helper (`modulatedDelay.ts`) - an LFO modulating a `DelayNode`'s `delayTime`, with feedback. Differ only in default delay/depth/feedback ranges.                                                                                                                                                                                                                                                                                                                                                               |
-| `Phaser`            | Modulation                | 4 cascaded `allpass` `BiquadFilterNode`s swept by one shared LFO, with feedback for resonance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `Tremolo`           | Modulation                | DSPark stereo tremolo compiled to WASM (packages/core/src/dsp/tremolo.cpp): rate/depth/shape (Sine/Triangle/Square), right-channel LFO 180°-offset. Migrated from the LFO-modulated `GainNode` (issue #22).                                                                                                                                                                                                                                                                                                                                                    |
-| `Delay`             | Delay                     | Feedback delay with a tone filter in the loop; `character: 'clean' \| 'tape'` adds a lower cutoff plus gentle `WaveShaperNode` saturation in the feedback path so repeats warm up over time.                                                                                                                                                                                                                                                                                                                                                                   |
-| `PingPongDelay`     | Delay                     | Two cross-coupled delay lines, each hard-panned opposite the other, so repeats alternate left/right. Stereo output (2-channel), unlike every other effect here.                                                                                                                                                                                                                                                                                                                                                                                                |
-| `Freeverb`          | Reverb                    | The classic Freeverb algorithm (Jezar at Dreampoint, public domain): 8 parallel damped feedback comb filters summed into 4 series Schroeder allpass filters. Delay lengths are Freeverb's original constants (specified in samples at its reference 44100 Hz, converted to seconds so it sounds the same at any `AudioContext` sample rate). Comb filters and Schroeder allpass filters are both implemented from their standard DSP formulas using `DelayNode`/`GainNode`/`BiquadFilterNode` - not a native Web Audio node type, since neither exists as one. |
+| Class               | Category   | Notes                                                                                                                                                                                                                                                                                |
+| ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NoiseGate`         | Noise gate | DSPark gate compiled to WASM (packages/core/src/dsp/noise_gate.cpp): threshold/hysteresis/attack/hold/release/range, times in ms. Migrated from the old hand-rolled `noiseGateWorklet.js` envelope follower (issue #22).                                                             |
+| `Compressor`        | Dynamics   | DSPark compressor compiled to WASM (packages/core/src/dsp/compressor.cpp): threshold/ratio/attack/release + knee/makeup/character models (Clean/Opto/FET/Varimu), times in ms. Migrated from the native `DynamicsCompressorNode` wrapper (issue #22).                                |
+| `ParametricEQ`      | EQ         | 4-band DSPark EQ compiled to WASM (packages/core/src/dsp/equalizer.cpp): low-shelf, 2 peaking mids, high-shelf, frequency/gain/Q per band. Migrated from the series-`BiquadFilterNode` chain (issue #22). Band count/type is fixed by the wrapper, matching the old `DEFAULT_BANDS`. |
+| `Chorus`, `Flanger` | Modulation | Compiled to WASM from `packages/core/src/dsp/chorus.cpp` / `flanger.cpp` (`chorusWorklet.js` / `flangerWorklet.js`): an LFO-modulated delay line with feedback, differing in delay/depth/feedback ranges. Migrated from the old `createModulatedDelay` Web Audio helper.             |
+| `Phaser`            | Modulation | Compiled to WASM from `packages/core/src/dsp/phaser.cpp` (`phaserWorklet.js`): cascaded allpass stages swept by one shared LFO, with feedback for resonance. Migrated from the `BiquadFilterNode` chain.                                                                             |
+| `Tremolo`           | Modulation | DSPark stereo tremolo compiled to WASM (packages/core/src/dsp/tremolo.cpp): rate/depth/shape (Sine/Triangle/Square), right-channel LFO 180°-offset. Migrated from the LFO-modulated `GainNode` (issue #22).                                                                          |
+| `Delay`             | Delay      | Compiled to WASM from `packages/core/src/dsp/delay.cpp` (`delayWorklet.js`): feedback delay with a tone filter in the loop and three models (Digital/Tape/Analog) selected through the core's `set_delay_model` ABI. Migrated from the `DelayNode` + `WaveShaperNode` loop.          |
+| `PingPongDelay`     | Delay      | Compiled to WASM from `packages/core/src/dsp/ping_pong_delay.cpp` (`pingPongWorklet.js`): two cross-coupled delay lines, each hard-panned opposite the other, so repeats alternate left/right. Stereo output (2-channel), unlike every other effect here.                            |
 
 ```ts
 import { EffectsChain } from '@/effects/EffectsChain'
 import { NoiseGate } from '@/effects/NoiseGate'
-import { Drive } from '@/effects/Drive'
 import { DragonflyReverb } from '@/effects/DragonflyReverb'
 
 const chain = new EffectsChain(context)
 const gate = await NoiseGate.create(context) // every effect is async now (WASM-backed)
-const drive = await Drive.create(context)
 const reverb = await DragonflyReverb.create(context)
 
 chain.insert(gate)
-chain.insert(drive)
 chain.insert(reverb)
-drive.setDrive(0.6)
 reverb.setRoomSize(0.7)
 
 someSource.connect(chain.inputNode)

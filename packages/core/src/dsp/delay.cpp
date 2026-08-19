@@ -17,13 +17,10 @@ constexpr int kWowDepthParam = 4;
 constexpr int kWowRateParam = 5;
 constexpr int kParamCount = 6;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const Delay::ParamInfo kParamInfo[kParamCount] = {
-    {"Time", "time", 10.0f, 1000.0f, "ms"},
-    {"Feedback", "feedback", 0.0f, 0.9f, "%"},
-    {"Tone", "tone", 200.0f, 12000.0f, "Hz"},
-    {"Model", "model", 0.0f, 2.0f, ""},
-    {"Wow Depth", "wow_depth", 0.0f, 5.0f, "ms"},
-    {"Wow Rate", "wow_rate", 0.1f, 3.0f, "Hz"},
+#include "generated/delay_params.inc"
 };
 
 constexpr float kMaxDelaySeconds = 1.1f;  // 1.1s max buffer (covers 1000ms + wow)
@@ -36,6 +33,10 @@ struct ToneFilter {
   float x1 = 0.0f, x2 = 0.0f;
   float y1 = 0.0f, y2 = 0.0f;
 
+  // Butterworth (Q = 0.707) lowpass coefficients via the bilinear transform,
+  // or a straight pass-through when the cutoff reaches Nyquist - the standard
+  // RBJ cookbook forms. Coefficients are recomputed once per block, not per
+  // sample, since the tone knob doesn't need sample-accurate smoothing.
   void SetCutoff(float freq, float sample_rate) {
     if (freq >= sample_rate * 0.49f) {
       b0 = 1.0f; b1 = 0.0f; b2 = 0.0f;
@@ -53,6 +54,7 @@ struct ToneFilter {
     a2 = (1.0f - alpha) * a0_inv;
   }
 
+  // Direct Form I biquad step: two input and two output history taps.
   float Process(float x) {
     const float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
     x2 = x1; x1 = x;
@@ -60,6 +62,7 @@ struct ToneFilter {
     return y;
   }
 
+  // Clear the filter history (model or sample-rate change).
   void Reset() { x1 = x2 = y1 = y2 = 0.0f; }
 };
 
@@ -67,12 +70,16 @@ struct ToneFilter {
 // applied to the feedback path to emulate BBD/tape electronics.
 inline float SoftClip(float x) { return std::tanh(x * 1.5f) / 1.5f; }
 
+// One channel's delay line: the circular buffer, its write cursor, the tape
+// wow LFO phase, and the tone filter that sits in the feedback path.
 struct Channel {
   std::vector<float> buffer;
   int write_pos = 0;
   float wow_phase = 0.0f;
   ToneFilter filter;
 
+  // Allocate for the longest delay the params allow (kMaxDelaySeconds covers
+  // the 1000ms maximum plus the tape model's wow excursion) and clear state.
   void Resize(float sample_rate) {
     const int size = static_cast<int>(std::ceil(sample_rate * kMaxDelaySeconds)) + 1;
     buffer.assign(static_cast<size_t>(size), 0.0f);
@@ -80,6 +87,8 @@ struct Channel {
     filter.Reset();
   }
 
+  // Read `delay_ms` in the past with linear interpolation, so the tape model's
+  // continuously-moving tap doesn't quantise to whole samples.
   float ReadTap(float delay_ms, float sample_rate) const {
     const float delay_samples = delay_ms * sample_rate / 1000.0f;
     const float read_pos = static_cast<float>(write_pos) - delay_samples;
@@ -106,20 +115,27 @@ struct Delay::Impl {
   float wow_rate = 0.5f;
   float sample_rate = 48000.0f;
 
+  // Re-allocate both delay lines for the current sample rate.
   void ApplySampleRate() {
     for (auto& ch : channels) ch.Resize(sample_rate);
   }
 };
 
+// Buffers are allocated here and on every Reset(), never in Process().
 Delay::Delay() : impl_(std::make_unique<Impl>()) { impl_->ApplySampleRate(); }
 
 Delay::~Delay() = default;
 
+// Adopt a new sample rate and re-allocate the delay lines. Delay times are
+// held in milliseconds, so the params themselves carry over. Not real-time safe.
 void Delay::Reset(double sample_rate) {
   impl_->sample_rate = static_cast<float>(sample_rate);
   impl_->ApplySampleRate();
 }
 
+// Switch model (Digital / Tape / Analog). Clears the tone filters so the
+// previous model's filter state can't ring into the new one; the delay buffer
+// contents are deliberately kept, so switching mid-repeat doesn't cut the tail.
 void Delay::SetModel(Model model) {
   if (model != impl_->model) {
     impl_->model = model;
@@ -127,6 +143,21 @@ void Delay::SetModel(Model model) {
   }
 }
 
+// Feedback delay with three models differing only in what happens inside the
+// feedback loop:
+//
+//   Digital - clean repeats: the tap is fed straight back (still soft-clipped,
+//             which only engages on hot signals).
+//   Analog  - BBD-style: the tone lowpass sits in the loop, so each successive
+//             repeat is darker than the last.
+//   Tape    - Analog plus "wow": a slow LFO modulates the tap position, giving
+//             the pitch drift of a tape mechanism. The right channel's wow runs
+//             a quarter cycle behind the left for a wider image.
+//
+// The soft clipper (tanh) in the loop is what keeps feedback near 0.9 from
+// running away - it compresses rather than hard-clipping, so a self-oscillating
+// setting saturates musically instead of blowing up. Output is wet-only; the
+// dry/wet mix belongs to the caller.
 void Delay::Process(const float* const* input, float* const* output, int num_frames) {
   const float sr = impl_->sample_rate;
   const float fb = impl_->feedback;
@@ -166,12 +197,18 @@ void Delay::Process(const float* const* input, float* const* output, int num_fra
   }
 }
 
+// Param surface: time (ms), feedback (0..0.9), tone (Hz cutoff in the feedback
+// loop), model (0=Digital, 1=Tape, 2=Analog), wow depth (ms) and wow rate (Hz)
+// for the tape model.
 int Delay::ParamCount() { return kParamCount; }
 
+// Name/symbol/range/unit for one param index.
 const Delay::ParamInfo& Delay::GetParamInfo(int index) {
   return kParamInfo[static_cast<size_t>(index)];
 }
 
+// Current value of one param, 0 for an unknown index (the model enum is
+// widened to float, matching the all-float param ABI).
 float Delay::GetParam(int index) const {
   switch (index) {
     case kTimeParam:     return impl_->time_ms;
@@ -184,6 +221,9 @@ float Delay::GetParam(int index) const {
   }
 }
 
+// Store one param. All real-time safe: the buffer is already sized for the
+// maximum delay, so a time change just moves the read tap. The model index is
+// clamped to the enum's range rather than trusted.
 void Delay::SetParam(int index, float value) {
   switch (index) {
     case kTimeParam:     impl_->time_ms = value; break;

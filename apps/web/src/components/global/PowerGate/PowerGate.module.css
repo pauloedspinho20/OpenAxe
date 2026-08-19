@@ -77,3 +77,25 @@
   outline: 1px solid var(--accent);
   outline-offset: 1px;
 }
+
+.deviceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.deviceRow .latencySelect {
+  flex: 1;
+  min-width: 140px;
+}
+
+.deviceHint {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}

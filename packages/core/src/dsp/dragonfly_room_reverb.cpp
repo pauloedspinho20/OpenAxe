@@ -32,54 +32,67 @@ namespace nam_studio {
 namespace dsp {
 namespace {
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DragonflyRoomReverb::ParamInfo kParamInfo[paramCount] = {
-    {"Dry Level", "dry_level", 0.0f, 100.0f, "%"},
-    {"Early Level", "early_level", 0.0f, 100.0f, "%"},
-    {"Early Send", "early_send", 0.0f, 100.0f, "%"},
-    {"Late Level", "late_level", 0.0f, 100.0f, "%"},
-    {"Size", "size", 8.0f, 32.0f, "m"},
-    {"Width", "width", 50.0f, 150.0f, "%"},
-    {"Predelay", "predelay", 0.0f, 100.0f, "ms"},
-    {"Decay", "decay", 0.1f, 10.0f, "s"},
-    {"Diffuse", "diffuse", 0.0f, 100.0f, "%"},
-    {"Spin", "spin", 0.0f, 5.0f, "Hz"},
-    {"Wander", "wander", 0.0f, 100.0f, "%"},
-    {"High Cut", "in_high_cut", 1000.0f, 16000.0f, "Hz"},
-    {"Early Damp", "early_damp", 1000.0f, 16000.0f, "Hz"},
-    {"Late Damp", "late_damp", 1000.0f, 16000.0f, "Hz"},
-    {"Low Boost", "low_boost", 0.0f, 100.0f, "%"},
-    {"Boost Freq", "boost_freq", 50.0f, 1050.0f, "Hz"},
-    {"Low Cut", "in_low_cut", 0.0f, 200.0f, "Hz"},
+#include "generated/dragonfly_room_reverb_params.inc"
 };
 
 }  // namespace
 
+// A small-to-medium room algorithm: shorter, denser early reflections than the
+// hall, with input high/low cuts, separate early/late damping, and a low-boost
+// shelf - the character controls a room needs rather than a hall's decay
+// multipliers.
+//
+// The vendored DSP object is held as an opaque void* and cast at every use:
+// DragonflyReverbDSP has internal linkage (see the anonymous namespace above),
+// so its type cannot appear in the public header. Constructed at 48kHz and
+// re-prepared by Reset(); allocates, like every method here that isn't marked
+// real-time safe below.
 DragonflyRoomReverb::DragonflyRoomReverb() : dsp_(new DragonflyReverbDSP(48000.0)) {}
 
 DragonflyRoomReverb::~DragonflyRoomReverb() { delete static_cast<DragonflyReverbDSP*>(dsp_); }
 
+// Re-prepare for a new sample rate. Dragonfly rebuilds its delay networks
+// here, so this allocates and is not real-time safe.
 void DragonflyRoomReverb::Reset(double sample_rate) {
   static_cast<DragonflyReverbDSP*>(dsp_)->sampleRateChanged(sample_rate);
 }
 
+// Run one stereo block. The const_casts are Dragonfly's signature, not a
+// mutation: run() takes non-const pointers but only reads the input. Real-time
+// safe. Output is the algorithm's own dry/wet blend (its `dry_level` param),
+// which is why the engine leaves reverb mix to the DSP rather than staging it.
 void DragonflyRoomReverb::Process(const float* const* input, float* const* output, int num_frames) {
   static_cast<DragonflyReverbDSP*>(dsp_)->run(const_cast<const float**>(input),
                                                const_cast<float**>(output),
                                                static_cast<uint32_t>(num_frames));
 }
 
+// Flush the tail to silence without re-preparing - used when the graph is
+// rewired underneath the block, so a stale tail can't bleed into a new route.
 void DragonflyRoomReverb::Mute() { static_cast<DragonflyReverbDSP*>(dsp_)->mute(); }
 
+// Param count for this algorithm; each of the four differs, which is why
+// switching algorithms re-reads the whole param surface (see the engine's
+// SetReverbAlgorithm and SetReverbControl).
 int DragonflyRoomReverb::ParamCount() { return static_cast<int>(paramCount); }
 
+// Name/symbol/range/unit for one param index, from the generated table above
+// (which mirrors Dragonfly's own PARAMS metadata).
 const DragonflyRoomReverb::ParamInfo& DragonflyRoomReverb::GetParamInfo(int index) {
   return kParamInfo[index];
 }
 
+// Read one param straight out of the Dragonfly DSP object - unlike the DSPark
+// wrappers, these do expose getters, so no local mirror is needed.
 float DragonflyRoomReverb::GetParam(int index) const {
   return static_cast<DragonflyReverbDSP*>(dsp_)->getParameterValue(static_cast<uint32_t>(index));
 }
 
+// Write one param into the Dragonfly DSP object. Real-time safe: Dragonfly
+// smooths param changes internally rather than rebuilding its networks.
 void DragonflyRoomReverb::SetParam(int index, float value) {
   static_cast<DragonflyReverbDSP*>(dsp_)->setParameterValue(static_cast<uint32_t>(index), value);
 }

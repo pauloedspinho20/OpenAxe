@@ -71,6 +71,8 @@ export const useIOStore = create<IOStore>()(
     {
       name: 'nam-web-studio-io',
       partialize: (state) => ({
+        inputDeviceId: state.inputDeviceId,
+        outputDeviceId: state.outputDeviceId,
         inputGain: state.inputGain,
         inputChannel: state.inputChannel,
         latencyHint: state.latencyHint,
@@ -78,3 +80,18 @@ export const useIOStore = create<IOStore>()(
     },
   ),
 )
+
+/**
+ * Devices present in both the input and output lists (by id) - the only
+ * choice the native RtAudio backend accepts for a single device driving both
+ * directions (see apps/desktop/src/audio.cpp's Open(), which rejects
+ * mismatched input/output device ids to prevent a mic+speaker feedback loop
+ * - issue #53). The native PowerGate/Settings device pickers offer only
+ * these, one selection driving both `inputDeviceId` and `outputDeviceId`.
+ */
+export function getDuplexDevices(
+  state: Pick<IOState, 'inputDevices' | 'outputDevices'>,
+): IODevice[] {
+  const outputIds = new Set(state.outputDevices.map((d) => d.deviceId))
+  return state.inputDevices.filter((d) => outputIds.has(d.deviceId))
+}

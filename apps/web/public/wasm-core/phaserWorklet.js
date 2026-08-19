@@ -4,13 +4,9 @@
  * phaser.cpp). See namStudioEffectBase.js for shared WASM/buffer plumbing.
  */
 import { NamStudioEffectProcessor } from './namStudioEffectBase.js'
+import { PHASER_PARAMS } from './generatedParams.js'
 
 const PHASER_KIND = 5
-
-const RATE_PARAM = 0
-const DEPTH_PARAM = 1
-const FEEDBACK_PARAM = 2
-const STAGES_PARAM = 3
 
 class PhaserProcessor extends NamStudioEffectProcessor {
   static get parameterDescriptors() {
@@ -27,10 +23,10 @@ class PhaserProcessor extends NamStudioEffectProcessor {
   }
 
   applyParams(module, block, parameters) {
-    module._nam_studio_set_param(this.graph, block, RATE_PARAM, parameters.rate[0])
-    module._nam_studio_set_param(this.graph, block, DEPTH_PARAM, parameters.depth[0])
-    module._nam_studio_set_param(this.graph, block, FEEDBACK_PARAM, parameters.feedback[0])
-    module._nam_studio_set_param(this.graph, block, STAGES_PARAM, parameters.stages[0])
+    module._nam_studio_set_param(this.graph, block, PHASER_PARAMS.rate, parameters.rate[0])
+    module._nam_studio_set_param(this.graph, block, PHASER_PARAMS.depth, parameters.depth[0])
+    module._nam_studio_set_param(this.graph, block, PHASER_PARAMS.feedback, parameters.feedback[0])
+    module._nam_studio_set_param(this.graph, block, PHASER_PARAMS.stages, parameters.stages[0])
   }
 }
 

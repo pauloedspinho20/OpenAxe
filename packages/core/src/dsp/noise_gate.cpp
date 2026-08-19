@@ -15,15 +15,15 @@ constexpr int kReleaseParam = 4;
 constexpr int kRangeParam = 5;
 constexpr int kParamCount = 6;
 
+// Generated from packages/core/param_schema.json (issue #51) - run
+// scripts/gen-param-schema.mjs after editing the schema.
 const DsparkParamInfo kParamInfo[kParamCount] = {
-    {"Threshold", "threshold", -80.0f, 0.0f, "dB"},
-    {"Hysteresis", "hysteresis", 0.0f, 20.0f, "dB"},
-    {"Attack", "attack", 0.01f, 50.0f, "ms"},
-    {"Hold", "hold", 0.0f, 500.0f, "ms"},
-    {"Release", "release", 1.0f, 1000.0f, "ms"},
-    {"Range", "range", -100.0f, 0.0f, "dB"},
+#include "generated/noise_gate_params.inc"
 };
 
+// A usable single-coil starting point: open at -40dB, 4dB of hysteresis so a
+// decaying note doesn't chatter the gate, fast attack, short hold, and a range
+// deep enough (-80dB) to read as silence when closed.
 constexpr float kDefaults[kParamCount] = {
     -40.0f,  // threshold
     4.0f,    // hysteresis
@@ -35,6 +35,10 @@ constexpr float kDefaults[kParamCount] = {
 
 }  // namespace
 
+// The policy DsparkEffect<> needs: param table, defaults, and how each param
+// index maps onto the vendored gate's setters. See internal/dspark_wrapper.h.
+// Threshold/hysteresis/range are dB; attack/hold/release are milliseconds -
+// the units the generated param table declares, passed straight through.
 struct NoiseGateTraits {
   static constexpr int kParamCount = nam_studio::dsp::kParamCount;
   static constexpr const DsparkParamInfo* kInfo = nam_studio::dsp::kParamInfo;
@@ -67,6 +71,7 @@ struct NoiseGateTraits {
   }
 };
 
+// Pimpl so the vendored dspark:: types stay out of the public header.
 struct NoiseGate::Impl {
   DsparkEffect<dspark::NoiseGate<float>, NoiseGateTraits> dsp;
 };
@@ -74,22 +79,35 @@ struct NoiseGate::Impl {
 NoiseGate::NoiseGate() : impl_(std::make_unique<Impl>()) {}
 NoiseGate::~NoiseGate() = default;
 
+// Re-prepare for a new sample rate - the envelope follower's attack/hold/
+// release coefficients are all derived from it - and re-seed every param.
+// Allocates; not real-time safe.
 void NoiseGate::Reset(double sample_rate) { impl_->dsp.Reset(sample_rate); }
 
+// Envelope-following gate: while the input sits below the threshold the
+// output is attenuated by `range`, and it opens/closes over the attack/hold/
+// release times. Hysteresis raises the close threshold above the open one so a
+// note decaying through the threshold doesn't flutter the gate. Real-time safe.
 void NoiseGate::Process(const float* const* input, float* const* output, int num_frames) {
   impl_->dsp.Process(input, output, num_frames);
 }
 
+// Param surface: threshold (dB), hysteresis (dB), attack (ms), hold (ms),
+// release (ms), range (dB of attenuation while closed).
 int NoiseGate::ParamCount() {
   return DsparkEffect<dspark::NoiseGate<float>, NoiseGateTraits>::ParamCount();
 }
 
+// Name/symbol/range/unit for one param index.
 const NoiseGate::ParamInfo& NoiseGate::GetParamInfo(int index) {
   return DsparkEffect<dspark::NoiseGate<float>, NoiseGateTraits>::GetParamInfo(index);
 }
 
+// Current value of one param, from DsparkEffect's mirror of what it pushed
+// into the processor (the vendored types expose no getters).
 float NoiseGate::GetParam(int index) const { return impl_->dsp.GetParam(index); }
 
+// Store one param and push it into the processor. Real-time safe.
 void NoiseGate::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
 }  // namespace nam_studio::dsp
