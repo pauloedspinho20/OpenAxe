@@ -91,6 +91,18 @@ export class NativeBlock implements PresetBlock {
 
     for (const [key, value] of Object.entries(params)) {
       if (key === 'input_level' || key === 'output_level') continue
+      // The reverb algorithm and delay model are string selects with no core
+      // symbol - they must go through their dedicated bridge calls
+      // (nam_studio_set_reverb_algorithm / nam_studio_set_delay_model), not
+      // setParam, which would reject the key and silently drop the knob.
+      if (key === 'reverbAlgorithm' && typeof value === 'string') {
+        void this.bridge.setReverbAlgorithm({ blockId: this.id, algorithm: value })
+        continue
+      }
+      if (key === 'model' && typeof value === 'string') {
+        void this.bridge.setDelayModel({ blockId: this.id, model: value })
+        continue
+      }
       void this.bridge
         .setParam({ blockId: this.id, key, value: toNumber(value) })
         .then((result) => {
