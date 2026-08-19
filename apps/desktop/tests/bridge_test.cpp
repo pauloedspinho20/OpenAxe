@@ -312,10 +312,16 @@ void TestConcurrentMutationsWhileStreamRunning() {
   CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"IN","toId":"anchor"}])")))["ok"] == true);
   CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"anchor","toId":"OUT"}])")))["ok"] == true);
 
-  std::atomic<bool> stop{false};
-  std::atomic<int> mutations{0};
+  // Issue #52/#59: the rare hang/crash only shows up under sustained,
+  // repeated thread-creation pressure against a live audio stream. A single
+  // 500ms burst was nowhere near enough to get a statistical read, so we run
+  // many back-to-back rounds - each round spins up, hammers, and tears down 4
+  // worker threads - which is exactly the pattern that reproduced #59.
+  static const int kStressRounds = 30;
   static const char* const kKinds[] = {"delay", "reverb", "compressor", "chorus"};
 
+  std::atomic<bool> stop{false};
+  std::atomic<int> mutations{0};
   auto worker = [&](int seed) {
     int i = 0;
     while (!stop.load(std::memory_order_relaxed)) {
@@ -335,11 +341,14 @@ void TestConcurrentMutationsWhileStreamRunning() {
     }
   };
 
-  std::vector<std::thread> workers;
-  for (int t = 0; t < 4; ++t) workers.emplace_back(worker, t);
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  stop.store(true, std::memory_order_relaxed);
-  for (auto& w : workers) w.join();
+  for (int round = 0; round < kStressRounds; ++round) {
+    std::vector<std::thread> workers;
+    for (int t = 0; t < 4; ++t) workers.emplace_back(worker, t);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    stop.store(true, std::memory_order_relaxed);
+    for (auto& w : workers) w.join();
+    stop.store(false, std::memory_order_relaxed);
+  }
 
   CHECK(mutations.load() > 0);
 
@@ -357,8 +366,8 @@ void TestConcurrentMutationsWhileStreamRunning() {
   Parse(bridge.HandleStop(""));
   bridge.HandleClose("");
 
-  std::printf("  TestConcurrentMutationsWhileStreamRunning: %d mutations across 4 threads, no crash\n",
-              mutations.load());
+  std::printf("  TestConcurrentMutationsWhileStreamRunning: %d mutations across %d rounds x 4 threads, no crash\n",
+               mutations.load(), kStressRounds);
 }
 
 // The UI's per-block Input/Output knobs. They used to be forwarded as the
