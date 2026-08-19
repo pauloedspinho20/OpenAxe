@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
-project(nam_studio_desktop VERSION 0.1.0 LANGUAGES CXX)
+# C alongside CXX: JUCE's own build tooling (juceaide) needs a working C
+# compiler; enabling it late/implicitly via a FetchContent'd subdirectory
+# instead of here can leave CMAKE_C_COMPILE_OBJECT unset on some generators.
+project(nam_studio_desktop VERSION 0.1.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,21 +43,27 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(webview)
 
-# ── Audio I/O (RtAudio 6.0.1, MIT) ───────────────────────────────────────
-# Low-latency cross-platform audio: CoreAudio (macOS), WASAPI/ASIO (Windows),
-# ALSA/JACK (Linux). Static so the app ships self-contained. Tests and the
-# Python bindings are disabled; ASIO stays OFF by default (gated per the M1
-# plan - it needs the Steinberg SDK at configure time).
-set(RTAUDIO_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
-set(RTAUDIO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RTAUDIO_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+# ── Audio I/O (JUCE juce_audio_devices, AGPLv3/commercial) ───────────────
+# Low-latency audio via JUCE's own from-scratch per-platform backends:
+# CoreAudio (macOS), WASAPI (Windows; ASIO opt-in later), ALSA (Linux; JACK
+# opt-in later). Replaces RtAudio, whose CoreAudio backend has a reproducible
+# bug (garbage input pointer during its internal duplex bridging - see
+# audio.cpp's Open()) - JUCE's CoreAudioIODevice is an independent
+# implementation, not RtAudio-based, so that bug cannot reproduce here.
+#
+# Fetch the whole JUCE tree rather than a single juce_add_module() call:
+# JUCE's own top-level CMakeLists.txt registers every module as a lazy CMake
+# target (nothing compiles until something links against it), which avoids
+# manually wiring juce_audio_devices' transitive deps ourselves.
+set(JUCE_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
+set(JUCE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
-  rtaudio
-  GIT_REPOSITORY https://github.com/thestk/rtaudio
-  GIT_TAG 6.0.1
+  juce
+  GIT_REPOSITORY https://github.com/juce-framework/JUCE
+  GIT_TAG 9.0.1
   GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(rtaudio)
+FetchContent_MakeAvailable(juce)
 
 # ── Bridge JSON + native file dialogs (M2) ──────────────────────────────
 # nlohmann/json (MIT, header-only): request/response marshalling for the
@@ -91,10 +100,16 @@ add_executable(nam_desktop WIN32 src/main.cpp src/http_server.cpp)
 
 target_link_libraries(nam_desktop_lib PUBLIC
   $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>
-  rtaudio
   nlohmann_json::nlohmann_json
   portable_file_dialogs
 )
+# PRIVATE, per JUCE's own CMake docs: linking a bare module target PUBLIC can
+# cause it to be built into a target multiple times. Nothing outside
+# audio.cpp/audio.h needs JUCE symbols (same containment RtAudio had).
+target_link_libraries(nam_desktop_lib PRIVATE juce_audio_devices)
+# Normally implied by juce_add_gui_app()/juce_add_console_app(), which this
+# bare-module integration doesn't use - several JUCE modules branch on it.
+target_compile_definitions(nam_desktop_lib PRIVATE JUCE_STANDALONE_APPLICATION=1)
 
 if(APPLE)
   # webview's Cocoa backend is Objective-C++; the TU that includes

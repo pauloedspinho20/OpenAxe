@@ -1,6 +1,6 @@
 #include "audio.h"
 
-#include <RtAudio.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 
 #include <algorithm>
 #include <chrono>
@@ -76,46 +76,32 @@ TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_fram
   return out;
 }
 
-// RtAudio 6.x reports errors via return codes (RtAudioErrorType) and
-// getErrorText(); it no longer throws exceptions. Every failure path below
-// stores the backend's message in last_error_ so the JS bridge can surface
-// it verbatim.
-
 namespace {
-// Sentinel meaning "platform default device" for Open(); RtAudio 6.x removed
-// the RtAudio::ADevice constant but kept this historical value in spirit.
+// Sentinel meaning "platform default device" for Open().
 constexpr unsigned int kDefaultDevice = 0xFFFFFFFFu;
-
-unsigned int ResolveDevice(unsigned int requested, bool input, RtAudio& audio) {
-  if (requested != kDefaultDevice) return requested;
-  const unsigned int count = audio.getDeviceCount();
-  if (count == 0) return kDefaultDevice;
-  return input ? audio.getDefaultInputDevice() : audio.getDefaultOutputDevice();
-}
 }  // namespace
 
 int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_frames,
-                      double /*stream_time*/, RtAudioStreamStatus /*status*/, void* user_data) {
+                      void* user_data) {
   auto* state = static_cast<RtCallbackState*>(user_data);
   state->callbacks.fetch_add(1, std::memory_order_relaxed);
   state->frames_processed.fetch_add(n_frames, std::memory_order_relaxed);
 
   // The stream errored since it opened (see AudioIO::HandleStreamError,
-  // typically RTAUDIO_DEVICE_DISCONNECT from a second process touching the
-  // same shared hardware mid-stream). Checked before touching
-  // input_buffer/output_buffer at all - once the backend has reported a
-  // stream-level error there is no guarantee left that those buffers still
-  // match input_channels/output_channels (or are even valid), so this
-  // returns without reading or writing anything, rather than risk an
-  // out-of-bounds access on data whose shape may have changed underneath it.
-  // The app-level Stop()/Close() (driven by TakeStreamError, polled from the
-  // JS layer) tears the stream down properly shortly after.
+  // typically a device disconnect from a second process touching the same
+  // shared hardware mid-stream). Checked before touching input_buffer/
+  // output_buffer at all - once the backend has reported a stream-level
+  // error there is no guarantee left that those buffers still match
+  // input_channels/output_channels (or are even valid), so this returns
+  // without reading or writing anything, rather than risk an out-of-bounds
+  // access on data whose shape may have changed underneath it. The app-level
+  // Stop()/Close() (driven by TakeStreamError, polled from the JS layer)
+  // tears the stream down properly shortly after.
   if (state->stream_error.load(std::memory_order_acquire)) return 0;
 
-  // RtAudio was opened with RTAUDIO_NONINTERLEAVED, so input_buffer/output_buffer
-  // are arrays of `input_channels`/`output_channels` pointers. Read exactly that
-  // many - a mono input (built-in mic) is a 1-element array, so a second read
-  // would be out of bounds.
+  // Buffers are arrays of `input_channels`/`output_channels` deinterleaved
+  // pointers. Read exactly that many - a mono input (built-in mic) is a
+  // 1-element array, so a second read would be out of bounds.
   const int in_ch = state->input_channels;
   const int out_ch = state->output_channels;
   const float* in_l = nullptr;
@@ -163,32 +149,57 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   return 0;
 }
 
-AudioIO::AudioIO() {
-  // Registered once for the object's lifetime - RtAudio invokes this from
-  // whichever internal thread noticed the problem, which is not necessarily
-  // the audio callback thread and is not synchronized with io_mutex_. See
-  // HandleStreamError's own doc comment for why it only records the error
-  // rather than acting on it directly.
-  audio_.setErrorCallback(
-      [this](RtAudioErrorType type, const std::string& text) { HandleStreamError(type, text); });
+// Adapts juce::AudioIODeviceCallback to RtProcessCallback + HandleStreamError
+// - see the forward declaration's doc comment in audio.h for why this is a
+// private nested class rather than AudioIO itself inheriting the JUCE type.
+class AudioIO::Callback : public juce::AudioIODeviceCallback {
+ public:
+  Callback(AudioIO& owner, RtCallbackState& state) : owner_(owner), state_(state) {}
+
+  void audioDeviceIOCallbackWithContext(const float* const* input, int /*numInputChannels*/,
+                                        float* const* output, int /*numOutputChannels*/,
+                                        int numSamples,
+                                        const juce::AudioIODeviceCallbackContext&) override {
+    // input/output are deinterleaved per-channel pointer arrays, exactly the
+    // shape RtProcessCallback already expects (only ever reads through
+    // input's pointers, so casting away its const is safe).
+    RtProcessCallback(const_cast<float**>(output), const_cast<float**>(input),
+                      static_cast<unsigned int>(numSamples), &state_);
+  }
+  void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
+  void audioDeviceStopped() override {}
+  void audioDeviceError(const juce::String& message) override {
+    owner_.HandleStreamError(message.toStdString());
+  }
+
+ private:
+  AudioIO& owner_;
+  RtCallbackState& state_;
+};
+
+AudioIO::AudioIO() : callback_(std::make_unique<Callback>(*this, state_)) {
+  // juce_audio_devices depends on juce_events, which needs a MessageManager
+  // instance for some internal facilities (e.g. WASAPI's device-list
+  // watching). This app never calls its runDispatchLoop() - the webview
+  // shell's own native event loop keeps everything moving, exactly like a
+  // JUCE plugin never owns its host's event loop either.
+  juce::MessageManager::getInstance();
+
+#if JUCE_MAC
+  type_.reset(juce::AudioIODeviceType::createAudioIODeviceType_CoreAudio());
+#elif JUCE_WINDOWS
+  type_.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared));
+#elif JUCE_LINUX
+  type_.reset(juce::AudioIODeviceType::createAudioIODeviceType_ALSA());
+#endif
 }
 
 AudioIO::~AudioIO() {
-  if (audio_.isStreamOpen()) audio_.closeStream();
+  if (device_ && device_->isOpen()) device_->close();
 }
 
-void AudioIO::HandleStreamError(RtAudioErrorType type, const std::string& text) {
-  // RTAUDIO_WARNING covers routine, non-fatal notices (e.g. stopStream()
-  // called on an already-stopped stream) - only genuine stream-breaking
-  // errors need to silence the callback and hand control back to the app.
-  // RTAUDIO_DEVICE_DISCONNECT is the one a second process touching the same
-  // shared hardware mid-stream actually triggers (see Open()'s mismatched-
-  // device comment above for the related, already-known crash class this
-  // guards against).
-  if (type == RTAUDIO_WARNING) return;
-
-  WriteLog("audio: stream error (type " + std::to_string(static_cast<int>(type)) +
-            "): " + text);
+void AudioIO::HandleStreamError(const std::string& text) {
+  WriteLog("audio: stream error: " + text);
 
   // Do this first and unconditionally - even if a racing Close() flips the
   // stream shut right after, an audio callback that's already in flight (or
@@ -210,27 +221,91 @@ bool AudioIO::TakeStreamError(std::string* message) {
   return true;
 }
 
+unsigned int AudioIO::HashDeviceId(const std::string& name) {
+  // FNV-1a 32-bit: a pure function of the name, so ListDevices() and
+  // ResolveDeviceName() never need a cached id->name table between them (and
+  // ids incidentally stay stable across relaunches, though nothing requires
+  // that - see the header's AudioDeviceInfo comment).
+  uint32_t h = 0x811C9DC5u;
+  for (unsigned char c : name) {
+    h ^= c;
+    h *= 0x01000193u;
+  }
+  if (h == kDefaultDevice) h ^= 1u;  // never collide with the sentinel
+  return h;
+}
+
+bool AudioIO::ResolveDeviceName(unsigned int id, bool input, std::string* name) const {
+  if (!type_) return false;
+  type_->scanForDevices();
+  const juce::StringArray names = type_->getDeviceNames(input);
+  if (names.isEmpty()) return false;
+
+  if (id == kDefaultDevice) {
+    int index = type_->getDefaultDeviceIndex(input);
+    if (index < 0 || index >= names.size()) index = 0;
+    *name = names[index].toStdString();
+    return true;
+  }
+
+  for (const auto& n : names) {
+    if (HashDeviceId(n.toStdString()) == id) {
+      *name = n.toStdString();
+      return true;
+    }
+  }
+  return false;
+}
+
 std::vector<AudioDeviceInfo> AudioIO::ListDevices() const {
   std::vector<AudioDeviceInfo> devices;
-  // RtAudio device ids are not contiguous across backends (CoreAudio uses
-  // raw AudioDeviceIDs), so enumerate via getDeviceIds() - never 0..count-1.
-  const std::vector<unsigned int> ids = audio_.getDeviceIds();
-  if (ids.empty()) return devices;
+  if (!type_) return devices;
+  type_->scanForDevices();
 
-  devices.reserve(ids.size());
-  const std::string api = RtAudio::getApiName(audio_.getCurrentApi());
-  for (const unsigned int id : ids) {
-    RtAudio::DeviceInfo info = audio_.getDeviceInfo(id);
+  const juce::StringArray input_names = type_->getDeviceNames(true);
+  const juce::StringArray output_names = type_->getDeviceNames(false);
+  const int default_input = type_->getDefaultDeviceIndex(true);
+  const int default_output = type_->getDefaultDeviceIndex(false);
+  const std::string api = type_->getTypeName().toStdString();
+
+  // Open() only ever accepts a single device driving both directions, so an
+  // input-only or output-only device can never actually be opened - and
+  // neither can a device whose input and output endpoints are separate
+  // entities with different names (a real characteristic of some backends,
+  // e.g. WASAPI, not something introduced here). Duplex-capable here means
+  // the same name is reported in both lists: the JUCE equivalent of the
+  // input_channels>0 && output_channels>0 filter this used under RtAudio.
+  for (int i = 0; i < input_names.size(); ++i) {
+    const juce::String& name = input_names[i];
+    const int out_index = output_names.indexOf(name);
+    if (out_index < 0) continue;
+
+    // Probe channel counts / sample rates by briefly creating the device -
+    // a UI-poll-rate call, not real-time, so the extra cost is fine.
+    std::unique_ptr<juce::AudioIODevice> probe(type_->createDevice(name, name));
+    if (!probe) continue;
+
+    const int in_ch = probe->getInputChannelNames().size();
+    const int out_ch = probe->getOutputChannelNames().size();
+    if (in_ch <= 0 || out_ch <= 0) continue;
+
+    const juce::Array<double> rates = probe->getAvailableSampleRates();
+    double preferred = 0.0;
+    for (double r : rates) {
+      if (r > preferred) preferred = r;
+    }
+    if (rates.contains(48000.0)) preferred = 48000.0;
+
     AudioDeviceInfo d;
-    d.id = id;
-    d.name = info.name.empty() ? "Unknown device" : info.name;
-    d.is_default = info.isDefaultInput || info.isDefaultOutput;
-    d.input_channels = info.inputChannels;
-    d.output_channels = info.outputChannels;
-    d.preferred_sample_rate = info.preferredSampleRate;
+    d.id = HashDeviceId(name.toStdString());
+    d.name = name.toStdString();
+    d.is_default = (i == default_input) || (out_index == default_output);
+    d.input_channels = in_ch;
+    d.output_channels = out_ch;
+    d.preferred_sample_rate = static_cast<unsigned int>(preferred);
     d.api = api;
-    d.is_input = info.inputChannels > 0;
-    d.is_output = info.outputChannels > 0;
+    d.is_input = true;
+    d.is_output = true;
     devices.push_back(std::move(d));
   }
   return devices;
@@ -245,21 +320,34 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
     std::lock_guard<std::mutex> error_lock(error_mutex_);
     has_pending_stream_error_ = false;
   }
-  if (audio_.isStreamOpen()) audio_.closeStream();
+  if (device_) {
+    if (device_->isOpen()) device_->close();
+    device_.reset();
+  }
+  if (!type_) {
+    last_error_ = "no audio backend available";
+    return false;
+  }
 
-  const unsigned int input_id = ResolveDevice(input_device, /*input=*/true, audio_);
-  const unsigned int output_id = ResolveDevice(output_device, /*input=*/false, audio_);
+  std::string input_name, output_name;
+  if (!ResolveDeviceName(input_device, /*input=*/true, &input_name) ||
+      !ResolveDeviceName(output_device, /*input=*/false, &output_name)) {
+    last_error_ = "requested audio device not found";
+    return false;
+  }
 
   // Two independent physical devices (this is the common case with no
   // external interface: the built-in mic + built-in speakers are separate
-  // devices) hit two real problems - RtAudio's CoreAudio backend can crash
-  // bridging them into one "asynchronous duplex" stream (issue #53), and
-  // even when it doesn't, live mic monitoring straight into open speakers is
-  // an acoustic feedback loop with no fix at this layer. Refuse outright
-  // rather than let either happen - the user needs a single device that
-  // does both (an audio interface, aggregate device, or virtual loopback),
-  // not a silently degraded or crash-prone session.
-  if (input_id != output_id) {
+  // devices) is an acoustic feedback loop with no fix at this layer - live
+  // mic monitoring straight into open speakers. Refuse outright rather than
+  // let it happen - the user needs a single device that does both (an audio
+  // interface, aggregate device, or virtual loopback), not a silently
+  // degraded session. (This used to also guard against a RtAudio CoreAudio
+  // backend crash bridging two independent devices into one duplex stream -
+  // issue #53 - which no longer applies now that this uses JUCE's own
+  // from-scratch CoreAudio backend, but the feedback-loop half of the
+  // rationale is backend-independent and the policy stays unconditional.)
+  if (input_name != output_name) {
     last_error_ =
         "Input and output must be the same audio device - pick a single "
         "audio interface (or aggregate/loopback device) for both, not "
@@ -267,95 +355,84 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
     return false;
   }
 
-  RtAudio::StreamParameters in;
-  in.deviceId = input_id;
-  in.nChannels = 2;
-  in.firstChannel = 0;
+  std::unique_ptr<juce::AudioIODevice> device(type_->createDevice(output_name, input_name));
+  if (!device) {
+    last_error_ = "failed to create audio device";
+    return false;
+  }
 
-  RtAudio::StreamParameters out;
-  out.deviceId = output_id;
-  out.nChannels = 2;
-  out.firstChannel = 0;
-
-  RtAudio::StreamOptions options;
-  options.flags = RTAUDIO_NONINTERLEAVED;
-  options.flags |= RTAUDIO_SCHEDULE_REALTIME;
-  options.numberOfBuffers = 0;  // backend default
-  // Only consulted with RTAUDIO_SCHEDULE_REALTIME, and only by the backends
-  // that schedule their own callback thread (ALSA/JACK, where RtAudio clamps
-  // this into SCHED_RR's valid range - so asking high means "the top of the
-  // RT band", and the old 0 meant the bottom of it). CoreAudio and WASAPI
-  // ignore it: they set their own priority for the callback thread.
-  options.priority = 90;
-  // buffer_frames == 0 means "as small as this device allows" - the hardware
-  // minimum on CoreAudio, 2 periods instead of the default 4 on
-  // ALSA/WASAPI/DS. Opt-in, since a heavy NAM model can overrun a block that
-  // small (see the header).
-  if (buffer_frames == kLowestLatencyBuffer) options.flags |= RTAUDIO_MINIMIZE_LATENCY;
-
-  // Clamp channels to what each device actually provides: a mono built-in mic
-  // has 1 input channel, stereo speakers have 2 output channels. Requesting
-  // more than a device offers makes RtAudio fail with "does not support the
-  // requested channel count". Never exceed 2 (the rig is stereo internally).
-  const RtAudio::DeviceInfo in_info = audio_.getDeviceInfo(input_id);
-  const RtAudio::DeviceInfo out_info = audio_.getDeviceInfo(output_id);
-  const int in_ch = std::min(2, static_cast<int>(in_info.inputChannels));
-  const int out_ch = std::min(2, static_cast<int>(out_info.outputChannels));
+  // Clamp channels to what the device actually provides: a mono built-in mic
+  // has 1 input channel, stereo speakers have 2 output channels. Never
+  // exceed 2 (the rig is stereo internally).
+  const int in_ch = std::min(2, device->getInputChannelNames().size());
+  const int out_ch = std::min(2, device->getOutputChannelNames().size());
   if (in_ch <= 0 || out_ch <= 0) {
     last_error_ = "input/output device has no usable channels";
     return false;
   }
-  in.nChannels = in_ch;
-  out.nChannels = out_ch;
   state_.input_channels = in_ch;
   state_.output_channels = out_ch;
 
   // Prefer a rate the device actually runs at: opening at an unsupported rate
-  // either fails outright or makes the OS resample around us, which costs both
-  // latency and fidelity for no benefit.
+  // either fails outright or makes the OS resample around us, which costs
+  // both latency and fidelity for no benefit.
+  const juce::Array<double> rates = device->getAvailableSampleRates();
   double rate = sample_rate;
-  const auto supports = [](const RtAudio::DeviceInfo& info, double r) {
-    return std::find(info.sampleRates.begin(), info.sampleRates.end(),
-                     static_cast<unsigned int>(r)) != info.sampleRates.end();
-  };
-  if (!supports(in_info, rate) || !supports(out_info, rate)) {
-    const unsigned int preferred =
-        out_info.preferredSampleRate != 0 ? out_info.preferredSampleRate : in_info.preferredSampleRate;
-    if (preferred != 0) rate = static_cast<double>(preferred);
+  if (!rates.contains(rate)) {
+    double preferred = 0.0;
+    for (double r : rates) {
+      if (r > preferred) preferred = r;
+    }
+    if (rates.contains(48000.0)) preferred = 48000.0;
+    if (preferred != 0.0) rate = preferred;
   }
 
+  // buffer_frames == 0 means "as small as this device allows" - opt-in,
+  // since a heavy NAM model can overrun a block that small (see the header).
   unsigned int frames = buffer_frames;
-  const RtAudioErrorType result =
-      audio_.openStream(&out, &in, RTAUDIO_FLOAT32, rate, &frames, &RtProcessCallback,
-                        &state_, &options);
-  if (result != RTAUDIO_NO_ERROR) {
-    last_error_ = audio_.getErrorText();
+  if (buffer_frames == kLowestLatencyBuffer) {
+    const juce::Array<int> sizes = device->getAvailableBufferSizes();
+    int smallest = device->getDefaultBufferSize();
+    for (int s : sizes) {
+      if (s > 0 && (smallest <= 0 || s < smallest)) smallest = s;
+    }
+    frames = static_cast<unsigned int>(smallest);
+  }
+
+  juce::BigInteger in_mask, out_mask;
+  in_mask.setRange(0, in_ch, true);
+  out_mask.setRange(0, out_ch, true);
+
+  const juce::String error = device->open(in_mask, out_mask, rate, static_cast<int>(frames));
+  if (error.isNotEmpty()) {
+    last_error_ = error.toStdString();
     return false;
   }
 
-  input_device_id_ = input_id;
-  output_device_id_ = output_id;
-  sample_rate_ = audio_.getStreamSampleRate();
-  buffer_frames_ = frames;  // backend may have adjusted the buffer size
+  device_ = std::move(device);
+  input_device_id_ = output_device_id_ = HashDeviceId(input_name);
+  sample_rate_ = device_->getCurrentSampleRate();
+  buffer_frames_ = static_cast<unsigned int>(device_->getCurrentBufferSizeSamples());
   return true;
 }
 
 void AudioIO::Close() {
   std::lock_guard<std::mutex> lock(io_mutex_);
-  if (audio_.isStreamOpen()) {
-    audio_.closeStream();
+  if (device_) {
+    if (device_->isOpen()) device_->close();
+    device_.reset();
     state_.graph_ready.store(false, std::memory_order_release);
   }
 }
 
 bool AudioIO::IsOpen() const {
   std::lock_guard<std::mutex> lock(io_mutex_);
-  return audio_.isStreamOpen();
+  return device_ && device_->isOpen();
 }
 
 bool AudioIO::IsRunning() const {
   std::lock_guard<std::mutex> lock(io_mutex_);
-  return audio_.isStreamRunning();
+  return device_ && device_->isPlaying();
 }
 
 void AudioIO::SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size) {
@@ -372,24 +449,21 @@ void AudioIO::SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int m
 bool AudioIO::Start() {
   std::lock_guard<std::mutex> lock(io_mutex_);
   last_error_.clear();
-  const RtAudioErrorType result = audio_.startStream();
-  if (result != RTAUDIO_NO_ERROR) {
-    last_error_ = audio_.getErrorText();
+  if (!device_) {
+    last_error_ = "no audio device open";
     return false;
   }
+  // JUCE's start() is void - unlike RtAudio's startStream(), failures
+  // surface asynchronously via audioDeviceError/HandleStreamError (polled
+  // through TakeStreamError), not a synchronous return code here.
+  device_->start(callback_.get());
   return true;
 }
 
 bool AudioIO::Stop() {
   std::lock_guard<std::mutex> lock(io_mutex_);
   last_error_.clear();
-  if (audio_.isStreamRunning()) {
-    const RtAudioErrorType result = audio_.stopStream();
-    if (result != RTAUDIO_NO_ERROR) {
-      last_error_ = audio_.getErrorText();
-      return false;
-    }
-  }
+  if (device_ && device_->isPlaying()) device_->stop();
   return true;
 }
 
@@ -410,14 +484,16 @@ std::string AudioIO::LastError() const {
 
 long AudioIO::StreamLatencyFrames() const {
   std::lock_guard<std::mutex> lock(io_mutex_);
-  return audio_.getStreamLatency();
+  if (!device_) return 0;
+  return static_cast<long>(device_->getInputLatencyInSamples()) +
+         static_cast<long>(device_->getOutputLatencyInSamples());
 }
 
 bool AudioIO::BeginSuspend() {
   std::lock_guard<std::mutex> lock(io_mutex_);
   // If the stream isn't running there is no audio thread touching the graph,
   // so there is nothing to synchronize with.
-  if (!audio_.isStreamRunning()) return true;
+  if (!device_ || !device_->isPlaying()) return true;
 
   const unsigned int before = state_.suspended_callbacks.load(std::memory_order_acquire);
   state_.suspend.store(true, std::memory_order_release);
@@ -432,7 +508,7 @@ bool AudioIO::BeginSuspend() {
 
   // Timed out - the device is stalling. Force the stream off; with no audio
   // thread running, mutating the graph afterwards is safe.
-  audio_.stopStream();
+  device_->stop();
   return false;
 }
 

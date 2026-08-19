@@ -58,7 +58,9 @@ void TestAddBlockAndInfo() {
   auto r = Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":2,"id":"d1"}])")));
   CHECK(r["ok"] == true && r["id"] == "d1");
 
-  // Mixer is a passthrough (monostate) block - 0 params.
+  // Mixer stays a monostate (no wrapped DSP) but still exposes real params:
+  // level + pan for each of its 4 input ports - see kMixerParamCount in
+  // engine.cpp.
   r = Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"mixer","row":1,"col":1,"id":"m1"}])")));
   CHECK(r["ok"] == true && r["id"] == "m1");
 
@@ -74,7 +76,16 @@ void TestAddBlockAndInfo() {
   }
 
   auto mixer = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"m1"}])")));
-  CHECK(mixer["paramCount"] == 0);
+  // 4 inputs x 2 params each (level, pan), interleaved in{p}_level/in{p}_pan -
+  // unity level (1.0) and centre pan (0.0) by default.
+  CHECK(mixer["paramCount"] == 8);
+  CHECK(mixer["params"].is_array());
+  CHECK(mixer["params"].size() == 8);
+  for (size_t i = 0; i < mixer["params"].size(); ++i) {
+    const double value = mixer["params"][i]["value"].get<double>();
+    const bool is_pan = (i % 2) == 1;
+    CHECK(std::abs(value - (is_pan ? 0.0 : 1.0)) < 1e-6);
+  }
 }
 
 void TestParamsByIndexAndSymbol() {
@@ -185,8 +196,8 @@ void TestMonitorTap() {
   float* out[2] = {out0, out1};
 
   // Two callbacks so the ring accumulates more than one frame's worth.
-  nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR, &state);
-  nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR, &state);
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   auto tap_in = nam_desktop::ReadTap(state, /*input=*/true, kFrames);
   CHECK(tap_in.frames == static_cast<unsigned int>(kFrames));
@@ -219,8 +230,7 @@ void TestSuspendCallbackSilencesOutput() {
   for (int i = 0; i < kFrames; ++i) in0[i] = in1[i] = 0.5f;
   float* in[2] = {in0, in1};
 
-  nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR,
-                                 &state);
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   CHECK(state.suspended_callbacks.load() == 1);
   for (int i = 0; i < kFrames; ++i) {
@@ -234,22 +244,23 @@ void TestSuspendCallbackSilencesOutput() {
 // one at a time elsewhere in this file). This drives a real open+running
 // audio stream and hammers the bridge with concurrent graph mutations from
 // several threads at once - each one a genuine BeginSuspend/Mutate/EndSuspend
-// round trip racing a real RtAudio callback, and several threads' Call()s
+// round trip racing a real audio callback, and several threads' Call()s
 // racing each other into the same control-thread queue. Success is simply
 // completing without crashing or hanging, plus the bridge's own bookkeeping
 // (blocks_) coming out exactly as populated - a leak there would mean the
 // concurrent add/remove pairs didn't all land.
 //
 // Deliberately opens a single device that supports both input and output
-// (e.g. an audio interface, or a loopback device like BlackHole), rather
-// than RtAudio's separate-default-devices resolution. Two independent
-// physical devices (this host's own default pairing is the MacBook's
-// built-in mic + built-in speakers) hit an unrelated, still-reproducible-on-
-// current-upstream RtAudio CoreAudio bug where the very first callback(s)
-// can dereference a garbage input pointer during its internal duplex
-// bridging - a real, serious, separate finding, but not what this test is
-// trying to isolate (see the session notes for issue #52). Skips if no
-// single duplex-capable device exists.
+// (e.g. an audio interface, or a loopback device like BlackHole), rather than
+// resolving separate defaults for input and output. Two independent physical
+// devices (this host's own default pairing is the MacBook's built-in mic +
+// built-in speakers) is unconditionally rejected by Open() (see its
+// comment) - this used to also reproduce a RtAudio CoreAudio-backend bug on
+// exactly that single-device setup (garbage input pointer on the very first
+// callback(s) during its internal duplex bridging); this test (and
+// audio_io_test.cpp's TestOpenStartStop) is the regression test for the swap
+// to JUCE's own from-scratch CoreAudio backend. Skips if no single
+// duplex-capable device exists.
 void TestConcurrentMutationsWhileStreamRunning() {
   nam_desktop::StudioBridge bridge;
 
@@ -258,18 +269,21 @@ void TestConcurrentMutationsWhileStreamRunning() {
     std::printf("  Skipping concurrent-mutation stress test: no audio devices on this host\n");
     return;
   }
-  int duplex_id = -1;
+  // int64_t, not int: device ids are now a hash spanning the full unsigned
+  // 32-bit range (see AudioIO::HashDeviceId in audio.cpp), so about half of
+  // them would overflow a plain int - and this still needs a negative
+  // sentinel for "not found".
+  int64_t duplex_id = -1;
   for (const auto& d : devices) {
     if (d.value("isInput", false) && d.value("isOutput", false)) {
-      duplex_id = d.value("id", -1);
+      duplex_id = d.value("id", int64_t{-1});
       break;
     }
   }
   if (duplex_id < 0) {
     std::printf(
         "  Skipping concurrent-mutation stress test: no single input+output device on this "
-        "host (separate mic/speaker devices hit an unrelated RtAudio duplex bug - see issue "
-        "#52's notes)\n");
+        "host\n");
     return;
   }
 
