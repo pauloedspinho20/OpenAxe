@@ -24,6 +24,9 @@ jobs:
       - name: Param schema drift check
         run: node scripts/gen-param-schema.mjs --check
 
+      - name: Grid dimensions drift check
+        run: node scripts/check-grid-dims.mjs
+
       - name: Lint
         run: pnpm lint
 

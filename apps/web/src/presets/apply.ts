@@ -32,11 +32,21 @@ async function applyBlockAsset(
     if (data.modelId) {
       const blob = await getCachedAsset(data.modelId)
       if (blob) {
-        const json = await blob.text()
-        await block.loadModel?.(json, undefined, {
-          id: data.modelId,
-          name: data.modelName ?? data.modelId,
-        })
+        try {
+          const json = await blob.text()
+          await block.loadModel?.(json, undefined, {
+            id: data.modelId,
+            name: data.modelName ?? data.modelId,
+          })
+        } catch {
+          // A corrupt/unsupported model shouldn't abort the whole preset.
+          missingAssets.push({
+            blockId: data.id,
+            kind: 'model',
+            id: data.modelId,
+            name: data.modelName ?? data.modelId,
+          })
+        }
       } else {
         missingAssets.push({
           blockId: data.id,
@@ -55,9 +65,19 @@ async function applyBlockAsset(
     if (data.irId) {
       const blob = await getCachedAsset(data.irId)
       if (blob) {
-        const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
-        const irMix = typeof data.params.irMix === 'number' ? data.params.irMix : 1
-        block.loadIR?.(audioBuffer, irMix, { id: data.irId, name: data.irName ?? data.irId })
+        try {
+          const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
+          const irMix = typeof data.params.irMix === 'number' ? data.params.irMix : 1
+          block.loadIR?.(audioBuffer, irMix, { id: data.irId, name: data.irName ?? data.irId })
+        } catch {
+          // A corrupt/unsupported IR shouldn't abort the whole preset.
+          missingAssets.push({
+            blockId: data.id,
+            kind: 'ir',
+            id: data.irId,
+            name: data.irName ?? data.irId,
+          })
+        }
       } else {
         missingAssets.push({
           blockId: data.id,

@@ -92,6 +92,13 @@ export class RigWorkletNode {
   private nextMessageId = 1
   private readonly pending = new Map<number, (reply: WorkletReply) => void>()
 
+  // setParam calls are buffered and flushed once per animation frame so a fast
+  // knob drag (hundreds of input events/sec) collapses to at most one message
+  // per block/key per frame, instead of allocating a Promise + IPC round-trip
+  // per event. The final value for each key wins.
+  private readonly paramBuffer = new Map<string, { blockId: string; key: string; value: number }>()
+  private paramRafHandle: number | null = null
+
   private constructor(node: AudioWorkletNode) {
     this.node = node
     this.node.port.onmessage = (event: MessageEvent<WorkletReply>) => {
@@ -191,7 +198,25 @@ export class RigWorkletNode {
   // ── Params / trims / bypass / master ────────────────────────────────────
 
   setParam(blockId: string, key: string, value: number): void {
-    this.send({ type: 'setParam', block: blockId, key, value })
+    this.paramBuffer.set(`${blockId}|${key}`, { blockId, key, value })
+    if (this.paramRafHandle === null) {
+      const flush = () => {
+        this.paramRafHandle = null
+        this.flushParams()
+      }
+      this.paramRafHandle =
+        typeof requestAnimationFrame === 'function'
+          ? requestAnimationFrame(flush)
+          : (setTimeout(flush, 0) as unknown as number)
+    }
+  }
+
+  private flushParams(): void {
+    if (this.paramBuffer.size === 0) return
+    for (const { blockId, key, value } of this.paramBuffer.values()) {
+      this.send({ type: 'setParam', block: blockId, key, value })
+    }
+    this.paramBuffer.clear()
   }
 
   setBypass(blockId: string, bypassed: boolean): void {
@@ -268,6 +293,8 @@ export class RigWorkletNode {
 
   async dispose(): Promise<void> {
     await this.request({ type: 'dispose' }).catch(() => {})
+    // Apply any buffered param writes before tearing the worklet down.
+    this.flushParams()
     this.node.disconnect()
     this.pending.clear()
   }

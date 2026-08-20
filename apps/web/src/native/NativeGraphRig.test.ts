@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { IN_RAIL, OUT_RAIL, jack } from '../engine/gridConfig'
 import { NativeGraphRig } from './NativeGraphRig'
-import type { NamStudioBridge } from './namStudio'
+import type { NamStudioBridge, NamStudioIdResult } from './namStudio'
 
 /** A mock bridge recording calls, cast loosely (tests only touch what rigs use). */
 function makeBridge() {
@@ -9,7 +9,7 @@ function makeBridge() {
     addBlock: vi.fn(async (args: { id?: string }) => ({ ok: true, id: args.id })),
     removeBlock: vi.fn(async () => ({ ok: true })),
     moveBlock: vi.fn(async () => ({ ok: true })),
-    connect: vi.fn(async () => ({ ok: true, id: 'edge-x' })),
+    connect: vi.fn(async (): Promise<NamStudioIdResult> => ({ ok: true, id: 'edge-x' })),
     disconnect: vi.fn(async () => ({ ok: true })),
     setParam: vi.fn(async (_args: { key: string }) => ({ ok: true })),
     loadModelJson: vi.fn(async () => ({ ok: true, result: 0 })),
@@ -75,6 +75,34 @@ describe('NativeGraphRig', () => {
       id: outEdge.ok ? outEdge.id : '',
     })
     expect(rig.listEdgeIds()).toHaveLength(2)
+  })
+
+  it('rolls back the local edge when the bridge rejects the connect', async () => {
+    const { calls, bridge } = makeBridge()
+    // Bridge re-validates against the core and rejects this connect.
+    calls.connect.mockResolvedValue({ ok: false, error: 'kWrongOrder' })
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('mixer', 0, 1, 'm1')
+
+    const result = rig.connect(jack(IN_RAIL), jack('m1'))
+    expect(result.ok).toBe(true) // optimistic, like GraphRig
+    // The bridge rejects asynchronously; let the microtask settle.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(rig.listEdgeIds()).toHaveLength(0)
+    expect(calls.connect).toHaveBeenCalled()
+  })
+
+  it('countActiveHeavyBlocks counts loaded IRs (mirrors web GraphRig)', async () => {
+    const { bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('cab', 0, 1, 'c1')
+    const block = rig.getBlock('c1') as unknown as { loadedIr: unknown }
+
+    expect(rig.countActiveHeavyBlocks()).toBe(0)
+    block.loadedIr = { id: 'ir1', name: 'IR' }
+    expect(rig.countActiveHeavyBlocks()).toBe(1)
+    block.loadedIr = null
+    expect(rig.countActiveHeavyBlocks()).toBe(0)
   })
 
   it('rejects an invalid connect without touching the bridge', async () => {

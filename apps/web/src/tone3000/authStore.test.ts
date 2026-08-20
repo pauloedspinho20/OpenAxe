@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './authStore'
 import { clearPkce, clearTokens, storePkce, setTokens } from './client'
