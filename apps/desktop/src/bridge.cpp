@@ -111,10 +111,21 @@ void StudioBridge::Submit(std::function<void()> task) {
 }
 
 void StudioBridge::Call(std::function<void()> task) {
-  std::mutex done_mutex;
-  std::condition_variable done_cv;
-  bool done = false;
-  Submit([&] {
+  // Heap-allocated completion object, captured by *value* into the submitted
+  // lambda so the control thread never depends on this stack frame's lifetime.
+  // The previous design captured stack-local done_mutex/done_cv/done by
+  // reference; that is only safe because the caller blocks until the task
+  // completes, but it leaves a by-reference-to-stack hazard that is exactly
+  // the kind of edge case that misbehaves under thread-creation / memory
+  // pressure (issue #59). Owning it via shared_ptr keeps it alive for both
+  // the caller's wait and the control thread's notify no matter what.
+  struct Completion {
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool done = false;
+  };
+  auto completion = std::make_shared<Completion>();
+  Submit([completion, task = std::move(task)] {
     try {
       task();
     } catch (...) {
@@ -123,13 +134,13 @@ void StudioBridge::Call(std::function<void()> task) {
       // programming bug that should not take the app down.
     }
     {
-      std::lock_guard<std::mutex> lock(done_mutex);
-      done = true;
+      std::lock_guard<std::mutex> lock(completion->mutex);
+      completion->done = true;
     }
-    done_cv.notify_one();
+    completion->cv.notify_one();
   });
-  std::unique_lock<std::mutex> lock(done_mutex);
-  done_cv.wait(lock, [&] { return done; });
+  std::unique_lock<std::mutex> lock(completion->mutex);
+  completion->cv.wait(lock, [&] { return completion->done; });
 }
 
 void StudioBridge::ControlLoop() {

@@ -1,50 +1,74 @@
 #pragma once
 
-#include <RtAudio.h>
-
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include "nam_studio/api.h"
 
+// Forward-declared rather than #include <juce_audio_devices/...>: JUCE's own
+// CMake support compiles a linked module's sources directly into whichever
+// target links it (see the PRIVATE-linking note on nam_desktop_lib in
+// CMakeLists.txt), so anything that just #includes this header - the tests -
+// must not also need JUCE's own headers/include paths, only these type names
+// behind a unique_ptr (fine without a complete type - see audio.cpp, which
+// does include the real header, for every actual use).
+namespace juce {
+class AudioIODeviceType;
+class AudioIODevice;
+}  // namespace juce
+
 // The desktop shell's audio I/O layer (issue #15 M1): a thin wrapper over
-// RtAudio that opens a low-latency full-duplex stream and drives the shared
-// C++ DSP core's nam_studio_graph directly from the real-time callback -
-// same process, zero IPC, no Web Audio anywhere in the path.
+// JUCE's juce_audio_devices module that opens a low-latency full-duplex
+// stream and drives the shared C++ DSP core's nam_studio_graph directly from
+// the real-time callback - same process, zero IPC, no Web Audio anywhere in
+// the path.
 //
-// Platform backends, selected by RtAudio at configure time:
-//   macOS   CoreAudio (default)
-//   Windows WASAPI (default); ASIO when built with RTAUDIO_API_ASIO + ASIO SDK
-//   Linux   ALSA (default); JACK when built with RTAUDIO_API_JACK
+// Previously wrapped RtAudio; swapped out after a reproducible RtAudio
+// CoreAudio-backend crash (garbage input pointer during its internal duplex
+// bridging - see Open()'s comment). juce_audio_devices ships its own
+// from-scratch per-platform backends, independent of RtAudio's source.
 //
-// Real-time thread priority is handled by the RtAudio backend itself
-// (CoreAudio/ALSA/JACK schedule the callback thread; WASAPI uses the
-// pro-audio thread) plus the RTAUDIO_SCHEDULE_REALTIME flag on Open().
+// Platform backends, selected at compile time (see the ctor):
+//   macOS   CoreAudio
+//   Windows WASAPI (shared mode); ASIO is a future opt-in
+//   Linux   ALSA; JACK is a future opt-in
+//
+// Real-time thread priority is handled by the backend itself, same as it was
+// under RtAudio.
 
 namespace nam_desktop {
 
 // Mirrors the web app's IODevice (apps/web/src/state/ioStore.ts): an id and a
-// label per endpoint. RtAudio has no stable "groupId" concept, so the JS
-// bridge synthesizes one from the backend + device name in M2.
+// label per endpoint. JUCE identifies devices by name string, not a stable
+// numeric id, so the id here is a hash of the name (see HashDeviceId in
+// audio.cpp) - stable within a session and, incidentally, across relaunches,
+// but the JS layer already treats device ids as ephemeral/not persisted
+// across sessions (see ioStore.ts), so that's not a requirement.
 struct AudioDeviceInfo {
-  unsigned int id = 0;      // RtAudio device id
+  unsigned int id = 0;      // hash of the JUCE device name - see HashDeviceId
   std::string name;
   bool is_default = false;
   int input_channels = 0;
   int output_channels = 0;
   unsigned int preferred_sample_rate = 0;
   std::string api;          // e.g. "CoreAudio", "WASAPI", "JACK", "ALSA"
-  bool is_input = false;    // input_channels > 0
-  bool is_output = false;   // output_channels > 0
+  // Directions the device provides. ListDevices() enumerates the union of
+  // every backend-reported name and records which directions each has, so a
+  // true duplex device sets both, while an interface exposed under separate
+  // input/output names (e.g. the FM3) may set only one here and be paired up
+  // at Open() time.
+  bool is_input = true;
+  bool is_output = true;
 };
 
-// The RtAudio callback state + handler. A free function + plain struct so
-// the DSP-in-callback wiring is directly unit-testable without hardware
-// (tests call RtProcessCallback with fake buffers).
+// The audio callback state + handler. A free function + plain struct so the
+// DSP-in-callback wiring is directly unit-testable without hardware (tests
+// call RtProcessCallback with fake buffers).
 struct RtCallbackState {
   NamStudioGraph* graph = nullptr;         // owned by the app; guarded by graph_ready
   std::atomic<bool> graph_ready{false};
@@ -58,9 +82,9 @@ struct RtCallbackState {
   std::atomic<unsigned int> callbacks{0};
   std::atomic<unsigned int> frames_processed{0};
 
-  // Set by AudioIO's RtAudio error callback (a different thread - see
+  // Set by AudioIO's device error callback (a different thread - see
   // AudioIO::HandleStreamError) when the stream hits a runtime error after
-  // opening, most commonly RTAUDIO_DEVICE_DISCONNECT: a second process (e.g.
+  // opening, most commonly a device disconnect: a second process (e.g.
   // a browser tab also using the same physical mic/speakers) forcing the OS
   // to reconfigure a device this stream is mid-callback on. The callback
   // checks this exactly like `suspend` - writes silence and stops calling
@@ -109,11 +133,13 @@ struct TapFrame {
 // retries its own copy if the writer was mid-update.
 TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_frames);
 
-// RtAudio callback. Runs on the real-time audio thread: allocates nothing,
+// The real-time audio callback. Runs on the audio thread: allocates nothing,
 // only calls nam_studio_process(). If no graph is attached yet it writes
-// silence to the output.
+// silence to the output. Backend-agnostic (plain buffer pointers), called
+// from AudioIO::Callback's audioDeviceIOCallbackWithContext override in
+// audio.cpp.
 int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_frames,
-                      double stream_time, RtAudioStreamStatus status, void* user_data);
+                      void* user_data);
 
 class AudioIO {
  public:
@@ -123,25 +149,27 @@ class AudioIO {
   AudioIO(const AudioIO&) = delete;
   AudioIO& operator=(const AudioIO&) = delete;
 
-  // Enumerate every audio endpoint (input- and output-capable). Never throws.
+  // Enumerate duplex-capable audio endpoints (input_channels > 0 AND
+  // output_channels > 0) - the only kind Open() accepts, since it requires
+  // the same device id for both directions. Input-only/output-only devices
+  // are omitted rather than left for callers to filter out. Never throws.
   std::vector<AudioDeviceInfo> ListDevices() const;
 
-  // Open a full-duplex stream. input_device/output_device use RtAudio device
-  // ids; pass 0xFFFFFFFF (kDefaultDeviceId, the classic RtAudio sentinel) for
-  // the platform default input/output - Open() resolves it to the actual
-  // default device id before calling openStream(). Channels are fixed at 2
-  // in / 2 out for now (the M3 UI's channel-routing modes land with the
-  // bridge). Returns false on failure (see LastError).
+  // Open a full-duplex stream. input_device/output_device are the ids
+  // ListDevices() returned (see AudioDeviceInfo::id); pass 0xFFFFFFFF
+  // (kDefaultDeviceId) for the platform default input/output - Open()
+  // resolves it to the actual default device before opening. Channels are
+  // fixed at 2 in / 2 out for now (the M3 UI's channel-routing modes land
+  // with the bridge). Returns false on failure (see LastError).
   //
   // Latency:
   // - buffer_frames is the block size to request; the backend may adjust it
   //   (read BufferFrames() afterwards for what it actually granted).
   // - buffer_frames == kLowestLatencyBuffer (0) asks the backend for the
-  //   smallest block the device supports (RTAUDIO_MINIMIZE_LATENCY: the
-  //   hardware minimum on CoreAudio, 2 periods/buffers on ALSA/WASAPI/DS).
-  //   That is the lowest achievable round-trip, but a heavy NAM model can
-  //   overrun a very small block, so it stays an explicit opt-in rather than
-  //   the default.
+  //   smallest block the device supports (the minimum entry from
+  //   AudioIODevice::getAvailableBufferSizes()). That is the lowest
+  //   achievable round-trip, but a heavy NAM model can overrun a very small
+  //   block, so it stays an explicit opt-in rather than the default.
   // - sample_rate falls back to the device's preferred rate when the
   //   requested one isn't in its supported list, which both avoids an open
   //   failure and keeps the OS from resampling underneath us.
@@ -181,7 +209,7 @@ class AudioIO {
   // last call - see RtCallbackState::stream_error. The caller (the bridge,
   // polled from the JS layer) is expected to Stop()/Close() the now-silent
   // stream and surface `message`; it must not call Stop/Close from inside
-  // the RtAudio error callback itself (may run on a non-owning thread mid
+  // the device error callback itself (may run on a non-owning thread mid
   // teardown - see HandleStreamError).
   bool TakeStreamError(std::string* message);
 
@@ -199,19 +227,44 @@ class AudioIO {
   long StreamLatencyFrames() const;
 
  private:
-  // Registered once in the constructor (RtAudio invokes it from whichever
-  // internal thread noticed the problem - not necessarily the audio thread,
-  // and not synchronized with io_mutex_). Never opens/closes/starts/stops
-  // the stream itself - only records the error for TakeStreamError to pick
-  // up later from a normal caller thread.
-  void HandleStreamError(RtAudioErrorType type, const std::string& text);
+  // Adapts juce::AudioIODeviceCallback (which AudioIO can't publicly inherit
+  // without leaking JUCE types into this header) to RtProcessCallback, and
+  // forwards device errors to HandleStreamError. Defined in audio.cpp.
+  class Callback;
 
-  // RtAudio 6.x marks none of its query methods const; mutable lets
-  // ListDevices() stay const even though it walks the device list.
-  mutable RtAudio audio_;
+  // Registered on the device (device_->start(callback_.get())); JUCE invokes
+  // it from whichever internal thread noticed the problem - not necessarily
+  // the audio thread, and not synchronized with io_mutex_. Never opens/
+  // closes/starts/stops the stream itself - only records the error for
+  // TakeStreamError to pick up later from a normal caller thread. JUCE gives
+  // no error-severity type to filter on (unlike RtAudio's RTAUDIO_WARNING),
+  // so every call is treated as a real error.
+  void HandleStreamError(const std::string& text);
+
+  // Hashes a JUCE device name into the stable-within-a-session numeric id
+  // AudioDeviceInfo::id/Open() use (see audio.h's top comment). Pure
+  // function, defined in audio.cpp.
+  static unsigned int HashDeviceId(const std::string& name);
+
+  // Resolves an id (from ListDevices() or the kDefaultDevice sentinel) back
+  // to the JUCE device name it came from, by freshly re-scanning type_ -
+  // never relies on a cached id->name table, so it can't go stale between a
+  // ListDevices() call and the Open() that follows it. Returns false (name
+  // untouched) if no currently-present device matches.
+  bool ResolveDeviceName(unsigned int id, bool input, std::string* name) const;
+
+  // The platform's default device type (CoreAudio/WASAPI/ALSA), constructed
+  // once in the ctor. Mutable so ListDevices()/ResolveDeviceName can stay
+  // const even though scanForDevices()/createDevice() aren't const in JUCE.
+  mutable std::unique_ptr<juce::AudioIODeviceType> type_;
+  // Created fresh by Open(), destroyed by Close(). Mutable for the same
+  // reason as type_ (StreamLatencyFrames() etc. stay const).
+  mutable std::unique_ptr<juce::AudioIODevice> device_;
+  std::unique_ptr<Callback> callback_;
+
   // Serializes stream control (Open/Close/Start/Stop) and BeginSuspend's
-  // stopStream against queries, since the webview thread and the control
-  // thread both call into this object. Never taken by the audio callback.
+  // stop() against queries, since the webview thread and the control thread
+  // both call into this object. Never taken by the audio callback.
   mutable std::mutex io_mutex_;
   RtCallbackState state_;
   unsigned int input_device_id_ = 0;
@@ -222,7 +275,7 @@ class AudioIO {
 
   // Separate from io_mutex_ - HandleStreamError must never risk blocking on
   // a lock an Open()/Close() call already holds while tearing the stream
-  // down, since RtAudio may invoke it from within that same teardown.
+  // down, since JUCE may invoke it from within that same teardown.
   mutable std::mutex error_mutex_;
   bool has_pending_stream_error_ = false;
   std::string pending_stream_error_;
