@@ -274,6 +274,20 @@ void AudioEngine::RecomputeRouting() {
     routing_.push_back(RoutingEdge{ParseGraphId(edge->from.block_id), edge->from.port,
                                     ParseGraphId(edge->to.block_id), edge->to.port});
   }
+
+  // Group edges by destination block so Process() only walks the edges that
+  // actually feed each block (issue #66). OUT_RAIL is a sentinel not present
+  // in exec_order_, so its edge falls out of incoming_ here - that's fine, it
+  // is consumed separately when summing into the output bus.
+  std::unordered_map<BlockId, size_t> index_of;
+  index_of.reserve(exec_order_.size());
+  for (size_t i = 0; i < exec_order_.size(); ++i) index_of.emplace(exec_order_[i], i);
+
+  incoming_.assign(exec_order_.size(), {});
+  for (const RoutingEdge& edge : routing_) {
+    const auto it = index_of.find(edge.to);
+    if (it != index_of.end()) incoming_[it->second].push_back(edge);
+  }
 }
 
 // ── Topology ────────────────────────────────────────────────────────────
@@ -592,7 +606,8 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
     ext_in_r_[static_cast<size_t>(i)] = r;
   }
 
-  for (const BlockId id : exec_order_) {
+  for (size_t bi = 0; bi < exec_order_.size(); ++bi) {
+    const BlockId id = exec_order_[bi];
     BlockState& state = *block_states_.at(id);
     if (static_cast<int>(state.output_l.size()) < num_frames) continue;  // not yet Reset - stay silent
 
@@ -602,8 +617,7 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       std::fill_n(state.input_r[static_cast<size_t>(p)].begin(), num_frames, 0.0f);
     }
 
-    for (const RoutingEdge& edge : routing_) {
-      if (edge.to != id) continue;
+    for (const RoutingEdge& edge : incoming_[bi]) {
       const float* src_l = nullptr;
       const float* src_r = nullptr;
       float src_gain = 1.0f;  // a splitter's per-output level, applied per fan-out port

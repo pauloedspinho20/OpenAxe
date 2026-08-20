@@ -265,6 +265,14 @@ class AudioEngine {
 
   std::vector<BlockId> exec_order_;
   std::vector<RoutingEdge> routing_;
+  // Incoming edges grouped per exec_order_ block (incoming_[i] holds every
+  // edge whose destination is exec_order_[i]), built alongside routing_ in
+  // RecomputeRouting(). Process()'s per-block hot loop iterates only
+  // incoming_[bi] instead of rescanning the whole flat routing_ (issue #66),
+  // turning the routing walk from O(B·E) into O(E). Same lifecycle/threading
+  // guarantees as routing_: only ever read by Process(), rebuilt under the
+  // suspend handshake on every topology change.
+  std::vector<std::vector<RoutingEdge>> incoming_;
   std::vector<float> ext_in_l_;
   std::vector<float> ext_in_r_;
 };

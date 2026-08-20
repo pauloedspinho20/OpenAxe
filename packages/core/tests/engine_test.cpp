@@ -443,6 +443,47 @@ void TestSplitterPerOutputLevel() {
   NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.125f) < 1e-5f);
 }
 
+// issue #66: Process() walks per-block incoming edges (incoming_) rather than
+// rescanning the whole flat edge list. This rig exercises the grouping in both
+// directions a splitter creates: it fans out to multiple targets (each target
+// block gets exactly its own incoming edge), and a mixer fans those branches
+// back in across its independent input ports (the mixer's incoming_ vector
+// holds several edges) - all must be delivered so the summed output is correct.
+void TestSplitterFanOutAndMixerFanInRouting() {
+  AudioEngine engine;
+  const BlockId splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
+  const BlockId cab_a = engine.AddBlock(BlockKind::kCab, 0, 1);
+  const BlockId cab_b = engine.AddBlock(BlockKind::kCab, 1, 1);
+  const BlockId mixer = engine.AddBlock(BlockKind::kMixer, 0, 2);  // fans in from a and b
+  NAM_EXPECT(engine.Connect(kInRailId, 0, splitter, 0).ok);
+  NAM_EXPECT(engine.Connect(splitter, 0, cab_a, 0).ok);
+  NAM_EXPECT(engine.Connect(splitter, 1, cab_b, 0).ok);
+  NAM_EXPECT(engine.Connect(cab_a, 0, mixer, 0).ok);
+  NAM_EXPECT(engine.Connect(cab_b, 0, mixer, 1).ok);
+  NAM_EXPECT(engine.Connect(mixer, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto settled = [&](float input) {
+    std::vector<float> output;
+    for (int i = 0; i < 40; ++i) output = RunMono(engine, input);
+    return output;
+  };
+
+  // Unity throughout: each fan-out branch carries 0.5, the mixer sums its two
+  // unity-gain inputs (port0 + port1) into 1.0 output.
+  for (float sample : settled(0.5f)) NAM_EXPECT(std::fabs(sample - 1.0f) < 1e-5f);
+  RunMono(engine, 0.5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(cab_a) - 0.5f) < 1e-5f);
+  NAM_EXPECT(std::fabs(engine.GetMeter(cab_b) - 0.5f) < 1e-5f);
+
+  // Halving one splitter output must drop only that branch's contribution:
+  // mixer now sums 0.5 (from a) + 0.25 (from b) = 0.75. This proves both
+  // splitter fan-out edges and both mixer fan-in edges reached Process()
+  // through the per-block incoming_ lists.
+  engine.SetParam(splitter, 1, 0.5f);
+  for (float sample : settled(0.5f)) NAM_EXPECT(std::fabs(sample - 0.75f) < 1e-5f);
+}
+
 void TestMasterLevelScalesOutput() {
   AudioEngine engine;
   const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 0);  // pure passthrough
@@ -498,6 +539,7 @@ int main() {
   TestMixerSumsBothConnectedPorts();
   TestMixerPerInputLevelAndPan();
   TestSplitterPerOutputLevel();
+  TestSplitterFanOutAndMixerFanInRouting();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();
