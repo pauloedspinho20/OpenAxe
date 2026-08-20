@@ -92,6 +92,19 @@ describe('NativeGraphRig', () => {
     expect(calls.connect).toHaveBeenCalled()
   })
 
+  it('countActiveHeavyBlocks counts loaded IRs (mirrors web GraphRig)', async () => {
+    const { bridge } = makeBridge()
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('cab', 0, 1, 'c1')
+    const block = rig.getBlock('c1') as unknown as { loadedIr: unknown }
+
+    expect(rig.countActiveHeavyBlocks()).toBe(0)
+    block.loadedIr = { id: 'ir1', name: 'IR' }
+    expect(rig.countActiveHeavyBlocks()).toBe(1)
+    block.loadedIr = null
+    expect(rig.countActiveHeavyBlocks()).toBe(0)
+  })
+
   it('rejects an invalid connect without touching the bridge', async () => {
     const { calls, bridge } = makeBridge()
     const rig = new NativeGraphRig(bridge)

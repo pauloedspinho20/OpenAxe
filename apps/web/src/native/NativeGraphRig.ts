@@ -117,6 +117,9 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     let count = 0
     for (const { block } of this.blocks.values()) {
       if (block.getLoadedModel() != null) count++
+      // Mirrors web GraphRig: a cab IR convolves for real in the C++ core, so
+      // it must count as a heavy block on the native path too.
+      if (block.getLoadedIr() != null) count++
     }
     return count
   }
