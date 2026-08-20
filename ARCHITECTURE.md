@@ -22,7 +22,7 @@ the DSP does.
 │ Presentation      apps/web (React) · desktop webview · VST3 editor ·     │
 │                   iOS/Android views — all sharing packages/ui tokens     │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ Integration       Web Audio worklet · RtAudio + window.namStudio bridge  │
+│ Integration       Web Audio worklet · JUCE audio_devices + window.namStudio bridge  │
 │                   · iPlug2 processor · JNI / AVAudioEngine               │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ Engine ABI        packages/core/include/nam_studio/api.h — extern "C",   │
@@ -47,7 +47,7 @@ meters, and CPU load.
 
 ### What a front end is still allowed to own
 
-- Device and host integration: Web Audio graph plumbing, RtAudio streams, the
+- Device and host integration: Web Audio graph plumbing, JUCE audio_devices streams, the
   plugin's process callback.
 - Persistence _mechanism_: IndexedDB in the browser, files on desktop, host
   state chunks in a plugin. The preset _model_ belongs in core (see below).
@@ -120,7 +120,7 @@ layer.
 
 | Target  | What sets latency                                                                           | Lowest available                                                                                                                                                                                                                              |
 | ------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop | RtAudio block size + the device's own buffering                                             | `bufferFrames: 0` asks the device for its smallest block (`RTAUDIO_MINIMIZE_LATENCY`); default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                               |
+| Desktop | JUCE audio_devices block size + the device's own buffering                                  | `bufferFrames: 0` asks the device for its smallest block; default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                                                            |
 | Web     | The 128-frame AudioWorklet render quantum, plus the context's `baseLatency`/`outputLatency` | Fixed by the platform. `latencyHint: 'interactive'` is what the app requests; chaining worklet nodes adds **no** extra latency (they all run inside one quantum), so the win from step 2 above is CPU and behaviour parity, not milliseconds. |
 | VST3    | The host's block size                                                                       | Nothing to add: report zero latency and process in place.                                                                                                                                                                                     |
 

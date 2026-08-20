@@ -9,7 +9,7 @@ Native desktop shell (macOS, Windows, Linux) for NAM Web Studio (issue #15).
   WebKitGTK on Linux). The React UI runs inside it.
 - **DSP:** `packages/core`'s `nam_studio_core` static library + `extern "C"`
   ABI — same process as the audio, no IPC.
-- **Audio I/O:** RtAudio 6.0.1 (issue #15 M1) — CoreAudio / ASIO (gated) /
+- **Audio I/O:** JUCE `juce_audio_devices` (issue #15 M1) — CoreAudio / WASAPI / ALSA (see `src/audio.*`) —
   WASAPI / ALSA / JACK, fetched via CMake. The real-time callback calls
   `nam_studio_process` directly: same process, zero IPC, no Web Audio.
 - **Tests:** `cmake -B build -DNAM_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
@@ -118,7 +118,7 @@ server) instead of the bundled copy.
 
 - [x] M0 — shell scaffold: window + webview + core link + `namVersion` JS
       bridge demo (placeholder HTML).
-- [x] M1 — RtAudio duplex I/O (`AudioIO` in `src/audio.*`), device
+- [x] M1 — JUCE audio_devices duplex I/O (`AudioIO` in `src/audio.*`), device
       enumeration, buffer/sample-rate control, DSP driven from the callback.
 - [x] M2 — full `window.namStudio.*` JS↔C++ bridge (`StudioBridge` in
       `src/bridge.*`): devices, stream control, graph topology, params,
@@ -128,7 +128,7 @@ server) instead of the bundled copy.
 - [x] M3 — reuse the apps/web React UI. `NativeGraphRig` (apps/web/src/native)
       implements `GraphRigControls` over the bridge; `useAudioEngine` dispatches
       to a native variant when `window.namStudio` is present; `useAudioIO` lists
-      RtAudio devices. `scripts/build.mjs` bundles the web build (relative base)
+      JUCE audio_devices. `scripts/build.mjs` bundles the web build (relative base)
       into `build/ui`, served by a small loopback HTTP server (WKWebView
       sandboxes file://). Block/input meters and the tuner are fed from C++ taps
       (`namStudio.getTap`); model JSON is loaded via `namStudio.loadModelJson`.
@@ -201,9 +201,17 @@ deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
   via static initializers).
 - On macOS the TU that includes `webview.h` compiles as Objective-C++
   (`enable_language(OBJCXX)` + `LANGUAGE OBJCXX` on `main.cpp`).
-- RtAudio 6.x has **no exception API** — functions return `RtAudioErrorType`
-  and messages come from `getErrorText()` (5.x threw `RtAudioError`). Device
-  ids are **not contiguous** (`CoreAudio` uses raw `AudioDeviceID`s): enumerate
-  with `getDeviceIds()`, never `0..count-1`, and resolve "default" via
-  `getDefaultInputDevice()/getDefaultOutputDevice()` (the old `ADevice`
-  sentinel no longer exists).
+- JUCE's `AudioIODevice::open()` returns a non-empty `juce::String` on failure
+  (no exception API); `start()` is void and surfaces errors via the device's
+  `lastError`. Device ids are **strings** (`AudioIODeviceType::getDeviceNames`,
+  `AudioIODevice::getDeviceID()`), never integer indices — resolve "default"
+  via the device manager, not a hard-coded sentinel.
+
+## Licensing
+
+The desktop shell uses **JUCE**'s `juce_audio_devices` module for audio I/O
+(replacing the RtAudio backend the early issues/README text referenced). JUCE is
+distributed under the GPL (or a paid JUCE licence for closed-source use); this
+project ships under GPLv3, so the GPL flavour applies. Note this in particular
+against `README.md`'s "Why these choices", which still argues _against_ JUCE on
+licensing grounds — that rationale predates the switch and should be revised.
