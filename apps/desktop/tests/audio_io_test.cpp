@@ -216,6 +216,12 @@ void TestDeviceEnumeration() {
   // Hosts without audio hardware (e.g. CI) legitimately return an empty
   // list; only assert the call itself never throws.
   std::printf("  AudioIO::ListDevices: %zu device(s)\n", devices.size());
+  for (size_t i = 0; i < devices.size(); ++i) {
+    const auto& d = devices[i];
+    std::printf("    [%zu] name='%s' id=%u default=%d in=%d out=%d inCh=%d outCh=%d api=%s\n",
+                i, d.name.c_str(), d.id, d.is_default ? 1 : 0, d.is_input ? 1 : 0,
+                d.is_output ? 1 : 0, d.input_channels, d.output_channels, d.api.c_str());
+  }
 }
 
 // Opens a real duplex stream on a single device that offers 2 in / 2 out and
@@ -279,19 +285,25 @@ void TestOpenStartStop() {
 // Two independent physical devices for input/output cause an acoustic
 // feedback loop the app has no way to fix - Open() must refuse the pairing
 // outright rather than let it happen.
-void TestOpenRejectsMismatchedDevices() {
+void TestOpenAcceptsSplitDevices() {
   nam_desktop::AudioIO io;
   const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
   if (devices.size() < 2) {
-    std::printf("  Skipping mismatched-device rejection test: fewer than 2 devices on this host\n");
+    std::printf("  Skipping split-device test: fewer than 2 devices on this host\n");
     return;
   }
 
   const unsigned int a = devices[0].id;
   const unsigned int b = devices[1].id;
-  CHECK(!io.Open(a, b, 48000.0, 128));
-  CHECK(!io.LastError().empty());
-  CHECK(!io.IsOpen());
+  // Open() no longer refuses different input/output endpoints outright - it
+  // lets JUCE bridge them (needed for interfaces like the FM3 that CoreAudio
+  // exposes under separate input/output names). It may still fail for genuine
+  // hardware reasons, but the old "must be the same audio device" rejection is
+  // gone, so that specific error must never appear.
+  io.Open(a, b, 48000.0, 128);
+  const std::string err = io.LastError();
+  CHECK(err.find("must be the same audio device") == std::string::npos);
+  io.Close();
 }
 
 }  // namespace
@@ -304,7 +316,7 @@ int main() {
   TestTapConcurrentReadWrite();
   TestDeviceEnumeration();
   TestOpenStartStop();
-  TestOpenRejectsMismatchedDevices();
+  TestOpenAcceptsSplitDevices();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

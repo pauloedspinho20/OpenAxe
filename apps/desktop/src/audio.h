@@ -57,9 +57,11 @@ struct AudioDeviceInfo {
   int output_channels = 0;
   unsigned int preferred_sample_rate = 0;
   std::string api;          // e.g. "CoreAudio", "WASAPI", "JACK", "ALSA"
-  // Always true: ListDevices() only returns duplex-capable devices. Kept
-  // (rather than dropped) so the JSON/TS shape stays stable if a future
-  // input-only or output-only mode is added.
+  // Directions the device provides. ListDevices() enumerates the union of
+  // every backend-reported name and records which directions each has, so a
+  // true duplex device sets both, while an interface exposed under separate
+  // input/output names (e.g. the FM3) may set only one here and be paired up
+  // at Open() time.
   bool is_input = true;
   bool is_output = true;
 };

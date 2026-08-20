@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <map>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -278,26 +279,53 @@ std::vector<AudioDeviceInfo> AudioIO::ListDevices() const {
   const int default_output = type_->getDefaultDeviceIndex(false);
   const std::string api = type_->getTypeName().toStdString();
 
-  // Open() only ever accepts a single device driving both directions, so an
-  // input-only or output-only device can never actually be opened - and
-  // neither can a device whose input and output endpoints are separate
-  // entities with different names (a real characteristic of some backends,
-  // e.g. WASAPI, not something introduced here). Duplex-capable here means
-  // the same name is reported in both lists: the JUCE equivalent of the
-  // input_channels>0 && output_channels>0 filter this used under RtAudio.
-  for (int i = 0; i < input_names.size(); ++i) {
-    const juce::String& name = input_names[i];
-    const int out_index = output_names.indexOf(name);
-    if (out_index < 0) continue;
+  // A single physical interface may be reported by the backend under one
+  // shared name for both directions (a true duplex device) or under separate
+  // input/output names (common for USB interfaces such as the FM3). Enumerate
+  // the union of every name and record which directions each provides, so all
+  // interfaces show up regardless of how the backend exposes them. Open() then
+  // combines an input endpoint and an output endpoint - even two names of the
+  // same device - via createDevice(output_name, input_name).
+  const juce::String def_in_name =
+      (default_input >= 0 && default_input < input_names.size()) ? input_names[default_input]
+                                                                 : juce::String();
+  const juce::String def_out_name =
+      (default_output >= 0 && default_output < output_names.size()) ? output_names[default_output]
+                                                                    : juce::String();
 
-    // Probe channel counts / sample rates by briefly creating the device -
-    // a UI-poll-rate call, not real-time, so the extra cost is fine.
-    std::unique_ptr<juce::AudioIODevice> probe(type_->createDevice(name, name));
+  std::map<juce::String, AudioDeviceInfo> by_name;
+  auto ensure = [&](const juce::String& name, bool is_input) -> AudioDeviceInfo& {
+    auto it = by_name.find(name);
+    if (it == by_name.end()) {
+      AudioDeviceInfo d;
+      d.id = HashDeviceId(name.toStdString());
+      d.name = name.toStdString();
+      d.api = api;
+      d.is_input = false;
+      d.is_output = false;
+      it = by_name.emplace(name, std::move(d)).first;
+    }
+    if (is_input) it->second.is_input = true;
+    else it->second.is_output = true;
+    if (name == def_in_name || name == def_out_name) it->second.is_default = true;
+    return it->second;
+  };
+
+  for (int i = 0; i < input_names.size(); ++i) ensure(input_names[i], true);
+  for (int i = 0; i < output_names.size(); ++i) ensure(output_names[i], false);
+
+  for (auto& [name, d] : by_name) {
+    // Probe channel counts by creating the device for the directions it has.
+    std::unique_ptr<juce::AudioIODevice> probe(
+        type_->createDevice(d.is_output ? name : juce::String(),
+                            d.is_input ? name : juce::String()));
     if (!probe) continue;
-
     const int in_ch = probe->getInputChannelNames().size();
     const int out_ch = probe->getOutputChannelNames().size();
-    if (in_ch <= 0 || out_ch <= 0) continue;
+    if (d.is_input && in_ch <= 0) continue;
+    if (d.is_output && out_ch <= 0) continue;
+    d.input_channels = in_ch;
+    d.output_channels = out_ch;
 
     const juce::Array<double> rates = probe->getAvailableSampleRates();
     double preferred = 0.0;
@@ -305,17 +333,7 @@ std::vector<AudioDeviceInfo> AudioIO::ListDevices() const {
       if (r > preferred) preferred = r;
     }
     if (rates.contains(48000.0)) preferred = 48000.0;
-
-    AudioDeviceInfo d;
-    d.id = HashDeviceId(name.toStdString());
-    d.name = name.toStdString();
-    d.is_default = (i == default_input) || (out_index == default_output);
-    d.input_channels = in_ch;
-    d.output_channels = out_ch;
     d.preferred_sample_rate = static_cast<unsigned int>(preferred);
-    d.api = api;
-    d.is_input = true;
-    d.is_output = true;
     devices.push_back(std::move(d));
   }
   return devices;
@@ -346,25 +364,14 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
     return false;
   }
 
-  // Two independent physical devices (this is the common case with no
-  // external interface: the built-in mic + built-in speakers are separate
-  // devices) is an acoustic feedback loop with no fix at this layer - live
-  // mic monitoring straight into open speakers. Refuse outright rather than
-  // let it happen - the user needs a single device that does both (an audio
-  // interface, aggregate device, or virtual loopback), not a silently
-  // degraded session. (This used to also guard against a RtAudio CoreAudio
-  // backend crash bridging two independent devices into one duplex stream -
-  // issue #53 - which no longer applies now that this uses JUCE's own
-  // from-scratch CoreAudio backend, but the feedback-loop half of the
-  // rationale is backend-independent and the policy stays unconditional.)
-  if (input_name != output_name) {
-    last_error_ =
-        "Input and output must be the same audio device - pick a single "
-        "audio interface (or aggregate/loopback device) for both, not "
-        "separate input and output devices.";
-    return false;
-  }
-
+  // An input endpoint and an output endpoint may legitimately be different
+  // device names (a single USB interface like the FM3 is often exposed by
+  // CoreAudio under separate input/output names, and some setups use
+  // different physical devices for each). JUCE's createDevice(output, input)
+  // bridges them into one stream cleanly - the old RtAudio CoreAudio crash
+  // doing this (issue #53) no longer applies. The one genuine hazard is an
+  // acoustic feedback loop (live mic straight into open speakers); that's a
+  // user-facing choice we no longer try to police here.
   std::unique_ptr<juce::AudioIODevice> device(type_->createDevice(output_name, input_name));
   if (!device) {
     last_error_ = "failed to create audio device";
@@ -420,7 +427,8 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
   }
 
   device_ = std::move(device);
-  input_device_id_ = output_device_id_ = HashDeviceId(input_name);
+  input_device_id_ = HashDeviceId(input_name);
+  output_device_id_ = HashDeviceId(output_name);
   sample_rate_ = device_->getCurrentSampleRate();
   buffer_frames_ = static_cast<unsigned int>(device_->getCurrentBufferSizeSamples());
   return true;
