@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { IN_RAIL, OUT_RAIL, jack } from '../engine/gridConfig'
 import { NativeGraphRig } from './NativeGraphRig'
-import type { NamStudioBridge } from './namStudio'
+import type { NamStudioBridge, NamStudioIdResult } from './namStudio'
 
 /** A mock bridge recording calls, cast loosely (tests only touch what rigs use). */
 function makeBridge() {
@@ -9,7 +9,7 @@ function makeBridge() {
     addBlock: vi.fn(async (args: { id?: string }) => ({ ok: true, id: args.id })),
     removeBlock: vi.fn(async () => ({ ok: true })),
     moveBlock: vi.fn(async () => ({ ok: true })),
-    connect: vi.fn(async () => ({ ok: true, id: 'edge-x' })),
+    connect: vi.fn(async (): Promise<NamStudioIdResult> => ({ ok: true, id: 'edge-x' })),
     disconnect: vi.fn(async () => ({ ok: true })),
     setParam: vi.fn(async (_args: { key: string }) => ({ ok: true })),
     loadModelJson: vi.fn(async () => ({ ok: true, result: 0 })),
