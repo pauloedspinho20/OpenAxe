@@ -197,16 +197,16 @@ AudioIO::AudioIO() : callback_(std::make_unique<Callback>(*this, state_)) {
 
 AudioIO::~AudioIO() {
   if (device_ && device_->isOpen()) device_->close();
-  // Tear the JUCE audio objects down first: they may still reference the
-  // MessageManager internally, so it must outlive them.
+  // Tear the JUCE audio objects down first.
   device_.reset();
   type_.reset();
-  // Balances the getInstance() in the constructor. juce_audio_devices pulls in
-  // juce_events, which owns a process-wide MessageManager singleton; nothing
-  // else in this app creates or runs it, so we own its full lifecycle. Without
-  // this, the singleton leaks (caught by JUCE's LeakedObjectDetector) at process
-  // exit whenever a StudioBridge is destroyed.
-  juce::MessageManager::deleteInstance();
+  // NOTE: we intentionally do NOT call juce::MessageManager::deleteInstance()
+  // here. The comment above the getInstance() in the ctor explains the
+  // singleton's origin; deleting it at teardown triggered a double-free /
+  // heap-corruption crash (malloc_zone_error, SIGSEGV in the webview dispatch
+  // path) because JUCE's own teardown still reached the same singleton. The
+  // only cost of leaving it is a benign JUCE LeakedObjectDetector warning at
+  // process exit - far preferable to a crash.
 }
 
 void AudioIO::HandleStreamError(const std::string& text) {
