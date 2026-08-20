@@ -129,13 +129,20 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
 
     const edgeId = id ?? this.genId('edge')
     this.edges.set(edgeId, { from, to })
-    void this.bridge.connect({
-      fromId: this.mapJack(from),
-      fromPort: from.port,
-      toId: this.mapJack(to),
-      toPort: to.port,
-      id: edgeId,
-    })
+    // The bridge re-validates against the core's graph_validation rules; a
+    // rejected edge is dropped locally so the UI can't believe it exists
+    // (mirrors GraphRig.connect on the web path).
+    void this.bridge
+      .connect({
+        fromId: this.mapJack(from),
+        fromPort: from.port,
+        toId: this.mapJack(to),
+        toPort: to.port,
+        id: edgeId,
+      })
+      .then((r) => {
+        if (!r.ok) this.edges.delete(edgeId)
+      })
     return { ok: true, id: edgeId }
   }
 
