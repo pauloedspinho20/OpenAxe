@@ -231,4 +231,24 @@ describe('applyPreset', () => {
     expect(state.masterLevel).toBe(0.6)
     expect(state.masterMuted).toBe(true)
   })
+
+  it('reports a corrupt model in missingAssets instead of aborting the restore', async () => {
+    getCachedAssetMock.mockResolvedValue({
+      text: async () => {
+        throw new Error('corrupt json')
+      },
+    })
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      blocks: [
+        { id: 'amp1', kind: 'amp', row: 0, col: 0, params: {}, modelId: 'm1', modelName: 'M1' },
+      ],
+    })
+
+    const result = await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(result.missingAssets).toEqual([{ blockId: 'amp1', kind: 'model', id: 'm1', name: 'M1' }])
+    // The store sync must still run even when one asset fails.
+    expect(useGraphStore.getState().blocks).toHaveLength(1)
+  })
 })

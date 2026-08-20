@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { toast } from '@nam/ui'
 import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
 import { useEngineVersion } from '../../../state/engineVersion'
@@ -79,11 +79,10 @@ function statusText(instance: BlockInstance, loaded: { name: string } | null): s
  * asset load/browse controls live in BlockInspector instead - click the card
  * to select it there, rather than crowding every detail into a small tile.
  */
-export function BlockCard({ instance, rig, onDragChange }: BlockCardProps) {
+function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
   const dragState = useRef<{ startX: number; startY: number } | null>(null)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
-  const blocks = useGraphStore((s) => s.blocks)
   const edges = useGraphStore((s) => s.edges)
 
   // Re-render once async block creation inside bindGraphRig's reconcile
@@ -131,7 +130,11 @@ export function BlockCard({ instance, rig, onDragChange }: BlockCardProps) {
       return
     }
     const valid = canMoveTo(
-      new Map(blocks.map((b) => [b.id, { id: b.id, kind: b.kind, col: b.col }])),
+      new Map(
+        useGraphStore
+          .getState()
+          .blocks.map((b) => [b.id, { id: b.id, kind: b.kind, col: b.col }] as const),
+      ),
       edges,
       instance.id,
       cell.col,
@@ -316,3 +319,11 @@ export function BlockCard({ instance, rig, onDragChange }: BlockCardProps) {
     </div>
   )
 }
+
+/**
+ * Memoized so a param change elsewhere in the rig (which replaces only the
+ * edited block's object in the store array, leaving the others' references
+ * intact) doesn't re-render every card. Cards re-render only when their own
+ * `instance`, the live `rig`, or the drag callback identity changes.
+ */
+export const BlockCard = memo(BlockCardImpl)
