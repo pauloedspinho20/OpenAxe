@@ -77,6 +77,21 @@ describe('NativeGraphRig', () => {
     expect(rig.listEdgeIds()).toHaveLength(2)
   })
 
+  it('rolls back the local edge when the bridge rejects the connect', async () => {
+    const { calls, bridge } = makeBridge()
+    // Bridge re-validates against the core and rejects this connect.
+    calls.connect.mockResolvedValue({ ok: false, error: 'kWrongOrder' })
+    const rig = new NativeGraphRig(bridge)
+    await rig.addBlock('mixer', 0, 1, 'm1')
+
+    const result = rig.connect(jack(IN_RAIL), jack('m1'))
+    expect(result.ok).toBe(true) // optimistic, like GraphRig
+    // The bridge rejects asynchronously; let the microtask settle.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(rig.listEdgeIds()).toHaveLength(0)
+    expect(calls.connect).toHaveBeenCalled()
+  })
+
   it('rejects an invalid connect without touching the bridge', async () => {
     const { calls, bridge } = makeBridge()
     const rig = new NativeGraphRig(bridge)
