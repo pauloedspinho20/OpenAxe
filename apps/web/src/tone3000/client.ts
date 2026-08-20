@@ -2,9 +2,10 @@
  * Zero-dependency Tone3000 OAuth2+PKCE + API client for a pure client-side
  * SPA (see README's "no required backend" decision). Heavily inspired by the
  * official reference client (github.com/tone-3000/api/src/tone3000-client.ts),
- * adapted to this app's storage choices: the refresh token is persisted in
- * localStorage so a returning session reconnects without a full re-auth, and
- * the access token lives in sessionStorage.
+ * adapted to this app's storage choices: the full token triple (including the
+ * refresh token) lives in sessionStorage only, so a returning tab reconnects
+ * without a full re-auth but the long-lived credential does not outlive the
+ * session in localStorage (which a same-origin XSS could read indefinitely).
  *
  * There is NO `t3k_cs_` client secret here: Tone3000's docs mark it server
  * only, and the browser token endpoint accepts just client_id + PKCE. See
@@ -40,7 +41,6 @@ export async function sha256Base64url(input: string): Promise<string> {
 const VERIFIER_KEY = 't3k_code_verifier'
 const STATE_KEY = 't3k_state'
 const ACCESS_TOKENS_KEY = 't3k_tokens'
-const REFRESH_TOKENS_KEY = 't3k_refresh_token'
 
 export function storePkce(verifier: string, state: string): void {
   sessionStorage.setItem(VERIFIER_KEY, verifier)
@@ -62,7 +62,10 @@ function setAccessTokens(tokens: T3KTokens): void {
 }
 
 function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKENS_KEY)
+  // The refresh token is stored alongside the access token in sessionStorage
+  // (see setTokens/setAccessTokens); reading it from there keeps the
+  // long-lived credential out of localStorage.
+  return getAccessTokens()?.refresh_token ?? null
 }
 
 /** Attempt to exchange a stored refresh token for fresh access tokens. Null if none is stored. */
@@ -177,20 +180,17 @@ export async function handleOAuthCallback(
   }
 }
 
-/** Persist a freshly-issued token triple (access in sessionStorage, refresh in localStorage). */
+/** Persist a freshly-issued token triple in sessionStorage (access + refresh). */
 export function setTokens(tokens: T3KTokens): void {
   setAccessTokens({
     access_token: tokens.access_token,
     expires_at: tokens.expires_at,
     refresh_token: tokens.refresh_token,
   })
-  // The refresh token is the long-lived credential - persist it across sessions.
-  if (tokens.refresh_token) localStorage.setItem(REFRESH_TOKENS_KEY, tokens.refresh_token)
 }
 
 export function clearTokens(): void {
   sessionStorage.removeItem(ACCESS_TOKENS_KEY)
-  localStorage.removeItem(REFRESH_TOKENS_KEY)
 }
 
 /**
