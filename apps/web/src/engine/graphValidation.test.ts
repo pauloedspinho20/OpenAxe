@@ -10,7 +10,7 @@
 // rule in either, port it to the other.
 import { describe, expect, it } from 'vitest'
 import { canConnect, canMoveTo, isEdgeOrderValid, type ValidatableBlock } from './graphValidation'
-import { jack } from './gridConfig'
+import { GRID_COLS, jack } from './gridConfig'
 
 function blocks(entries: Array<[string, ValidatableBlock['kind'], number]>) {
   const map = new Map<string, ValidatableBlock>()
@@ -73,6 +73,16 @@ describe('canConnect', () => {
     const map = blocks([['a', 'compressor', 0]])
     expect(canConnect(map, [], jack('IN'), jack('a')).ok).toBe(true)
     expect(canConnect(map, [], jack('a'), jack('OUT')).ok).toBe(true)
+  })
+
+  // Regression for issue #61: the rightmost valid UI column must reach OUT.
+  // OUT sorts at column GRID_COLS, so a block at GRID_COLS-1 (the last placeable
+  // column) must connect to OUT - otherwise the rightmost columns produce no
+  // sound on the native path where the C++ core mirrors this rule.
+  it('connects a block in the last grid column to OUT', () => {
+    expect(
+      canConnect(blocks([['a', 'compressor', GRID_COLS - 1]]), [], jack('a'), jack('OUT')).ok,
+    ).toBe(true)
   })
 
   it('rejects a second cable into the same jack on a normal block', () => {
