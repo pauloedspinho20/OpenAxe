@@ -73,12 +73,20 @@ export function useAudioIO() {
   }, [])
 
   useEffect(() => {
-    if (getNamStudio()) return // native devices don't emit devicechange; no hot-plug listener
-    if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return
+    // Populate the device list once on mount in every mode. In the desktop
+    // shell this is the only way the native device list reaches the UI -
+    // enumerate() routes through enumerateNative() (bridge.listDevices()),
+    // and the C++ side already knows about the real hardware.
     if (!enumeratedRef.current) {
       enumeratedRef.current = true
       void enumerate()
     }
+
+    // Browser hot-plug detection only exists for the web MediaDevices API.
+    // Native (desktop) devices don't emit devicechange, so there's no listener
+    // to attach there.
+    if (getNamStudio()) return
+    if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return
 
     // Re-enumerate on hot-plug.
     try {

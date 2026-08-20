@@ -72,6 +72,25 @@ export function useNativeAudioEngine() {
   const outputTapRef = useRef<Float32Array>(new Float32Array(0))
   const pollIntervalRef = useRef<number | null>(null)
 
+  // Serializes every open/start/stop/close sequence against every other one.
+  // powerOn, the no-sound recovery poll, a stream-error recovery, and
+  // powerOff/"Restart Audio Engine" are all independent async flows that
+  // share the one native stream - without this, e.g. the recovery poll's
+  // open()+start() can interleave with a concurrent powerOff()'s stop()+
+  // close(), starting a stream that was just torn down underneath it and
+  // crashing the real-time audio thread. Queuing every op onto this chain
+  // makes them run one at a time, in call order, no matter which async flow
+  // triggered them.
+  const opQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const runExclusive = useCallback(<T>(fn: () => Promise<T>): Promise<T> => {
+    const result = opQueueRef.current.then(fn, fn)
+    opQueueRef.current = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }, [])
+
   /**
    * A second process (e.g. a browser tab also open on the same physical mic/
    * speakers) can force the OS to reconfigure a device mid-stream, which is
@@ -84,31 +103,36 @@ export function useNativeAudioEngine() {
    * where the existing recovery poll below picks it back up automatically
    * once a usable device reappears.
    */
-  const handleStreamError = useCallback(async (bridge: NamStudioBridge, message: string) => {
-    if (handlingStreamErrorRef.current) return
-    handlingStreamErrorRef.current = true
-    try {
-      await bridge.stop().catch(() => {})
-      await bridge.close().catch(() => {})
-      toast.error('Audio device error', {
-        description: `${message} — switched to no-sound mode; it'll reconnect automatically once a device is available.`,
-      })
-      setState((s) =>
-        s.status === 'ready'
-          ? {
-              ...s,
-              context: null,
-              analyser: null,
-              tunerAnalyser: null,
-              micGranted: false,
-              noSound: true,
-            }
-          : s,
-      )
-    } finally {
-      handlingStreamErrorRef.current = false
-    }
-  }, [])
+  const handleStreamError = useCallback(
+    async (bridge: NamStudioBridge, message: string) => {
+      if (handlingStreamErrorRef.current) return
+      handlingStreamErrorRef.current = true
+      try {
+        await runExclusive(async () => {
+          await bridge.stop().catch(() => {})
+          await bridge.close().catch(() => {})
+        })
+        toast.error('Audio device error', {
+          description: `${message} — switched to no-sound mode; it'll reconnect automatically once a device is available.`,
+        })
+        setState((s) =>
+          s.status === 'ready'
+            ? {
+                ...s,
+                context: null,
+                analyser: null,
+                tunerAnalyser: null,
+                micGranted: false,
+                noSound: true,
+              }
+            : s,
+        )
+      } finally {
+        handlingStreamErrorRef.current = false
+      }
+    },
+    [runExclusive],
+  )
 
   // While the engine is running, keep the analysers fed from the latest native
   // taps and drive block meters from the core's real peaks. No-op in no-sound
@@ -158,33 +182,37 @@ export function useNativeAudioEngine() {
    * context/analyser shims. Shared by the explicit "Power On" path and the
    * no-sound recovery poll below, since both need the identical sequence.
    */
-  const openAndStart = useCallback(async (bridge: NamStudioBridge, deviceId: number) => {
-    const io = useIOStore.getState()
-    const opened = await bridge.open({
-      inputDeviceId: deviceId,
-      outputDeviceId: deviceId,
-      sampleRate: SAMPLE_RATE,
-      bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
-    })
-    if (!opened.ok) throw new Error(opened.error ?? 'failed to open audio device')
-    const started = await bridge.start()
-    if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
+  const openAndStart = useCallback(
+    (bridge: NamStudioBridge, deviceId: number) =>
+      runExclusive(async () => {
+        const io = useIOStore.getState()
+        const opened = await bridge.open({
+          inputDeviceId: deviceId,
+          outputDeviceId: deviceId,
+          sampleRate: SAMPLE_RATE,
+          bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
+        })
+        if (!opened.ok) throw new Error(opened.error ?? 'failed to open audio device')
+        const started = await bridge.start()
+        if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
 
-    const context = new NativeAudioContext(SAMPLE_RATE)
-    const analyser = new NativeAnalyser({
-      fftSize: 256,
-      sampleRate: SAMPLE_RATE,
-      read: () => outputTapRef.current,
-    })
-    // Large fftSize: the tuner's autocorrelation needs a wide window to
-    // resolve low bass (~31Hz needs >1500 samples per cycle at 48kHz).
-    const tunerAnalyser = new NativeAnalyser({
-      fftSize: 4096,
-      sampleRate: SAMPLE_RATE,
-      read: () => inputTapRef.current,
-    })
-    return { context, analyser, tunerAnalyser }
-  }, [])
+        const context = new NativeAudioContext(SAMPLE_RATE)
+        const analyser = new NativeAnalyser({
+          fftSize: 256,
+          sampleRate: SAMPLE_RATE,
+          read: () => outputTapRef.current,
+        })
+        // Large fftSize: the tuner's autocorrelation needs a wide window to
+        // resolve low bass (~31Hz needs >1500 samples per cycle at 48kHz).
+        const tunerAnalyser = new NativeAnalyser({
+          fftSize: 4096,
+          sampleRate: SAMPLE_RATE,
+          read: () => inputTapRef.current,
+        })
+        return { context, analyser, tunerAnalyser }
+      }),
+    [runExclusive],
+  )
 
   const powerOn = useCallback(
     async (opts?: NativeAudioEnginePowerOnOptions) => {
@@ -308,13 +336,15 @@ export function useNativeAudioEngine() {
     const bridge = bridgeRef.current
     bridgeRef.current = null
     if (bridge) {
-      await bridge.stop().catch(() => {})
-      await bridge.close().catch(() => {})
+      await runExclusive(async () => {
+        await bridge.stop().catch(() => {})
+        await bridge.close().catch(() => {})
+      })
     }
     await rigRef.current?.dispose()
     rigRef.current = null
     setState(IDLE)
-  }, [])
+  }, [runExclusive])
 
   return { ...state, powerOn, powerOff }
 }

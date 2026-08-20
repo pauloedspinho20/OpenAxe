@@ -1,5 +1,3 @@
-#include <RtAudio.h>
-
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -58,8 +56,7 @@ void TestCallbackPassthrough() {
   float* in[2] = {in0, in1};
   float* out[2] = {out0, out1};
 
-  nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR,
-                                 &state);
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   CHECK(state.callbacks.load() == 1);
   CHECK(state.frames_processed.load() == static_cast<unsigned int>(kFrames));
@@ -79,8 +76,7 @@ void TestCallbackSilenceWhenNoGraph() {
   for (int i = 0; i < kFrames; ++i) out0[i] = out1[i] = 1.0f;
   float* out[2] = {out0, out1};
 
-  nam_desktop::RtProcessCallback(out, nullptr, kFrames, 0.0,
-                                 RtAudioErrorType::RTAUDIO_NO_ERROR, &state);
+  nam_desktop::RtProcessCallback(out, nullptr, kFrames, &state);
 
   for (int i = 0; i < kFrames; ++i) {
     CHECK(out0[i] == 0.0f);
@@ -126,8 +122,7 @@ void TestTapConcurrentReadWrite() {
         in0[i] = value;
         in1[i] = value * 2.0f;
       }
-      nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR,
-                                     &state);
+      nam_desktop::RtProcessCallback(out, in, kFrames, &state);
       ++k;
       callbacks_done.fetch_add(1, std::memory_order_relaxed);
     }
@@ -160,10 +155,8 @@ void TestTapConcurrentReadWrite() {
 }
 
 // A second process touching the same shared audio device (e.g. a browser tab
-// also open on the built-in mic/speakers) can force RtAudio's CoreAudio
-// backend to reconfigure the device mid-stream, which is exactly what the
-// mismatched-device rejection above already knows can crash that backend.
-// Once AudioIO's RtAudio error callback observes that (see
+// also open on the built-in mic/speakers) can force the OS to reconfigure the
+// device mid-stream. Once AudioIO's device error callback observes that (see
 // AudioIO::HandleStreamError), RtProcessCallback must stop touching
 // input_channels/output_channels against buffers whose real shape may have
 // just changed - checked here without needing real hardware, since the
@@ -193,8 +186,7 @@ void TestCallbackHoldsSilenceOnStreamError() {
   float* out[2] = {out0, out1};
 
   const unsigned int callbacks_before = state.callbacks.load();
-  nam_desktop::RtProcessCallback(out, in, kFrames, 0.0, RtAudioErrorType::RTAUDIO_NO_ERROR,
-                                 &state);
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   // Still counted as a callback (diagnostics keep working)...
   CHECK(state.callbacks.load() == callbacks_before + 1);
@@ -224,17 +216,26 @@ void TestDeviceEnumeration() {
   // Hosts without audio hardware (e.g. CI) legitimately return an empty
   // list; only assert the call itself never throws.
   std::printf("  AudioIO::ListDevices: %zu device(s)\n", devices.size());
+  for (size_t i = 0; i < devices.size(); ++i) {
+    const auto& d = devices[i];
+    std::printf("    [%zu] name='%s' id=%u default=%d in=%d out=%d inCh=%d outCh=%d api=%s\n",
+                i, d.name.c_str(), d.id, d.is_default ? 1 : 0, d.is_input ? 1 : 0,
+                d.is_output ? 1 : 0, d.input_channels, d.output_channels, d.api.c_str());
+  }
 }
 
 // Opens a real duplex stream on a single device that offers 2 in / 2 out and
 // verifies the real-time callback actually fires. Skips silently when the
 // host has no such device.
 //
-// Open() rejects two independent physical devices outright (issue #53: an
-// RtAudio CoreAudio crash, and even when it doesn't crash, an unfixable
-// acoustic feedback loop from mic straight into open speakers) - so this
-// deliberately looks for one device that can serve both directions, rather
-// than picking the best input and the best output independently.
+// Open() rejects two independent physical devices outright (an unfixable
+// acoustic feedback loop from mic straight into open speakers - see Open()'s
+// comment) - so this deliberately looks for one device that can serve both
+// directions, rather than picking the best input and the best output
+// independently. This test previously reproduced a RtAudio CoreAudio-backend
+// crash (garbage input pointer on the very first callback(s) during its
+// internal duplex bridging) on this exact single-device setup - it's now the
+// regression test for the swap to JUCE's own from-scratch CoreAudio backend.
 void TestOpenStartStop() {
   nam_desktop::AudioIO io;
   const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
@@ -281,23 +282,28 @@ void TestOpenStartStop() {
   nam_studio_graph_destroy(graph);
 }
 
-// issue #53: two independent physical devices for input/output can crash
-// RtAudio's CoreAudio backend and, even when they don't, cause an acoustic
+// Two independent physical devices for input/output cause an acoustic
 // feedback loop the app has no way to fix - Open() must refuse the pairing
-// outright rather than let either happen.
-void TestOpenRejectsMismatchedDevices() {
+// outright rather than let it happen.
+void TestOpenAcceptsSplitDevices() {
   nam_desktop::AudioIO io;
   const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
   if (devices.size() < 2) {
-    std::printf("  Skipping mismatched-device rejection test: fewer than 2 devices on this host\n");
+    std::printf("  Skipping split-device test: fewer than 2 devices on this host\n");
     return;
   }
 
   const unsigned int a = devices[0].id;
   const unsigned int b = devices[1].id;
-  CHECK(!io.Open(a, b, 48000.0, 128));
-  CHECK(!io.LastError().empty());
-  CHECK(!io.IsOpen());
+  // Open() no longer refuses different input/output endpoints outright - it
+  // lets JUCE bridge them (needed for interfaces like the FM3 that CoreAudio
+  // exposes under separate input/output names). It may still fail for genuine
+  // hardware reasons, but the old "must be the same audio device" rejection is
+  // gone, so that specific error must never appear.
+  io.Open(a, b, 48000.0, 128);
+  const std::string err = io.LastError();
+  CHECK(err.find("must be the same audio device") == std::string::npos);
+  io.Close();
 }
 
 }  // namespace
@@ -310,7 +316,7 @@ int main() {
   TestTapConcurrentReadWrite();
   TestDeviceEnumeration();
   TestOpenStartStop();
-  TestOpenRejectsMismatchedDevices();
+  TestOpenAcceptsSplitDevices();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

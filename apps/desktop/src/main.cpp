@@ -135,8 +135,10 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
 
   async function refreshDevices() {
     const devices = await call('listDevices');
-    const ins = devices.filter((d) => d.isInput);
-    const outs = devices.filter((d) => d.isOutput);
+    // Only surface the platform default device in each picker - the app always
+    // runs on the system default I/O, so there's no point offering the rest.
+    const ins = devices.filter((d) => d.isInput && d.isDefault);
+    const outs = devices.filter((d) => d.isOutput && d.isDefault);
     const fill = (sel, list, empty) => {
       sel.innerHTML = '';
       if (!list.length) { const o = document.createElement('option'); o.textContent = empty; sel.appendChild(o); return; }
