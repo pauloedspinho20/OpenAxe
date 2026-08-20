@@ -15,6 +15,7 @@
     "build:all": "turbo run build",
     "package:desktop": "pnpm --filter @nam/desktop package",
     "lint": "turbo run lint",
+    "check:grid": "node scripts/check-grid-dims.mjs",
     "format": "prettier --write .",
     "format:check": "turbo run format:check",
     "test": "turbo run test",

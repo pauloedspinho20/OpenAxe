@@ -2,14 +2,18 @@
 
 #include <string>
 
-// Ported from apps/web/src/engine/gridConfig.ts - keep in sync with that
-// file's semantics (grid size, rail sentinels, jack identity) exactly.
+// Ported from apps/web/src/engine/gridConfig.ts - TS (gridConfig.ts) is the
+// source of truth; keep this header's grid size in sync with it exactly
+// (scripts/check-grid-dims.mjs --check fails CI on drift). The OUT-rail sort
+// column is kGridCols; if it diverges from TS's GRID_COLS, native/desktop
+// OUT connections for the rightmost UI columns pass the TS pre-check but are
+// rejected by the core (issue #61).
 namespace nam_studio::graph {
 
-// Provisional grid size - see the app's grid rearchitecture plan for why
-// this may change.
-inline constexpr int kGridRows = 3;
-inline constexpr int kGridCols = 8;
+// Grid size - must match apps/web/src/engine/gridConfig.ts. "Provisional"
+// there means it may change; when it does, this header follows.
+inline constexpr int kGridRows = 4;
+inline constexpr int kGridCols = 10;
 
 // The fixed rail sentinels - not real blocks, never occupy a grid cell.
 inline constexpr const char* kInRail = "IN";
