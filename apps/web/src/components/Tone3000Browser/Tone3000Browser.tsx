@@ -14,6 +14,8 @@ import {
 import { importTone3000Asset } from '../../tone3000/importService'
 import type { BlockLoadTarget } from '../../tone3000/importService'
 import type { Tone, Tone3000Model } from '../../tone3000/types'
+import { cacheDefaultGear, defaultGearFor } from '../../tone3000/defaultGear'
+import type { DefaultGearEntry } from '../../tone3000/defaultGear'
 import { Dialog, HardwareButton, OutlineButton } from '@nam/ui'
 import styles from './Tone3000Browser.module.css'
 
@@ -26,7 +28,7 @@ interface Props {
   context: AudioContext | null
 }
 
-type Scope = 'browse' | 'library' | 'favorites' | 'created'
+type Scope = 'browse' | 'defaults' | 'library' | 'favorites' | 'created'
 type ViewMode = 'list' | 'cards'
 
 interface SearchState {
@@ -72,6 +74,8 @@ export function Tone3000Browser({ target, context }: Props) {
   const [importingId, setImportingId] = useState<string | null>(null)
   const [importDone, setImportDone] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [loadingDefaultId, setLoadingDefaultId] = useState<string | null>(null)
+  const [defaultsError, setDefaultsError] = useState<string | null>(null)
   const [makes, setMakes] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [makesValue, setMakesValue] = useState('')
@@ -125,7 +129,7 @@ export function Tone3000Browser({ target, context }: Props) {
   // from different endpoints, and Favorites/Created skip the free-text/
   // format/sort/makes/tags filters only the search endpoint supports.
   useEffect(() => {
-    if (scope === 'library' || !browser.target) return
+    if (scope === 'library' || scope === 'defaults' || !browser.target) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -297,6 +301,26 @@ export function Tone3000Browser({ target, context }: Props) {
     close()
   }
 
+  const loadDefaultGear = async (entry: DefaultGearEntry) => {
+    if (!target || !context) return
+    setDefaultsError(null)
+    setLoadingDefaultId(entry.id)
+    try {
+      const blob = await cacheDefaultGear(entry)
+      if (entry.slot === 'model') {
+        await target.loadModel(await blob.text(), { id: entry.id, name: entry.name })
+      } else {
+        const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
+        target.loadIR(audioBuffer, { id: entry.id, name: entry.name })
+      }
+      close()
+    } catch (err) {
+      setDefaultsError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoadingDefaultId(null)
+    }
+  }
+
   const close = () => {
     browser.closeBrowser()
     setScope('browse')
@@ -308,6 +332,7 @@ export function Tone3000Browser({ target, context }: Props) {
     setError(null)
     setNeedsConnect(false)
     setImportError(null)
+    setDefaultsError(null)
   }
 
   if (!browser.open || !browser.target) return null
@@ -322,6 +347,10 @@ export function Tone3000Browser({ target, context }: Props) {
       matchesQuery(e.creator, search.query) ||
       matchesQuery(e.toneTitle ?? '', search.query),
   )
+  // Bundled with the app itself (issue #101) - no Tone3000 account needed,
+  // scoped to the current block's own gear kind (unlike Library, which shows
+  // every cached asset regardless of gear).
+  const defaultEntries = defaultGearFor(gear).filter((e) => matchesQuery(e.name, search.query))
 
   return (
     <Dialog
@@ -338,6 +367,13 @@ export function Tone3000Browser({ target, context }: Props) {
             onClick={() => setScope('browse')}
           >
             ALL
+          </button>
+          <button
+            type="button"
+            className={`${styles.tab} ${scope === 'defaults' ? styles.tabActive : ''}`}
+            onClick={() => setScope('defaults')}
+          >
+            DEFAULTS ({defaultGearFor(gear).length})
           </button>
           <button
             type="button"
@@ -387,7 +423,7 @@ export function Tone3000Browser({ target, context }: Props) {
       {importError && <p className={styles.error}>{importError}</p>}
       {error && <p className={styles.error}>{error}</p>}
 
-      {scope !== 'library' && (
+      {scope !== 'library' && scope !== 'defaults' && (
         <div className={styles.body}>
           <div className={styles.filters}>
             <input
@@ -627,6 +663,47 @@ export function Tone3000Browser({ target, context }: Props) {
                     aria-label={`Remove ${entry.name} from library`}
                   >
                     ×
+                  </OutlineButton>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {scope === 'defaults' && (
+        <div className={styles.body}>
+          <div className={styles.filters}>
+            <input
+              type="text"
+              placeholder="Filter defaults…"
+              value={search.query}
+              onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+              className={styles.input}
+            />
+          </div>
+          {defaultsError && <p className={styles.error}>{defaultsError}</p>}
+          {defaultGearFor(gear).length === 0 && (
+            <p className={styles.hint}>
+              No bundled defaults for {GEAR_LABELS[gear].toLowerCase()} yet.
+            </p>
+          )}
+          {defaultGearFor(gear).length > 0 && defaultEntries.length === 0 && (
+            <p className={styles.hint}>No defaults match.</p>
+          )}
+          <ul className={listClass}>
+            {defaultEntries.map((entry) => (
+              <li key={entry.id} className={cardClass}>
+                <div className={styles.libraryRow}>
+                  <div className={styles.libraryInfo}>
+                    <span className={styles.cardTitle}>{entry.name}</span>
+                    <span className={`label ${styles.cardMeta}`}>Bundled with the app</span>
+                  </div>
+                  <OutlineButton
+                    disabled={!target || loadingDefaultId === entry.id}
+                    onClick={() => void loadDefaultGear(entry)}
+                  >
+                    {loadingDefaultId === entry.id ? 'LOADING…' : 'LOAD'}
                   </OutlineButton>
                 </div>
               </li>
