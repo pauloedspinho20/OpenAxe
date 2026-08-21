@@ -17,3 +17,13 @@ the display name shown in the app - e.g. `fender-twin-clean.nam` → "Fender Twi
 
 Only add files you have the right to redistribute under this project's license (GPLv3) - see
 [CONTRIBUTING.md](../../../../../CONTRIBUTING.md#licensing-rules-for-contributed-code).
+
+**These folders are deliberately empty right now.** An earlier attempt bundled 4 real Tone3000
+captures here, but every one of them carries Tone3000's standard "T3K" license: _"Users may
+download and use the data file in software and publish the resulting outputs without royalties or
+restrictions. However, they may not upload, republish, or distribute the data file without the
+author's permission."_ Checking a `.nam`/`.wav` file into this public repo - or shipping it in the
+built app - **is** redistributing it, so a capture under that license can't go here without the
+original creator's explicit permission, even though the app _using_ it at runtime is fine. Before
+adding a Tone3000-sourced file here, either confirm it's CC0/public-domain, or get - and keep a
+record of - the author's permission to redistribute it specifically.
