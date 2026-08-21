@@ -85,9 +85,12 @@ will catch it (CI is currently off, see above):
 - `node scripts/check-wasm-exports.mjs` — every `_nam_studio_*` symbol the web
   app calls is actually in `packages/core/CMakeLists.txt`'s
   `EXPORTED_FUNCTIONS` (issue #70)
+- `node scripts/sync-version.mjs --check` — every `package.json`'s
+  `"version"` matches the root `VERSION` file (issue #54)
 
-Each has a `--fix` mode; a fix still requires re-running the relevant build
-(wasm rebuild, etc.) to take effect.
+Each has a `--fix`/write mode (`sync-version.mjs`'s is the no-flag default,
+not `--fix`); a fix still requires re-running the relevant build (wasm
+rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Env vars
 
@@ -122,3 +125,8 @@ Each has a `--fix` mode; a fix still requires re-running the relevant build
   current pin for the named peer before assuming your change broke it, and
   consider a `pnpm.overrides` pin (see the current `valibot` override in root
   `package.json` for precedent) rather than loosening the strict setting.
+- **Root `VERSION` file is the one version source of truth** — every
+  `package.json` and both `apps/desktop`'s and `packages/core`'s CMake
+  `project()` version read it; see
+  [CONTRIBUTING.md#releasing-desktop-builds](./CONTRIBUTING.md#releasing-desktop-builds)
+  for the tag-and-release flow.

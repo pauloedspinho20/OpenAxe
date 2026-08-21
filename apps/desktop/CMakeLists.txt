@@ -1,8 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
+
+# issue #54: the root VERSION file is the one source of truth for the
+# product's version - every package.json's "version" field is kept in sync
+# with it by scripts/sync-version.mjs, and this is what actually names the
+# built installer (CPACK_PACKAGE_FILE_NAME below), so reading it here instead
+# of a second hardcoded literal is what keeps the artifact filename and the
+# app's own version from drifting apart again.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" NAM_STUDIO_VERSION)
+string(STRIP "${NAM_STUDIO_VERSION}" NAM_STUDIO_VERSION)
+
 # C alongside CXX: JUCE's own build tooling (juceaide) needs a working C
 # compiler; enabling it late/implicitly via a FetchContent'd subdirectory
 # instead of here can leave CMAKE_C_COMPILE_OBJECT unset on some generators.
-project(nam_studio_desktop VERSION 0.1.0 LANGUAGES CXX C)
+project(nam_studio_desktop VERSION ${NAM_STUDIO_VERSION} LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -62,6 +62,26 @@ Useful scripts (run at the repo root; Turborepo fans them out to the relevant pa
 All five (`lint`, `format:check`, `build`, `test:run`, `test:e2e`) must pass before a PR is merged —
 CI runs them on every push and pull request.
 
+## Releasing (desktop builds)
+
+The root `VERSION` file is the one source of truth for the product's version — every
+`package.json`'s `"version"` field and both `apps/desktop/CMakeLists.txt`'s and
+`packages/core/CMakeLists.txt`'s CMake `project()` version are kept in sync with it (checked by
+`node scripts/sync-version.mjs --check`, which also runs in CI).
+
+To cut a release:
+
+1. Bump `VERSION`, then run `node scripts/sync-version.mjs` to propagate it.
+2. Commit that change and merge it to `main`.
+3. Tag and push: `git tag v$(cat VERSION) && git push --tags`.
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the desktop app for all
+three platforms (the same matrix as `desktop.yml`) and publishes the installers as public assets
+on a GitHub Release for that tag — see [CHANGELOG.md](./CHANGELOG.md) for what's shipped in each
+one. (Automated version bumping via Changesets/semantic-release, reading commits' existing
+Conventional-Commits-style prefixes, is a natural next step if manual tagging gets tedious — not
+set up yet.)
+
 ## Commit / PR expectations
 
 - Keep PRs scoped to one task from one epic where possible.

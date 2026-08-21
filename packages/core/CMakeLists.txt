@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
-project(nam_studio_core VERSION 0.1.0 LANGUAGES CXX)
+
+# issue #54: the root VERSION file is the one source of truth for the
+# product's version (see apps/desktop/CMakeLists.txt's comment on the same
+# read) - kept in sync with every package.json by scripts/sync-version.mjs.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" NAM_STUDIO_VERSION)
+string(STRIP "${NAM_STUDIO_VERSION}" NAM_STUDIO_VERSION)
+
+project(nam_studio_core VERSION ${NAM_STUDIO_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
