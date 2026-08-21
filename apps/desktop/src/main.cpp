@@ -275,11 +275,19 @@ int main(int argc, char** argv) {
                       : std::filesystem::weakly_canonical(argv0).parent_path().string();
     nam_desktop::InstallDebugLogging(exe_dir);
 
+    // Construct the bridge BEFORE the webview. On exit the webview's
+    // destructor drains its dispatch queue (pending JS getTap/meters calls
+    // from the React UI's ~50ms poll), which invoke bridge handlers that read
+    // RtCallbackState. Declaring the bridge first makes it destruct LAST
+    // (reverse order), so the webview finishes draining while the bridge and
+    // its state_ are still alive - otherwise a drained getTap touches freed
+    // state_ (the exit-time heap corruption / std::terminate in
+    // ~cocoa_wkwebview_engine).
+    nam_desktop::StudioBridge bridge;
+
     webview::webview w(nam_desktop::DebugEnabled(), nullptr);
     w.set_title("NAM Web Studio");
     w.set_size(1280, 800, WEBVIEW_HINT_NONE);
-
-    nam_desktop::StudioBridge bridge;
 
     // window.namStudio.* bridge surface (issue #15 M2). Each bind exposes a
     // global JS function; webview marshals its JSON args here and resolves

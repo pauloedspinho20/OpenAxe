@@ -210,6 +210,21 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    // Tear down the C++ graph before clearing the JS mirrors. The next power-on
+    // replays the same graphStore ids through bindGraphRig, so if the core's
+    // blocks/edges survive here its HandleAddBlock returns "block id already
+    // exists", reconcile rejects, and the bindGraphRig promise chain dies -
+    // every power cycle after the first silently stops syncing the graph.
+    // Edges are removed first; removeBlock may not clean up dangling edges on
+    // every core version, so dropping them explicitly keeps the two in sync.
+    const edgeIds = [...this.edges.keys()]
+    const blockIds = [...this.blocks.keys()]
+    await Promise.all(
+      edgeIds.map((id) => this.bridge.disconnect({ edgeId: id }).catch(() => undefined)),
+    )
+    await Promise.all(
+      blockIds.map((id) => this.bridge.removeBlock({ blockId: id }).catch(() => undefined)),
+    )
     this.analysers.clear()
     this.peaks.clear()
     this.blocks.clear()

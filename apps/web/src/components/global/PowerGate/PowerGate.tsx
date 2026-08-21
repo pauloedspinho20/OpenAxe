@@ -1,6 +1,6 @@
 import { HardwareButton, Wordmark } from '@nam/ui'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
-import { getDuplexDevices, useIOStore, type LatencyHint } from '@/state/ioStore'
+import { useIOStore, type LatencyHint } from '@/state/ioStore'
 import { getNamStudio } from '@/native/namStudio'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import styles from './PowerGate.module.css'
@@ -48,16 +48,6 @@ export function PowerGate({
   if (status === 'ready') return null
 
   const starting = status === 'starting'
-  // Native (desktop): RtAudio rejects a mismatched input/output pair (issue
-  // #53 - the built-in-mic-plus-speakers feedback loop this exists to
-  // prevent), so only devices capable of both are offered, one choice
-  // driving both `inputDeviceId`/`outputDeviceId`.
-  const duplexDevices = getDuplexDevices(io)
-
-  const selectNativeDevice = (id: string) => {
-    io.setInputDevice(id)
-    io.setOutputDevice(id)
-  }
 
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
@@ -100,18 +90,32 @@ export function PowerGate({
             <select
               className={styles.latencySelect}
               value={io.inputDeviceId}
-              onChange={(e) => selectNativeDevice(e.target.value)}
+              onChange={(e) => io.setInputDevice(e.target.value)}
               disabled={starting}
-              aria-label="Audio device"
+              aria-label="Input device"
             >
-              <option value="">Default device</option>
-              {duplexDevices.map((d) => (
+              <option value="">Default input</option>
+              {io.inputDevices.map((d) => (
                 <option key={d.deviceId} value={d.deviceId}>
                   {d.label}
                 </option>
               ))}
             </select>
-            {duplexDevices.length === 0 && (
+            <select
+              className={styles.latencySelect}
+              value={io.outputDeviceId}
+              onChange={(e) => io.setOutputDevice(e.target.value)}
+              disabled={starting}
+              aria-label="Output device"
+            >
+              <option value="">Default output</option>
+              {io.outputDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            {io.inputDevices.length === 0 && io.outputDevices.length === 0 && (
               <p className={styles.deviceHint}>
                 No audio interface found - plug one in, or continue without sound below.
               </p>

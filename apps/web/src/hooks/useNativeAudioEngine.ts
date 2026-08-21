@@ -7,7 +7,7 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import { getNamStudio, type NamStudioBridge, type NamStudioDevice } from '../native/namStudio'
+import { getNamStudio, type NamStudioBridge } from '../native/namStudio'
 
 export interface NativeAudioEngineState {
   status: EngineStatus
@@ -46,10 +46,11 @@ const DEFAULT_DEVICE = 0xffffffff
 /** How often to re-scan for a usable device while in no-sound mode. */
 const DEVICE_RECOVERY_INTERVAL_MS = 3000
 
-/** Devices RtAudio can drive as a single input+output device (see audio.cpp's
- * Open(), which rejects a mismatched pair - issue #53). */
-function findDuplexDevices(devices: NamStudioDevice[]): NamStudioDevice[] {
-  return devices.filter((d) => d.isInput && d.isOutput)
+/** Resolve a persisted device id ("", or a numeric id as a string) to the
+ * number the C++ core expects - 0xffffffff means "let the backend pick the
+ * platform default" (see audio.cpp's Open()). */
+function resolveDeviceId(id: string): number {
+  return id ? Number(id) : DEFAULT_DEVICE
 }
 
 /**
@@ -93,15 +94,12 @@ export function useNativeAudioEngine() {
 
   /**
    * A second process (e.g. a browser tab also open on the same physical mic/
-   * speakers) can force the OS to reconfigure a device mid-stream, which is
-   * exactly the class of RtAudio CoreAudio bug the mismatched-device
-   * rejection in Open() already guards against (issue #53) - just triggered
-   * externally instead of by this app's own device choice. RtProcessCallback
-   * stops touching the stream the instant it observes the error (see
-   * audio.cpp), so by the time this fires there's nothing left to crash -
-   * just a broken stream to tear down cleanly and drop into no-sound mode,
-   * where the existing recovery poll below picks it back up automatically
-   * once a usable device reappears.
+   * speakers) can force the OS to reconfigure a device mid-stream. The C++
+   * core observes the error and stops touching the stream in its callback (see
+   * audio.cpp), so by the time this fires there's nothing left to crash - just
+   * a broken stream to tear down cleanly and drop into no-sound mode, where the
+   * existing recovery poll below picks it back up automatically once a usable
+   * device reappears.
    */
   const handleStreamError = useCallback(
     async (bridge: NamStudioBridge, message: string) => {
@@ -191,18 +189,20 @@ export function useNativeAudioEngine() {
   }, [state.status, state.noSound, handleStreamError])
 
   /**
-   * Opens + starts the RtAudio stream on `deviceId` (same id for input and
-   * output - see findDuplexDevices) and builds the Web-Audio-free
-   * context/analyser shims. Shared by the explicit "Power On" path and the
-   * no-sound recovery poll below, since both need the identical sequence.
+   * Opens + starts the native stream with independent input/output device
+   * ids (the C++ core opens them as separate createDevice(output, input)
+   * names - see apps/desktop/src/audio.cpp's Open()) and builds the
+   * Web-Audio-free context/analyser shims. Shared by the explicit "Power On"
+   * path and the no-sound recovery poll below, since both need the identical
+   * sequence.
    */
   const openAndStart = useCallback(
-    (bridge: NamStudioBridge, deviceId: number) =>
+    (bridge: NamStudioBridge, inputDeviceId: number, outputDeviceId: number) =>
       runExclusive(async () => {
         const io = useIOStore.getState()
         const opened = await bridge.open({
-          inputDeviceId: deviceId,
-          outputDeviceId: deviceId,
+          inputDeviceId,
+          outputDeviceId,
           sampleRate: SAMPLE_RATE,
           bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
         })
@@ -262,8 +262,11 @@ export function useNativeAudioEngine() {
         }
 
         const io = useIOStore.getState()
-        const deviceId = io.inputDeviceId ? Number(io.inputDeviceId) : DEFAULT_DEVICE
-        const { context, analyser, tunerAnalyser } = await openAndStart(bridge, deviceId)
+        const { context, analyser, tunerAnalyser } = await openAndStart(
+          bridge,
+          resolveDeviceId(io.inputDeviceId),
+          resolveDeviceId(io.outputDeviceId),
+        )
 
         setState({
           status: 'ready',
@@ -288,10 +291,11 @@ export function useNativeAudioEngine() {
     [state.status, openAndStart],
   )
 
-  // No-sound recovery: periodically re-scan for a duplex-capable device and
-  // switch to normal mode automatically the moment one shows up - no user
-  // confirmation, per the app's "no built-in mic + speaker feedback loop"
-  // constraint (issue #53) this whole flow exists to route around safely.
+  // No-sound recovery: periodically try to open the stream with the user's
+  // chosen (or default) input + output devices and switch to normal mode the
+  // moment it opens - no user confirmation. Input and output are opened
+  // independently (the native core accepts separate device names), so a
+  // mismatched pair is fine here - we never overwrite the saved selections.
   useEffect(() => {
     if (state.status !== 'ready' || !state.noSound) return
     const bridge = bridgeRef.current
@@ -302,22 +306,12 @@ export function useNativeAudioEngine() {
       if (recoveringRef.current) return
       recoveringRef.current = true
       try {
-        const devices = await bridge.listDevices()
-        const duplex = findDuplexDevices(devices)
-        const firstDuplex = duplex[0]
-        if (!firstDuplex) return
-
         const io = useIOStore.getState()
-        const preferred =
-          io.inputDeviceId &&
-          io.inputDeviceId === io.outputDeviceId &&
-          duplex.some((d) => String(d.id) === io.inputDeviceId)
-            ? Number(io.inputDeviceId)
-            : firstDuplex.id
-
-        const { context, analyser, tunerAnalyser } = await openAndStart(bridge, preferred)
-        io.setInputDevice(String(preferred))
-        io.setOutputDevice(String(preferred))
+        const { context, analyser, tunerAnalyser } = await openAndStart(
+          bridge,
+          resolveDeviceId(io.inputDeviceId),
+          resolveDeviceId(io.outputDeviceId),
+        )
         setState((s) =>
           s.rig === rig
             ? {
