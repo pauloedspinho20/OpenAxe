@@ -4,7 +4,10 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    /* "node" is needed only for RigWorkletNode.integration.test.ts's
+       @vitest-environment node imports (node:fs/node:url) - it doesn't
+       affect the browser bundle, only tsc's type-check. */
+    "types": ["vite/client", "node"],
     "allowArbitraryExtensions": true,
     /* packages/core/param_schema.json is imported directly by
        paramSchema.coreDrift.test.ts - the core param table is the source of
