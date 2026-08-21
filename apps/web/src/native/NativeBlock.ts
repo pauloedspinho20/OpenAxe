@@ -44,11 +44,25 @@ function toNumber(v: number | string | boolean): number {
  * - IR/Cab blocks convolve for real now (dsp/convolver.cpp): loadIR forwards the
  *   file's bytes to the core, which decodes and resamples them
  *   (nam_studio_load_ir_wav).
- * - Params apply by core param *symbol*; effect params whose symbol doesn't
- *   match the core's table are rejected by the bridge (issue #41). That
- *   rejection is surfaced as a one-time console warning per block+key (see
- *   setParams) rather than silently dropped, ahead of the real fix - a single
- *   param schema shared by web/core/WASM (issue #51).
+ * - Params apply by core param *symbol*. Issue #51's shared schema
+ *   (packages/core/param_schema.json, generating both the C++ .inc fragments
+ *   and this app's paramSchema.ts, checked by paramSchema.coreDrift.test.ts)
+ *   keeps every plain-symbol effect kind's web keys identical to the core's
+ *   table - covered end-to-end (bridge resolution, not just static schema
+ *   equality) by TestSymbolMappedParamRoundTripAllEffectKinds in
+ *   apps/desktop/tests/bridge_test.cpp. Kinds that don't map 1:1 route
+ *   through their own dedicated bridge call instead of setParam: reverb
+ *   knobs (nam_studio_set_reverb_control), reverbAlgorithm/model (delay)
+ *   string selects (setReverbAlgorithm/setDelayModel), and the
+ *   input_level/output_level I/O trims above (setBlockTrim, which collide in
+ *   name but not meaning with the Amp family's core dBu-calibration params
+ *   of the same symbol). slimSize/irMix are camelCase aliases resolved by
+ *   the bridge (CoreSymbolAliasFor). A key that reaches setParam and still
+ *   finds no matching symbol (a typo, or a new UI field added without its
+ *   core counterpart) is a genuine gap, not one of the above - the bridge
+ *   rejects it and this class surfaces that as a one-time console warning
+ *   per block+key (see setParams) rather than silently dropping it (issue
+ *   #41).
  */
 export class NativeBlock implements PresetBlock {
   readonly kind: BlockKind

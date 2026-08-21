@@ -116,6 +116,88 @@ void TestParamsByIndexAndSymbol() {
   CHECK(set["ok"] == false);
 }
 
+// issue #41: every plain-symbol-mapped effect kind's web param keys must
+// actually round-trip through the live bridge resolution path (HandleSetParam
+// -> ResolveParamIndex -> core -> HandleGetParam), not just satisfy the
+// static schema-equality check in paramSchema.coreDrift.test.ts (which only
+// compares packages/core/param_schema.json against apps/web/src/effects/
+// paramSchema.ts as data - it can't catch a bridge-side resolution bug, and
+// it doesn't run against the desktop binary at all). TestParamsByIndexAndSymbol
+// covers one block (delay) via its own generic symbol; TestReverbControlKeys
+// and TestAmpToneStackAndSlimSizeKeys already cover the special-routed kinds
+// (reverb controls, slimSize/irMix aliases). This covers every remaining kind
+// whose web keys are meant to equal the core's symbols outright, using the
+// exact key names apps/web/src/effects/paramSchema.ts sends.
+void TestSymbolMappedParamRoundTripAllEffectKinds() {
+  struct Kind {
+    const char* kind;
+    std::vector<const char*> keys;
+  };
+  const std::vector<Kind> kinds = {
+      {"noise-gate", {"threshold", "hysteresis", "attack", "hold", "release", "range"}},
+      {"compressor",
+       {"threshold", "ratio", "attack", "release", "knee", "makeup_gain", "character", "mix"}},
+      {"eq",
+       {"band0_frequency", "band0_gain", "band0_q", "band1_frequency", "band1_gain", "band1_q",
+        "band2_frequency", "band2_gain", "band2_q", "band3_frequency", "band3_gain", "band3_q"}},
+      {"chorus", {"rate", "depth", "delay", "feedback"}},
+      {"flanger", {"rate", "depth", "delay", "feedback"}},
+      {"phaser", {"rate", "depth", "feedback", "stages"}},
+      {"tremolo", {"rate", "depth", "shape"}},
+      {"delay", {"time", "feedback", "tone", "wow_depth", "wow_rate"}},
+      {"ping-pong-delay", {"time", "feedback", "tone"}},
+      {"mixer",
+       {"in0_level", "in0_pan", "in1_level", "in1_pan", "in2_level", "in2_pan", "in3_level",
+        "in3_pan"}},
+      {"splitter", {"out0_level", "out1_level", "out2_level", "out3_level"}},
+  };
+
+  int next_id = 0;
+  for (const auto& k : kinds) {
+    nam_desktop::StudioBridge bridge;
+    const std::string id = "k" + std::to_string(++next_id);
+    const std::string add =
+        std::string(R"([{"kind":")") + k.kind + R"(","row":0,"col":0,"id":")" + id + R"("}])";
+    CHECK(Parse(bridge.HandleAddBlock(Arr(add.c_str())))["ok"] == true);
+
+    const auto info =
+        Parse(bridge.HandleBlockInfo(Arr((R"([{"blockId":")" + id + R"("}])").c_str())));
+
+    for (const char* key : k.keys) {
+      double min_v = 0.0, max_v = 1.0;
+      bool found = false;
+      for (const auto& p : info["params"]) {
+        if (p["symbol"].get<std::string>() == key) {
+          min_v = p["min"].get<double>();
+          max_v = p["max"].get<double>();
+          found = true;
+          break;
+        }
+      }
+      // A web key with no matching core symbol is exactly the bug issue #41
+      // describes - fail loudly here instead of only via a runtime
+      // console.warn a user will never see.
+      CHECK(found);
+      if (!found) continue;
+
+      const std::string get_req =
+          std::string(R"([{"blockId":")") + id + R"(","key":")" + key + R"("}])";
+      const double before = Parse(bridge.HandleGetParam(Arr(get_req.c_str())))["value"].get<double>();
+      double target = min_v + (max_v - min_v) * 0.75;
+      if (std::fabs(target - before) < 1e-6) target = min_v + (max_v - min_v) * 0.25;
+
+      const std::string set_req = std::string(R"([{"blockId":")") + id + R"(","key":")" + key +
+                                   R"(","value":)" + std::to_string(target) + R"(}])";
+      const auto set_result = Parse(bridge.HandleSetParam(Arr(set_req.c_str())));
+      CHECK(set_result["ok"] == true);
+
+      const auto got = Parse(bridge.HandleGetParam(Arr(get_req.c_str())));
+      CHECK(got["ok"] == true);
+      CHECK(std::fabs(got["value"].get<double>() - target) < 1e-3);
+    }
+  }
+}
+
 void TestConnectDisconnectAndEdges() {
   nam_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"mixer","row":0,"col":0,"id":"m1"}])")));
@@ -652,6 +734,7 @@ int main() {
   TestVersion();
   TestAddBlockAndInfo();
   TestParamsByIndexAndSymbol();
+  TestSymbolMappedParamRoundTripAllEffectKinds();
   TestConnectDisconnectAndEdges();
   TestRemoveBlockDropsEdges();
   TestMoveBlock();
