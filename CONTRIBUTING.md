@@ -36,9 +36,11 @@ pnpm install
 pnpm dev
 ```
 
-> Peer dependency warnings from `neural-amp-modeler-wasm` (pinned to React 18 peers) and a
-> Storybook MCP addon transitive dep are expected and harmless — `.npmrc` disables strict peer
-> checking so `pnpm install` doesn't fail on them.
+> `.npmrc` sets `strict-peer-dependencies=true` — a genuinely unmet peer fails `pnpm install`
+> outright. If install fails on a peer you didn't touch, it's likely a pre-existing unmet peer
+> elsewhere in the tree that your change's dependency resolution just surfaced; check
+> `pnpm-lock.yaml`'s current pin before assuming your change is at fault, and prefer a
+> `pnpm.overrides` pin (see root `package.json`) over loosening the strict setting.
 
 Useful scripts (run at the repo root; Turborepo fans them out to the relevant package):
 
