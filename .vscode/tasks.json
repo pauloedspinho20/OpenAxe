@@ -2,10 +2,28 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Setup: everything",
+      "type": "shell",
+      "command": "node scripts/setup.mjs",
+      "detail": "Start here. Fetches the DSP submodules, installs dependencies (repairing wrong-architecture native binaries), and configures both CMake projects. Idempotent - safe to re-run any time something looks broken",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Setup: everything (web only, no C++)",
+      "type": "shell",
+      "command": "node scripts/setup.mjs --web-only",
+      "detail": "Same, minus the submodules and CMake - for working on the web app without a C++ toolchain",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
       "label": "Install dependencies",
       "type": "shell",
       "command": "pnpm install",
-      "detail": "pnpm install across the workspace (apps/web, packages/ui)",
+      "detail": "pnpm install across the workspace (apps/web, packages/ui). Prefer \"Setup: everything\" - it also repairs the wrong-architecture native binaries a pnpm running under emulation installs",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
@@ -131,8 +149,8 @@
     {
       "label": "C++: Init submodules",
       "type": "shell",
-      "command": "git submodule update --init --recursive -- packages/core/third_party/nam-core && git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf",
-      "detail": "One-time fetch of the vendored DSP library submodules (NAMCore's Eigen/AudioDSPTools, Dragonfly's dpf) - needed before configuring packages/core",
+      "command": "node scripts/setup.mjs --submodules-only",
+      "detail": "One-time fetch of the vendored DSP library submodules (dspark's Effects, NAMCore's Eigen/AudioDSPTools, Dragonfly's dpf) - needed before configuring packages/core. Skips whatever is already present",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
