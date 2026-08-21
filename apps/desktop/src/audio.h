@@ -100,6 +100,20 @@ struct RtCallbackState {
   int input_channels = 2;
   int output_channels = 2;
 
+  // Input TRIM (the web UI's ioStore.inputGain), 1 = unity. The web engine
+  // applies this with a GainNode between the input source and the rig; the
+  // desktop shell owns its own device I/O, so it applies the same scalar here
+  // instead (issue #115). Scaling happens before both nam_studio_process and
+  // the monitor tap, so the input meter and tuner see post-trim signal exactly
+  // as they do on the web (where they hang off the GainNode's output).
+  //
+  // Atomic because the UI thread writes it while the audio thread reads it;
+  // the callback never scales the backend's own input buffers in place (those
+  // belong to the driver) - it copies into in_scratch, which is sized by
+  // SetGraph on a non-audio thread so the callback never allocates.
+  std::atomic<float> input_gain{1.0f};
+  std::array<std::vector<float>, 2> in_scratch;
+
   // Monitor tap: ring buffers holding the most recent input (pre-graph) and
   // output (post-graph) stereo frames, captured by the audio thread and read
   // by the UI/control thread to drive facade analysers (block/input meters,
@@ -185,6 +199,13 @@ class AudioIO {
   // nam_studio_reset (not real-time safe) so it must be called before
   // Start(), from a non-audio thread. Passing nullptr detaches.
   void SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size);
+
+  // Input TRIM applied to the incoming signal before the graph and before the
+  // monitor tap (see RtCallbackState::input_gain). 1 = unity. Safe to call
+  // from any thread at any time, including while the stream is running -
+  // it's a single atomic store, no suspend handshake needed.
+  void SetInputGain(float gain);
+  float InputGain() const;
 
   // Start/stop the stream. Start() arms the callback's graph pointer, so it
   // is not real-time safe; call it from the UI thread before audio flows.

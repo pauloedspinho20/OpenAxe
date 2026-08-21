@@ -134,6 +134,20 @@ export function useNativeAudioEngine() {
     [runExclusive],
   )
 
+  // Input TRIM. The web engine puts a GainNode between the input source and
+  // the rig; the desktop shell has no Web Audio to hang one off, so the same
+  // scalar is pushed to the C++ audio callback instead (issue #115), which
+  // applies it before the graph and before the monitor taps - so the input
+  // meter and tuner read post-trim on both paths. Runs on power-on too (the
+  // status transition), so the knob's current value is never left behind.
+  const inputGain = useIOStore((s) => s.inputGain)
+  useEffect(() => {
+    if (state.status !== 'ready') return
+    const bridge = bridgeRef.current
+    if (!bridge) return
+    void bridge.setInputGain({ gain: inputGain }).catch(() => {})
+  }, [inputGain, state.status])
+
   // While the engine is running, keep the analysers fed from the latest native
   // taps and drive block meters from the core's real peaks. No-op in no-sound
   // mode - there's no running stream to poll.

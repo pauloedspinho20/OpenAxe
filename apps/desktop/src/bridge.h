@@ -110,6 +110,7 @@ class StudioBridge {
   std::string HandleSetBlockTrim(const std::string& req);
   std::string HandleLoadIrWav(const std::string& req);
   std::string HandleUnloadIr(const std::string& req);
+  std::string HandleSetInputGain(const std::string& req);
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);

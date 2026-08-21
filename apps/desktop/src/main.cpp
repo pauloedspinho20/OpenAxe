@@ -315,6 +315,7 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "namStudio.setBlockTrim", &nam_desktop::StudioBridge::HandleSetBlockTrim);
     Bind(w, bridge, "namStudio.loadIrWav", &nam_desktop::StudioBridge::HandleLoadIrWav);
     Bind(w, bridge, "namStudio.unloadIr", &nam_desktop::StudioBridge::HandleUnloadIr);
+    Bind(w, bridge, "namStudio.setInputGain", &nam_desktop::StudioBridge::HandleSetInputGain);
     Bind(w, bridge, "namStudio.setMasterLevel", &nam_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "namStudio.setMasterMuted", &nam_desktop::StudioBridge::HandleSetMasterMuted);
     Bind(w, bridge, "namStudio.setTunerMuted", &nam_desktop::StudioBridge::HandleSetTunerMuted);
