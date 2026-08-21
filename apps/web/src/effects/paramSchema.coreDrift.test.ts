@@ -5,12 +5,17 @@ import type { EffectKind } from './Effect'
 
 /**
  * packages/core/param_schema.json is the single source of truth for effect
- * param symbols and ranges (issue #51), but only the C++ fragments and the
- * worklets' symbol->index map are generated from it - the UI's knob ranges in
- * paramSchema.ts are still hand-written. Nothing else fails when the two drift,
- * and the symptom is a knob whose travel doesn't match what the DSP accepts, or
- * a param that silently doesn't exist in the core at all. This test is the
- * guard until the ranges themselves are generated.
+ * param symbols and ranges (issue #51). Every symbol-mapped knob's min/max in
+ * paramSchema.ts is now generated from it (issue #72, via
+ * scripts/gen-param-schema.mjs -> generatedParamRanges.ts) rather than
+ * hand-written, so this test can no longer catch drift in the generated
+ * values themselves - by construction, they're copied verbatim. It's kept
+ * anyway (reading param_schema.json directly, independently of the generated
+ * file) as a second, from-scratch check that the generation step actually
+ * wired the right symbol to the right field for the right kind - the failure
+ * mode a codegen bug (not a hand-edit) would produce. reverb and the UI-only
+ * I/O trim knobs are still exceptions genuinely worth documenting here: see
+ * EXCLUDED_KINDS below and their comments in paramSchema.ts.
  *
  * Ranges are compared per effect kind, since symbols like `rate`/`depth`/
  * `feedback` recur across kinds with different ranges.
