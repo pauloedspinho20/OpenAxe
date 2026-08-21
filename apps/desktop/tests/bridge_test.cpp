@@ -159,6 +159,29 @@ void TestMoveBlock() {
   CHECK(info["row"] == 3 && info["col"] == 4);
 }
 
+// issue #62: a moveBlock must not reset the whole audio engine. It used to
+// pass reset_after=true, which re-seeded every block's params from the DSP
+// defaults on each move - so a single param tweak that reconciles every block
+// reset the engine N times. Set a param to a non-default value, move the
+// block, and confirm the param survives the move (proving no reset ran).
+void TestMoveBlockDoesNotReset() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
+
+  const double def = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"d1"}])")))["params"][0]
+                          ["value"].get<double>();
+  const double kVal = (def == 0.0) ? 0.5 : 0.0;  // guaranteed != default
+
+  Parse(bridge.HandleSetParam(
+      Arr((R"([{"blockId":"d1","key":0,"value":)" + std::to_string(kVal) + R"(}])").c_str())));
+  const auto after_set = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"d1","key":0}])")));
+  CHECK(after_set["ok"] == true && std::fabs(after_set["value"].get<double>() - kVal) < 1e-6);
+
+  Parse(bridge.HandleMoveBlock(Arr(R"([{"blockId":"d1","row":3,"col":4}])")));
+  const auto after_move = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"d1","key":0}])")));
+  CHECK(after_move["ok"] == true && std::fabs(after_move["value"].get<double>() - kVal) < 1e-6);
+}
+
 void TestBadInputs() {
   nam_desktop::StudioBridge bridge;
   CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"bogus","row":0,"col":0}])")))["ok"] == false);
@@ -536,6 +559,66 @@ void TestLoadIrWav() {
   CHECK(r["ok"] == false);
 }
 
+// issue #69: a cab IR payload larger than the cap must be rejected before the
+// core tries to decode it (TestLoadIrWav already covers a valid small IR and a
+// garbage-but-small one).
+void TestLoadIrWavRejectsOversized() {
+  static constexpr char kAlphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  auto b64 = [](const std::string& in) {
+    std::string out;
+    for (size_t i = 0; i < in.size(); i += 3) {
+      const uint32_t b0 = static_cast<unsigned char>(in[i]);
+      const uint32_t b1 = i + 1 < in.size() ? static_cast<unsigned char>(in[i + 1]) : 0;
+      const uint32_t b2 = i + 2 < in.size() ? static_cast<unsigned char>(in[i + 2]) : 0;
+      const uint32_t triple = (b0 << 16) | (b1 << 8) | b2;
+      out.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+      out.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+      out.push_back(i + 1 < in.size() ? kAlphabet[(triple >> 6) & 0x3F] : '=');
+      out.push_back(i + 2 < in.size() ? kAlphabet[triple & 0x3F] : '=');
+    }
+    return out;
+  };
+
+  std::string wav = "RIFF";
+  wav.append(4, '\0');
+  wav += "WAVE";
+  wav.append(9 * 1024 * 1024, '\0');  // > 8 MB cap
+  const std::string encoded = b64(wav);
+
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
+  const std::string req = std::string(R"([{"blockId":"c1","wavBase64":")") + encoded + R"("}])";
+  const auto r = Parse(bridge.HandleLoadIrWav(Arr(req.c_str())));
+  CHECK(r["ok"] == false);
+}
+
+// issue #71: only loopback http(s) origins may host the privileged UI.
+void TestIsTrustedUiUrl() {
+  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1:5173"));
+  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1/"));
+  CHECK(nam_desktop::IsTrustedUiUrl("https://localhost:3000"));
+  CHECK(nam_desktop::IsTrustedUiUrl("http://[::1]:5173"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("https://evil.example"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("http://192.168.1.5:5173"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("file:///Users/me/ui/index.html"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("data:text/html,<h1>x</h1>"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("http://127.0.0.1.evil.example"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("javascript:alert(1)"));
+  CHECK(!nam_desktop::IsTrustedUiUrl(""));
+}
+
+// issue #69: a model JSON larger than the cap must be rejected before it
+// reaches the core.
+void TestLoadModelJsonRejectsOversized() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
+  const std::string big(33 * 1024 * 1024, 'a');  // > 32 MB cap
+  const std::string req = std::string(R"([{"blockId":"a1","json":")") + big + R"("}])";
+  const auto r = Parse(bridge.HandleLoadModelJson(Arr(req.c_str())));
+  CHECK(r["ok"] == false);
+}
+
 // issue #42: bypass and the master bus were UI-only no-ops on desktop - this
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
@@ -572,6 +655,7 @@ int main() {
   TestConnectDisconnectAndEdges();
   TestRemoveBlockDropsEdges();
   TestMoveBlock();
+  TestMoveBlockDoesNotReset();
   TestBadInputs();
   TestMonitorTap();
   TestSuspendCallbackSilencesOutput();
@@ -581,6 +665,9 @@ int main() {
   TestAmpToneStackAndSlimSizeKeys();
   TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
+  TestIsTrustedUiUrl();
+  TestLoadIrWavRejectsOversized();
+  TestLoadModelJsonRejectsOversized();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

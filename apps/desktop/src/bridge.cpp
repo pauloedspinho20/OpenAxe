@@ -4,7 +4,10 @@
 #include <portable-file-dialogs.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <cstring>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -82,7 +85,37 @@ std::optional<E> MapByName(const std::string& name, const std::pair<const char*,
 // -3 = unknown (a real core id is never < -2).
 constexpr int32_t kUnknownBlock = -3;
 
+// issue #69: hard ceilings on user-supplied asset bytes before they reach the
+// DSP core, so a large/malformed file can't exhaust memory or crash the
+// engine. Mirrors the web UI's caps in apps/web/.../assetLimits.ts.
+constexpr size_t kMaxNamModelJsonBytes = 32 * 1024 * 1024;  // 32 MB
+constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
+
 }  // namespace
+
+bool nam_desktop::IsTrustedUiUrl(const std::string& url) {
+  // Accept only loopback http(s). The bundled UI is served from our own
+  // loopback HTTP server and the dev server is also loopback; nothing else
+  // should ever receive the privileged bridge (issue #71).
+  std::string lower;
+  lower.reserve(url.size());
+  for (char c : url) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+
+  const size_t scheme_end = lower.find("://");
+  if (scheme_end == std::string::npos) return false;
+  const std::string scheme = lower.substr(0, scheme_end);
+  if (scheme != "http" && scheme != "https") return false;
+
+  std::string host = lower.substr(scheme_end + 3);
+  const size_t slash = host.find('/');
+  if (slash != std::string::npos) host = host.substr(0, slash);
+  const size_t at = host.find('@');  // drop userinfo
+  if (at != std::string::npos) host = host.substr(at + 1);
+  const size_t colon = host.rfind(':');  // drop port
+  if (colon != std::string::npos) host = host.substr(0, colon);
+
+  return host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+}
 
 // ── Control executor ────────────────────────────────────────────────────
 
@@ -373,7 +406,11 @@ std::string StudioBridge::HandleMoveBlock(const std::string& req) {
     Call([&] {
       auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_move_block(graph_, it->second.core_id, row, col); }, true);
+      // Move only re-sorts execution order (AudioEngine::MoveBlock calls
+      // RecomputeRouting, not Reset), so it needs no reallocation and must
+      // not suspend/reset the audio thread - doing so made every param
+      // change reset the whole engine (issue #62).
+      Mutate([&] { nam_studio_move_block(graph_, it->second.core_id, row, col); }, false);
       it->second.row = row;
       it->second.col = col;
     });
@@ -652,6 +689,13 @@ std::string StudioBridge::HandleLoadModel(const std::string& req) {
     if (chosen.empty()) return (json{{"ok", false}, {"canceled", true}}).dump();
     const std::string path = chosen.front();
 
+    // issue #69: reject an oversized model before the core reads it from disk
+    // (mirrors the 32 MB web/native-IR caps - there is no native IR picker).
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (!ec && size > kMaxNamModelJsonBytes)
+      return JsonError("loadModel: file too large (max 32 MB)");
+
     int result = -1;
     Call([&] {
       Mutate([&] { result = static_cast<int>(nam_studio_load_nam_model(graph_, core_id, path.c_str())); },
@@ -669,6 +713,8 @@ std::string StudioBridge::HandleLoadModelJson(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const std::string content = o.value("json", "");
+    if (content.size() > kMaxNamModelJsonBytes)
+      return JsonError("loadModelJson: file too large (max 32 MB)");
 
     int32_t core_id = kUnknownBlock;
     Call([&] {
@@ -854,6 +900,13 @@ std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
 
     const std::vector<uint8_t> bytes = DecodeBase64(encoded);
     if (bytes.empty()) return JsonError("loadIrWav: could not decode the base64 payload");
+    if (bytes.size() > kMaxIrWavBytes)
+      return JsonError("loadIrWav: file too large (max 8 MB)");
+    // A cab IR is a WAV container - reject anything that isn't RIFF/WAVE before
+    // the core tries to decode it (issue #69).
+    if (bytes.size() < 12 || std::memcmp(bytes.data(), "RIFF", 4) != 0 ||
+        std::memcmp(bytes.data() + 8, "WAVE", 4) != 0)
+      return JsonError("loadIrWav: not a WAV file");
 
     int32_t core_id = kUnknownBlock;
     Call([&] {

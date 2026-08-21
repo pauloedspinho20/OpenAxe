@@ -1,6 +1,12 @@
 import { useRef, useState } from 'react'
 import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
 import type { CabBlock } from '../../../engine/blocks/CabBlock'
+import {
+  assertIrBytes,
+  assertIrFile,
+  assertModelFile,
+  assertModelText,
+} from '../../../engine/assetLimits'
 import { useEngineVersion } from '../../../state/engineVersion'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Browser } from '../../../tone3000/browserStore'
@@ -55,13 +61,18 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
     try {
       if (isIr) {
         if (!context) return
-        const audioBuffer = await context.decodeAudioData(await file.arrayBuffer())
+        assertIrFile(file)
+        const buf = await file.arrayBuffer()
+        assertIrBytes(buf)
+        const audioBuffer = await context.decodeAudioData(buf)
         ;(block as CabBlock).loadIR(audioBuffer, (block as CabBlock).getIrMix(), {
           id: file.name,
           name: file.name,
         })
       } else {
+        assertModelFile(file)
         const json = await file.text()
+        assertModelText(json)
         const quality = useSettingsStore.getState().namQuality
         await (block as AmpBlock).loadModel(json, quality, { id: file.name, name: file.name })
       }
