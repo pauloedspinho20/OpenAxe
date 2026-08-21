@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './authStore'
 import { clearPkce, clearTokens, storePkce, setTokens } from './client'
+import * as client from './client'
 
 const reset = () => {
   clearTokens()
@@ -100,5 +101,47 @@ describe('tone3000 authStore', () => {
     expect(useTone3000Auth.getState().status).toBe('anonymous')
     expect(sessionStorage.getItem('t3k_tokens')).toBeNull()
     expect(localStorage.getItem('t3k_refresh_token')).toBeNull()
+  })
+
+  it('getToken throws a helpful error when there are no credentials to use', async () => {
+    setUrl('/')
+    await expect(useTone3000Auth.getState().getToken()).rejects.toThrow(
+      /account connection is needed/,
+    )
+    expect(useTone3000Auth.getState().status).toBe('anonymous')
+  })
+
+  it('connect surfaces an error when the OAuth flow fails to start', async () => {
+    vi.spyOn(client, 'startStandardFlow').mockRejectedValue(new Error('popup blocked'))
+    await useTone3000Auth.getState().connect()
+    expect(useTone3000Auth.getState().status).toBe('error')
+    expect(useTone3000Auth.getState().error).toBe('popup blocked')
+    expect(useTone3000Auth.getState().pendingFlow).toBe(false)
+  })
+
+  it('handleCallback returns to anonymous when the user canceled', async () => {
+    setUrl('/?code=c&state=s')
+    vi.spyOn(client, 'handleOAuthCallback').mockResolvedValue({ ok: false, error: 'canceled' })
+    const result = await useTone3000Auth.getState().handleCallback()
+    expect(result).toBe(false)
+    expect(useTone3000Auth.getState().status).toBe('anonymous')
+  })
+
+  it('handleCallback no-ops a not_pending (stale) callback', async () => {
+    setUrl('/?code=c&state=s')
+    vi.spyOn(client, 'handleOAuthCallback').mockResolvedValue({ ok: false, error: 'not_pending' })
+    const result = await useTone3000Auth.getState().handleCallback()
+    expect(result).toBe(false)
+    expect(useTone3000Auth.getState().pendingFlow).toBe(false)
+    expect(useTone3000Auth.getState().status).toBe('anonymous')
+  })
+
+  it('handleCallback sets an error status for a genuinely failed callback', async () => {
+    setUrl('/?code=c&state=s')
+    vi.spyOn(client, 'handleOAuthCallback').mockResolvedValue({ ok: false, error: 'expired' })
+    const result = await useTone3000Auth.getState().handleCallback()
+    expect(result).toBe(false)
+    expect(useTone3000Auth.getState().status).toBe('error')
+    expect(useTone3000Auth.getState().error).toBe('expired')
   })
 })
