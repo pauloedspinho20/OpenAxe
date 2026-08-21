@@ -373,7 +373,11 @@ std::string StudioBridge::HandleMoveBlock(const std::string& req) {
     Call([&] {
       auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_move_block(graph_, it->second.core_id, row, col); }, true);
+      // Move only re-sorts execution order (AudioEngine::MoveBlock calls
+      // RecomputeRouting, not Reset), so it needs no reallocation and must
+      // not suspend/reset the audio thread - doing so made every param
+      // change reset the whole engine (issue #62).
+      Mutate([&] { nam_studio_move_block(graph_, it->second.core_id, row, col); }, false);
       it->second.row = row;
       it->second.col = col;
     });
