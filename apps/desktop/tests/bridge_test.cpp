@@ -593,6 +593,21 @@ void TestLoadIrWavRejectsOversized() {
   CHECK(r["ok"] == false);
 }
 
+// issue #71: only loopback http(s) origins may host the privileged UI.
+void TestIsTrustedUiUrl() {
+  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1:5173"));
+  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1/"));
+  CHECK(nam_desktop::IsTrustedUiUrl("https://localhost:3000"));
+  CHECK(nam_desktop::IsTrustedUiUrl("http://[::1]:5173"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("https://evil.example"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("http://192.168.1.5:5173"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("file:///Users/me/ui/index.html"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("data:text/html,<h1>x</h1>"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("http://127.0.0.1.evil.example"));
+  CHECK(!nam_desktop::IsTrustedUiUrl("javascript:alert(1)"));
+  CHECK(!nam_desktop::IsTrustedUiUrl(""));
+}
+
 // issue #69: a model JSON larger than the cap must be rejected before it
 // reaches the core.
 void TestLoadModelJsonRejectsOversized() {
@@ -650,6 +665,7 @@ int main() {
   TestAmpToneStackAndSlimSizeKeys();
   TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
+  TestIsTrustedUiUrl();
   TestLoadIrWavRejectsOversized();
   TestLoadModelJsonRejectsOversized();
 
