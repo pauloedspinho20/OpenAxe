@@ -30,6 +30,9 @@ jobs:
       - name: WASM exports drift check
         run: node scripts/check-wasm-exports.mjs
 
+      - name: Version sync check
+        run: node scripts/sync-version.mjs --check
+
       - name: Lint
         run: pnpm lint
 
