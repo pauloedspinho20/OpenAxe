@@ -1,0 +1,81 @@
+# Publishes downloadable desktop builds via GitHub Releases (issue #54).
+# Reuses desktop.yml's matrix build; the only difference is where the built
+# installer ends up - a public Release asset instead of a transient,
+# login-required CI artifact.
+#
+# Usage: bump VERSION (and run `node scripts/sync-version.mjs`), commit, then
+#   git tag v$(cat VERSION) && git push --tags
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: dmg
+          - os: windows-latest
+            artifact: zip
+          - os: ubuntu-24.04
+            artifact: deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # packages/core uses git submodules for its DSP dependencies
+          submodules: recursive
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libasound2-dev libpulse-dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      # The one source of truth (VERSION) is what names the built installer
+      # (see apps/desktop/CMakeLists.txt's CPACK_PACKAGE_FILE_NAME) - a tag
+      # that doesn't match it means someone forgot to bump/sync VERSION
+      # before tagging, which is exactly the drift this issue exists to
+      # prevent, so fail loudly instead of publishing a mislabeled release.
+      - name: Verify tag matches VERSION
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          file_version="$(cat VERSION)"
+          if [ "$tag_version" != "$file_version" ]; then
+            echo "::error::tag v$tag_version does not match VERSION file ($file_version) - bump VERSION (node scripts/sync-version.mjs) and re-tag"
+            exit 1
+          fi
+
+      - name: Package desktop app
+        run: pnpm --filter @nam/desktop package
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/build/nam-studio-desktop-*.${{ matrix.artifact }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
