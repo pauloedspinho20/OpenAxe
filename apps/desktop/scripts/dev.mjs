@@ -13,7 +13,7 @@
 // Anything after `--` (or any unrecognized arg) is forwarded to the binary.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
@@ -50,11 +50,46 @@ if (!exe) {
   process.exit(1)
 }
 
+// On macOS, TCC only presents the microphone permission prompt — and persists
+// the allow decision — for a properly bundled app that declares
+// NSMicrophoneUsageDescription + a stable CFBundleIdentifier (issue #143). The
+// raw binary at build/bin/nam_desktop has no .app wrapper, so dev mode gets no
+// prompt and CoreAudio receives silence. Wrap it in a minimal .app that reuses
+// packaging/Info.plist so dev mode is recognized as a real app like the
+// packaged build. Other platforms don't gate mic access on an app bundle.
+//
+// Returns the path to actually exec: on non-macOS this is just `exe`; on macOS
+// it's the executable inside a freshly staged .app bundle.
+function getDevLaunchTarget(rawExe) {
+  if (process.platform !== 'darwin') return rawExe
+
+  const plist = join(root, 'packaging', 'Info.plist')
+  const appBundle = join(root, 'build', 'nam_desktop_dev.app')
+  const macOsDir = join(appBundle, 'Contents', 'MacOS')
+  const bundleExe = join(macOsDir, 'nam_desktop')
+  const bundlePlist = join(appBundle, 'Contents', 'Info.plist')
+
+  const stale =
+    !existsSync(bundleExe) ||
+    !existsSync(bundlePlist) ||
+    statSync(bundleExe).mtimeMs < statSync(rawExe).mtimeMs ||
+    statSync(bundlePlist).mtimeMs < statSync(plist).mtimeMs
+  if (stale) {
+    mkdirSync(macOsDir, { recursive: true })
+    cpSync(rawExe, bundleExe)
+    cpSync(plist, bundlePlist)
+    console.log(`[nam/desktop] staged dev .app bundle -> ${appBundle}`)
+  }
+  return bundleExe
+}
+
 const env = { ...process.env }
 if (uiUrl) {
   env.NAM_STUDIO_UI_URL = uiUrl
   console.log(`[nam/desktop] UI from ${uiUrl} (dev server)`)
 }
 
-console.log(`[nam/desktop] launching ${exe}`)
-execFileSync(exe, appArgs, { stdio: 'inherit', env })
+const launchExe = getDevLaunchTarget(exe)
+
+console.log(`[nam/desktop] launching ${launchExe}`)
+execFileSync(launchExe, appArgs, { stdio: 'inherit', env })
