@@ -316,21 +316,26 @@ export function useWebAudioEngine() {
   return { ...state, powerOn, powerOff }
 }
 
-/**
- * Engine dispatcher (issue #15 M3): in the desktop shell the audio runs in the
- * C++ core via window.namStudio, so we return the native engine hook; in the
- * browser we keep the Web Audio one. Both hooks are called unconditionally
- * (hook rules); the inactive variant stays 'off' and only the returned one's
- * powerOn/powerOff ever run. The union is cast to the web shape so App.tsx and
- * every component consume the same AudioEngineState - NativeGraphRig satisfies
- * the GraphRigControls/PresetRig surface they actually use.
- */
-export function useAudioEngine(): AudioEngineState & AudioEngineActions {
-  const web = useWebAudioEngine()
-  const native = useNativeAudioEngine()
-  const [isNative] = useState(() => getNamStudio() !== null)
-  return (isNative ? native : web) as AudioEngineState & AudioEngineActions
-}
+// Engine dispatcher (issue #15 M3, issue #44): in the desktop shell the audio
+// runs in the C++ core via window.namStudio; in the browser it's Web Audio.
+// window.namStudio is injected by the desktop shell's native init script
+// before this module's own script ever runs (apps/desktop/src/main.cpp binds
+// it, then navigates), so which shell this is runs exactly once, at module
+// load, and never changes for the page's lifetime. Selecting the hook
+// implementation itself here - rather than calling both hooks every render
+// and picking which result to keep (the previous approach) - means only the
+// active engine's effects/subscriptions ever mount: no double store
+// subscriptions, no wasted mount-time effects on the inactive engine. Every
+// call site still does a single, unconditional `useAudioEngine()` call, so
+// the rules of hooks hold; the branch just lives outside any component.
+const isNativeShell = getNamStudio() !== null
+
+/** The union is cast to the web shape so App.tsx and every component consume
+ * the same AudioEngineState - NativeGraphRig satisfies the
+ * GraphRigControls/PresetRig surface they actually use. */
+export const useAudioEngine: () => AudioEngineState & AudioEngineActions = isNativeShell
+  ? (useNativeAudioEngine as unknown as () => AudioEngineState & AudioEngineActions)
+  : useWebAudioEngine
 
 /**
  * Build a channel router that maps the source's input channels to the
