@@ -324,8 +324,13 @@ int main(int argc, char** argv) {
     // native shell can run against `pnpm dev:web` with HMR - the bridge binds
     // above are installed on the webview itself, so window.namStudio is there
     // whichever URL the UI comes from.
-    const char* ui_url = std::getenv("NAM_STUDIO_UI_URL");
-    const bool use_dev_server = ui_url && *ui_url;
+    const char* ui_url_env = std::getenv("NAM_STUDIO_UI_URL");
+    const bool use_dev_server =
+        ui_url_env && *ui_url_env && nam_desktop::IsTrustedUiUrl(ui_url_env);
+    if (ui_url_env && *ui_url_env && !use_dev_server) {
+      std::cerr << "nam_desktop: refusing NAM_STUDIO_UI_URL=" << ui_url_env
+                << " - only loopback http(s) UI origins are allowed (issue #71)\n";
+    }
 
     // Otherwise serve the bundled React UI over loopback HTTP when present
     // (WKWebView sandboxes file:// subresources, so file:// navigation would
@@ -334,8 +339,8 @@ int main(int argc, char** argv) {
     const std::string ui = use_dev_server ? std::string() : UiIndexPath(argv0);
     nam_desktop::HttpServer uiServer;
     if (use_dev_server) {
-      std::cerr << "nam_desktop: loading UI from " << ui_url << " (dev server)\n";
-      w.navigate(ui_url);
+      std::cerr << "nam_desktop: loading UI from " << ui_url_env << " (dev server)\n";
+      w.navigate(ui_url_env);
     } else if (!ui.empty()) {
       const std::string uiDir = std::filesystem::path(ui).parent_path().string();
       unsigned short port = 0;

@@ -52,11 +52,17 @@ struct BlockRecord {
 };
 
 struct EdgeRecord {
-  nlohmann::json from_id;  // block js id, or the number -1/-2 for the rails
+  nlohmann::json from_id;   // block js id, or the number -1/-2 for the rails
   int from_port = 0;
   nlohmann::json to_id;
   int to_port = 0;
 };
+
+// issue #71: only loopback http(s) origins may host the UI while the privileged
+// window.namStudio bridge is bound. Anything else (a remote host supplied via
+// NAM_STUDIO_UI_URL, a file:// or data: URL, ...) is rejected so untrusted JS
+// can never reach the native bridge.
+bool IsTrustedUiUrl(const std::string& url);
 
 class StudioBridge {
  public:

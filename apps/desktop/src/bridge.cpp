@@ -4,6 +4,7 @@
 #include <portable-file-dialogs.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -91,6 +92,30 @@ constexpr size_t kMaxNamModelJsonBytes = 32 * 1024 * 1024;  // 32 MB
 constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
 
 }  // namespace
+
+bool nam_desktop::IsTrustedUiUrl(const std::string& url) {
+  // Accept only loopback http(s). The bundled UI is served from our own
+  // loopback HTTP server and the dev server is also loopback; nothing else
+  // should ever receive the privileged bridge (issue #71).
+  std::string lower;
+  lower.reserve(url.size());
+  for (char c : url) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+
+  const size_t scheme_end = lower.find("://");
+  if (scheme_end == std::string::npos) return false;
+  const std::string scheme = lower.substr(0, scheme_end);
+  if (scheme != "http" && scheme != "https") return false;
+
+  std::string host = lower.substr(scheme_end + 3);
+  const size_t slash = host.find('/');
+  if (slash != std::string::npos) host = host.substr(0, slash);
+  const size_t at = host.find('@');  // drop userinfo
+  if (at != std::string::npos) host = host.substr(at + 1);
+  const size_t colon = host.rfind(':');  // drop port
+  if (colon != std::string::npos) host = host.substr(0, colon);
+
+  return host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+}
 
 // ── Control executor ────────────────────────────────────────────────────
 
