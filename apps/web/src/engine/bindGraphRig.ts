@@ -32,21 +32,37 @@ interface MaybeBypassable {
   setBypass?(bypassed: boolean): void
 }
 
-async function reconcile(rig: GraphRigControls, state: GraphState): Promise<void> {
+async function reconcile(
+  rig: GraphRigControls,
+  state: GraphState,
+  positions: Map<string, { row: number; col: number }>,
+): Promise<void> {
   const liveBlockIds = new Set(rig.listBlockIds())
   const storeBlockIds = new Set(state.blocks.map((b) => b.id))
 
   for (const id of liveBlockIds) {
-    if (!storeBlockIds.has(id)) await rig.removeBlock(id)
+    if (!storeBlockIds.has(id)) {
+      await rig.removeBlock(id)
+      positions.delete(id)
+    }
   }
   for (const block of state.blocks) {
-    if (!liveBlockIds.has(block.id)) await rig.addBlock(block.kind, block.row, block.col, block.id)
+    if (!liveBlockIds.has(block.id)) {
+      await rig.addBlock(block.kind, block.row, block.col, block.id)
+      positions.set(block.id, { row: block.row, col: block.col })
+    }
   }
 
   for (const block of state.blocks) {
-    // Idempotent when position hasn't changed - cheap to call unconditionally,
-    // same philosophy as re-applying every scalar value every reconcile.
-    rig.moveBlock(block.id, block.row, block.col)
+    const prev = positions.get(block.id)
+    // Only move when the grid cell actually changed. The web path tolerates
+    // unconditional moves, but on the native path each moveBlock suspends and
+    // resets the whole audio engine (issue #62) - so a single param change
+    // that reconciles every block must not move blocks that never moved.
+    if (!prev || prev.row !== block.row || prev.col !== block.col) {
+      rig.moveBlock(block.id, block.row, block.col)
+      positions.set(block.id, { row: block.row, col: block.col })
+    }
     rig.setBlockParams(block.id, block.params)
     if (block.bypass !== undefined) {
       ;(rig.getBlock(block.id) as MaybeBypassable | null)?.setBypass?.(block.bypass)
@@ -86,12 +102,13 @@ export function bindGraphRig(
   store: UseBoundStore<StoreApi<GraphState>>,
   rig: GraphRigControls,
 ): () => void {
-  let chain: Promise<void> = reconcile(rig, store.getState())
+  const positions = new Map<string, { row: number; col: number }>()
+  let chain: Promise<void> = reconcile(rig, store.getState(), positions)
   let unbound = false
 
   const unsubscribe = store.subscribe((state) => {
     if (unbound) return
-    chain = chain.then(() => (unbound ? undefined : reconcile(rig, state)))
+    chain = chain.then(() => (unbound ? undefined : reconcile(rig, state, positions)))
   })
 
   return () => {

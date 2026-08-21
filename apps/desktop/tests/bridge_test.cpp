@@ -159,6 +159,29 @@ void TestMoveBlock() {
   CHECK(info["row"] == 3 && info["col"] == 4);
 }
 
+// issue #62: a moveBlock must not reset the whole audio engine. It used to
+// pass reset_after=true, which re-seeded every block's params from the DSP
+// defaults on each move - so a single param tweak that reconciles every block
+// reset the engine N times. Set a param to a non-default value, move the
+// block, and confirm the param survives the move (proving no reset ran).
+void TestMoveBlockDoesNotReset() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
+
+  const double def = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"d1"}])")))["params"][0]
+                          ["value"].get<double>();
+  const double kVal = (def == 0.0) ? 0.5 : 0.0;  // guaranteed != default
+
+  Parse(bridge.HandleSetParam(
+      Arr((R"([{"blockId":"d1","key":0,"value":)" + std::to_string(kVal) + R"(}])").c_str())));
+  const auto after_set = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"d1","key":0}])")));
+  CHECK(after_set["ok"] == true && std::fabs(after_set["value"].get<double>() - kVal) < 1e-6);
+
+  Parse(bridge.HandleMoveBlock(Arr(R"([{"blockId":"d1","row":3,"col":4}])")));
+  const auto after_move = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"d1","key":0}])")));
+  CHECK(after_move["ok"] == true && std::fabs(after_move["value"].get<double>() - kVal) < 1e-6);
+}
+
 void TestBadInputs() {
   nam_desktop::StudioBridge bridge;
   CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"bogus","row":0,"col":0}])")))["ok"] == false);
@@ -572,6 +595,7 @@ int main() {
   TestConnectDisconnectAndEdges();
   TestRemoveBlockDropsEdges();
   TestMoveBlock();
+  TestMoveBlockDoesNotReset();
   TestBadInputs();
   TestMonitorTap();
   TestSuspendCallbackSilencesOutput();

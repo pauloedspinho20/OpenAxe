@@ -127,6 +127,35 @@ describe('bindGraphRig', () => {
     expect(rig.disconnect).toHaveBeenCalledWith('ab')
   })
 
+  it('skips moveBlock when only params change (issue #62)', async () => {
+    const rig = createMockRig()
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    rig.listBlockIds.mockReturnValue([id])
+    bindGraphRig(useGraphStore, rig)
+    await flush()
+    rig.moveBlock.mockClear()
+
+    useGraphStore.getState().setBlockParams(id, { drive: 0.8 })
+    await flush()
+
+    expect(rig.moveBlock).not.toHaveBeenCalled()
+    expect(rig.setBlockParams).toHaveBeenCalledWith(id, { drive: 0.8 })
+  })
+
+  it('still calls moveBlock when a block is relocated (issue #62)', async () => {
+    const rig = createMockRig()
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    rig.listBlockIds.mockReturnValue([id])
+    bindGraphRig(useGraphStore, rig)
+    await flush()
+    rig.moveBlock.mockClear()
+
+    useGraphStore.getState().moveBlock(id, 2, 3)
+    await flush()
+
+    expect(rig.moveBlock).toHaveBeenCalledWith(id, 2, 3)
+  })
+
   it('pushes the tuner mute flag', async () => {
     const rig = createMockRig()
     bindGraphRig(useGraphStore, rig)
