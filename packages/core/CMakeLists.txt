@@ -199,7 +199,15 @@ if(EMSCRIPTEN)
     # Every name here must exist in the linked archive: wasm-ld fails the build
     # on an export it can't find, which is how _nam_studio_set_drive_model
     # (removed with the Drive effect) went unnoticed - the compiled artifacts
-    # are checked in and nothing rebuilds them automatically.
+    # are checked in and nothing rebuilds them automatically. wasm-ld only
+    # catches an export listed here that doesn't exist though - the opposite
+    # drift (a symbol the web app calls that ISN'T listed here) fails silently
+    # at runtime instead, since Emscripten just leaves it undefined on the JS
+    # Module object. scripts/check-wasm-exports.mjs (issue #70) catches that
+    # direction by diffing every `_nam_studio_*`/`_malloc`/`_free` identifier
+    # referenced in apps/web against this list - run in CI, and standalone
+    # with `--fix` to add any it finds missing (a wasm rebuild is still
+    # required after - see scripts/build-core-wasm.sh).
     "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_malloc','_free']"
     # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
     # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's

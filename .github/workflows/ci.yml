@@ -27,6 +27,9 @@ jobs:
       - name: Grid dimensions drift check
         run: node scripts/check-grid-dims.mjs
 
+      - name: WASM exports drift check
+        run: node scripts/check-wasm-exports.mjs
+
       - name: Lint
         run: pnpm lint
 
