@@ -105,9 +105,9 @@ describe('ioStore', () => {
     const persisted = localStorage.getItem('nam-web-studio-io')
     expect(persisted).not.toBeNull()
     const parsed = JSON.parse(persisted!)
-    // Persisted fields - device IDs survive reload so a chosen device (or the
-    // native duplex pick) is remembered; the enumerated lists themselves are
-    // re-populated fresh every launch since hardware ids can change.
+    // Persisted fields - device IDs survive reload so a chosen input/output
+    // device is remembered; the enumerated lists themselves are re-populated
+    // fresh every launch since hardware ids can change.
     expect(parsed.state.inputDeviceId).toBe('some-mic')
     expect(parsed.state.outputDeviceId).toBe('some-speaker')
     expect(parsed.state.inputGain).toBe(0.75)

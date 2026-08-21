@@ -163,10 +163,13 @@ class AudioIO {
   AudioIO(const AudioIO&) = delete;
   AudioIO& operator=(const AudioIO&) = delete;
 
-  // Enumerate duplex-capable audio endpoints (input_channels > 0 AND
-  // output_channels > 0) - the only kind Open() accepts, since it requires
-  // the same device id for both directions. Input-only/output-only devices
-  // are omitted rather than left for callers to filter out. Never throws.
+  // Enumerate every audio endpoint (input and/or output), recording which
+  // direction(s) each provides independently. A single physical interface may
+  // appear under one shared name for both directions (true duplex) or under
+  // separate input/output names; both show up. Open() accepts an input
+  // endpoint and an output endpoint that need not be the same device (see
+  // Open()'s createDevice(output_name, input_name) call - the old RtAudio
+  // CoreAudio crash doing this, issue #53, no longer applies). Never throws.
   std::vector<AudioDeviceInfo> ListDevices() const;
 
   // Open a full-duplex stream. input_device/output_device are the ids
@@ -278,16 +281,26 @@ class AudioIO {
   // once in the ctor. Mutable so ListDevices()/ResolveDeviceName can stay
   // const even though scanForDevices()/createDevice() aren't const in JUCE.
   mutable std::unique_ptr<juce::AudioIODeviceType> type_;
-  // Created fresh by Open(), destroyed by Close(). Mutable for the same
-  // reason as type_ (StreamLatencyFrames() etc. stay const).
-  mutable std::unique_ptr<juce::AudioIODevice> device_;
-  std::unique_ptr<Callback> callback_;
 
   // Serializes stream control (Open/Close/Start/Stop) and BeginSuspend's
   // stop() against queries, since the webview thread and the control thread
   // both call into this object. Never taken by the audio callback.
   mutable std::mutex io_mutex_;
+
+  // Declared BEFORE device_/callback_ so it is destroyed LAST. The audio
+  // callback and the webview bridge both reach into this struct by reference;
+  // its lifetime must outlive both the JUCE audio thread (owned by device_)
+  // and the Callback that carries a RtCallbackState&. Destroying it first (its
+  // old position, after those members) freed the tap/in_scratch vectors while
+  // a still-referencing thread could touch them - the exit-time heap
+  // corruption (free_list_checksum_botch) / use-after-free in the bridge.
   RtCallbackState state_;
+
+  // Created fresh by Open(), destroyed by Close(). Mutable for the same
+  // reason as type_ (StreamLatencyFrames() etc. stay const).
+  mutable std::unique_ptr<juce::AudioIODevice> device_;
+  std::unique_ptr<Callback> callback_;
+
   unsigned int input_device_id_ = 0;
   unsigned int output_device_id_ = 0;
   double sample_rate_ = 48000.0;
