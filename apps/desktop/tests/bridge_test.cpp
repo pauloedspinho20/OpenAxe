@@ -559,6 +559,51 @@ void TestLoadIrWav() {
   CHECK(r["ok"] == false);
 }
 
+// issue #69: a cab IR payload larger than the cap must be rejected before the
+// core tries to decode it (TestLoadIrWav already covers a valid small IR and a
+// garbage-but-small one).
+void TestLoadIrWavRejectsOversized() {
+  static constexpr char kAlphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  auto b64 = [](const std::string& in) {
+    std::string out;
+    for (size_t i = 0; i < in.size(); i += 3) {
+      const uint32_t b0 = static_cast<unsigned char>(in[i]);
+      const uint32_t b1 = i + 1 < in.size() ? static_cast<unsigned char>(in[i + 1]) : 0;
+      const uint32_t b2 = i + 2 < in.size() ? static_cast<unsigned char>(in[i + 2]) : 0;
+      const uint32_t triple = (b0 << 16) | (b1 << 8) | b2;
+      out.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+      out.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+      out.push_back(i + 1 < in.size() ? kAlphabet[(triple >> 6) & 0x3F] : '=');
+      out.push_back(i + 2 < in.size() ? kAlphabet[triple & 0x3F] : '=');
+    }
+    return out;
+  };
+
+  std::string wav = "RIFF";
+  wav.append(4, '\0');
+  wav += "WAVE";
+  wav.append(9 * 1024 * 1024, '\0');  // > 8 MB cap
+  const std::string encoded = b64(wav);
+
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
+  const std::string req = std::string(R"([{"blockId":"c1","wavBase64":")") + encoded + R"("}])";
+  const auto r = Parse(bridge.HandleLoadIrWav(Arr(req.c_str())));
+  CHECK(r["ok"] == false);
+}
+
+// issue #69: a model JSON larger than the cap must be rejected before it
+// reaches the core.
+void TestLoadModelJsonRejectsOversized() {
+  nam_desktop::StudioBridge bridge;
+  Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
+  const std::string big(33 * 1024 * 1024, 'a');  // > 32 MB cap
+  const std::string req = std::string(R"([{"blockId":"a1","json":")") + big + R"("}])";
+  const auto r = Parse(bridge.HandleLoadModelJson(Arr(req.c_str())));
+  CHECK(r["ok"] == false);
+}
+
 // issue #42: bypass and the master bus were UI-only no-ops on desktop - this
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
@@ -605,6 +650,8 @@ int main() {
   TestAmpToneStackAndSlimSizeKeys();
   TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
+  TestLoadIrWavRejectsOversized();
+  TestLoadModelJsonRejectsOversized();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

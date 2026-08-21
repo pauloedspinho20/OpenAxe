@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -81,6 +83,12 @@ std::optional<E> MapByName(const std::string& name, const std::pair<const char*,
 
 // -3 = unknown (a real core id is never < -2).
 constexpr int32_t kUnknownBlock = -3;
+
+// issue #69: hard ceilings on user-supplied asset bytes before they reach the
+// DSP core, so a large/malformed file can't exhaust memory or crash the
+// engine. Mirrors the web UI's caps in apps/web/.../assetLimits.ts.
+constexpr size_t kMaxNamModelJsonBytes = 32 * 1024 * 1024;  // 32 MB
+constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
 
 }  // namespace
 
@@ -656,6 +664,13 @@ std::string StudioBridge::HandleLoadModel(const std::string& req) {
     if (chosen.empty()) return (json{{"ok", false}, {"canceled", true}}).dump();
     const std::string path = chosen.front();
 
+    // issue #69: reject an oversized model before the core reads it from disk
+    // (mirrors the 32 MB web/native-IR caps - there is no native IR picker).
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (!ec && size > kMaxNamModelJsonBytes)
+      return JsonError("loadModel: file too large (max 32 MB)");
+
     int result = -1;
     Call([&] {
       Mutate([&] { result = static_cast<int>(nam_studio_load_nam_model(graph_, core_id, path.c_str())); },
@@ -673,6 +688,8 @@ std::string StudioBridge::HandleLoadModelJson(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const std::string content = o.value("json", "");
+    if (content.size() > kMaxNamModelJsonBytes)
+      return JsonError("loadModelJson: file too large (max 32 MB)");
 
     int32_t core_id = kUnknownBlock;
     Call([&] {
@@ -858,6 +875,13 @@ std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
 
     const std::vector<uint8_t> bytes = DecodeBase64(encoded);
     if (bytes.empty()) return JsonError("loadIrWav: could not decode the base64 payload");
+    if (bytes.size() > kMaxIrWavBytes)
+      return JsonError("loadIrWav: file too large (max 8 MB)");
+    // A cab IR is a WAV container - reject anything that isn't RIFF/WAVE before
+    // the core tries to decode it (issue #69).
+    if (bytes.size() < 12 || std::memcmp(bytes.data(), "RIFF", 4) != 0 ||
+        std::memcmp(bytes.data() + 8, "WAVE", 4) != 0)
+      return JsonError("loadIrWav: not a WAV file");
 
     int32_t core_id = kUnknownBlock;
     Call([&] {
