@@ -172,6 +172,9 @@ export interface NamStudioBridge {
     wavBase64: string
   }): Promise<NamStudioOk & { frames?: number }>
   unloadIr(args: { blockId: string }): Promise<NamStudioOk>
+  /** Input TRIM applied before the graph and the monitor taps, 1 = unity -
+   * the native counterpart of the web engine's input GainNode. */
+  setInputGain(args: { gain: number }): Promise<NamStudioOk>
   setMasterLevel(args: { level: number }): Promise<NamStudioOk>
   setMasterMuted(args: { muted: boolean }): Promise<NamStudioOk>
   setTunerMuted(args: { muted: boolean }): Promise<NamStudioOk>
@@ -290,6 +293,9 @@ class NativeBridge implements NamStudioBridge {
   }
   unloadIr(args: { blockId: string }) {
     return this.call<NamStudioOk>('unloadIr', args)
+  }
+  setInputGain(args: { gain: number }) {
+    return this.call<NamStudioOk>('setInputGain', args)
   }
   setMasterLevel(args: { level: number }) {
     return this.call<NamStudioOk>('setMasterLevel', args)

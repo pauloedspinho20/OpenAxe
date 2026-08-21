@@ -949,6 +949,19 @@ std::string StudioBridge::HandleUnloadIr(const std::string& req) {
   }
 }
 
+std::string StudioBridge::HandleSetInputGain(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    // Straight to AudioIO, not through Mutate(): the gain is a lone atomic the
+    // audio callback reads, so there is no graph state to suspend around.
+    audio_.SetInputGain(o.value("gain", 1.0f));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setInputGain: ") + e.what());
+  }
+}
+
 std::string StudioBridge::HandleSetMasterLevel(const std::string& req) {
   try {
     const json args = ParseArgs(req);

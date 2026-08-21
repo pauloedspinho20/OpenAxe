@@ -68,6 +68,91 @@ void TestCallbackPassthrough() {
   nam_studio_graph_destroy(graph);
 }
 
+// Issue #115: the input TRIM scales the signal before the graph AND before the
+// monitor tap, so the input meter/tuner read post-trim exactly as they do on
+// the web path (where they hang off the input GainNode's output).
+void TestCallbackAppliesInputGain() {
+  constexpr double kRate = 48000.0;
+  constexpr int kFrames = 64;
+  constexpr int kBlock = 512;
+  constexpr float kGain = 0.5f;
+
+  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  nam_desktop::RtCallbackState state;
+  for (auto& ch : state.tap_in) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.tap_out) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.in_scratch) ch.assign(kBlock, 0.0f);
+  state.graph = graph;
+  state.graph_ready.store(true, std::memory_order_release);
+  state.input_gain.store(kGain, std::memory_order_relaxed);
+
+  float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+  for (int i = 0; i < kFrames; ++i) {
+    in0[i] = 0.5f;
+    in1[i] = -0.25f;
+    out0[i] = out1[i] = 0.0f;
+  }
+  float* in[2] = {in0, in1};
+  float* out[2] = {out0, out1};
+
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+
+  for (int i = 0; i < kFrames; ++i) {
+    CHECK(out0[i] == 0.5f * kGain);
+    CHECK(out1[i] == -0.25f * kGain);
+    // The backend's own input buffers must never be written to - only the
+    // scratch copy is scaled.
+    CHECK(in0[i] == 0.5f);
+    CHECK(in1[i] == -0.25f);
+  }
+
+  const nam_desktop::TapFrame tap = nam_desktop::ReadTap(state, /*input=*/true, kFrames);
+  CHECK(tap.frames == static_cast<unsigned int>(kFrames));
+  for (unsigned int i = 0; i < tap.frames; ++i) {
+    CHECK(tap.l[i] == 0.5f * kGain);
+    CHECK(tap.r[i] == -0.25f * kGain);
+  }
+
+  nam_studio_graph_destroy(graph);
+}
+
+// Unity gain must not route through the scratch buffers at all, and an
+// unsized scratch (a block bigger than SetGraph armed for) must fall back to
+// the untrimmed signal rather than allocate on the audio thread.
+void TestCallbackInputGainEdgeCases() {
+  constexpr double kRate = 48000.0;
+  constexpr int kFrames = 64;
+  constexpr int kBlock = 512;
+
+  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  nam_desktop::RtCallbackState state;
+  state.graph = graph;
+  state.graph_ready.store(true, std::memory_order_release);
+
+  float in0[kFrames], out0[kFrames];
+  for (int i = 0; i < kFrames; ++i) {
+    in0[i] = 0.5f;
+    out0[i] = 0.0f;
+  }
+  float* in[1] = {in0};
+  float* out[1] = {out0};
+  state.input_channels = 1;
+  state.output_channels = 1;
+
+  // Unity: scratch is empty, but unity never needs it.
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  for (int i = 0; i < kFrames; ++i) CHECK(out0[i] == 0.5f);
+
+  // Non-unity with a scratch too small for this block: untrimmed, not crashed.
+  state.input_gain.store(0.25f, std::memory_order_relaxed);
+  for (auto& ch : state.in_scratch) ch.assign(kFrames / 2, 0.0f);
+  for (int i = 0; i < kFrames; ++i) out0[i] = 0.0f;
+  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  for (int i = 0; i < kFrames; ++i) CHECK(out0[i] == 0.5f);
+
+  nam_studio_graph_destroy(graph);
+}
+
 void TestCallbackSilenceWhenNoGraph() {
   constexpr int kFrames = 32;
   nam_desktop::RtCallbackState state;  // graph_ready defaults to false
@@ -310,6 +395,8 @@ void TestOpenAcceptsSplitDevices() {
 
 int main() {
   TestCallbackPassthrough();
+  TestCallbackAppliesInputGain();
+  TestCallbackInputGainEdgeCases();
   TestCallbackSilenceWhenNoGraph();
   TestCallbackHoldsSilenceOnStreamError();
   TestTakeStreamErrorDefaultsToNoError();

@@ -122,6 +122,25 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   const float* in_ptrs[2] = {in_l, in_r};
   float* out_ptrs[2] = {out_l, out_r};
 
+  // Input TRIM (issue #115). Applied here, before both the graph and the tap,
+  // so the meter/tuner see the trimmed signal like they do on the web path.
+  // The backend's input buffers are never written to - the scaled copy lands
+  // in the scratch buffers SetGraph sized on a non-audio thread. If they're
+  // too small for this block (a backend handing us more frames than the block
+  // size we were armed with), the trim is skipped rather than allocated for:
+  // a wrong level for one block beats a malloc on the audio thread.
+  const float gain = state->input_gain.load(std::memory_order_relaxed);
+  if (in_l && gain != 1.0f && state->in_scratch[0].size() >= n_frames &&
+      (!in_r || state->in_scratch[1].size() >= n_frames)) {
+    for (unsigned int i = 0; i < n_frames; ++i) state->in_scratch[0][i] = in_l[i] * gain;
+    in_ptrs[0] = state->in_scratch[0].data();
+    if (in_r) {
+      for (unsigned int i = 0; i < n_frames; ++i) state->in_scratch[1][i] = in_r[i] * gain;
+      in_ptrs[1] = state->in_scratch[1].data();
+    }
+    in_l = in_ptrs[0];
+  }
+
   // Suspended (graph mutation in progress): write silence and signal the
   // control thread that this callback observed the pause.
   if (state->suspend.load(std::memory_order_acquire)) {
@@ -455,6 +474,10 @@ bool AudioIO::IsRunning() const {
 
 void AudioIO::SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size) {
   InitTap(state_);  // non-audio thread, so the audio thread never allocates
+  // Same reasoning for the TRIM scratch buffers (see RtCallbackState::
+  // in_scratch). Sized generously: a backend may hand the callback a slightly
+  // larger block than the one it granted, and the callback will not allocate.
+  for (auto& ch : state_.in_scratch) ch.assign(std::max(max_block_size, 1u) * 2, 0.0f);
   // nam_studio_reset is documented not real-time safe - this must be called
   // from a non-audio thread before Start(). Rebuild the graph while the
   // stream is stopped (or before it starts), then publish the pointer via
@@ -463,6 +486,12 @@ void AudioIO::SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int m
   state_.graph = graph;
   state_.graph_ready.store(graph != nullptr, std::memory_order_release);
 }
+
+void AudioIO::SetInputGain(float gain) {
+  state_.input_gain.store(gain, std::memory_order_relaxed);
+}
+
+float AudioIO::InputGain() const { return state_.input_gain.load(std::memory_order_relaxed); }
 
 bool AudioIO::Start() {
   std::lock_guard<std::mutex> lock(io_mutex_);
