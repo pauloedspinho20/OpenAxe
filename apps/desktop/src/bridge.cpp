@@ -93,7 +93,7 @@ constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
 
 }  // namespace
 
-bool nam_desktop::IsTrustedUiUrl(const std::string& url) {
+bool IsTrustedUiUrl(const std::string& url) {
   // Accept only loopback http(s). The bundled UI is served from our own
   // loopback HTTP server and the dev server is also loopback; nothing else
   // should ever receive the privileged bridge (issue #71).

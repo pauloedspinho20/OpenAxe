@@ -137,6 +137,17 @@ if(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
     # via one of these macros - Dragonfly's own Makefile always builds
     # with LIBFV3_FLOAT.
     target_compile_definitions(${wrapper_name}_vendor PRIVATE LIBFV3_FLOAT)
+    # freeverb3's headers declare several inline/internal-linkage member
+    # functions (slot_::alloc, biquad_::setLPF_RBJ, revbase_::getSampleRate,
+    # ...) in the *_t.hpp shims that are only ever used via the template
+    # specializations defined in the matching .cpp - Clang's
+    # -Wundefined-internal fires on every one of them. They're a known
+    # artifact of freeverb3's header layout in third-party vendored code,
+    # have no runtime effect, and are out of our control, so silence the
+    # warning for these targets rather than patching the subtree.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(${wrapper_name}_vendor PRIVATE -Wno-undefined-internal)
+    endif()
     target_link_libraries(nam_studio_core PRIVATE ${wrapper_name}_vendor)
   endforeach()
 else()

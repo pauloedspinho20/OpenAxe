@@ -137,6 +137,14 @@ target_link_libraries(nam_desktop PRIVATE
   webview::core
   nam_desktop_lib
 )
+# webview.h (fetched, third-party) declares several locals with `auto` that
+# Clang deduces as Objective-C `id` in the OBJCXX translation units that pull
+# it in (main.cpp) - every one trips -Wauto-var-id. The library is vendored
+# and out of our control, so silence the warning for this target rather than
+# patching the fetched header.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(nam_desktop PRIVATE -Wno-auto-var-id)
+endif()
 
 # http_server.cpp (compiled directly into this target, not nam_desktop_lib)
 # calls raw Winsock functions on Windows (accept/bind/socket/...) - unlike
