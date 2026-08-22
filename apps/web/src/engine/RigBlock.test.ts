@@ -94,14 +94,14 @@ describe('engine/RigBlock', () => {
   it('folds a mono IR down to its single channel', () => {
     block.loadIR(fakeBuffer([1], 4), undefined, { id: 'ir1', name: 'IR' })
     expect(block.getLoadedIr()).toEqual({ id: 'ir1', name: 'IR' })
-    const samples = worklet.loadIr.mock.calls[0][1] as Float32Array
+    const samples = worklet.loadIr.mock.calls[0]![1] as Float32Array
     expect(samples).toHaveLength(4)
     expect(Array.from(samples)).toEqual([1, 1, 1, 1])
   })
 
   it('averages a multi-channel IR and scales by 1/channels', () => {
     block.loadIR(fakeBuffer([2], 2), undefined, { id: 'ir2', name: 'Stereo IR' })
-    const samples = worklet.loadIr.mock.calls[0][1] as Float32Array
+    const samples = worklet.loadIr.mock.calls[0]![1] as Float32Array
     // 2 channels of all-ones averaged and scaled by 1/2 -> 1.
     expect(Array.from(samples)).toEqual([1, 1])
   })

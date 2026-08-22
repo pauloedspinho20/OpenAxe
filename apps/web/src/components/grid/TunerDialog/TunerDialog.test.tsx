@@ -1,18 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { TunerDialog } from './TunerDialog'
 import { useGraphStore } from '../../../state/graphStore'
 
 describe('components/TunerDialog', () => {
-  let setTunerMuted: ReturnType<typeof vi.fn>
+  let setTunerMuted: MockInstance<(muted: boolean) => void>
 
   beforeEach(() => {
-    setTunerMuted = vi.fn()
-    const spy = vi.spyOn(useGraphStore.getState(), 'setTunerMuted')
-    spy.mockImplementation(setTunerMuted)
+    setTunerMuted = vi.spyOn(useGraphStore.getState(), 'setTunerMuted')
     // vi.spyOn reuses the same spy instance across tests; clear prior calls.
-    spy.mockClear()
+    setTunerMuted.mockClear()
   })
 
   afterEach(() => {

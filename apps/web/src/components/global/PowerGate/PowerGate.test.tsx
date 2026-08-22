@@ -11,7 +11,7 @@ vi.mock('@/native/namStudio', () => ({
 }))
 
 const baseProps = {
-  status: 'idle' as const,
+  status: 'off' as const,
   error: null,
   latencyHint: 'interactive' as const,
   onLatencyChange: () => {},
@@ -91,7 +91,7 @@ describe('PowerGate', () => {
   it('updates the input device selection', () => {
     const setInputDevice = vi.spyOn(useIOStore.getState(), 'setInputDevice')
     useIOStore.setState({
-      inputDevices: [{ deviceId: 'd1', label: 'Mic' }],
+      inputDevices: [{ deviceId: 'd1', label: 'Mic', groupId: 'grp' }],
       outputDevices: [],
     })
     render(<PowerGate {...baseProps} />)
@@ -107,8 +107,8 @@ describe('PowerGate', () => {
   it('always shows the output selector in the native (desktop) shell', () => {
     vi.mocked(getNamStudio).mockReturnValue({} as never)
     useIOStore.setState({
-      inputDevices: [{ deviceId: 'i', label: 'In' }],
-      outputDevices: [{ deviceId: 'o', label: 'Out' }],
+      inputDevices: [{ deviceId: 'i', label: 'In', groupId: 'grp' }],
+      outputDevices: [{ deviceId: 'o', label: 'Out', groupId: 'grp' }],
     })
     render(<PowerGate {...baseProps} outputSelectionSupported={false} />)
     expect(screen.getByLabelText('Output device')).toBeInTheDocument()

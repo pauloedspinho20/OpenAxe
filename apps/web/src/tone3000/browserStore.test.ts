@@ -24,7 +24,7 @@ describe('tone3000/browserStore', () => {
     useTone3000Browser.getState().openBrowser({
       blockId: 'b1',
       slot: 'ir',
-      gear: 'ir',
+      gear: 'cab',
     })
     useTone3000Browser.getState().closeBrowser()
     expect(useTone3000Browser.getState().open).toBe(false)
