@@ -475,6 +475,81 @@ void TestConcurrentMutationsWhileStreamRunning() {
                mutations.load(), kStressRounds);
 }
 
+// HandleOpen used to call AudioIO::Open()/SetGraph() (which resizes
+// AudioEngine's ext_in_l_/ext_in_r_ and re-publishes max_block_size_) with no
+// suspend/resume around it, unlike every other graph mutation in this file.
+// Reopening while a previous stream was still live - a device switch, or the
+// no-sound recovery poll retrying every few seconds - could race an in-flight
+// nam_studio_process call against that resize: ASAN caught it as a
+// heap-buffer-overflow store in AudioEngine::Process (engine.cpp, on
+// ext_in_l_). This drives that exact sequence - open+start, then reopen while
+// running with a real block wired in - so the race would show up as an ASAN
+// abort or a crash rather than silently passing.
+void TestReopenWhileStreamRunning() {
+  nam_desktop::StudioBridge bridge;
+
+  const auto devices = Parse(bridge.HandleListDevices(""));
+  if (!devices.is_array() || devices.empty()) {
+    std::printf("  Skipping reopen-while-running test: no audio devices on this host\n");
+    return;
+  }
+  int64_t duplex_id = -1;
+  for (const auto& d : devices) {
+    if (d.value("isInput", false) && d.value("isOutput", false)) {
+      duplex_id = d.value("id", int64_t{-1});
+      break;
+    }
+  }
+  if (duplex_id < 0) {
+    std::printf(
+        "  Skipping reopen-while-running test: no single input+output device on this host\n");
+    return;
+  }
+
+  const std::string open_args = std::string(R"([{"inputDeviceId":)") + std::to_string(duplex_id) +
+                                 R"(,"outputDeviceId":)" + std::to_string(duplex_id) + "}]";
+
+  const auto opened = Parse(bridge.HandleOpen(Arr(open_args.c_str())));
+  if (opened["ok"] != true) {
+    std::printf("  Skipping reopen-while-running test: open failed (%s)\n",
+                opened.value("error", "").c_str());
+    return;
+  }
+  const auto started = Parse(bridge.HandleStart(""));
+  if (started["ok"] != true) {
+    std::printf("  Skipping reopen-while-running test: start failed (%s)\n",
+                started.value("error", "").c_str());
+    bridge.HandleClose("");
+    return;
+  }
+
+  CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"anchor"}])")))
+            ["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"IN","toId":"anchor"}])")))["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"anchor","toId":"OUT"}])")))["ok"] == true);
+
+  // Let real callbacks run against the anchor block for a moment, then reopen
+  // (same devices, stand-in for a device switch or a recovery retry) while
+  // the previous stream is still playing - this is the exact window the fix
+  // suspends around.
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  for (int i = 0; i < 5; ++i) {
+    const auto reopened = Parse(bridge.HandleOpen(Arr(open_args.c_str())));
+    CHECK(reopened["ok"] == true);
+    CHECK(Parse(bridge.HandleStart(""))["ok"] == true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+
+  const auto config = Parse(bridge.HandleGetConfig(""));
+  CHECK(config["ok"] == true);
+  CHECK(config["running"] == true);
+
+  Parse(bridge.HandleStop(""));
+  bridge.HandleClose("");
+
+  std::printf("  TestReopenWhileStreamRunning: 5 reopens against a live stream, no crash\n");
+}
+
 // The UI's per-block Input/Output knobs. They used to be forwarded as the
 // core params `input_level`/`output_level`, which only exist on the Amp family
 // and hold the loaded model's dBu calibration - so the knobs either did
@@ -728,6 +803,55 @@ void TestSetBypassAndMasterBus() {
   CHECK(r["ok"] == true);
 }
 
+// Backs the Tone3000 refresh token surviving an app restart (issue #146) -
+// the webview's own storage can't do that here since the UI server (and so
+// the webview's origin) binds a fresh ephemeral port every launch. Uses a
+// test-only key so this can never collide with (or clobber) the real
+// "tone3000_refresh_token" entry a live app instance has stored.
+void TestSecureStorageRoundTrip() {
+  nam_desktop::StudioBridge bridge;
+
+  // Start from a clean slate in case a previous run of this binary crashed
+  // before its own cleanup ran.
+  Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+
+  auto load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"].is_null());
+
+  auto store = Parse(bridge.HandleSecureStore(
+      Arr(R"([{"key":"bridge_test_secret","value":"s3cr3t-refresh-token"}])")));
+  CHECK(store["ok"] == true);
+
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"] == "s3cr3t-refresh-token");
+
+  // Storing again under the same key overwrites rather than erroring or
+  // duplicating - a token refresh does exactly this on every app launch.
+  store = Parse(bridge.HandleSecureStore(
+      Arr(R"([{"key":"bridge_test_secret","value":"rotated-refresh-token"}])")));
+  CHECK(store["ok"] == true);
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["value"] == "rotated-refresh-token");
+
+  auto del = Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(del["ok"] == true);
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"].is_null());
+
+  // Deleting an already-absent key is a no-op success, matching
+  // removeBlock/setBypass's unknown-id handling elsewhere in this file.
+  del = Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(del["ok"] == true);
+
+  // A key that isn't a plain identifier is rejected outright - the Linux
+  // fallback turns it straight into a filename (see secure_storage.cpp).
+  auto bad = Parse(bridge.HandleSecureStore(Arr(R"([{"key":"../evil","value":"x"}])")));
+  CHECK(bad["ok"] == false);
+}
+
 }  // namespace
 
 int main() {
@@ -748,9 +872,11 @@ int main() {
   TestAmpToneStackAndSlimSizeKeys();
   TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
+  TestReopenWhileStreamRunning();
   TestIsTrustedUiUrl();
   TestLoadIrWavRejectsOversized();
   TestLoadModelJsonRejectsOversized();
+  TestSecureStorageRoundTrip();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

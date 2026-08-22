@@ -38,6 +38,18 @@ textarea {
   -webkit-user-select: text;
 }
 
+/* Desktop shell note: WKWebView treats a mousedown on an <img> as the start
+   of a native "drag this image out" gesture unless told otherwise, which
+   swallows the click entirely - no click event, no console error. Any image
+   sitting inside a clickable control (e.g. Tone3000Browser's card thumbnails)
+   would silently eat clicks in the desktop app while working fine in a
+   regular browser. img[draggable="false"] in JSX covers this cross-browser;
+   this catches every other <img> too. */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 #root {
   min-height: 100svh;
   display: flex;

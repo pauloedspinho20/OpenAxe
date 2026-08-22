@@ -150,7 +150,15 @@
   border: 1px solid var(--seam);
   border-radius: var(--r-sm);
   overflow: hidden;
-  height: 100%;
+  /* No height here on purpose: .cardsGrid uses align-items: start (no
+     stretch), so a percentage height against its auto-sized row is an
+     ambiguous case the spec leaves engines free to resolve differently -
+     Chromium treats it as auto (no effect), but WKWebView (the desktop
+     shell) was resolving it against a shorter row and, combined with
+     overflow: hidden above, clipping away every card's title/meta/credit
+     text while leaving the thumbnail visible. Confirmed by loading the
+     desktop app's own built bundle in a regular browser: same HTML/CSS,
+     text renders fine there. */
 }
 
 .cardHeader {

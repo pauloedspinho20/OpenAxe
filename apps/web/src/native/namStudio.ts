@@ -186,6 +186,20 @@ export interface NamStudioBridge {
    * second process forcing a mid-stream reconfiguration on a shared device.
    * `error` is null when nothing is pending. */
   takeStreamError(): Promise<{ error: string | null }>
+
+  /** Small secret store (issue #146) backed by the OS keychain (macOS/
+   * Windows) or a permission-restricted file (Linux, until Secret Service
+   * is wired up) - see apps/desktop/src/secure_storage.h. Used to persist
+   * the Tone3000 refresh token across app restarts, which the webview's own
+   * storage can't do here: the UI server (and so the webview's origin)
+   * binds a fresh ephemeral port every launch. `key` must be a plain
+   * identifier ([A-Za-z0-9_-]+) - anything else is rejected. */
+  secureStore(args: { key: string; value: string }): Promise<NamStudioOk>
+  /** `value` is null when nothing is stored under `key` - the ordinary
+   * "never connected" case, not a failure (still `ok: true`). */
+  secureLoad(args: { key: string }): Promise<NamStudioOk & { value: string | null }>
+  /** No-op success if there was nothing stored under `key`. */
+  secureDelete(args: { key: string }): Promise<NamStudioOk>
 }
 
 type Args = Record<string, unknown> | undefined
@@ -318,9 +332,24 @@ class NativeBridge implements NamStudioBridge {
   takeStreamError() {
     return this.call<{ error: string | null }>('takeStreamError')
   }
+  secureStore(args: { key: string; value: string }) {
+    return this.call<NamStudioOk>('secureStore', args)
+  }
+  secureLoad(args: { key: string }) {
+    return this.call<NamStudioOk & { value: string | null }>('secureLoad', args)
+  }
+  secureDelete(args: { key: string }) {
+    return this.call<NamStudioOk>('secureDelete', args)
+  }
 }
 
 export function getNamStudio(): NamStudioBridge | null {
+  // Not just the browser/webview-vs-native check this already was: some
+  // unit tests run in a plain Node environment with no `window` global at
+  // all (no @vitest-environment jsdom directive) - calling code that's
+  // unconditionally reachable outside a component (e.g. client.ts's
+  // setTokens/clearTokens) must not throw there either.
+  if (typeof window === 'undefined') return null
   const w = window as unknown as Record<string, unknown>
   if (typeof w['namStudio.version'] !== 'function') return null
   return new NativeBridge()
