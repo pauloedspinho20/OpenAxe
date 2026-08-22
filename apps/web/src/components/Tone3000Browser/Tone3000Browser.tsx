@@ -510,6 +510,7 @@ export function Tone3000Browser({ target, context }: Props) {
                             alt=""
                             className={styles.cardImage}
                             loading="lazy"
+                            draggable={false}
                           />
                           {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
                         </div>

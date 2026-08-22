@@ -306,14 +306,26 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     // still adjust. The reply reports what was actually granted.
     const unsigned int buffer_frames = o.value("bufferFrames", 128u);
 
+    // Reopening while a previous stream is still live (device switch, or the
+    // no-sound recovery poll retrying every few seconds) must not let
+    // Open()/SetGraph() below race an in-flight nam_studio_process call on
+    // that old stream - both touch the same long-lived AudioEngine
+    // (ext_in_l_/max_block_size_ etc., resized here and read every callback),
+    // and ASAN has caught the resulting heap-buffer-overflow when a resize
+    // and a Process() call interleave. BeginSuspend() is a no-op when nothing
+    // is playing yet, which covers the common first-open case.
+    audio_.BeginSuspend();
     if (!audio_.Open(input_device, output_device, sample_rate, buffer_frames)) {
+      audio_.EndSuspend();
       return JsonError("open failed: " + audio_.LastError());
     }
     graph_sample_rate_ = audio_.SampleRate();
     graph_block_ = static_cast<int32_t>(audio_.BufferFrames());
-    // Re-arm the graph at the stream's actual parameters. Stream is open but
-    // not started, so no audio thread is touching the graph yet.
+    // Re-arm the graph at the stream's actual parameters. The old stream (if
+    // any) is suspended and the new one isn't started yet, so no audio
+    // thread can be touching the graph here.
     Call([this] { audio_.SetGraph(graph_, graph_sample_rate_, graph_block_); });
+    audio_.EndSuspend();
     const long latency_frames = audio_.StreamLatencyFrames();
     return (json{{"ok", true},
                  {"sampleRate", audio_.SampleRate()},
