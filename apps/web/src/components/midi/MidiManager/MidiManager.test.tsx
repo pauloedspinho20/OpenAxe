@@ -49,7 +49,7 @@ describe('MidiManager', () => {
   })
 
   it('shows an enable button when supported but not yet granted', () => {
-    openManager({ permission: 'prompt' })
+    openManager({ permission: 'unknown' })
     render(<MidiManager />)
     fireEvent.click(screen.getByRole('button', { name: 'Enable MIDI' }))
     expect(midiAccess.requestMidiAccess).toHaveBeenCalled()
