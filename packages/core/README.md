@@ -117,6 +117,123 @@ a band boost measurably louder than a cut, silence measurably crushed), and
 run all four kinds in a chain through the engine and the full `extern "C"`
 surface.
 
+## Rig state wire format (issue #119)
+
+`nam_studio_serialize_state` / `nam_studio_load_state`
+(`include/nam_studio/api.h`, implemented in `src/serialization/{json rig_state}.{h,cpp}`
+— a hand-written dependency-free JSON module plus the state mapping) turn an
+entire rig into one JSON document and back. This is the single preset/scene
+model for host chunks, preset files, and eventually IndexedDB - step 5 of
+ARCHITECTURE.md's migration order, and the prerequisite that lets a plugin
+(#16) save state at all. Model/IR asset payloads are NOT part of the document;
+they are handled separately by the embedded-assets work.
+
+```json
+{
+  "schemaVersion": 1,
+  "blocks": [
+    {
+      "id": "2",
+      "kind": "ping-pong-delay",
+      "row": 0,
+      "col": 3,
+      "bypass": false,
+      "inputTrim": 1.0,
+      "outputTrim": 1.1,
+      "delayModel": "digital",
+      "params": { "time": 250, "feedback": 0.5, "tone": 6000 }
+    },
+    {
+      "id": "3",
+      "kind": "reverb",
+      "row": 1,
+      "col": 4,
+      "reverbAlgorithm": "room",
+      "params": { "decay": 2.1, "high_cut": 5200 }
+    }
+  ],
+  "edges": [
+    { "id": "7", "from": { "blockId": "-1", "port": 0 }, "to": { "blockId": "2", "port": 0 } },
+    { "id": "9", "from": { "blockId": "2", "port": 0 }, "to": { "blockId": "-2", "port": 0 } }
+  ],
+  "masterLevel": 0.8,
+  "masterMuted": false
+}
+```
+
+Field notes:
+
+- **Params are keyed by SYMBOL, never by index.** Index order is a core
+  implementation detail (`GetParamInfo()` tables); a reorder must never remap
+  a saved rig. On load, unknown symbols are skipped and counted - not a
+  failure.
+- **Block ids are strings** (the graph layer's ids, decimal here). Load maps
+  them onto fresh engine ids through a document-local table, so edges resolve
+  regardless of renumbering; duplicate ids in one document skip the second
+  block. Rail jacks serialize as `"-1"`/`"-2"`; `"IN"`/`"OUT"` load equally.
+- **`kind` strings** are the TS union's hyphenated literals
+  (`noise-gate`, ..., `ping-pong-delay`, `amp`, `amp-cab`, `pedal`,
+  `outboard`, `space`, `cab`, `mixer`, `splitter`) - block.h's documented
+  future mapping lives in `rig_state.cpp`.
+- **`bypass`** appears only for kinds with a bypass concept (everything except
+  cab/mixer/splitter), mirroring types.ts. **`inputTrim`/`outputTrim`**
+  (core extensions, always written) are the per-block I/O staging gains.
+- **`reverbAlgorithm`** (`hall|room|plate|early-reflections`) rides on reverb
+  blocks and **`delayModel`** (`digital|analog|tape`) on delay blocks - both
+  choose which DSP object backs the block rather than being params, so they
+  are applied BEFORE params on load (both calls re-seed the param table).
+- **Amp calibration caveat**: an amp-family block's `input_level`/`output_level`
+  params carry its loaded model's dBu calibration. They are serialized only
+  while actually set (model-defined or user-written); restoring them cannot
+  fabricate an override over whatever model gets loaded later.
+
+### Versioning policy
+
+`schemaVersion` is bumped for any breaking shape change. Missing field means
+1 (the web app's existing presets predate it). Versions this build knows are
+accepted; a NEWER version is rejected (`NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION`)
+rather than guessed at. Unknown fields inside a known version are ignored -
+forward-compatible by construction.
+
+### Compatibility with the web app's existing preset files
+
+The shape is a superset of `apps/web/src/presets/types.ts`'s `Preset`
+(`blocks[]` with `id/kind/row/col/bypass/params`, `edges[]` with `from`/`to`
+jacks, `masterLevel`, `masterMuted`), so today's exported `.json` files load
+as-is. Those files predate core symbols in a few places, so documents WITHOUT
+a `schemaVersion` get exactly the interpretation `RigBlock.ts` +
+`namStudioRigWorklet.js` apply today:
+
+- `params.input_level`/`output_level` mean the **I/O trims**, not the amp
+  family's calibration params (which canonical documents carry under those
+  same names only when genuinely calibration).
+- Reverb blocks' UI abstractions (`roomSize`, `damping`, `width`, `predelay`,
+  `spin`, `wander`, `earlySend`, `dryLevel`) route through the core's
+  `ReverbControl` mapping; the algorithm select arrives as
+  `params.reverbAlgorithm`.
+- Delay blocks' `params.model` may be the select string
+  (`"digital"|"analog"|"tape"`) or the numeric symbol value (0..2).
+
+Canonical documents (with `schemaVersion`) always use core symbols directly.
+
+### Failure semantics
+
+Hard failures reject the whole document and leave the graph untouched:
+unparseable JSON, wrong root shape, missing `blocks`/`edges` arrays, or an
+unsupported `schemaVersion`. Everything else follows applyPreset's
+partial-failure tolerance (#64): malformed entries, unknown kinds, dangling
+or rejected edges, and unresolvable params each skip individually while the
+rest restores. `nam_studio_serialize_state` uses the usual two-call sizing
+pattern (pass NULL to get the required capacity, NUL included). Both calls
+are control-thread only - allocate/rebuild topology - so suspend audio around
+them like every other mutation.
+
+Tests: `tests/json_test.cpp` covers the JSON module itself (escapes, number
+round-tripping, malformed input, depth limits); `tests/api_state_test.cpp`
+is issue #119's round-trip proof - a non-trivial rig (amp + cab + effects +
+mixer + splitter) serialized, reloaded into fresh graphs, and asserted
+field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`.
+
 ## Vendored third-party DSP libraries
 
 All added as git submodules under `third_party/`, and all wired into the
@@ -165,7 +282,8 @@ alongside it.
 
 ## Non-goals (not yet — tracked for follow-up work)
 
-- Preset/JSON (de)serialization.
+- ~~Preset/JSON (de)serialization~~ — done (see "Rig state wire format" above);
+  migrating the web/desktop front ends onto it is the follow-up.
 - Full lock-free concurrency: `Process()` itself is allocation-free and its
   params are lock-free atomics, but topology mutation
   (add/remove/connect/disconnect) and NAM model loading are not claimed safe

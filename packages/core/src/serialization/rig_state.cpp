@@ -1,0 +1,571 @@
+#include "rig_state.h"
+
+#include <cmath>
+#include <cstring>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "json.h"
+#include "nam_studio/block.h"
+#include "nam_studio/dsp/delay.h"
+
+namespace nam_studio::state {
+namespace {
+
+using engine::AudioEngine;
+using engine::BlockId;
+using json::Value;
+
+// ── Wire-format string maps ──────────────────────────────────────────────
+// block.h documents the hyphenated wire strings as the TS union's literals;
+// this is that mapping (the "documented non-goal" of the PR that added
+// BlockKind itself). The reverb algorithm and delay model strings match the
+// web UI's select values (paramSchema.ts), which is what existing preset
+// files already contain.
+
+const char* BlockKindToString(graph::BlockKind kind) {
+  switch (kind) {
+    case graph::BlockKind::kNoiseGate: return "noise-gate";
+    case graph::BlockKind::kCompressor: return "compressor";
+    case graph::BlockKind::kEq: return "eq";
+    case graph::BlockKind::kChorus: return "chorus";
+    case graph::BlockKind::kFlanger: return "flanger";
+    case graph::BlockKind::kPhaser: return "phaser";
+    case graph::BlockKind::kTremolo: return "tremolo";
+    case graph::BlockKind::kDelay: return "delay";
+    case graph::BlockKind::kPingPongDelay: return "ping-pong-delay";
+    case graph::BlockKind::kReverb: return "reverb";
+    case graph::BlockKind::kAmp: return "amp";
+    case graph::BlockKind::kAmpCab: return "amp-cab";
+    case graph::BlockKind::kPedal: return "pedal";
+    case graph::BlockKind::kOutboard: return "outboard";
+    case graph::BlockKind::kSpace: return "space";
+    case graph::BlockKind::kCab: return "cab";
+    case graph::BlockKind::kMixer: return "mixer";
+    case graph::BlockKind::kSplitter: return "splitter";
+  }
+  return nullptr;  // unreachable for a valid enum value
+}
+
+bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
+  static const std::unordered_map<std::string, graph::BlockKind> kMap = {
+      {"noise-gate", graph::BlockKind::kNoiseGate},
+      {"compressor", graph::BlockKind::kCompressor},
+      {"eq", graph::BlockKind::kEq},
+      {"chorus", graph::BlockKind::kChorus},
+      {"flanger", graph::BlockKind::kFlanger},
+      {"phaser", graph::BlockKind::kPhaser},
+      {"tremolo", graph::BlockKind::kTremolo},
+      {"delay", graph::BlockKind::kDelay},
+      {"ping-pong-delay", graph::BlockKind::kPingPongDelay},
+      {"reverb", graph::BlockKind::kReverb},
+      {"amp", graph::BlockKind::kAmp},
+      {"amp-cab", graph::BlockKind::kAmpCab},
+      {"pedal", graph::BlockKind::kPedal},
+      {"outboard", graph::BlockKind::kOutboard},
+      {"space", graph::BlockKind::kSpace},
+      {"cab", graph::BlockKind::kCab},
+      {"mixer", graph::BlockKind::kMixer},
+      {"splitter", graph::BlockKind::kSplitter},
+  };
+  const auto it = kMap.find(text);
+  if (it == kMap.end()) return false;
+  out = it->second;
+  return true;
+}
+
+const char* ReverbAlgorithmToString(engine::ReverbAlgorithm algorithm) {
+  switch (algorithm) {
+    case engine::ReverbAlgorithm::kHall: return "hall";
+    case engine::ReverbAlgorithm::kRoom: return "room";
+    case engine::ReverbAlgorithm::kPlate: return "plate";
+    case engine::ReverbAlgorithm::kEarlyReflections: return "early-reflections";
+  }
+  return "hall";  // unreachable for a valid enum value
+}
+
+bool StringToReverbAlgorithm(const std::string& text, engine::ReverbAlgorithm& out) {
+  if (text == "hall") {
+    out = engine::ReverbAlgorithm::kHall;
+  } else if (text == "room") {
+    out = engine::ReverbAlgorithm::kRoom;
+  } else if (text == "plate") {
+    out = engine::ReverbAlgorithm::kPlate;
+  } else if (text == "early-reflections") {
+    out = engine::ReverbAlgorithm::kEarlyReflections;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+const char* DelayModelToString(dsp::Delay::Model model) {
+  switch (model) {
+    case dsp::Delay::Model::kDigital: return "digital";
+    case dsp::Delay::Model::kAnalog: return "analog";
+    case dsp::Delay::Model::kTape: return "tape";
+  }
+  return "digital";  // unreachable for a valid enum value
+}
+
+bool StringToDelayModel(const std::string& text, dsp::Delay::Model& out) {
+  if (text == "digital") {
+    out = dsp::Delay::Model::kDigital;
+  } else if (text == "analog") {
+    out = dsp::Delay::Model::kAnalog;
+  } else if (text == "tape") {
+    out = dsp::Delay::Model::kTape;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// Bypass is a concept for the effect kinds + the NAM gear kinds - cab/mixer/
+// splitter have none (types.ts's PresetBlockData doc comment). Mirroring that,
+// those three serialize without a bypass field.
+bool KindHasBypass(graph::BlockKind kind) {
+  return kind != graph::BlockKind::kCab && kind != graph::BlockKind::kMixer &&
+         kind != graph::BlockKind::kSplitter;
+}
+
+bool IsAmpFamilyKind(graph::BlockKind kind) {
+  switch (kind) {
+    case graph::BlockKind::kAmp:
+    case graph::BlockKind::kAmpCab:
+    case graph::BlockKind::kPedal:
+    case graph::BlockKind::kOutboard:
+    case graph::BlockKind::kSpace:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Block ids in the document are strings - GraphRig's own form, and what web
+// presets already carry. Rails serialize as "-1"/"-2" (the engine's decimal
+// GraphIdOf form); their grid names load too.
+std::string BlockIdToString(int64_t id) { return std::to_string(id); }
+
+// Every param by SYMBOL, never by index - index order is a core
+// implementation detail (GetParamInfo tables) and a reorder must not silently
+// remap a user's saved rig (the issue's headline requirement).
+Value SerializeParams(const AudioEngine& engine, BlockId id, bool amp_family) {
+  Value params = Value::Object();
+  const int count = engine.ParamCount(id);
+  for (int i = 0; i < count; ++i) {
+    const auto info = engine.ParamInfo(id, i);
+    if (!info || info->symbol == nullptr) continue;
+    // The amp family's input_level/output_level slots hold the loaded model's
+    // dBu calibration. While the corresponding active flag is down there is no
+    // meaningful value to save - writing one on restore would flip the flag
+    // and fabricate an override over whatever model gets loaded later.
+    if (amp_family && std::strcmp(info->symbol, "input_level") == 0 &&
+        !engine.IsAmpInputLevelActive(id)) {
+      continue;
+    }
+    if (amp_family && std::strcmp(info->symbol, "output_level") == 0 &&
+        !engine.IsAmpOutputLevelActive(id)) {
+      continue;
+    }
+    params.Set(info->symbol, Value::Number(engine.GetParam(id, i)));
+  }
+  return params;
+}
+
+}  // namespace
+
+std::string SerializeState(const AudioEngine& engine) {
+  Value root = Value::Object();
+  root.Set("schemaVersion", Value::Number(kCurrentSchemaVersion));
+
+  Value blocks = Value::Array();
+  for (const engine::BlockSnapshot& snap : engine.ListBlocks()) {
+    Value block = Value::Object();
+    block.Set("id", Value::String(BlockIdToString(snap.id)));
+    block.Set("kind", Value::String(BlockKindToString(snap.kind)));
+    block.Set("row", Value::Number(snap.row));
+    block.Set("col", Value::Number(snap.col));
+    if (KindHasBypass(snap.kind)) {
+      block.Set("bypass", Value::Bool(engine.IsBypassed(snap.id)));
+    }
+    block.Set("inputTrim", Value::Number(engine.GetInputTrim(snap.id)));
+    block.Set("outputTrim", Value::Number(engine.GetOutputTrim(snap.id)));
+
+    // Core extensions beyond the TS Preset shape: which algorithm/model backs
+    // reverb/delay blocks. These aren't params - they choose the DSP object -
+    // so they ride as block fields (the loader also accepts the legacy homes).
+    if (snap.kind == graph::BlockKind::kReverb) {
+      block.Set("reverbAlgorithm",
+                Value::String(ReverbAlgorithmToString(engine.GetReverbAlgorithm(snap.id))));
+    }
+    if (snap.kind == graph::BlockKind::kDelay) {
+      block.Set("delayModel", Value::String(DelayModelToString(engine.GetDelayModel(snap.id))));
+    }
+
+    block.Set("params", SerializeParams(engine, snap.id, IsAmpFamilyKind(snap.kind)));
+    blocks.items().push_back(std::move(block));
+  }
+  root.Set("blocks", std::move(blocks));
+
+  Value edges = Value::Array();
+  for (const engine::EdgeSnapshot& edge : engine.ListEdges()) {
+    Value entry = Value::Object();
+    entry.Set("id", Value::String(BlockIdToString(edge.id)));
+    Value from = Value::Object();
+    from.Set("blockId", Value::String(BlockIdToString(edge.from_block)));
+    from.Set("port", Value::Number(edge.from_port));
+    entry.Set("from", std::move(from));
+    Value to = Value::Object();
+    to.Set("blockId", Value::String(BlockIdToString(edge.to_block)));
+    to.Set("port", Value::Number(edge.to_port));
+    entry.Set("to", std::move(to));
+    edges.items().push_back(std::move(entry));
+  }
+  root.Set("edges", std::move(edges));
+
+  root.Set("masterLevel", Value::Number(engine.GetMasterLevel()));
+  root.Set("masterMuted", Value::Bool(engine.IsMasterMuted()));
+
+  return json::Write(root);
+}
+
+// ── Loading ──────────────────────────────────────────────────────────────
+
+namespace {
+
+// The legacy param keys existing web presets use that are NOT core symbols -
+// resolved exactly as RigBlock.ts + namStudioRigWorklet.js resolve them today:
+// input_level/output_level mean the per-block I/O trims everywhere, and a
+// reverb block's roomSize/damping/... route through ReverbControl.
+struct ReverbControlKey {
+  const char* key;
+  engine::ReverbControl control;
+};
+constexpr ReverbControlKey kReverbControlKeys[] = {
+    {"roomSize", engine::ReverbControl::kRoomSize},
+    {"damping", engine::ReverbControl::kDamping},
+    {"width", engine::ReverbControl::kWidth},
+    {"predelay", engine::ReverbControl::kPredelay},
+    {"spin", engine::ReverbControl::kSpin},
+    {"wander", engine::ReverbControl::kWander},
+    {"earlySend", engine::ReverbControl::kEarlySend},
+    {"dryLevel", engine::ReverbControl::kDryLevel},
+};
+
+const ReverbControlKey* FindReverbControlKey(const std::string& key) {
+  for (const ReverbControlKey& entry : kReverbControlKeys) {
+    if (key == entry.key) return &entry;
+  }
+  return nullptr;
+}
+
+// Sets one param by symbol - the document never carries index order. Returns
+// false when the block's current param table has no such symbol (skipped with
+// a warning, per the issue: unknown symbols are not a hard failure).
+bool SetParamBySymbol(AudioEngine& engine, BlockId id, const std::string& symbol, float value) {
+  const int count = engine.ParamCount(id);
+  for (int i = 0; i < count; ++i) {
+    const auto info = engine.ParamInfo(id, i);
+    if (info && info->symbol != nullptr && symbol == info->symbol) {
+      engine.SetParam(id, i, value);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Resolves a delay block's model choice from whatever shape the document used:
+// canonical "delayModel" string, legacy params.model string ('analog'), or
+// legacy numeric params.model (the `model` symbol's own 0..2 range).
+bool ResolveDelayModelChoice(const Value& block, const Value* params, dsp::Delay::Model& out) {
+  const Value* field = block.Find("delayModel");
+  if (field != nullptr && field->IsString() && StringToDelayModel(*field->AsString(), out)) {
+    return true;
+  }
+  if (params != nullptr) {
+    const Value* legacy = params->Find("model");
+    if (legacy != nullptr && legacy->IsString() && StringToDelayModel(*legacy->AsString(), out)) {
+      return true;
+    }
+    if (legacy != nullptr && legacy->IsNumber()) {
+      const double v = legacy->AsNumber();
+      const double rounded = std::round(v);
+      if (rounded == v && rounded >= 0.0 && rounded <= 2.0) {
+        out = static_cast<dsp::Delay::Model>(static_cast<int>(rounded));
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Same for a reverb block's algorithm: canonical block field first, then the
+// legacy params.reverbAlgorithm select value.
+bool ResolveReverbAlgorithmChoice(const Value& block, const Value* params,
+                                  engine::ReverbAlgorithm& out) {
+  const Value* field = block.Find("reverbAlgorithm");
+  if (field != nullptr && field->IsString() && StringToReverbAlgorithm(*field->AsString(), out)) {
+    return true;
+  }
+  if (params != nullptr) {
+    const Value* legacy = params->Find("reverbAlgorithm");
+    if (legacy != nullptr && legacy->IsString() &&
+        StringToReverbAlgorithm(*legacy->AsString(), out)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// One document jack -> this layer's int id, through the doc-id map built
+// while blocks were added ("IN"/"OUT"/"-1"/"-2" hit the rail sentinels).
+bool MapJack(const Value& jack, const std::unordered_map<std::string, BlockId>& block_ids,
+             BlockId& out_block, int& out_port) {
+  if (!jack.IsObject()) return false;
+  const Value* id_field = jack.Find("blockId");
+  const Value* port_field = jack.Find("port");
+  if (id_field == nullptr || !id_field->IsString() || port_field == nullptr ||
+      !port_field->IsNumber()) {
+    return false;
+  }
+  const std::string& name = *id_field->AsString();
+  if (name == graph::kInRail || name == "-1") {
+    out_block = engine::kInRailId;
+  } else if (name == graph::kOutRail || name == "-2") {
+    out_block = engine::kOutRailId;
+  } else {
+    const auto it = block_ids.find(name);
+    if (it == block_ids.end()) return false;  // dangling endpoint - skip edge
+    out_block = it->second;
+  }
+  out_port = static_cast<int>(port_field->AsNumber());
+  return true;
+}
+
+}  // namespace
+
+LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
+  LoadOutcome outcome;
+
+  // ── Document-level validation: hard failures leave the graph untouched ──
+  if (json_text == nullptr) {
+    outcome.error = LoadError::kBadDocument;
+    outcome.detail = "null input";
+    return outcome;
+  }
+
+  Value root;
+  std::string parse_error;
+  if (!json::Parse(json_text, root, &parse_error)) {
+    outcome.error = LoadError::kParseError;
+    outcome.detail = parse_error;
+    return outcome;
+  }
+  if (!root.IsObject()) {
+    outcome.error = LoadError::kBadDocument;
+    outcome.detail = "document root must be an object";
+    return outcome;
+  }
+
+  // schemaVersion policy: missing means 1 (the web app's existing preset
+  // files predate the field); anything newer than what this loader knows is
+  // rejected rather than guessed at. A missing field also flips the loader's
+  // legacy-compat behaviour on (see pass 3): those files carry UI-level keys,
+  // not core symbols, in a couple of places.
+  int version = 1;
+  bool legacy = true;
+  if (const Value* v = root.Find("schemaVersion"); v != nullptr) {
+    legacy = false;
+    if (!v->IsNumber()) {
+      outcome.error = LoadError::kBadDocument;
+      outcome.detail = "schemaVersion must be a number";
+      return outcome;
+    }
+    const double raw = v->AsNumber();
+    if (raw != std::floor(raw) || raw < 1.0) {
+      outcome.error = LoadError::kBadDocument;
+      outcome.detail = "schemaVersion must be a positive integer";
+      return outcome;
+    }
+    version = static_cast<int>(raw);
+  }
+  if (version > kCurrentSchemaVersion) {
+    outcome.error = LoadError::kUnsupportedVersion;
+    outcome.detail = "document schemaVersion " + std::to_string(version) +
+                     " is newer than this build's " + std::to_string(kCurrentSchemaVersion);
+    return outcome;
+  }
+
+  const Value* blocks_doc = root.Find("blocks");
+  const Value* edges_doc = root.Find("edges");
+  if (blocks_doc == nullptr || !blocks_doc->IsArray() || edges_doc == nullptr ||
+      !edges_doc->IsArray()) {
+    outcome.error = LoadError::kBadDocument;
+    outcome.detail = "document requires 'blocks' and 'edges' arrays";
+    return outcome;
+  }
+
+  // ── Rebuild: clear first, exactly like applyPreset (#64) ────────────────
+  engine.ClearTopology();
+
+  // Pass 1 - place every well-formed block, recording doc-id -> new id so
+  // edges can reference blocks regardless of how ids renumber.
+  struct DocBlock {
+    const Value* entry;
+    BlockId new_id;
+    graph::BlockKind kind;
+  };
+  std::vector<DocBlock> placed;
+  placed.reserve(blocks_doc->items().size());
+  std::unordered_map<std::string, BlockId> block_ids;
+
+  for (const Value& entry : blocks_doc->items()) {
+    const Value* id_field = entry.Find("id");
+    const Value* kind_field = entry.Find("kind");
+    const Value* row_field = entry.Find("row");
+    const Value* col_field = entry.Find("col");
+    if (id_field == nullptr || !id_field->IsString() || kind_field == nullptr ||
+        !kind_field->IsString() || row_field == nullptr || !row_field->IsNumber() ||
+        col_field == nullptr || !col_field->IsNumber()) {
+      ++outcome.stats.blocks_skipped;
+      continue;
+    }
+    graph::BlockKind kind;
+    if (!StringToBlockKind(*kind_field->AsString(), kind)) {
+      ++outcome.stats.blocks_skipped;  // unknown kind string - skip, don't abort
+      continue;
+    }
+    const std::string& doc_id = *id_field->AsString();
+    if (block_ids.contains(doc_id)) {
+      ++outcome.stats.blocks_skipped;  // duplicate id in one document
+      continue;
+    }
+    const BlockId new_id = engine.AddBlock(kind, static_cast<int>(row_field->AsNumber()),
+                                           static_cast<int>(col_field->AsNumber()));
+    block_ids.emplace(doc_id, new_id);
+    placed.push_back(DocBlock{&entry, new_id, kind});
+    ++outcome.stats.blocks_restored;
+  }
+
+  // Pass 2 - reverb algorithm / delay model choices BEFORE params: both calls
+  // replace or re-seed the block's whole param table, so applying them after
+  // would wipe values restored around them.
+  for (const DocBlock& doc_block : placed) {
+    const Value* params = doc_block.entry->Find("params");
+    if (doc_block.kind == graph::BlockKind::kReverb) {
+      engine::ReverbAlgorithm algorithm;
+      if (ResolveReverbAlgorithmChoice(*doc_block.entry, params, algorithm)) {
+        engine.SetReverbAlgorithm(doc_block.new_id, algorithm);
+      }
+    } else if (doc_block.kind == graph::BlockKind::kDelay) {
+      dsp::Delay::Model model;
+      if (ResolveDelayModelChoice(*doc_block.entry, params, model)) {
+        engine.SetDelayModel(doc_block.new_id, model);
+      }
+    }
+  }
+
+  // Pass 3 - params (by symbol), bypass and trims per block. Anything that
+  // doesn't resolve - unknown symbol, non-numeric value - is skipped and
+  // counted, never a reason to abort the restore.
+  for (const DocBlock& doc_block : placed) {
+    if (const Value* bypass = doc_block.entry->Find("bypass");
+        bypass != nullptr && bypass->IsBool()) {
+      engine.SetBypass(doc_block.new_id, bypass->AsBool(false));
+    }
+    if (const Value* trims_in = doc_block.entry->Find("inputTrim"); trims_in != nullptr &&
+                                                                 trims_in->IsNumber()) {
+      engine.SetInputTrim(doc_block.new_id,
+                          static_cast<float>(trims_in->AsNumber()));
+    }
+    if (const Value* trims_out = doc_block.entry->Find("outputTrim");
+        trims_out != nullptr && trims_out->IsNumber()) {
+      engine.SetOutputTrim(doc_block.new_id,
+                           static_cast<float>(trims_out->AsNumber()));
+    }
+
+    const Value* params = doc_block.entry->Find("params");
+    if (params == nullptr || !params->IsObject()) continue;
+
+    for (const auto& [key, value] : params->members()) {
+      // Legacy web meaning first: in documents WITHOUT a schemaVersion (the
+      // web app's existing preset files), these two keys are the I/O trims on
+      // every kind - RigBlock.setParams routes them to setTrim. In canonical
+      // core documents they are what they say: the amp family's dBu
+      // calibration symbols, and they fall through to the by-symbol path
+      // below.
+      if (legacy && (key == "input_level" || key == "output_level") && value.IsNumber()) {
+        const float gain = static_cast<float>(value.AsNumber());
+        if (key == "input_level") {
+          engine.SetInputTrim(doc_block.new_id, gain);
+        } else {
+          engine.SetOutputTrim(doc_block.new_id, gain);
+        }
+        continue;
+      }
+      // Legacy reverb abstractions -> the core's ReverbControl mapping, same
+      // special case the rig worklet makes for kind == reverb.
+      if (doc_block.kind == graph::BlockKind::kReverb) {
+        if (const ReverbControlKey* control = FindReverbControlKey(key);
+            control != nullptr && value.IsNumber()) {
+          engine.SetReverbControl(doc_block.new_id, control->control,
+                                  static_cast<float>(value.AsNumber()));
+          continue;
+        }
+        if (key == "reverbAlgorithm") continue;  // handled in pass 2
+      }
+      if (doc_block.kind == graph::BlockKind::kDelay && key == "model") {
+        continue;  // handled in pass 2 (string select or numeric param)
+      }
+      if (!value.IsNumber()) {
+        ++outcome.stats.params_skipped;  // booleans/strings have no core slot
+        continue;
+      }
+      if (!SetParamBySymbol(engine, doc_block.new_id, key,
+                            static_cast<float>(value.AsNumber()))) {
+        ++outcome.stats.params_skipped;  // unknown symbol: warning, not failure
+      }
+    }
+  }
+
+  // ── Edges ───────────────────────────────────────────────────────────────
+  for (const Value& edge : edges_doc->items()) {
+    const Value* from = edge.Find("from");
+    const Value* to = edge.Find("to");
+    if (from == nullptr || to == nullptr) {
+      ++outcome.stats.edges_skipped;
+      continue;
+    }
+    BlockId from_block = 0;
+    BlockId to_block = 0;
+    int from_port = 0;
+    int to_port = 0;
+    if (!MapJack(*from, block_ids, from_block, from_port) ||
+        !MapJack(*to, block_ids, to_block, to_port)) {
+      ++outcome.stats.edges_skipped;  // malformed jack or dangling block id
+      continue;
+    }
+    // Connect validates ordering/port range/jack conflicts itself; a rejected
+    // connection is one skipped cable, not a failed restore.
+    const auto result = engine.Connect(from_block, from_port, to_block, to_port);
+    if (result.ok) {
+      ++outcome.stats.edges_restored;
+    } else {
+      ++outcome.stats.edges_skipped;
+    }
+  }
+
+  // ── Master bus ──────────────────────────────────────────────────────────
+  if (const Value* level = root.Find("masterLevel"); level != nullptr && level->IsNumber()) {
+    engine.SetMasterLevel(static_cast<float>(level->AsNumber()));
+  }
+  if (const Value* muted = root.Find("masterMuted"); muted != nullptr && muted->IsBool()) {
+    engine.SetMasterMuted(muted->AsBool(false));
+  }
+
+  return outcome;
+}
+
+}  // namespace nam_studio::state

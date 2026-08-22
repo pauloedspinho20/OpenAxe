@@ -1,8 +1,11 @@
 #include "nam_studio/api.h"
 
 #include <algorithm>
+#include <cstring>
+#include <string>
 
 #include "nam_studio/engine.h"
+#include "serialization/rig_state.h"
 
 namespace {
 
@@ -351,5 +354,31 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
 }
 
 float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetCpuLoad(); }
+
+// ── Rig state (de)serialization (issue #119) ────────────────────────────
+// Thin forwarders onto nam_studio::state, keeping the JSON machinery out of
+// this file entirely. Both are control-thread calls - see api.h for the
+// contracts and packages/core/README.md for the wire format.
+
+int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_t capacity) {
+  const std::string document = nam_studio::state::SerializeState(graph->engine);
+  const int32_t required = static_cast<int32_t>(document.size()) + 1;  // + NUL
+  if (out_json == nullptr) return required;
+  if (capacity < required) return -1;
+  std::memcpy(out_json, document.c_str(), static_cast<size_t>(required));
+  return required;
+}
+
+NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char* json) {
+  const auto outcome = nam_studio::state::LoadState(graph->engine, json);
+  switch (outcome.error) {
+    case nam_studio::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
+    case nam_studio::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
+    case nam_studio::state::LoadError::kUnsupportedVersion:
+      return NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION;
+    case nam_studio::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
+  }
+  return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
+}
 
 }  // extern "C"

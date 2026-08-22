@@ -429,6 +429,57 @@ void AudioEngine::Disconnect(EdgeId id) {
   RecomputeRouting();
 }
 
+// ── Rig-state enumeration / clearing (issue #119) ────────────────────────
+
+// Every block as a flat snapshot, sorted by id so serialized output is
+// deterministic regardless of unordered_map iteration order.
+std::vector<BlockSnapshot> AudioEngine::ListBlocks() const {
+  std::vector<BlockSnapshot> out;
+  out.reserve(block_states_.size());
+  for (const auto& [id, state] : block_states_) {
+    const graph::BlockRecord* record = rig_.GetBlock(GraphIdOf(id));
+    // Can't legitimately miss - block_states_ and the rig are mutated
+    // together on the control thread.
+    if (!record) continue;
+    out.push_back(BlockSnapshot{id, record->kind, record->row, record->col});
+  }
+  std::sort(out.begin(), out.end(), [](const BlockSnapshot& a, const BlockSnapshot& b) {
+    return a.id < b.id;
+  });
+  return out;
+}
+
+// Every edge as a flat snapshot, sorted by id (same determinism argument).
+std::vector<EdgeSnapshot> AudioEngine::ListEdges() const {
+  std::vector<EdgeSnapshot> out;
+  out.reserve(rig_.ListEdgeIds().size());
+  for (const auto& edge_graph_id : rig_.ListEdgeIds()) {
+    const graph::EdgeRecord* edge = rig_.GetEdge(edge_graph_id);
+    if (!edge) continue;
+    out.push_back(EdgeSnapshot{static_cast<EdgeId>(std::stoi(edge_graph_id)),
+                               ParseGraphId(edge->from.block_id), edge->from.port,
+                               ParseGraphId(edge->to.block_id), edge->to.port});
+  }
+  std::sort(out.begin(), out.end(),
+            [](const EdgeSnapshot& a, const EdgeSnapshot& b) { return a.id < b.id; });
+  return out;
+}
+
+// Clear the whole topology: remove each block through the ordinary path (so
+// edges touching them go too and routing is rebuilt once at the end). Ids keep
+// counting; the engine never reuses one. Not real-time safe.
+void AudioEngine::ClearTopology() {
+  for (const auto& [id, state] : block_states_) {
+    (void)state;
+    rig_.RemoveBlock(GraphIdOf(id));
+  }
+  {
+    std::unique_lock lock(block_states_mutex_);
+    block_states_.clear();
+  }
+  RecomputeRouting();
+}
+
 // ── Lifecycle / processing ─────────────────────────────────────────────
 
 // Arm the engine for a given sample rate and maximum block size: re-prepare
@@ -1108,6 +1159,65 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   // for all models — but kept for parity with other model-switch methods).
   state->param_count = dsp::Delay::ParamCount();
   SeedParamsFromDsp(*state);
+}
+
+// ── Per-block state readers for serialization (issue #119) ──────────────
+
+// Which Dragonfly algorithm currently backs a reverb block. The choice isn't
+// stored as a field - it IS which alternative the DSP variant holds - so the
+// getter recovers it from there. kHall for anything else (the default every
+// new reverb block starts on).
+ReverbAlgorithm AudioEngine::GetReverbAlgorithm(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || state->kind != graph::BlockKind::kReverb) return ReverbAlgorithm::kHall;
+  if (std::holds_alternative<dsp::DragonflyRoomReverb>(state->dsp)) {
+    return ReverbAlgorithm::kRoom;
+  }
+  if (std::holds_alternative<dsp::DragonflyPlateReverb>(state->dsp)) {
+    return ReverbAlgorithm::kPlate;
+  }
+  if (std::holds_alternative<dsp::DragonflyEarlyReflections>(state->dsp)) {
+    return ReverbAlgorithm::kEarlyReflections;
+  }
+  return ReverbAlgorithm::kHall;  // includes the kHall case above
+}
+
+// Which delay character the block plays through. Read from the atomic param
+// MIRROR rather than the DSP object: a SetParam('model', n) write lands in
+// the mirror immediately but reaches the DSP only on the next Process()
+// buffer, and serialization must capture what the user set, not what the DSP
+// object last heard. The mirror is seeded from the DSP on every
+// re-seed/re-prepare, so the two agree except inside that window - and the
+// mirror is the authoritative side of it. kDigital for anything that isn't a
+// kDelay block or whose table somehow lacks the symbol.
+dsp::Delay::Model AudioEngine::GetDelayModel(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || state->kind != graph::BlockKind::kDelay) return dsp::Delay::Model::kDigital;
+  for (int i = 0; i < state->param_count; ++i) {
+    const std::optional<ParamDescriptor> info = ParamInfo(id, i);
+    if (info && info->symbol && std::strcmp(info->symbol, "model") == 0) {
+      const int value = static_cast<int>(std::lround(GetParam(id, i)));
+      if (value >= 0 && value <= 2) {
+        return static_cast<dsp::Delay::Model>(value);
+      }
+      break;
+    }
+  }
+  return dsp::Delay::Model::kDigital;
+}
+
+// The amp calibration gates - true once the model defined the level or the
+// caller wrote the param explicitly (see BlockState's doc comment).
+bool AudioEngine::IsAmpInputLevelActive(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || !IsAmpFamily(state->kind)) return false;
+  return state->amp_input_level_active.load(std::memory_order_relaxed);
+}
+
+bool AudioEngine::IsAmpOutputLevelActive(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || !IsAmpFamily(state->kind)) return false;
+  return state->amp_output_level_active.load(std::memory_order_relaxed);
 }
 
 // ── Bypass / master bus ────────────────────────────────────────────────
