@@ -115,6 +115,14 @@ class StudioBridge {
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);
 
+  // Small secret store (issue #146) backing the Tone3000 refresh token so it
+  // survives an app restart - see secure_storage.h. Independent of the
+  // graph/audio state above, so these run straight on the webview thread
+  // like the read-only queries do, no Call()/Mutate() needed.
+  std::string HandleSecureStore(const std::string& req);
+  std::string HandleSecureLoad(const std::string& req);
+  std::string HandleSecureDelete(const std::string& req);
+
  private:
   // Control executor ------------------------------------------------------
   // Submit a task to the control thread (fire-and-forget).
