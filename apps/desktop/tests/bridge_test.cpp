@@ -803,6 +803,55 @@ void TestSetBypassAndMasterBus() {
   CHECK(r["ok"] == true);
 }
 
+// Backs the Tone3000 refresh token surviving an app restart (issue #146) -
+// the webview's own storage can't do that here since the UI server (and so
+// the webview's origin) binds a fresh ephemeral port every launch. Uses a
+// test-only key so this can never collide with (or clobber) the real
+// "tone3000_refresh_token" entry a live app instance has stored.
+void TestSecureStorageRoundTrip() {
+  nam_desktop::StudioBridge bridge;
+
+  // Start from a clean slate in case a previous run of this binary crashed
+  // before its own cleanup ran.
+  Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+
+  auto load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"].is_null());
+
+  auto store = Parse(bridge.HandleSecureStore(
+      Arr(R"([{"key":"bridge_test_secret","value":"s3cr3t-refresh-token"}])")));
+  CHECK(store["ok"] == true);
+
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"] == "s3cr3t-refresh-token");
+
+  // Storing again under the same key overwrites rather than erroring or
+  // duplicating - a token refresh does exactly this on every app launch.
+  store = Parse(bridge.HandleSecureStore(
+      Arr(R"([{"key":"bridge_test_secret","value":"rotated-refresh-token"}])")));
+  CHECK(store["ok"] == true);
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["value"] == "rotated-refresh-token");
+
+  auto del = Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(del["ok"] == true);
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"].is_null());
+
+  // Deleting an already-absent key is a no-op success, matching
+  // removeBlock/setBypass's unknown-id handling elsewhere in this file.
+  del = Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(del["ok"] == true);
+
+  // A key that isn't a plain identifier is rejected outright - the Linux
+  // fallback turns it straight into a filename (see secure_storage.cpp).
+  auto bad = Parse(bridge.HandleSecureStore(Arr(R"([{"key":"../evil","value":"x"}])")));
+  CHECK(bad["ok"] == false);
+}
+
 }  // namespace
 
 int main() {
@@ -827,6 +876,7 @@ int main() {
   TestIsTrustedUiUrl();
   TestLoadIrWavRejectsOversized();
   TestLoadModelJsonRejectsOversized();
+  TestSecureStorageRoundTrip();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

@@ -327,6 +327,9 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "namStudio.setMasterLevel", &nam_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "namStudio.setMasterMuted", &nam_desktop::StudioBridge::HandleSetMasterMuted);
     Bind(w, bridge, "namStudio.setTunerMuted", &nam_desktop::StudioBridge::HandleSetTunerMuted);
+    Bind(w, bridge, "namStudio.secureStore", &nam_desktop::StudioBridge::HandleSecureStore);
+    Bind(w, bridge, "namStudio.secureLoad", &nam_desktop::StudioBridge::HandleSecureLoad);
+    Bind(w, bridge, "namStudio.secureDelete", &nam_desktop::StudioBridge::HandleSecureDelete);
 
     // NAM_STUDIO_UI_URL wins over the bundled copy: it points the webview at
     // an already-running dev server (Vite, http://127.0.0.1:5173) so the
@@ -347,15 +350,31 @@ int main(int argc, char** argv) {
     // exercises the full bridge against the C++ core.
     const std::string ui = use_dev_server ? std::string() : UiIndexPath(argv0);
     nam_desktop::HttpServer uiServer;
+    // The UI server's port above is ephemeral (by design - see its header,
+    // it must never fight Vite for 5173), so it can't be the Tone3000 OAuth
+    // redirect_uri: an OAuth provider needs an exact, pre-registered value,
+    // and that value can't shift every launch. This second, fixed-port
+    // listener is registered with Tone3000 instead; its only job is 302-ing
+    // the redirect back to whatever port the UI actually ended up on this
+    // launch, read live out of `ui_port` below. Skipped in dev-server mode -
+    // there the webview's origin already *is* the fixed, registered
+    // http://localhost:5173 (see apps/web/.env.example), so no bounce is
+    // needed. See tone3000/config.ts's DESKTOP_OAUTH_REDIRECT_PORT.
+    unsigned short ui_port = 0;
+    nam_desktop::HttpServer oauthRedirectServer;
     if (use_dev_server) {
       std::cerr << "nam_desktop: loading UI from " << ui_url_env << " (dev server)\n";
       w.navigate(ui_url_env);
     } else if (!ui.empty()) {
       const std::string uiDir = std::filesystem::path(ui).parent_path().string();
-      unsigned short port = 0;
-      if (uiServer.Start(uiDir, port)) {
-        std::cerr << "nam_desktop: serving UI at http://127.0.0.1:" << port << "\n";
-        w.navigate("http://127.0.0.1:" + std::to_string(port) + "/index.html");
+      if (uiServer.Start(uiDir, ui_port)) {
+        std::cerr << "nam_desktop: serving UI at http://127.0.0.1:" << ui_port << "\n";
+        if (!oauthRedirectServer.StartOAuthRedirect(nam_desktop::kOAuthRedirectPort, &ui_port)) {
+          std::cerr << "nam_desktop: OAuth redirect listener on port "
+                    << nam_desktop::kOAuthRedirectPort
+                    << " failed to start (already in use?) - Tone3000 login will not complete\n";
+        }
+        w.navigate("http://127.0.0.1:" + std::to_string(ui_port) + "/index.html");
       } else {
         std::cerr << "nam_desktop: UI HTTP server failed to start; using placeholder\n";
         w.set_html(kPlaceholderHtml);

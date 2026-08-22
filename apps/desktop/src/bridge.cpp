@@ -17,6 +17,7 @@
 #include "debug_log.h"
 #include "nam_studio/api.h"
 #include "nam_studio/core.h"
+#include "secure_storage.h"
 
 namespace nam_desktop {
 
@@ -1038,6 +1039,64 @@ std::string StudioBridge::HandleTakeStreamError(const std::string&) {
   std::string message;
   const bool errored = audio_.TakeStreamError(&message);
   return (json{{"error", errored ? json(message) : json()}}).dump();
+}
+
+namespace {
+// Keys only ever come from our own trusted JS (issue #71 already restricts
+// who gets the bridge at all), but the Linux fallback in secure_storage.cpp
+// turns a key straight into a filename - reject anything that isn't a plain
+// identifier so a typo or future caller can't traverse outside its secrets
+// directory.
+bool IsValidSecretKey(const std::string& key) {
+  if (key.empty()) return false;
+  return std::all_of(key.begin(), key.end(), [](unsigned char c) {
+    return std::isalnum(c) || c == '_' || c == '-';
+  });
+}
+}  // namespace
+
+std::string StudioBridge::HandleSecureStore(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    const std::string value = o.value("value", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureStore: invalid key");
+    std::string error;
+    if (!secure_storage::Store(key, value, &error)) return JsonError("secureStore: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureStore: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSecureLoad(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureLoad: invalid key");
+    std::string error;
+    const auto value = secure_storage::Load(key, &error);
+    if (!value && !error.empty()) return JsonError("secureLoad: " + error);
+    return (json{{"ok", true}, {"value", value ? json(*value) : json()}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureLoad: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSecureDelete(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureDelete: invalid key");
+    std::string error;
+    if (!secure_storage::Delete(key, &error)) return JsonError("secureDelete: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureDelete: ") + e.what());
+  }
 }
 
 }  // namespace nam_desktop

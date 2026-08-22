@@ -3,17 +3,21 @@
  * works anonymously to search the public catalog, and a token is fetched (or
  * a full OAuth connect run) only when the user actually imports/downloads.
  *
- * The refresh token is persisted in localStorage by client.ts, so a returning
- * session can re-authenticate without a full OAuth round trip.
+ * The refresh token is persisted by client.ts (localStorage on web, the OS
+ * keychain on desktop - see its module header), so a returning
+ * session/launch can re-authenticate without a full OAuth round trip - see
+ * hydrateFromPersistentStorage below for where that actually happens.
  */
 import { create } from 'zustand'
 import {
+  apiGetUser,
   clearTokens,
   consumeOAuthCallbackParams,
   getAccessToken,
   handleOAuthCallback,
   setTokens,
   startStandardFlow,
+  tryHydrateFromPersistentStorage,
   tryRefreshFromStorage,
 } from './client'
 import type { User } from './types'
@@ -36,6 +40,10 @@ export interface Tone3000AuthActions {
   connect: () => Promise<void>
   /** Exchange ?code=...&state=... after an OAuth redirect and store tokens. Returns true if a callback was handled. */
   handleCallback: () => Promise<boolean>
+  /** Silently redeem a refresh token persisted from a previous visit/launch
+   * and refetch the user profile, so a returning user is shown as connected
+   * without reconnecting. No-op (and no error) when there's nothing stored. */
+  hydrateFromPersistentStorage: () => Promise<void>
   /** Forget all tokens and connection state. */
   disconnect: () => void
   setError: (error: string | null) => void
@@ -117,6 +125,20 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
     return false
   },
 
+  hydrateFromPersistentStorage: async () => {
+    const tokens = await tryHydrateFromPersistentStorage()
+    if (!tokens) return
+    set({ status: 'connected', error: null })
+    try {
+      set({ user: await apiGetUser() })
+    } catch {
+      // The refresh above already proved the credential is live - a
+      // transient failure fetching the profile on top of that shouldn't
+      // undo "connected"; the catalog just falls back to showing no
+      // username until the next successful fetch.
+    }
+  },
+
   disconnect: () => {
     clearTokens()
     set({ status: 'anonymous', user: null, error: null, pendingFlow: false })
@@ -126,11 +148,18 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
 }))
 
 /**
- * Handle the OAuth callback once on app boot, if the URL carries one.
- * Unconditional - handleCallback() itself no-ops safely when there's
- * nothing to consume, which also makes this safe to call twice in a row
- * (e.g. React StrictMode's dev-only double effect invocation).
+ * Handle the OAuth callback once on app boot, if the URL carries one -
+ * handleCallback() itself no-ops safely when there's nothing to consume,
+ * which also makes this safe to call twice in a row (e.g. React StrictMode's
+ * dev-only double effect invocation). Otherwise, fall back to silently
+ * reconnecting from a refresh token a previous visit/launch persisted (see
+ * client.ts's tryHydrateFromPersistentStorage) - skipped if the callback
+ * above already connected, so a normal OAuth completion doesn't also
+ * trigger a redundant refresh right behind it.
  */
 export async function handleTone3000CallbackOnLoad(): Promise<void> {
-  await useTone3000Auth.getState().handleCallback()
+  const handledCallback = await useTone3000Auth.getState().handleCallback()
+  if (!handledCallback && useTone3000Auth.getState().status !== 'connected') {
+    await useTone3000Auth.getState().hydrateFromPersistentStorage()
+  }
 }

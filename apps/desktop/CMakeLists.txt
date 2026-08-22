@@ -104,7 +104,13 @@ FetchContent_MakeAvailable(nlohmann_json portable_file_dialogs)
 # nam_desktop_lib: the app logic (audio I/O now; the JS bridge in M2), built
 # independently of the webview so the C++ tests can link it without pulling
 # in an Objective-C++ window. nam_desktop is the thin WIN32 entry point.
-add_library(nam_desktop_lib STATIC src/audio.cpp src/bridge.cpp src/latency.cpp src/debug_log.cpp)
+add_library(nam_desktop_lib STATIC
+  src/audio.cpp
+  src/bridge.cpp
+  src/latency.cpp
+  src/debug_log.cpp
+  src/secure_storage.cpp
+)
 
 add_executable(nam_desktop WIN32 src/main.cpp src/http_server.cpp)
 
@@ -126,6 +132,17 @@ if(APPLE)
   # webview.h must compile as OBJCXX on macOS.
   enable_language(OBJCXX)
   set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE OBJCXX)
+  # secure_storage.cpp's macOS branch persists the Tone3000 refresh token in
+  # the Keychain (issue #146) - Security.framework is the Keychain Services
+  # API, CoreFoundation is its CFString/CFData/CFDictionary plumbing.
+  find_library(SECURITY_FRAMEWORK Security REQUIRED)
+  find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+  target_link_libraries(nam_desktop_lib PRIVATE ${SECURITY_FRAMEWORK} ${COREFOUNDATION_FRAMEWORK})
+elseif(WIN32)
+  # secure_storage.cpp's Windows branch persists the Tone3000 refresh token
+  # via Credential Manager (wincred.h) - CredWrite/Read/DeleteW live in
+  # Advapi32.
+  target_link_libraries(nam_desktop_lib PRIVATE Advapi32)
 endif()
 
 # WHOLE_ARCHIVE: NAM's architecture parsers (LSTM/WaveNet/ConvNet/Linear)
