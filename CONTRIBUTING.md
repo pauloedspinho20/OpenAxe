@@ -85,7 +85,15 @@ Releases are **fully automatic — no manual bump or tag**. Merging to `main` is
 Manual escape hatch: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force
 a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview / `node scripts/auto-bump.mjs --tag && git push && git push --tags` if you need to cut a release outside CI.
 
-> Requires branch protection bypass for `github-actions[bot]` on `main` (Ruleset `protect-main-dev` → Bypass → `github-actions` → Always), otherwise the workflow's push-back is rejected by `require_a_pull_request`.
+> Requires a PAT that can bypass branch protection on `main`:
+>
+> 1. Create a classic PAT (https://github.com/settings/tokens) with `repo` scope
+>    as pauloedspinho20, or a fine-grained PAT with Contents:write on this repo.
+> 2. Add it as repo secret `RELEASE_PAT` (Settings → Secrets → Actions → New secret).
+> 3. Ruleset protect-main-dev already has Bypass → pauloedspinho20 → Always,
+>    so pushes authenticated as you bypass the PR requirement.
+>    If RELEASE_PAT is missing the workflow falls back to GITHUB_TOKEN and the
+>    push will be rejected by branch protection (intentional — add the secret).
 
 ## Commit / PR expectations
 
