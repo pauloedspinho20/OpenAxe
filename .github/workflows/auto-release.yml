@@ -1,0 +1,118 @@
+# Fully automatic versioning: on every push to main, derive the next semver
+# from conventional commits since the last v* tag, bump VERSION,
+# sync package.json files, update CHANGELOG.md, commit + tag and push.
+# Pushing the tag then triggers the existing Desktop Release workflow
+# (release.yml) which builds and publishes installers — no manual steps.
+#
+# Flow:
+#   PR → dev → PR dev→main → merge to main → this workflow → vX.Y.Z tag → release.yml
+#
+# Requires a PAT that can bypass branch protection on main:
+#   1. Create a classic PAT (https://github.com/settings/tokens) with `repo` scope
+#      as pauloedspinho20, or a fine-grained PAT with Contents:write on this repo.
+#   2. Add it as repo secret `RELEASE_PAT` (Settings → Secrets → Actions → New secret).
+#   3. Ruleset protect-main-dev already has Bypass → pauloedspinho20 → Always,
+#      so pushes authenticated as you bypass the PR requirement.
+#   If RELEASE_PAT is missing the workflow falls back to GITHUB_TOKEN and the
+#   push will be rejected by branch protection (intentional — add the secret).
+
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Force bump type (major/minor/patch) — leave empty for auto from commits'
+        required: false
+        type: choice
+        options: [auto, major, minor, patch]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  bump-and-tag:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          # Use RELEASE_PAT so the push-back is authenticated as you and bypasses
+          # the ruleset (GITHUB_TOKEN is the actions bot and has no bypass on
+          # user-owned repos). Falls back to GITHUB_TOKEN if secret not set.
+          token: ${{ secrets.RELEASE_PAT != '' && secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace (for sync scripts)
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine bump and create release commit + tag
+        id: bump
+        run: |
+          # If workflow_dispatch with explicit bump, do a forced bump instead of auto
+          if [ "${{ inputs.bump }}" != "" ] && [ "${{ inputs.bump }}" != "auto" ]; then
+            NEXT=$(node -e "
+              const v=require('fs').readFileSync('VERSION','utf8').trim().split('.').map(Number);
+              const bump='${{ inputs.bump }}';
+              if(bump==='major'){v[0]+=1;v[1]=0;v[2]=0}else if(bump==='minor'){v[1]+=1;v[2]=0}else{v[2]+=1}
+              console.log(v.join('.'))
+            ")
+            echo "$NEXT" > VERSION
+            node scripts/sync-version.mjs
+            # minimal changelog entry for forced bump
+            DATE=$(date +%Y-%m-%d)
+            awk -v ver="$NEXT" -v date="$DATE" '
+              /## \[Unreleased\]/ { print; print ""; print "## [" ver "] - " date; print ""; print "- Manual '"${{ inputs.bump }}"' bump via workflow_dispatch"; print ""; next }1
+            ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+            git add VERSION CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json packages/ui/package.json
+            git commit -m "chore(release): $NEXT [skip ci]"
+            git tag -a "v$NEXT" -m "v$NEXT"
+            echo "next=$NEXT" >> $GITHUB_OUTPUT
+            echo "created=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Auto mode: let auto-bump.mjs decide from conventional commits
+          node scripts/auto-bump.mjs --tag
+          # Check if a tag was created (script commits + tags when bump needed)
+          if git log -1 --pretty=%B | grep -q "chore(release):"; then
+            NEXT=$(cat VERSION)
+            echo "next=$NEXT" >> $GITHUB_OUTPUT
+            echo "created=true" >> $GITHUB_OUTPUT
+          else
+            echo "created=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push commit and tag
+        if: steps.bump.outputs.created == 'true'
+        run: |
+          NEXT="${{ steps.bump.outputs.next }}"
+          echo "Pushing v$NEXT to origin..."
+          git push origin main
+          git push origin "v$NEXT"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.bump.outputs.created }}" = "true" ]; then
+            echo "✅ Released v${{ steps.bump.outputs.next }} — tag pushed, Desktop Release will now build installers." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No version bump needed — no new commits since last tag or no relevant changes." >> $GITHUB_STEP_SUMMARY
+          fi
