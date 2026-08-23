@@ -12,6 +12,7 @@
 #include "test_harness.h"
 
 using nam_studio::dsp::DecodeWav;
+using nam_studio::dsp::EncodeWavF32;
 using nam_studio::dsp::ResampleMono;
 
 namespace {
@@ -271,6 +272,45 @@ void TestResampleMono() {
   NAM_EXPECT(ResampleMono(constant, 0.0, 48000.0).size() == constant.size());
 }
 
+// EncodeWavF32 is DecodeWav's float path in reverse (issue #120's cab-IR
+// embedding needs it): whatever goes in must come back bit-for-bit, and the
+// container itself has to be a valid RIFF/WAVE.
+void TestEncodeWavF32RoundTrip() {
+  std::vector<float> samples;
+  samples.reserve(257);
+  for (int i = 0; i < 257; ++i) {
+    const float v = static_cast<float>(i) / 257.0f;
+    samples.push_back(i % 3 == 0 ? -v : v);
+  }
+  samples[10] = 1.0f;
+  samples[11] = -1.0f;
+
+  const auto encoded = EncodeWavF32(samples, 48000.0);
+  NAM_EXPECT(encoded.size() == 44 + samples.size() * sizeof(float));
+  NAM_EXPECT(std::memcmp(encoded.data(), "RIFF", 4) == 0);
+  NAM_EXPECT(std::memcmp(encoded.data() + 8, "WAVE", 4) == 0);
+
+  const auto decoded = DecodeWav(encoded.data(), encoded.size());
+  NAM_EXPECT(decoded.has_value());
+  if (!decoded.has_value()) return;
+  NAM_EXPECT(decoded->sample_rate == 48000.0);
+  NAM_EXPECT(decoded->source_channels == 1);
+  NAM_EXPECT(decoded->samples.size() == samples.size());
+  for (size_t i = 0; i < samples.size(); ++i) {
+    // Bit-exact: these are raw float32 payload bytes, not a lossy codec.
+    if (decoded->samples[i] != samples[i]) {
+      std::fprintf(stderr, "  (round-trip mismatch at sample %zu)\n", i);
+      NAM_EXPECT(false);
+      break;
+    }
+  }
+
+  // Degenerate arguments yield an empty buffer rather than a malformed file.
+  NAM_EXPECT(EncodeWavF32({}, 48000.0).empty());
+  NAM_EXPECT(EncodeWavF32(samples, 0.0).empty());
+  NAM_EXPECT(EncodeWavF32(samples, -100.0).empty());
+}
+
 }  // namespace
 
 int main() {
@@ -283,6 +323,7 @@ int main() {
   TestSkipsUnknownChunks();
   TestRejectsMalformedInput();
   TestResampleMono();
+  TestEncodeWavF32RoundTrip();
 
   return nam_studio::test::g_failures == 0 ? 0 : 1;
 }

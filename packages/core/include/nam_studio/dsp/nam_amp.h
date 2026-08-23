@@ -65,6 +65,14 @@ class NamAmp {
   bool HasModel() const;
   const NamModelInfo& ModelInfo() const { return info_; }
 
+  // The .nam JSON this model was loaded from - the path load reads the file
+  // itself and retains the same text, so both entry points are
+  // indistinguishable here (issue #120: state serialization embeds this as
+  // the block's model payload). Empty when no model is loaded. Deliberately a
+  // full copy of the source: a few MB per amp block, traded for a saved rig
+  // that can carry its own captures.
+  const std::string& SourceJson() const { return source_json_; }
+
   // Must be called before Process(), and whenever sample rate or max block
   // size changes. Not real-time safe.
   void Reset(double sample_rate, int max_buffer_size);
@@ -91,6 +99,8 @@ class NamAmp {
   std::unique_ptr<nam::DSP> dsp_;
   NamModelInfo info_;
   double slim_size_ = 1.0;
+  // The exact .nam JSON the current model came from (see SourceJson).
+  std::string source_json_;
 };
 
 }  // namespace nam_studio::dsp

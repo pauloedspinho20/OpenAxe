@@ -2,13 +2,19 @@
 
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
+#include "base64.h"
 #include "json.h"
 #include "nam_studio/block.h"
 #include "nam_studio/dsp/delay.h"
+#include "sha256.h"
 
 namespace nam_studio::state {
 namespace {
@@ -130,6 +136,30 @@ bool KindHasBypass(graph::BlockKind kind) {
          kind != graph::BlockKind::kSplitter;
 }
 
+// Filename without directory or extension - the display name a path-loaded
+// asset reports when nothing more explicit was recorded.
+std::string StemOfPath(const std::string& path) {
+  const auto slash = path.find_last_of("/\\");
+  std::string file = slash == std::string::npos ? path : path.substr(slash + 1);
+  const auto dot = file.find_last_of('.');
+  if (dot != std::string::npos && dot > 0) file.resize(dot);
+  return file;
+}
+
+// The "model"/"ir" object a block carries (#120): display name and content
+// hash always (hash lets a UI verify a relinked file is the same capture),
+// source path best-effort for relinking, and the asset itself as base64 only
+// when the caller asked for embedding.
+json::Value BuildAssetObject(const std::string& name, const std::string& path,
+                             const uint8_t* bytes, size_t size, bool embed) {
+  json::Value asset = json::Value::Object();
+  asset.Set("name", json::Value::String(name));
+  asset.Set("hash", json::Value::String(Sha256Hex(bytes, size)));
+  asset.Set("path", json::Value::String(path));
+  if (embed) asset.Set("payload", json::Value::String(Base64Encode(bytes, size)));
+  return asset;
+}
+
 bool IsAmpFamilyKind(graph::BlockKind kind) {
   switch (kind) {
     case graph::BlockKind::kAmp:
@@ -176,7 +206,7 @@ Value SerializeParams(const AudioEngine& engine, BlockId id, bool amp_family) {
 
 }  // namespace
 
-std::string SerializeState(const AudioEngine& engine) {
+std::string SerializeState(const AudioEngine& engine, bool embed_assets) {
   Value root = Value::Object();
   root.Set("schemaVersion", Value::Number(kCurrentSchemaVersion));
 
@@ -202,6 +232,29 @@ std::string SerializeState(const AudioEngine& engine) {
     }
     if (snap.kind == graph::BlockKind::kDelay) {
       block.Set("delayModel", Value::String(DelayModelToString(engine.GetDelayModel(snap.id))));
+    }
+
+    // Asset references / payloads (#120). Amp-family blocks carry their loaded
+    // capture's .nam JSON; cab blocks their IR's WAV bytes. Written whenever
+    // an asset is loaded: name/hash/path as relinkable references always,
+    // the payload itself only under embed_assets.
+    if (IsAmpFamilyKind(snap.kind)) {
+      if (const auto model = engine.BlockModelAsset(snap.id)) {
+        const std::string name =
+            model->name.empty() ? StemOfPath(model->path) : model->name;
+        block.Set("model", BuildAssetObject(
+                               name, model->path,
+                               reinterpret_cast<const uint8_t*>(model->json.data()),
+                               model->json.size(), embed_assets));
+      }
+    }
+    if (snap.kind == graph::BlockKind::kCab) {
+      if (const auto ir = engine.BlockIrAsset(snap.id)) {
+        const std::string name = ir->name.empty() ? StemOfPath(ir->path) : ir->name;
+        block.Set("ir",
+                  BuildAssetObject(name, ir->path, ir->wav_bytes.data(), ir->wav_bytes.size(),
+                                   embed_assets));
+      }
     }
 
     block.Set("params", SerializeParams(engine, snap.id, IsAmpFamilyKind(snap.kind)));
@@ -344,6 +397,108 @@ bool MapJack(const Value& jack, const std::unordered_map<std::string, BlockId>& 
   return true;
 }
 
+// ── Asset restoration (#120) ─────────────────────────────────────────────
+
+// Read a file's bytes for a cab IR's path-relink fallback, refusing anything
+// over `limit` up front so a huge local file can't be pulled into memory.
+std::vector<uint8_t> ReadFileBytesCapped(const std::string& path, size_t limit) {
+  std::error_code size_error;
+  const auto size = std::filesystem::file_size(path, size_error);
+  if (size_error || size > limit) return {};
+  std::ifstream ifs(path, std::ios::binary);
+  if (!ifs.good()) return {};
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(ifs)),
+                             std::istreambuf_iterator<char>());
+  if (bytes.size() > limit) return {};
+  return bytes;
+}
+
+// Restore one amp-family block's model from a document's "model" object.
+// Order: embedded payload first (the point of #120 - the payload is
+// self-contained), then the recorded source path (relinking when the same
+// machine still has the file), then nothing: the block stays empty and the
+// asset joins the outcome's missing list. A payload that fails to load - bad
+// base64, oversized, not a valid .nam - falls through to the path attempt
+// rather than giving up. Never a hard failure: partial-failure tolerance
+// applies to assets like everything else.
+void RestoreAmpAsset(AudioEngine& engine, BlockId id, const Value& entry, LoadOutcome& outcome) {
+  const Value* model_obj = entry.Find("model");
+  if (model_obj == nullptr || !model_obj->IsObject()) return;
+
+  std::string name;
+  std::string path;
+  if (const Value* n = model_obj->Find("name"); n != nullptr && n->IsString()) {
+    name = *n->AsString();
+  }
+  if (const Value* p = model_obj->Find("path"); p != nullptr && p->IsString()) {
+    path = *p->AsString();
+  }
+
+  bool restored = false;
+  if (const Value* payload = model_obj->Find("payload");
+      payload != nullptr && payload->IsString() && !payload->AsString()->empty()) {
+    std::vector<uint8_t> bytes;
+    // The decode cap runs before allocation - the payload is untrusted input
+    // arriving from a project file (issue #69's limits apply on load too).
+    if (Base64Decode(payload->AsString()->data(), payload->AsString()->size(),
+                     engine::kMaxModelBytes, bytes)) {
+      restored = !engine.LoadNamModelJson(id, std::string(bytes.begin(), bytes.end())).has_value();
+    }
+  }
+  if (!restored && !path.empty()) {
+    restored = !engine.LoadNamModel(id, path).has_value();
+  }
+
+  if (restored) {
+    // Keep the document's own name/path rather than deriving them anew, so
+    // re-serializing the restored rig reproduces it byte for byte.
+    engine.SetModelSourceInfo(id, name, path);
+    ++outcome.stats.assets_restored;
+  } else {
+    ++outcome.stats.assets_missing;
+    outcome.missing_assets.push_back(name.empty() ? "(unnamed model)" : name);
+  }
+}
+
+// Same for a cab block's "ir" object: WAV bytes embedded as base64, else the
+// source file read back from disk, else missing.
+void RestoreIrAsset(AudioEngine& engine, BlockId id, const Value& entry, LoadOutcome& outcome) {
+  const Value* ir_obj = entry.Find("ir");
+  if (ir_obj == nullptr || !ir_obj->IsObject()) return;
+
+  std::string name;
+  std::string path;
+  if (const Value* n = ir_obj->Find("name"); n != nullptr && n->IsString()) {
+    name = *n->AsString();
+  }
+  if (const Value* p = ir_obj->Find("path"); p != nullptr && p->IsString()) {
+    path = *p->AsString();
+  }
+
+  bool restored = false;
+  if (const Value* payload = ir_obj->Find("payload");
+      payload != nullptr && payload->IsString() && !payload->AsString()->empty()) {
+    std::vector<uint8_t> bytes;
+    if (Base64Decode(payload->AsString()->data(), payload->AsString()->size(),
+                     engine::kMaxIrBytes, bytes)) {
+      restored =
+          !bytes.empty() && engine.LoadIrWav(id, bytes.data(), bytes.size()) != 0;
+    }
+  }
+  if (!restored && !path.empty()) {
+    const auto bytes = ReadFileBytesCapped(path, engine::kMaxIrBytes);
+    restored = !bytes.empty() && engine.LoadIrWav(id, bytes.data(), bytes.size()) != 0;
+  }
+
+  if (restored) {
+    engine.SetIrSourceInfo(id, name, path);
+    ++outcome.stats.assets_restored;
+  } else {
+    ++outcome.stats.assets_missing;
+    outcome.missing_assets.push_back(name.empty() ? "(unnamed IR)" : name);
+  }
+}
+
 }  // namespace
 
 LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
@@ -464,6 +619,21 @@ LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
       if (ResolveDelayModelChoice(*doc_block.entry, params, model)) {
         engine.SetDelayModel(doc_block.new_id, model);
       }
+    }
+  }
+
+  // Pass 2.5 - assets (#120), also before params: loading a model seeds its
+  // dBu calibration into the amp param table, and the document's own values
+  // (including any explicit user override of those symbols) must be applied
+  // on top afterwards - exactly why pass 2's choices run first too. Assets
+  // that can't be resolved leave their block empty and land in the outcome's
+  // missing list; they never abort the restore.
+  for (const DocBlock& doc_block : placed) {
+    if (IsAmpFamilyKind(doc_block.kind)) {
+      RestoreAmpAsset(engine, doc_block.new_id, *doc_block.entry, outcome);
+    }
+    if (doc_block.kind == graph::BlockKind::kCab) {
+      RestoreIrAsset(engine, doc_block.new_id, *doc_block.entry, outcome);
     }
   }
 
