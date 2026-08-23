@@ -1,16 +1,18 @@
 import styles from './Wordmark.module.css'
+import markUrl from './assets/openaxe-256.png'
 
-// Inline axe mark (final red on black) so the Wordmark needs no runtime
-// asset fetch (works in Storybook, the web app and the desktop bundle alike).
+// PNG mark so the Wordmark needs no runtime SVG fetch (works in Storybook,
+// the web app and the desktop bundle alike). Uses the final 256 png.
 function AxeMark({ size = 24 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
-      <rect width="1024" height="1024" fill="#000000" />
-      <path
-        d="M0 345 L520 345 L840 95 L860 45 L980 95 L1024 160 L1024 240 L980 290 L850 330 L825 310 L540 430 L280 545 L145 1024 Z"
-        fill="#ff2b2b"
-      />
-    </svg>
+    <img
+      src={markUrl}
+      alt=""
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{ display: 'block', objectFit: 'contain' }}
+    />
   )
 }
 

@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" role="img" aria-label="OpenAxe">
-  <rect width="760" height="200" fill="#000000"/>
-  <g transform="translate(20 20) scale(0.3125)">
-    <rect width="1024" height="1024" fill="#000000"/>
-    <path d="M0 345 L520 345 L840 95 L860 45 L980 95 L1024 160 L1024 240 L980 290 L850 330 L825 310 L540 430 L280 545 L145 1024 Z" fill="#ff2b2b"/>
-  </g>
-  <text x="196" y="132" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="96" font-weight="800" letter-spacing="-2" fill="#eeece6">Open</text>
-  <text x="436" y="132" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="96" font-weight="800" letter-spacing="-2" fill="#ff2b2b">Axe</text>
-</svg>
