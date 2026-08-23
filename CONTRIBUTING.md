@@ -62,25 +62,30 @@ Useful scripts (run at the repo root; Turborepo fans them out to the relevant pa
 All five (`lint`, `format:check`, `build`, `test:run`, `test:e2e`) must pass before a PR is merged —
 CI runs them on every push and pull request.
 
-## Releasing (desktop builds)
+## Releasing (desktop builds) — fully automatic
 
 The root `VERSION` file is the one source of truth for the product's version — every
 `package.json`'s `"version"` field and both `apps/desktop/CMakeLists.txt`'s and
 `packages/core/CMakeLists.txt`'s CMake `project()` version are kept in sync with it (checked by
 `node scripts/sync-version.mjs --check`, which also runs in CI).
 
-To cut a release:
+Releases are **fully automatic — no manual bump or tag**. Merging to `main` is the only trigger:
 
-1. Bump `VERSION`, then run `node scripts/sync-version.mjs` to propagate it.
-2. Commit that change and merge it to `main`.
-3. Tag and push: `git tag v$(cat VERSION) && git push --tags`.
+1. Open PRs against `dev` (feature work), then `dev` → `main` when ready to release. Use
+   Conventional Commits (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:` etc.) — they drive the bump.
+2. Merging the `dev` → `main` PR fires `.github/workflows/auto-release.yml`, which:
+   - reads conventional commits since the last `v*` tag (`scripts/auto-bump.mjs`),
+   - decides `patch` (`fix:`/`chore:`), `minor` (`feat:`), or `major` (`BREAKING CHANGE` / `!` — with `0.y.z` mapping breaking → minor until `1.0.0`),
+   - bumps `VERSION`, runs `node scripts/sync-version.mjs`, prepends `CHANGELOG.md`,
+   - commits `chore(release): X.Y.Z [skip ci]`, creates annotated tag `vX.Y.Z` and pushes both.
+3. Pushing the `v*` tag triggers `.github/workflows/release.yml`, which builds the desktop app for all
+   three platforms (same matrix as `desktop.yml`) and publishes the installers as public assets
+   on a GitHub Release for that tag — see [CHANGELOG.md](./CHANGELOG.md).
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the desktop app for all
-three platforms (the same matrix as `desktop.yml`) and publishes the installers as public assets
-on a GitHub Release for that tag — see [CHANGELOG.md](./CHANGELOG.md) for what's shipped in each
-one. (Automated version bumping via Changesets/semantic-release, reading commits' existing
-Conventional-Commits-style prefixes, is a natural next step if manual tagging gets tedious — not
-set up yet.)
+Manual escape hatch: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force
+a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview / `node scripts/auto-bump.mjs --tag && git push && git push --tags` if you need to cut a release outside CI.
+
+> Requires branch protection bypass for `github-actions[bot]` on `main` (Ruleset `protect-main-dev` → Bypass → `github-actions` → Always), otherwise the workflow's push-back is rejected by `require_a_pull_request`.
 
 ## Commit / PR expectations
 
