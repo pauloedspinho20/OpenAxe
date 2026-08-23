@@ -79,6 +79,10 @@ else()
   message(WARNING "Skipping api_automation_slots_test - nam-core/dragonfly/dspark submodules must all be initialized")
 endif()
 
+add_executable(api_midi_test api_midi_test.cpp)
+target_link_libraries(api_midi_test PRIVATE nam_studio_core)
+add_test(NAME api_midi_test COMMAND api_midi_test)
+
 if(NAM_STUDIO_HAS_NAM_CORE)
   add_executable(nam_amp_test nam_amp_test.cpp)
   # WHOLE_ARCHIVE: NAMCore's architecture parsers (LSTM, WaveNet, ConvNet,

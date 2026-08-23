@@ -9,6 +9,7 @@
 #include "nam_studio/dsp/note_utils.h"
 #include "nam_studio/dsp/pitch_detect.h"
 #include "nam_studio/engine.h"
+#include "nam_studio/midi.h"
 #include "serialization/rig_state.h"
 
 namespace {
@@ -361,6 +362,168 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
 }
 
 float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetCpuLoad(); }
+
+// ── MIDI mapping (issue #124) ─────────────────────────────────────────
+// Thin forwarders onto the MIDI model. Helpers are pure functions; the rest
+// delegates to AudioEngine's MIDI state (see engine.h for the threading
+// contract — mutations are control-thread only, Handle is any-thread).
+
+namespace {
+
+nam_studio::midi::MessageType ToMidiMessageType(NamStudioMidiMessageType t) {
+  switch (t) {
+    case NAM_STUDIO_MIDI_NOTEON: return nam_studio::midi::MessageType::kNoteOn;
+    case NAM_STUDIO_MIDI_CC: return nam_studio::midi::MessageType::kCc;
+    case NAM_STUDIO_MIDI_PC: return nam_studio::midi::MessageType::kPc;
+  }
+  return nam_studio::midi::MessageType::kCc;
+}
+NamStudioMidiMessageType FromMidiMessageType(nam_studio::midi::MessageType t) {
+  switch (t) {
+    case nam_studio::midi::MessageType::kNoteOn: return NAM_STUDIO_MIDI_NOTEON;
+    case nam_studio::midi::MessageType::kCc: return NAM_STUDIO_MIDI_CC;
+    case nam_studio::midi::MessageType::kPc: return NAM_STUDIO_MIDI_PC;
+  }
+  return NAM_STUDIO_MIDI_CC;
+}
+nam_studio::midi::ActionKind ToMidiActionKind(NamStudioMidiActionKind k) {
+  switch (k) {
+    case NAM_STUDIO_MIDI_ACTION_SLOT: return nam_studio::midi::ActionKind::kSlot;
+    case NAM_STUDIO_MIDI_ACTION_SCENE: return nam_studio::midi::ActionKind::kScene;
+    case NAM_STUDIO_MIDI_ACTION_NEXT_SCENE: return nam_studio::midi::ActionKind::kNextScene;
+    case NAM_STUDIO_MIDI_ACTION_PREV_SCENE: return nam_studio::midi::ActionKind::kPrevScene;
+  }
+  return nam_studio::midi::ActionKind::kSlot;
+}
+NamStudioMidiActionKind FromMidiActionKind(nam_studio::midi::ActionKind k) {
+  switch (k) {
+    case nam_studio::midi::ActionKind::kSlot: return NAM_STUDIO_MIDI_ACTION_SLOT;
+    case nam_studio::midi::ActionKind::kScene: return NAM_STUDIO_MIDI_ACTION_SCENE;
+    case nam_studio::midi::ActionKind::kNextScene: return NAM_STUDIO_MIDI_ACTION_NEXT_SCENE;
+    case nam_studio::midi::ActionKind::kPrevScene: return NAM_STUDIO_MIDI_ACTION_PREV_SCENE;
+  }
+  return NAM_STUDIO_MIDI_ACTION_SLOT;
+}
+
+}  // namespace
+
+int32_t nam_studio_midi_mapping_count(NamStudioGraph* graph) {
+  return static_cast<int32_t>(graph->engine.MidiMappingCount());
+}
+
+int32_t nam_studio_midi_get_mapping(NamStudioGraph* graph, int32_t index,
+                                    NamStudioMidiMessageType* out_type,
+                                    int32_t* out_channel, int32_t* out_number,
+                                    NamStudioMidiActionKind* out_kind,
+                                    int32_t* out_slot, int32_t* out_scene) {
+  const auto m = graph->engine.MidiMappingAt(static_cast<size_t>(index));
+  if (!m) return 0;
+  if (out_type) *out_type = FromMidiMessageType(m->match.type);
+  if (out_channel) *out_channel = m->match.channel;
+  if (out_number) *out_number = m->match.number;
+  if (out_kind) *out_kind = FromMidiActionKind(m->action.kind);
+  if (out_slot) *out_slot = m->action.slot;
+  if (out_scene) *out_scene = m->action.scene;
+  return 1;
+}
+
+int32_t nam_studio_midi_add_mapping(NamStudioGraph* graph,
+                                    NamStudioMidiMessageType type,
+                                    int32_t channel, int32_t number,
+                                    NamStudioMidiActionKind kind,
+                                    int32_t slot, int32_t scene) {
+  nam_studio::midi::MidiMatch match{ToMidiMessageType(type), channel, number};
+  nam_studio::midi::MidiAction action;
+  action.kind = ToMidiActionKind(kind);
+  action.slot = slot;
+  action.scene = scene;
+  return graph->engine.AddMidiMapping(match, action) ? 1 : 0;
+}
+
+int32_t nam_studio_midi_remove_mapping(NamStudioGraph* graph, int32_t index) {
+  return graph->engine.RemoveMidiMapping(static_cast<size_t>(index)) ? 1 : 0;
+}
+
+void nam_studio_midi_clear_mappings(NamStudioGraph* graph) { graph->engine.ClearMidiMappings(); }
+
+int32_t nam_studio_midi_arm_learn(NamStudioGraph* graph, NamStudioMidiActionKind kind,
+                                  int32_t slot, int32_t scene) {
+  nam_studio::midi::MidiAction action;
+  action.kind = ToMidiActionKind(kind);
+  action.slot = slot;
+  action.scene = scene;
+  return graph->engine.ArmMidiLearn(action) ? 1 : 0;
+}
+
+void nam_studio_midi_cancel_learn(NamStudioGraph* graph) { graph->engine.CancelMidiLearn(); }
+
+int32_t nam_studio_midi_is_learning(NamStudioGraph* graph) {
+  return graph->engine.IsMidiLearning() ? 1 : 0;
+}
+
+int32_t nam_studio_midi_get_learn_target(NamStudioGraph* graph,
+                                         NamStudioMidiActionKind* out_kind,
+                                         int32_t* out_slot, int32_t* out_scene) {
+  const auto target = graph->engine.MidiLearnTarget();
+  if (!target) return 0;
+  if (out_kind) *out_kind = FromMidiActionKind(target->kind);
+  if (out_slot) *out_slot = target->slot;
+  if (out_scene) *out_scene = target->scene;
+  return 1;
+}
+
+int32_t nam_studio_midi_parse_message(const uint8_t* data, int32_t size,
+                                      NamStudioMidiMessageType* out_type,
+                                      int32_t* out_channel, int32_t* out_number,
+                                      int32_t* out_value) {
+  if (!data || size <= 0) return 0;
+  const auto msg = nam_studio::midi::ParseMidiMessage(data, static_cast<size_t>(size));
+  if (!msg) return 0;
+  if (out_type) *out_type = FromMidiMessageType(msg->type);
+  if (out_channel) *out_channel = msg->channel;
+  if (out_number) *out_number = msg->number;
+  if (out_value) *out_value = msg->value;
+  return 1;
+}
+
+int32_t nam_studio_midi_is_trigger_edge(NamStudioMidiMessageType type, int32_t value) {
+  nam_studio::midi::MessageType t = ToMidiMessageType(type);
+  nam_studio::midi::MidiMessage m{t, 0, 0, value};
+  return nam_studio::midi::IsTriggerEdge(m) ? 1 : 0;
+}
+
+int32_t nam_studio_midi_message_matches(NamStudioMidiMessageType msg_type,
+                                        int32_t msg_channel, int32_t msg_number,
+                                        NamStudioMidiMessageType match_type,
+                                        int32_t match_channel, int32_t match_number) {
+  nam_studio::midi::MidiMessage msg{ToMidiMessageType(msg_type), msg_channel, msg_number, 0};
+  nam_studio::midi::MidiMatch match{ToMidiMessageType(match_type), match_channel, match_number};
+  return nam_studio::midi::MessageMatches(msg, match) ? 1 : 0;
+}
+
+int32_t nam_studio_midi_handle_message(NamStudioGraph* graph,
+                                       const uint8_t* data, int32_t size,
+                                       int32_t sample_offset,
+                                       NamStudioMidiActionKind* out_kind,
+                                       int32_t* out_slot, int32_t* out_scene,
+                                       NamStudioMidiMessageType* out_match_type,
+                                       int32_t* out_match_channel,
+                                       int32_t* out_match_number) {
+  if (!data || size <= 0) return 0;
+  const auto result = graph->engine.HandleMidiMessage(data, static_cast<size_t>(size), sample_offset);
+  if (result.kind == nam_studio::engine::AudioEngine::MidiHandleResult::kNone) return 0;
+  if (result.action) {
+    if (out_kind) *out_kind = FromMidiActionKind(result.action->kind);
+    if (out_slot) *out_slot = result.action->slot;
+    if (out_scene) *out_scene = result.action->scene;
+  }
+  if (result.match) {
+    if (out_match_type) *out_match_type = FromMidiMessageType(result.match->type);
+    if (out_match_channel) *out_match_channel = result.match->channel;
+    if (out_match_number) *out_match_number = result.match->number;
+  }
+  return result.kind == nam_studio::engine::AudioEngine::MidiHandleResult::kDispatched ? 1 : 2;
+}
 
 // ── Automation slot map (issue #121) ────────────────────────────────────
 // Thin forwarders onto AudioEngine's slot machinery - see api.h for the
