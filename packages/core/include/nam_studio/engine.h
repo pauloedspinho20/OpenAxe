@@ -83,6 +83,26 @@ struct ConnectOutcome {
   EdgeId id = -1;  // valid iff ok
 };
 
+// One block's placeable state, copied out for callers that enumerate the rig
+// (state serialization today; anything else tomorrow) without touching the
+// engine's internals. id is the engine's own int id.
+struct BlockSnapshot {
+  BlockId id;
+  graph::BlockKind kind;
+  int row;
+  int col;
+};
+
+// One edge's endpoints as int ids (rails use their kInRailId/kOutRailId
+// sentinels), same purpose as BlockSnapshot.
+struct EdgeSnapshot {
+  EdgeId id;
+  BlockId from_block;
+  int from_port;
+  BlockId to_block;
+  int to_port;
+};
+
 // Not real-time safe: constructs/destroys DSP objects, allocates buffers,
 // parses model files. Callers must not invoke these concurrently with
 // Process() - there is no real host driving this from an audio thread yet
@@ -104,6 +124,21 @@ class AudioEngine {
   void MoveBlock(BlockId id, int row, int col);        // no-op if unknown
   ConnectOutcome Connect(BlockId from_block, int from_port, BlockId to_block, int to_port);
   void Disconnect(EdgeId id);                          // no-op if unknown
+
+  // ── Rig-state enumeration / clearing (issue #119) ─────────────────────
+  // Everything state (de)serialization needs that isn't already reachable
+  // through the per-block accessors below. All control-thread only - none of
+  // it is real-time safe (ListBlocks/ListEdges allocate; ClearTopology frees).
+  // Every block, sorted by id for deterministic output. Rails are never
+  // included.
+  std::vector<BlockSnapshot> ListBlocks() const;
+  // Every edge, sorted by id for deterministic output.
+  std::vector<EdgeSnapshot> ListEdges() const;
+  // Removes every block (and with them every edge). Ids keep counting - they
+  // are never reused within an engine's lifetime. LoadState uses this to
+  // rebuild the rig from a document, mirroring applyPreset's clear-first
+  // behaviour.
+  void ClearTopology();
 
   // ── Lifecycle / processing ───────────────────────────────────────────
   // (Re)allocates every block's scratch buffers and resets every live DSP
@@ -169,6 +204,23 @@ class AudioEngine {
 
   // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
   void SetDelayModel(BlockId id, dsp::Delay::Model model);
+
+  // ── Per-block state readers for serialization (issue #119) ───────────
+  // The algorithm/model choices are not params - they decide which DSP object
+  // backs the block - so they need their own getters. Defaults (kHall /
+  // kDigital) for unknown ids and for blocks of other kinds, mirroring how
+  // AddBlock seeds new blocks.
+  ReverbAlgorithm GetReverbAlgorithm(BlockId id) const;
+  dsp::Delay::Model GetDelayModel(BlockId id) const;
+
+  // Whether an amp-family block's input/output-level param currently holds a
+  // value worth serializing: true when the loaded model itself defined the
+  // calibration or the caller wrote it explicitly, false when the slot is
+  // empty. Serialization skips these two symbols while inactive, because
+  // restoring them would flip the active flag and fabricate a dBu override
+  // over whatever model gets loaded later.
+  bool IsAmpInputLevelActive(BlockId id) const;
+  bool IsAmpOutputLevelActive(BlockId id) const;
 
   // ── Bypass / master bus (real-time safe, lock-free) ──────────────────
   // No-op if id is unknown. While bypassed, the block's DSP is skipped and

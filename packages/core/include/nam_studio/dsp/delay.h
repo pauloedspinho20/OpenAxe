@@ -52,6 +52,12 @@ class Delay {
 
   void SetModel(Model model);
 
+  // The model currently backing the block (kDigital unless SetModel changed
+  // it). Real-time safe: a plain field read. Serialization needs this to know
+  // which of the three characters to restore - the choice lives here rather
+  // than in any param table.
+  Model GetModel() const;
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

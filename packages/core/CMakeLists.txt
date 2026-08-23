@@ -28,6 +28,8 @@ add_library(nam_studio_core STATIC
   src/graph_rig.cpp
   src/engine.cpp
   src/api.cpp
+  src/serialization/json.cpp
+  src/serialization/rig_state.cpp
   src/dsp/chorus.cpp
   src/dsp/delay.cpp
   src/dsp/flanger.cpp

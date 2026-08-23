@@ -7,10 +7,10 @@ namespace nam_studio::graph {
 
 // Every placeable grid block kind: the 10 synthetic effects, the 5 NAM-model
 // gear kinds (structurally identical, kind only affects UI labeling/gear
-// filtering), plus cab/mixer/splitter. Wire-format string mapping (the TS
-// union's hyphenated literals, e.g. "ping-pong-delay") is intentionally not
-// included here - that's preset/JSON (de)serialization work, a documented
-// non-goal of this PR.
+// filtering), plus cab/mixer/splitter. The wire-format string mapping (the TS
+// union's hyphenated literals, e.g. "ping-pong-delay") lives in
+// src/serialization/rig_state.cpp - the only place that speaks both this enum
+// and the preset/state JSON dialect (issue #119).
 enum class BlockKind {
   kNoiseGate,
   kCompressor,

@@ -24,6 +24,24 @@ add_executable(api_test api_test.cpp)
 target_link_libraries(api_test PRIVATE nam_studio_core)
 add_test(NAME api_test COMMAND api_test)
 
+# The JSON module is dependency-free, so it builds unconditionally. Its header
+# lives under src/ (it's private to the library), hence the extra include path.
+add_executable(json_test json_test.cpp)
+target_include_directories(json_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(json_test PRIVATE nam_studio_core)
+add_test(NAME json_test COMMAND json_test)
+
+if(NAM_STUDIO_HAS_NAM_CORE)
+  # Rig-state round-trip (issue #119) drives the full engine - amp-family
+  # blocks, Dragonfly reverb and DSPark effects all get instantiated - so it
+  # needs every DSP family present, like engine_test below. WHOLE_ARCHIVE for
+  # the same reason nam_amp_test does: NAMCore's architecture parsers
+  # self-register via static initializers nothing else references directly.
+  add_executable(api_state_test api_state_test.cpp)
+  target_link_libraries(api_state_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
+  add_test(NAME api_state_test COMMAND api_state_test)
+endif()
+
 if(NAM_STUDIO_HAS_NAM_CORE)
   add_executable(nam_amp_test nam_amp_test.cpp)
   # WHOLE_ARCHIVE: NAMCore's architecture parsers (LSTM, WaveNet, ConvNet,

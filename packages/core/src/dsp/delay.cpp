@@ -143,6 +143,9 @@ void Delay::SetModel(Model model) {
   }
 }
 
+// Which character the block currently plays through - see the header.
+Delay::Model Delay::GetModel() const { return impl_->model; }
+
 // Feedback delay with three models differing only in what happens inside the
 // feedback loop:
 //

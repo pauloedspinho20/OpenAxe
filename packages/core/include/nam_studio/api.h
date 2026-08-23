@@ -262,6 +262,48 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id);
 // Fraction of real-time budget the last nam_studio_process call used.
 float nam_studio_get_cpu_load(NamStudioGraph* graph);
 
+// ── Rig state (de)serialization (issue #119) ─────────────────────────────
+// The one preset/scene model for host chunks, preset files, and (eventually)
+// IndexedDB - see packages/core/README.md's "Rig state wire format" for the
+// schema and versioning policy. Both are control-thread calls: they allocate,
+// and load rebuilds the topology. Suspend audio around them.
+
+// Serializes the entire graph: blocks (kind, row/col, every param by SYMBOL,
+// bypass, in/out trim, reverb algorithm, delay model), edges, master
+// level/mute. Writes a NUL-terminated JSON document into out_json (capacity
+// bytes) and returns the number of bytes written INCLUDING the terminator.
+// When out_json is NULL, returns the required capacity instead and writes
+// nothing - the usual two-call sizing pattern:
+//
+//   int32_t needed = nam_studio_serialize_state(g, NULL, 0);
+//   char* buf = malloc(needed);
+//   nam_studio_serialize_state(g, buf, needed);
+//
+// Returns -1 if capacity is too small (the required size still holds) or
+// out_json is non-NULL with capacity <= 0. Not real-time safe.
+int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_t capacity);
+
+// nam_studio_load_state's result.
+typedef enum NamStudioLoadStateResult {
+  NAM_STUDIO_LOAD_STATE_OK = 0,
+  // Not valid JSON.
+  NAM_STUDIO_LOAD_STATE_PARSE_ERROR = 1,
+  // schemaVersion newer than this build knows - never guessed at.
+  NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION = 2,
+  // Wrong root shape / missing required fields.
+  NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT = 3,
+} NamStudioLoadStateResult;
+
+// Rebuilds the graph from a previously serialized document. Clears the
+// existing topology first. Returns 0 on success, non-zero for a malformed or
+// unsupported-version document (in which cases the existing graph is left
+// untouched). Malformed individual entries inside an otherwise valid document
+// are NOT failures: they are skipped with a warning and the rest restores -
+// mirroring applyPreset's partial-failure tolerance (#64). Unknown param
+// symbols and dangling edges skip the same way. Not real-time safe - suspend
+// audio around it.
+NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char* json);
+
 #ifdef __cplusplus
 }
 #endif
