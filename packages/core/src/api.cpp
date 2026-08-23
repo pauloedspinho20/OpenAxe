@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "nam_studio/engine.h"
 #include "serialization/rig_state.h"
@@ -89,6 +91,9 @@ NamStudioLoadResult ToLoadResult(std::optional<nam_studio::dsp::NamLoadError> er
 
 struct NamStudioGraph {
   nam_studio::engine::AudioEngine engine;
+  // The missing-asset list (#120) from the most recent load_state, kept for
+  // the query ABI below. Control-thread data like everything else here.
+  std::vector<std::string> missing_assets;
 };
 
 extern "C" {
@@ -361,7 +366,15 @@ float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetC
 // contracts and packages/core/README.md for the wire format.
 
 int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_t capacity) {
-  const std::string document = nam_studio::state::SerializeState(graph->engine);
+  return nam_studio_serialize_state_ex(graph, 0, out_json, capacity);
+}
+
+// Shared body of both serialize entry points: the two-call sizing pattern over
+// the state layer's document (embedding assets when asked - see api.h).
+int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_assets,
+                                      char* out_json, int32_t capacity) {
+  const std::string document =
+      nam_studio::state::SerializeState(graph->engine, embed_assets != 0);
   const int32_t required = static_cast<int32_t>(document.size()) + 1;  // + NUL
   if (out_json == nullptr) return required;
   if (capacity < required) return -1;
@@ -371,6 +384,9 @@ int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_
 
 NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char* json) {
   const auto outcome = nam_studio::state::LoadState(graph->engine, json);
+  // Publish the missing-asset list (#120) for the query ABI below - replaced
+  // wholesale on every load, hard failures included (they restore nothing).
+  graph->missing_assets = std::move(outcome.missing_assets);
   switch (outcome.error) {
     case nam_studio::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
     case nam_studio::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
@@ -379,6 +395,17 @@ NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char
     case nam_studio::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
   }
   return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
+}
+
+// ── Missing-asset queries (issue #120) ──────────────────────────────────
+
+int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {
+  return static_cast<int32_t>(graph->missing_assets.size());
+}
+
+const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index) {
+  if (index < 0 || static_cast<size_t>(index) >= graph->missing_assets.size()) return nullptr;
+  return graph->missing_assets[static_cast<size_t>(index)].c_str();
 }
 
 }  // extern "C"

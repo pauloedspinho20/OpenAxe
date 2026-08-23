@@ -1,10 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <shared_mutex>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -41,6 +43,14 @@ using EdgeId = int32_t;
 // AddBlock never returns these).
 inline constexpr BlockId kInRailId = -1;
 inline constexpr BlockId kOutRailId = -2;
+
+// Hard ceilings on user-supplied asset bytes reaching the DSP core - issue
+// #69's numbers, now enforced here so every front end (and above all the
+// state loader, whose embedded payloads arrive from untrusted project files,
+// #120) inherits them rather than re-deriving them. A .nam model JSON may be
+// 32 MiB; a cab IR WAV 8 MiB. Loaders reject anything larger.
+inline constexpr size_t kMaxModelBytes = 32u * 1024u * 1024u;
+inline constexpr size_t kMaxIrBytes = 8u * 1024u * 1024u;
 
 enum class ReverbAlgorithm {
   kHall,
@@ -101,6 +111,26 @@ struct EdgeSnapshot {
   int from_port;
   BlockId to_block;
   int to_port;
+};
+
+// A block's retained asset source, copied out for state serialization (#120):
+// the exact bytes the current asset was loaded from, plus whatever name/path
+// metadata travelled with it. `json` is the .nam document for amp-family
+// blocks, `wav_bytes` the WAV file bytes for cab blocks; name is a display
+// label and path the best-effort source location (both empty when unknown -
+// e.g. anything loaded through nam_studio_load_nam_model_json). Returned by
+// value: multi-megabyte copies, but serialization is a control-thread call
+// and the alternative hands out pointers into engine-owned storage.
+struct ModelAssetSource {
+  std::string json;
+  std::string name;
+  std::string path;
+};
+
+struct IrAssetSource {
+  std::vector<uint8_t> wav_bytes;
+  std::string name;
+  std::string path;
 };
 
 // Not real-time safe: constructs/destroys DSP objects, allocates buffers,
@@ -221,6 +251,22 @@ class AudioEngine {
   // over whatever model gets loaded later.
   bool IsAmpInputLevelActive(BlockId id) const;
   bool IsAmpOutputLevelActive(BlockId id) const;
+
+  // ── Asset-source retention for state embedding (issue #120) ──────────
+  // What serialization needs to make a saved rig self-contained. Both are
+  // control-thread reads that copy out retained source bytes (see the struct
+  // comments); nullopt when the block doesn't exist, is the wrong kind, or
+  // has no asset loaded.
+  std::optional<ModelAssetSource> BlockModelAsset(BlockId id) const;
+  std::optional<IrAssetSource> BlockIrAsset(BlockId id) const;
+
+  // Record display name / source path metadata alongside a block's current
+  // asset. The state loader calls these after restoring from a document so a
+  // re-serialization reproduces it byte for byte (a payload-restored model
+  // keeps the name/path the document recorded, not nothing). No-op for
+  // unknown ids or wrong kinds; not real-time safe.
+  void SetModelSourceInfo(BlockId id, const std::string& name, const std::string& path);
+  void SetIrSourceInfo(BlockId id, const std::string& name, const std::string& path);
 
   // ── Bypass / master bus (real-time safe, lock-free) ──────────────────
   // No-op if id is unknown. While bypassed, the block's DSP is skipped and

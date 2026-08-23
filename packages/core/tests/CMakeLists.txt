@@ -42,6 +42,23 @@ if(NAM_STUDIO_HAS_NAM_CORE)
   add_test(NAME api_state_test COMMAND api_state_test)
 endif()
 
+if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_DSPARK)
+  # Embedded-asset state round-trip (issue #120): a rig with a real NAM model
+  # and a real IR serialized with embed_assets=1 must restore bit-identically
+  # into a fresh graph whose source files are gone. Same linking story as
+  # api_realtime_test below - full engine, whole archive, example models dir.
+  add_executable(api_state_assets_test api_state_assets_test.cpp)
+  # src/ include path: the test also drives the serialization-private
+  # sha256/base64 helpers directly (same pattern as json_test).
+  target_include_directories(api_state_assets_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  target_link_libraries(api_state_assets_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
+  target_compile_definitions(api_state_assets_test PRIVATE
+    NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
+  add_test(NAME api_state_assets_test COMMAND api_state_assets_test)
+else()
+  message(WARNING "Skipping api_state_assets_test - nam-core/dragonfly/dspark submodules must all be initialized")
+endif()
+
 if(NAM_STUDIO_HAS_NAM_CORE)
   add_executable(nam_amp_test nam_amp_test.cpp)
   # WHOLE_ARCHIVE: NAMCore's architecture parsers (LSTM, WaveNet, ConvNet,

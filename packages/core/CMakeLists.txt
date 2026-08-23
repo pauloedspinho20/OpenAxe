@@ -30,6 +30,8 @@ add_library(nam_studio_core STATIC
   src/api.cpp
   src/serialization/json.cpp
   src/serialization/rig_state.cpp
+  src/serialization/sha256.cpp
+  src/serialization/base64.cpp
   src/dsp/chorus.cpp
   src/dsp/delay.cpp
   src/dsp/flanger.cpp

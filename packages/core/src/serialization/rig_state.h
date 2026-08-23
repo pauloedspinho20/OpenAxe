@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "nam_studio/engine.h"
 
@@ -25,9 +26,18 @@ inline constexpr int kCurrentSchemaVersion = 1;
 
 // Serializes the engine's entire rig - blocks (kind, row/col, params by
 // symbol, bypass, I/O trims, reverb algorithm / delay model choice), edges,
-// master level/mute - as a schemaVersion-stamped JSON document. Not real-time
-// safe; suspend audio around it like any other control-thread call.
-std::string SerializeState(const engine::AudioEngine& engine);
+// master level/mute - as a schemaVersion-stamped JSON document.
+//
+// With `embed_assets` (issue #120), each amp-family block's loaded NAM capture
+// and each cab block's IR are additionally embedded into the document
+// (base64), making it self-contained: it restores bit-identically on a machine
+// that has never seen the source files. Without it, blocks record only
+// name/content-hash/source-path references and restoration falls back to those
+// paths. Embedding is opt-in per call: a plugin writing a host chunk wants it,
+// a desktop app writing a small .preset file next to a model library does not.
+// Not real-time safe either way; suspend audio around it like any other
+// control-thread call.
+std::string SerializeState(const engine::AudioEngine& engine, bool embed_assets = false);
 
 enum class LoadError {
   kNone = 0,
@@ -45,12 +55,20 @@ struct LoadStats {
   int params_skipped = 0;   // unknown symbols, non-numeric values
   int edges_restored = 0;
   int edges_skipped = 0;    // malformed entries, dangling endpoints, rejected connections
+  int assets_restored = 0;  // models/IRs reinstated from payload or path (#120)
+  int assets_missing = 0;   // referenced but unresolvable - see missing_assets below
 };
 
 struct LoadOutcome {
   LoadError error = LoadError::kNone;
   std::string detail;  // empty on success; describes hard failures
   LoadStats stats;
+  // Names of the assets (#120) a load could not resolve - neither an embedded
+  // payload nor the recorded source path produced a usable asset. A UI offers
+  // relinking here; matching by content hash is the document's own suggestion.
+  // Empty unless error == kNone. Unnamed assets report as "(unnamed model)" /
+  // "(unnamed IR)". Valid until the next LoadState call.
+  std::vector<std::string> missing_assets;
 };
 
 // Rebuilds the engine's rig from a serialized document. The existing topology

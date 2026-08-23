@@ -5,8 +5,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <span>
+#include <system_error>
 #include <type_traits>
 #include <variant>
 
@@ -150,6 +152,19 @@ struct AudioEngine::BlockState {
   // reasoning as the tone stack for living here rather than in DspVariant - a
   // cab is convolution plus a dry blend, not a single DSP object.
   std::array<dsp::Convolver, 2> cab;
+
+  // ── Asset-source retention (issue #120) ────────────────────────────────
+  // What a saved rig needs so it can carry its own assets. The IR keeps its
+  // original WAV bytes (a synthesized one when the caller installed raw
+  // samples); both families keep whatever display name / source path travelled
+  // with the asset. Costs a few MB per loaded model - traded deliberately for
+  // a serialized rig that restores self-contained on a machine that has never
+  // seen the files.
+  std::vector<uint8_t> ir_source_wav;  // cab only
+  std::string model_name;              // amp family: explicit name, may be empty
+  std::string model_path;              // amp family: source path, empty for JSON loads
+  std::string ir_name;                 // cab
+  std::string ir_path;                 // cab
 
   // input_l/input_r[port][frame]; most kinds use only port 0. kMixer uses
   // kMixerInputCount independent ports, summed together into port 0 right
@@ -909,7 +924,17 @@ std::optional<dsp::NamLoadError> AudioEngine::LoadNamModel(BlockId id, const std
   auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
   if (!amp) return dsp::NamLoadError::kFileNotFound;
 
+  // Issue #69's ceiling, enforced in-core: an oversized user file is rejected
+  // before NamAmp reads it, whatever front end let it through.
+  std::error_code size_error;
+  const auto file_size = std::filesystem::file_size(file_path, size_error);
+  if (!size_error && file_size > kMaxModelBytes) return dsp::NamLoadError::kInvalidFormat;
+
   if (auto err = amp->LoadModel(file_path)) return err;
+  // Record where this capture came from (serialization's relink field) and
+  // drop any name a previous asset carried - a fresh path load has none.
+  state->model_path = file_path;
+  state->model_name.clear();
   AdoptLoadedModel(*state, *amp);
   return std::nullopt;
 }
@@ -924,7 +949,15 @@ std::optional<dsp::NamLoadError> AudioEngine::LoadNamModelJson(BlockId id,
   auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
   if (!amp) return dsp::NamLoadError::kFileNotFound;
 
+  // Same in-core ceiling as the path form; this is also the entry point the
+  // state loader feeds embedded payloads through (#120 - untrusted bytes).
+  if (json_text.size() > kMaxModelBytes) return dsp::NamLoadError::kInvalidFormat;
+
   if (auto err = amp->LoadModelFromJson(json_text)) return err;
+  // No path or display name travels with raw JSON - forget any the previous
+  // asset had rather than mislabelling the new one.
+  state->model_path.clear();
+  state->model_name.clear();
   AdoptLoadedModel(*state, *amp);
   return std::nullopt;
 }
@@ -960,6 +993,8 @@ void AudioEngine::UnloadNamModel(BlockId id) {
   amp->UnloadModel();
   state->amp_input_level_active.store(false, std::memory_order_relaxed);
   state->amp_output_level_active.store(false, std::memory_order_relaxed);
+  state->model_name.clear();
+  state->model_path.clear();
 }
 
 // Whether an amp-family block currently has a capture loaded. False for every
@@ -988,18 +1023,37 @@ std::optional<dsp::NamModelInfo> AudioEngine::BlockModelInfo(BlockId id) const {
 // same IR data but keep independent tails, since the channels carry different
 // audio. Not real-time safe (allocates and transforms); the caller suspends
 // audio, as with model loading.
+//
+// Raw samples carry no file bytes, so a 32-bit-float WAV is synthesized at the
+// engine's rate and kept as the block's retained IR source (#120) -
+// serialization embeds it, and DecodeWav hands the exact samples back.
 void AudioEngine::LoadIr(BlockId id, const float* samples, int length) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kCab) return;
   for (auto& conv : state->cab) conv.SetImpulseResponse(samples, length);
+  if (samples != nullptr && length > 0) {
+    state->ir_source_wav =
+        dsp::EncodeWavF32(std::vector<float>(samples, samples + length), sample_rate_);
+    state->ir_name.clear();
+    state->ir_path.clear();
+  } else {
+    // A clearing call - forget the retained source along with the IR.
+    state->ir_source_wav.clear();
+    state->ir_name.clear();
+    state->ir_path.clear();
+  }
 }
 
 // Decode a WAV file, match it to the engine's sample rate, and install it. The
 // decode and the resample both happen here rather than in each front end so a
-// 44.1kHz cab IR in a 48kHz session sounds the same everywhere.
+// 44.1kHz cab IR in a 48kHz session sounds the same everywhere. The original
+// bytes are retained verbatim as the block's IR source (#120): restoration
+// re-runs this exact pipeline from them.
 int AudioEngine::LoadIrWav(BlockId id, const uint8_t* bytes, size_t size) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kCab) return 0;
+  // Issue #69's ceiling, enforced in-core (#120 loads embedded payloads here).
+  if (size > kMaxIrBytes) return 0;
 
   const auto decoded = dsp::DecodeWav(bytes, size);
   if (!decoded || decoded->samples.empty()) return 0;
@@ -1012,14 +1066,21 @@ int AudioEngine::LoadIrWav(BlockId id, const uint8_t* bytes, size_t size) {
   for (auto& conv : state->cab) {
     conv.SetImpulseResponse(samples.data(), static_cast<int>(samples.size()));
   }
+  state->ir_source_wav.assign(bytes, bytes + size);
+  state->ir_name.clear();
+  state->ir_path.clear();
   return static_cast<int>(samples.size());
 }
 
-// Drop the IR; the block goes back to passing audio through.
+// Drop the IR; the block goes back to passing audio through. The retained
+// source and its metadata go with it.
 void AudioEngine::UnloadIr(BlockId id) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kCab) return;
   for (auto& conv : state->cab) conv.Clear();
+  state->ir_source_wav.clear();
+  state->ir_name.clear();
+  state->ir_path.clear();
 }
 
 // Length of the installed IR in samples, 0 when there is none.
@@ -1027,6 +1088,46 @@ int AudioEngine::IrLength(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   if (!state || state->kind != graph::BlockKind::kCab) return 0;
   return state->cab[0].ImpulseResponseLength();
+}
+
+// ── Asset-source retention (issue #120) ────────────────────────────────
+
+// Copy out an amp-family block's retained model source plus its recorded
+// name/path. Nullopt for unknown ids, non-amp kinds, and blocks with no model.
+std::optional<ModelAssetSource> AudioEngine::BlockModelAsset(BlockId id) const {
+  const BlockState* state = FindBlock(id);
+  if (!state || !IsAmpFamily(state->kind)) return std::nullopt;
+  const auto* amp = std::get_if<dsp::NamAmp>(&state->dsp);
+  if (!amp || !amp->HasModel()) return std::nullopt;
+  return ModelAssetSource{amp->SourceJson(), state->model_name, state->model_path};
+}
+
+// Same for a cab block's retained WAV bytes. Nullopt unless the block is a cab
+// with an IR installed (LoadIr synthesizes bytes for raw-sample installs, so
+// every loaded IR has them).
+std::optional<IrAssetSource> AudioEngine::BlockIrAsset(BlockId id) const {
+  const BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kCab) return std::nullopt;
+  if (state->ir_source_wav.empty()) return std::nullopt;
+  return IrAssetSource{state->ir_source_wav, state->ir_name, state->ir_path};
+}
+
+// Record display name / source path alongside the current asset - the state
+// loader's bookkeeping so re-serializing a restored rig reproduces the
+// document byte for byte (#120). No-ops for unknown/wrong-kind blocks.
+void AudioEngine::SetModelSourceInfo(BlockId id, const std::string& name,
+                                     const std::string& path) {
+  BlockState* state = FindBlock(id);
+  if (!state || !IsAmpFamily(state->kind)) return;
+  state->model_name = name;
+  state->model_path = path;
+}
+
+void AudioEngine::SetIrSourceInfo(BlockId id, const std::string& name, const std::string& path) {
+  BlockState* state = FindBlock(id);
+  if (!state || state->kind != graph::BlockKind::kCab) return;
+  state->ir_name = name;
+  state->ir_path = path;
 }
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────

@@ -283,6 +283,30 @@ float nam_studio_get_cpu_load(NamStudioGraph* graph);
 // out_json is non-NULL with capacity <= 0. Not real-time safe.
 int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_t capacity);
 
+// Same document, with control over asset embedding (issue #120). With
+// embed_assets non-zero, every loaded NAM capture and cab IR is embedded into
+// the document as base64, making it self-contained: loading it on a machine
+// that has never seen the source files restores the rig bit-identically. With
+// zero, blocks record only each asset's name, content hash and source path,
+// and loading falls back to those paths - smaller documents for callers that
+// keep a model library alongside their presets. A plugin writing a host chunk
+// wants embedding; a desktop app writing a small .preset next to a model
+// library may not. Same two-call pattern and return conventions as above;
+// not real-time safe.
+int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_assets,
+                                      char* out_json, int32_t capacity);
+
+// Names of the assets a load could not resolve (issue #120): neither an
+// embedded payload nor the recorded source path produced a usable asset for
+// some block. Count is 0 when everything restored (or nothing was loaded
+// yet); entries are the assets' display names, "(unnamed model)" /
+// "(unnamed IR)" when a block carried none. A UI offers relinking here -
+// matching by content hash is what the document suggests. The list reflects
+// the most recent nam_studio_load_state call on this graph and stays valid
+// until the next one.
+int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph);
+const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index);
+
 // nam_studio_load_state's result.
 typedef enum NamStudioLoadStateResult {
   NAM_STUDIO_LOAD_STATE_OK = 0,
@@ -300,8 +324,11 @@ typedef enum NamStudioLoadStateResult {
 // untouched). Malformed individual entries inside an otherwise valid document
 // are NOT failures: they are skipped with a warning and the rest restores -
 // mirroring applyPreset's partial-failure tolerance (#64). Unknown param
-// symbols and dangling edges skip the same way. Not real-time safe - suspend
-// audio around it.
+// symbols and dangling edges skip the same way. Block assets (models/IRs)
+// restore from their embedded payload first, then their recorded path; ones
+// that resolve neither leave their block empty and are reported through
+// nam_studio_state_missing_asset_count / _missing_asset. Not real-time safe -
+// suspend audio around it.
 NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char* json);
 
 #ifdef __cplusplus

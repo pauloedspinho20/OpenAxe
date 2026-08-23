@@ -117,16 +117,18 @@ a band boost measurably louder than a cut, silence measurably crushed), and
 run all four kinds in a chain through the engine and the full `extern "C"`
 surface.
 
-## Rig state wire format (issue #119)
+## Rig state wire format (issues #119, #120)
 
-`nam_studio_serialize_state` / `nam_studio_load_state`
-(`include/nam_studio/api.h`, implemented in `src/serialization/{json rig_state}.{h,cpp}`
-— a hand-written dependency-free JSON module plus the state mapping) turn an
-entire rig into one JSON document and back. This is the single preset/scene
-model for host chunks, preset files, and eventually IndexedDB - step 5 of
-ARCHITECTURE.md's migration order, and the prerequisite that lets a plugin
-(#16) save state at all. Model/IR asset payloads are NOT part of the document;
-they are handled separately by the embedded-assets work.
+`nam_studio_serialize_state` / `nam_studio_serialize_state_ex` /
+`nam_studio_load_state` (`include/nam_studio/api.h`, implemented in
+`src/serialization/{json rig_state sha256 base64}.{h,cpp}` — a hand-written
+dependency-free JSON module plus the state mapping) turn an entire rig into
+one JSON document and back. This is the single preset/scene model for host
+chunks, preset files, and eventually IndexedDB - step 5 of ARCHITECTURE.md's
+migration order, and the prerequisite that lets a plugin (#16) save state at
+all. Model/IR asset payloads ride inside the document when the caller asks
+for embedding (`serialize_state_ex(..., embed_assets=1)`); without it blocks
+record relinkable references only.
 
 ```json
 {
@@ -187,6 +189,64 @@ Field notes:
   while actually set (model-defined or user-written); restoring them cannot
   fabricate an override over whatever model gets loaded later.
 
+### Embedded assets (issue #120)
+
+A rig that references its NAM captures and cab IRs only by id is useless to a
+plugin: reopen the DAW project on another machine and the amp has no capture.
+So each amp-family block with a model loaded carries a `"model"` object, and
+each cab block with an IR carries an `"ir"` object:
+
+```json
+{
+  "id": "2",
+  "kind": "amp",
+  "...": "...",
+  "model": {
+    "name": "lstm",
+    "hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    "path": "/Users/you/Captures/lstm.nam",
+    "payload": "<the entire .nam JSON, base64>"
+  }
+}
+```
+
+- **`name`** - display label, always written when an asset is loaded. A path-
+  loaded capture reports its file's stem; a JSON-loaded one records whatever
+  the document it was restored from carried (empty otherwise).
+- **`hash`** - lowercase hex SHA-256 of the exact source bytes, always
+  written. A UI verifying a relinked file matches the missing asset hashes the
+  candidate and compares.
+- **`path`** - the source file location, best-effort (empty for assets that
+  never came from a file), so a load on the same machine can relink.
+- **`payload`** - the asset itself, **only when `embed_assets` is non-zero**:
+  the `.nam` JSON verbatim for models, the WAV file bytes (or a synthesized
+  32-bit-float WAV when the IR arrived as raw samples) base64-encoded for IRs.
+  Embedding is opt-in per call: a plugin writing a host chunk wants it, a
+  desktop app writing a small `.preset` next to a model library does not.
+  Blocks without a loaded asset write neither object.
+
+Restoration order per block: **embedded payload first**, then **source path**
+(relinking), then the block stays empty and the asset is reported as missing -
+`nam_studio_load_state` publishes the names of unresolvable assets, which
+`nam_studio_state_missing_asset_count` / `nam_studio_state_missing_asset`
+hand back to the caller until the next load. A payload that fails to decode,
+overshoots the size ceiling below, or isn't a valid asset falls through to the
+path attempt before giving up. Missing assets never abort the restore -
+partial-failure tolerance applies to assets like everything else.
+
+Embedded payloads are **untrusted input arriving from a project file**, so
+they hit the issue #69 size ceilings on load, now enforced inside the core
+(`engine.h`: `kMaxModelBytes` = 32 MiB of .nam JSON, `kMaxIrBytes` = 8 MiB of
+WAV) rather than only in each front end. The decoder checks the decoded size
+before allocating.
+
+Cost: every amp-family block retains its capture's full source JSON and every
+cab block its WAV bytes - a few MB per block. That is the price of a saved rig
+that restores self-contained on a machine that has never seen the files, and
+it buys byte-stable re-serialization: restoring a document and saving it again
+reproduces it exactly, because restored blocks keep the document's own
+name/path metadata (`SetModelSourceInfo` / `SetIrSourceInfo`).
+
 ### Versioning policy
 
 `schemaVersion` is bumped for any breaking shape change. Missing field means
@@ -232,7 +292,12 @@ Tests: `tests/json_test.cpp` covers the JSON module itself (escapes, number
 round-tripping, malformed input, depth limits); `tests/api_state_test.cpp`
 is issue #119's round-trip proof - a non-trivial rig (amp + cab + effects +
 mixer + splitter) serialized, reloaded into fresh graphs, and asserted
-field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`.
+field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`;
+`tests/api_state_assets_test.cpp` is issue #120's - a real capture and a real
+IR embedded into a document that restores sample-identically after the source
+graph is destroyed (the sources exist nowhere on disk), plus the payload ->
+path -> missing fallback ladder, the size ceilings, and SHA-256/base64
+known-answer tests.
 
 ## Vendored third-party DSP libraries
 
