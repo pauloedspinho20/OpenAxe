@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace nam_studio::json {
+namespace openaxe::json {
 namespace {
 
 // ── Writer ────────────────────────────────────────────────────────────────
@@ -437,4 +437,4 @@ bool Parse(std::string_view text, Value& out_value, std::string* out_error) {
   return ok;
 }
 
-}  // namespace nam_studio::json
+}  // namespace openaxe::json

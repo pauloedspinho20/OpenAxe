@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-namespace nam_desktop::secure_storage {
+namespace openaxe_desktop::secure_storage {
 
 // Small per-key secret store for the desktop shell (issue #146): persists
 // the Tone3000 refresh token across app restarts without going through the
@@ -41,4 +41,4 @@ std::optional<std::string> Load(const std::string& key, std::string* error = nul
 // was nothing stored.
 bool Delete(const std::string& key, std::string* error = nullptr);
 
-}  // namespace nam_desktop::secure_storage
+}  // namespace openaxe_desktop::secure_storage

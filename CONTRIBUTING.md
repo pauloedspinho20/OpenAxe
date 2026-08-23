@@ -1,4 +1,4 @@
-# Contributing to NAM Web Studio
+# Contributing to OpenAxe
 
 Thanks for your interest in contributing! This project is free and open source (GPLv3), and
 contributions of all sizes are welcome.
@@ -48,7 +48,7 @@ Useful scripts (run at the repo root; Turborepo fans them out to the relevant pa
 - `pnpm format` / `pnpm format:check` — Prettier
 - `pnpm test` / `pnpm test:run` — Vitest (watch / single run)
 - `pnpm test:e2e` — Playwright e2e (chromium/firefox/webkit desktop + a mobile viewport project,
-  see `apps/web/playwright.config.ts`); run `pnpm --filter @nam/web exec playwright install` once
+  see `apps/web/playwright.config.ts`); run `pnpm --filter @openaxe/web exec playwright install` once
   first to fetch the browser binaries. These hit a real browser's Web Audio API against the actual
   Vite dev server, which Vitest's jsdom environment can't reach - use them for anything that needs
   a real AudioContext, not as a substitute for unit tests.

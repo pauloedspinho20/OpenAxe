@@ -2,14 +2,14 @@
 // (dsp/tone_stack.cpp). These assert what a tone control has to do - move energy
 // at its own frequency and leave the others roughly alone - by measuring the
 // stack's response to sine waves rather than by inspecting coefficients.
-#include "nam_studio/dsp/tone_stack.h"
+#include "openaxe/dsp/tone_stack.h"
 
 #include <cmath>
 #include <vector>
 
 #include "test_harness.h"
 
-using nam_studio::dsp::ToneStack;
+using openaxe::dsp::ToneStack;
 
 namespace {
 
@@ -50,14 +50,14 @@ void TestFlatIsBitExact() {
   for (int i = 0; i < 64; ++i) buffer[static_cast<size_t>(i)] = 0.1f * static_cast<float>(i);
   const std::vector<float> original = buffer;
   tone.Process(buffer.data(), 64);
-  for (size_t i = 0; i < buffer.size(); ++i) NAM_EXPECT(buffer[i] == original[i]);
+  for (size_t i = 0; i < buffer.size(); ++i) OPENAXE_EXPECT(buffer[i] == original[i]);
 
   // ...and it stays exact after a band is moved and returned to 0.
   tone.SetGainDb(ToneStack::Band::kBass, 6.0f);
   tone.SetGainDb(ToneStack::Band::kBass, 0.0f);
   buffer = original;
   tone.Process(buffer.data(), 64);
-  for (size_t i = 0; i < buffer.size(); ++i) NAM_EXPECT(buffer[i] == original[i]);
+  for (size_t i = 0; i < buffer.size(); ++i) OPENAXE_EXPECT(buffer[i] == original[i]);
 }
 
 // Each band boosts around its own centre frequency. Tolerances are wide on
@@ -67,26 +67,26 @@ void TestEachBandBoostsItsOwnRegion() {
   {
     ToneStack tone;
     tone.SetGainDb(ToneStack::Band::kBass, 12.0f);
-    NAM_EXPECT(ToDb(GainAt(tone, 50.0)) > 9.0);      // well inside the shelf
-    NAM_EXPECT(ToDb(GainAt(tone, 4000.0)) < 1.0);    // far above it: untouched
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 50.0)) > 9.0);      // well inside the shelf
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 4000.0)) < 1.0);    // far above it: untouched
   }
   {
     ToneStack tone;
     tone.SetGainDb(ToneStack::Band::kMid, 12.0f);
-    NAM_EXPECT(ToDb(GainAt(tone, 1000.0)) > 9.0);    // at the bell's centre
-    NAM_EXPECT(ToDb(GainAt(tone, 50.0)) < 3.0);
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 1000.0)) > 9.0);    // at the bell's centre
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 50.0)) < 3.0);
   }
   {
     ToneStack tone;
     tone.SetGainDb(ToneStack::Band::kTreble, 12.0f);
-    NAM_EXPECT(ToDb(GainAt(tone, 12000.0)) > 9.0);
-    NAM_EXPECT(ToDb(GainAt(tone, 100.0)) < 1.0);
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 12000.0)) > 9.0);
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 100.0)) < 1.0);
   }
   {
     ToneStack tone;
     tone.SetGainDb(ToneStack::Band::kPresence, 12.0f);
-    NAM_EXPECT(ToDb(GainAt(tone, 8000.0)) > 8.0);
-    NAM_EXPECT(ToDb(GainAt(tone, 200.0)) < 1.0);
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 8000.0)) > 8.0);
+    OPENAXE_EXPECT(ToDb(GainAt(tone, 200.0)) < 1.0);
   }
 }
 
@@ -95,22 +95,22 @@ void TestEachBandBoostsItsOwnRegion() {
 void TestCutsAttenuateAndBandsCompose() {
   ToneStack tone;
   tone.SetGainDb(ToneStack::Band::kBass, -12.0f);
-  NAM_EXPECT(ToDb(GainAt(tone, 50.0)) < -9.0);
+  OPENAXE_EXPECT(ToDb(GainAt(tone, 50.0)) < -9.0);
 
   tone.SetGainDb(ToneStack::Band::kMid, 12.0f);
   // The bass cut and the mid boost coexist rather than replacing each other.
-  NAM_EXPECT(ToDb(GainAt(tone, 50.0)) < -8.0);
-  NAM_EXPECT(ToDb(GainAt(tone, 1000.0)) > 8.0);
+  OPENAXE_EXPECT(ToDb(GainAt(tone, 50.0)) < -8.0);
+  OPENAXE_EXPECT(ToDb(GainAt(tone, 1000.0)) > 8.0);
 }
 
 // Gains are clamped to the ±12dB the UI offers, and read back clamped.
 void TestGainsAreClampedAndReadBack() {
   ToneStack tone;
   tone.SetGainDb(ToneStack::Band::kTreble, 100.0f);
-  NAM_EXPECT(tone.GetGainDb(ToneStack::Band::kTreble) == 12.0f);
+  OPENAXE_EXPECT(tone.GetGainDb(ToneStack::Band::kTreble) == 12.0f);
   tone.SetGainDb(ToneStack::Band::kTreble, -100.0f);
-  NAM_EXPECT(tone.GetGainDb(ToneStack::Band::kTreble) == -12.0f);
-  NAM_EXPECT(tone.GetGainDb(ToneStack::Band::kBass) == 0.0f);
+  OPENAXE_EXPECT(tone.GetGainDb(ToneStack::Band::kTreble) == -12.0f);
+  OPENAXE_EXPECT(tone.GetGainDb(ToneStack::Band::kBass) == 0.0f);
 }
 
 // The response has to hold at other sample rates - the coefficients depend on
@@ -134,7 +134,7 @@ void TestResponseHoldsAt96k() {
     ++count;
   }
   const double gain_db = ToDb(std::sqrt(sum / count) / 0.70710678);
-  NAM_EXPECT(gain_db > 9.0);
+  OPENAXE_EXPECT(gain_db > 9.0);
 }
 
 // A stack processing silence must stay silent, and nothing may produce NaN/Inf.
@@ -146,11 +146,11 @@ void TestSilenceAndFiniteness() {
 
   std::vector<float> buffer(256, 0.0f);
   tone.Process(buffer.data(), 256);
-  for (float sample : buffer) NAM_EXPECT(sample == 0.0f);
+  for (float sample : buffer) OPENAXE_EXPECT(sample == 0.0f);
 
   std::vector<float> loud(256, 1.0f);
   tone.Process(loud.data(), 256);
-  for (float sample : loud) NAM_EXPECT(std::isfinite(sample));
+  for (float sample : loud) OPENAXE_EXPECT(std::isfinite(sample));
 
   tone.Process(nullptr, 256);  // must not crash
   tone.Process(buffer.data(), 0);
@@ -166,5 +166,5 @@ int main() {
   TestResponseHoldsAt96k();
   TestSilenceAndFiniteness();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

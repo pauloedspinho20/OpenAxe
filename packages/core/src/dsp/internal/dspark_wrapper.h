@@ -1,7 +1,7 @@
 #pragma once
 
-// The shared adapter turning any DSPark processor into the nam_studio::dsp
-// wrapper contract (see include/nam_studio/dsp/dspark_param.h for the
+// The shared adapter turning any DSPark processor into the openaxe::dsp
+// wrapper contract (see include/openaxe/dsp/dspark_param.h for the
 // contract). DSPark processors all speak the same small interface -
 // prepare(dspark::AudioSpec) + processBlock(dspark::AudioBufferView<float>) -
 // so all the plumbing that is identical across wrappers (the AudioSpec
@@ -38,9 +38,9 @@
 
 #include "Core/AudioBuffer.h"
 #include "Core/AudioSpec.h"
-#include "nam_studio/dsp/dspark_param.h"
+#include "openaxe/dsp/dspark_param.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 // DSPark processors pre-allocate their block-sized buffers in prepare(), and
 // hosts honour the block size they were prepared with. Process() slices
@@ -129,4 +129,4 @@ class DsparkEffect {
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

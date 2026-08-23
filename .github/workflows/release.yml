@@ -71,11 +71,11 @@ jobs:
           fi
 
       - name: Package desktop app
-        run: pnpm --filter @nam/desktop package
+        run: pnpm --filter @openaxe/desktop package
 
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/desktop/build/nam-studio-desktop-*.${{ matrix.artifact }}
+          files: apps/desktop/build/openaxe-desktop-*.${{ matrix.artifact }}
           fail_on_unmatched_files: true
           generate_release_notes: true

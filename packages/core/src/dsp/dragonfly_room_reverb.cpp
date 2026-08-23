@@ -1,4 +1,4 @@
-#include "nam_studio/dsp/dragonfly_room_reverb.h"
+#include "openaxe/dsp/dragonfly_room_reverb.h"
 
 // See dragonfly_hall_reverb.cpp for the full rationale behind this
 // structure (pre-include order, why the whole of freeverb3 must share one
@@ -28,7 +28,7 @@ namespace {
 #include "DSP.cpp"
 }  // namespace
 
-namespace nam_studio {
+namespace openaxe {
 namespace dsp {
 namespace {
 
@@ -98,4 +98,4 @@ void DragonflyRoomReverb::SetParam(int index, float value) {
 }
 
 }  // namespace dsp
-}  // namespace nam_studio
+}  // namespace openaxe

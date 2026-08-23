@@ -88,7 +88,7 @@ describe('tone3000 client', () => {
     await expect(getAccessToken()).resolves.toBe('abc')
   })
 
-  // issue #146: on the web build (no window.namStudio bridge - see the
+  // issue #146: on the web build (no window.openAxe bridge - see the
   // "native secret store mirroring" describe below for the desktop path),
   // the refresh token additionally persists to localStorage, so a later
   // visit can reconnect without a full OAuth round trip.
@@ -134,7 +134,7 @@ describe('tone3000 client', () => {
 // issue #146: on desktop the refresh token also has to survive an app
 // restart, which sessionStorage can't do on its own (the webview's origin -
 // an ephemeral port - changes every launch). setTokens/clearTokens mirror it
-// through window.namStudio.secure* when that bridge is present; these tests
+// through window.openAxe.secure* when that bridge is present; these tests
 // fake just enough of `window` to exercise that without a real native shell.
 describe('tone3000 client - native secret store mirroring', () => {
   const secureStore = vi.fn().mockResolvedValue({ ok: true })
@@ -145,10 +145,10 @@ describe('tone3000 client - native secret store mirroring', () => {
     vi.stubGlobal('sessionStorage', makeStorage())
     vi.stubGlobal('localStorage', makeStorage())
     vi.stubGlobal('window', {
-      'namStudio.version': vi.fn(),
-      'namStudio.secureStore': secureStore,
-      'namStudio.secureLoad': secureLoad,
-      'namStudio.secureDelete': secureDelete,
+      'openAxe.version': vi.fn(),
+      'openAxe.secureStore': secureStore,
+      'openAxe.secureLoad': secureLoad,
+      'openAxe.secureDelete': secureDelete,
     })
     secureStore.mockClear()
     secureLoad.mockReset()

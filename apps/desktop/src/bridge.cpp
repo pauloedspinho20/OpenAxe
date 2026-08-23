@@ -15,11 +15,11 @@
 #include <vector>
 
 #include "debug_log.h"
-#include "nam_studio/api.h"
-#include "nam_studio/core.h"
+#include "openaxe/api.h"
+#include "openaxe/core.h"
 #include "secure_storage.h"
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 using nlohmann::json;
 
@@ -255,7 +255,7 @@ void StudioBridge::DropEdgesTouching(const std::string& block_id) {
 // ── Handlers ────────────────────────────────────────────────────────────
 
 std::string StudioBridge::HandleVersion(const std::string&) {
-  return json(nam_studio::core::version()).dump();
+  return json(openaxe::core::version()).dump();
 }
 
 std::string StudioBridge::HandleListDevices(const std::string&) {
@@ -1099,4 +1099,4 @@ std::string StudioBridge::HandleSecureDelete(const std::string& req) {
   }
 }
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

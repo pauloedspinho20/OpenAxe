@@ -1,7 +1,7 @@
 // Builds the native desktop app. The CMake project (apps/desktop) pulls in
 // the shared C++ DSP core (packages/core) and the webview shell, then
-// produces the platform binary (bin/nam_desktop on macOS/Linux,
-// nam_desktop.exe on Windows).
+// produces the platform binary (bin/openaxe_desktop on macOS/Linux,
+// openaxe_desktop.exe on Windows).
 //
 //   node scripts/build.mjs [--debug]
 //
@@ -15,8 +15,8 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)))  // apps/desktop
-const repoRoot = dirname(dirname(root))                        // monorepo root
+const root = dirname(dirname(fileURLToPath(import.meta.url))) // apps/desktop
+const repoRoot = dirname(dirname(root)) // monorepo root
 const buildDir = join(root, 'build')
 
 // Build the React UI (issue #15 M3) with a relative base so it can be served
@@ -28,7 +28,7 @@ function bundleUi() {
   // it at all there (ENOENT) without going through a shell, unlike cmake
   // below which is a real .exe. Node quotes command/args correctly for
   // whichever shell this ends up running under either way.
-  execFileSync('pnpm', ['--filter', '@nam/web', 'build:desktop'], {
+  execFileSync('pnpm', ['--filter', '@openaxe/web', 'build:desktop'], {
     cwd: repoRoot,
     stdio: 'inherit',
     shell: true,
@@ -49,11 +49,9 @@ export function run(debug, skipUi = false) {
   if (!existsSync(buildDir)) mkdirSync(buildDir, { recursive: true })
 
   console.log(`[nam/desktop] configuring CMake (${buildType})...`)
-  execFileSync(
-    'cmake',
-    ['-S', root, '-B', buildDir, `-DCMAKE_BUILD_TYPE=${buildType}`],
-    { stdio: 'inherit' },
-  )
+  execFileSync('cmake', ['-S', root, '-B', buildDir, `-DCMAKE_BUILD_TYPE=${buildType}`], {
+    stdio: 'inherit',
+  })
 
   console.log('[nam/desktop] building...')
   execFileSync('cmake', ['--build', buildDir, '--config', buildType], {

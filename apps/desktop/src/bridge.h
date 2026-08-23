@@ -15,7 +15,7 @@
 
 #include "audio.h"
 
-// The window.namStudio.* JS<->C++ bridge (issue #15 M2). Exposes the shared
+// The window.openAxe.* JS<->C++ bridge (issue #15 M2). Exposes the shared
 // DSP core's extern "C" ABI plus the desktop audio I/O to the webview UI as
 // promise-returning JS functions, bound via webview::bind().
 //
@@ -42,7 +42,7 @@
 // one object per call) and returns a JSON string that webview resolves as the
 // JS promise value.
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 struct BlockRecord {
   int32_t core_id = -1;
@@ -59,8 +59,8 @@ struct EdgeRecord {
 };
 
 // issue #71: only loopback http(s) origins may host the UI while the privileged
-// window.namStudio bridge is bound. Anything else (a remote host supplied via
-// NAM_STUDIO_UI_URL, a file:// or data: URL, ...) is rejected so untrusted JS
+// window.openAxe bridge is bound. Anything else (a remote host supplied via
+// OPENAXE_UI_URL, a file:// or data: URL, ...) is rejected so untrusted JS
 // can never reach the native bridge.
 bool IsTrustedUiUrl(const std::string& url);
 
@@ -164,4 +164,4 @@ class StudioBridge {
   int32_t graph_block_ = 512;
 };
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

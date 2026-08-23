@@ -1,4 +1,4 @@
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 #include <algorithm>
 #include <cstring>
@@ -6,15 +6,15 @@
 #include <utility>
 #include <vector>
 
-#include "nam_studio/engine.h"
+#include "openaxe/engine.h"
 #include "serialization/rig_state.h"
 
 namespace {
 
-// Explicit switches (not ordinal-identity casts) so nam_studio::graph's own
+// Explicit switches (not ordinal-identity casts) so openaxe::graph's own
 // enums stay free to reorder/extend independently of this public C surface.
-nam_studio::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
-  using nam_studio::graph::BlockKind;
+openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
+  using openaxe::graph::BlockKind;
   switch (kind) {
     case NAM_STUDIO_BLOCK_NOISE_GATE:
       return BlockKind::kNoiseGate;
@@ -59,8 +59,8 @@ nam_studio::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
 // ABI enum -> engine enum. The two are kept separate deliberately: the C enum
 // is a stable wire format for JS/FFI callers, so the engine's own enum can be
 // reordered without breaking anyone.
-nam_studio::engine::ReverbAlgorithm ToReverbAlgorithm(NamStudioReverbAlgorithm algorithm) {
-  using nam_studio::engine::ReverbAlgorithm;
+openaxe::engine::ReverbAlgorithm ToReverbAlgorithm(NamStudioReverbAlgorithm algorithm) {
+  using openaxe::engine::ReverbAlgorithm;
   switch (algorithm) {
     case NAM_STUDIO_REVERB_HALL:
       return ReverbAlgorithm::kHall;
@@ -76,12 +76,12 @@ nam_studio::engine::ReverbAlgorithm ToReverbAlgorithm(NamStudioReverbAlgorithm a
 
 // Engine load error -> ABI result code. std::nullopt (success) becomes
 // NAM_STUDIO_LOAD_OK, since exceptions can't cross extern "C".
-NamStudioLoadResult ToLoadResult(std::optional<nam_studio::dsp::NamLoadError> error) {
+NamStudioLoadResult ToLoadResult(std::optional<openaxe::dsp::NamLoadError> error) {
   if (!error) return NAM_STUDIO_LOAD_OK;
   switch (*error) {
-    case nam_studio::dsp::NamLoadError::kFileNotFound:
+    case openaxe::dsp::NamLoadError::kFileNotFound:
       return NAM_STUDIO_LOAD_FILE_NOT_FOUND;
-    case nam_studio::dsp::NamLoadError::kInvalidFormat:
+    case openaxe::dsp::NamLoadError::kInvalidFormat:
       return NAM_STUDIO_LOAD_INVALID_FORMAT;
   }
   return NAM_STUDIO_LOAD_INVALID_FORMAT;  // unreachable for a valid enum value
@@ -90,7 +90,7 @@ NamStudioLoadResult ToLoadResult(std::optional<nam_studio::dsp::NamLoadError> er
 }  // namespace
 
 struct NamStudioGraph {
-  nam_studio::engine::AudioEngine engine;
+  openaxe::engine::AudioEngine engine;
   // The missing-asset list (#120) from the most recent load_state, kept for
   // the query ABI below. Control-thread data like everything else here.
   std::vector<std::string> missing_assets;
@@ -228,7 +228,7 @@ int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id) {
 
 void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
                                    NamStudioReverbControl control, float value) {
-  using nam_studio::engine::ReverbControl;
+  using openaxe::engine::ReverbControl;
   ReverbControl mapped = ReverbControl::kRoomSize;
   switch (control) {
     case NAM_STUDIO_REVERB_ROOM_SIZE: mapped = ReverbControl::kRoomSize; break;
@@ -246,7 +246,7 @@ void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
 
 void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
                                  NamStudioDelayModel model) {
-  using nam_studio::dsp::Delay;
+  using openaxe::dsp::Delay;
   Delay::Model m = Delay::Model::kDigital;
   switch (model) {
     case NAM_STUDIO_DELAY_DIGITAL: m = Delay::Model::kDigital; break;
@@ -406,7 +406,7 @@ float nam_studio_get_automation_param_normalized(NamStudioGraph* graph, int32_t 
 }
 
 // ── Rig state (de)serialization (issue #119) ────────────────────────────
-// Thin forwarders onto nam_studio::state, keeping the JSON machinery out of
+// Thin forwarders onto openaxe::state, keeping the JSON machinery out of
 // this file entirely. Both are control-thread calls - see api.h for the
 // contracts and packages/core/README.md for the wire format.
 
@@ -419,7 +419,7 @@ int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_
 int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_assets,
                                       char* out_json, int32_t capacity) {
   const std::string document =
-      nam_studio::state::SerializeState(graph->engine, embed_assets != 0);
+      openaxe::state::SerializeState(graph->engine, embed_assets != 0);
   const int32_t required = static_cast<int32_t>(document.size()) + 1;  // + NUL
   if (out_json == nullptr) return required;
   if (capacity < required) return -1;
@@ -428,16 +428,16 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
 }
 
 NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char* json) {
-  const auto outcome = nam_studio::state::LoadState(graph->engine, json);
+  const auto outcome = openaxe::state::LoadState(graph->engine, json);
   // Publish the missing-asset list (#120) for the query ABI below - replaced
   // wholesale on every load, hard failures included (they restore nothing).
   graph->missing_assets = std::move(outcome.missing_assets);
   switch (outcome.error) {
-    case nam_studio::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
-    case nam_studio::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
-    case nam_studio::state::LoadError::kUnsupportedVersion:
+    case openaxe::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
+    case openaxe::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
+    case openaxe::state::LoadError::kUnsupportedVersion:
       return NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION;
-    case nam_studio::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
+    case openaxe::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
   }
   return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
 }

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from '@nam/ui'
+import { toast } from '@openaxe/ui'
 import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
-import { getNamStudio } from '../native/namStudio'
+import { getOpenAxe } from '../native/openaxe'
 import { useNativeAudioEngine } from './useNativeAudioEngine'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
@@ -317,8 +317,8 @@ export function useWebAudioEngine() {
 }
 
 // Engine dispatcher (issue #15 M3, issue #44): in the desktop shell the audio
-// runs in the C++ core via window.namStudio; in the browser it's Web Audio.
-// window.namStudio is injected by the desktop shell's native init script
+// runs in the C++ core via window.openAxe; in the browser it's Web Audio.
+// window.openAxe is injected by the desktop shell's native init script
 // before this module's own script ever runs (apps/desktop/src/main.cpp binds
 // it, then navigates), so which shell this is runs exactly once, at module
 // load, and never changes for the page's lifetime. Selecting the hook
@@ -328,7 +328,7 @@ export function useWebAudioEngine() {
 // subscriptions, no wasted mount-time effects on the inactive engine. Every
 // call site still does a single, unconditional `useAudioEngine()` call, so
 // the rules of hooks hold; the branch just lives outside any component.
-const isNativeShell = getNamStudio() !== null
+const isNativeShell = getOpenAxe() !== null
 
 /** The union is cast to the web shape so App.tsx and every component consume
  * the same AudioEngineState - NativeGraphRig satisfies the

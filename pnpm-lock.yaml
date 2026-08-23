@@ -52,7 +52,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@nam/ui':
+      '@openaxe/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@types/p5':

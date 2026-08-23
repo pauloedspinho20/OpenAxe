@@ -1,5 +1,5 @@
 import type { Tone3000LibraryEntry } from '../../../tone3000/library'
-import { Dialog } from '@nam/ui'
+import { Dialog } from '@openaxe/ui'
 import styles from './NamModelDetails.module.css'
 
 export interface NamModelDetailsProps {

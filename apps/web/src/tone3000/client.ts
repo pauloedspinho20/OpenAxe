@@ -12,8 +12,8 @@
  * restart so the user isn't asked to reconnect every time (issue #146) - see
  * persistRefreshToken/tryHydrateFromPersistentStorage below for where it
  * lives on each build:
- *   - Desktop: the OS keychain via window.namStudio.secure* (native/
- *     namStudio.ts), which sessionStorage/localStorage can't reach anyway -
+ *   - Desktop: the OS keychain via window.openAxe.secure* (native/
+ *     openaxe.ts), which sessionStorage/localStorage can't reach anyway -
  *     the webview's origin is a fresh ephemeral port every launch.
  *   - Web: localStorage. This is a deliberate change from an earlier,
  *     stricter design that kept it sessionStorage-only specifically to
@@ -26,7 +26,7 @@
  * config.ts for why.
  */
 import { DESKTOP_REDIRECT_URI, PUBLISHABLE_KEY, REDIRECT_URI, T3K_API } from './config'
-import { getNamStudio } from '../native/namStudio'
+import { getOpenAxe } from '../native/openaxe'
 import type { OAuthCallbackResult, T3KTokens } from './types'
 import type {
   ListUserTonesParams,
@@ -42,7 +42,7 @@ import type {
  * and can't be pre-registered), the web build's own value otherwise. See
  * config.ts's DESKTOP_REDIRECT_URI. */
 function resolveRedirectUri(): string {
-  return getNamStudio() ? DESKTOP_REDIRECT_URI : REDIRECT_URI
+  return getOpenAxe() ? DESKTOP_REDIRECT_URI : REDIRECT_URI
 }
 
 export async function randomBase64url(bytes: number): Promise<string> {
@@ -205,7 +205,7 @@ export async function handleOAuthCallback(
 }
 
 /** Identifier the desktop shell's OS-keychain-backed secret store uses for
- * the refresh token - see native/namStudio.ts's secureStore/secureLoad. */
+ * the refresh token - see native/openaxe.ts's secureStore/secureLoad. */
 const NATIVE_REFRESH_TOKEN_KEY = 'tone3000_refresh_token'
 /** Web build's equivalent, in localStorage - see the module header for why
  * this is a deliberate exception to the rest of this file staying out of
@@ -213,7 +213,7 @@ const NATIVE_REFRESH_TOKEN_KEY = 'tone3000_refresh_token'
 const WEB_REFRESH_TOKEN_KEY = 't3k_refresh_token'
 
 function persistRefreshToken(token: string): void {
-  const bridge = getNamStudio()
+  const bridge = getOpenAxe()
   if (bridge) {
     void bridge.secureStore({ key: NATIVE_REFRESH_TOKEN_KEY, value: token }).catch(() => {})
   } else {
@@ -222,7 +222,7 @@ function persistRefreshToken(token: string): void {
 }
 
 function clearPersistedRefreshToken(): void {
-  const bridge = getNamStudio()
+  const bridge = getOpenAxe()
   if (bridge) {
     void bridge.secureDelete({ key: NATIVE_REFRESH_TOKEN_KEY }).catch(() => {})
   } else {
@@ -259,7 +259,7 @@ export function clearTokens(): void {
  * a dead credential forever.
  */
 export async function tryHydrateFromPersistentStorage(): Promise<T3KTokens | null> {
-  const bridge = getNamStudio()
+  const bridge = getOpenAxe()
   const stored = bridge
     ? ((await bridge.secureLoad({ key: NATIVE_REFRESH_TOKEN_KEY }).catch(() => null))?.value ??
       null)

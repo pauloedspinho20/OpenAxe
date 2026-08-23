@@ -1,10 +1,10 @@
-#include "nam_studio/dsp/tone_stack.h"
+#include "openaxe/dsp/tone_stack.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -173,4 +173,4 @@ void ToneStack::Process(float* samples, int num_frames) {
   }
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "nam_studio/engine.h"
+#include "openaxe/engine.h"
 
 // Rig-state (de)serialization - issue #119's step 5 of ARCHITECTURE.md's
 // migration order ("Preset/scene model in core, with front ends supplying only
@@ -15,7 +15,7 @@
 // the loader additionally understands the web app's existing files' UI-level
 // param keys exactly as RigBlock.ts + namStudioRigWorklet.js resolve them -
 // so today's exported presets load without migration.
-namespace nam_studio::state {
+namespace openaxe::state {
 
 // Bumped for any breaking change to the document shape. Policy:
 //  - missing schemaVersion  -> treated as 1 (the web app's existing presets)
@@ -79,4 +79,4 @@ struct LoadOutcome {
 // counted in the returned stats. Not real-time safe - suspend audio around it.
 LoadOutcome LoadState(engine::AudioEngine& engine, const char* json);
 
-}  // namespace nam_studio::state
+}  // namespace openaxe::state

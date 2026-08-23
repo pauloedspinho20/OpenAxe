@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { EngineStatus } from '../../../hooks/useAudioEngine'
 import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../state/ioStore'
-import { getNamStudio } from '../../../native/namStudio'
+import { getOpenAxe } from '../../../native/openaxe'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Auth } from '../../../tone3000/authStore'
 import {
@@ -15,7 +15,7 @@ import {
   readDataBundleFromFile,
   type DataBundle,
 } from '../../../settings/dataBundle'
-import { Dialog, HardwareButton, Knob, Toggle } from '@nam/ui'
+import { Dialog, HardwareButton, Knob, Toggle } from '@openaxe/ui'
 import styles from './SettingsDialog.module.css'
 
 export interface SettingsDialogProps {
@@ -66,7 +66,7 @@ export function SettingsDialog({
   onPowerOn,
 }: SettingsDialogProps) {
   const io = useIOStore()
-  const isNative = getNamStudio() !== null
+  const isNative = getOpenAxe() !== null
   const namQuality = useSettingsStore((s) => s.namQuality)
   const setNamQuality = useSettingsStore((s) => s.setNamQuality)
   const auth = useTone3000Auth()

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Axe group from packages/ui/assets/brand/openaxe-mark.svg (issue #151).
+     The 512-unit source geometry is mapped into the 108x108 adaptive viewport
+     (scale 0.1266, centered) and shrunk further by the group scale so every
+     point clears the 66dp safe-zone circle. Rects are sharp-cornered here;
+     rounding is invisible at launcher sizes. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <group
+      android:translateX="21.6"
+      android:translateY="21.6"
+      android:scaleX="0.72"
+      android:scaleY="0.72">
+    <group
+        android:translateX="0"
+        android:translateY="0"
+        android:scaleX="0.176"
+        android:scaleY="0.176">
+      <path
+          android:fillColor="#eeece6"
+          android:pathData="M300,68 h42 a21,21 0 0 1 21,21 v358 a21,21 0 0 1 -21,21 h-42 a21,21 0 0 1 -21,-21 v-358 a21,21 0 0 1 21,-21 z" />
+      <path
+          android:fillColor="#ff5a1f"
+          android:pathData="M292,96 C244,92 196,96 150,108 C134,130 124,154 124,180 C126,212 142,244 176,268 C214,278 254,274 292,256 Z" />
+      <path
+          android:fillColor="#ffe9dd"
+          android:pathData="M150,108 C134,130 124,154 124,180 C126,212 142,244 176,268 C156,236 149,208 149,180 C149,150 148,128 150,108 Z" />
+      <path
+          android:fillColor="#c23503"
+          android:pathData="M348,108 h34 a15,15 0 0 1 15,15 v106 a15,15 0 0 1 -15,15 h-34 a15,15 0 0 1 -15,-15 v-106 a15,15 0 0 1 15,-15 z" />
+      <path
+          android:fillColor="#9c2b04"
+          android:pathData="M292,84 h56 a14,14 0 0 1 14,14 v156 a14,14 0 0 1 -14,14 h-56 a14,14 0 0 1 -14,-14 v-156 a14,14 0 0 1 14,-14 z" />
+    </group>
+  </group>
+</vector>

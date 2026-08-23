@@ -8,9 +8,9 @@
 
 #include <cstddef>
 
-#include "nam_studio/engine.h"  // kAutomation* constants asserted below
+#include "openaxe/engine.h"  // kAutomation* constants asserted below
 
-namespace nam_studio::automation {
+namespace openaxe::automation {
 
 inline constexpr int kSlotCount = 16;
 inline constexpr int kParamsPerSlot = 20;
@@ -51,19 +51,19 @@ constexpr bool StrEq(const char* a, const char* b) {
 
 // Pin core's own copies of the constants to this file (both derive from the
 // same schema section; a mismatch means one side was hand-edited).
-static_assert(kSlotCount == nam_studio::engine::kAutomationSlotCount,
+static_assert(kSlotCount == openaxe::engine::kAutomationSlotCount,
               "slot count drifted between param_schema.json and engine.h");
-static_assert(kParamsPerSlot == nam_studio::engine::kAutomationParamsPerSlot,
+static_assert(kParamsPerSlot == openaxe::engine::kAutomationParamsPerSlot,
               "params-per-slot drifted between param_schema.json and engine.h");
-static_assert(kMasterParamCount <= nam_studio::engine::kAutomationParamsPerSlot,
+static_assert(kMasterParamCount <= openaxe::engine::kAutomationParamsPerSlot,
               "master slot overflows the stride");
-static_assert(StrEq(kMasterSymbols[0], nam_studio::engine::kMasterAutomationSymbols[0]),
+static_assert(StrEq(kMasterSymbols[0], openaxe::engine::kMasterAutomationSymbols[0]),
               "master param 0 symbol drifted");
-static_assert(kMasterMin[0] == nam_studio::engine::kMasterAutomationMin[0] && kMasterMax[0] == nam_studio::engine::kMasterAutomationMax[0],
+static_assert(kMasterMin[0] == openaxe::engine::kMasterAutomationMin[0] && kMasterMax[0] == openaxe::engine::kMasterAutomationMax[0],
               "master param level range drifted");
-static_assert(StrEq(kMasterSymbols[1], nam_studio::engine::kMasterAutomationSymbols[1]),
+static_assert(StrEq(kMasterSymbols[1], openaxe::engine::kMasterAutomationSymbols[1]),
               "master param 1 symbol drifted");
-static_assert(kMasterMin[1] == nam_studio::engine::kMasterAutomationMin[1] && kMasterMax[1] == nam_studio::engine::kMasterAutomationMax[1],
+static_assert(kMasterMin[1] == openaxe::engine::kMasterAutomationMin[1] && kMasterMax[1] == openaxe::engine::kMasterAutomationMax[1],
               "master param muted range drifted");
 
-}  // namespace nam_studio::automation
+}  // namespace openaxe::automation

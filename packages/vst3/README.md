@@ -3,6 +3,10 @@
 Placeholder for the VST3/CLAP/AU plugin built with iPlug2, linking directly
 against `packages/core`'s C++ DSP engine (#16). No plugin code lives here yet.
 
+`assets/branding/` already carries the OpenAxe mark/lockup (SVG + a 256px PNG)
+so the editor has branding ready for JUCE/iPlug2 resource embedding on day one
+(see `packages/ui/assets/brand/` for the source of truth).
+
 This README currently carries the one design decision #16's phase-0 work had
 to settle before any parameter code could be written: how a dynamic grid rig
 presents a fixed, session-stable parameter list to hosts.
@@ -132,7 +136,7 @@ Slot addressing pins TWO things as permanent API:
 | `param_schema.json` → `"pluginAutomation"`                                                                                                                                           | Single source of truth: counts + master descriptors                                                                   |
 | `scripts/gen-param-schema.mjs --target=automation-map`                                                                                                                               | Renders the header below; validates kinds fit the stride                                                              |
 | `generated/automation_param_map.h` (this package)                                                                                                                                    | Plugin-side constants, id layout helper, master metadata, static_asserts pinning core's copies                        |
-| `packages/core/include/nam_studio/engine.h` → `kAutomation*` / `kMasterAutomation*`                                                                                                  | Core's mirrored constants (asserted equal to the generated ones)                                                      |
+| `packages/core/include/openaxe/engine.h` → `kAutomation*` / `kMasterAutomation*`                                                                                                     | Core's mirrored constants (asserted equal to the generated ones)                                                      |
 | ABI: `nam_studio_bind_automation_slot`, `_unbind_…`, `_automation_slot_block`, `_automation_slot_param_count`, `_automation_slot_param_info`, `_set/get_automation_param_normalized` | Everything a plugin wrapper needs                                                                                     |
 | Rig state `"automationSlots"`                                                                                                                                                        | Bindings ride the document (`{"<slot>": {"blockId": "<doc id>"}}`); restored after blocks, soft-skipped when dangling |
 

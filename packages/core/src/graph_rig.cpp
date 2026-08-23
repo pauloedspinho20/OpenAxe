@@ -1,9 +1,9 @@
-#include "nam_studio/graph_rig.h"
+#include "openaxe/graph_rig.h"
 
 #include <utility>
 #include <vector>
 
-namespace nam_studio::graph {
+namespace openaxe::graph {
 
 // Monotonic "block-1"/"edge-7" ids for callers that don't bring their own. The
 // counter is shared between blocks and edges - the prefix is what disambiguates
@@ -140,4 +140,4 @@ void GraphRig::Dispose() {
   blocks_.clear();
 }
 
-}  // namespace nam_studio::graph
+}  // namespace openaxe::graph

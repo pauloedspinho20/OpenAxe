@@ -1,6 +1,6 @@
 #include "base64.h"
 
-namespace nam_studio::state {
+namespace openaxe::state {
 namespace {
 
 constexpr char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -113,4 +113,4 @@ bool Base64Decode(const char* data, size_t size, size_t max_output,
   return true;
 }
 
-}  // namespace nam_studio::state
+}  // namespace openaxe::state

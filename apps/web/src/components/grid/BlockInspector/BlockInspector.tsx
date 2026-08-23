@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { HardwareButton, Panel } from '@nam/ui'
+import { HardwareButton, Panel } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { useEngineVersion } from '../../../state/engineVersion'

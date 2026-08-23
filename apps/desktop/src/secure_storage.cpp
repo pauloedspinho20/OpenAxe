@@ -32,9 +32,12 @@
 #include <wincred.h>
 #endif
 
-namespace nam_desktop::secure_storage {
+namespace openaxe_desktop::secure_storage {
 
 namespace {
+// Service name intentionally keeps the pre-OpenAxe branding (issue #151):
+// renaming it would strand users' saved Tone3000 credentials in the
+// keychain under the old service.
 constexpr const char* kServiceName = "NAM Web Studio";
 }  // namespace
 
@@ -253,4 +256,4 @@ bool Delete(const std::string& key, std::string* error) {
 
 #endif
 
-}  // namespace nam_desktop::secure_storage
+}  // namespace openaxe_desktop::secure_storage

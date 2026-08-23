@@ -1,6 +1,8 @@
-# NAM Web Studio
+# <img src="./packages/ui/assets/brand/openaxe-mark.svg" width="28" valign="middle" alt="OpenAxe logo" /> OpenAxe
 
 A free, open-source guitar/bass amp, cabinet, and effects suite — in the spirit of Amplitube / Guitar Rig — built on [Neural Amp Modeler](https://github.com/sdatkinson/NeuralAmpModelerCore) (NAM). Runs as a **web app** today; planned for **desktop**, **VST3/CLAP/AU/AAX plugin**, and **mobile** (iOS + Android) — all sharing the same C++ DSP engine and design system.
+
+> Formerly "NAM Web Studio" — rebranded in [#151](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/151). "NAM" in upstream contexts (the [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore) library, the `.nam` model format, Tone3000's catalog) still refers to the upstream project; only the product name changed.
 
 Runs entirely in the browser: no native app required, no backend, no account. Works offline once installed as a PWA.
 
@@ -119,7 +121,7 @@ NAM-Web-Studio/
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
 │   ├── core/                  # C++ DSP library — graph engine, NAM, Dragonfly Reverb done (#14)
-│   │   ├── include/nam_studio/    # Graph engine, dsp/ wrappers, extern "C" lifecycle API
+│   │   ├── include/openaxe/    # Graph engine, dsp/ wrappers, extern "C" lifecycle API
 │   │   ├── src/                   # Implementation + tests/ (CTest, all passing)
 │   │   └── third_party/           # Dragonfly (wired), NAMCore (wired), DSPark (wired)
 │   ├── vst3/                   # Placeholder — iPlug2 (C++) VST3/CLAP/AU/AAX plugin (#16)
@@ -176,7 +178,7 @@ git submodule update --init --recursive -- packages/core/third_party/nam-core
 git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
 
 # Configure, build, and run the test suite
-cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON
+cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON
 cmake --build packages/core/build
 ctest --test-dir packages/core/build --output-on-failure
 ```
@@ -192,22 +194,22 @@ The native desktop shell reuses the web UI and drives `packages/core` directly (
 ```bash
 pnpm dev:desktop          # Debug build + bundle UI + launch the window
 pnpm build:desktop        # Release build + bundle UI
-pnpm package:desktop      # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
+pnpm package:desktop      # build + CPack -> build/openaxe-desktop-<v>.dmg|.zip|.deb
 
 # Web + desktop side by side. Either run both dev targets in parallel...
 pnpm dev:all
 # ...or start the web dev server and attach the native shell to it, so the
 # desktop window gets Vite HMR instead of a rebuilt-and-bundled UI copy:
 pnpm dev:web              # terminal 1
-pnpm dev:desktop:attach   # terminal 2 (NAM_STUDIO_UI_URL=http://localhost:5173)
+pnpm dev:desktop:attach   # terminal 2 (OPENAXE_UI_URL=http://localhost:5173)
 
-# C++ tests (configure once with NAM_DESKTOP_BUILD_TESTS=ON):
-cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+# C++ tests (configure once with OPENAXE_DESKTOP_BUILD_TESTS=ON):
+cmake -S apps/desktop -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build apps/desktop/build
 ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
 ```
 
-Debugging a random crash: read `apps/desktop/build/bin/nam_desktop.log` (mirrors stderr, appends a backtrace on a segfault/abort), run with `NAM_DESKTOP_DEBUG=1` to enable the webview inspector, or grab the OS crash report from `~/Library/Logs/DiagnosticReports/nam_desktop-*.crash`. Full details in the [desktop README](./apps/desktop/README.md#debugging).
+Debugging a random crash: read `apps/desktop/build/bin/openaxe_desktop.log` (mirrors stderr, appends a backtrace on a segfault/abort), run with `OPENAXE_DESKTOP_DEBUG=1` to enable the webview inspector, or grab the OS crash report from `~/Library/Logs/DiagnosticReports/openaxe_desktop-*.crash`. Full details in the [desktop README](./apps/desktop/README.md#debugging).
 
 ## Roadmap
 

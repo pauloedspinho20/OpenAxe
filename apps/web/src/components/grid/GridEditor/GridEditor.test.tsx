@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { GridEditor } from './GridEditor'
 import { useGraphStore } from '../../../state/graphStore'
 
-vi.mock('../../../native/namStudio', () => ({ getNamStudio: vi.fn(() => null) }))
+vi.mock('../../../native/openaxe', () => ({ getOpenAxe: vi.fn(() => null) }))
 
 describe('components/GridEditor', () => {
   beforeEach(() => {

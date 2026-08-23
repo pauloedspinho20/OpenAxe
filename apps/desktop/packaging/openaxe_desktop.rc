@@ -1,0 +1,4 @@
+// Windows exe resource: the first icon entry becomes the file icon in
+// Explorer. openaxe.ico is generated from packages/ui/assets/brand by
+// apps/web/scripts/render-brand-icons.mjs (issue #151).
+1 ICON "openaxe.ico"

@@ -1,7 +1,7 @@
-import { HardwareButton, Wordmark } from '@nam/ui'
+import { HardwareButton, Wordmark } from '@openaxe/ui'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
-import { getNamStudio } from '@/native/namStudio'
+import { getOpenAxe } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import styles from './PowerGate.module.css'
 
@@ -43,7 +43,7 @@ export function PowerGate({
 }: PowerGateProps) {
   const auth = useTone3000Auth()
   const io = useIOStore()
-  const isNative = getNamStudio() !== null
+  const isNative = getOpenAxe() !== null
 
   if (status === 'ready') return null
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Knob } from '@nam/ui'
+import { Knob } from '@openaxe/ui'
 import type { Block, EffectParams } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
 import { useGraphStore } from '@/state/graphStore'

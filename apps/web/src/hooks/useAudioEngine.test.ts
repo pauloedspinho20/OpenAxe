@@ -36,15 +36,15 @@ describe('describePowerOnError', () => {
 // referentially the selected hook - not a wrapper that still calls both.
 describe('useAudioEngine dispatcher', () => {
   afterEach(() => {
-    vi.doUnmock('../native/namStudio')
+    vi.doUnmock('../native/openaxe')
     vi.resetModules()
   })
 
   it('is the web engine hook when no native bridge is present', async () => {
     vi.resetModules()
-    vi.doMock('../native/namStudio', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('../native/namStudio')>()),
-      getNamStudio: () => null,
+    vi.doMock('../native/openaxe', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../native/openaxe')>()),
+      getOpenAxe: () => null,
     }))
     const mod = await import('./useAudioEngine')
     expect(mod.useAudioEngine).toBe(mod.useWebAudioEngine)
@@ -52,9 +52,9 @@ describe('useAudioEngine dispatcher', () => {
 
   it('is the native engine hook when a native bridge is present', async () => {
     vi.resetModules()
-    vi.doMock('../native/namStudio', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('../native/namStudio')>()),
-      getNamStudio: () => ({}) as import('../native/namStudio').NamStudioBridge,
+    vi.doMock('../native/openaxe', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../native/openaxe')>()),
+      getOpenAxe: () => ({}) as import('../native/openaxe').OpenAxeBridge,
     }))
     const [{ useNativeAudioEngine }, mod] = await Promise.all([
       import('./useNativeAudioEngine'),

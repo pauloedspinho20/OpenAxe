@@ -12,7 +12,7 @@
 #include "audio.h"
 #include "bridge.h"
 
-// Tests the window.namStudio bridge through its public Handle* interface -
+// Tests the window.openAxe bridge through its public Handle* interface -
 // the exact entry points webview::bind calls - so the whole round-trip (JSON
 // request -> control-thread mutation -> JSON response) is exercised. Most
 // tests need no audio hardware: the graph runs without an open stream. The
@@ -47,13 +47,13 @@ nlohmann::json Parse(const std::string& s) {
 const char* Arr(const char* obj) { return obj; }
 
 void TestVersion() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   const auto j = Parse(bridge.HandleVersion(""));
   CHECK(j.is_string() && !j.get<std::string>().empty());
 }
 
 void TestAddBlockAndInfo() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   // Delay has wrapped DSP, so it exposes a real param table.
   auto r = Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":2,"id":"d1"}])")));
   CHECK(r["ok"] == true && r["id"] == "d1");
@@ -89,7 +89,7 @@ void TestAddBlockAndInfo() {
 }
 
 void TestParamsByIndexAndSymbol() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
   const auto info = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"d1"}])")));
   const std::string symbol = info["params"][0]["symbol"].get<std::string>();
@@ -154,7 +154,7 @@ void TestSymbolMappedParamRoundTripAllEffectKinds() {
 
   int next_id = 0;
   for (const auto& k : kinds) {
-    nam_desktop::StudioBridge bridge;
+    openaxe_desktop::StudioBridge bridge;
     const std::string id = "k" + std::to_string(++next_id);
     const std::string add =
         std::string(R"([{"kind":")") + k.kind + R"(","row":0,"col":0,"id":")" + id + R"("}])";
@@ -199,7 +199,7 @@ void TestSymbolMappedParamRoundTripAllEffectKinds() {
 }
 
 void TestConnectDisconnectAndEdges() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"mixer","row":0,"col":0,"id":"m1"}])")));
 
   // IN rail (-1) -> m1 -> OUT rail (-2).
@@ -222,7 +222,7 @@ void TestConnectDisconnectAndEdges() {
 }
 
 void TestRemoveBlockDropsEdges() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"mixer","row":0,"col":0,"id":"m1"}])")));
   Parse(bridge.HandleConnect(Arr(R"([{"fromId":-1,"fromPort":0,"toId":"m1","toPort":0,"id":"e1"}])")));
   Parse(bridge.HandleConnect(Arr(R"([{"fromId":"m1","fromPort":0,"toId":-2,"toPort":0,"id":"e2"}])")));
@@ -234,7 +234,7 @@ void TestRemoveBlockDropsEdges() {
 }
 
 void TestMoveBlock() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"eq","row":0,"col":0,"id":"e1"}])")));
   Parse(bridge.HandleMoveBlock(Arr(R"([{"blockId":"e1","row":3,"col":4}])")));
   const auto info = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"e1"}])")));
@@ -247,7 +247,7 @@ void TestMoveBlock() {
 // reset the engine N times. Set a param to a non-default value, move the
 // block, and confirm the param survives the move (proving no reset ran).
 void TestMoveBlockDoesNotReset() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
 
   const double def = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"d1"}])")))["params"][0]
@@ -265,7 +265,7 @@ void TestMoveBlockDoesNotReset() {
 }
 
 void TestBadInputs() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"bogus","row":0,"col":0}])")))["ok"] == false);
   CHECK(Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"missing"}])")))["ok"] == false);
   CHECK(Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"missing","key":0,"value":1}])")))["ok"] == false);
@@ -285,9 +285,9 @@ void TestMonitorTap() {
   nam_studio_connect(graph, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
   nam_studio_reset(graph, kRate, kBlock);
 
-  nam_desktop::RtCallbackState state;
-  for (auto& ch : state.tap_in) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
-  for (auto& ch : state.tap_out) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  openaxe_desktop::RtCallbackState state;
+  for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
 
@@ -301,17 +301,17 @@ void TestMonitorTap() {
   float* out[2] = {out0, out1};
 
   // Two callbacks so the ring accumulates more than one frame's worth.
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
-  auto tap_in = nam_desktop::ReadTap(state, /*input=*/true, kFrames);
+  auto tap_in = openaxe_desktop::ReadTap(state, /*input=*/true, kFrames);
   CHECK(tap_in.frames == static_cast<unsigned int>(kFrames));
   for (int i = 0; i < kFrames; ++i) {
     CHECK(tap_in.l[i] == static_cast<float>(i));
     CHECK(tap_in.r[i] == static_cast<float>(i) * 2.0f);
   }
 
-  auto tap_out = nam_desktop::ReadTap(state, /*input=*/false, kFrames);
+  auto tap_out = openaxe_desktop::ReadTap(state, /*input=*/false, kFrames);
   CHECK(tap_out.frames == static_cast<unsigned int>(kFrames));
   for (int i = 0; i < kFrames; ++i) {
     CHECK(tap_out.l[i] == static_cast<float>(i));
@@ -325,7 +325,7 @@ void TestMonitorTap() {
 // the control thread knows no nam_studio_process is in flight.
 void TestSuspendCallbackSilencesOutput() {
   constexpr int kFrames = 32;
-  nam_desktop::RtCallbackState state;
+  openaxe_desktop::RtCallbackState state;
   state.suspend.store(true, std::memory_order_release);
 
   float out0[kFrames], out1[kFrames];
@@ -335,7 +335,7 @@ void TestSuspendCallbackSilencesOutput() {
   for (int i = 0; i < kFrames; ++i) in0[i] = in1[i] = 0.5f;
   float* in[2] = {in0, in1};
 
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   CHECK(state.suspended_callbacks.load() == 1);
   for (int i = 0; i < kFrames; ++i) {
@@ -367,7 +367,7 @@ void TestSuspendCallbackSilencesOutput() {
 // to JUCE's own from-scratch CoreAudio backend. Skips if no single
 // duplex-capable device exists.
 void TestConcurrentMutationsWhileStreamRunning() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
 
   const auto devices = Parse(bridge.HandleListDevices(""));
   if (!devices.is_array() || devices.empty()) {
@@ -486,7 +486,7 @@ void TestConcurrentMutationsWhileStreamRunning() {
 // running with a real block wired in - so the race would show up as an ASAN
 // abort or a crash rather than silently passing.
 void TestReopenWhileStreamRunning() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
 
   const auto devices = Parse(bridge.HandleListDevices(""));
   if (!devices.is_array() || devices.empty()) {
@@ -555,7 +555,7 @@ void TestReopenWhileStreamRunning() {
 // and hold the loaded model's dBu calibration - so the knobs either did
 // nothing or recalibrated the amp. They now drive real core I/O trims.
 void TestSetBlockTrim() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
 
   auto r = Parse(bridge.HandleSetBlockTrim(Arr(R"([{"blockId":"a1","input":0.5,"output":1.2}])")));
@@ -582,7 +582,7 @@ void TestSetBlockTrim() {
 // working control but the algorithm selector. They now go through the core's
 // ReverbControl mapping.
 void TestReverbControlKeys() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"reverb","row":0,"col":0,"id":"r1"}])")));
 
   for (const char* key : {"roomSize", "damping", "width", "predelay", "spin", "wander",
@@ -618,7 +618,7 @@ void TestReverbControlKeys() {
 // nothing on desktop) and the camelCase `slimSize` key, which resolved to no
 // core symbol before the alias existed.
 void TestAmpToneStackAndSlimSizeKeys() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
 
   for (const char* key : {"bass", "mid", "treble", "presence"}) {
@@ -691,7 +691,7 @@ void TestLoadIrWav() {
     base64.push_back(i + 2 < wav.size() ? kAlphabet[triple & 0x3F] : '=');
   }
 
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
 
   const std::string req =
@@ -743,7 +743,7 @@ void TestLoadIrWavRejectsOversized() {
   wav.append(9 * 1024 * 1024, '\0');  // > 8 MB cap
   const std::string encoded = b64(wav);
 
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
   const std::string req = std::string(R"([{"blockId":"c1","wavBase64":")") + encoded + R"("}])";
   const auto r = Parse(bridge.HandleLoadIrWav(Arr(req.c_str())));
@@ -752,23 +752,23 @@ void TestLoadIrWavRejectsOversized() {
 
 // issue #71: only loopback http(s) origins may host the privileged UI.
 void TestIsTrustedUiUrl() {
-  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1:5173"));
-  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1/"));
-  CHECK(nam_desktop::IsTrustedUiUrl("https://localhost:3000"));
-  CHECK(nam_desktop::IsTrustedUiUrl("http://[::1]:5173"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("https://evil.example"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("http://192.168.1.5:5173"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("file:///Users/me/ui/index.html"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("data:text/html,<h1>x</h1>"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("http://127.0.0.1.evil.example"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("javascript:alert(1)"));
-  CHECK(!nam_desktop::IsTrustedUiUrl(""));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("http://127.0.0.1:5173"));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("http://127.0.0.1/"));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("https://localhost:3000"));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("http://[::1]:5173"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("https://evil.example"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("http://192.168.1.5:5173"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("file:///Users/me/ui/index.html"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("data:text/html,<h1>x</h1>"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("http://127.0.0.1.evil.example"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("javascript:alert(1)"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl(""));
 }
 
 // issue #69: a model JSON larger than the cap must be rejected before it
 // reaches the core.
 void TestLoadModelJsonRejectsOversized() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
   const std::string big(33 * 1024 * 1024, 'a');  // > 32 MB cap
   const std::string req = std::string(R"([{"blockId":"a1","json":")") + big + R"("}])";
@@ -780,7 +780,7 @@ void TestLoadModelJsonRejectsOversized() {
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
 void TestSetBypassAndMasterBus() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
 
   auto r = Parse(bridge.HandleSetBypass(Arr(R"([{"blockId":"d1","bypassed":true}])")));
@@ -809,7 +809,7 @@ void TestSetBypassAndMasterBus() {
 // test-only key so this can never collide with (or clobber) the real
 // "tone3000_refresh_token" entry a live app instance has stored.
 void TestSecureStorageRoundTrip() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
 
   // Start from a clean slate in case a previous run of this binary crashed
   // before its own cleanup ran.

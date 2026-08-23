@@ -13,11 +13,11 @@
 
 #include "base64.h"
 #include "json.h"
-#include "nam_studio/block.h"
-#include "nam_studio/dsp/delay.h"
+#include "openaxe/block.h"
+#include "openaxe/dsp/delay.h"
 #include "sha256.h"
 
-namespace nam_studio::state {
+namespace openaxe::state {
 namespace {
 
 using engine::AudioEngine;
@@ -797,4 +797,4 @@ LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
   return outcome;
 }
 
-}  // namespace nam_studio::state
+}  // namespace openaxe::state

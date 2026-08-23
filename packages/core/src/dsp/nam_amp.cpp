@@ -1,4 +1,4 @@
-#include "nam_studio/dsp/nam_amp.h"
+#include "openaxe/dsp/nam_amp.h"
 
 #include <filesystem>
 #include <fstream>
@@ -13,7 +13,7 @@
 #include "NAM/get_dsp.h"
 #include "NAM/slimmable.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 NamAmp::NamAmp() = default;
 NamAmp::~NamAmp() = default;
@@ -28,7 +28,7 @@ NamAmp::~NamAmp() = default;
 // retention (#120 - serialization needs the original JSON either way).
 //
 // NAMCore picks the architecture parser (WaveNet / LSTM / ConvNet / Linear)
-// itself from the file's contents - which is exactly why nam_studio_core must be
+// itself from the file's contents - which is exactly why openaxe_core must be
 // linked whole-archive: those parsers self-register through static
 // initializers, and a plain static link drops them, making every load fail.
 //
@@ -181,4 +181,4 @@ void NamAmp::SetOutputLevel(double dbu) {
   info_.output_level_dbu = dbu;
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

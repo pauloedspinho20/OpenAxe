@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useSceneManager } from '../../../state/sceneManager'
 import { useSceneStore } from '../../../state/sceneStore'
 import { SceneNavigator } from '../../../scenes/sceneNavigator'
-import { Dialog } from '@nam/ui'
+import { Dialog } from '@openaxe/ui'
 import styles from './SceneManager.module.css'
 
 export function SceneManager() {

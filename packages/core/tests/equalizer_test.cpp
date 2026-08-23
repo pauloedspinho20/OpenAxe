@@ -1,8 +1,8 @@
 // End-to-end test for the DSPark-backed Equalizer wrapper (kEq): 4 bands x
 // {frequency, gain, q} = 12 params. Verifies a band boost/cut actually
 // changes the output energy at that frequency and that all-default bands are
-// transparent. Only built if NAM_STUDIO_HAS_DSPARK.
-#include "nam_studio/dsp/equalizer.h"
+// transparent. Only built if OPENAXE_HAS_DSPARK.
+#include "openaxe/dsp/equalizer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -12,16 +12,16 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::Equalizer;
+using openaxe::dsp::Equalizer;
 
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(Equalizer::ParamCount() == 12);
+  OPENAXE_EXPECT(Equalizer::ParamCount() == 12);
   const auto& first = Equalizer::GetParamInfo(0);
-  NAM_EXPECT(std::string(first.symbol) == "band0_frequency");
+  OPENAXE_EXPECT(std::string(first.symbol) == "band0_frequency");
   const auto& last = Equalizer::GetParamInfo(11);
-  NAM_EXPECT(std::string(last.symbol) == "band3_q");
+  OPENAXE_EXPECT(std::string(last.symbol) == "band3_q");
 }
 
 void TestGetSetEveryParam() {
@@ -29,9 +29,9 @@ void TestGetSetEveryParam() {
   for (int i = 0; i < Equalizer::ParamCount(); ++i) {
     const auto& info = Equalizer::GetParamInfo(i);
     eq.SetParam(i, info.min_value);
-    NAM_EXPECT(eq.GetParam(i) == info.min_value);
+    OPENAXE_EXPECT(eq.GetParam(i) == info.min_value);
     eq.SetParam(i, info.max_value);
-    NAM_EXPECT(eq.GetParam(i) == info.max_value);
+    OPENAXE_EXPECT(eq.GetParam(i) == info.max_value);
   }
 }
 
@@ -68,10 +68,10 @@ void TestBassBoostRaisesLevelBelowBoost() {
   // louder than the same EQ with -12 dB at 100 Hz.
   const float boosted = LowShelfSinePeak(12.0f, 256, 8);
   const float cut = LowShelfSinePeak(-12.0f, 256, 8);
-  NAM_EXPECT(std::isfinite(boosted) && std::isfinite(cut));
-  NAM_EXPECT(boosted > cut);
-  NAM_EXPECT(boosted > 1.0f);  // +12 dB -> peak well above the input's 1.0
-  NAM_EXPECT(cut < 1.0f);      // -12 dB -> peak well below the input's 1.0
+  OPENAXE_EXPECT(std::isfinite(boosted) && std::isfinite(cut));
+  OPENAXE_EXPECT(boosted > cut);
+  OPENAXE_EXPECT(boosted > 1.0f);  // +12 dB -> peak well above the input's 1.0
+  OPENAXE_EXPECT(cut < 1.0f);      // -12 dB -> peak well below the input's 1.0
 }
 
 void TestAllDefaultsAreTransparent() {
@@ -95,7 +95,7 @@ void TestAllDefaultsAreTransparent() {
       if (std::fabs(out_l[i] - input[i]) > 1e-3f) close = false;
     }
   }
-  NAM_EXPECT(close);
+  OPENAXE_EXPECT(close);
 }
 
 }  // namespace
@@ -106,5 +106,5 @@ int main() {
   TestBassBoostRaisesLevelBelowBoost();
   TestAllDefaultsAreTransparent();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

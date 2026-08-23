@@ -11,24 +11,24 @@
 
 #include "test_harness.h"
 
-using nam_studio::json::Parse;
-using nam_studio::json::Value;
-using nam_studio::json::Write;
+using openaxe::json::Parse;
+using openaxe::json::Value;
+using openaxe::json::Write;
 
 namespace {
 
 void ExpectRoundTrip(const std::string& json) {
   Value parsed;
   std::string error;
-  NAM_EXPECT(Parse(json, parsed, &error));
+  OPENAXE_EXPECT(Parse(json, parsed, &error));
   if (!error.empty()) return;
   const std::string written = Write(parsed);
   Value reparsed;
   std::string error2;
-  NAM_EXPECT(Parse(written, reparsed, &error2));
+  OPENAXE_EXPECT(Parse(written, reparsed, &error2));
   if (!error2.empty()) return;
   // Re-serializing must be stable (idempotent formatting).
-  NAM_EXPECT(Write(reparsed) == written);
+  OPENAXE_EXPECT(Write(reparsed) == written);
 }
 
 }  // namespace
@@ -37,75 +37,75 @@ int main() {
   // ── Parsing basics ────────────────────────────────────────────────────
   {
     Value v;
-    NAM_EXPECT(Parse("null", v, nullptr));
-    NAM_EXPECT(v.IsNull());
-    NAM_EXPECT(Parse("true", v, nullptr));
-    NAM_EXPECT(v.IsBool() && v.AsBool(false));
-    NAM_EXPECT(Parse("false", v, nullptr));
-    NAM_EXPECT(v.IsBool() && !v.AsBool(true));
-    NAM_EXPECT(Parse("-12.5e2", v, nullptr));
-    NAM_EXPECT(v.IsNumber() && v.AsNumber() == -1250.0);
-    NAM_EXPECT(Parse("\"hi\"", v, nullptr));
-    NAM_EXPECT(v.IsString() && *v.AsString() == "hi");
+    OPENAXE_EXPECT(Parse("null", v, nullptr));
+    OPENAXE_EXPECT(v.IsNull());
+    OPENAXE_EXPECT(Parse("true", v, nullptr));
+    OPENAXE_EXPECT(v.IsBool() && v.AsBool(false));
+    OPENAXE_EXPECT(Parse("false", v, nullptr));
+    OPENAXE_EXPECT(v.IsBool() && !v.AsBool(true));
+    OPENAXE_EXPECT(Parse("-12.5e2", v, nullptr));
+    OPENAXE_EXPECT(v.IsNumber() && v.AsNumber() == -1250.0);
+    OPENAXE_EXPECT(Parse("\"hi\"", v, nullptr));
+    OPENAXE_EXPECT(v.IsString() && *v.AsString() == "hi");
   }
 
   // Number forms JSON allows (and one it doesn't).
   {
     Value v;
-    NAM_EXPECT(Parse("0", v, nullptr) && v.AsNumber() == 0.0);
-    NAM_EXPECT(Parse("-0", v, nullptr) && v.AsNumber() == -0.0);
-    NAM_EXPECT(Parse("1E+3", v, nullptr) && v.AsNumber() == 1000.0);
-    NAM_EXPECT(!Parse("01", v, nullptr));   // leading zero
-    NAM_EXPECT(!Parse(".5", v, nullptr));   // no leading digit
-    NAM_EXPECT(!Parse("1.", v, nullptr));   // trailing dot
-    NAM_EXPECT(!Parse("+1", v, nullptr));   // no leading sign
+    OPENAXE_EXPECT(Parse("0", v, nullptr) && v.AsNumber() == 0.0);
+    OPENAXE_EXPECT(Parse("-0", v, nullptr) && v.AsNumber() == -0.0);
+    OPENAXE_EXPECT(Parse("1E+3", v, nullptr) && v.AsNumber() == 1000.0);
+    OPENAXE_EXPECT(!Parse("01", v, nullptr));   // leading zero
+    OPENAXE_EXPECT(!Parse(".5", v, nullptr));   // no leading digit
+    OPENAXE_EXPECT(!Parse("1.", v, nullptr));   // trailing dot
+    OPENAXE_EXPECT(!Parse("+1", v, nullptr));   // no leading sign
   }
 
   // String escapes, including \u with a surrogate pair and UTF-8 passthrough.
   {
     Value v;
-    NAM_EXPECT(Parse("\"a\\nb\\t\\\"c\\\\d\"", v, nullptr));
-    NAM_EXPECT(*v.AsString() == "a\nb\t\"c\\d");
-    NAM_EXPECT(Parse("\"\\u0041\"", v, nullptr));
-    NAM_EXPECT(*v.AsString() == "A");
+    OPENAXE_EXPECT(Parse("\"a\\nb\\t\\\"c\\\\d\"", v, nullptr));
+    OPENAXE_EXPECT(*v.AsString() == "a\nb\t\"c\\d");
+    OPENAXE_EXPECT(Parse("\"\\u0041\"", v, nullptr));
+    OPENAXE_EXPECT(*v.AsString() == "A");
     // U+1F600 as a surrogate pair -> 4-byte UTF-8.
-    NAM_EXPECT(Parse("\"\\uD83D\\uDE00\"", v, nullptr));
-    NAM_EXPECT(*v.AsString() == "\xF0\x9F\x98\x80");
-    NAM_EXPECT(!Parse("\"\\uD83D\"", v, nullptr));       // lone high surrogate
-    NAM_EXPECT(!Parse("\"\\uDC00\"", v, nullptr));       // lone low surrogate
-    NAM_EXPECT(!Parse("\"unterminated", v, nullptr));
-    NAM_EXPECT(!Parse("\"bad \\x escape\"", v, nullptr));
+    OPENAXE_EXPECT(Parse("\"\\uD83D\\uDE00\"", v, nullptr));
+    OPENAXE_EXPECT(*v.AsString() == "\xF0\x9F\x98\x80");
+    OPENAXE_EXPECT(!Parse("\"\\uD83D\"", v, nullptr));       // lone high surrogate
+    OPENAXE_EXPECT(!Parse("\"\\uDC00\"", v, nullptr));       // lone low surrogate
+    OPENAXE_EXPECT(!Parse("\"unterminated", v, nullptr));
+    OPENAXE_EXPECT(!Parse("\"bad \\x escape\"", v, nullptr));
   }
 
   // Nested containers, insertion order preserved, duplicate keys last-wins.
   {
     Value v;
-    NAM_EXPECT(Parse("{\"a\":1,\"b\":[1,{\"c\":true}],\"a\":2}", v, nullptr));
-    NAM_EXPECT(v.Find("a") != nullptr && v.Find("a")->AsNumber() == 2.0);
-    NAM_EXPECT(v.members()[0].first == "a");  // order kept
-    NAM_EXPECT(v.members()[1].first == "b");
+    OPENAXE_EXPECT(Parse("{\"a\":1,\"b\":[1,{\"c\":true}],\"a\":2}", v, nullptr));
+    OPENAXE_EXPECT(v.Find("a") != nullptr && v.Find("a")->AsNumber() == 2.0);
+    OPENAXE_EXPECT(v.members()[0].first == "a");  // order kept
+    OPENAXE_EXPECT(v.members()[1].first == "b");
     const Value& b = *v.Find("b");
-    NAM_EXPECT(b.items().size() == 2);
-    NAM_EXPECT(b.items()[1].Find("c")->AsBool(false));
+    OPENAXE_EXPECT(b.items().size() == 2);
+    OPENAXE_EXPECT(b.items()[1].Find("c")->AsBool(false));
   }
 
   // Malformed documents fail without crashing (and report where).
   {
     Value v;
     std::string error;
-    NAM_EXPECT(!Parse("{", v, &error) && !error.empty());
-    NAM_EXPECT(!Parse("[1,", v, nullptr));
-    NAM_EXPECT(!Parse("{\"a\" 1}", v, nullptr));
-    NAM_EXPECT(Parse("{}", v, nullptr));                 // empty object is fine
-    NAM_EXPECT(Parse("[]", v, nullptr));                 // empty array too
-    NAM_EXPECT(!Parse("{} {}", v, nullptr));             // trailing content
-    NAM_EXPECT(!Parse("1 2", v, nullptr));
-    NAM_EXPECT(!Parse("", v, nullptr));
+    OPENAXE_EXPECT(!Parse("{", v, &error) && !error.empty());
+    OPENAXE_EXPECT(!Parse("[1,", v, nullptr));
+    OPENAXE_EXPECT(!Parse("{\"a\" 1}", v, nullptr));
+    OPENAXE_EXPECT(Parse("{}", v, nullptr));                 // empty object is fine
+    OPENAXE_EXPECT(Parse("[]", v, nullptr));                 // empty array too
+    OPENAXE_EXPECT(!Parse("{} {}", v, nullptr));             // trailing content
+    OPENAXE_EXPECT(!Parse("1 2", v, nullptr));
+    OPENAXE_EXPECT(!Parse("", v, nullptr));
     // Depth bomb: must be rejected, not blow the stack. Build 5000 nested
     // arrays.
     std::string deep(5000, '[');
     deep.append(5000, ']');
-    NAM_EXPECT(!Parse(deep, v, nullptr));
+    OPENAXE_EXPECT(!Parse(deep, v, nullptr));
   }
 
   // ── Writing ───────────────────────────────────────────────────────────
@@ -120,17 +120,17 @@ int main() {
     obj.Set("s", Value::String("x\"y\n"));
     const std::string text = Write(obj);
     Value back;
-    NAM_EXPECT(Parse(text, back, nullptr));
-    NAM_EXPECT(back.Find("clean")->AsNumber() == 0.35);
-    NAM_EXPECT(text.find("\"clean\": 0.35") != std::string::npos);
-    NAM_EXPECT(back.Find("big")->AsNumber() == 12000.0);
-    NAM_EXPECT(back.Find("neg")->AsNumber() == -12.0);
-    NAM_EXPECT(back.Find("flag")->AsBool(false));
-    NAM_EXPECT(back.Find("nothing")->IsNull());
-    NAM_EXPECT(*back.Find("s")->AsString() == "x\"y\n");
+    OPENAXE_EXPECT(Parse(text, back, nullptr));
+    OPENAXE_EXPECT(back.Find("clean")->AsNumber() == 0.35);
+    OPENAXE_EXPECT(text.find("\"clean\": 0.35") != std::string::npos);
+    OPENAXE_EXPECT(back.Find("big")->AsNumber() == 12000.0);
+    OPENAXE_EXPECT(back.Find("neg")->AsNumber() == -12.0);
+    OPENAXE_EXPECT(back.Find("flag")->AsBool(false));
+    OPENAXE_EXPECT(back.Find("nothing")->IsNull());
+    OPENAXE_EXPECT(*back.Find("s")->AsString() == "x\"y\n");
     // Control characters get \u escapes; C0 shortcuts stay short.
     Value ctrl = Value::String(std::string("a\x01z"));
-    NAM_EXPECT(Write(ctrl).find("\\u0001") != std::string::npos);
+    OPENAXE_EXPECT(Write(ctrl).find("\\u0001") != std::string::npos);
   }
 
   // Float bit-exactness through write->parse for awkward values.
@@ -140,9 +140,9 @@ int main() {
       Value v = Value::Number(original);
       const std::string text = Write(v);
       Value back;
-      NAM_EXPECT(Parse(text, back, nullptr));
+      OPENAXE_EXPECT(Parse(text, back, nullptr));
       // Values originate from float params: exact after a float round-trip.
-      NAM_EXPECT(static_cast<float>(back.AsNumber()) == static_cast<float>(original));
+      OPENAXE_EXPECT(static_cast<float>(back.AsNumber()) == static_cast<float>(original));
     }
   }
 
@@ -153,10 +153,10 @@ int main() {
       "\"col\": 3, \"bypass\": false, \"params\": {\"time\": 250, \"tone\": 6000}}],"
       " \"edges\": [], \"masterLevel\": 0.8, \"masterMuted\": false}");
 
-  if (::nam_studio::test::g_failures == 0) {
+  if (::openaxe::test::g_failures == 0) {
     std::printf("json_test passed\n");
     return 0;
   }
-  std::printf("json_test FAILED (%d)\n", ::nam_studio::test::g_failures);
+  std::printf("json_test FAILED (%d)\n", ::openaxe::test::g_failures);
   return 1;
 }

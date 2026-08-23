@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from 'react'
-import { toast } from '@nam/ui'
+import { toast } from '@openaxe/ui'
 import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
 import { useEngineVersion } from '../../../state/engineVersion'
 import { useSelection } from '../../../state/selection'

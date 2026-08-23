@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAudioIO } from './useAudioIO'
 import { useIOStore } from '../state/ioStore'
-import { getNamStudio } from '../native/namStudio'
+import { getOpenAxe } from '../native/openaxe'
 
-vi.mock('@/native/namStudio', () => ({
-  getNamStudio: vi.fn(() => null),
+vi.mock('@/native/openaxe', () => ({
+  getOpenAxe: vi.fn(() => null),
 }))
 
 function stubMediaDevices() {
@@ -21,7 +21,7 @@ function stubMediaDevices() {
 
 describe('useAudioIO', () => {
   beforeEach(() => {
-    vi.mocked(getNamStudio).mockReturnValue(null)
+    vi.mocked(getOpenAxe).mockReturnValue(null)
     useIOStore.setState({
       inputDeviceId: '',
       outputDeviceId: '',
@@ -49,7 +49,7 @@ describe('useAudioIO', () => {
   })
 
   it('uses the native bridge when present', async () => {
-    vi.mocked(getNamStudio).mockReturnValue({
+    vi.mocked(getOpenAxe).mockReturnValue({
       listDevices: vi.fn().mockResolvedValue([
         { id: 1, isInput: true, name: 'In', api: 'wasapi' },
         { id: 2, isInput: false, name: 'Out', api: 'wasapi' },
@@ -95,7 +95,7 @@ describe('useAudioIO', () => {
   })
 
   it('does not attach a devicechange listener in native mode', async () => {
-    vi.mocked(getNamStudio).mockReturnValue({ listDevices: vi.fn().mockResolvedValue([]) } as never)
+    vi.mocked(getOpenAxe).mockReturnValue({ listDevices: vi.fn().mockResolvedValue([]) } as never)
     const md = navigator.mediaDevices as unknown as { addEventListener: ReturnType<typeof vi.fn> }
     renderHook(() => useAudioIO())
     await waitFor(() => expect(useIOStore.getState().inputDevices).toHaveLength(0))

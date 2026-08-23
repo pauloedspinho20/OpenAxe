@@ -17,7 +17,7 @@
 // runs; duplicate keys parse last-wins. Numbers are held as double, which
 // covers every value core writes (params, trims, master level are floats;
 // row/col/schemaVersion are ints well inside double's exact range).
-namespace nam_studio::json {
+namespace openaxe::json {
 
 class Value {
  public:
@@ -78,4 +78,4 @@ std::string Write(const Value& value);
 inline constexpr int kMaxDepth = 128;
 bool Parse(std::string_view text, Value& out_value, std::string* out_error);
 
-}  // namespace nam_studio::json
+}  // namespace openaxe::json

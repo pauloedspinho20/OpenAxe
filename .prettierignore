@@ -11,6 +11,11 @@ blob-report
 packages/core/build
 apps/desktop/build
 apps/desktop/_CPack_Packages
+# Generated C++ fragments (scripts/gen-param-schema.mjs). Prettier mangles
+# these - it has no C++ parser and reformats them as prose - and the
+# generator's --check mode compares its own raw output byte-for-byte, so
+# they must never pass through prettier at all.
+packages/core/src/dsp/generated
 # Emscripten's own generated glue code (scripts/build-core-wasm.sh) - never
 # hand-edited and not run through prettier when regenerated, unlike the other
 # checked-in files under wasm-core/ (hand-written worklets, our own codegen's

@@ -2,7 +2,7 @@ import type { EffectParams } from '../effects/Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import type { PresetBlock } from '../presets/types'
 import { isNativeAudioBuffer } from './NativeAudioContext'
-import type { NamStudioBridge } from './namStudio'
+import type { OpenAxeBridge } from './openaxe'
 
 /**
  * Base64-encode the IR's bytes for the JSON bridge. Binary can't cross a webview
@@ -32,7 +32,7 @@ function toNumber(v: number | string | boolean): number {
  * A block facade the native engine exposes to the UI. Satisfies the
  * `PresetBlock` slice (capture/apply, model/IR methods) and `BlockLoadTarget`
  * (Tone3000/asset import) without any AudioNode - the real DSP lives in the
- * C++ core, driven through `window.namStudio`. It intentionally does NOT
+ * C++ core, driven through `window.openAxe`. It intentionally does NOT
  * satisfy `Block` (which requires input/output AudioNodes); consumers use the
  * `PresetBlock`/`BlockLoadTarget` surface via duck-typing, so a cast at the
  * rig boundary is the only concession needed.
@@ -66,7 +66,7 @@ function toNumber(v: number | string | boolean): number {
  */
 export class NativeBlock implements PresetBlock {
   readonly kind: BlockKind
-  private readonly bridge: NamStudioBridge
+  private readonly bridge: OpenAxeBridge
   private readonly id: string
   private params: EffectParams = {}
   private bypassed = false
@@ -74,7 +74,7 @@ export class NativeBlock implements PresetBlock {
   private loadedIr: { id: string; name: string } | null = null
   private readonly unmappedParamsWarned = new Set<string>()
 
-  constructor(bridge: NamStudioBridge, id: string, kind: BlockKind) {
+  constructor(bridge: OpenAxeBridge, id: string, kind: BlockKind) {
     this.bridge = bridge
     this.id = id
     this.kind = kind

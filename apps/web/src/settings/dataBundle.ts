@@ -124,7 +124,7 @@ export function downloadDataBundle(bundle: DataBundle): void {
   try {
     const link = document.createElement('a')
     link.href = url
-    link.download = `nam-web-studio-backup-${new Date(bundle.exportedAt).toISOString().slice(0, 10)}.json`
+    link.download = `openaxe-backup-${new Date(bundle.exportedAt).toISOString().slice(0, 10)}.json`
     link.click()
   } finally {
     URL.revokeObjectURL(url)

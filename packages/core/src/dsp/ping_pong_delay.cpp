@@ -1,10 +1,10 @@
-#include "nam_studio/dsp/ping_pong_delay.h"
+#include "openaxe/dsp/ping_pong_delay.h"
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -189,4 +189,4 @@ void PingPongDelay::SetParam(int index, float value) {
   }
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

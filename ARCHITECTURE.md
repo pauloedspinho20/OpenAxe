@@ -1,6 +1,6 @@
 # Architecture: one C++ engine, four front ends
 
-NAM Web Studio ships (or plans to ship) as a web app, a native desktop app, a
+OpenAxe ships (or plans to ship) as a web app, a native desktop app, a
 VST3/CLAP/AU plugin, and mobile apps. They are four shells around **one**
 audio engine: `packages/core`, C++20, no platform APIs, no UI.
 
@@ -22,10 +22,10 @@ the DSP does.
 │ Presentation      apps/web (React) · desktop webview · VST3 editor ·     │
 │                   iOS/Android views — all sharing packages/ui tokens     │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ Integration       Web Audio worklet · JUCE audio_devices + window.namStudio bridge  │
+│ Integration       Web Audio worklet · JUCE audio_devices + window.openAxe bridge  │
 │                   · iPlug2 processor · JNI / AVAudioEngine               │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ Engine ABI        packages/core/include/nam_studio/api.h — extern "C",   │
+│ Engine ABI        packages/core/include/openaxe/api.h — extern "C",   │
 │                   int ids, float params, no exceptions, no allocation on │
 │                   the real-time path                                     │
 ├──────────────────────────────────────────────────────────────────────────┤
@@ -158,3 +158,82 @@ Rules that keep it that way:
 - New ABI a browser needs must be added to `EXPORTED_FUNCTIONS` in
   `packages/core/CMakeLists.txt`, then `scripts/build-core-wasm.sh` re-run and
   the artifacts committed — nothing rebuilds them automatically.
+
+## Diagrams
+
+Rendered inline by GitHub (Mermaid). Same content as the sections above, in
+picture form — added during the OpenAxe rebrand (issue #151).
+
+### One engine, four shells
+
+```mermaid
+flowchart TB
+    subgraph shells["Presentation + integration (four shells)"]
+        WEB["apps/web<br/>React SPA<br/>AudioWorklet + WASM"]
+        DESK["apps/desktop<br/>C++ webview shell<br/>JUCE audio_devices"]
+        VST["packages/vst3<br/>plugin editor + processor"]
+        MOBILE["apps/ios · apps/android<br/>SwiftUI / Compose"]
+    end
+
+    ABI["packages/core/include/openaxe/api.h<br/>extern &quot;C&quot; ABI<br/>int ids · float params · no exceptions"]
+
+    subgraph core["packages/core (the one engine)"]
+        GR["graph_rig<br/>topology + routing rules"]
+        ENG["engine<br/>live DSP + meters"]
+        DSP["dsp/*<br/>NamAmp · convolver · effects"]
+        VAL["graph_validation"]
+    end
+
+    WEB -- "rig worklet calls _nam_studio_*" --> ABI
+    DESK -- "in-process calls" --> ABI
+    VST --> ABI
+    MOBILE --> ABI
+    ABI --> GR --> ENG --> DSP
+    GR --> VAL
+```
+
+### Core engine: signal, params, and assets
+
+```mermaid
+flowchart LR
+    subgraph fe["Front end (web worklet / desktop bridge)"]
+        UI["user gesture"]
+    end
+
+    subgraph abi["extern &quot;C&quot; boundary"]
+        SETP["nam_studio_set_param"]
+        ADD["nam_studio_add_block / connect"]
+        LOAD["nam_studio_load_nam_model_json<br/>nam_studio_load_ir_wav"]
+        PROC["nam_studio_process"]
+    end
+
+    subgraph engine["AudioEngine (control thread unless noted)"]
+        TOPO["graph_rig: block placement,<br/>edge validation, semi-smart wiring"]
+        PARAM["param tables<br/>(param_schema.json generated)"]
+        ASSETS["NamAmp model load · wav decode +<br/>resample · convolver partitioning"]
+    end
+
+    RT["real-time path: atomics in,<br/>float buffers out, no allocation"]
+
+    UI --> SETP --> PARAM --> RT
+    UI --> ADD --> TOPO
+    UI --> LOAD --> ASSETS
+    TOPO --> RT
+    ASSETS --> RT
+    PROC --> RT
+```
+
+### Design system: token pipeline
+
+```mermaid
+flowchart TB
+    DT["packages/ui/tokens/design-tokens.json<br/>(transcribed source of truth)"]
+    CSS["CSS custom properties<br/>(packages/ui/*.css, live runtime source)"]
+    UI["packages/ui components<br/>primitives: Knob · Fader · Led · Meter ·<br/>Toggle · HardwareButton · Panel"]
+    SB[".storybook<br/>(component workbench)"]
+    FUT["future generators:<br/>C++ (VST3) · Kotlin (Android) · Swift (iOS)"]
+
+    DT -- "transcription (generator =<br/>future work, issue #13/#21)" --> CSS
+    CSS --> UI --> SB
+    DT -.-> FUT
+```

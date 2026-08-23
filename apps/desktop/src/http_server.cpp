@@ -23,7 +23,7 @@ typedef int socklen_t;
 #include <unistd.h>
 #endif
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 namespace {
 
@@ -261,4 +261,4 @@ HttpServer::~HttpServer() {
   Stop();
 }
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

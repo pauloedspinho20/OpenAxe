@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 // Forward-declared rather than #include <juce_audio_devices/...>: JUCE's own
 // CMake support compiles a linked module's sources directly into whichever
-// target links it (see the PRIVATE-linking note on nam_desktop_lib in
+// target links it (see the PRIVATE-linking note on openaxe_desktop_lib in
 // CMakeLists.txt), so anything that just #includes this header - the tests -
 // must not also need JUCE's own headers/include paths, only these type names
 // behind a unique_ptr (fine without a complete type - see audio.cpp, which
@@ -41,7 +41,7 @@ class AudioIODevice;
 // Real-time thread priority is handled by the backend itself, same as it was
 // under RtAudio.
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 // Mirrors the web app's IODevice (apps/web/src/state/ioStore.ts): an id and a
 // label per endpoint. JUCE identifies devices by name string, not a stable
@@ -315,4 +315,4 @@ class AudioIO {
   std::string pending_stream_error_;
 };
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

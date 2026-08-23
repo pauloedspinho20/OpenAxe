@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useIOStore, type InputChannelMode } from '../../../state/ioStore'
-import { Dialog, SelectField, ErrorText } from '@nam/ui'
+import { Dialog, SelectField, ErrorText } from '@openaxe/ui'
 
 export interface InputDeviceDialogProps {
   open: boolean

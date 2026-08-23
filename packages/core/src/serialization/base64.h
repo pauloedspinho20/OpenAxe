@@ -10,7 +10,7 @@
 // decoder takes an output cap so a hostile document cannot make us allocate
 // gigabytes before the caller's own size check runs - the payload is
 // untrusted input arriving from a project file.
-namespace nam_studio::state {
+namespace openaxe::state {
 
 // Standard RFC 4648 alphabet with padding.
 std::string Base64Encode(const uint8_t* data, size_t size);
@@ -21,4 +21,4 @@ std::string Base64Encode(const uint8_t* data, size_t size);
 bool Base64Decode(const char* data, size_t size, size_t max_output,
                   std::vector<uint8_t>& out);
 
-}  // namespace nam_studio::state
+}  // namespace openaxe::state
