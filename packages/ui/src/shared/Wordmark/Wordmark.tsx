@@ -33,7 +33,9 @@ export function Wordmark({ variant = 'inline' }: WordmarkProps) {
   return (
     <span className={styles.inline}>
       <AxeMark size={16} />
-      OPENAXE
+      <p>
+        OPEN<span style={{ color: '#ff2b2b' }}>AXE</span>
+      </p>
     </span>
   )
 }
