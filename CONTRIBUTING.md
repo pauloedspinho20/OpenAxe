@@ -1,4 +1,4 @@
-# Contributing to NAM Web Studio
+# Contributing to OpenAxe
 
 Thanks for your interest in contributing! This project is free and open source (GPLv3), and
 contributions of all sizes are welcome.
@@ -36,9 +36,11 @@ pnpm install
 pnpm dev
 ```
 
-> Peer dependency warnings from `neural-amp-modeler-wasm` (pinned to React 18 peers) and a
-> Storybook MCP addon transitive dep are expected and harmless — `.npmrc` disables strict peer
-> checking so `pnpm install` doesn't fail on them.
+> `.npmrc` sets `strict-peer-dependencies=true` — a genuinely unmet peer fails `pnpm install`
+> outright. If install fails on a peer you didn't touch, it's likely a pre-existing unmet peer
+> elsewhere in the tree that your change's dependency resolution just surfaced; check
+> `pnpm-lock.yaml`'s current pin before assuming your change is at fault, and prefer a
+> `pnpm.overrides` pin (see root `package.json`) over loosening the strict setting.
 
 Useful scripts (run at the repo root; Turborepo fans them out to the relevant package):
 
@@ -46,7 +48,7 @@ Useful scripts (run at the repo root; Turborepo fans them out to the relevant pa
 - `pnpm format` / `pnpm format:check` — Prettier
 - `pnpm test` / `pnpm test:run` — Vitest (watch / single run)
 - `pnpm test:e2e` — Playwright e2e (chromium/firefox/webkit desktop + a mobile viewport project,
-  see `apps/web/playwright.config.ts`); run `pnpm --filter @nam/web exec playwright install` once
+  see `apps/web/playwright.config.ts`); run `pnpm --filter @openaxe/web exec playwright install` once
   first to fetch the browser binaries. These hit a real browser's Web Audio API against the actual
   Vite dev server, which Vitest's jsdom environment can't reach - use them for anything that needs
   a real AudioContext, not as a substitute for unit tests.
@@ -59,6 +61,26 @@ Useful scripts (run at the repo root; Turborepo fans them out to the relevant pa
 
 All five (`lint`, `format:check`, `build`, `test:run`, `test:e2e`) must pass before a PR is merged —
 CI runs them on every push and pull request.
+
+## Releasing (desktop builds)
+
+The root `VERSION` file is the one source of truth for the product's version — every
+`package.json`'s `"version"` field and both `apps/desktop/CMakeLists.txt`'s and
+`packages/core/CMakeLists.txt`'s CMake `project()` version are kept in sync with it (checked by
+`node scripts/sync-version.mjs --check`, which also runs in CI).
+
+To cut a release:
+
+1. Bump `VERSION`, then run `node scripts/sync-version.mjs` to propagate it.
+2. Commit that change and merge it to `main`.
+3. Tag and push: `git tag v$(cat VERSION) && git push --tags`.
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the desktop app for all
+three platforms (the same matrix as `desktop.yml`) and publishes the installers as public assets
+on a GitHub Release for that tag — see [CHANGELOG.md](./CHANGELOG.md) for what's shipped in each
+one. (Automated version bumping via Changesets/semantic-release, reading commits' existing
+Conventional-Commits-style prefixes, is a natural next step if manual tagging gets tedious — not
+set up yet.)
 
 ## Commit / PR expectations
 

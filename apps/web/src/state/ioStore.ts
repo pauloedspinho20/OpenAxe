@@ -4,6 +4,13 @@
  * while the engine is off. Device lists are ephemeral (not persisted) since
  * device IDs change across sessions; selected IDs, gain and latency are
  * persisted so the user's preferences survive reload.
+ *
+ * Input and output device selections are independent. On the web they map to
+ * getUserMedia + setSinkId (two independent choices); on the native desktop
+ * shell they map to the C++ core's separate input/output device names
+ * (AudioIO::Open accepts createDevice(output_name, input_name)). A previous
+ * RtAudio-era restriction (issue #53) forcing a single duplex device is gone
+ * since the JUCE backend swap — see apps/desktop/src/audio.cpp.
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -69,6 +76,8 @@ export const useIOStore = create<IOStore>()(
       setDeviceLists: (inputDevices, outputDevices) => set({ inputDevices, outputDevices }),
     }),
     {
+      // Key kept from the pre-rebrand name (issue #151): renaming would
+      // orphan users' persisted I/O config.
       name: 'nam-web-studio-io',
       partialize: (state) => ({
         inputDeviceId: state.inputDeviceId,
@@ -80,18 +89,3 @@ export const useIOStore = create<IOStore>()(
     },
   ),
 )
-
-/**
- * Devices present in both the input and output lists (by id) - the only
- * choice the native RtAudio backend accepts for a single device driving both
- * directions (see apps/desktop/src/audio.cpp's Open(), which rejects
- * mismatched input/output device ids to prevent a mic+speaker feedback loop
- * - issue #53). The native PowerGate/Settings device pickers offer only
- * these, one selection driving both `inputDeviceId` and `outputDeviceId`.
- */
-export function getDuplexDevices(
-  state: Pick<IOState, 'inputDevices' | 'outputDevices'>,
-): IODevice[] {
-  const outputIds = new Set(state.outputDevices.map((d) => d.deviceId))
-  return state.inputDevices.filter((d) => outputIds.has(d.deviceId))
-}

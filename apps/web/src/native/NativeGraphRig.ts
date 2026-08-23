@@ -10,14 +10,14 @@ import {
 import type { PresetRig } from '../presets/types'
 import { NativeAnalyser, peakSineSource } from './NativeAnalyser'
 import { NativeBlock } from './NativeBlock'
-import type { NamStudioBridge } from './namStudio'
+import type { OpenAxeBridge } from './openaxe'
 
 export type ConnectResult = { ok: true; id: string } | { ok: false; reason: string }
 
 /**
  * The desktop native rig: a drop-in for `GraphRig` (satisfies
  * `GraphRigControls`, which `bindGraphRig` mirrors graphStore into, plus the
- * `PresetRig` slice) that drives the C++ DSP core through `window.namStudio`
+ * `PresetRig` slice) that drives the C++ DSP core through `window.openAxe`
  * instead of Web Audio nodes.
  *
  * Connection/placement validation is reused verbatim from the web engine
@@ -32,7 +32,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * the native engine, so the existing meter widgets animate from true levels).
  */
 export class NativeGraphRig implements GraphRigControls, PresetRig {
-  private readonly bridge: NamStudioBridge
+  private readonly bridge: OpenAxeBridge
   private readonly blocks = new Map<string, { block: NativeBlock; row: number; col: number }>()
   private readonly edges = new Map<string, { from: Jack; to: Jack }>()
   private readonly analysers = new Map<string, NativeAnalyser>()
@@ -40,7 +40,7 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   private disposed = false
   private nextId = 0
 
-  constructor(bridge: NamStudioBridge) {
+  constructor(bridge: OpenAxeBridge) {
     this.bridge = bridge
   }
 
@@ -210,6 +210,21 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    // Tear down the C++ graph before clearing the JS mirrors. The next power-on
+    // replays the same graphStore ids through bindGraphRig, so if the core's
+    // blocks/edges survive here its HandleAddBlock returns "block id already
+    // exists", reconcile rejects, and the bindGraphRig promise chain dies -
+    // every power cycle after the first silently stops syncing the graph.
+    // Edges are removed first; removeBlock may not clean up dangling edges on
+    // every core version, so dropping them explicitly keeps the two in sync.
+    const edgeIds = [...this.edges.keys()]
+    const blockIds = [...this.blocks.keys()]
+    await Promise.all(
+      edgeIds.map((id) => this.bridge.disconnect({ edgeId: id }).catch(() => undefined)),
+    )
+    await Promise.all(
+      blockIds.map((id) => this.bridge.removeBlock({ blockId: id }).catch(() => undefined)),
+    )
     this.analysers.clear()
     this.peaks.clear()
     this.blocks.clear()

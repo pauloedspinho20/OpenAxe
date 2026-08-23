@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useIOStore } from '../../../state/ioStore'
-import { Dialog, SelectField } from '@nam/ui'
+import { Dialog, SelectField } from '@openaxe/ui'
 
 export interface OutputDeviceDialogProps {
   open: boolean

@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
@@ -12,7 +14,7 @@
 #include "audio.h"
 #include "bridge.h"
 
-// Tests the window.namStudio bridge through its public Handle* interface -
+// Tests the window.openAxe bridge through its public Handle* interface -
 // the exact entry points webview::bind calls - so the whole round-trip (JSON
 // request -> control-thread mutation -> JSON response) is exercised. Most
 // tests need no audio hardware: the graph runs without an open stream. The
@@ -47,13 +49,13 @@ nlohmann::json Parse(const std::string& s) {
 const char* Arr(const char* obj) { return obj; }
 
 void TestVersion() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   const auto j = Parse(bridge.HandleVersion(""));
   CHECK(j.is_string() && !j.get<std::string>().empty());
 }
 
 void TestAddBlockAndInfo() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   // Delay has wrapped DSP, so it exposes a real param table.
   auto r = Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":2,"id":"d1"}])")));
   CHECK(r["ok"] == true && r["id"] == "d1");
@@ -89,7 +91,7 @@ void TestAddBlockAndInfo() {
 }
 
 void TestParamsByIndexAndSymbol() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
   const auto info = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"d1"}])")));
   const std::string symbol = info["params"][0]["symbol"].get<std::string>();
@@ -116,8 +118,90 @@ void TestParamsByIndexAndSymbol() {
   CHECK(set["ok"] == false);
 }
 
+// issue #41: every plain-symbol-mapped effect kind's web param keys must
+// actually round-trip through the live bridge resolution path (HandleSetParam
+// -> ResolveParamIndex -> core -> HandleGetParam), not just satisfy the
+// static schema-equality check in paramSchema.coreDrift.test.ts (which only
+// compares packages/core/param_schema.json against apps/web/src/effects/
+// paramSchema.ts as data - it can't catch a bridge-side resolution bug, and
+// it doesn't run against the desktop binary at all). TestParamsByIndexAndSymbol
+// covers one block (delay) via its own generic symbol; TestReverbControlKeys
+// and TestAmpToneStackAndSlimSizeKeys already cover the special-routed kinds
+// (reverb controls, slimSize/irMix aliases). This covers every remaining kind
+// whose web keys are meant to equal the core's symbols outright, using the
+// exact key names apps/web/src/effects/paramSchema.ts sends.
+void TestSymbolMappedParamRoundTripAllEffectKinds() {
+  struct Kind {
+    const char* kind;
+    std::vector<const char*> keys;
+  };
+  const std::vector<Kind> kinds = {
+      {"noise-gate", {"threshold", "hysteresis", "attack", "hold", "release", "range"}},
+      {"compressor",
+       {"threshold", "ratio", "attack", "release", "knee", "makeup_gain", "character", "mix"}},
+      {"eq",
+       {"band0_frequency", "band0_gain", "band0_q", "band1_frequency", "band1_gain", "band1_q",
+        "band2_frequency", "band2_gain", "band2_q", "band3_frequency", "band3_gain", "band3_q"}},
+      {"chorus", {"rate", "depth", "delay", "feedback"}},
+      {"flanger", {"rate", "depth", "delay", "feedback"}},
+      {"phaser", {"rate", "depth", "feedback", "stages"}},
+      {"tremolo", {"rate", "depth", "shape"}},
+      {"delay", {"time", "feedback", "tone", "wow_depth", "wow_rate"}},
+      {"ping-pong-delay", {"time", "feedback", "tone"}},
+      {"mixer",
+       {"in0_level", "in0_pan", "in1_level", "in1_pan", "in2_level", "in2_pan", "in3_level",
+        "in3_pan"}},
+      {"splitter", {"out0_level", "out1_level", "out2_level", "out3_level"}},
+  };
+
+  int next_id = 0;
+  for (const auto& k : kinds) {
+    openaxe_desktop::StudioBridge bridge;
+    const std::string id = "k" + std::to_string(++next_id);
+    const std::string add =
+        std::string(R"([{"kind":")") + k.kind + R"(","row":0,"col":0,"id":")" + id + R"("}])";
+    CHECK(Parse(bridge.HandleAddBlock(Arr(add.c_str())))["ok"] == true);
+
+    const auto info =
+        Parse(bridge.HandleBlockInfo(Arr((R"([{"blockId":")" + id + R"("}])").c_str())));
+
+    for (const char* key : k.keys) {
+      double min_v = 0.0, max_v = 1.0;
+      bool found = false;
+      for (const auto& p : info["params"]) {
+        if (p["symbol"].get<std::string>() == key) {
+          min_v = p["min"].get<double>();
+          max_v = p["max"].get<double>();
+          found = true;
+          break;
+        }
+      }
+      // A web key with no matching core symbol is exactly the bug issue #41
+      // describes - fail loudly here instead of only via a runtime
+      // console.warn a user will never see.
+      CHECK(found);
+      if (!found) continue;
+
+      const std::string get_req =
+          std::string(R"([{"blockId":")") + id + R"(","key":")" + key + R"("}])";
+      const double before = Parse(bridge.HandleGetParam(Arr(get_req.c_str())))["value"].get<double>();
+      double target = min_v + (max_v - min_v) * 0.75;
+      if (std::fabs(target - before) < 1e-6) target = min_v + (max_v - min_v) * 0.25;
+
+      const std::string set_req = std::string(R"([{"blockId":")") + id + R"(","key":")" + key +
+                                   R"(","value":)" + std::to_string(target) + R"(}])";
+      const auto set_result = Parse(bridge.HandleSetParam(Arr(set_req.c_str())));
+      CHECK(set_result["ok"] == true);
+
+      const auto got = Parse(bridge.HandleGetParam(Arr(get_req.c_str())));
+      CHECK(got["ok"] == true);
+      CHECK(std::fabs(got["value"].get<double>() - target) < 1e-3);
+    }
+  }
+}
+
 void TestConnectDisconnectAndEdges() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"mixer","row":0,"col":0,"id":"m1"}])")));
 
   // IN rail (-1) -> m1 -> OUT rail (-2).
@@ -140,7 +224,7 @@ void TestConnectDisconnectAndEdges() {
 }
 
 void TestRemoveBlockDropsEdges() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"mixer","row":0,"col":0,"id":"m1"}])")));
   Parse(bridge.HandleConnect(Arr(R"([{"fromId":-1,"fromPort":0,"toId":"m1","toPort":0,"id":"e1"}])")));
   Parse(bridge.HandleConnect(Arr(R"([{"fromId":"m1","fromPort":0,"toId":-2,"toPort":0,"id":"e2"}])")));
@@ -152,7 +236,7 @@ void TestRemoveBlockDropsEdges() {
 }
 
 void TestMoveBlock() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"eq","row":0,"col":0,"id":"e1"}])")));
   Parse(bridge.HandleMoveBlock(Arr(R"([{"blockId":"e1","row":3,"col":4}])")));
   const auto info = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"e1"}])")));
@@ -165,7 +249,7 @@ void TestMoveBlock() {
 // reset the engine N times. Set a param to a non-default value, move the
 // block, and confirm the param survives the move (proving no reset ran).
 void TestMoveBlockDoesNotReset() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
 
   const double def = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"d1"}])")))["params"][0]
@@ -183,7 +267,7 @@ void TestMoveBlockDoesNotReset() {
 }
 
 void TestBadInputs() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"bogus","row":0,"col":0}])")))["ok"] == false);
   CHECK(Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"missing"}])")))["ok"] == false);
   CHECK(Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"missing","key":0,"value":1}])")))["ok"] == false);
@@ -203,9 +287,9 @@ void TestMonitorTap() {
   nam_studio_connect(graph, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
   nam_studio_reset(graph, kRate, kBlock);
 
-  nam_desktop::RtCallbackState state;
-  for (auto& ch : state.tap_in) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
-  for (auto& ch : state.tap_out) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  openaxe_desktop::RtCallbackState state;
+  for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
 
@@ -219,17 +303,17 @@ void TestMonitorTap() {
   float* out[2] = {out0, out1};
 
   // Two callbacks so the ring accumulates more than one frame's worth.
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
-  auto tap_in = nam_desktop::ReadTap(state, /*input=*/true, kFrames);
+  auto tap_in = openaxe_desktop::ReadTap(state, /*input=*/true, kFrames);
   CHECK(tap_in.frames == static_cast<unsigned int>(kFrames));
   for (int i = 0; i < kFrames; ++i) {
     CHECK(tap_in.l[i] == static_cast<float>(i));
     CHECK(tap_in.r[i] == static_cast<float>(i) * 2.0f);
   }
 
-  auto tap_out = nam_desktop::ReadTap(state, /*input=*/false, kFrames);
+  auto tap_out = openaxe_desktop::ReadTap(state, /*input=*/false, kFrames);
   CHECK(tap_out.frames == static_cast<unsigned int>(kFrames));
   for (int i = 0; i < kFrames; ++i) {
     CHECK(tap_out.l[i] == static_cast<float>(i));
@@ -243,7 +327,7 @@ void TestMonitorTap() {
 // the control thread knows no nam_studio_process is in flight.
 void TestSuspendCallbackSilencesOutput() {
   constexpr int kFrames = 32;
-  nam_desktop::RtCallbackState state;
+  openaxe_desktop::RtCallbackState state;
   state.suspend.store(true, std::memory_order_release);
 
   float out0[kFrames], out1[kFrames];
@@ -253,7 +337,7 @@ void TestSuspendCallbackSilencesOutput() {
   for (int i = 0; i < kFrames; ++i) in0[i] = in1[i] = 0.5f;
   float* in[2] = {in0, in1};
 
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   CHECK(state.suspended_callbacks.load() == 1);
   for (int i = 0; i < kFrames; ++i) {
@@ -285,7 +369,7 @@ void TestSuspendCallbackSilencesOutput() {
 // to JUCE's own from-scratch CoreAudio backend. Skips if no single
 // duplex-capable device exists.
 void TestConcurrentMutationsWhileStreamRunning() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
 
   const auto devices = Parse(bridge.HandleListDevices(""));
   if (!devices.is_array() || devices.empty()) {
@@ -357,6 +441,24 @@ void TestConcurrentMutationsWhileStreamRunning() {
       if (add["ok"] == true) {
         Parse(bridge.HandleSetParam(
             Arr((std::string(R"([{"blockId":")") + id + R"(","key":0,"value":0.3}])").c_str())));
+        // issue #211: the algorithm/model-swap mutators race the live audio
+        // callback exactly like add/remove do - each is a SetReverbAlgorithm
+        // emplace / SetDelayModel param-count + smoothing rewrite inside the
+        // suspend handshake. Cycle them so those exact sites get hammered as
+        // hard as the topology path.
+        if (kind == "reverb") {
+          static const char* const kAlgos[] = {"hall", "room", "plate", "earlyReflections"};
+          Parse(bridge.HandleSetReverbAlgorithm(Arr(
+              (std::string(R"([{"blockId":")") + id + R"(","algorithm":")" + kAlgos[i % 4] +
+               R"("}])")
+                  .c_str())));
+        } else if (kind == "delay") {
+          static const char* const kModels[] = {"digital", "analog", "tape"};
+          Parse(bridge.HandleSetDelayModel(Arr(
+              (std::string(R"([{"blockId":")") + id + R"(","model":")" + kModels[i % 3] +
+               R"("}])")
+                  .c_str())));
+        }
         Parse(bridge.HandleRemoveBlock(
             Arr((std::string(R"([{"blockId":")") + id + R"("}])").c_str())));
       }
@@ -393,12 +495,198 @@ void TestConcurrentMutationsWhileStreamRunning() {
                mutations.load(), kStressRounds);
 }
 
+// issue #211: nam_studio_set_param's Amp-family slim-size forward reallocates
+// inside NAMCore and used to run straight on the webview thread, so dragging
+// the slim-size knob while the audio callback was mid-process could race a
+// realloc against the model's inference buffers. HandleSetParam now routes it
+// through the suspend handshake like every other structural mutation. This
+// loads a genuinely slimmable capture (so SetSlimSize has real buffers to
+// rebuild) and hammers the UI->bridge slimSize path from several threads while
+// a live stream runs - the exact window that used to be unsafe. Skips on hosts
+// without a single duplex device, like the sibling stress test.
+void TestSlimSizeMutationsWhileStreamRunning() {
+  openaxe_desktop::StudioBridge bridge;
+
+  const auto devices = Parse(bridge.HandleListDevices(""));
+  if (!devices.is_array() || devices.empty()) {
+    std::printf("  Skipping slim-size stress test: no audio devices on this host\n");
+    return;
+  }
+  int64_t duplex_id = -1;
+  for (const auto& d : devices) {
+    if (d.value("isInput", false) && d.value("isOutput", false)) {
+      duplex_id = d.value("id", int64_t{-1});
+      break;
+    }
+  }
+  if (duplex_id < 0) {
+    std::printf("  Skipping slim-size stress test: no single input+output device on this host\n");
+    return;
+  }
+
+  const auto opened = Parse(bridge.HandleOpen(Arr(
+      (std::string(R"([{"inputDeviceId":)") + std::to_string(duplex_id) +
+       R"(,"outputDeviceId":)" + std::to_string(duplex_id) + "}]")
+          .c_str())));
+  if (opened["ok"] != true) {
+    std::printf("  Skipping slim-size stress test: open failed (%s)\n",
+                opened.value("error", "").c_str());
+    return;
+  }
+  const auto started = Parse(bridge.HandleStart(""));
+  if (started["ok"] != true) {
+    std::printf("  Skipping slim-size stress test: start failed (%s)\n",
+                started.value("error", "").c_str());
+    bridge.HandleClose("");
+    return;
+  }
+
+  CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"anchor"}])")))
+            ["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"IN","toId":"anchor"}])")))["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"anchor","toId":"OUT"}])")))["ok"] == true);
+
+  // Load a genuinely slimmable capture so SetSlimSize actually rebuilds
+  // NAMCore's internal buffers (the reallocation that used to race Process).
+  std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/slimmable_wavenet.nam",
+                    std::ios::binary);
+  if (!ifs.good()) {
+    std::printf("  Skipping slim-size stress test: example slimmable model not available\n");
+    Parse(bridge.HandleStop(""));
+    bridge.HandleClose("");
+    return;
+  }
+  const std::string model_json((std::istreambuf_iterator<char>(ifs)),
+                               std::istreambuf_iterator<char>());
+  // Build the request with nlohmann so the model's own quotes/backslashes are
+  // JSON-escaped - the handler parses the request as JSON (ParseArgs tolerates
+  // a bare object, wrapping it in the args array).
+  nlohmann::json load_req = nlohmann::json::object();
+  load_req["blockId"] = "anchor";
+  load_req["json"] = model_json;
+  const auto loaded = Parse(bridge.HandleLoadModelJson(load_req.dump()));
+  CHECK(loaded["ok"] == true);
+  const auto info = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"anchor"}])")));
+  CHECK(info["hasModel"] == true);
+
+  std::atomic<bool> stop{false};
+  std::atomic<int> writes{0};
+  auto worker = [&](int seed) {
+    int i = 0;
+    while (!stop.load(std::memory_order_relaxed)) {
+      const float slim = ((seed * 7 + i) % 100) / 100.0f;
+      Parse(bridge.HandleSetParam(Arr(
+          (std::string(R"([{"blockId":"anchor","key":"slimSize","value":)") +
+           std::to_string(slim) + R"(}])")
+              .c_str())));
+      ++i;
+      writes.fetch_add(1, std::memory_order_relaxed);
+    }
+  };
+
+  std::vector<std::thread> workers;
+  for (int t = 0; t < 3; ++t) workers.emplace_back(worker, t + 1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+  stop.store(true, std::memory_order_relaxed);
+  for (auto& w : workers) w.join();
+
+  CHECK(writes.load() > 0);
+  // The amp is still intact, queryable, and the stream is still alive.
+  const auto after = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"anchor"}])")));
+  CHECK(after["ok"] == true);
+  CHECK(after["hasModel"] == true);
+  const auto config = Parse(bridge.HandleGetConfig(""));
+  CHECK(config["ok"] == true);
+  CHECK(config["running"] == true);
+
+  Parse(bridge.HandleStop(""));
+  bridge.HandleClose("");
+
+  std::printf("  TestSlimSizeMutationsWhileStreamRunning: %d slim-size writes against a live stream, no crash\n",
+               writes.load());
+}
+
+// HandleOpen used to call AudioIO::Open()/SetGraph() (which resizes
+// AudioEngine's ext_in_l_/ext_in_r_ and re-publishes max_block_size_) with no
+// suspend/resume around it, unlike every other graph mutation in this file.
+// Reopening while a previous stream was still live - a device switch, or the
+// no-sound recovery poll retrying every few seconds - could race an in-flight
+// nam_studio_process call against that resize: ASAN caught it as a
+// heap-buffer-overflow store in AudioEngine::Process (engine.cpp, on
+// ext_in_l_). This drives that exact sequence - open+start, then reopen while
+// running with a real block wired in - so the race would show up as an ASAN
+// abort or a crash rather than silently passing.
+void TestReopenWhileStreamRunning() {
+  openaxe_desktop::StudioBridge bridge;
+
+  const auto devices = Parse(bridge.HandleListDevices(""));
+  if (!devices.is_array() || devices.empty()) {
+    std::printf("  Skipping reopen-while-running test: no audio devices on this host\n");
+    return;
+  }
+  int64_t duplex_id = -1;
+  for (const auto& d : devices) {
+    if (d.value("isInput", false) && d.value("isOutput", false)) {
+      duplex_id = d.value("id", int64_t{-1});
+      break;
+    }
+  }
+  if (duplex_id < 0) {
+    std::printf(
+        "  Skipping reopen-while-running test: no single input+output device on this host\n");
+    return;
+  }
+
+  const std::string open_args = std::string(R"([{"inputDeviceId":)") + std::to_string(duplex_id) +
+                                 R"(,"outputDeviceId":)" + std::to_string(duplex_id) + "}]";
+
+  const auto opened = Parse(bridge.HandleOpen(Arr(open_args.c_str())));
+  if (opened["ok"] != true) {
+    std::printf("  Skipping reopen-while-running test: open failed (%s)\n",
+                opened.value("error", "").c_str());
+    return;
+  }
+  const auto started = Parse(bridge.HandleStart(""));
+  if (started["ok"] != true) {
+    std::printf("  Skipping reopen-while-running test: start failed (%s)\n",
+                started.value("error", "").c_str());
+    bridge.HandleClose("");
+    return;
+  }
+
+  CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"anchor"}])")))
+            ["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"IN","toId":"anchor"}])")))["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"anchor","toId":"OUT"}])")))["ok"] == true);
+
+  // Let real callbacks run against the anchor block for a moment, then reopen
+  // (same devices, stand-in for a device switch or a recovery retry) while
+  // the previous stream is still playing - this is the exact window the fix
+  // suspends around.
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  for (int i = 0; i < 5; ++i) {
+    const auto reopened = Parse(bridge.HandleOpen(Arr(open_args.c_str())));
+    CHECK(reopened["ok"] == true);
+    CHECK(Parse(bridge.HandleStart(""))["ok"] == true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+
+  const auto config = Parse(bridge.HandleGetConfig(""));
+  CHECK(config["ok"] == true);
+  CHECK(config["running"] == true);
+
+  Parse(bridge.HandleStop(""));
+  bridge.HandleClose("");
+
+  std::printf("  TestReopenWhileStreamRunning: 5 reopens against a live stream, no crash\n");
+}
+
 // The UI's per-block Input/Output knobs. They used to be forwarded as the
 // core params `input_level`/`output_level`, which only exist on the Amp family
 // and hold the loaded model's dBu calibration - so the knobs either did
 // nothing or recalibrated the amp. They now drive real core I/O trims.
 void TestSetBlockTrim() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
 
   auto r = Parse(bridge.HandleSetBlockTrim(Arr(R"([{"blockId":"a1","input":0.5,"output":1.2}])")));
@@ -425,7 +713,7 @@ void TestSetBlockTrim() {
 // working control but the algorithm selector. They now go through the core's
 // ReverbControl mapping.
 void TestReverbControlKeys() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"reverb","row":0,"col":0,"id":"r1"}])")));
 
   for (const char* key : {"roomSize", "damping", "width", "predelay", "spin", "wander",
@@ -461,7 +749,7 @@ void TestReverbControlKeys() {
 // nothing on desktop) and the camelCase `slimSize` key, which resolved to no
 // core symbol before the alias existed.
 void TestAmpToneStackAndSlimSizeKeys() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
 
   for (const char* key : {"bass", "mid", "treble", "presence"}) {
@@ -534,7 +822,7 @@ void TestLoadIrWav() {
     base64.push_back(i + 2 < wav.size() ? kAlphabet[triple & 0x3F] : '=');
   }
 
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
 
   const std::string req =
@@ -586,7 +874,7 @@ void TestLoadIrWavRejectsOversized() {
   wav.append(9 * 1024 * 1024, '\0');  // > 8 MB cap
   const std::string encoded = b64(wav);
 
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"cab","row":0,"col":0,"id":"c1"}])")));
   const std::string req = std::string(R"([{"blockId":"c1","wavBase64":")") + encoded + R"("}])";
   const auto r = Parse(bridge.HandleLoadIrWav(Arr(req.c_str())));
@@ -595,23 +883,23 @@ void TestLoadIrWavRejectsOversized() {
 
 // issue #71: only loopback http(s) origins may host the privileged UI.
 void TestIsTrustedUiUrl() {
-  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1:5173"));
-  CHECK(nam_desktop::IsTrustedUiUrl("http://127.0.0.1/"));
-  CHECK(nam_desktop::IsTrustedUiUrl("https://localhost:3000"));
-  CHECK(nam_desktop::IsTrustedUiUrl("http://[::1]:5173"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("https://evil.example"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("http://192.168.1.5:5173"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("file:///Users/me/ui/index.html"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("data:text/html,<h1>x</h1>"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("http://127.0.0.1.evil.example"));
-  CHECK(!nam_desktop::IsTrustedUiUrl("javascript:alert(1)"));
-  CHECK(!nam_desktop::IsTrustedUiUrl(""));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("http://127.0.0.1:5173"));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("http://127.0.0.1/"));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("https://localhost:3000"));
+  CHECK(openaxe_desktop::IsTrustedUiUrl("http://[::1]:5173"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("https://evil.example"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("http://192.168.1.5:5173"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("file:///Users/me/ui/index.html"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("data:text/html,<h1>x</h1>"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("http://127.0.0.1.evil.example"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl("javascript:alert(1)"));
+  CHECK(!openaxe_desktop::IsTrustedUiUrl(""));
 }
 
 // issue #69: a model JSON larger than the cap must be rejected before it
 // reaches the core.
 void TestLoadModelJsonRejectsOversized() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"a1"}])")));
   const std::string big(33 * 1024 * 1024, 'a');  // > 32 MB cap
   const std::string req = std::string(R"([{"blockId":"a1","json":")") + big + R"("}])";
@@ -623,7 +911,7 @@ void TestLoadModelJsonRejectsOversized() {
 // exercises the actual bridge handlers (JSON round-trip), not just the
 // underlying AudioEngine methods (see engine_test.cpp in packages/core).
 void TestSetBypassAndMasterBus() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
   Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"delay","row":0,"col":0,"id":"d1"}])")));
 
   auto r = Parse(bridge.HandleSetBypass(Arr(R"([{"blockId":"d1","bypassed":true}])")));
@@ -646,12 +934,62 @@ void TestSetBypassAndMasterBus() {
   CHECK(r["ok"] == true);
 }
 
+// Backs the Tone3000 refresh token surviving an app restart (issue #146) -
+// the webview's own storage can't do that here since the UI server (and so
+// the webview's origin) binds a fresh ephemeral port every launch. Uses a
+// test-only key so this can never collide with (or clobber) the real
+// "tone3000_refresh_token" entry a live app instance has stored.
+void TestSecureStorageRoundTrip() {
+  openaxe_desktop::StudioBridge bridge;
+
+  // Start from a clean slate in case a previous run of this binary crashed
+  // before its own cleanup ran.
+  Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+
+  auto load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"].is_null());
+
+  auto store = Parse(bridge.HandleSecureStore(
+      Arr(R"([{"key":"bridge_test_secret","value":"s3cr3t-refresh-token"}])")));
+  CHECK(store["ok"] == true);
+
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"] == "s3cr3t-refresh-token");
+
+  // Storing again under the same key overwrites rather than erroring or
+  // duplicating - a token refresh does exactly this on every app launch.
+  store = Parse(bridge.HandleSecureStore(
+      Arr(R"([{"key":"bridge_test_secret","value":"rotated-refresh-token"}])")));
+  CHECK(store["ok"] == true);
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["value"] == "rotated-refresh-token");
+
+  auto del = Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(del["ok"] == true);
+  load = Parse(bridge.HandleSecureLoad(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(load["ok"] == true);
+  CHECK(load["value"].is_null());
+
+  // Deleting an already-absent key is a no-op success, matching
+  // removeBlock/setBypass's unknown-id handling elsewhere in this file.
+  del = Parse(bridge.HandleSecureDelete(Arr(R"([{"key":"bridge_test_secret"}])")));
+  CHECK(del["ok"] == true);
+
+  // A key that isn't a plain identifier is rejected outright - the Linux
+  // fallback turns it straight into a filename (see secure_storage.cpp).
+  auto bad = Parse(bridge.HandleSecureStore(Arr(R"([{"key":"../evil","value":"x"}])")));
+  CHECK(bad["ok"] == false);
+}
+
 }  // namespace
 
 int main() {
   TestVersion();
   TestAddBlockAndInfo();
   TestParamsByIndexAndSymbol();
+  TestSymbolMappedParamRoundTripAllEffectKinds();
   TestConnectDisconnectAndEdges();
   TestRemoveBlockDropsEdges();
   TestMoveBlock();
@@ -665,9 +1003,12 @@ int main() {
   TestAmpToneStackAndSlimSizeKeys();
   TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
+  TestSlimSizeMutationsWhileStreamRunning();
+  TestReopenWhileStreamRunning();
   TestIsTrustedUiUrl();
   TestLoadIrWavRejectsOversized();
   TestLoadModelJsonRejectsOversized();
+  TestSecureStorageRoundTrip();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);

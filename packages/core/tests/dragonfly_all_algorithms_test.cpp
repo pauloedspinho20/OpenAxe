@@ -4,15 +4,15 @@
 // anonymous-namespace-per-.cpp fix, linking any two of these together
 // would fail with duplicate DragonflyReverbDSP/fv3::* symbols - this test
 // existing and passing at all is the proof the fix holds, not just any
-// individual assertion inside it. Only built if NAM_STUDIO_HAS_DRAGONFLY
+// individual assertion inside it. Only built if OPENAXE_HAS_DRAGONFLY
 // (see tests/CMakeLists.txt).
 #include <cmath>
 #include <vector>
 
-#include "nam_studio/dsp/dragonfly_early_reflections.h"
-#include "nam_studio/dsp/dragonfly_hall_reverb.h"
-#include "nam_studio/dsp/dragonfly_plate_reverb.h"
-#include "nam_studio/dsp/dragonfly_room_reverb.h"
+#include "openaxe/dsp/dragonfly_early_reflections.h"
+#include "openaxe/dsp/dragonfly_hall_reverb.h"
+#include "openaxe/dsp/dragonfly_plate_reverb.h"
+#include "openaxe/dsp/dragonfly_room_reverb.h"
 #include "test_harness.h"
 
 namespace {
@@ -46,15 +46,15 @@ bool ProducesFiniteTail(Reverb& reverb, int dry_index, int wet_index) {
 }  // namespace
 
 int main() {
-  nam_studio::dsp::DragonflyHallReverb hall;
-  nam_studio::dsp::DragonflyRoomReverb room;
-  nam_studio::dsp::DragonflyPlateReverb plate;
-  nam_studio::dsp::DragonflyEarlyReflections early;
+  openaxe::dsp::DragonflyHallReverb hall;
+  openaxe::dsp::DragonflyRoomReverb room;
+  openaxe::dsp::DragonflyPlateReverb plate;
+  openaxe::dsp::DragonflyEarlyReflections early;
 
-  NAM_EXPECT(ProducesFiniteTail(hall, 0, 1));   // dry_level, early_level (late_level index 2 also wet)
-  NAM_EXPECT(ProducesFiniteTail(room, 0, 1));   // dry_level, early_level (late_level is index 3)
-  NAM_EXPECT(ProducesFiniteTail(plate, 0, 1));  // dry_level, early_level (Plate's only "wet" param)
-  NAM_EXPECT(ProducesFiniteTail(early, 0, 1));  // dry_level, early_level
+  OPENAXE_EXPECT(ProducesFiniteTail(hall, 0, 1));   // dry_level, early_level (late_level index 2 also wet)
+  OPENAXE_EXPECT(ProducesFiniteTail(room, 0, 1));   // dry_level, early_level (late_level is index 3)
+  OPENAXE_EXPECT(ProducesFiniteTail(plate, 0, 1));  // dry_level, early_level (Plate's only "wet" param)
+  OPENAXE_EXPECT(ProducesFiniteTail(early, 0, 1));  // dry_level, early_level
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Meter, MiniMeter } from '@nam/ui'
+import { Meter, MiniMeter } from '@openaxe/ui'
 
 export interface LiveMeterProps {
   label?: string

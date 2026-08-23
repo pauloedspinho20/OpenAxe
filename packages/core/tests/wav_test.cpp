@@ -2,7 +2,7 @@
 // AudioContext.decodeAudioData to lean on (dsp/wav.cpp). Files are built in
 // memory here so the cases are explicit - including the malformed ones, which
 // matter most: this parses whatever a user drags in.
-#include "nam_studio/dsp/wav.h"
+#include "openaxe/dsp/wav.h"
 
 #include <cmath>
 #include <cstdint>
@@ -11,8 +11,9 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::DecodeWav;
-using nam_studio::dsp::ResampleMono;
+using openaxe::dsp::DecodeWav;
+using openaxe::dsp::EncodeWavF32;
+using openaxe::dsp::ResampleMono;
 
 namespace {
 
@@ -75,15 +76,15 @@ void TestPcm16Mono() {
 
   const auto wav = BuildWav(1, 1, 48000, 16, data);
   const auto decoded = DecodeWav(wav.data(), wav.size());
-  NAM_EXPECT(decoded.has_value());
-  NAM_EXPECT(decoded->sample_rate == 48000.0);
-  NAM_EXPECT(decoded->source_channels == 1);
-  NAM_EXPECT(decoded->samples.size() == values.size());
-  NAM_EXPECT(std::fabs(decoded->samples[0]) < 1e-6f);
-  NAM_EXPECT(std::fabs(decoded->samples[1] - 0.5f) < 1e-4f);
-  NAM_EXPECT(std::fabs(decoded->samples[2] + 0.5f) < 1e-4f);
-  NAM_EXPECT(std::fabs(decoded->samples[3] - 1.0f) < 1e-4f);
-  NAM_EXPECT(std::fabs(decoded->samples[4] + 1.0f) < 1e-4f);
+  OPENAXE_EXPECT(decoded.has_value());
+  OPENAXE_EXPECT(decoded->sample_rate == 48000.0);
+  OPENAXE_EXPECT(decoded->source_channels == 1);
+  OPENAXE_EXPECT(decoded->samples.size() == values.size());
+  OPENAXE_EXPECT(std::fabs(decoded->samples[0]) < 1e-6f);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[1] - 0.5f) < 1e-4f);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[2] + 0.5f) < 1e-4f);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[3] - 1.0f) < 1e-4f);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[4] + 1.0f) < 1e-4f);
 }
 
 // Stereo folds to mono by averaging - a channel must not be dropped, or a
@@ -97,11 +98,11 @@ void TestStereoFoldsToMonoByAveraging() {
 
   const auto wav = BuildWav(1, 2, 44100, 16, data);
   const auto decoded = DecodeWav(wav.data(), wav.size());
-  NAM_EXPECT(decoded.has_value());
-  NAM_EXPECT(decoded->source_channels == 2);
-  NAM_EXPECT(decoded->samples.size() == 2);
-  NAM_EXPECT(std::fabs(decoded->samples[0]) < 1e-4f);         // +0.5 and -0.5 cancel
-  NAM_EXPECT(std::fabs(decoded->samples[1] - 0.5f) < 1e-4f);  // both +0.5
+  OPENAXE_EXPECT(decoded.has_value());
+  OPENAXE_EXPECT(decoded->source_channels == 2);
+  OPENAXE_EXPECT(decoded->samples.size() == 2);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[0]) < 1e-4f);         // +0.5 and -0.5 cancel
+  OPENAXE_EXPECT(std::fabs(decoded->samples[1] - 0.5f) < 1e-4f);  // both +0.5
 }
 
 // 24-bit needs sign extension, which is the easiest thing to get wrong.
@@ -117,9 +118,9 @@ void TestPcm24SignExtension() {
 
   const auto wav = BuildWav(1, 1, 48000, 24, data);
   const auto decoded = DecodeWav(wav.data(), wav.size());
-  NAM_EXPECT(decoded.has_value());
-  NAM_EXPECT(std::fabs(decoded->samples[0] - 0.5f) < 1e-4f);
-  NAM_EXPECT(std::fabs(decoded->samples[1] + 0.5f) < 1e-4f);
+  OPENAXE_EXPECT(decoded.has_value());
+  OPENAXE_EXPECT(std::fabs(decoded->samples[0] - 0.5f) < 1e-4f);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[1] + 0.5f) < 1e-4f);
 }
 
 // 8-bit PCM is unsigned with a 128 offset, unlike every wider integer form.
@@ -127,11 +128,11 @@ void TestPcm8IsUnsigned() {
   const std::vector<uint8_t> data = {128, 255, 0, 192};
   const auto wav = BuildWav(1, 1, 22050, 8, data);
   const auto decoded = DecodeWav(wav.data(), wav.size());
-  NAM_EXPECT(decoded.has_value());
-  NAM_EXPECT(std::fabs(decoded->samples[0]) < 1e-6f);          // 128 -> 0
-  NAM_EXPECT(decoded->samples[1] > 0.9f);
-  NAM_EXPECT(std::fabs(decoded->samples[2] + 1.0f) < 1e-6f);   // 0 -> -1
-  NAM_EXPECT(std::fabs(decoded->samples[3] - 0.5f) < 1e-2f);
+  OPENAXE_EXPECT(decoded.has_value());
+  OPENAXE_EXPECT(std::fabs(decoded->samples[0]) < 1e-6f);          // 128 -> 0
+  OPENAXE_EXPECT(decoded->samples[1] > 0.9f);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[2] + 1.0f) < 1e-6f);   // 0 -> -1
+  OPENAXE_EXPECT(std::fabs(decoded->samples[3] - 0.5f) < 1e-2f);
 }
 
 // Float WAVs are common for IRs exported from DAWs.
@@ -142,10 +143,10 @@ void TestFloat32AndFloat64() {
     std::memcpy(data.data(), values, sizeof(values));
     const auto wav = BuildWav(3, 1, 96000, 32, data);
     const auto decoded = DecodeWav(wav.data(), wav.size());
-    NAM_EXPECT(decoded.has_value());
-    NAM_EXPECT(decoded->sample_rate == 96000.0);
-    NAM_EXPECT(std::fabs(decoded->samples[0] - 0.25f) < 1e-6f);
-    NAM_EXPECT(std::fabs(decoded->samples[1] + 0.75f) < 1e-6f);
+    OPENAXE_EXPECT(decoded.has_value());
+    OPENAXE_EXPECT(decoded->sample_rate == 96000.0);
+    OPENAXE_EXPECT(std::fabs(decoded->samples[0] - 0.25f) < 1e-6f);
+    OPENAXE_EXPECT(std::fabs(decoded->samples[1] + 0.75f) < 1e-6f);
   }
   {
     std::vector<uint8_t> data(16);
@@ -153,9 +154,9 @@ void TestFloat32AndFloat64() {
     std::memcpy(data.data(), values, sizeof(values));
     const auto wav = BuildWav(3, 1, 48000, 64, data);
     const auto decoded = DecodeWav(wav.data(), wav.size());
-    NAM_EXPECT(decoded.has_value());
-    NAM_EXPECT(std::fabs(decoded->samples[0] - 0.125f) < 1e-6f);
-    NAM_EXPECT(std::fabs(decoded->samples[1] + 1.0f) < 1e-6f);
+    OPENAXE_EXPECT(decoded.has_value());
+    OPENAXE_EXPECT(std::fabs(decoded->samples[0] - 0.125f) < 1e-6f);
+    OPENAXE_EXPECT(std::fabs(decoded->samples[1] + 1.0f) < 1e-6f);
   }
 }
 
@@ -189,8 +190,8 @@ void TestExtensibleFormat() {
   out.insert(out.end(), data.begin(), data.end());
 
   const auto decoded = DecodeWav(out.data(), out.size());
-  NAM_EXPECT(decoded.has_value());
-  NAM_EXPECT(std::fabs(decoded->samples[0] - 0.5f) < 1e-4f);
+  OPENAXE_EXPECT(decoded.has_value());
+  OPENAXE_EXPECT(std::fabs(decoded->samples[0] - 0.5f) < 1e-4f);
 }
 
 // Unknown chunks before `fmt `/`data`, with odd sizes and their pad byte.
@@ -199,32 +200,32 @@ void TestSkipsUnknownChunks() {
   PushU16(data, static_cast<uint16_t>(static_cast<int16_t>(32767)));
   const auto wav = BuildWav(1, 1, 48000, 16, data, /*extra_chunk=*/true);
   const auto decoded = DecodeWav(wav.data(), wav.size());
-  NAM_EXPECT(decoded.has_value());
-  NAM_EXPECT(decoded->samples.size() == 1);
-  NAM_EXPECT(std::fabs(decoded->samples[0] - 1.0f) < 1e-4f);
+  OPENAXE_EXPECT(decoded.has_value());
+  OPENAXE_EXPECT(decoded->samples.size() == 1);
+  OPENAXE_EXPECT(std::fabs(decoded->samples[0] - 1.0f) < 1e-4f);
 }
 
 // Everything that isn't a WAV we can actually decode must return nullopt rather
 // than throwing, guessing, or reading past the buffer.
 void TestRejectsMalformedInput() {
-  NAM_EXPECT(!DecodeWav(nullptr, 100).has_value());
+  OPENAXE_EXPECT(!DecodeWav(nullptr, 100).has_value());
   const std::vector<uint8_t> tiny = {'R', 'I', 'F', 'F'};
-  NAM_EXPECT(!DecodeWav(tiny.data(), tiny.size()).has_value());
+  OPENAXE_EXPECT(!DecodeWav(tiny.data(), tiny.size()).has_value());
 
   std::vector<uint8_t> not_wave(64, 0);
   std::memcpy(not_wave.data(), "RIFF", 4);
   std::memcpy(not_wave.data() + 8, "AVI ", 4);
-  NAM_EXPECT(!DecodeWav(not_wave.data(), not_wave.size()).has_value());
+  OPENAXE_EXPECT(!DecodeWav(not_wave.data(), not_wave.size()).has_value());
 
   std::vector<uint8_t> data;
   PushU16(data, 0);
   // A compressed codec (0x0011 = IMA ADPCM) is well-formed but unsupported.
   const auto adpcm = BuildWav(0x0011, 1, 48000, 4, data);
-  NAM_EXPECT(!DecodeWav(adpcm.data(), adpcm.size()).has_value());
+  OPENAXE_EXPECT(!DecodeWav(adpcm.data(), adpcm.size()).has_value());
 
   // No data chunk at all.
   const auto empty = BuildWav(1, 1, 48000, 16, {});
-  NAM_EXPECT(!DecodeWav(empty.data(), empty.size()).has_value());
+  OPENAXE_EXPECT(!DecodeWav(empty.data(), empty.size()).has_value());
 
   // A header claiming far more data than the file contains: decode what is
   // really there instead of running off the end.
@@ -232,7 +233,7 @@ void TestRejectsMalformedInput() {
   truncated[truncated.size() - 12] = 0xFF;  // inflate the data chunk size
   truncated[truncated.size() - 11] = 0xFF;
   const auto decoded = DecodeWav(truncated.data(), truncated.size());
-  if (decoded.has_value()) NAM_EXPECT(decoded->samples.size() <= 8);
+  if (decoded.has_value()) OPENAXE_EXPECT(decoded->samples.size() <= 8);
 }
 
 // Resampling: the length scales, a constant stays constant, and a sine keeps its
@@ -240,12 +241,12 @@ void TestRejectsMalformedInput() {
 void TestResampleMono() {
   std::vector<float> constant(1000, 0.5f);
   const auto up = ResampleMono(constant, 44100.0, 48000.0);
-  NAM_EXPECT(up.size() == static_cast<size_t>(std::llround(1000.0 * 48000.0 / 44100.0)));
-  for (size_t i = 20; i + 20 < up.size(); ++i) NAM_EXPECT(std::fabs(up[i] - 0.5f) < 1e-3f);
+  OPENAXE_EXPECT(up.size() == static_cast<size_t>(std::llround(1000.0 * 48000.0 / 44100.0)));
+  for (size_t i = 20; i + 20 < up.size(); ++i) OPENAXE_EXPECT(std::fabs(up[i] - 0.5f) < 1e-3f);
 
   // Matching rates are a no-op, not a rebuild.
   const auto same = ResampleMono(constant, 48000.0, 48000.0);
-  NAM_EXPECT(same.size() == constant.size());
+  OPENAXE_EXPECT(same.size() == constant.size());
 
   // A 1kHz sine at 44.1k, resampled to 48k, must still be 1kHz: compare against
   // an ideal 1kHz sine at the new rate over the middle of the buffer.
@@ -259,16 +260,55 @@ void TestResampleMono() {
     const double expected = std::sin(6.283185307179586 * 1000.0 * static_cast<double>(i) / 48000.0);
     worst = std::max(worst, std::fabs(static_cast<double>(resampled[i]) - expected));
   }
-  NAM_EXPECT(worst < 0.02);
+  OPENAXE_EXPECT(worst < 0.02);
 
   // Downsampling shortens the buffer and stays finite (no aliasing blow-up).
   const auto down = ResampleMono(sine, 48000.0, 24000.0);
-  NAM_EXPECT(down.size() == sine.size() / 2);
-  for (float sample : down) NAM_EXPECT(std::isfinite(sample));
+  OPENAXE_EXPECT(down.size() == sine.size() / 2);
+  for (float sample : down) OPENAXE_EXPECT(std::isfinite(sample));
 
   // Degenerate arguments.
-  NAM_EXPECT(ResampleMono({}, 44100.0, 48000.0).empty());
-  NAM_EXPECT(ResampleMono(constant, 0.0, 48000.0).size() == constant.size());
+  OPENAXE_EXPECT(ResampleMono({}, 44100.0, 48000.0).empty());
+  OPENAXE_EXPECT(ResampleMono(constant, 0.0, 48000.0).size() == constant.size());
+}
+
+// EncodeWavF32 is DecodeWav's float path in reverse (issue #120's cab-IR
+// embedding needs it): whatever goes in must come back bit-for-bit, and the
+// container itself has to be a valid RIFF/WAVE.
+void TestEncodeWavF32RoundTrip() {
+  std::vector<float> samples;
+  samples.reserve(257);
+  for (int i = 0; i < 257; ++i) {
+    const float v = static_cast<float>(i) / 257.0f;
+    samples.push_back(i % 3 == 0 ? -v : v);
+  }
+  samples[10] = 1.0f;
+  samples[11] = -1.0f;
+
+  const auto encoded = EncodeWavF32(samples, 48000.0);
+  OPENAXE_EXPECT(encoded.size() == 44 + samples.size() * sizeof(float));
+  OPENAXE_EXPECT(std::memcmp(encoded.data(), "RIFF", 4) == 0);
+  OPENAXE_EXPECT(std::memcmp(encoded.data() + 8, "WAVE", 4) == 0);
+
+  const auto decoded = DecodeWav(encoded.data(), encoded.size());
+  OPENAXE_EXPECT(decoded.has_value());
+  if (!decoded.has_value()) return;
+  OPENAXE_EXPECT(decoded->sample_rate == 48000.0);
+  OPENAXE_EXPECT(decoded->source_channels == 1);
+  OPENAXE_EXPECT(decoded->samples.size() == samples.size());
+  for (size_t i = 0; i < samples.size(); ++i) {
+    // Bit-exact: these are raw float32 payload bytes, not a lossy codec.
+    if (decoded->samples[i] != samples[i]) {
+      std::fprintf(stderr, "  (round-trip mismatch at sample %zu)\n", i);
+      OPENAXE_EXPECT(false);
+      break;
+    }
+  }
+
+  // Degenerate arguments yield an empty buffer rather than a malformed file.
+  OPENAXE_EXPECT(EncodeWavF32({}, 48000.0).empty());
+  OPENAXE_EXPECT(EncodeWavF32(samples, 0.0).empty());
+  OPENAXE_EXPECT(EncodeWavF32(samples, -100.0).empty());
 }
 
 }  // namespace
@@ -283,6 +323,7 @@ int main() {
   TestSkipsUnknownChunks();
   TestRejectsMalformedInput();
   TestResampleMono();
+  TestEncodeWavF32RoundTrip();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

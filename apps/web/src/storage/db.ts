@@ -6,6 +6,11 @@
  * recipe for version-conflict errors.
  */
 
+// Deliberately still 'nam-web-studio' after the OpenAxe rebrand (issue #151):
+// this is the on-disk IndexedDB name users' saved rigs live under. Renaming
+// it without a migration would orphan every preset/scene/asset, so the old
+// name stays. If it is ever renamed, copy old DB -> new in a one-time
+// migration first.
 const DB_NAME = 'nam-web-studio'
 /**
  * v4: the preset schema changed from a fixed dual-chain shape (chainA/

@@ -1,4 +1,20 @@
 import styles from './Wordmark.module.css'
+import markUrl from './assets/openaxe-256.png'
+
+// PNG mark so the Wordmark needs no runtime SVG fetch (works in Storybook,
+// the web app and the desktop bundle alike). Uses the final 256 png.
+function AxeMark({ size = 24 }: { size?: number }) {
+  return (
+    <img
+      src={markUrl}
+      alt=""
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{ display: 'block', objectFit: 'contain' }}
+    />
+  )
+}
 
 export interface WordmarkProps {
   variant?: 'inline' | 'hero'
@@ -7,17 +23,21 @@ export interface WordmarkProps {
 export function Wordmark({ variant = 'inline' }: WordmarkProps) {
   if (variant === 'hero') {
     return (
-      <span className={styles.hero}>
-        <img src="./logo.png" className={styles.logo} alt="" />
-        NAM WEB STUDIO
-      </span>
+      <div className={styles.hero}>
+        <AxeMark size={200} />
+        <p>
+          OPEN<span>AXE</span>
+        </p>
+      </div>
     )
   }
 
   return (
-    <span className={styles.inline}>
-      <span className={styles.inlineDot} />
-      NAM WEB STUDIO
-    </span>
+    <div className={styles.inline}>
+      <AxeMark size={40} />
+      <p>
+        OPEN<span>AXE</span>
+      </p>
+    </div>
   )
 }

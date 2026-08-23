@@ -2,7 +2,7 @@
 
 #include <cstdio>
 
-namespace nam_studio::test {
+namespace openaxe::test {
 
 inline int g_failures = 0;
 
@@ -13,6 +13,6 @@ inline void Check(bool condition, const char* expr, const char* file, int line) 
   }
 }
 
-}  // namespace nam_studio::test
+}  // namespace openaxe::test
 
-#define NAM_EXPECT(cond) ::nam_studio::test::Check((cond), #cond, __FILE__, __LINE__)
+#define OPENAXE_EXPECT(cond) ::openaxe::test::Check((cond), #cond, __FILE__, __LINE__)

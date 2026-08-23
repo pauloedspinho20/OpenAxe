@@ -2,16 +2,31 @@
  * Zero-dependency Tone3000 OAuth2+PKCE + API client for a pure client-side
  * SPA (see README's "no required backend" decision). Heavily inspired by the
  * official reference client (github.com/tone-3000/api/src/tone3000-client.ts),
- * adapted to this app's storage choices: the full token triple (including the
- * refresh token) lives in sessionStorage only, so a returning tab reconnects
- * without a full re-auth but the long-lived credential does not outlive the
- * session in localStorage (which a same-origin XSS could read indefinitely).
+ * adapted to this app's storage choices.
+ *
+ * The access token stays sessionStorage-only, tab/window-session-scoped -
+ * it's short-lived (~1hr) and freely re-derivable from the refresh token, so
+ * there's little upside to persisting it anywhere longer-lived.
+ *
+ * The refresh token is the credential that actually needs to survive a
+ * restart so the user isn't asked to reconnect every time (issue #146) - see
+ * persistRefreshToken/tryHydrateFromPersistentStorage below for where it
+ * lives on each build:
+ *   - Desktop: the OS keychain via window.openAxe.secure* (native/
+ *     openaxe.ts), which sessionStorage/localStorage can't reach anyway -
+ *     the webview's origin is a fresh ephemeral port every launch.
+ *   - Web: localStorage. This is a deliberate change from an earlier,
+ *     stricter design that kept it sessionStorage-only specifically to
+ *     bound a same-origin XSS's reach to one tab session; persisting it
+ *     trades that away for not having to reconnect on every visit. Worth
+ *     revisiting if this app ever pulls in more third-party script surface.
  *
  * There is NO `t3k_cs_` client secret here: Tone3000's docs mark it server
  * only, and the browser token endpoint accepts just client_id + PKCE. See
  * config.ts for why.
  */
-import { PUBLISHABLE_KEY, REDIRECT_URI, T3K_API } from './config'
+import { DESKTOP_REDIRECT_URI, PUBLISHABLE_KEY, REDIRECT_URI, T3K_API } from './config'
+import { getOpenAxe } from '../native/openaxe'
 import type { OAuthCallbackResult, T3KTokens } from './types'
 import type {
   ListUserTonesParams,
@@ -21,6 +36,14 @@ import type {
   Tone3000Model,
   User,
 } from './types'
+
+/** The redirect_uri registered for this build - the desktop shell's fixed
+ * OAuth bounce port when running natively (its own UI server is ephemeral
+ * and can't be pre-registered), the web build's own value otherwise. See
+ * config.ts's DESKTOP_REDIRECT_URI. */
+function resolveRedirectUri(): string {
+  return getOpenAxe() ? DESKTOP_REDIRECT_URI : REDIRECT_URI
+}
 
 export async function randomBase64url(bytes: number): Promise<string> {
   const buf = crypto.getRandomValues(new Uint8Array(bytes))
@@ -62,9 +85,10 @@ function setAccessTokens(tokens: T3KTokens): void {
 }
 
 function getRefreshToken(): string | null {
-  // The refresh token is stored alongside the access token in sessionStorage
-  // (see setTokens/setAccessTokens); reading it from there keeps the
-  // long-lived credential out of localStorage.
+  // For a same-tab-session refresh (the access token merely expired, the
+  // tab never closed) the sessionStorage copy is all that's needed - no
+  // need to go through the slower persistent store here. That store (see
+  // tryHydrateFromPersistentStorage) is what a *new* session/launch reads.
   return getAccessTokens()?.refresh_token ?? null
 }
 
@@ -83,7 +107,7 @@ async function redeemCode(code: string, codeVerifier: string): Promise<T3KTokens
       grant_type: 'authorization_code',
       code,
       code_verifier: codeVerifier,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: resolveRedirectUri(),
       client_id: PUBLISHABLE_KEY!,
     }),
   })
@@ -180,17 +204,75 @@ export async function handleOAuthCallback(
   }
 }
 
-/** Persist a freshly-issued token triple in sessionStorage (access + refresh). */
+/** Identifier the desktop shell's OS-keychain-backed secret store uses for
+ * the refresh token - see native/openaxe.ts's secureStore/secureLoad. */
+const NATIVE_REFRESH_TOKEN_KEY = 'tone3000_refresh_token'
+/** Web build's equivalent, in localStorage - see the module header for why
+ * this is a deliberate exception to the rest of this file staying out of
+ * localStorage. */
+const WEB_REFRESH_TOKEN_KEY = 't3k_refresh_token'
+
+function persistRefreshToken(token: string): void {
+  const bridge = getOpenAxe()
+  if (bridge) {
+    void bridge.secureStore({ key: NATIVE_REFRESH_TOKEN_KEY, value: token }).catch(() => {})
+  } else {
+    localStorage.setItem(WEB_REFRESH_TOKEN_KEY, token)
+  }
+}
+
+function clearPersistedRefreshToken(): void {
+  const bridge = getOpenAxe()
+  if (bridge) {
+    void bridge.secureDelete({ key: NATIVE_REFRESH_TOKEN_KEY }).catch(() => {})
+  } else {
+    localStorage.removeItem(WEB_REFRESH_TOKEN_KEY)
+  }
+}
+
+/**
+ * Persist a freshly-issued token triple: the full triple in sessionStorage
+ * (access + refresh, for same-tab-session reuse - see getAccessToken), and
+ * the refresh token again into whichever longer-lived store this build
+ * uses (see persistRefreshToken) so it survives past this session entirely.
+ */
 export function setTokens(tokens: T3KTokens): void {
   setAccessTokens({
     access_token: tokens.access_token,
     expires_at: tokens.expires_at,
     refresh_token: tokens.refresh_token,
   })
+  persistRefreshToken(tokens.refresh_token)
 }
 
 export function clearTokens(): void {
   sessionStorage.removeItem(ACCESS_TOKENS_KEY)
+  clearPersistedRefreshToken()
+}
+
+/**
+ * Redeem a refresh token persisted from a previous visit/launch (see
+ * persistRefreshToken), so the user doesn't have to reconnect to Tone3000
+ * every time. Returns the fresh tokens on success, or null if there's
+ * nothing stored or the stored token was rejected (revoked/expired) - in
+ * the latter case the stale entry is cleared so this doesn't keep retrying
+ * a dead credential forever.
+ */
+export async function tryHydrateFromPersistentStorage(): Promise<T3KTokens | null> {
+  const bridge = getOpenAxe()
+  const stored = bridge
+    ? ((await bridge.secureLoad({ key: NATIVE_REFRESH_TOKEN_KEY }).catch(() => null))?.value ??
+      null)
+    : localStorage.getItem(WEB_REFRESH_TOKEN_KEY)
+  if (!stored) return null
+  try {
+    const tokens = await refreshTokens(stored)
+    setTokens(tokens)
+    return tokens
+  } catch {
+    clearPersistedRefreshToken()
+    return null
+  }
 }
 
 /**
@@ -202,7 +284,7 @@ export async function startStandardFlow(
   config = {} as { pubkey?: string; redirectUri?: string },
 ): Promise<void> {
   const pubkey = config.pubkey ?? PUBLISHABLE_KEY
-  const redirectUri = config.redirectUri ?? REDIRECT_URI
+  const redirectUri = config.redirectUri ?? resolveRedirectUri()
   const verifier = await randomBase64url(32)
   const codeChallenge = await sha256Base64url(verifier)
   const state = await randomBase64url(16)

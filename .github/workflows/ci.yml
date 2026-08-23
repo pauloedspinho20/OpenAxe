@@ -24,8 +24,20 @@ jobs:
       - name: Param schema drift check
         run: node scripts/gen-param-schema.mjs --check
 
+      # Covered by the plain --check above too (no --target means every
+      # target), kept explicit so the plugin-side artifact fails loudly on its
+      # own (issue #121).
+      - name: Plugin automation map drift check
+        run: node scripts/gen-param-schema.mjs --check --target=automation-map
+
       - name: Grid dimensions drift check
         run: node scripts/check-grid-dims.mjs
+
+      - name: WASM exports drift check
+        run: node scripts/check-wasm-exports.mjs
+
+      - name: Version sync check
+        run: node scripts/sync-version.mjs --check
 
       - name: Lint
         run: pnpm lint
@@ -34,7 +46,7 @@ jobs:
         run: pnpm format:check
 
       # `pnpm build` covers the web app + packages/ui and deliberately excludes
-      # @nam/desktop (use `pnpm build:desktop` / `build:all` for that): the
+      # @openaxe/desktop (use `pnpm build:desktop` / `build:all` for that): the
       # desktop build shells out to a full native CMake/webview compile (Linux
       # needs WebKitGTK + GTK dev packages this runner doesn't have, plus
       # packages/core's git submodules checked out - neither of which this job
@@ -47,7 +59,7 @@ jobs:
         run: pnpm test:run
 
       - name: Install Playwright browsers
-        run: pnpm --filter @nam/web exec playwright install --with-deps chromium firefox webkit
+        run: pnpm --filter @openaxe/web exec playwright install --with-deps chromium firefox webkit
 
       - name: E2E test
         run: pnpm test:e2e

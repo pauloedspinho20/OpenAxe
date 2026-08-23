@@ -1,10 +1,10 @@
-#include "nam_studio/dsp/wav.h"
+#include "openaxe/dsp/wav.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -187,4 +187,50 @@ std::vector<float> ResampleMono(const std::vector<float>& samples, double source
   return out;
 }
 
-}  // namespace nam_studio::dsp
+// Assemble the canonical little-endian RIFF/WAVE container around 32-bit float
+// samples: a 12-byte file header, a 16-byte `fmt ` chunk (format tag 3, mono),
+// and a `data` chunk holding the raw IEEE-754 sample bytes - exactly what
+// DecodeWav's float branch reads back.
+std::vector<uint8_t> EncodeWavF32(const std::vector<float>& samples, double sample_rate) {
+  if (samples.empty() || !(sample_rate > 0.0)) return {};
+  if (sample_rate > 4294967295.0) return {};
+
+  const uint32_t rate = static_cast<uint32_t>(sample_rate);
+  constexpr uint16_t kChannels = 1;
+  constexpr uint16_t kBits = 32;
+  const uint32_t byte_rate = rate * kChannels * (kBits / 8u);
+  const size_t data_bytes = samples.size() * sizeof(float);
+
+  std::vector<uint8_t> out;
+  out.reserve(44 + data_bytes);
+  auto put32 = [&out](uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFFu));
+  };
+  auto put16 = [&out](uint16_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFFu));
+  };
+
+  out.insert(out.end(), {'R', 'I', 'F', 'F'});
+  put32(static_cast<uint32_t>(36 + data_bytes));
+  out.insert(out.end(), {'W', 'A', 'V', 'E'});
+  out.insert(out.end(), {'f', 'm', 't', ' '});
+  put32(16);
+  put16(kFormatFloat);  // IEEE float, the same tag DecodeWav matches on
+  put16(kChannels);
+  put32(rate);
+  put32(byte_rate);
+  put16(static_cast<uint16_t>(kChannels * (kBits / 8u)));
+  put16(kBits);
+  out.insert(out.end(), {'d', 'a', 't', 'a'});
+  put32(static_cast<uint32_t>(data_bytes));
+
+  const auto* first = reinterpret_cast<const uint8_t*>(samples.data());
+  out.insert(out.end(), first, first + data_bytes);
+  return out;
+}
+
+}  // namespace openaxe::dsp

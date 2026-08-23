@@ -15,10 +15,11 @@
 #include <vector>
 
 #include "debug_log.h"
-#include "nam_studio/api.h"
-#include "nam_studio/core.h"
+#include "openaxe/api.h"
+#include "openaxe/core.h"
+#include "secure_storage.h"
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 using nlohmann::json;
 
@@ -93,7 +94,7 @@ constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
 
 }  // namespace
 
-bool nam_desktop::IsTrustedUiUrl(const std::string& url) {
+bool IsTrustedUiUrl(const std::string& url) {
   // Accept only loopback http(s). The bundled UI is served from our own
   // loopback HTTP server and the dev server is also loopback; nothing else
   // should ever receive the privileged bridge (issue #71).
@@ -254,7 +255,7 @@ void StudioBridge::DropEdgesTouching(const std::string& block_id) {
 // ── Handlers ────────────────────────────────────────────────────────────
 
 std::string StudioBridge::HandleVersion(const std::string&) {
-  return json(nam_studio::core::version()).dump();
+  return json(openaxe::core::version()).dump();
 }
 
 std::string StudioBridge::HandleListDevices(const std::string&) {
@@ -306,14 +307,26 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     // still adjust. The reply reports what was actually granted.
     const unsigned int buffer_frames = o.value("bufferFrames", 128u);
 
+    // Reopening while a previous stream is still live (device switch, or the
+    // no-sound recovery poll retrying every few seconds) must not let
+    // Open()/SetGraph() below race an in-flight nam_studio_process call on
+    // that old stream - both touch the same long-lived AudioEngine
+    // (ext_in_l_/max_block_size_ etc., resized here and read every callback),
+    // and ASAN has caught the resulting heap-buffer-overflow when a resize
+    // and a Process() call interleave. BeginSuspend() is a no-op when nothing
+    // is playing yet, which covers the common first-open case.
+    audio_.BeginSuspend();
     if (!audio_.Open(input_device, output_device, sample_rate, buffer_frames)) {
+      audio_.EndSuspend();
       return JsonError("open failed: " + audio_.LastError());
     }
     graph_sample_rate_ = audio_.SampleRate();
     graph_block_ = static_cast<int32_t>(audio_.BufferFrames());
-    // Re-arm the graph at the stream's actual parameters. Stream is open but
-    // not started, so no audio thread is touching the graph yet.
+    // Re-arm the graph at the stream's actual parameters. The old stream (if
+    // any) is suspended and the new one isn't started yet, so no audio
+    // thread can be touching the graph here.
     Call([this] { audio_.SetGraph(graph_, graph_sample_rate_, graph_block_); });
+    audio_.EndSuspend();
     const long latency_frames = audio_.StreamLatencyFrames();
     return (json{{"ok", true},
                  {"sampleRate", audio_.SampleRate()},
@@ -563,16 +576,41 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
 
     int32_t core_id = kUnknownBlock;
     int32_t index = -1;
+    bool slim_size = false;
     Call([&] {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
       core_id = it->second.core_id;
       index = ResolveParamIndex(key, core_id, graph_, blocks_, js_id);
+      if (index >= 0) {
+        const char* name = nullptr;
+        const char* sym = nullptr;
+        const char* unit = nullptr;
+        float min = 0, max = 0;
+        if (nam_studio_block_param_info(graph_, core_id, index, &name, &sym, &min, &max, &unit) &&
+            sym && std::strcmp(sym, "slim_size") == 0) {
+          slim_size = true;
+        }
+      }
     });
     if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
     if (index < 0) return JsonError("unknown param key");
-    // nam_studio_set_param is lock-free and thread-safe (see api.h).
-    nam_studio_set_param(graph_, core_id, index, value);
+    if (slim_size) {
+      // nam_studio_set_param forwards the Amp-family slim-size param
+      // synchronously into NAMCore, which may reallocate (issue #211) - it is
+      // Tier 2, not the lock-free atomic write the rest of the param surface
+      // is. Called straight from the webview thread it would race an in-flight
+      // nam_studio_process on the audio thread, so route it through the
+      // control thread's suspend handshake like every other structural
+      // mutation.
+      Call([&] {
+        Mutate([&] { nam_studio_set_param(graph_, core_id, index, value); },
+               /*reset_after=*/false);
+      });
+    } else {
+      // nam_studio_set_param is lock-free and thread-safe (see api.h).
+      nam_studio_set_param(graph_, core_id, index, value);
+    }
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setParam: ") + e.what());
@@ -949,6 +987,19 @@ std::string StudioBridge::HandleUnloadIr(const std::string& req) {
   }
 }
 
+std::string StudioBridge::HandleSetInputGain(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    // Straight to AudioIO, not through Mutate(): the gain is a lone atomic the
+    // audio callback reads, so there is no graph state to suspend around.
+    audio_.SetInputGain(o.value("gain", 1.0f));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setInputGain: ") + e.what());
+  }
+}
+
 std::string StudioBridge::HandleSetMasterLevel(const std::string& req) {
   try {
     const json args = ParseArgs(req);
@@ -1015,4 +1066,62 @@ std::string StudioBridge::HandleTakeStreamError(const std::string&) {
   return (json{{"error", errored ? json(message) : json()}}).dump();
 }
 
-}  // namespace nam_desktop
+namespace {
+// Keys only ever come from our own trusted JS (issue #71 already restricts
+// who gets the bridge at all), but the Linux fallback in secure_storage.cpp
+// turns a key straight into a filename - reject anything that isn't a plain
+// identifier so a typo or future caller can't traverse outside its secrets
+// directory.
+bool IsValidSecretKey(const std::string& key) {
+  if (key.empty()) return false;
+  return std::all_of(key.begin(), key.end(), [](unsigned char c) {
+    return std::isalnum(c) || c == '_' || c == '-';
+  });
+}
+}  // namespace
+
+std::string StudioBridge::HandleSecureStore(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    const std::string value = o.value("value", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureStore: invalid key");
+    std::string error;
+    if (!secure_storage::Store(key, value, &error)) return JsonError("secureStore: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureStore: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSecureLoad(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureLoad: invalid key");
+    std::string error;
+    const auto value = secure_storage::Load(key, &error);
+    if (!value && !error.empty()) return JsonError("secureLoad: " + error);
+    return (json{{"ok", true}, {"value", value ? json(*value) : json()}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureLoad: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSecureDelete(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureDelete: invalid key");
+    std::string error;
+    if (!secure_storage::Delete(key, &error)) return JsonError("secureDelete: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureDelete: ") + e.what());
+  }
+}
+
+}  // namespace openaxe_desktop

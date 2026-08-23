@@ -23,7 +23,7 @@ typedef int socklen_t;
 #include <unistd.h>
 #endif
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 namespace {
 
@@ -123,7 +123,86 @@ void HandleClient(int fd, const std::string& root) {
   SendAll(fd, body.data(), body.size());
 }
 
+// Extracts the raw query string (including the leading '?', or "" if none)
+// from a request line's target, e.g. "/callback?code=abc&state=xyz".
+std::string QueryStringOf(const std::string& target) {
+  const size_t q = target.find('?');
+  return q == std::string::npos ? std::string() : target.substr(q);
+}
+
+void HandleOAuthRedirectClient(int fd, unsigned short target_ui_port) {
+  std::array<char, kMaxRequest> buf;
+#ifdef _WIN32
+  const int n = recv(fd, buf.data(), static_cast<int>(buf.size()) - 1, 0);
+#else
+  const ssize_t n = recv(fd, buf.data(), buf.size() - 1, 0);
+#endif
+  if (n <= 0) return;
+  buf[static_cast<size_t>(n)] = '\0';
+
+  const std::string req(buf.data());
+  const size_t sp1 = req.find(' ');
+  const size_t sp2 = sp1 == std::string::npos ? std::string::npos : req.find(' ', sp1 + 1);
+  const std::string target =
+      sp1 == std::string::npos
+          ? std::string()
+          : req.substr(sp1 + 1, sp2 == std::string::npos ? std::string::npos : sp2 - sp1 - 1);
+
+  // The UI server hadn't picked a port yet (shouldn't happen in practice -
+  // this listener only starts after it has) - nothing sane to redirect to.
+  if (target_ui_port == 0) {
+    SendHeader(fd, 503, "Service Unavailable", 0, "text/plain");
+    return;
+  }
+
+  const std::string location =
+      "http://127.0.0.1:" + std::to_string(target_ui_port) + "/" + QueryStringOf(target);
+  const std::string head = "HTTP/1.1 302 Found\r\nLocation: " + location +
+                           "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+  SendAll(fd, head.data(), head.size());
+}
+
 }  // namespace
+
+bool HttpServer::StartOAuthRedirect(unsigned short port, const unsigned short* target_ui_port) {
+#ifdef _WIN32
+  WSADATA wsa;
+  if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+#endif
+  listen_fd_ = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
+  if (listen_fd_ < 0) return false;
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = htons(port);
+  if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
+      listen(listen_fd_, 8) != 0) {
+    CloseSocket(listen_fd_);
+    listen_fd_ = -1;
+    return false;
+  }
+
+  oauth_target_port_ = target_ui_port;
+  running_.store(true, std::memory_order_release);
+  thread_ = std::thread(&HttpServer::OAuthRedirectLoop, this);
+  return true;
+}
+
+void HttpServer::OAuthRedirectLoop() {
+  while (running_.load(std::memory_order_acquire)) {
+#ifdef _WIN32
+    SOCKET client = accept(listen_fd_, nullptr, nullptr);
+    if (client == INVALID_SOCKET) break;
+    const int fd = static_cast<int>(client);
+#else
+    const int fd = accept(listen_fd_, nullptr, nullptr);
+    if (fd < 0) break;
+#endif
+    HandleOAuthRedirectClient(fd, oauth_target_port_ ? *oauth_target_port_ : 0);
+    CloseSocket(fd);
+  }
+}
 
 bool HttpServer::Start(const std::string& root, unsigned short& out_port) {
 #ifdef _WIN32
@@ -182,4 +261,4 @@ HttpServer::~HttpServer() {
   Stop();
 }
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

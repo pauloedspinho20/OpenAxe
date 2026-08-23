@@ -4,7 +4,16 @@
 #include <string>
 #include <thread>
 
-namespace nam_desktop {
+namespace openaxe_desktop {
+
+// Fixed port registered with Tone3000 as the desktop app's OAuth
+// redirect_uri (http://127.0.0.1:54010/callback - see
+// apps/web/src/tone3000/config.ts's DESKTOP_OAUTH_REDIRECT_PORT, which MUST
+// be kept equal to this). Deliberately not the UI server's own ephemeral
+// port - see HttpServer::StartOAuthRedirect below for why a fixed port is
+// needed at all. Changing this value requires re-registering the new URI
+// with Tone3000 and updating config.ts to match.
+constexpr unsigned short kOAuthRedirectPort = 54010;
 
 // A minimal local HTTP server that serves a static directory (the bundled
 // React UI) over 127.0.0.1 on an OS-assigned port. The webview navigates to
@@ -22,14 +31,28 @@ class HttpServer {
   // Serve `root` on 127.0.0.1:0 (ephemeral port). Returns true and sets
   // out_port on success. Stop() joins the serve thread.
   bool Start(const std::string& root, unsigned short& out_port);
+
+  // Binds a FIXED port instead of an ephemeral one - the only job of this
+  // mode is bouncing a Tone3000 OAuth redirect back to wherever the bundled
+  // UI's own (ephemeral, unregisterable) port actually ended up this launch.
+  // Responds to any GET with a 302 to http://127.0.0.1:<*target_ui_port>/
+  // plus the incoming request's query string. `target_ui_port` is read
+  // fresh per request (so it's fine to call this before the UI server has
+  // picked its port) and must outlive this instance. Returns false if the
+  // port is already taken (e.g. by Vite's dev server) - Tone3000 login just
+  // won't complete in that case, everything else keeps working.
+  bool StartOAuthRedirect(unsigned short port, const unsigned short* target_ui_port);
+
   void Stop();
 
  private:
   void ServeLoop(const std::string& root);
+  void OAuthRedirectLoop();
 
   int listen_fd_ = -1;
   std::thread thread_;
   std::atomic<bool> running_{false};
+  const unsigned short* oauth_target_port_ = nullptr;
 };
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

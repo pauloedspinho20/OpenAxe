@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 // Forward-declared rather than #include <juce_audio_devices/...>: JUCE's own
 // CMake support compiles a linked module's sources directly into whichever
-// target links it (see the PRIVATE-linking note on nam_desktop_lib in
+// target links it (see the PRIVATE-linking note on openaxe_desktop_lib in
 // CMakeLists.txt), so anything that just #includes this header - the tests -
 // must not also need JUCE's own headers/include paths, only these type names
 // behind a unique_ptr (fine without a complete type - see audio.cpp, which
@@ -41,7 +41,7 @@ class AudioIODevice;
 // Real-time thread priority is handled by the backend itself, same as it was
 // under RtAudio.
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 // Mirrors the web app's IODevice (apps/web/src/state/ioStore.ts): an id and a
 // label per endpoint. JUCE identifies devices by name string, not a stable
@@ -100,6 +100,20 @@ struct RtCallbackState {
   int input_channels = 2;
   int output_channels = 2;
 
+  // Input TRIM (the web UI's ioStore.inputGain), 1 = unity. The web engine
+  // applies this with a GainNode between the input source and the rig; the
+  // desktop shell owns its own device I/O, so it applies the same scalar here
+  // instead (issue #115). Scaling happens before both nam_studio_process and
+  // the monitor tap, so the input meter and tuner see post-trim signal exactly
+  // as they do on the web (where they hang off the GainNode's output).
+  //
+  // Atomic because the UI thread writes it while the audio thread reads it;
+  // the callback never scales the backend's own input buffers in place (those
+  // belong to the driver) - it copies into in_scratch, which is sized by
+  // SetGraph on a non-audio thread so the callback never allocates.
+  std::atomic<float> input_gain{1.0f};
+  std::array<std::vector<float>, 2> in_scratch;
+
   // Monitor tap: ring buffers holding the most recent input (pre-graph) and
   // output (post-graph) stereo frames, captured by the audio thread and read
   // by the UI/control thread to drive facade analysers (block/input meters,
@@ -149,10 +163,13 @@ class AudioIO {
   AudioIO(const AudioIO&) = delete;
   AudioIO& operator=(const AudioIO&) = delete;
 
-  // Enumerate duplex-capable audio endpoints (input_channels > 0 AND
-  // output_channels > 0) - the only kind Open() accepts, since it requires
-  // the same device id for both directions. Input-only/output-only devices
-  // are omitted rather than left for callers to filter out. Never throws.
+  // Enumerate every audio endpoint (input and/or output), recording which
+  // direction(s) each provides independently. A single physical interface may
+  // appear under one shared name for both directions (true duplex) or under
+  // separate input/output names; both show up. Open() accepts an input
+  // endpoint and an output endpoint that need not be the same device (see
+  // Open()'s createDevice(output_name, input_name) call - the old RtAudio
+  // CoreAudio crash doing this, issue #53, no longer applies). Never throws.
   std::vector<AudioDeviceInfo> ListDevices() const;
 
   // Open a full-duplex stream. input_device/output_device are the ids
@@ -185,6 +202,13 @@ class AudioIO {
   // nam_studio_reset (not real-time safe) so it must be called before
   // Start(), from a non-audio thread. Passing nullptr detaches.
   void SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size);
+
+  // Input TRIM applied to the incoming signal before the graph and before the
+  // monitor tap (see RtCallbackState::input_gain). 1 = unity. Safe to call
+  // from any thread at any time, including while the stream is running -
+  // it's a single atomic store, no suspend handshake needed.
+  void SetInputGain(float gain);
+  float InputGain() const;
 
   // Start/stop the stream. Start() arms the callback's graph pointer, so it
   // is not real-time safe; call it from the UI thread before audio flows.
@@ -257,16 +281,26 @@ class AudioIO {
   // once in the ctor. Mutable so ListDevices()/ResolveDeviceName can stay
   // const even though scanForDevices()/createDevice() aren't const in JUCE.
   mutable std::unique_ptr<juce::AudioIODeviceType> type_;
-  // Created fresh by Open(), destroyed by Close(). Mutable for the same
-  // reason as type_ (StreamLatencyFrames() etc. stay const).
-  mutable std::unique_ptr<juce::AudioIODevice> device_;
-  std::unique_ptr<Callback> callback_;
 
   // Serializes stream control (Open/Close/Start/Stop) and BeginSuspend's
   // stop() against queries, since the webview thread and the control thread
   // both call into this object. Never taken by the audio callback.
   mutable std::mutex io_mutex_;
+
+  // Declared BEFORE device_/callback_ so it is destroyed LAST. The audio
+  // callback and the webview bridge both reach into this struct by reference;
+  // its lifetime must outlive both the JUCE audio thread (owned by device_)
+  // and the Callback that carries a RtCallbackState&. Destroying it first (its
+  // old position, after those members) freed the tap/in_scratch vectors while
+  // a still-referencing thread could touch them - the exit-time heap
+  // corruption (free_list_checksum_botch) / use-after-free in the bridge.
   RtCallbackState state_;
+
+  // Created fresh by Open(), destroyed by Close(). Mutable for the same
+  // reason as type_ (StreamLatencyFrames() etc. stay const).
+  mutable std::unique_ptr<juce::AudioIODevice> device_;
+  std::unique_ptr<Callback> callback_;
+
   unsigned int input_device_id_ = 0;
   unsigned int output_device_id_ = 0;
   double sample_rate_ = 48000.0;
@@ -281,4 +315,4 @@ class AudioIO {
   std::string pending_stream_error_;
 };
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

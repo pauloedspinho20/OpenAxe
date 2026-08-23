@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useGraphStore } from '../../../state/graphStore'
 import { Tuner } from '../../Tuner/Tuner'
-import { Dialog } from '@nam/ui'
+import { Dialog } from '@openaxe/ui'
 
 export interface TunerDialogProps {
   open: boolean

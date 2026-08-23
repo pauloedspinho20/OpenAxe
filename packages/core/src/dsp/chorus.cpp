@@ -1,11 +1,11 @@
-#include "nam_studio/dsp/chorus.h"
+#include "openaxe/dsp/chorus.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -177,4 +177,4 @@ void Chorus::SetParam(int index, float value) {
   }
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

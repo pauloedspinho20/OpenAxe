@@ -1,26 +1,37 @@
 cmake_minimum_required(VERSION 3.22)
-project(nam_studio_core VERSION 0.1.0 LANGUAGES CXX)
+
+# issue #54: the root VERSION file is the one source of truth for the
+# product's version (see apps/desktop/CMakeLists.txt's comment on the same
+# read) - kept in sync with every package.json by scripts/sync-version.mjs.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" OPENAXE_VERSION)
+string(STRIP "${OPENAXE_VERSION}" OPENAXE_VERSION)
+
+project(openaxe_core VERSION ${OPENAXE_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(NAM_STUDIO_BUILD_TESTS "Build packages/core unit tests" OFF)
+option(OPENAXE_BUILD_TESTS "Build packages/core unit tests" OFF)
 
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
-# nam_studio::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and the 4
+# openaxe::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and the 4
 # DSPark-based dynamics/EQ wrappers (Compressor/Equalizer/NoiseGate/Tremolo)
 # directly - it's the layer that makes those already-wrapped families
 # actually produce audio, so unlike the rest of this file it does NOT
 # degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/DSPARK_DIR below turn out
-# to be uninitialized; linking nam_studio_core will fail with undefined
+# to be uninitialized; linking openaxe_core will fail with undefined
 # symbols in that case. Run `git submodule update --init --recursive` first
 # if that happens.
-add_library(nam_studio_core STATIC
+add_library(openaxe_core STATIC
   src/core.cpp
   src/graph_validation.cpp
   src/graph_rig.cpp
   src/engine.cpp
   src/api.cpp
+  src/serialization/json.cpp
+  src/serialization/rig_state.cpp
+  src/serialization/sha256.cpp
+  src/serialization/base64.cpp
   src/dsp/chorus.cpp
   src/dsp/delay.cpp
   src/dsp/flanger.cpp
@@ -33,9 +44,12 @@ add_library(nam_studio_core STATIC
   src/dsp/tone_stack.cpp
   src/dsp/convolver.cpp
   src/dsp/wav.cpp
+  src/dsp/pitch_detect.cpp
+  src/dsp/note_utils.cpp
+  src/midi.cpp
 )
 
-target_include_directories(nam_studio_core PUBLIC
+target_include_directories(openaxe_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -46,24 +60,24 @@ target_include_directories(nam_studio_core PUBLIC
 # target. Its documented downstream-integration pattern (tools/CMakeLists.txt)
 # is to glob NAM/*.cpp directly into the consumer's own target, which is
 # what this does. Eigen/nlohmann include dirs stay PRIVATE: nam_amp.h only
-# forward-declares nam::DSP, so consumers of nam_studio_core never need
+# forward-declares nam::DSP, so consumers of openaxe_core never need
 # those paths themselves.
 set(NAM_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nam-core")
 if(EXISTS "${NAM_CORE_DIR}/NAM/dsp.cpp")
   file(GLOB NAM_CORE_SOURCES_TOP "${NAM_CORE_DIR}/NAM/*.cpp")
   file(GLOB NAM_CORE_SOURCES_SUB "${NAM_CORE_DIR}/NAM/*/*.cpp")
-  target_sources(nam_studio_core PRIVATE
+  target_sources(openaxe_core PRIVATE
     src/dsp/nam_amp.cpp
     ${NAM_CORE_SOURCES_TOP}
     ${NAM_CORE_SOURCES_SUB}
   )
-  target_include_directories(nam_studio_core PRIVATE
+  target_include_directories(openaxe_core PRIVATE
     "${NAM_CORE_DIR}"
     "${NAM_CORE_DIR}/Dependencies/eigen"
     "${NAM_CORE_DIR}/Dependencies/nlohmann"
   )
-  target_compile_definitions(nam_studio_core PRIVATE NAM_SAMPLE_FLOAT)
-  set(NAM_STUDIO_HAS_NAM_CORE TRUE)
+  target_compile_definitions(openaxe_core PRIVATE NAM_SAMPLE_FLOAT)
+  set(OPENAXE_HAS_NAM_CORE TRUE)
 else()
   message(WARNING
     "packages/core/third_party/nam-core has no NAM/dsp.cpp - the NAM "
@@ -81,7 +95,7 @@ endif()
 #     exception specifications removed in C++17, so it (and DSP.cpp, and
 #     this wrapper's own .cpp, which all transitively include those
 #     headers) must compile at C++14 - each algorithm gets its own target
-#     with a CXX_STANDARD override, linked into the C++20 nam_studio_core
+#     with a CXX_STANDARD override, linked into the C++20 openaxe_core
 #     target (mixing standards across TUs in one binary is fine; only
 #     same-TU consistency matters).
 #  2. DSP.cpp includes two small DPF header-only utilities
@@ -99,7 +113,7 @@ endif()
 set(DRAGONFLY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dragonfly-reverb")
 if(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
    AND EXISTS "${DRAGONFLY_DIR}/dpf/distrho/DistrhoPlugin.hpp")
-  set(NAM_STUDIO_HAS_DRAGONFLY TRUE)
+  set(OPENAXE_HAS_DRAGONFLY TRUE)
 
   # (plugin subdirectory name, wrapper source/target base name) pairs.
   set(DRAGONFLY_ALGOS
@@ -130,7 +144,18 @@ if(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
     # via one of these macros - Dragonfly's own Makefile always builds
     # with LIBFV3_FLOAT.
     target_compile_definitions(${wrapper_name}_vendor PRIVATE LIBFV3_FLOAT)
-    target_link_libraries(nam_studio_core PRIVATE ${wrapper_name}_vendor)
+    # freeverb3's headers declare several inline/internal-linkage member
+    # functions (slot_::alloc, biquad_::setLPF_RBJ, revbase_::getSampleRate,
+    # ...) in the *_t.hpp shims that are only ever used via the template
+    # specializations defined in the matching .cpp - Clang's
+    # -Wundefined-internal fires on every one of them. They're a known
+    # artifact of freeverb3's header layout in third-party vendored code,
+    # have no runtime effect, and are out of our control, so silence the
+    # warning for these targets rather than patching the subtree.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(${wrapper_name}_vendor PRIVATE -Wno-undefined-internal)
+    endif()
+    target_link_libraries(openaxe_core PRIVATE ${wrapper_name}_vendor)
   endforeach()
 else()
   message(WARNING
@@ -150,8 +175,8 @@ endif()
 # minimal example); this include path is all the build wiring it needs.
 set(DSPARK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dspark")
 if(EXISTS "${DSPARK_DIR}/Effects/Compressor.h")
-  target_include_directories(nam_studio_core PRIVATE "${DSPARK_DIR}")
-  set(NAM_STUDIO_HAS_DSPARK TRUE)
+  target_include_directories(openaxe_core PRIVATE "${DSPARK_DIR}")
+  set(OPENAXE_HAS_DSPARK TRUE)
 else()
   message(WARNING
     "packages/core/third_party/dspark isn't initialized - the Compressor/"
@@ -162,7 +187,7 @@ endif()
 if(EMSCRIPTEN)
   # Web target (issue #22): compiled to WASM, consumed by apps/web via
   # AudioWorklet. Emscripten's exports/link flags only apply to a final
-  # linked module, not a static archive - nam_studio_core itself stays a
+  # linked module, not a static archive - openaxe_core itself stays a
   # plain STATIC library (as every other target links it), and this small
   # executable is what actually gets Emscripten's MODULARIZE treatment.
   # wasm_entry.cpp is deliberately empty; nothing needs a main() for the
@@ -170,13 +195,13 @@ if(EMSCRIPTEN)
   # C++ exceptions must be enabled for this target. Emscripten disables them by
   # default, which turns any `throw` into an abort() that takes the whole
   # AudioWorklet down - and the core relies on catching them: NAMCore signals a
-  # bad model by throwing, and nam_studio::dsp::NamAmp catches that to return a
+  # bad model by throwing, and openaxe::dsp::NamAmp catches that to return a
   # NamLoadError instead (the ABI can't propagate exceptions). Without this, a
   # malformed .nam file killed the audio thread instead of returning an error.
   # -fexceptions (the JS-based implementation) rather than -fwasm-exceptions:
   # universally supported, and the cost lands on unwinding paths, not on
   # nam_studio_process.
-  target_compile_options(nam_studio_core PRIVATE -fexceptions)
+  target_compile_options(openaxe_core PRIVATE -fexceptions)
   add_executable(nam_studio_core_wasm src/wasm_entry.cpp)
   target_compile_options(nam_studio_core_wasm PRIVATE -fexceptions)
   # WHOLE_ARCHIVE for the same reason the desktop app and the tests need it:
@@ -186,12 +211,15 @@ if(EMSCRIPTEN)
   # This only started to matter once the web app's amp block ran core's own NAM
   # inference (ampWorklet.js) instead of a separate npm engine.
   target_link_libraries(nam_studio_core_wasm PRIVATE
-    $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
+    $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  # OUTPUT_NAME stays "nam_studio_core": the committed artifacts the web app fetches
+  # are nam_studio_core.{js,wasm}; renaming the output without an Emscripten
+  # rebuild + recommit would break the loader (see api.h's ABI note).
   set_target_properties(nam_studio_core_wasm PROPERTIES OUTPUT_NAME "nam_studio_core")
   target_link_options(nam_studio_core_wasm PRIVATE
     "SHELL:-s MODULARIZE=1"
     "SHELL:-s EXPORT_ES6=1"
-    "SHELL:-s ENVIRONMENT=worklet"
+    "SHELL:-s ENVIRONMENT=web,worklet"
     "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
     -fexceptions
@@ -199,8 +227,16 @@ if(EMSCRIPTEN)
     # Every name here must exist in the linked archive: wasm-ld fails the build
     # on an export it can't find, which is how _nam_studio_set_drive_model
     # (removed with the Drive effect) went unnoticed - the compiled artifacts
-    # are checked in and nothing rebuilds them automatically.
-    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_malloc','_free']"
+    # are checked in and nothing rebuilds them automatically. wasm-ld only
+    # catches an export listed here that doesn't exist though - the opposite
+    # drift (a symbol the web app calls that ISN'T listed here) fails silently
+    # at runtime instead, since Emscripten just leaves it undefined on the JS
+    # Module object. scripts/check-wasm-exports.mjs (issue #70) catches that
+    # direction by diffing every `_nam_studio_*`/`_malloc`/`_free` identifier
+    # referenced in apps/web against this list - run in CI, and standalone
+    # with `--fix` to add any it finds missing (a wasm rebuild is still
+    # required after - see scripts/build-core-wasm.sh).
+    "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_nam_studio_detect_pitch','_nam_studio_frequency_to_note','_nam_studio_midi_mapping_count','_nam_studio_midi_get_mapping','_nam_studio_midi_add_mapping','_nam_studio_midi_remove_mapping','_nam_studio_midi_clear_mappings','_nam_studio_midi_arm_learn','_nam_studio_midi_cancel_learn','_nam_studio_midi_is_learning','_nam_studio_midi_get_learn_target','_nam_studio_midi_parse_message','_nam_studio_midi_is_trigger_edge','_nam_studio_midi_message_matches','_nam_studio_midi_handle_message','_nam_studio_serialize_state','_nam_studio_serialize_state_ex','_nam_studio_load_state','_nam_studio_state_missing_asset_count','_nam_studio_state_missing_asset','_malloc','_free']"
     # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
     # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's
     # double/int32 out-params back out.
@@ -209,20 +245,20 @@ if(EMSCRIPTEN)
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # iOS target (issue #17): linked into apps/ios via an XCFramework.
-  set_target_properties(nam_studio_core PROPERTIES
+  set_target_properties(openaxe_core PROPERTIES
     FRAMEWORK TRUE
     MACOSX_FRAMEWORK_IDENTIFIER "io.miew.namstudio.core"
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
   # Android target (issue #17): shared lib for the JNI bridge.
-  add_library(nam_studio_core_jni SHARED src/core.cpp)
-  target_include_directories(nam_studio_core_jni PUBLIC include)
+  add_library(openaxe_core_jni SHARED src/core.cpp)
+  target_include_directories(openaxe_core_jni PUBLIC include)
 else()
   # Native desktop (issue #15) and VST3 plugin (issue #16) both link
-  # against the static nam_studio_core target directly.
+  # against the static openaxe_core target directly.
 endif()
 
-if(NAM_STUDIO_BUILD_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+if(OPENAXE_BUILD_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
   enable_testing()
   add_subdirectory(tests)
 endif()

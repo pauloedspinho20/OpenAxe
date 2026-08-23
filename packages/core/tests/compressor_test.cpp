@@ -1,8 +1,8 @@
 // End-to-end test for the DSPark-backed Compressor wrapper (kCompressor):
 // constructs the real DSP, sweeps every parameter, and verifies it actually
 // compresses a loud signal and leaves a quiet one alone. Only built if
-// NAM_STUDIO_HAS_DSPARK (see tests/CMakeLists.txt).
-#include "nam_studio/dsp/compressor.h"
+// OPENAXE_HAS_DSPARK (see tests/CMakeLists.txt).
+#include "openaxe/dsp/compressor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,21 +11,21 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::Compressor;
+using openaxe::dsp::Compressor;
 
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(Compressor::ParamCount() == 8);
+  OPENAXE_EXPECT(Compressor::ParamCount() == 8);
   const auto& threshold = Compressor::GetParamInfo(0);
-  NAM_EXPECT(std::string(threshold.symbol) == "threshold");
+  OPENAXE_EXPECT(std::string(threshold.symbol) == "threshold");
   const auto& character = Compressor::GetParamInfo(6);
-  NAM_EXPECT(std::string(character.symbol) == "character");
-  NAM_EXPECT(character.min_value == 0.0f && character.max_value == 3.0f);
+  OPENAXE_EXPECT(std::string(character.symbol) == "character");
+  OPENAXE_EXPECT(character.min_value == 0.0f && character.max_value == 3.0f);
   // Mix (dry/wet) is the native DSPark control added at index 7.
   const auto& mix = Compressor::GetParamInfo(7);
-  NAM_EXPECT(std::string(mix.symbol) == "mix");
-  NAM_EXPECT(mix.min_value == 0.0f && mix.max_value == 1.0f);
+  OPENAXE_EXPECT(std::string(mix.symbol) == "mix");
+  OPENAXE_EXPECT(mix.min_value == 0.0f && mix.max_value == 1.0f);
 }
 
 void TestGetSetEveryParam() {
@@ -33,9 +33,9 @@ void TestGetSetEveryParam() {
   for (int i = 0; i < Compressor::ParamCount(); ++i) {
     const auto& info = Compressor::GetParamInfo(i);
     comp.SetParam(i, info.min_value);
-    NAM_EXPECT(comp.GetParam(i) == info.min_value);
+    OPENAXE_EXPECT(comp.GetParam(i) == info.min_value);
     comp.SetParam(i, info.max_value);
-    NAM_EXPECT(comp.GetParam(i) == info.max_value);
+    OPENAXE_EXPECT(comp.GetParam(i) == info.max_value);
   }
 }
 
@@ -68,12 +68,12 @@ void TestLoudSineIsCompressed() {
       max_abs_out = std::max(max_abs_out, std::fabs(out_l[i]));
     }
   }
-  NAM_EXPECT(all_finite);
-  NAM_EXPECT(max_abs_out > 0.0f);
+  OPENAXE_EXPECT(all_finite);
+  OPENAXE_EXPECT(max_abs_out > 0.0f);
   // 1.0 (= 0 dBFS) at threshold -60 dB with 20:1 -> output pinned well below
   // the input peak. A wide margin keeps the assertion robust to model/engine
   // details.
-  NAM_EXPECT(max_abs_out < 0.5f);
+  OPENAXE_EXPECT(max_abs_out < 0.5f);
 }
 
 void TestQuietSignalIsNotCompressed() {
@@ -101,7 +101,7 @@ void TestQuietSignalIsNotCompressed() {
       for (int i = 0; i < kFrames; ++i) max_abs_out = std::max(max_abs_out, std::fabs(out_l[i]));
     }
   }
-  NAM_EXPECT(max_abs_out > 0.8f * kAmplitude);
+  OPENAXE_EXPECT(max_abs_out > 0.8f * kAmplitude);
 }
 
 }  // namespace
@@ -112,5 +112,5 @@ int main() {
   TestLoudSineIsCompressed();
   TestQuietSignalIsNotCompressed();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

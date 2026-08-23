@@ -14,7 +14,7 @@ import {
 import { importTone3000Asset } from '../../tone3000/importService'
 import type { BlockLoadTarget } from '../../tone3000/importService'
 import type { Tone, Tone3000Model } from '../../tone3000/types'
-import { Dialog, HardwareButton, OutlineButton } from '@nam/ui'
+import { Dialog, HardwareButton, OutlineButton } from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
 
 /** Max results /tones/search and /tones/favorited return per page (per API docs). */
@@ -510,6 +510,7 @@ export function Tone3000Browser({ target, context }: Props) {
                             alt=""
                             className={styles.cardImage}
                             loading="lazy"
+                            draggable={false}
                           />
                           {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
                         </div>

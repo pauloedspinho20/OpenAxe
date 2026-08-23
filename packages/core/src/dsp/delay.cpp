@@ -1,11 +1,11 @@
-#include "nam_studio/dsp/delay.h"
+#include "openaxe/dsp/delay.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -143,6 +143,9 @@ void Delay::SetModel(Model model) {
   }
 }
 
+// Which character the block currently plays through - see the header.
+Delay::Model Delay::GetModel() const { return impl_->model; }
+
 // Feedback delay with three models differing only in what happens inside the
 // feedback loop:
 //
@@ -236,4 +239,4 @@ void Delay::SetParam(int index, float value) {
   }
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

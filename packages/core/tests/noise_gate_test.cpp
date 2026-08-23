@@ -1,7 +1,7 @@
 // End-to-end test for the DSPark-backed NoiseGate wrapper (kNoiseGate):
 // verifies the gate opens for a signal above the threshold and closes (with
-// range attenuation) below it. Only built if NAM_STUDIO_HAS_DSPARK.
-#include "nam_studio/dsp/noise_gate.h"
+// range attenuation) below it. Only built if OPENAXE_HAS_DSPARK.
+#include "openaxe/dsp/noise_gate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -10,16 +10,16 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::NoiseGate;
+using openaxe::dsp::NoiseGate;
 
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(NoiseGate::ParamCount() == 6);
+  OPENAXE_EXPECT(NoiseGate::ParamCount() == 6);
   const auto& threshold = NoiseGate::GetParamInfo(0);
-  NAM_EXPECT(std::string(threshold.symbol) == "threshold");
+  OPENAXE_EXPECT(std::string(threshold.symbol) == "threshold");
   const auto& range = NoiseGate::GetParamInfo(5);
-  NAM_EXPECT(std::string(range.symbol) == "range");
+  OPENAXE_EXPECT(std::string(range.symbol) == "range");
 }
 
 void TestGetSetEveryParam() {
@@ -27,9 +27,9 @@ void TestGetSetEveryParam() {
   for (int i = 0; i < NoiseGate::ParamCount(); ++i) {
     const auto& info = NoiseGate::GetParamInfo(i);
     gate.SetParam(i, info.min_value);
-    NAM_EXPECT(gate.GetParam(i) == info.min_value);
+    OPENAXE_EXPECT(gate.GetParam(i) == info.min_value);
     gate.SetParam(i, info.max_value);
-    NAM_EXPECT(gate.GetParam(i) == info.max_value);
+    OPENAXE_EXPECT(gate.GetParam(i) == info.max_value);
   }
 }
 
@@ -63,16 +63,16 @@ void TestLoudSignalOpensTheGate() {
   // stays open and the signal passes near-unity (range only applies when
   // closed): the 0.1 input must come out at ~0.1, not ~1e-4.
   const float peak = ConstantLevelPeak(0.1f, 256, 8);
-  NAM_EXPECT(std::isfinite(peak));
-  NAM_EXPECT(peak > 0.08f);
+  OPENAXE_EXPECT(std::isfinite(peak));
+  OPENAXE_EXPECT(peak > 0.08f);
 }
 
 void TestSilentSignalIsGated() {
   // 1e-5 (~ -100 dB) sits far below the threshold: the gate closes and
   // applies its default -80 dB range, crushing the output to ~1e-4 of input.
   const float peak = ConstantLevelPeak(1e-5f, 256, 16);
-  NAM_EXPECT(std::isfinite(peak));
-  NAM_EXPECT(peak < 1e-4f);
+  OPENAXE_EXPECT(std::isfinite(peak));
+  OPENAXE_EXPECT(peak < 1e-4f);
 }
 
 }  // namespace
@@ -83,5 +83,5 @@ int main() {
   TestLoudSignalOpensTheGate();
   TestSilentSignalIsGated();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

@@ -1,11 +1,11 @@
-#include "nam_studio/dsp/phaser.h"
+#include "openaxe/dsp/phaser.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -185,4 +185,4 @@ void Phaser::SetParam(int index, float value) {
   }
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

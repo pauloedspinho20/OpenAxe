@@ -1,7 +1,7 @@
-import { HardwareButton, Wordmark } from '@nam/ui'
+import { HardwareButton, Wordmark } from '@openaxe/ui'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
-import { getDuplexDevices, useIOStore, type LatencyHint } from '@/state/ioStore'
-import { getNamStudio } from '@/native/namStudio'
+import { useIOStore, type LatencyHint } from '@/state/ioStore'
+import { getOpenAxe } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import styles from './PowerGate.module.css'
 
@@ -43,32 +43,16 @@ export function PowerGate({
 }: PowerGateProps) {
   const auth = useTone3000Auth()
   const io = useIOStore()
-  const isNative = getNamStudio() !== null
+  const isNative = getOpenAxe() !== null
 
   if (status === 'ready') return null
 
   const starting = status === 'starting'
-  // Native (desktop): RtAudio rejects a mismatched input/output pair (issue
-  // #53 - the built-in-mic-plus-speakers feedback loop this exists to
-  // prevent), so only devices capable of both are offered, one choice
-  // driving both `inputDeviceId`/`outputDeviceId`.
-  const duplexDevices = getDuplexDevices(io)
-
-  const selectNativeDevice = (id: string) => {
-    io.setInputDevice(id)
-    io.setOutputDevice(id)
-  }
 
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
         <Wordmark variant="hero" />
-        <p className={styles.description}>
-          Starts the audio engine and asks for microphone access for your instrument input. Your
-          browser remembers that permission across visits, but starting audio itself needs a fresh
-          click every time you open this page - that's a browser autoplay restriction, not something
-          this app can skip.
-        </p>
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
 
@@ -100,18 +84,32 @@ export function PowerGate({
             <select
               className={styles.latencySelect}
               value={io.inputDeviceId}
-              onChange={(e) => selectNativeDevice(e.target.value)}
+              onChange={(e) => io.setInputDevice(e.target.value)}
               disabled={starting}
-              aria-label="Audio device"
+              aria-label="Input device"
             >
-              <option value="">Default device</option>
-              {duplexDevices.map((d) => (
+              <option value="">Default input</option>
+              {io.inputDevices.map((d) => (
                 <option key={d.deviceId} value={d.deviceId}>
                   {d.label}
                 </option>
               ))}
             </select>
-            {duplexDevices.length === 0 && (
+            <select
+              className={styles.latencySelect}
+              value={io.outputDeviceId}
+              onChange={(e) => io.setOutputDevice(e.target.value)}
+              disabled={starting}
+              aria-label="Output device"
+            >
+              <option value="">Default output</option>
+              {io.outputDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            {io.inputDevices.length === 0 && io.outputDevices.length === 0 && (
               <p className={styles.deviceHint}>
                 No audio interface found - plug one in, or continue without sound below.
               </p>
@@ -167,22 +165,11 @@ export function PowerGate({
         </select>
 
         <HardwareButton
+          variant="accent"
           label={starting ? 'Starting…' : 'POWER ON'}
           onClick={() => onPowerOn()}
           disabled={starting}
-          fullWidth
         />
-        <HardwareButton
-          label="Continue without sound"
-          onClick={() => onPowerOn({ noSound: true })}
-          disabled={starting}
-          fullWidth
-        />
-        <p className={styles.tone3000Hint}>
-          No sound mode skips the audio device entirely - the grid, presets, and editing all still
-          work. The app switches back to normal audio automatically the moment a usable device is
-          available.
-        </p>
       </div>
     </div>
   )

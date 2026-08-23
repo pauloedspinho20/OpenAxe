@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Verifies the grid dimensions defined twice - TS (apps/web/src/engine/
-// gridConfig.ts) and C++ (packages/core/include/nam_studio/grid_config.h) -
+// gridConfig.ts) and C++ (packages/core/include/openaxe/grid_config.h) -
 // stay in sync. The C++ header is explicitly "Ported from gridConfig.ts",
 // so TS is the source of truth and the C++ constants must match it.
 //
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const TS_PATH = join(ROOT, 'apps/web/src/engine/gridConfig.ts')
-const CPP_PATH = join(ROOT, 'packages/core/include/nam_studio/grid_config.h')
+const CPP_PATH = join(ROOT, 'packages/core/include/openaxe/grid_config.h')
 
 const FIX = process.argv.includes('--fix')
 

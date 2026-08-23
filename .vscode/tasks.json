@@ -2,10 +2,28 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Setup: everything",
+      "type": "shell",
+      "command": "node scripts/setup.mjs",
+      "detail": "Start here. Fetches the DSP submodules, installs dependencies (repairing wrong-architecture native binaries), and configures both CMake projects. Idempotent - safe to re-run any time something looks broken",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Setup: everything (web only, no C++)",
+      "type": "shell",
+      "command": "node scripts/setup.mjs --web-only",
+      "detail": "Same, minus the submodules and CMake - for working on the web app without a C++ toolchain",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
       "label": "Install dependencies",
       "type": "shell",
       "command": "pnpm install",
-      "detail": "pnpm install across the workspace (apps/web, packages/ui)",
+      "detail": "pnpm install across the workspace (apps/web, packages/ui). Prefer \"Setup: everything\" - it also repairs the wrong-architecture native binaries a pnpm running under emulation installs",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
@@ -13,7 +31,7 @@
     {
       "label": "Install Playwright browsers",
       "type": "shell",
-      "command": "pnpm --filter @nam/web exec playwright install",
+      "command": "pnpm --filter @openaxe/web exec playwright install",
       "detail": "One-time fetch of the chromium/firefox/webkit binaries used by the e2e suite",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
@@ -94,7 +112,7 @@
     {
       "label": "Test coverage",
       "type": "shell",
-      "command": "pnpm --filter @nam/web test:coverage",
+      "command": "pnpm --filter @openaxe/web test:coverage",
       "detail": "Vitest with the v8 coverage report (apps/web)",
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -131,8 +149,8 @@
     {
       "label": "C++: Init submodules",
       "type": "shell",
-      "command": "git submodule update --init --recursive -- packages/core/third_party/nam-core && git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf",
-      "detail": "One-time fetch of the vendored DSP library submodules (NAMCore's Eigen/AudioDSPTools, Dragonfly's dpf) - needed before configuring packages/core",
+      "command": "node scripts/setup.mjs --submodules-only",
+      "detail": "One-time fetch of the vendored DSP library submodules (dspark's Effects, NAMCore's Eigen/AudioDSPTools, Dragonfly's dpf) - needed before configuring packages/core. Skips whatever is already present",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
@@ -140,7 +158,7 @@
     {
       "label": "C++: Configure",
       "type": "shell",
-      "command": "cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
+      "command": "cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
       "detail": "Configures the packages/core C++ DSP library with tests enabled - see packages/core/README.md if cmake isn't on your PATH",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -185,7 +203,7 @@
     {
       "label": "Desktop: Configure (with tests)",
       "type": "shell",
-      "command": "cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
+      "command": "cmake -S apps/desktop -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
       "detail": "Configures the apps/desktop C++ shell (webview + RtAudio + core) with the CTest suite enabled",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -194,7 +212,7 @@
     {
       "label": "Desktop: Build",
       "type": "shell",
-      "command": "pnpm --filter @nam/desktop build",
+      "command": "pnpm --filter @openaxe/desktop build",
       "detail": "Release build of the native desktop app + bundles the React UI into build/ui (scripts/build.mjs)",
       "group": { "kind": "build", "isDefault": false },
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -204,7 +222,7 @@
     {
       "label": "Desktop: Dev (Debug build + launch)",
       "type": "shell",
-      "command": "pnpm --filter @nam/desktop dev",
+      "command": "pnpm --filter @openaxe/desktop dev",
       "detail": "Debug-builds the desktop app and launches the window against the bundled web UI",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -213,7 +231,7 @@
     {
       "label": "Desktop: Dev (fast - skip the UI rebuild)",
       "type": "shell",
-      "command": "pnpm --filter @nam/desktop dev:fast",
+      "command": "pnpm --filter @openaxe/desktop dev:fast",
       "detail": "Debug-builds and launches the desktop app reusing the UI already in build/ui - for C++-only changes",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "dedicated" },
@@ -223,7 +241,7 @@
       "label": "Desktop: Dev (attach to the web dev server)",
       "type": "shell",
       "command": "pnpm dev:desktop:attach",
-      "detail": "Debug-builds and launches the desktop app pointed at http://localhost:5173 (NAM_STUDIO_UI_URL) - needs \"Web: Dev server\" running, gives the native shell Vite HMR",
+      "detail": "Debug-builds and launches the desktop app pointed at http://localhost:5173 (OPENAXE_UI_URL) - needs \"Web: Dev server\" running, gives the native shell Vite HMR",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "dedicated" },
       "problemMatcher": []
@@ -257,8 +275,8 @@
     {
       "label": "Desktop: Package",
       "type": "shell",
-      "command": "pnpm --filter @nam/desktop package",
-      "detail": "Builds the app + UI and runs CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb",
+      "command": "pnpm --filter @openaxe/desktop package",
+      "detail": "Builds the app + UI and runs CPack -> build/openaxe-desktop-<v>.dmg|.zip|.deb",
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []

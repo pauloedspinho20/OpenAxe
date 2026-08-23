@@ -1,11 +1,11 @@
-#include "nam_studio/dsp/flanger.h"
+#include "openaxe/dsp/flanger.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -168,4 +168,4 @@ void Flanger::SetParam(int index, float value) {
   }
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

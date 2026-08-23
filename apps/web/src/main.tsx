@@ -1,10 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ErrorBoundary } from './components/global/ErrorBoundary/ErrorBoundary'
+import { installUnhandledRejectionHandler } from './unhandledRejections'
 import './index.css'
 import App from './App.tsx'
 
+installUnhandledRejectionHandler()
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

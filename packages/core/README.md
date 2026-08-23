@@ -6,7 +6,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
 
 ## What's real (issue #14, first PR)
 
-- **Audio graph engine** (`include/nam_studio/{grid_config,block,graph_validation,graph_rig}.h`
+- **Audio graph engine** (`include/openaxe/{grid_config,block,graph_validation,graph_rig}.h`
   - matching `src/*.cpp`) — an original, dependency-free C++ port of the
     app's existing TypeScript graph engine (`apps/web/src/engine/GraphRig.ts`
     and friends). Blocks live on a grid, wired left-to-right by column;
@@ -15,12 +15,12 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     real-time-processing-specific from the TS original (live node wiring,
     analyser taps, master bus, params) — this is the topology/bookkeeping
     layer only.
-- **NAM inference wrapper** (`include/nam_studio/dsp/nam_amp.h` +
+- **NAM inference wrapper** (`include/openaxe/dsp/nam_amp.h` +
   `src/dsp/nam_amp.cpp`) — wraps NeuralAmpModelerCore's `nam::DSP`, exposing
   model loading, sample-rate-aware reset, real-time process, input/output
   level calibration (dBu), loudness, and slim-size quality control as a
-  clean C++ class (`nam_studio::dsp::NamAmp`).
-- **All four Dragonfly Reverb algorithms** (`include/nam_studio/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
+  clean C++ class (`openaxe::dsp::NamAmp`).
+- **All four Dragonfly Reverb algorithms** (`include/openaxe/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
   - matching `src/dsp/*.cpp`) — wrap each of Dragonfly's `DragonflyReverbDSP`
     classes (freeverb3-based), exposing their full parameter surfaces:
     `DragonflyHallReverb` (18 params: dry/early/late levels, size, width,
@@ -33,19 +33,19 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     basic Freeverb effect with a full modulated, frequency-dependent-decay
     reverb suite.
 - **Real-time audio engine + full `extern "C"` API** (issue #14's follow-up
-  PR): `include/nam_studio/engine.h` + `src/engine.cpp` add
-  `nam_studio::engine::AudioEngine`, a layer on top of `GraphRig` that gives
+  PR): `include/openaxe/engine.h` + `src/engine.cpp` add
+  `openaxe::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
   4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
   `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
   `kChorus`/`kFlanger`/`kPhaser`/`kDelay`/`kPingPongDelay`, and passthrough
   for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
-  `include/nam_studio/api.h` + `src/api.cpp`
+  `include/openaxe/api.h` + `src/api.cpp`
   expose it as an `extern "C"` surface (int32 ids, not `GraphRig`'s strings —
   portable across C/WASM/FFI): topology, `reset`/`process`, generic param
   get/set/info, NAM model management, reverb algorithm choice, and metering.
-- **Compressor, EQ, Noise Gate, Tremolo** (`include/nam_studio/dsp/{compressor,equalizer,noise_gate,tremolo}.h`
+- **Compressor, EQ, Noise Gate, Tremolo** (`include/openaxe/dsp/{compressor,equalizer,noise_gate,tremolo}.h`
   - matching `src/dsp/*.cpp`) — four DSPark processors wrapped behind the same
     thin-class interface as the Dragonfly reverbs, via a generic adapter
     (`src/dsp/internal/dspark_wrapper.h`) that any future DSPark effect plugs
@@ -59,7 +59,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
-- **Convolver** (`include/nam_studio/dsp/convolver.h` + `src/dsp/convolver.cpp`)
+- **Convolver** (`include/openaxe/dsp/convolver.h` + `src/dsp/convolver.cpp`)
   — cabinet/room impulse-response convolution, the DSP behind a Cab block.
   Partitioned convolution in the standard two-part form: a direct time-domain FIR
   for the first 64 taps, then FFT partitions through a frequency-domain delay
@@ -67,22 +67,22 @@ wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
   That shape is what makes it **zero-latency for any block size** - a purely
   block-based FFT scheme would either delay the stream or leave a gap in it. A
   2048-tap cab IR costs roughly 40x less than a direct FIR would.
-- **WAV decoder** (`include/nam_studio/dsp/wav.h` + `src/dsp/wav.cpp`) — decodes
+- **WAV decoder** (`include/openaxe/dsp/wav.h` + `src/dsp/wav.cpp`) — decodes
   a WAV file held in memory (8/16/24/32-bit PCM, 32/64-bit float, any channel
   count folded to mono, WAVE_FORMAT_EXTENSIBLE, unknown chunks skipped) and
   resamples with a windowed-sinc kernel. Only a browser gets audio decoding for
   free, so this is what lets the desktop app and a plugin load an impulse response
   at all - bytes in, samples out, the same shape as loading a NAM model from JSON.
   A malformed or compressed file returns nullopt rather than throwing.
-- **Tone stack** (`include/nam_studio/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
+- **Tone stack** (`include/openaxe/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
   — the 4-band Bass/Mid/Treble/Presence stack the engine runs after every NAM
   model (low shelf 100Hz, peaking 1kHz Q0.7, high shelf 5kHz, peaking 8kHz Q0.5,
   each ±12dB). Frequencies and slopes match the Web Audio `BiquadFilterNode`
   chain the web app used to own privately, so moving it here didn't change how
   the web app sounds - and the desktop app, which had no tone controls at all,
   now matches it. Flat is bit-exact passthrough, so an un-EQ'd amp costs nothing.
-- `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
-  placeholder (`nam_studio::core::version()`), unchanged.
+- `include/openaxe/core.h` + `src/core.cpp` — the pre-existing #13
+  placeholder (`openaxe::core::version()`), unchanged.
 
 **Test suite** (`tests/`, CTest): `graph_validation_test` and `graph_rig_test`
 port the boundary-value matrix from `graphValidation.test.ts`/
@@ -116,6 +116,197 @@ a band boost measurably louder than a cut, silence measurably crushed), and
 `engine_test`'s DSPark case + `api_realtime_test`'s `TestEndToEndDsparkRig`
 run all four kinds in a chain through the engine and the full `extern "C"`
 surface.
+
+## Rig state wire format (issues #119, #120)
+
+`nam_studio_serialize_state` / `nam_studio_serialize_state_ex` /
+`nam_studio_load_state` (`include/openaxe/api.h`, implemented in
+`src/serialization/{json rig_state sha256 base64}.{h,cpp}` — a hand-written
+dependency-free JSON module plus the state mapping) turn an entire rig into
+one JSON document and back. This is the single preset/scene model for host
+chunks, preset files, and eventually IndexedDB - step 5 of ARCHITECTURE.md's
+migration order, and the prerequisite that lets a plugin (#16) save state at
+all. Model/IR asset payloads ride inside the document when the caller asks
+for embedding (`serialize_state_ex(..., embed_assets=1)`); without it blocks
+record relinkable references only.
+
+```json
+{
+  "schemaVersion": 1,
+  "blocks": [
+    {
+      "id": "2",
+      "kind": "ping-pong-delay",
+      "row": 0,
+      "col": 3,
+      "bypass": false,
+      "inputTrim": 1.0,
+      "outputTrim": 1.1,
+      "delayModel": "digital",
+      "params": { "time": 250, "feedback": 0.5, "tone": 6000 }
+    },
+    {
+      "id": "3",
+      "kind": "reverb",
+      "row": 1,
+      "col": 4,
+      "reverbAlgorithm": "room",
+      "params": { "decay": 2.1, "high_cut": 5200 }
+    }
+  ],
+  "edges": [
+    { "id": "7", "from": { "blockId": "-1", "port": 0 }, "to": { "blockId": "2", "port": 0 } },
+    { "id": "9", "from": { "blockId": "2", "port": 0 }, "to": { "blockId": "-2", "port": 0 } }
+  ],
+  "masterLevel": 0.8,
+  "masterMuted": false
+}
+```
+
+Field notes:
+
+- **Params are keyed by SYMBOL, never by index.** Index order is a core
+  implementation detail (`GetParamInfo()` tables); a reorder must never remap
+  a saved rig. On load, unknown symbols are skipped and counted - not a
+  failure.
+- **Block ids are strings** (the graph layer's ids, decimal here). Load maps
+  them onto fresh engine ids through a document-local table, so edges resolve
+  regardless of renumbering; duplicate ids in one document skip the second
+  block. Rail jacks serialize as `"-1"`/`"-2"`; `"IN"`/`"OUT"` load equally.
+- **`kind` strings** are the TS union's hyphenated literals
+  (`noise-gate`, ..., `ping-pong-delay`, `amp`, `amp-cab`, `pedal`,
+  `outboard`, `space`, `cab`, `mixer`, `splitter`) - block.h's documented
+  future mapping lives in `rig_state.cpp`.
+- **`bypass`** appears only for kinds with a bypass concept (everything except
+  cab/mixer/splitter), mirroring types.ts. **`inputTrim`/`outputTrim`**
+  (core extensions, always written) are the per-block I/O staging gains.
+- **`reverbAlgorithm`** (`hall|room|plate|early-reflections`) rides on reverb
+  blocks and **`delayModel`** (`digital|analog|tape`) on delay blocks - both
+  choose which DSP object backs the block rather than being params, so they
+  are applied BEFORE params on load (both calls re-seed the param table).
+- **Amp calibration caveat**: an amp-family block's `input_level`/`output_level`
+  params carry its loaded model's dBu calibration. They are serialized only
+  while actually set (model-defined or user-written); restoring them cannot
+  fabricate an override over whatever model gets loaded later.
+- **`automationSlots`** (issue #121, optional) maps automation slots to the
+  blocks they are bound to: `{"3": {"blockId": "0"}, "11": {"blockId": "1"}}`.
+  Slot 0 is permanently the master bus and never appears; values don't ride
+  here (they live in each block's own symbol-keyed params). Restored after
+  blocks exist; dangling or malformed entries skip with a count. See
+  packages/vst3/README.md's design note for the slot model itself.
+
+### Embedded assets (issue #120)
+
+A rig that references its NAM captures and cab IRs only by id is useless to a
+plugin: reopen the DAW project on another machine and the amp has no capture.
+So each amp-family block with a model loaded carries a `"model"` object, and
+each cab block with an IR carries an `"ir"` object:
+
+```json
+{
+  "id": "2",
+  "kind": "amp",
+  "...": "...",
+  "model": {
+    "name": "lstm",
+    "hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    "path": "/Users/you/Captures/lstm.nam",
+    "payload": "<the entire .nam JSON, base64>"
+  }
+}
+```
+
+- **`name`** - display label, always written when an asset is loaded. A path-
+  loaded capture reports its file's stem; a JSON-loaded one records whatever
+  the document it was restored from carried (empty otherwise).
+- **`hash`** - lowercase hex SHA-256 of the exact source bytes, always
+  written. A UI verifying a relinked file matches the missing asset hashes the
+  candidate and compares.
+- **`path`** - the source file location, best-effort (empty for assets that
+  never came from a file), so a load on the same machine can relink.
+- **`payload`** - the asset itself, **only when `embed_assets` is non-zero**:
+  the `.nam` JSON verbatim for models, the WAV file bytes (or a synthesized
+  32-bit-float WAV when the IR arrived as raw samples) base64-encoded for IRs.
+  Embedding is opt-in per call: a plugin writing a host chunk wants it, a
+  desktop app writing a small `.preset` next to a model library does not.
+  Blocks without a loaded asset write neither object.
+
+Restoration order per block: **embedded payload first**, then **source path**
+(relinking), then the block stays empty and the asset is reported as missing -
+`nam_studio_load_state` publishes the names of unresolvable assets, which
+`nam_studio_state_missing_asset_count` / `nam_studio_state_missing_asset`
+hand back to the caller until the next load. A payload that fails to decode,
+overshoots the size ceiling below, or isn't a valid asset falls through to the
+path attempt before giving up. Missing assets never abort the restore -
+partial-failure tolerance applies to assets like everything else.
+
+Embedded payloads are **untrusted input arriving from a project file**, so
+they hit the issue #69 size ceilings on load, now enforced inside the core
+(`engine.h`: `kMaxModelBytes` = 32 MiB of .nam JSON, `kMaxIrBytes` = 8 MiB of
+WAV) rather than only in each front end. The decoder checks the decoded size
+before allocating.
+
+Cost: every amp-family block retains its capture's full source JSON and every
+cab block its WAV bytes - a few MB per block. That is the price of a saved rig
+that restores self-contained on a machine that has never seen the files, and
+it buys byte-stable re-serialization: restoring a document and saving it again
+reproduces it exactly, because restored blocks keep the document's own
+name/path metadata (`SetModelSourceInfo` / `SetIrSourceInfo`).
+
+### Versioning policy
+
+`schemaVersion` is bumped for any breaking shape change. Missing field means
+1 (the web app's existing presets predate it). Versions this build knows are
+accepted; a NEWER version is rejected (`NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION`)
+rather than guessed at. Unknown fields inside a known version are ignored -
+forward-compatible by construction.
+
+### Compatibility with the web app's existing preset files
+
+The shape is a superset of `apps/web/src/presets/types.ts`'s `Preset`
+(`blocks[]` with `id/kind/row/col/bypass/params`, `edges[]` with `from`/`to`
+jacks, `masterLevel`, `masterMuted`), so today's exported `.json` files load
+as-is. Those files predate core symbols in a few places, so documents WITHOUT
+a `schemaVersion` get exactly the interpretation `RigBlock.ts` +
+`namStudioRigWorklet.js` apply today:
+
+- `params.input_level`/`output_level` mean the **I/O trims**, not the amp
+  family's calibration params (which canonical documents carry under those
+  same names only when genuinely calibration).
+- Reverb blocks' UI abstractions (`roomSize`, `damping`, `width`, `predelay`,
+  `spin`, `wander`, `earlySend`, `dryLevel`) route through the core's
+  `ReverbControl` mapping; the algorithm select arrives as
+  `params.reverbAlgorithm`.
+- Delay blocks' `params.model` may be the select string
+  (`"digital"|"analog"|"tape"`) or the numeric symbol value (0..2).
+
+Canonical documents (with `schemaVersion`) always use core symbols directly.
+
+### Failure semantics
+
+Hard failures reject the whole document and leave the graph untouched:
+unparseable JSON, wrong root shape, missing `blocks`/`edges` arrays, or an
+unsupported `schemaVersion`. Everything else follows applyPreset's
+partial-failure tolerance (#64): malformed entries, unknown kinds, dangling
+or rejected edges, and unresolvable params each skip individually while the
+rest restores. `nam_studio_serialize_state` uses the usual two-call sizing
+pattern (pass NULL to get the required capacity, NUL included). Both calls
+are control-thread only - allocate/rebuild topology - so suspend audio around
+them like every other mutation.
+
+Tests: `tests/json_test.cpp` covers the JSON module itself (escapes, number
+round-tripping, malformed input, depth limits); `tests/api_state_test.cpp`
+is issue #119's round-trip proof - a non-trivial rig (amp + cab + effects +
+mixer + splitter) serialized, reloaded into fresh graphs, and asserted
+field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`;
+`tests/api_state_assets_test.cpp` is issue #120's - a real capture and a real
+IR embedded into a document that restores sample-identically after the source
+graph is destroyed (the sources exist nowhere on disk), plus the payload ->
+path -> missing fallback ladder, the size ceilings, and SHA-256/base64
+known-answer tests; `tests/api_automation_slots_test.cpp` is issue #121's -
+slot values surviving kind-swapping rebinds, save/reload landing on the same
+control, master-slot immutability, and soft-failure tolerance for malformed
+binding documents.
 
 ## Vendored third-party DSP libraries
 
@@ -165,7 +356,8 @@ alongside it.
 
 ## Non-goals (not yet — tracked for follow-up work)
 
-- Preset/JSON (de)serialization.
+- ~~Preset/JSON (de)serialization~~ — done (see "Rig state wire format" above);
+  migrating the web/desktop front ends onto it is the follow-up.
 - Full lock-free concurrency: `Process()` itself is allocation-free and its
   params are lock-free atomics, but topology mutation
   (add/remove/connect/disconnect) and NAM model loading are not claimed safe
@@ -188,12 +380,12 @@ impulse-response tests, and the combined-binary symbol-isolation regression
 test, against Debug builds:
 
 ```bash
-cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build packages/core/build
 ctest --test-dir packages/core/build --output-on-failure
 ```
 
-**Emscripten: verified for issue #22's first slice.** `nam_studio_core`
+**Emscripten: verified for issue #22's first slice.** `openaxe_core`
 itself stays a plain `STATIC` library (Emscripten's export/link flags only
 apply to a final linked module); a small `nam_studio_core_wasm` executable
 target (empty `src/wasm_entry.cpp`, no `main()` needed for the
@@ -212,15 +404,15 @@ from #13's scaffold and remain authored-but-untested.
 
 ### A gotcha worth knowing if you extend this
 
-`nam_studio_core` is a `STATIC` library. NeuralAmpModelerCore's architecture
+`openaxe_core` is a `STATIC` library. NeuralAmpModelerCore's architecture
 parsers (LSTM, WaveNet, ConvNet, Linear) each self-register via a static
 initializer with no other symbol anything here calls directly. A plain
 static-archive link only pulls in object files that resolve a currently
 undefined symbol, so those registration-only translation units get silently
 dropped — `get_dsp()` then fails at runtime with "No config parser
 registered for architecture: ...". Any executable that needs NAM model
-loading to actually work must link `nam_studio_core` with whole-archive
-semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>` (CMake
+loading to actually work must link `openaxe_core` with whole-archive
+semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>` (CMake
 3.24+, portable across GNU/Apple/MSVC linkers) — see `tests/CMakeLists.txt`
 for the pattern `nam_amp_test` uses.
 
@@ -232,7 +424,7 @@ to build it:**
    It (and anything that includes its headers, including each wrapper's
    own `.cpp`) must compile at C++14 - hence each algorithm gets its own
    `dragonfly_<algo>_reverb_vendor` CMake target with `CXX_STANDARD 14`,
-   linked into the C++20 `nam_studio_core` target. Mixing standards across
+   linked into the C++20 `openaxe_core` target. Mixing standards across
    translation units in one binary is fine; only same-TU consistency
    matters.
 2. freeverb3 needs `-DLIBFV3_FLOAT` defined (it picks its internal sample

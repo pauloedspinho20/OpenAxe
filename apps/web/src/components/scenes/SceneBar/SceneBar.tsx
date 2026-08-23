@@ -10,7 +10,7 @@ import { usePresetManager } from '../../../state/presetManager'
 import { capturePreset } from '../../../presets/capture'
 import { getPreset, listPresets, savePreset } from '../../../presets/presetStore'
 import type { Preset } from '../../../presets/types'
-import { HardwareButton } from '@nam/ui'
+import { HardwareButton } from '@openaxe/ui'
 import styles from './SceneBar.module.css'
 
 export interface SceneBarProps {

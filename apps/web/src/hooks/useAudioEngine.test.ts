@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { describePowerOnError } from './useAudioEngine'
 
 // The rest of useAudioEngine relies on real AudioContext/getUserMedia, which
@@ -24,5 +24,42 @@ describe('describePowerOnError', () => {
 
   it('stringifies a non-Error throw', () => {
     expect(describePowerOnError('boom')).toBe('boom')
+  })
+})
+
+// issue #44: useAudioEngine used to call BOTH useWebAudioEngine and
+// useNativeAudioEngine on every render and pick which result to keep - so
+// the inactive engine's store subscriptions/effects still mounted. It now
+// selects the hook implementation itself, once, at module load. These tests
+// force a fresh module evaluation per case (vi.resetModules + a dynamic
+// import) with native-bridge presence mocked, and assert useAudioEngine is
+// referentially the selected hook - not a wrapper that still calls both.
+describe('useAudioEngine dispatcher', () => {
+  afterEach(() => {
+    vi.doUnmock('../native/openaxe')
+    vi.resetModules()
+  })
+
+  it('is the web engine hook when no native bridge is present', async () => {
+    vi.resetModules()
+    vi.doMock('../native/openaxe', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../native/openaxe')>()),
+      getOpenAxe: () => null,
+    }))
+    const mod = await import('./useAudioEngine')
+    expect(mod.useAudioEngine).toBe(mod.useWebAudioEngine)
+  })
+
+  it('is the native engine hook when a native bridge is present', async () => {
+    vi.resetModules()
+    vi.doMock('../native/openaxe', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../native/openaxe')>()),
+      getOpenAxe: () => ({}) as import('../native/openaxe').OpenAxeBridge,
+    }))
+    const [{ useNativeAudioEngine }, mod] = await Promise.all([
+      import('./useNativeAudioEngine'),
+      import('./useAudioEngine'),
+    ])
+    expect(mod.useAudioEngine).toBe(useNativeAudioEngine)
   })
 })

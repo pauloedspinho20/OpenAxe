@@ -40,13 +40,28 @@
   outline-offset: 2px;
 }
 
-.accent.active {
+.accent {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.accent:hover {
+  color: var(--led-hot);
+  border-color: var(--led-hot);
+}
+
+.default.active {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
   box-shadow:
     0 0 8px var(--accent-dim),
     inset 0 1px 1px var(--btn-active-highlight);
+}
+
+.default.active:hover {
+  color: var(--led-hot);
+  border-color: var(--led-hot);
 }
 
 .danger.active {

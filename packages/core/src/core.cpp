@@ -1,7 +1,7 @@
-#include "nam_studio/core.h"
+#include "openaxe/core.h"
 
-namespace nam_studio::core {
+namespace openaxe::core {
 
 const char* version() { return "0.1.0"; }
 
-}  // namespace nam_studio::core
+}  // namespace openaxe::core

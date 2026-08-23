@@ -30,7 +30,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
 /**
  * The web rig: a thin driver over the single rig `AudioWorkletProcessor`
  * (issue #55). It owns one `RigWorkletNode`, which in turn owns one
- * nam_studio_core module and one nam_studio_graph holding the whole rig - every
+ * openaxe_core module and one nam_studio_graph holding the whole rig - every
  * block kind, connection, param, trim, bypass, model/IR and the master bus
  * live in the core. This class is the Web Audio path's analogue of the
  * desktop's NativeGraphRig: it keeps the same block/edge bookkeeping and UI

@@ -15,7 +15,7 @@
 
 #include "audio.h"
 
-// The window.namStudio.* JS<->C++ bridge (issue #15 M2). Exposes the shared
+// The window.openAxe.* JS<->C++ bridge (issue #15 M2). Exposes the shared
 // DSP core's extern "C" ABI plus the desktop audio I/O to the webview UI as
 // promise-returning JS functions, bound via webview::bind().
 //
@@ -42,7 +42,7 @@
 // one object per call) and returns a JSON string that webview resolves as the
 // JS promise value.
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 struct BlockRecord {
   int32_t core_id = -1;
@@ -59,8 +59,8 @@ struct EdgeRecord {
 };
 
 // issue #71: only loopback http(s) origins may host the UI while the privileged
-// window.namStudio bridge is bound. Anything else (a remote host supplied via
-// NAM_STUDIO_UI_URL, a file:// or data: URL, ...) is rejected so untrusted JS
+// window.openAxe bridge is bound. Anything else (a remote host supplied via
+// OPENAXE_UI_URL, a file:// or data: URL, ...) is rejected so untrusted JS
 // can never reach the native bridge.
 bool IsTrustedUiUrl(const std::string& url);
 
@@ -110,9 +110,18 @@ class StudioBridge {
   std::string HandleSetBlockTrim(const std::string& req);
   std::string HandleLoadIrWav(const std::string& req);
   std::string HandleUnloadIr(const std::string& req);
+  std::string HandleSetInputGain(const std::string& req);
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);
+
+  // Small secret store (issue #146) backing the Tone3000 refresh token so it
+  // survives an app restart - see secure_storage.h. Independent of the
+  // graph/audio state above, so these run straight on the webview thread
+  // like the read-only queries do, no Call()/Mutate() needed.
+  std::string HandleSecureStore(const std::string& req);
+  std::string HandleSecureLoad(const std::string& req);
+  std::string HandleSecureDelete(const std::string& req);
 
  private:
   // Control executor ------------------------------------------------------
@@ -155,4 +164,4 @@ class StudioBridge {
   int32_t graph_block_ = 512;
 };
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

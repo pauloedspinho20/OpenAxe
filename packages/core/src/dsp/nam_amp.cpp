@@ -1,6 +1,8 @@
-#include "nam_studio/dsp/nam_amp.h"
+#include "openaxe/dsp/nam_amp.h"
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 
 // NAMCore's own bundled nlohmann (Dependencies/nlohmann, a PRIVATE include dir
 // on this target) - matching how NAM/dsp.h itself includes it, so there is only
@@ -11,7 +13,7 @@
 #include "NAM/get_dsp.h"
 #include "NAM/slimmable.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 NamAmp::NamAmp() = default;
 NamAmp::~NamAmp() = default;
@@ -20,8 +22,13 @@ NamAmp::~NamAmp() = default;
 // know about it. Returns an error code instead of throwing, since this crosses
 // the extern "C" ABI; std::nullopt means success.
 //
+// Reads the file's text itself and delegates to LoadModelFromJson rather than
+// handing NAMCore the path: both entry points then share one parse path (so
+// they can never disagree about what a file contains) and one source
+// retention (#120 - serialization needs the original JSON either way).
+//
 // NAMCore picks the architecture parser (WaveNet / LSTM / ConvNet / Linear)
-// itself from the file's contents - which is exactly why nam_studio_core must be
+// itself from the file's contents - which is exactly why openaxe_core must be
 // linked whole-archive: those parsers self-register through static
 // initializers, and a plain static link drops them, making every load fail.
 //
@@ -30,20 +37,13 @@ NamAmp::~NamAmp() = default;
 std::optional<NamLoadError> NamAmp::LoadModel(const std::string& nam_file_path) {
   if (!std::filesystem::exists(nam_file_path)) return NamLoadError::kFileNotFound;
 
-  std::unique_ptr<nam::DSP> loaded;
-  nam::dspData config;
-  try {
-    loaded = nam::get_dsp(std::filesystem::path(nam_file_path), config);
-  } catch (const std::exception&) {
-    // NAMCore throws NamFileValidationError (a std::runtime_error) for both
-    // unreadable and malformed files - existence was already ruled out
-    // above, so anything caught here is a format problem.
-    return NamLoadError::kInvalidFormat;
-  }
-  if (!loaded) return NamLoadError::kInvalidFormat;
+  std::ifstream ifs(nam_file_path, std::ios::binary);
+  if (!ifs.good()) return NamLoadError::kFileNotFound;
+  const std::string json_text((std::istreambuf_iterator<char>(ifs)),
+                              std::istreambuf_iterator<char>());
+  if (json_text.empty()) return NamLoadError::kInvalidFormat;
 
-  AdoptModel(std::move(loaded), config);
-  return std::nullopt;
+  return LoadModelFromJson(json_text);
 }
 
 // Load from the .nam file's JSON content instead of a path - see the header for
@@ -80,6 +80,9 @@ std::optional<NamLoadError> NamAmp::LoadModelFromJson(const std::string& json_te
   if (!loaded) return NamLoadError::kInvalidFormat;
 
   AdoptModel(std::move(loaded), config);
+  // Retain only once the model is genuinely adopted - a failed load must not
+  // leave a stale source behind for serialization to embed (#120).
+  source_json_ = json_text;
   return std::nullopt;
 }
 
@@ -112,12 +115,13 @@ void NamAmp::AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& co
   }
 }
 
-// Drop the model and forget its metadata; the block then passes audio through
-// unchanged. Frees - not real-time safe.
+// Drop the model and forget its metadata and retained source; the block then
+// passes audio through unchanged. Frees - not real-time safe.
 void NamAmp::UnloadModel() {
   dsp_.reset();
   info_ = NamModelInfo{};
   slim_size_ = 1.0;
+  source_json_.clear();
 }
 
 // Whether a capture is currently loaded (a block with none is a passthrough).
@@ -177,4 +181,4 @@ void NamAmp::SetOutputLevel(double dbu) {
   info_.output_level_dbu = dbu;
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

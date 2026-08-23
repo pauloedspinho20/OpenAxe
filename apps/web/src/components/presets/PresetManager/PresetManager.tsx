@@ -8,7 +8,7 @@ import { deletePreset, listPresets, savePreset } from '../../../presets/presetSt
 import { downloadPresetAsFile, readPresetFromFile } from '../../../presets/presetIO'
 import type { Preset } from '../../../presets/types'
 import type { GraphRig } from '../../../engine/GraphRig'
-import { Dialog, HardwareButton } from '@nam/ui'
+import { Dialog, HardwareButton } from '@openaxe/ui'
 import styles from './PresetManager.module.css'
 
 export interface PresetManagerProps {

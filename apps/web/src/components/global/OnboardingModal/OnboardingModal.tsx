@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Dialog, HardwareButton } from '@nam/ui'
+import { Dialog, HardwareButton } from '@openaxe/ui'
 import styles from './OnboardingModal.module.css'
 
 export interface OnboardingModalProps {
@@ -53,7 +53,7 @@ export function OnboardingModal({ open, onDismiss }: OnboardingModalProps) {
     <Dialog
       open={open}
       onClose={onDismiss}
-      title="Welcome to NAM Web Studio"
+      title="Welcome to OpenAxe"
       width="min(520px, 90vw)"
       zIndex={120}
     >

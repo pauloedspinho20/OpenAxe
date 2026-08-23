@@ -1,7 +1,7 @@
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BLOCK_OPTIONS } from '../blockOptions'
 import { BlockIcon } from '../blockIcons'
-import { Dialog } from '@nam/ui'
+import { Dialog } from '@openaxe/ui'
 import styles from './AddBlockMenu.module.css'
 
 export interface AddBlockMenuProps {

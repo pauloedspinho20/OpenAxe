@@ -1,18 +1,18 @@
 # apps/desktop
 
-Native desktop shell (macOS, Windows, Linux) for NAM Web Studio (issue #15).
+Native desktop shell (macOS, Windows, Linux) for OpenAxe (issue #15).
 
 ## Architecture
 
 - **Shell:** [webview/webview](https://github.com/webview/webview) (C++,
   MIT) — the OS webview (WKWebView on macOS, Edge WebView2 on Windows,
   WebKitGTK on Linux). The React UI runs inside it.
-- **DSP:** `packages/core`'s `nam_studio_core` static library + `extern "C"`
+- **DSP:** `packages/core`'s `openaxe_core` static library + `extern "C"`
   ABI — same process as the audio, no IPC.
 - **Audio I/O:** JUCE `juce_audio_devices` (issue #15 M1) — CoreAudio / WASAPI / ALSA (see `src/audio.*`) —
   WASAPI / ALSA / JACK, fetched via CMake. The real-time callback calls
   `nam_studio_process` directly: same process, zero IPC, no Web Audio.
-- **Tests:** `cmake -B build -DNAM_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
+- **Tests:** `cmake -B build -DOPENAXE_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
   (`ctest --test-dir build`). The callback wiring is tested with fake buffers
   (no hardware needed); the open/start/stop test uses a real device pair when
   the host has one and skips otherwise, so CI stays green headless.
@@ -34,18 +34,18 @@ cmake -S apps/desktop -B apps/desktop/build -DCMAKE_BUILD_TYPE=Debug
 cmake --build apps/desktop/build
 ```
 
-Binary output: `apps/desktop/build/bin/nam_desktop`.
+Binary output: `apps/desktop/build/bin/openaxe_desktop`.
 
 ## Useful commands
 
 ```sh
 pnpm dev:desktop                               # Debug build + bundle UI + launch the window
-pnpm --filter @nam/desktop dev:fast            # same, reusing the UI already in build/ui (C++-only changes)
+pnpm --filter @openaxe/desktop dev:fast            # same, reusing the UI already in build/ui (C++-only changes)
 pnpm dev:desktop:attach                        # launch against the Vite dev server (HMR) - see "Running alongside the web app"
 pnpm build:desktop                             # Release build + bundle UI
-pnpm package:desktop                           # build + CPack -> build/nam-studio-desktop-<v>.dmg|.zip|.deb
-pnpm --filter @nam/desktop exec tsc -b         # typecheck (the shared apps/web TS)
-pnpm --filter @nam/web test:run src/native     # run the NativeGraphRig unit tests
+pnpm package:desktop                           # build + CPack -> build/openaxe-desktop-<v>.dmg|.zip|.deb
+pnpm --filter @openaxe/desktop exec tsc -b         # typecheck (the shared apps/web TS)
+pnpm --filter @openaxe/web test:run src/native     # run the NativeGraphRig unit tests
 ```
 
 ### Running alongside the web app
@@ -60,22 +60,22 @@ pnpm dev:all            # Vite dev server + native app, in parallel
 
 For UI work, skip the bundle step entirely and point the webview at the running
 dev server, which gives the native window Vite HMR while still talking to the
-real C++ engine over `window.namStudio` (the bridge binds live on the webview,
+real C++ engine over `window.openAxe` (the bridge binds live on the webview,
 not on the page's origin):
 
 ```sh
 pnpm dev:web            # terminal 1 - http://localhost:5173
-pnpm dev:desktop:attach # terminal 2 - NAM_STUDIO_UI_URL=http://localhost:5173
+pnpm dev:desktop:attach # terminal 2 - OPENAXE_UI_URL=http://localhost:5173
 ```
 
-Any URL works: `NAM_STUDIO_UI_URL=<url> ./build/bin/nam_desktop`, or
+Any URL works: `OPENAXE_UI_URL=<url> ./build/bin/openaxe_desktop`, or
 `node scripts/dev.mjs --ui-url=<url>`. When it is set, the bundled-UI lookup and
 the built-in HTTP server are skipped.
 
 ### C++ tests
 
 ```sh
-cmake -S apps/desktop -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S apps/desktop -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build apps/desktop/build
 ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
 ```
@@ -95,23 +95,23 @@ real-time thread blocking. These tools tell you which:
 
 ```sh
 # 1. Log file - mirrors stderr and gets a backtrace appended on a segfault/abort.
-cat apps/desktop/build/bin/nam_desktop.log
+cat apps/desktop/build/bin/openaxe_desktop.log
 
 # 2. Webview devtools + verbose logging (WKWebView remote inspector).
-NAM_DESKTOP_DEBUG=1 pnpm dev:desktop
+OPENAXE_DESKTOP_DEBUG=1 pnpm dev:desktop
 #    Then in Safari: Develop -> your Mac -> the WKWebView page, for JS console errors.
 
 # 3. macOS crash report (crashing thread + full stack, captured by the OS).
-ls -t ~/Library/Logs/DiagnosticReports/nam_desktop-*.crash
+ls -t ~/Library/Logs/DiagnosticReports/openaxe_desktop-*.crash
 
 # 4. lldb live backtrace.
-cd apps/desktop && lldb -- build/bin/nam_desktop   # run -> (crash) -> bt
+cd apps/desktop && lldb -- build/bin/openaxe_desktop   # run -> (crash) -> bt
 ```
 
-Env vars: `NAM_DESKTOP_DEBUG=1` enables the webview inspector and verbose
-logging; `NAM_DESKTOP_LOG=<path>` overrides the log file location (default:
-`<exeDir>/nam_desktop.log`); `NAM_STUDIO_UI_DIR=<dir>` overrides where the
-bundled UI is found; `NAM_STUDIO_UI_URL=<url>` loads the UI from a URL (dev
+Env vars: `OPENAXE_DESKTOP_DEBUG=1` enables the webview inspector and verbose
+logging; `OPENAXE_DESKTOP_LOG=<path>` overrides the log file location (default:
+`<exeDir>/openaxe_desktop.log`); `OPENAXE_UI_DIR=<dir>` overrides where the
+bundled UI is found; `OPENAXE_UI_URL=<url>` loads the UI from a URL (dev
 server) instead of the bundled copy.
 
 ## Status
@@ -120,14 +120,14 @@ server) instead of the bundled copy.
       bridge demo (placeholder HTML).
 - [x] M1 — JUCE audio_devices duplex I/O (`AudioIO` in `src/audio.*`), device
       enumeration, buffer/sample-rate control, DSP driven from the callback.
-- [x] M2 — full `window.namStudio.*` JS↔C++ bridge (`StudioBridge` in
+- [x] M2 — full `window.openAxe.*` JS↔C++ bridge (`StudioBridge` in
       `src/bridge.*`): devices, stream control, graph topology, params,
       NAM model loading via native file dialog, meters/CPU. Threading:
       control-thread executor serializes mutations under an audio suspend
       handshake; lock-free params run on the UI thread.
 - [x] M3 — reuse the apps/web React UI. `NativeGraphRig` (apps/web/src/native)
       implements `GraphRigControls` over the bridge; `useAudioEngine` dispatches
-      to a native variant when `window.namStudio` is present; `useAudioIO` lists
+      to a native variant when `window.openAxe` is present; `useAudioIO` lists
       JUCE audio_devices. `scripts/build.mjs` bundles the web build (relative base)
       into `build/ui`, served by a small loopback HTTP server (WKWebView
       sandboxes file://). Block/input meters and the tuner are fed from C++ taps
@@ -150,15 +150,15 @@ server) instead of the bundled copy.
 pnpm package:desktop   # build web UI + native app, then CPack
 ```
 
-Produces `apps/desktop/build/nam-studio-desktop-<v>.dmg|.zip|.deb`. The package
+Produces `apps/desktop/build/openaxe-desktop-<v>.dmg|.zip|.deb`. The package
 layout is staged by `packaging/stage.cmake` (the build sets
 `CMAKE_SKIP_INSTALL_RULES` so FetchContent subprojects never install anything,
 and tells CPack to skip the generated install target). The web UI ships inside
 the bundle (`Contents/Resources/ui` on macOS, `ui/` beside the exe on Windows,
-`share/nam-studio-desktop/ui` on Linux); the app finds it at runtime and serves
+`share/openaxe-desktop/ui` on Linux); the app finds it at runtime and serves
 it over loopback HTTP (see `UiIndexPath` in `src/main.cpp`).
 
-## Bridge surface (`window.namStudio.*`)
+## Bridge surface (`window.openAxe.*`)
 
 Each is a webview bind; JS passes one object argument and gets back a promise.
 Block/edge ids are the web app's strings; the bridge maps them to core ints on
@@ -196,7 +196,7 @@ deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
 
 ## Gotchas
 
-- `nam_studio_core` must be linked **whole-archive** (`LINK_LIBRARY:WHOLE_ARCHIVE`)
+- `openaxe_core` must be linked **whole-archive** (`LINK_LIBRARY:WHOLE_ARCHIVE`)
   or NAM model loading silently fails (the architecture parsers self-register
   via static initializers).
 - On macOS the TU that includes `webview.h` compiles as Objective-C++

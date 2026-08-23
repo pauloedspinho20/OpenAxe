@@ -1,7 +1,7 @@
 // End-to-end test for the DSPark-backed Tremolo wrapper (kTremolo): verifies
 // full-depth modulation actually sweeps the output amplitude, and that depth 0
-// is a passthrough. Only built if NAM_STUDIO_HAS_DSPARK.
-#include "nam_studio/dsp/tremolo.h"
+// is a passthrough. Only built if OPENAXE_HAS_DSPARK.
+#include "openaxe/dsp/tremolo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -10,17 +10,17 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::Tremolo;
+using openaxe::dsp::Tremolo;
 
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(Tremolo::ParamCount() == 3);
+  OPENAXE_EXPECT(Tremolo::ParamCount() == 3);
   const auto& rate = Tremolo::GetParamInfo(0);
-  NAM_EXPECT(std::string(rate.symbol) == "rate");
+  OPENAXE_EXPECT(std::string(rate.symbol) == "rate");
   const auto& shape = Tremolo::GetParamInfo(2);
-  NAM_EXPECT(std::string(shape.symbol) == "shape");
-  NAM_EXPECT(shape.min_value == 0.0f && shape.max_value == 2.0f);
+  OPENAXE_EXPECT(std::string(shape.symbol) == "shape");
+  OPENAXE_EXPECT(shape.min_value == 0.0f && shape.max_value == 2.0f);
 }
 
 void TestGetSetEveryParam() {
@@ -28,9 +28,9 @@ void TestGetSetEveryParam() {
   for (int i = 0; i < Tremolo::ParamCount(); ++i) {
     const auto& info = Tremolo::GetParamInfo(i);
     trem.SetParam(i, info.min_value);
-    NAM_EXPECT(trem.GetParam(i) == info.min_value);
+    OPENAXE_EXPECT(trem.GetParam(i) == info.min_value);
     trem.SetParam(i, info.max_value);
-    NAM_EXPECT(trem.GetParam(i) == info.max_value);
+    OPENAXE_EXPECT(trem.GetParam(i) == info.max_value);
   }
 }
 
@@ -68,14 +68,14 @@ std::pair<float, float> ModulationRange(float depth, float rate) {
 
 void TestFullDepthModulatesAmplitude() {
   const auto [lo, hi] = ModulationRange(1.0f, 20.0f);
-  NAM_EXPECT(std::isfinite(lo) && std::isfinite(hi));
-  NAM_EXPECT(hi > 0.9f);   // near the peak the output approaches the input
-  NAM_EXPECT(lo < 0.1f);   // depth 1 = full cut, the trough dips toward zero
+  OPENAXE_EXPECT(std::isfinite(lo) && std::isfinite(hi));
+  OPENAXE_EXPECT(hi > 0.9f);   // near the peak the output approaches the input
+  OPENAXE_EXPECT(lo < 0.1f);   // depth 1 = full cut, the trough dips toward zero
 }
 
 void TestZeroDepthIsPassthrough() {
   const auto [lo, hi] = ModulationRange(0.0f, 10.0f);
-  NAM_EXPECT(lo > 0.99f && hi < 1.01f);  // untouched within float tolerance
+  OPENAXE_EXPECT(lo > 0.99f && hi < 1.01f);  // untouched within float tolerance
 }
 
 }  // namespace
@@ -86,5 +86,5 @@ int main() {
   TestFullDepthModulatesAmplitude();
   TestZeroDepthIsPassthrough();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

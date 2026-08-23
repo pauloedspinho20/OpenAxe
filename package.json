@@ -1,19 +1,19 @@
 {
-  "name": "nam-web-studio",
+  "name": "openaxe",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "packageManager": "pnpm@10.16.1",
   "scripts": {
-    "dev": "turbo run dev --filter=@nam/web",
-    "dev:web": "turbo run dev --filter=@nam/web",
-    "dev:desktop": "turbo run dev --filter=@nam/desktop",
-    "dev:desktop:attach": "pnpm --filter @nam/desktop dev:attach",
+    "dev": "turbo run dev --filter=@openaxe/web",
+    "dev:web": "turbo run dev --filter=@openaxe/web",
+    "dev:desktop": "turbo run dev --filter=@openaxe/desktop",
+    "dev:desktop:attach": "pnpm --filter @openaxe/desktop dev:attach",
     "dev:all": "turbo run dev",
-    "build": "turbo run build --filter=!@nam/desktop",
-    "build:web": "turbo run build --filter=@nam/web",
-    "build:desktop": "turbo run build --filter=@nam/desktop",
+    "build": "turbo run build --filter=!@openaxe/desktop",
+    "build:web": "turbo run build --filter=@openaxe/web",
+    "build:desktop": "turbo run build --filter=@openaxe/desktop",
     "build:all": "turbo run build",
-    "package:desktop": "pnpm --filter @nam/desktop package",
+    "package:desktop": "pnpm --filter @openaxe/desktop package",
     "lint": "turbo run lint",
     "check:grid": "node scripts/check-grid-dims.mjs",
     "format": "prettier --write .",
@@ -38,5 +38,10 @@
     "@storybook/addon-docs": "^10.5.8",
     "@chromatic-com/storybook": "5.3.0",
     "@storybook/addon-mcp": "^0.7.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "valibot": "^1.4.0"
+    }
   }
 }

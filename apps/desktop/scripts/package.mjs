@@ -1,8 +1,8 @@
 // Packages the desktop app into a platform artifact (issue #15 M4): builds the
 // web UI + native app (Release), then runs CPack to produce:
-//   macOS  build/nam-studio-desktop-<v>.dmg  (.app bundle inside)
-//   Windows build/nam-studio-desktop-<v>.zip
-//   Linux   build/nam-studio-desktop-<v>.deb
+//   macOS  build/openaxe-desktop-<v>.dmg  (.app bundle inside)
+//   Windows build/openaxe-desktop-<v>.zip
+//   Linux   build/openaxe-desktop-<v>.deb
 //
 //   node scripts/package.mjs
 
@@ -14,7 +14,7 @@ import { run } from './build.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
-run(false)  // Release + bundle the web UI into build/ui
+run(false) // Release + bundle the web UI into build/ui
 
 console.log('[nam/desktop] running cpack...')
 execFileSync('cpack', ['--config', join(root, 'build', 'CPackConfig.cmake')], {
