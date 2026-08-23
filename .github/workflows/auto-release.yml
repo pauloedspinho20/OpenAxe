@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   bump-and-tag:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +84,7 @@ jobs:
               /## \[Unreleased\]/ { print; print ""; print "## [" ver "] - " date; print ""; print "- Manual '"${{ inputs.bump }}"' bump via workflow_dispatch"; print ""; next }1
             ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
             git add VERSION CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json packages/ui/package.json
-            git commit -m "chore(release): $NEXT"
+            git commit -m "chore(release): $NEXT [skip ci]"
             git tag -a "v$NEXT" -m "v$NEXT"
             echo "next=$NEXT" >> $GITHUB_OUTPUT
             echo "created=true" >> $GITHUB_OUTPUT
