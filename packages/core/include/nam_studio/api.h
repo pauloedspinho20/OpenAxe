@@ -399,6 +399,29 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph);
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index);
 
+// ── Tuner — pitch detection + note mapping (issue #123) ────────────────
+// Pure functions over a buffer — no graph, no state. Safe from any thread.
+// These are the one detector every front end shares: web, desktop, plugin,
+// mobile. The web tuner's previous TS autocorrelation (apps/web/src/tuner/)
+// now forwards to these through WASM; the native path calls them directly.
+
+// Returns the detected fundamental in Hz, or 0 when no confident pitch was
+// found (silence, noise, chord). `samples` is mono float audio at
+// `sample_rate`. Returns 0 for null/empty buffers or invalid rates. The
+// searched range is 25..1500 Hz — a 5-string bass's low B up to past a
+// guitar's high frets — matching the TS defaults pitchDetect.ts used.
+float nam_studio_detect_pitch(const float* samples, int32_t count, double sample_rate);
+
+// Hz → note/cents mapping so all four front ends display the same reading.
+// `frequency` must be > 0. `reference_a4` is the A4 concert pitch (440).
+// Returns 1 on success, 0 if frequency <= 0 or any required out pointer is
+// null. `out_name` points at static storage (one of "C","C#",...,"B") and
+// stays valid forever; `out_octave` is the octave number; `out_cents` is
+// -50..50, 0 = dead on.
+int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
+                                     const char** out_name, int32_t* out_octave,
+                                     int32_t* out_cents);
+
 // nam_studio_load_state's result.
 typedef enum NamStudioLoadStateResult {
   NAM_STUDIO_LOAD_STATE_OK = 0,
