@@ -53,12 +53,6 @@ export function PowerGate({
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
         <Wordmark variant="hero" />
-        <p className={styles.description}>
-          Starts the audio engine and asks for microphone access for your instrument input. Your
-          browser remembers that permission across visits, but starting audio itself needs a fresh
-          click every time you open this page - that's a browser autoplay restriction, not something
-          this app can skip.
-        </p>
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
 
