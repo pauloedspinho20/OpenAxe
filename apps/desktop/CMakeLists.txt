@@ -100,6 +100,16 @@ FetchContent_Declare(
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_MakeAvailable(nlohmann_json portable_file_dialogs)
 
+# ── Curl (JUCE juce_core WebInputStream on Linux) ───────────────────────
+# JUCE's juce_core uses libcurl for HTTP (pkg-config 'libcurl' found during
+# CMake configure on Linux — see CI logs: -- Found libcurl, version 8.5.0).
+# It compiles juce_core.cpp with curl symbols but does not always propagate the
+# link dep via juce_audio_devices alone, leading to undefined refs
+# (curl_easy_init etc.) on ubuntu-24.04. Link explicitly on Linux.
+if(UNIX AND NOT APPLE)
+  find_package(CURL REQUIRED)
+endif()
+
 # ── The desktop app ──────────────────────────────────────────────────────
 # openaxe_desktop_lib: the app logic (audio I/O now; the JS bridge in M2), built
 # independently of the webview so the C++ tests can link it without pulling
@@ -129,6 +139,9 @@ target_link_libraries(openaxe_desktop_lib PUBLIC
 # cause it to be built into a target multiple times. Nothing outside
 # audio.cpp/audio.h needs JUCE symbols (same containment RtAudio had).
 target_link_libraries(openaxe_desktop_lib PRIVATE juce_audio_devices)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(openaxe_desktop_lib PRIVATE CURL::libcurl)
+endif()
 # Normally implied by juce_add_gui_app()/juce_add_console_app(), which this
 # bare-module integration doesn't use - several JUCE modules branch on it.
 target_compile_definitions(openaxe_desktop_lib PRIVATE JUCE_STANDALONE_APPLICATION=1)
