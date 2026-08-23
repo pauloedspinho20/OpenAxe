@@ -17,6 +17,7 @@
 #include "debug_log.h"
 #include "nam_studio/api.h"
 #include "nam_studio/core.h"
+#include "secure_storage.h"
 
 namespace nam_desktop {
 
@@ -93,7 +94,7 @@ constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
 
 }  // namespace
 
-bool nam_desktop::IsTrustedUiUrl(const std::string& url) {
+bool IsTrustedUiUrl(const std::string& url) {
   // Accept only loopback http(s). The bundled UI is served from our own
   // loopback HTTP server and the dev server is also loopback; nothing else
   // should ever receive the privileged bridge (issue #71).
@@ -306,14 +307,26 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     // still adjust. The reply reports what was actually granted.
     const unsigned int buffer_frames = o.value("bufferFrames", 128u);
 
+    // Reopening while a previous stream is still live (device switch, or the
+    // no-sound recovery poll retrying every few seconds) must not let
+    // Open()/SetGraph() below race an in-flight nam_studio_process call on
+    // that old stream - both touch the same long-lived AudioEngine
+    // (ext_in_l_/max_block_size_ etc., resized here and read every callback),
+    // and ASAN has caught the resulting heap-buffer-overflow when a resize
+    // and a Process() call interleave. BeginSuspend() is a no-op when nothing
+    // is playing yet, which covers the common first-open case.
+    audio_.BeginSuspend();
     if (!audio_.Open(input_device, output_device, sample_rate, buffer_frames)) {
+      audio_.EndSuspend();
       return JsonError("open failed: " + audio_.LastError());
     }
     graph_sample_rate_ = audio_.SampleRate();
     graph_block_ = static_cast<int32_t>(audio_.BufferFrames());
-    // Re-arm the graph at the stream's actual parameters. Stream is open but
-    // not started, so no audio thread is touching the graph yet.
+    // Re-arm the graph at the stream's actual parameters. The old stream (if
+    // any) is suspended and the new one isn't started yet, so no audio
+    // thread can be touching the graph here.
     Call([this] { audio_.SetGraph(graph_, graph_sample_rate_, graph_block_); });
+    audio_.EndSuspend();
     const long latency_frames = audio_.StreamLatencyFrames();
     return (json{{"ok", true},
                  {"sampleRate", audio_.SampleRate()},
@@ -1026,6 +1039,64 @@ std::string StudioBridge::HandleTakeStreamError(const std::string&) {
   std::string message;
   const bool errored = audio_.TakeStreamError(&message);
   return (json{{"error", errored ? json(message) : json()}}).dump();
+}
+
+namespace {
+// Keys only ever come from our own trusted JS (issue #71 already restricts
+// who gets the bridge at all), but the Linux fallback in secure_storage.cpp
+// turns a key straight into a filename - reject anything that isn't a plain
+// identifier so a typo or future caller can't traverse outside its secrets
+// directory.
+bool IsValidSecretKey(const std::string& key) {
+  if (key.empty()) return false;
+  return std::all_of(key.begin(), key.end(), [](unsigned char c) {
+    return std::isalnum(c) || c == '_' || c == '-';
+  });
+}
+}  // namespace
+
+std::string StudioBridge::HandleSecureStore(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    const std::string value = o.value("value", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureStore: invalid key");
+    std::string error;
+    if (!secure_storage::Store(key, value, &error)) return JsonError("secureStore: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureStore: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSecureLoad(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureLoad: invalid key");
+    std::string error;
+    const auto value = secure_storage::Load(key, &error);
+    if (!value && !error.empty()) return JsonError("secureLoad: " + error);
+    return (json{{"ok", true}, {"value", value ? json(*value) : json()}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureLoad: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSecureDelete(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string key = o.value("key", "");
+    if (!IsValidSecretKey(key)) return JsonError("secureDelete: invalid key");
+    std::string error;
+    if (!secure_storage::Delete(key, &error)) return JsonError("secureDelete: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("secureDelete: ") + e.what());
+  }
 }
 
 }  // namespace nam_desktop
