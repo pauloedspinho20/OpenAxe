@@ -25,10 +25,10 @@
 #include "nam_studio/dsp/noise_gate.h"
 #include "nam_studio/dsp/phaser.h"
 #include "nam_studio/dsp/ping_pong_delay.h"
+#include "nam_studio/dsp/smoothing.h"
 #include "nam_studio/dsp/tone_stack.h"
 #include "nam_studio/dsp/tremolo.h"
 #include "nam_studio/dsp/wav.h"
-#include "nam_studio/dsp/smoothing.h"
 
 namespace nam_studio::engine {
 namespace {
@@ -268,34 +268,6 @@ struct AudioEngine::BlockState {
   std::atomic<float> meter{0.0f};
 };
 
-// One step of a param's ramp over a time interval dt_s, returning the new
-// value. kNone snaps; kExponential is a one-pole (63% settled after the time
-// constant); kLinear slews at a constant rate that traverses the full param
-// range in the time constant and never overshoots. Real-time safe: pure
-// arithmetic, no allocation, no atomics. Operates in double so the live ramp
-// state (which is double) can actually reach its target without stalling.
-double RampStep(double current, float target, const dsp::ParamSmoothing& s, double dt_s) {
-  switch (s.mode) {
-    case dsp::SmoothingMode::kNone:
-      return target;
-    case dsp::SmoothingMode::kExponential: {
-      const double tau = s.time_constant_s > 1e-6f ? s.time_constant_s : 1e-6f;
-      const double coef = 1.0 - std::exp(-dt_s / tau);
-      return current + (target - current) * coef;
-    }
-    case dsp::SmoothingMode::kLinear: {
-      const double range = s.max - s.min;
-      if (!(range > 0.0)) return target;
-      const double tau = s.time_constant_s > 1e-6f ? s.time_constant_s : 1e-6f;
-      const double max_step = range * (dt_s / tau);
-      const double diff = target - current;
-      if (std::fabs(diff) <= max_step) return target;
-      return current + std::copysign(max_step, diff);
-    }
-  }
-  return target;
-}
-
 // Advance a splitter's per-output ramp state by one whole buffer and publish
 // the snapshot its consumers will recompute from (issue #122). The fan-out
 // gain is applied inside each consumer's edge sum, so with N branches off one
@@ -368,7 +340,13 @@ int AudioEngine::SubBlocksForSmoothing(int num_frames, double sample_rate, const
   }
   if (!need) return 1;
   const float block_s = num_frames > 0 ? num_frames / static_cast<float>(sample_rate) : 0.0f;
-  const float target_s = std::min(min_tau / 4.0f, 0.004f);
+  float target_s = std::min(min_tau / 4.0f, 0.004f);
+  // A schema row marked linear/exponential but missing (or carrying a
+  // non-positive) time constant would make target_s <= 0 and the division
+  // below +inf, whose int cast is UB before the clamp ever runs. The
+  // generator now rejects such rows; this keeps the audio path safe even if
+  // one slips through.
+  if (!(target_s > 0.0f)) target_s = 0.004f;
   int n = static_cast<int>(std::ceil(block_s / target_s));
   return std::clamp(n, 1, 64);
 }
@@ -944,7 +922,7 @@ void AudioEngine::RunDsp(BlockState& state, int start, int num_frames) {
             } else {
               for (int i = 0; i < num_frames; ++i) {
                 smoothed_mix =
-                    RampStep(smoothed_mix, target, state.smoothing[kCabMixParam], inv_sr);
+                    dsp::RampStep(smoothed_mix, target, state.smoothing[kCabMixParam], inv_sr);
                 const double m = std::clamp(smoothed_mix, 0.0, 1.0);
                 const float dry = 1.0f - m;
                 state.output_l[static_cast<size_t>(start + i)] =
@@ -1108,8 +1086,8 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
         const dsp::ParamSmoothing& ls = state.smoothing[static_cast<size_t>(base)];
         const dsp::ParamSmoothing& ps = state.smoothing[static_cast<size_t>(base + 1)];
         for (int i = 0; i < num_frames; ++i) {
-          smoothed_level = RampStep(smoothed_level, target_level, ls, inv_sr);
-          smoothed_pan = RampStep(smoothed_pan, target_pan, ps, inv_sr);
+          smoothed_level = dsp::RampStep(smoothed_level, target_level, ls, inv_sr);
+          smoothed_pan = dsp::RampStep(smoothed_pan, target_pan, ps, inv_sr);
           const float a = (smoothed_pan + 1.0f) * 0.78539816f;  // (pan+1) * pi/4
           const float gl = std::cos(a) * kPanScale;
           const float gr = std::sin(a) * kPanScale;
@@ -1163,7 +1141,7 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
           // Advance the SetParam-style ramp state for this sub-block. kNone
           // params snap to target; the rest ease toward it.
           for (int i = 0; i < state.param_count; ++i) {
-            state.smoothed[static_cast<size_t>(i)] = RampStep(
+            state.smoothed[static_cast<size_t>(i)] = dsp::RampStep(
                 state.smoothed[static_cast<size_t>(i)],
                 state.params[static_cast<size_t>(i)].load(std::memory_order_relaxed),
                 state.smoothing[static_cast<size_t>(i)], dt);

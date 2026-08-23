@@ -125,6 +125,32 @@ function cppSmoothingRow(param) {
   return `    {${mode}, ${cppFloat(s.timeConstant)}, ${cppFloat(s.min)}, ${cppFloat(s.max)}},`
 }
 
+// A ramp mode the engine can't run (or a typo'd one, which would otherwise
+// silently degrade to `none`), or an exponential/linear row without a positive
+// time constant (which would stall the ramp and poison SubBlocksForSmoothing's
+// sub-block math) must fail generation rather than ship as a broken table.
+function validateSmoothing(schema) {
+  for (const [kind, def] of Object.entries(schema.effects)) {
+    for (const param of def.params ?? []) {
+      const s = param.smoothing
+      if (!s || !s.mode) continue
+      if (!(s.mode in SMOOTHING_MODE_ENUM)) {
+        throw new Error(
+          `${kind}.${param.id ?? param.symbol}: unknown smoothing.mode '${s.mode}' (expected none|linear|exponential)`,
+        )
+      }
+      if (
+        (s.mode === 'linear' || s.mode === 'exponential') &&
+        !(typeof s.timeConstant === 'number' && s.timeConstant > 0)
+      ) {
+        throw new Error(
+          `${kind}.${param.id ?? param.symbol}: smoothing.mode '${s.mode}' requires a positive numeric timeConstant`,
+        )
+      }
+    }
+  }
+}
+
 function jsIdent(kind) {
   return kind
     .replace(/-([a-z])/g, (_, c) => c.toUpperCase())
@@ -389,6 +415,7 @@ async function main() {
   const files = new Map()
 
   if (selectedTargets.includes('base')) {
+    validateSmoothing(schema)
     const { cppTargets, jsMaps, ranges } = buildTargets(schema)
     for (const target of cppTargets) {
       files.set(join(CPP_OUT_DIR, target.fragmentName), renderCppFragment(target))

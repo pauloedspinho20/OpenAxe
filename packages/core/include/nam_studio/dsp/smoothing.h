@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 
 namespace nam_studio::dsp {
@@ -22,5 +23,47 @@ struct ParamSmoothing {
   float min = 0.0f;              // param range (for the linear slew rate)
   float max = 1.0f;
 };
+
+// One step of a param's ramp over a time interval dt_s, returning the new
+// value. kNone snaps; kExponential is a one-pole (63% settled after the time
+// constant); kLinear slews at a constant rate that traverses the full param
+// range in the time constant and never overshoots. Real-time safe: pure
+// arithmetic, no allocation, no atomics. Operates in double so a live ramp
+// held in double can actually reach its target (a float32 accumulator stalls
+// ~1 ULP short because the per-sample step rounds to zero).
+//
+// Header-inline rather than engine-local so it is directly unit-testable and
+// shareable by future front ends; the engine's ramp *state* stays private to
+// AudioEngine.
+inline double RampStep(double current, float target, const ParamSmoothing& s, double dt_s) {
+  switch (s.mode) {
+    case SmoothingMode::kNone:
+      return target;
+    case SmoothingMode::kExponential: {
+      const double tau = s.time_constant_s > 1e-6f ? s.time_constant_s : 1e-6f;
+      const double coef = 1.0 - std::exp(-dt_s / tau);
+      const double delta = static_cast<double>(target) - current;
+      // Snap once the remaining gap is negligible on the param's own scale.
+      // The one-pole only approaches asymptotically, and without this the
+      // value never lands exactly on its target - which would keep any
+      // fast path keyed on exact settled values (mixer unity, cab fully-wet)
+      // disarmed forever after a single excursion. A snap of <=1e-6 of the
+      // param range is far below audible.
+      const double eps = (static_cast<double>(s.max) - s.min) * 1e-6;
+      if (!(std::fabs(delta) > eps)) return target;
+      return current + delta * coef;
+    }
+    case SmoothingMode::kLinear: {
+      const double range = s.max - s.min;
+      if (!(range > 0.0)) return target;
+      const double tau = s.time_constant_s > 1e-6f ? s.time_constant_s : 1e-6f;
+      const double max_step = range * (dt_s / tau);
+      const double diff = target - current;
+      if (std::fabs(diff) <= max_step) return target;
+      return current + std::copysign(max_step, diff);
+    }
+  }
+  return target;
+}
 
 }  // namespace nam_studio::dsp

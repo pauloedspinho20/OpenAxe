@@ -290,7 +290,7 @@ void TestCabIrConvolutionOverAbi() {
   NAM_EXPECT(std::fabs(wet[32]) < 1e-4f);          // nothing in between
 
   // Mix at 0 is fully dry: the impulse survives, the echo doesn't. The cab's
-  // ir_mix is smoothed (exponential, ~20ms) per issue #122, so settle a few
+  // ir_mix is smoothed (exponential, 30 ms per the schema) per issue #122, so settle a few
   // buffers after the change before asserting the steady state.
   nam_studio_set_param(graph, cab, 0, 0.0f);
   for (int i = 0; i < 200; ++i) render(1.0f);

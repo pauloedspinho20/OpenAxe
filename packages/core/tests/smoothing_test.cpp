@@ -8,6 +8,8 @@
 // as engine_test.cpp.
 #include "nam_studio/engine.h"
 
+#include "nam_studio/dsp/smoothing.h"
+
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -146,6 +148,86 @@ void SplitterFanOutRampsIdentically() {
   }
 }
 
+// Direct unit coverage of the pure ramp function itself, including the
+// kLinear path no schema row uses yet (it must stay correct so the schema can
+// adopt it) and the exact-settle behaviour the engine's fast paths rely on.
+void RampStepUnitSemantics() {
+  using nam_studio::dsp::ParamSmoothing;
+  using nam_studio::dsp::RampStep;
+  using nam_studio::dsp::SmoothingMode;
+  const double dt = 1.0 / kSampleRate;
+
+  // kNone snaps to the target immediately.
+  {
+    ParamSmoothing s;  // defaults to kNone
+    // Returns the float target widened to double - exactly what the atomic
+    // mirror holds, so "snap" means bit-exact with the stored param.
+    EXPECT(RampStep(0.25, 0.9f, s, dt) == static_cast<double>(0.9f));
+  }
+
+  // kExponential: matches the closed form mid-ramp, is monotonic, never
+  // overshoots, and settles EXACTLY on the target once the gap drops below
+  // 1e-6 of the range (the snap that lets exact-value fast paths re-arm).
+  {
+    ParamSmoothing s{SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f};
+    double v = 1.0;
+    const double tau = 0.03f;  // the POLICY stores float - closed form must match it
+    const double base = std::exp(-dt / tau);
+    for (int i = 0; i < 64; ++i) {
+      v = RampStep(v, 0.5f, s, dt);
+      const double expected = 0.5 + 0.5 * std::pow(base, i + 1);
+      EXPECT(std::fabs(v - expected) < 1e-12);
+      EXPECT(v >= 0.5);
+    }
+    // Far from settled: must NOT have snapped yet.
+    EXPECT(v > 0.97);
+    bool snapped = false;
+    for (int i = 0; i < 100000 && !snapped; ++i) {
+      v = RampStep(v, 0.5f, s, dt);
+      if (v == 0.5) snapped = true;
+    }
+    EXPECT(snapped);
+  }
+
+  // The float32-stall regression from issue #122: a one-pole held in float32
+  // stalls ~4e-5 short of 0.5 because its per-sample step rounds to 0 ULP.
+  // In double with the settle snap, the ramp must reach the target exactly.
+  {
+    ParamSmoothing s{SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f};
+    float stalled = 0.0f;
+    for (int i = 0; i < 200000; ++i)
+      stalled = static_cast<float>(static_cast<double>(stalled) +
+                                   (0.5 - static_cast<double>(stalled)) * (1.0 - std::exp(-dt / 0.03)));
+    EXPECT(stalled < 0.5f && stalled > 0.49995f);  // documents the stall itself
+    double v = 0.0;
+    for (int i = 0; i < 200000; ++i) v = RampStep(v, 0.5f, s, dt);
+    EXPECT(v == 0.5);  // ...and the fix
+  }
+
+  // kLinear: constant slew bounded by range/tau per second, completes exactly,
+  // never overshoots, and handles a degenerate zero-range policy.
+  {
+    ParamSmoothing s{SmoothingMode::kLinear, 0.03f, 0.0f, 1.0f};
+    const double step = 1.0 * (dt / 0.03f);  // match the policy's float tau
+    double v = 0.0;
+    int steps_taken = 0;
+    while (v != 1.0 && steps_taken < 100000) {
+      const double prev = v;
+      v = RampStep(v, 1.0f, s, dt);
+      ++steps_taken;
+      EXPECT(v > prev);                                   // always moving forward...
+      EXPECT(v - prev <= step + 1e-15);                   // ...at most max_step...
+      EXPECT(v <= 1.0);                                   // ...and never past the target
+    }
+    EXPECT(v == 1.0);
+    // Full range traversed in ~tau (1440 samples at 48 kHz), not just eventually.
+    EXPECT(steps_taken > 1400 && steps_taken < 1480);
+
+    ParamSmoothing degenerate{SmoothingMode::kLinear, 0.03f, 1.0f, 1.0f};
+    EXPECT(RampStep(0.3, 0.7f, degenerate, dt) == static_cast<double>(0.7f));
+  }
+}
+
 // Note on "none"-mode params (the other half of issue #122's contract: where a
 // wrapped DSP already smooths internally - reverb dry/wet, compressor
 // threshold, amp calibration - the engine must NOT re-smooth). Those params
@@ -162,6 +244,7 @@ void SplitterFanOutRampsIdentically() {
 int main() {
   ExponentialParamRampsSmoothly();
   SplitterFanOutRampsIdentically();
+  RampStepUnitSemantics();
   if (g_failures != 0) {
     std::fprintf(stderr, "\n%d smoothing checks failed\n", g_failures);
     return 1;
