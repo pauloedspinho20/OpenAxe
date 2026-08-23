@@ -21,11 +21,23 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-6);
   font-family: var(--font-display);
   font-size: 30px;
   font-weight: bold;
   letter-spacing: 0.14em;
   margin-bottom: var(--sp-4);
   user-select: none;
+}
+
+.hero p,
+.inline p {
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  display: flex;
+  gap: 0.14em;
+}
+.hero p span,
+.inline p span {
+  color: var(--led-hot);
 }

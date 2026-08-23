@@ -40,6 +40,16 @@
   outline-offset: 2px;
 }
 
+.button.accent {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.button.accent:hover {
+  color: var(--led-hot);
+  border-color: var(--led-hot);
+}
+
 .accent.active {
   color: var(--accent);
   border-color: var(--accent);

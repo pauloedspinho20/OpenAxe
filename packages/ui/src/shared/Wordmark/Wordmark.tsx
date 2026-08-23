@@ -23,19 +23,21 @@ export interface WordmarkProps {
 export function Wordmark({ variant = 'inline' }: WordmarkProps) {
   if (variant === 'hero') {
     return (
-      <span className={styles.hero}>
+      <div className={styles.hero}>
         <AxeMark size={200} />
-        OPENAXE
-      </span>
+        <p>
+          OPEN<span>AXE</span>
+        </p>
+      </div>
     )
   }
 
   return (
-    <span className={styles.inline}>
-      <AxeMark size={16} />
+    <div className={styles.inline}>
+      <AxeMark size={40} />
       <p>
-        OPEN<span style={{ color: '#ff2b2b' }}>AXE</span>
+        OPEN<span>AXE</span>
       </p>
-    </span>
+    </div>
   )
 }
