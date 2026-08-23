@@ -1,4 +1,4 @@
-# <img src="./packages/ui/assets/brand/openaxe-mark.svg" width="28" valign="middle" alt="OpenAxe logo" /> OpenAxe
+# <img src="./apps/desktop/packaging/openaxe-256.png" width="28" valign="middle" alt="OpenAxe logo" /> OpenAxe
 
 A free, open-source guitar/bass amp, cabinet, and effects suite — in the spirit of Amplitube / Guitar Rig — built on [Neural Amp Modeler](https://github.com/sdatkinson/NeuralAmpModelerCore) (NAM). Runs as a **web app** today; planned for **desktop**, **VST3/CLAP/AU/AAX plugin**, and **mobile** (iOS + Android) — all sharing the same C++ DSP engine and design system.
 

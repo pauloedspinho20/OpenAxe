@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenAxe definitive mark (axe + lightning) — dark shape on black, single path.
-     Source: packages/ui/assets/brand/openaxe-mark.svg (1024 units). Mapped into
-     adaptive 108 viewport with safe-zone scaling. -->
+<!-- OpenAxe definitive mark (axe + lightning) — red on black, single path.
+     Mapped into adaptive 108 viewport with safe-zone scaling. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"

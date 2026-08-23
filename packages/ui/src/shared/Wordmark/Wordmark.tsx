@@ -1,8 +1,7 @@
 import styles from './Wordmark.module.css'
 
-// Inline copy of packages/ui/assets/brand/openaxe-mark.svg's axe group so the
-// Wordmark needs no runtime asset fetch (works in Storybook, the web app and
-// the desktop bundle alike). Regenerate from the source SVG if it changes.
+// Inline axe mark (final red on black) so the Wordmark needs no runtime
+// asset fetch (works in Storybook, the web app and the desktop bundle alike).
 function AxeMark({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
