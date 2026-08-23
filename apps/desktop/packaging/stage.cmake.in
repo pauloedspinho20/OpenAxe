@@ -16,20 +16,20 @@ if(APPLE)
   file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${app}/Contents/Resources")
   file(COPY "@OPENAXE_DESKTOP_PLIST@" DESTINATION "${app}/Contents")
   # Dock/Finder icon (Info.plist's CFBundleIconFile points here).
-  file(COPY "${CMAKE_CURRENT_LIST_DIR}/openaxe.icns" DESTINATION "${app}/Contents/Resources")
+  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe.icns" DESTINATION "${app}/Contents/Resources")
 elseif(WIN32)
   file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
   file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
   # Explorer icon is compiled into the exe via openaxe_desktop.rc; this copy is
   # a convenience for shortcuts/installers that want a standalone .ico.
-  file(COPY "${CMAKE_CURRENT_LIST_DIR}/openaxe.ico" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
+  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe.ico" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
 else()
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps")
   file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
   file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
-  file(COPY "${CMAKE_CURRENT_LIST_DIR}/openaxe-256.png"
+  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe-256.png"
         DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps"
         RENAME openaxe.png)
 endif()
