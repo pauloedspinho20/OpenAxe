@@ -505,7 +505,7 @@ void TestConcurrentMutationsWhileStreamRunning() {
 // a live stream runs - the exact window that used to be unsafe. Skips on hosts
 // without a single duplex device, like the sibling stress test.
 void TestSlimSizeMutationsWhileStreamRunning() {
-  nam_desktop::StudioBridge bridge;
+  openaxe_desktop::StudioBridge bridge;
 
   const auto devices = Parse(bridge.HandleListDevices(""));
   if (!devices.is_array() || devices.empty()) {
