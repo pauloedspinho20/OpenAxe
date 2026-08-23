@@ -98,7 +98,7 @@ Two hardware finishes: **Carbon** (dark, TX-6-style) and **Aluminum** (light, OP
 pnpm + Turborepo monorepo (#13). `apps/ios`, `apps/android`, and `packages/vst3` are placeholders — each holds a README pointing at the issue that builds it out (#17, #17, #16); `apps/desktop` is a working native shell (see above); `packages/core` has a real, tested C++ audio graph engine, full NAM inference wrapper, and all four Dragonfly Reverb algorithms, with three more DSP libraries still to wrap (#14).
 
 ```
-NAM-Web-Studio/
+OpenAxe/
 ├── apps/
 │   ├── web/                  # Vite + React app (the current live product)
 │   │   ├── src/
