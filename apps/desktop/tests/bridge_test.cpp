@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
@@ -439,6 +441,24 @@ void TestConcurrentMutationsWhileStreamRunning() {
       if (add["ok"] == true) {
         Parse(bridge.HandleSetParam(
             Arr((std::string(R"([{"blockId":")") + id + R"(","key":0,"value":0.3}])").c_str())));
+        // issue #211: the algorithm/model-swap mutators race the live audio
+        // callback exactly like add/remove do - each is a SetReverbAlgorithm
+        // emplace / SetDelayModel param-count + smoothing rewrite inside the
+        // suspend handshake. Cycle them so those exact sites get hammered as
+        // hard as the topology path.
+        if (kind == "reverb") {
+          static const char* const kAlgos[] = {"hall", "room", "plate", "earlyReflections"};
+          Parse(bridge.HandleSetReverbAlgorithm(Arr(
+              (std::string(R"([{"blockId":")") + id + R"(","algorithm":")" + kAlgos[i % 4] +
+               R"("}])")
+                  .c_str())));
+        } else if (kind == "delay") {
+          static const char* const kModels[] = {"digital", "analog", "tape"};
+          Parse(bridge.HandleSetDelayModel(Arr(
+              (std::string(R"([{"blockId":")") + id + R"(","model":")" + kModels[i % 3] +
+               R"("}])")
+                  .c_str())));
+        }
         Parse(bridge.HandleRemoveBlock(
             Arr((std::string(R"([{"blockId":")") + id + R"("}])").c_str())));
       }
@@ -473,6 +493,117 @@ void TestConcurrentMutationsWhileStreamRunning() {
 
   std::printf("  TestConcurrentMutationsWhileStreamRunning: %d mutations across %d rounds x 4 threads, no crash\n",
                mutations.load(), kStressRounds);
+}
+
+// issue #211: nam_studio_set_param's Amp-family slim-size forward reallocates
+// inside NAMCore and used to run straight on the webview thread, so dragging
+// the slim-size knob while the audio callback was mid-process could race a
+// realloc against the model's inference buffers. HandleSetParam now routes it
+// through the suspend handshake like every other structural mutation. This
+// loads a genuinely slimmable capture (so SetSlimSize has real buffers to
+// rebuild) and hammers the UI->bridge slimSize path from several threads while
+// a live stream runs - the exact window that used to be unsafe. Skips on hosts
+// without a single duplex device, like the sibling stress test.
+void TestSlimSizeMutationsWhileStreamRunning() {
+  nam_desktop::StudioBridge bridge;
+
+  const auto devices = Parse(bridge.HandleListDevices(""));
+  if (!devices.is_array() || devices.empty()) {
+    std::printf("  Skipping slim-size stress test: no audio devices on this host\n");
+    return;
+  }
+  int64_t duplex_id = -1;
+  for (const auto& d : devices) {
+    if (d.value("isInput", false) && d.value("isOutput", false)) {
+      duplex_id = d.value("id", int64_t{-1});
+      break;
+    }
+  }
+  if (duplex_id < 0) {
+    std::printf("  Skipping slim-size stress test: no single input+output device on this host\n");
+    return;
+  }
+
+  const auto opened = Parse(bridge.HandleOpen(Arr(
+      (std::string(R"([{"inputDeviceId":)") + std::to_string(duplex_id) +
+       R"(,"outputDeviceId":)" + std::to_string(duplex_id) + "}]")
+          .c_str())));
+  if (opened["ok"] != true) {
+    std::printf("  Skipping slim-size stress test: open failed (%s)\n",
+                opened.value("error", "").c_str());
+    return;
+  }
+  const auto started = Parse(bridge.HandleStart(""));
+  if (started["ok"] != true) {
+    std::printf("  Skipping slim-size stress test: start failed (%s)\n",
+                started.value("error", "").c_str());
+    bridge.HandleClose("");
+    return;
+  }
+
+  CHECK(Parse(bridge.HandleAddBlock(Arr(R"([{"kind":"amp","row":0,"col":0,"id":"anchor"}])")))
+            ["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"IN","toId":"anchor"}])")))["ok"] == true);
+  CHECK(Parse(bridge.HandleConnect(Arr(R"([{"fromId":"anchor","toId":"OUT"}])")))["ok"] == true);
+
+  // Load a genuinely slimmable capture so SetSlimSize actually rebuilds
+  // NAMCore's internal buffers (the reallocation that used to race Process).
+  std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/slimmable_wavenet.nam",
+                    std::ios::binary);
+  if (!ifs.good()) {
+    std::printf("  Skipping slim-size stress test: example slimmable model not available\n");
+    Parse(bridge.HandleStop(""));
+    bridge.HandleClose("");
+    return;
+  }
+  const std::string model_json((std::istreambuf_iterator<char>(ifs)),
+                               std::istreambuf_iterator<char>());
+  // Build the request with nlohmann so the model's own quotes/backslashes are
+  // JSON-escaped - the handler parses the request as JSON (ParseArgs tolerates
+  // a bare object, wrapping it in the args array).
+  nlohmann::json load_req = nlohmann::json::object();
+  load_req["blockId"] = "anchor";
+  load_req["json"] = model_json;
+  const auto loaded = Parse(bridge.HandleLoadModelJson(load_req.dump()));
+  CHECK(loaded["ok"] == true);
+  const auto info = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"anchor"}])")));
+  CHECK(info["hasModel"] == true);
+
+  std::atomic<bool> stop{false};
+  std::atomic<int> writes{0};
+  auto worker = [&](int seed) {
+    int i = 0;
+    while (!stop.load(std::memory_order_relaxed)) {
+      const float slim = ((seed * 7 + i) % 100) / 100.0f;
+      Parse(bridge.HandleSetParam(Arr(
+          (std::string(R"([{"blockId":"anchor","key":"slimSize","value":)") +
+           std::to_string(slim) + R"(}])")
+              .c_str())));
+      ++i;
+      writes.fetch_add(1, std::memory_order_relaxed);
+    }
+  };
+
+  std::vector<std::thread> workers;
+  for (int t = 0; t < 3; ++t) workers.emplace_back(worker, t + 1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+  stop.store(true, std::memory_order_relaxed);
+  for (auto& w : workers) w.join();
+
+  CHECK(writes.load() > 0);
+  // The amp is still intact, queryable, and the stream is still alive.
+  const auto after = Parse(bridge.HandleBlockInfo(Arr(R"([{"blockId":"anchor"}])")));
+  CHECK(after["ok"] == true);
+  CHECK(after["hasModel"] == true);
+  const auto config = Parse(bridge.HandleGetConfig(""));
+  CHECK(config["ok"] == true);
+  CHECK(config["running"] == true);
+
+  Parse(bridge.HandleStop(""));
+  bridge.HandleClose("");
+
+  std::printf("  TestSlimSizeMutationsWhileStreamRunning: %d slim-size writes against a live stream, no crash\n",
+               writes.load());
 }
 
 // HandleOpen used to call AudioIO::Open()/SetGraph() (which resizes
@@ -872,6 +1003,7 @@ int main() {
   TestAmpToneStackAndSlimSizeKeys();
   TestLoadIrWav();
   TestConcurrentMutationsWhileStreamRunning();
+  TestSlimSizeMutationsWhileStreamRunning();
   TestReopenWhileStreamRunning();
   TestIsTrustedUiUrl();
   TestLoadIrWavRejectsOversized();

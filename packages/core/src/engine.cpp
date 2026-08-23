@@ -180,8 +180,39 @@ constexpr dsp::ParamSmoothing kDragonflyEarlyReflectionsSmoothing[] = {
 struct AudioEngine::BlockState {
   graph::BlockKind kind = graph::BlockKind::kReverb;
   DspVariant dsp;
-  int param_count = 0;  // logical count; dynamic for Amp-family (see LoadNamModel)
+  // Logical param count; dynamic for Amp-family blocks (grows on model load)
+  // and for the per-algorithm reverb tables. Atomic because SetParam/
+  // GetParam/ParamInfo read it for bounds checks from threads that may run
+  // concurrently with the Tier-2 writes that change it (the desktop webview
+  // thread vs the control thread's model/algorithm swaps - issue #211); the
+  // audio thread reads it through the same atomics in Process().
+  std::atomic<int> param_count{0};
   std::array<std::atomic<float>, kMaxParamsPerBlock> params{};
+
+  // ── Threading discipline for the plain fields below (issue #211) ──────
+  // `dsp`, `smoothing[]`, `smoothed[]`, `ramp_*`, `tone`, `cab` and the
+  // per-block buffers are written by the control thread ONLY under the
+  // Tier-2 protocol (no Process() running) and read by Process() on the audio
+  // thread; Process() never writes them concurrently with a control-thread
+  // write. `kind` is set once at AddBlock and never changes. The asset-source
+  // strings/bytes are control-thread data Process() never reads. The atomics
+  // (params, trims, bypass, meter, the amp calibration gates, param_count,
+  // reverb_control_slots) are the only fields shared across threads without
+  // the protocol.
+
+  // Reverb blocks only (issue #211): the resolved (param index, clamp range)
+  // for each user-facing ReverbControl under the currently installed
+  // algorithm. Refreshed by RefreshReverbControlSlots under the Tier-2
+  // protocol; read by SetReverbControl from any thread - including the audio
+  // thread on the web - without touching the live DspVariant, which is never
+  // safely readable concurrently with an emplace. index < 0 = this algorithm
+  // doesn't expose the control (a no-op).
+  struct ReverbControlSlot {
+    std::atomic<int32_t> index{-1};
+    std::atomic<float> min{0.0f};
+    std::atomic<float> max{0.0f};
+  };
+  std::array<ReverbControlSlot, kReverbControlCount> reverb_control_slots{};
 
   // Smoothing policy per param (schema-derived, immutable at runtime) and the
   // live ramp state the audio thread advances. `smoothed[i]` is the value
@@ -189,7 +220,9 @@ struct AudioEngine::BlockState {
   // params[i] (the atomic target a UI/host wrote) per issue #122's ramp. Plain
   // float, not atomic: only Process() touches it, and it is re-seeded from the
   // policy + the param mirror on the control thread (AddBlock / reverb switch /
-  // model load) so the first block after a change never sweeps from zero.
+  // model load) so the first block after a change never sweeps from zero. The
+  // control-thread seeding happens under the Tier-2 protocol, so it never
+  // races the audio thread's advances (issue #211).
   std::array<dsp::ParamSmoothing, kMaxParamsPerBlock> smoothing{};
   // Live ramp state for issue #122. Held as double (not float) so the one-pole
   // ramp can actually reach its target: a float32 accumulator stalls ~1 ULP
@@ -332,7 +365,8 @@ void AudioEngine::PublishSplitterRamps(BlockState& state, int num_frames, double
 int AudioEngine::SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state) {
   bool need = false;
   float min_tau = 1e9f;
-  for (int i = 0; i < state.param_count; ++i) {
+  const int pc = state.param_count.load(std::memory_order_relaxed);
+  for (int i = 0; i < pc; ++i) {
     if (state.smoothing[i].mode != dsp::SmoothingMode::kNone) {
       need = true;
       min_tau = std::min(min_tau, state.smoothing[i].time_constant_s);
@@ -419,11 +453,12 @@ void AudioEngine::EnsureBuffers(BlockState& state) {
 // LoadNamModel instead (and whose param count isn't even known until a model
 // loads).
 void AudioEngine::SeedParamsFromDsp(BlockState& state) {
+  const int count = state.param_count.load(std::memory_order_relaxed);
   std::visit(
       [&](auto& d) {
         using T = std::decay_t<decltype(d)>;
         if constexpr (!std::is_same_v<T, std::monostate> && !std::is_same_v<T, dsp::NamAmp>) {
-          for (int i = 0; i < state.param_count; ++i) {
+          for (int i = 0; i < count; ++i) {
             state.params[static_cast<size_t>(i)].store(d.GetParam(i), std::memory_order_relaxed);
           }
         }
@@ -435,8 +470,11 @@ void AudioEngine::SeedParamsFromDsp(BlockState& state) {
 // into its BlockState, and seed the live ramp state from the param mirror so
 // the next Process() eases from the *current* value rather than from zero
 // (issue #122). Called on the control thread only - AddBlock, reverb algorithm
-// switch, and model load - never from the audio path.
+// switch, and model load - never from the audio path, and never concurrently
+// with Process() (issue #211: the ramp state this writes is plain data read by
+// the audio thread).
 void AudioEngine::SeedSmoothing(BlockState& state) {
+  const int pc = state.param_count.load(std::memory_order_relaxed);
   const dsp::ParamSmoothing* table = nullptr;
   int count = 0;
   switch (state.kind) {
@@ -470,7 +508,7 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       } else {
         table = kDragonflyEarlyReflectionsSmoothing;
       }
-      count = state.param_count;
+      count = pc;
       break;
     }
     case graph::BlockKind::kChorus:
@@ -513,12 +551,12 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       break;
   }
   if (table) {
-    for (int i = 0; i < count && i < state.param_count && i < kMaxParamsPerBlock; ++i) {
+    for (int i = 0; i < count && i < pc && i < kMaxParamsPerBlock; ++i) {
       state.smoothing[static_cast<size_t>(i)] = table[i];
     }
   }
   // Seed the live ramp state from the current param mirror.
-  for (int i = 0; i < state.param_count; ++i) {
+  for (int i = 0; i < pc; ++i) {
     state.smoothed[static_cast<size_t>(i)] =
         state.params[static_cast<size_t>(i)].load(std::memory_order_relaxed);
   }
@@ -597,60 +635,61 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   state->kind = kind;
   if (IsAmpFamily(kind)) {
     state->dsp.emplace<dsp::NamAmp>();
-    state->param_count = kAmpParamCount;
+    state->param_count.store(kAmpParamCount, std::memory_order_relaxed);
   } else if (kind == graph::BlockKind::kReverb) {
     state->dsp.emplace<dsp::DragonflyHallReverb>();  // default algorithm; see SetReverbAlgorithm
-    state->param_count = dsp::DragonflyHallReverb::ParamCount();
+    state->param_count.store(dsp::DragonflyHallReverb::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
+    RefreshReverbControlSlots(*state);
   } else if (kind == graph::BlockKind::kChorus) {
     state->dsp.emplace<dsp::Chorus>();
-    state->param_count = dsp::Chorus::ParamCount();
+    state->param_count.store(dsp::Chorus::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kFlanger) {
     state->dsp.emplace<dsp::Flanger>();
-    state->param_count = dsp::Flanger::ParamCount();
+    state->param_count.store(dsp::Flanger::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kPhaser) {
     state->dsp.emplace<dsp::Phaser>();
-    state->param_count = dsp::Phaser::ParamCount();
+    state->param_count.store(dsp::Phaser::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kDelay) {
     state->dsp.emplace<dsp::Delay>();
-    state->param_count = dsp::Delay::ParamCount();
+    state->param_count.store(dsp::Delay::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kPingPongDelay) {
     state->dsp.emplace<dsp::PingPongDelay>();
-    state->param_count = dsp::PingPongDelay::ParamCount();
+    state->param_count.store(dsp::PingPongDelay::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kCompressor) {
     state->dsp.emplace<dsp::Compressor>();
-    state->param_count = dsp::Compressor::ParamCount();
+    state->param_count.store(dsp::Compressor::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kEq) {
     state->dsp.emplace<dsp::Equalizer>();
-    state->param_count = dsp::Equalizer::ParamCount();
+    state->param_count.store(dsp::Equalizer::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kNoiseGate) {
     state->dsp.emplace<dsp::NoiseGate>();
-    state->param_count = dsp::NoiseGate::ParamCount();
+    state->param_count.store(dsp::NoiseGate::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   } else if (kind == graph::BlockKind::kTremolo) {
     state->dsp.emplace<dsp::Tremolo>();
-    state->param_count = dsp::Tremolo::ParamCount();
+    state->param_count.store(dsp::Tremolo::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
   if (kind == graph::BlockKind::kCab) {
     // Cab stays std::monostate - its DSP is the pair of convolvers above, not a
     // DspVariant alternative - but it does have a param, and its blend starts
     // fully wet so loading an IR is immediately audible.
-    state->param_count = kCabParamCount;
+    state->param_count.store(kCabParamCount, std::memory_order_relaxed);
     state->params[kCabMixParam].store(1.0f, std::memory_order_relaxed);
   }
   if (kind == graph::BlockKind::kMixer) {
     // Mixer and splitter stay std::monostate - neither is a DSP effect kind -
     // but both now expose per-port level/pan params the engine's Process()
     // applies during routing. Unity level, centre pan by default.
-    state->param_count = kMixerParamCount;
+    state->param_count.store(kMixerParamCount, std::memory_order_relaxed);
     for (int i = 0; i < kMixerParamCount; ++i) {
       const bool is_pan = (i % kMixerParamsPerInput) == 1;
       state->params[static_cast<size_t>(i)].store(is_pan ? 0.0f : 1.0f,
@@ -658,7 +697,7 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     }
   }
   if (kind == graph::BlockKind::kSplitter) {
-    state->param_count = kSplitterParamCount;
+    state->param_count.store(kSplitterParamCount, std::memory_order_relaxed);
     for (int i = 0; i < kSplitterParamCount; ++i) {
       state->params[static_cast<size_t>(i)].store(1.0f, std::memory_order_relaxed);
     }
@@ -861,7 +900,8 @@ void AudioEngine::ApplyRealtimeParams(BlockState& state) {
           // state.smoothed[i] is the eased value for this sub-block; feeding it
           // (not the raw atomic target) is what removes the zipper noise a host
           // automating a gain param would otherwise produce (issue #122).
-          for (int i = 0; i < state.param_count; ++i) {
+          const int pc = state.param_count.load(std::memory_order_relaxed);
+          for (int i = 0; i < pc; ++i) {
             d.SetParam(i, state.smoothed[static_cast<size_t>(i)]);
           }
         }
@@ -1140,7 +1180,8 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
           const float dt = len / static_cast<float>(sample_rate_);
           // Advance the SetParam-style ramp state for this sub-block. kNone
           // params snap to target; the rest ease toward it.
-          for (int i = 0; i < state.param_count; ++i) {
+          const int pc = state.param_count.load(std::memory_order_relaxed);
+          for (int i = 0; i < pc; ++i) {
             state.smoothed[static_cast<size_t>(i)] = dsp::RampStep(
                 state.smoothed[static_cast<size_t>(i)],
                 state.params[static_cast<size_t>(i)].load(std::memory_order_relaxed),
@@ -1209,19 +1250,33 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
 // How many params the block currently exposes. "Currently" matters for the amp
 // family: loading a slimmable model adds the slim-size param, so this can grow
 // (see LoadNamModel). 0 for unknown blocks and for the kinds with no DSP.
+// Atomic read (issue #211): this changes under Tier-2 writes on the control
+// thread, which may run concurrently with this caller on another thread.
 int AudioEngine::ParamCount(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
-  return state ? state->param_count : 0;
+  return state ? state->param_count.load(std::memory_order_relaxed) : 0;
 }
 
 // Name/symbol/range/unit for one param, or nullopt for an unknown block, an
 // out-of-range index, or a block with no DSP. The descriptor's strings are
 // static storage owned by the DSP wrappers, so they outlive any caller - which
 // is what lets them cross the extern "C" boundary as bare const char*.
+//
+// Reads the live DspVariant (ParamInfoOf), so like every variant read it must
+// not race a Tier-2 emplace. On the desktop this is only ever called from the
+// control thread (the bridge resolves param keys inside Call()), which is
+// serialized against the Tier-2 writes; on the web it runs on the same thread
+// as everything else. SetReverbControl no longer uses this for that reason.
 std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) const {
   const BlockState* state = FindBlockThreadSafe(id);
-  if (!state || index < 0 || index >= state->param_count) return std::nullopt;
+  if (!state || index < 0 || index >= state->param_count.load(std::memory_order_relaxed)) {
+    return std::nullopt;
+  }
+  return ParamInfoOf(*state, index);
+}
 
+// The shared std::visit over a block's live DSP for a valid index.
+std::optional<ParamDescriptor> AudioEngine::ParamInfoOf(const BlockState& state, int index) {
   return std::visit(
       [&](const auto& d) -> std::optional<ParamDescriptor> {
         using T = std::decay_t<decltype(d)>;
@@ -1235,7 +1290,7 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
           };
           return kAmpParams[index];
         } else if constexpr (std::is_same_v<T, std::monostate>) {
-          if (state->kind == graph::BlockKind::kCab) {
+          if (state.kind == graph::BlockKind::kCab) {
             // Generated from packages/core/param_schema.json (issue #51) - run
             // scripts/gen-param-schema.mjs after editing the schema.
             static constexpr ParamDescriptor kCabParams[kCabParamCount] = {
@@ -1243,13 +1298,13 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
             };
             return kCabParams[index];
           }
-          if (state->kind == graph::BlockKind::kMixer) {
+          if (state.kind == graph::BlockKind::kMixer) {
             static constexpr ParamDescriptor kMixerParams[kMixerParamCount] = {
 #include "dsp/generated/engine_mixer_params.inc"
             };
             return kMixerParams[index];
           }
-          if (state->kind == graph::BlockKind::kSplitter) {
+          if (state.kind == graph::BlockKind::kSplitter) {
             static constexpr ParamDescriptor kSplitterParams[kSplitterParamCount] = {
 #include "dsp/generated/engine_splitter_params.inc"
             };
@@ -1261,14 +1316,16 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
           return ParamDescriptor{info.name, info.symbol, info.min_value, info.max_value, info.unit};
         }
       },
-      state->dsp);
+      state.dsp);
 }
 
 // Read one param from the atomic mirror (not from the DSP object, which may
 // have transformed it). Real-time safe, callable from any thread.
 float AudioEngine::GetParam(BlockId id, int index) const {
   const BlockState* state = FindBlockThreadSafe(id);
-  if (!state || index < 0 || index >= state->param_count) return 0.0f;
+  if (!state || index < 0 || index >= state->param_count.load(std::memory_order_relaxed)) {
+    return 0.0f;
+  }
   return state->params[static_cast<size_t>(index)].load(std::memory_order_relaxed);
 }
 
@@ -1276,15 +1333,17 @@ float AudioEngine::GetParam(BlockId id, int index) const {
 // the next buffer. Real-time safe and callable from any thread - with one
 // documented exception, the amp's slim size, which reallocates inside NAMCore
 // and is therefore applied here, synchronously, instead of on the audio thread.
-// (That one call must not be made concurrently with Process; the bridge routes
-// it through its suspend handshake.)
+// (That one call is Tier 2: it must not be made concurrently with Process; the
+// desktop bridge routes it through its suspend handshake - see issue #211.)
 //
-// Out-of-range indices and unknown blocks are silently ignored: param tables
-// change shape when a model loads or a reverb algorithm switches, so a UI can
-// legitimately be one message behind.
+// The bounds check reads param_count atomically so it can't tear against the
+// control thread's model/algorithm swaps (issue #211). Out-of-range indices
+// and unknown blocks are silently ignored: param tables change shape when a
+// model loads or a reverb algorithm switches, so a UI can legitimately be one
+// message behind.
 void AudioEngine::SetParam(BlockId id, int index, float value) {
   BlockState* state = FindBlockThreadSafe(id);
-  if (!state || index < 0 || index >= state->param_count) return;
+  if (!state || index < 0 || index >= state->param_count.load(std::memory_order_relaxed)) return;
   state->params[static_cast<size_t>(index)].store(value, std::memory_order_relaxed);
 
   if (IsAmpFamily(state->kind)) {
@@ -1293,8 +1352,12 @@ void AudioEngine::SetParam(BlockId id, int index, float value) {
     } else if (index == kAmpOutputLevelParam) {
       state->amp_output_level_active.store(true, std::memory_order_relaxed);
     } else if (index == kAmpSlimSizeParam) {
-      // Not real-time safe - matches NamAmp::SetSlimSize's own contract.
-      // Applied synchronously here rather than deferred to Process().
+      // Tier 2 - matches NamAmp::SetSlimSize's own contract: NAMCore may
+      // reallocate, so the caller must not run this concurrently with
+      // Process() (the desktop bridge's suspend handshake covers it). The
+      // std::get_if here is a read of the variant's active alternative, which
+      // for amp-family blocks is always NamAmp and never reconstructed, so
+      // the read itself is safe.
       if (auto* amp = std::get_if<dsp::NamAmp>(&state->dsp)) amp->SetSlimSize(value);
     }
   }
@@ -1717,14 +1780,51 @@ std::span<const char* const> ReverbControlSymbols(ReverbControl control) {
 
 }  // namespace
 
+// Re-resolve every user-facing ReverbControl onto the algorithm currently
+// installed on `state` (issue #211): for each control, the first symbol the
+// algorithm's own param table exposes (ReverbControlSymbols) is located and
+// its index + clamp range published into the block's atomic
+// reverb_control_slots; the index stays -1 when the algorithm has none of the
+// candidate symbols (a no-op). Tier 2 - only called from AddBlock and
+// SetReverbAlgorithm, both under the no-concurrent-Process protocol, so the
+// std::visit here (via ParamInfoOf) never races Process()'s own visit. This is
+// what lets SetReverbControl run on any thread without ever touching the live
+// DspVariant.
+void AudioEngine::RefreshReverbControlSlots(BlockState& state) {
+  for (auto& slot : state.reverb_control_slots) {
+    slot.index.store(-1, std::memory_order_relaxed);
+    slot.min.store(0.0f, std::memory_order_relaxed);
+    slot.max.store(0.0f, std::memory_order_relaxed);
+  }
+  const int pc = state.param_count.load(std::memory_order_relaxed);
+  for (int c = 0; c < kReverbControlCount; ++c) {
+    const ReverbControl control = static_cast<ReverbControl>(c);
+    auto& slot = state.reverb_control_slots[static_cast<size_t>(c)];
+    for (const char* symbol : ReverbControlSymbols(control)) {
+      for (int i = 0; i < pc; ++i) {
+        const std::optional<ParamDescriptor> info = ParamInfoOf(state, i);
+        if (!info || !info->symbol || std::strcmp(info->symbol, symbol) != 0) continue;
+        slot.index.store(i, std::memory_order_relaxed);
+        slot.min.store(info->min_value, std::memory_order_relaxed);
+        slot.max.store(info->max_value, std::memory_order_relaxed);
+        break;
+      }
+      if (slot.index.load(std::memory_order_relaxed) >= 0) break;
+    }
+  }
+}
+
 // Apply one user-facing reverb control to whatever algorithm currently backs
 // the block: scale the two abstractions (room size -> decay, damping -> high
-// cut) and then resolve the control to the first symbol this algorithm actually
-// has, clamped into that param's declared range. Real-time safe - it ends in
-// the same atomic SetParam a raw index write would.
+// cut) and then write the resolved param through the block's atomic control
+// cache (RefreshReverbControlSlots), clamped into that param's declared range.
+// Real-time safe and callable from any thread - it reads only atomics and ends
+// in the same atomic SetParam a raw index write would, so it can't race an
+// algorithm swap (issue #211).
 void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float value) {
   const BlockState* state = FindBlockThreadSafe(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
+  if (static_cast<int>(control) < 0 || static_cast<int>(control) >= kReverbControlCount) return;
 
   float scaled = value;
   if (control == ReverbControl::kRoomSize) {
@@ -1735,22 +1835,21 @@ void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float valu
     scaled = kHighCutMaxHz - t * (kHighCutMaxHz - kHighCutMinHz);
   }
 
-  for (const char* symbol : ReverbControlSymbols(control)) {
-    for (int i = 0; i < state->param_count; ++i) {
-      const std::optional<ParamDescriptor> info = ParamInfo(id, i);
-      if (!info || !info->symbol || std::strcmp(info->symbol, symbol) != 0) continue;
-      SetParam(id, i, std::clamp(scaled, info->min_value, info->max_value));
-      return;
-    }
-  }
+  const auto& slot = state->reverb_control_slots[static_cast<size_t>(control)];
+  const int index = slot.index.load(std::memory_order_relaxed);
+  if (index < 0) return;  // this algorithm doesn't expose the control
+  const float min = slot.min.load(std::memory_order_relaxed);
+  const float max = slot.max.load(std::memory_order_relaxed);
+  SetParam(id, index, std::clamp(scaled, min, max));
 }
 
 // Swap which Dragonfly algorithm backs a reverb block. This *replaces* the DSP
-// object, so it allocates and is not real-time safe - algorithm choice is a
-// deliberate user action, not automation. The new object is re-prepared at the
-// engine's current sample rate and its own defaults are seeded into the param
-// mirror, because each algorithm has a different param table (which is also why
-// a UI should drive reverb through SetReverbControl rather than raw indices).
+// object, so it allocates and is Tier 2 (must not run concurrently with
+// Process()) - algorithm choice is a deliberate user action, not automation.
+// The new object is re-prepared at the engine's current sample rate and its own
+// defaults are seeded into the param mirror, because each algorithm has a
+// different param table (which is also why a UI should drive reverb through
+// SetReverbControl rather than raw indices).
 void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
@@ -1758,19 +1857,20 @@ void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
   switch (algorithm) {
     case ReverbAlgorithm::kHall:
       state->dsp.emplace<dsp::DragonflyHallReverb>();
-      state->param_count = dsp::DragonflyHallReverb::ParamCount();
+      state->param_count.store(dsp::DragonflyHallReverb::ParamCount(), std::memory_order_relaxed);
       break;
     case ReverbAlgorithm::kRoom:
       state->dsp.emplace<dsp::DragonflyRoomReverb>();
-      state->param_count = dsp::DragonflyRoomReverb::ParamCount();
+      state->param_count.store(dsp::DragonflyRoomReverb::ParamCount(), std::memory_order_relaxed);
       break;
     case ReverbAlgorithm::kPlate:
       state->dsp.emplace<dsp::DragonflyPlateReverb>();
-      state->param_count = dsp::DragonflyPlateReverb::ParamCount();
+      state->param_count.store(dsp::DragonflyPlateReverb::ParamCount(), std::memory_order_relaxed);
       break;
     case ReverbAlgorithm::kEarlyReflections:
       state->dsp.emplace<dsp::DragonflyEarlyReflections>();
-      state->param_count = dsp::DragonflyEarlyReflections::ParamCount();
+      state->param_count.store(dsp::DragonflyEarlyReflections::ParamCount(),
+                               std::memory_order_relaxed);
       break;
   }
 
@@ -1785,8 +1885,10 @@ void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
         state->dsp);
   }
   SeedParamsFromDsp(*state);
-  // The new algorithm has its own param table, hence its own smoothing policy.
+  // The new algorithm has its own param table, hence its own smoothing policy
+  // and reverb-control resolution.
   SeedSmoothing(*state);
+  RefreshReverbControlSlots(*state);
 }
 
 // ── Delay model choice ──────────────────────────────────────────────────
@@ -1805,7 +1907,7 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   delay->SetModel(model);
   // Reset param_count in case it changes (it doesn't currently — same count
   // for all models — but kept for parity with other model-switch methods).
-  state->param_count = dsp::Delay::ParamCount();
+  state->param_count.store(dsp::Delay::ParamCount(), std::memory_order_relaxed);
   SeedParamsFromDsp(*state);
   // Same param table across delay models, so the policy is unchanged - this
   // just re-seeds the live ramp state from the (re-defaulted) mirror.
@@ -1844,7 +1946,8 @@ ReverbAlgorithm AudioEngine::GetReverbAlgorithm(BlockId id) const {
 dsp::Delay::Model AudioEngine::GetDelayModel(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   if (!state || state->kind != graph::BlockKind::kDelay) return dsp::Delay::Model::kDigital;
-  for (int i = 0; i < state->param_count; ++i) {
+  const int pc = state->param_count.load(std::memory_order_relaxed);
+  for (int i = 0; i < pc; ++i) {
     const std::optional<ParamDescriptor> info = ParamInfo(id, i);
     if (info && info->symbol && std::strcmp(info->symbol, "model") == 0) {
       const int value = static_cast<int>(std::lround(GetParam(id, i)));

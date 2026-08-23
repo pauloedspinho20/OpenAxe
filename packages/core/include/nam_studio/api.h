@@ -11,6 +11,31 @@ extern "C" {
 // target (#15 desktop, #16 VST3, #17 mobile, #22 web/WASM) links against.
 typedef struct NamStudioGraph NamStudioGraph;
 
+// ── Threading contract (issue #211) ──────────────────────────────────────
+// Every function here is exactly one of two tiers, stated on the declaration:
+//
+//   Tier 1 - safe to call from ANY thread, concurrently with
+//   nam_studio_process, lock-free: nam_studio_get_param /
+//   nam_studio_set_param (EXCEPT the Amp-family slim-size param, which is
+//   Tier 2), nam_studio_block_param_count / _param_info (only where those
+//   read the DSP's param table, and those are control-thread calls - see the
+//   notes on them), nam_studio_set_reverb_control, the bypass/trim/master-bus
+//   calls, metering, and the automation-slot param get/set.
+//
+//   Tier 2 - structural / DSP-swapping: everything else that builds or
+//   replaces a block's DSP, rewrites its param table, loads a model/IR, or
+//   changes the topology. These mutate shared non-atomic BlockState fields,
+//   so the caller MUST ensure nam_studio_process is not running when it
+//   calls them - no process() call in flight and none starting until they
+//   return. The audio path itself stays lock-free; the exclusion is the
+//   caller's job. The two shipping shells each do it in their own way:
+//     - the desktop app wraps every Tier-2 call in its suspend handshake
+//       (StudioBridge::Mutate -> AudioIO::BeginSuspend/EndSuspend);
+//     - the web app runs inside the AudioWorklet, where control messages
+//       and process() share one thread and so can never race.
+//   A future shell must provide an equivalent handshake before calling any
+//   Tier-2 function.
+
 // Never returns NULL.
 NamStudioGraph* nam_studio_graph_create(void);
 // NULL is a no-op.
@@ -109,7 +134,11 @@ void nam_studio_reset(NamStudioGraph* graph, double sample_rate, int32_t max_blo
 void nam_studio_process(NamStudioGraph* graph, const float* const* input, int32_t input_channels,
                          float* const* output, int32_t output_channels, int32_t num_frames);
 
-// ── Params (generic across every block kind; lock-free) ────────────────
+// ── Params (generic across every block kind; Tier 1, lock-free) ────────
+// param_count/param_info read the block's atomic count and live DSP table:
+// they are safe from any thread for the count itself (issue #211), and the
+// info read visits the DSP's param table, so it must not race a Tier-2
+// algorithm/model swap (the desktop routes it through its control thread).
 
 // 0 for an unknown block or a kind with no wrapped DSP yet.
 int32_t nam_studio_block_param_count(NamStudioGraph* graph, int32_t block_id);
@@ -121,8 +150,10 @@ int32_t nam_studio_block_param_info(NamStudioGraph* graph, int32_t block_id, int
 float nam_studio_get_param(NamStudioGraph* graph, int32_t block_id, int32_t index);
 // No-op for an unknown block/index. Lock-free (safe from any thread) for
 // every param except an Amp-family block's Slim Size, which synchronously
-// forwards to NamAmp::SetSlimSize - not real-time safe, matching that
-// method's own documented contract (NAMCore may reallocate).
+// forwards to NamAmp::SetSlimSize - that one is Tier 2 (not real-time safe,
+// NAMCore may reallocate), so it must not run concurrently with
+// nam_studio_process; the desktop bridge routes it through its suspend
+// handshake (issue #211).
 void nam_studio_set_param(NamStudioGraph* graph, int32_t block_id, int32_t index, float value);
 
 // ── NAM model management (off the audio thread) ────────────────────────
@@ -162,15 +193,18 @@ int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t b
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────
 
-// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_REVERB block. Not
-// real-time safe - reconstructs the underlying wrapper instance.
+// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_REVERB block. Tier
+// 2 - reconstructs the underlying wrapper instance (destroying and rebuilding
+// the DSP object nam_studio_process visits), so it must not run concurrently
+// with nam_studio_process; suspend audio around it.
 void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
                                       NamStudioReverbAlgorithm algorithm);
 
 // ── Delay model choice ──────────────────────────────────────────────────
 
-// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Not
-// real-time safe.
+// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Tier 2
+// - rewrites the block's param table and re-seeds its smoothing/ramp state,
+// so it must not run concurrently with nam_studio_process.
 // ── Cab impulse responses ──────────────────────────────────────────────
 // Install an IR on a NAM_STUDIO_BLOCK_CAB block: `samples` is mono float audio
 // at the graph's own sample rate, `frames` its length. Nothing is resampled here,
@@ -203,9 +237,12 @@ int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id);
 // room size and damping are abstractions over the current algorithm's decay
 // and high cut, and the rest resolve to whichever symbol that algorithm uses
 // (Hall's pre-delay is `delay`, Room's is `predelay`, ...). No-op for
-// non-reverb blocks and for controls the current algorithm lacks. Every front
-// end should drive reverb through this rather than reimplementing the
-// per-algorithm mapping over nam_studio_set_param.
+// non-reverb blocks and for controls the current algorithm lacks. Tier 1:
+// resolves through a per-block atomic cache installed with the algorithm, so
+// it is safe from any thread and never races a set_reverb_algorithm on
+// another thread (issue #211). Every front end should drive reverb through
+// this rather than reimplementing the per-algorithm mapping over
+// nam_studio_set_param.
 typedef enum {
   NAM_STUDIO_REVERB_ROOM_SIZE = 0,   // 0..0.97
   NAM_STUDIO_REVERB_DAMPING = 1,     // 0..1
