@@ -57,6 +57,8 @@ struct LoadStats {
   int edges_skipped = 0;    // malformed entries, dangling endpoints, rejected connections
   int assets_restored = 0;  // models/IRs reinstated from payload or path (#120)
   int assets_missing = 0;   // referenced but unresolvable - see missing_assets below
+  int slots_restored = 0;   // automation slot bindings re-bound (#121)
+  int slots_skipped = 0;    // out-of-range slots, dangling block ids, refused binds
 };
 
 struct LoadOutcome {

@@ -360,6 +360,51 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
 
 float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetCpuLoad(); }
 
+// ── Automation slot map (issue #121) ────────────────────────────────────
+// Thin forwarders onto AudioEngine's slot machinery - see api.h for the
+// caller-facing contracts and packages/vst3/README.md for the design.
+
+int32_t nam_studio_bind_automation_slot(NamStudioGraph* graph, int32_t slot,
+                                        int32_t block_id) {
+  return graph->engine.BindAutomationSlot(slot, block_id) ? 1 : 0;
+}
+
+int32_t nam_studio_unbind_automation_slot(NamStudioGraph* graph, int32_t slot) {
+  return graph->engine.UnbindAutomationSlot(slot) ? 1 : 0;
+}
+
+int32_t nam_studio_automation_slot_block(NamStudioGraph* graph, int32_t slot) {
+  return graph->engine.AutomationSlotBlock(slot);
+}
+
+int32_t nam_studio_automation_slot_param_count(NamStudioGraph* graph, int32_t slot) {
+  return graph->engine.AutomationSlotParamCount(slot);
+}
+
+int32_t nam_studio_automation_slot_param_info(NamStudioGraph* graph, int32_t slot,
+                                              int32_t entry, const char** out_name,
+                                              const char** out_symbol, float* out_min,
+                                              float* out_max, const char** out_unit) {
+  const auto info = graph->engine.AutomationParamInfo(slot, entry);
+  if (!info) return 0;
+  if (out_name != nullptr) *out_name = info->name;
+  if (out_symbol != nullptr) *out_symbol = info->symbol;
+  if (out_min != nullptr) *out_min = info->min_value;
+  if (out_max != nullptr) *out_max = info->max_value;
+  if (out_unit != nullptr) *out_unit = info->unit;
+  return 1;
+}
+
+void nam_studio_set_automation_param_normalized(NamStudioGraph* graph, int32_t slot,
+                                                int32_t entry, float normalized) {
+  graph->engine.SetAutomationParamNormalized(slot, entry, normalized);
+}
+
+float nam_studio_get_automation_param_normalized(NamStudioGraph* graph, int32_t slot,
+                                                 int32_t entry) {
+  return graph->engine.GetAutomationParamNormalized(slot, entry);
+}
+
 // ── Rig state (de)serialization (issue #119) ────────────────────────────
 // Thin forwarders onto nam_studio::state, keeping the JSON machinery out of
 // this file entirely. Both are control-thread calls - see api.h for the

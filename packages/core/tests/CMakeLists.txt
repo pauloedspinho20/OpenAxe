@@ -59,6 +59,20 @@ else()
   message(WARNING "Skipping api_state_assets_test - nam-core/dragonfly/dspark submodules must all be initialized")
 endif()
 
+if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_DSPARK)
+  # Automation slot map (issue #121): binds slots to real blocks of several
+  # kinds (compressor/delay/tremolo wrappers), so like api_state_assets_test
+  # it needs every DSP family present. WHOLE_ARCHIVE for NAMCore's
+  # self-registering parsers, and src/ on the include path for the C++-level
+  # LoadState stats assertions.
+  add_executable(api_automation_slots_test api_automation_slots_test.cpp)
+  target_include_directories(api_automation_slots_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  target_link_libraries(api_automation_slots_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
+  add_test(NAME api_automation_slots_test COMMAND api_automation_slots_test)
+else()
+  message(WARNING "Skipping api_automation_slots_test - nam-core/dragonfly/dspark submodules must all be initialized")
+endif()
+
 if(NAM_STUDIO_HAS_NAM_CORE)
   add_executable(nam_amp_test nam_amp_test.cpp)
   # WHOLE_ARCHIVE: NAMCore's architecture parsers (LSTM, WaveNet, ConvNet,

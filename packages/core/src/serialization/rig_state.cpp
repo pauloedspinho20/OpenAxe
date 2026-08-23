@@ -1,6 +1,7 @@
 #include "rig_state.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -280,6 +281,23 @@ std::string SerializeState(const AudioEngine& engine, bool embed_assets) {
 
   root.Set("masterLevel", Value::Number(engine.GetMasterLevel()));
   root.Set("masterMuted", Value::Bool(engine.IsMasterMuted()));
+
+  // Automation slot bindings (#121): which slot points at which block, keyed
+  // by slot number. Slot 0 is the master bus - implicit, never serialized.
+  // Values don't ride here; they live in the blocks' own params (restored by
+  // symbol above) and re-derive from them once bindings are re-applied.
+  {
+    const auto bound = engine.ListBoundAutomationSlots();
+    if (!bound.empty()) {
+      Value slots = Value::Object();
+      for (const auto& entry : bound) {
+        Value binding = Value::Object();
+        binding.Set("blockId", Value::String(BlockIdToString(entry.block)));
+        slots.Set(BlockIdToString(entry.slot), std::move(binding));
+      }
+      root.Set("automationSlots", std::move(slots));
+    }
+  }
 
   return json::Write(root);
 }
@@ -733,6 +751,47 @@ LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
   }
   if (const Value* muted = root.Find("masterMuted"); muted != nullptr && muted->IsBool()) {
     engine.SetMasterMuted(muted->AsBool(false));
+  }
+
+  // ── Automation slot bindings (#121) ─────────────────────────────────────
+  // Restored last: blocks (and their params) must exist before slots can
+  // point at them. Bindings are {"<slot>": {"blockId": "<doc id>"}}; anything
+  // malformed - unknown slot, dangling block id, refused rebind - skips and
+  // counts, like every other soft failure. Absent key (older documents,
+  // rigs with no bindings) restores nothing.
+  if (const Value* slots_doc = root.Find("automationSlots");
+      slots_doc != nullptr && slots_doc->IsObject()) {
+    for (const auto& [key, binding] : slots_doc->members()) {
+      // Slot keys are decimal strings from our own serializer; a hostile
+      // document may hold anything, so validate shape before converting.
+      const bool numeric =
+          !key.empty() && key.size() <= 8 &&
+          key.find_first_not_of("0123456789") == std::string::npos;
+      const int slot = numeric ? std::atoi(key.c_str()) : -1;
+      if (!numeric) {
+        ++outcome.stats.slots_skipped;  // non-numeric slot key
+        continue;
+      }
+      const Value* block_field = binding.IsObject() ? binding.Find("blockId") : nullptr;
+      if (block_field == nullptr || !block_field->IsString()) {
+        ++outcome.stats.slots_skipped;
+        continue;
+      }
+      const auto it = block_ids.find(*block_field->AsString());
+      // Rails are never automation targets; a dangling doc id is the same
+      // skip-with-count as any other broken reference.
+      if (it == block_ids.end() ||
+          (*block_field->AsString() == graph::kInRail ||
+           *block_field->AsString() == graph::kOutRail)) {
+        ++outcome.stats.slots_skipped;
+        continue;
+      }
+      if (engine.BindAutomationSlot(slot, it->second)) {
+        ++outcome.stats.slots_restored;
+      } else {
+        ++outcome.stats.slots_skipped;
+      }
+    }
   }
 
   return outcome;

@@ -404,10 +404,17 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   return id;
 }
 
-// Remove a block and, through the rig, every edge that touched it. Not
-// real-time safe: it frees the DSP object and rewrites the routing tables.
+// Remove a block and, through the rig, every edge that touched it. Any
+// automation slot bound to it unbinds with it - a slot never dangles (#121).
+// Not real-time safe: it frees the DSP object and rewrites the routing tables.
 void AudioEngine::RemoveBlock(BlockId id) {
   rig_.RemoveBlock(GraphIdOf(id));
+  for (auto& slot : automation_slots_) {
+    if (slot.bound && slot.block == id) {
+      slot.bound = false;
+      slot.block = -1;
+    }
+  }
   {
     std::unique_lock lock(block_states_mutex_);
     block_states_.erase(id);
@@ -482,8 +489,14 @@ std::vector<EdgeSnapshot> AudioEngine::ListEdges() const {
 
 // Clear the whole topology: remove each block through the ordinary path (so
 // edges touching them go too and routing is rebuilt once at the end). Ids keep
-// counting; the engine never reuses one. Not real-time safe.
+// counting; the engine never reuses one. Every automation slot binding dies
+// with its block - LoadState re-binds from the document it is loading (#121).
+// Not real-time safe.
 void AudioEngine::ClearTopology() {
+  for (auto& slot : automation_slots_) {
+    slot.bound = false;
+    slot.block = -1;
+  }
   for (const auto& [id, state] : block_states_) {
     (void)state;
     rig_.RemoveBlock(GraphIdOf(id));
@@ -1128,6 +1141,156 @@ void AudioEngine::SetIrSourceInfo(BlockId id, const std::string& name, const std
   if (!state || state->kind != graph::BlockKind::kCab) return;
   state->ir_name = name;
   state->ir_path = path;
+}
+
+// ── Automation slots (issue #121) ──────────────────────────────────────
+
+namespace {
+
+// Normalized 0..1 <-> native range. Degenerate ranges (max <= min - a pinned
+// param) normalize to 0 and denormalize to min: the entry stays addressable
+// but moves nothing.
+float NormalizeTo(float value, float min, float max) {
+  if (!(max > min)) return 0.0f;
+  return std::clamp((value - min) / (max - min), 0.0f, 1.0f);
+}
+
+float DenormalizeFrom(float normalized, float min, float max) {
+  if (!(max > min)) return min;
+  return min + (max - min) * normalized;
+}
+
+// Whether `slot` names one of the bindable block slots (slot 0 is the master
+// bus and plays by its own rules everywhere below).
+bool IsBlockSlot(int slot) { return slot >= 1 && slot < kAutomationSlotCount; }
+
+}  // namespace
+
+bool AudioEngine::BindAutomationSlot(int slot, BlockId block) {
+  if (!IsBlockSlot(slot)) return false;
+  BlockState* state = FindBlock(block);
+  if (!state) return false;
+
+  auto& s = automation_slots_[slot];
+  s.bound = true;
+  s.block = block;
+  // Carry whatever this slot had automated onto its new target through the
+  // new target's own ranges. Only entries actually written through the slot
+  // apply, so a first-time binding never stomps the block's existing values.
+  ApplySlotMirror(s);
+  return true;
+}
+
+bool AudioEngine::UnbindAutomationSlot(int slot) {
+  if (!IsBlockSlot(slot)) return false;  // includes slot 0: never unbindable
+  auto& s = automation_slots_[slot];
+  if (!s.bound) return false;
+  s.bound = false;
+  s.block = -1;
+  // Mirror/dirty deliberately survive: rebinding later still carries the
+  // lane's position.
+  return true;
+}
+
+// -3 for slot 0 says "exists, permanently something else" - distinct from
+// plain "unbound" (-1) so a UI can grey the master slot out rather than offer
+// it as free.
+BlockId AudioEngine::AutomationSlotBlock(int slot) const {
+  if (slot == kMasterAutomationSlot) return -3;
+  if (!IsBlockSlot(slot)) return -2;
+  const auto& s = automation_slots_[slot];
+  return s.bound ? s.block : -1;
+}
+
+int AudioEngine::AutomationSlotParamCount(int slot) const {
+  if (slot == kMasterAutomationSlot) return kMasterAutomationParamCount;
+  if (IsBlockSlot(slot)) return kAutomationParamsPerSlot;
+  return 0;
+}
+
+std::optional<ParamDescriptor> AudioEngine::AutomationParamInfo(int slot, int entry) const {
+  if (entry < 0) return std::nullopt;
+  if (slot == kMasterAutomationSlot) {
+    if (entry >= kMasterAutomationParamCount) return std::nullopt;
+    return ParamDescriptor{kMasterAutomationLabels[entry], kMasterAutomationSymbols[entry],
+                          kMasterAutomationMin[entry], kMasterAutomationMax[entry],
+                          kMasterAutomationUnits[entry]};
+  }
+  if (!IsBlockSlot(slot)) return std::nullopt;
+  const auto& s = automation_slots_[slot];
+  if (!s.bound) return std::nullopt;
+  return ParamInfo(s.block, entry);  // nullopt past the block's own table
+}
+
+void AudioEngine::ApplySlotMirror(AutomationSlotState& state) {
+  if (!state.bound) return;
+  const int count = ParamCount(state.block);
+  for (int i = 0; i < kAutomationParamsPerSlot && i < count; ++i) {
+    if (!state.dirty[i]) continue;
+    const auto info = ParamInfo(state.block, i);
+    if (!info) continue;
+    SetParam(state.block, i, DenormalizeFrom(state.mirror[i], info->min_value, info->max_value));
+  }
+}
+
+void AudioEngine::SetAutomationParamNormalized(int slot, int entry, float value) {
+  if (entry < 0) return;
+  const float clamped = std::clamp(value, 0.0f, 1.0f);
+
+  if (slot == kMasterAutomationSlot) {
+    if (entry >= kMasterAutomationParamCount) return;
+    if (entry == 0) {
+      SetMasterLevel(DenormalizeFrom(clamped, kMasterAutomationMin[0], kMasterAutomationMax[0]));
+    } else {
+      SetMasterMuted(clamped >= 0.5f);
+    }
+    return;
+  }
+  if (!IsBlockSlot(slot)) return;
+
+  auto& s = automation_slots_[slot];
+  if (entry >= kAutomationParamsPerSlot) return;
+  s.mirror[entry] = clamped;
+  s.dirty[entry] = true;
+  if (!s.bound) return;
+  ApplySlotMirror(s);
+}
+
+float AudioEngine::GetAutomationParamNormalized(int slot, int entry) const {
+  if (entry < 0) return 0.0f;
+  if (slot == kMasterAutomationSlot) {
+    if (entry >= kMasterAutomationParamCount) return 0.0f;
+    if (entry == 0) {
+      return NormalizeTo(GetMasterLevel(), kMasterAutomationMin[0], kMasterAutomationMax[0]);
+    }
+    return IsMasterMuted() ? 1.0f : 0.0f;
+  }
+  if (!IsBlockSlot(slot) || entry >= kAutomationParamsPerSlot) return 0.0f;
+
+  const auto& s = automation_slots_[slot];
+  if (s.bound && entry < ParamCount(s.block)) {
+    // Live read: a knob moved outside the slot surface (web UI, desktop
+    // bridge) is what the host sees. The mirror follows along (it's a cache,
+    // hence mutable) so a later rebind carries the current truth, not a stale
+    // write. Dirty is deliberately untouched - observing isn't automating.
+    if (const auto info = ParamInfo(s.block, entry)) {
+      const float normalized =
+          NormalizeTo(GetParam(s.block, entry), info->min_value, info->max_value);
+      s.mirror[entry] = normalized;
+      return normalized;
+    }
+  }
+  return s.mirror[entry];
+}
+
+std::vector<AudioEngine::AutomationSlotSnapshot> AudioEngine::ListBoundAutomationSlots() const {
+  std::vector<AutomationSlotSnapshot> out;
+  for (int slot = 1; slot < kAutomationSlotCount; ++slot) {
+    if (automation_slots_[slot].bound) {
+      out.push_back(AutomationSlotSnapshot{slot, automation_slots_[slot].block});
+    }
+  }
+  return out;
 }
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────
