@@ -3,7 +3,7 @@
 #include <array>
 #include <cstring>
 
-namespace nam_studio::state {
+namespace openaxe::state {
 namespace {
 
 // FIPS 180-4 constants: the fractional parts of the cube roots of the first
@@ -115,4 +115,4 @@ std::string Sha256Hex(const uint8_t* data, size_t size) {
   return out;
 }
 
-}  // namespace nam_studio::state
+}  // namespace openaxe::state

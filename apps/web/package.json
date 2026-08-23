@@ -1,5 +1,5 @@
 {
-  "name": "@nam/web",
+  "name": "@openaxe/web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -16,7 +16,7 @@
     "format:check": "prettier --ignore-path ../../.prettierignore --check ."
   },
   "dependencies": {
-    "@nam/ui": "workspace:*",
+    "@openaxe/ui": "workspace:*",
     "@types/p5": "^1.7.7",
     "p5": "^2.3.2",
     "react": "^19.2.8",

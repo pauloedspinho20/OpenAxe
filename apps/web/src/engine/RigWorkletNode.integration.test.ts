@@ -2,7 +2,7 @@
 //
 // Integration test for the Web<->WASM ABI boundary (issue #80). The existing
 // connect.test.ts only stubs the worklet and checks message *shape*; this test
-// loads the REAL nam_studio_core module and drives the worklet's actual
+// loads the REAL openaxe_core module and drives the worklet's actual
 // message handler, so a renamed field or wrong encoding fails loudly instead of
 // silently at runtime.
 //

@@ -6,14 +6,14 @@
 
 #include "IPlug_include_in_plug_hdr.h"
 
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 const int kNumPresets = 1;
 
-class NamStudioPlugin final : public iplug::Plugin {
+class OpenAxePlugin final : public iplug::Plugin {
  public:
-  explicit NamStudioPlugin(const iplug::InstanceInfo& info);
-  ~NamStudioPlugin() override;
+  explicit OpenAxePlugin(const iplug::InstanceInfo& info);
+  ~OpenAxePlugin() override;
 
 #if IPLUG_DSP
   void ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) override;

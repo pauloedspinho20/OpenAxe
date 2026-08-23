@@ -1,8 +1,8 @@
-#include "nam_studio/dsp/note_utils.h"
+#include "openaxe/dsp/note_utils.h"
 
 #include <cmath>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 DetectedNote FrequencyToNote(float frequency, double reference_a4) {
   const double midi_float = 69.0 + 12.0 * std::log2(static_cast<double>(frequency) / reference_a4);
@@ -17,4 +17,4 @@ DetectedNote FrequencyToNote(float frequency, double reference_a4) {
   return note;
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

@@ -1,7 +1,7 @@
-import { HardwareButton, Wordmark } from '@nam/ui'
+import { HardwareButton, Wordmark } from '@openaxe/ui'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
-import { getNamStudio } from '@/native/namStudio'
+import { getOpenAxe } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import styles from './PowerGate.module.css'
 
@@ -43,7 +43,7 @@ export function PowerGate({
 }: PowerGateProps) {
   const auth = useTone3000Auth()
   const io = useIOStore()
-  const isNative = getNamStudio() !== null
+  const isNative = getOpenAxe() !== null
 
   if (status === 'ready') return null
 
@@ -53,12 +53,6 @@ export function PowerGate({
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
         <Wordmark variant="hero" />
-        <p className={styles.description}>
-          Starts the audio engine and asks for microphone access for your instrument input. Your
-          browser remembers that permission across visits, but starting audio itself needs a fresh
-          click every time you open this page - that's a browser autoplay restriction, not something
-          this app can skip.
-        </p>
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
 
@@ -171,22 +165,11 @@ export function PowerGate({
         </select>
 
         <HardwareButton
+          variant="accent"
           label={starting ? 'Starting…' : 'POWER ON'}
           onClick={() => onPowerOn()}
           disabled={starting}
-          fullWidth
         />
-        <HardwareButton
-          label="Continue without sound"
-          onClick={() => onPowerOn({ noSound: true })}
-          disabled={starting}
-          fullWidth
-        />
-        <p className={styles.tone3000Hint}>
-          No sound mode skips the audio device entirely - the grid, presets, and editing all still
-          work. The app switches back to normal audio automatically the moment a usable device is
-          available.
-        </p>
       </div>
     </div>
   )

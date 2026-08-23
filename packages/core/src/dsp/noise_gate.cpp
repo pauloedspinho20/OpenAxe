@@ -1,9 +1,9 @@
-#include "nam_studio/dsp/noise_gate.h"
+#include "openaxe/dsp/noise_gate.h"
 
 #include "Effects/NoiseGate.h"
 #include "internal/dspark_wrapper.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -40,9 +40,9 @@ constexpr float kDefaults[kParamCount] = {
 // Threshold/hysteresis/range are dB; attack/hold/release are milliseconds -
 // the units the generated param table declares, passed straight through.
 struct NoiseGateTraits {
-  static constexpr int kParamCount = nam_studio::dsp::kParamCount;
-  static constexpr const DsparkParamInfo* kInfo = nam_studio::dsp::kParamInfo;
-  static constexpr const float* kDefaults = nam_studio::dsp::kDefaults;
+  static constexpr int kParamCount = openaxe::dsp::kParamCount;
+  static constexpr const DsparkParamInfo* kInfo = openaxe::dsp::kParamInfo;
+  static constexpr const float* kDefaults = openaxe::dsp::kDefaults;
 
   static void Apply(dspark::NoiseGate<float>& proc, const float* values, int index, float value) {
     (void)values;
@@ -110,4 +110,4 @@ float NoiseGate::GetParam(int index) const { return impl_->dsp.GetParam(index); 
 // Store one param and push it into the processor. Real-time safe.
 void NoiseGate::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

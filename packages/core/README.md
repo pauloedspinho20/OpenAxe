@@ -6,7 +6,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
 
 ## What's real (issue #14, first PR)
 
-- **Audio graph engine** (`include/nam_studio/{grid_config,block,graph_validation,graph_rig}.h`
+- **Audio graph engine** (`include/openaxe/{grid_config,block,graph_validation,graph_rig}.h`
   - matching `src/*.cpp`) — an original, dependency-free C++ port of the
     app's existing TypeScript graph engine (`apps/web/src/engine/GraphRig.ts`
     and friends). Blocks live on a grid, wired left-to-right by column;
@@ -15,12 +15,12 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     real-time-processing-specific from the TS original (live node wiring,
     analyser taps, master bus, params) — this is the topology/bookkeeping
     layer only.
-- **NAM inference wrapper** (`include/nam_studio/dsp/nam_amp.h` +
+- **NAM inference wrapper** (`include/openaxe/dsp/nam_amp.h` +
   `src/dsp/nam_amp.cpp`) — wraps NeuralAmpModelerCore's `nam::DSP`, exposing
   model loading, sample-rate-aware reset, real-time process, input/output
   level calibration (dBu), loudness, and slim-size quality control as a
-  clean C++ class (`nam_studio::dsp::NamAmp`).
-- **All four Dragonfly Reverb algorithms** (`include/nam_studio/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
+  clean C++ class (`openaxe::dsp::NamAmp`).
+- **All four Dragonfly Reverb algorithms** (`include/openaxe/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
   - matching `src/dsp/*.cpp`) — wrap each of Dragonfly's `DragonflyReverbDSP`
     classes (freeverb3-based), exposing their full parameter surfaces:
     `DragonflyHallReverb` (18 params: dry/early/late levels, size, width,
@@ -33,19 +33,19 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     basic Freeverb effect with a full modulated, frequency-dependent-decay
     reverb suite.
 - **Real-time audio engine + full `extern "C"` API** (issue #14's follow-up
-  PR): `include/nam_studio/engine.h` + `src/engine.cpp` add
-  `nam_studio::engine::AudioEngine`, a layer on top of `GraphRig` that gives
+  PR): `include/openaxe/engine.h` + `src/engine.cpp` add
+  `openaxe::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
   4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
   `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
   `kChorus`/`kFlanger`/`kPhaser`/`kDelay`/`kPingPongDelay`, and passthrough
   for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
-  `include/nam_studio/api.h` + `src/api.cpp`
+  `include/openaxe/api.h` + `src/api.cpp`
   expose it as an `extern "C"` surface (int32 ids, not `GraphRig`'s strings —
   portable across C/WASM/FFI): topology, `reset`/`process`, generic param
   get/set/info, NAM model management, reverb algorithm choice, and metering.
-- **Compressor, EQ, Noise Gate, Tremolo** (`include/nam_studio/dsp/{compressor,equalizer,noise_gate,tremolo}.h`
+- **Compressor, EQ, Noise Gate, Tremolo** (`include/openaxe/dsp/{compressor,equalizer,noise_gate,tremolo}.h`
   - matching `src/dsp/*.cpp`) — four DSPark processors wrapped behind the same
     thin-class interface as the Dragonfly reverbs, via a generic adapter
     (`src/dsp/internal/dspark_wrapper.h`) that any future DSPark effect plugs
@@ -59,7 +59,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
-- **Convolver** (`include/nam_studio/dsp/convolver.h` + `src/dsp/convolver.cpp`)
+- **Convolver** (`include/openaxe/dsp/convolver.h` + `src/dsp/convolver.cpp`)
   — cabinet/room impulse-response convolution, the DSP behind a Cab block.
   Partitioned convolution in the standard two-part form: a direct time-domain FIR
   for the first 64 taps, then FFT partitions through a frequency-domain delay
@@ -67,22 +67,22 @@ wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
   That shape is what makes it **zero-latency for any block size** - a purely
   block-based FFT scheme would either delay the stream or leave a gap in it. A
   2048-tap cab IR costs roughly 40x less than a direct FIR would.
-- **WAV decoder** (`include/nam_studio/dsp/wav.h` + `src/dsp/wav.cpp`) — decodes
+- **WAV decoder** (`include/openaxe/dsp/wav.h` + `src/dsp/wav.cpp`) — decodes
   a WAV file held in memory (8/16/24/32-bit PCM, 32/64-bit float, any channel
   count folded to mono, WAVE_FORMAT_EXTENSIBLE, unknown chunks skipped) and
   resamples with a windowed-sinc kernel. Only a browser gets audio decoding for
   free, so this is what lets the desktop app and a plugin load an impulse response
   at all - bytes in, samples out, the same shape as loading a NAM model from JSON.
   A malformed or compressed file returns nullopt rather than throwing.
-- **Tone stack** (`include/nam_studio/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
+- **Tone stack** (`include/openaxe/dsp/tone_stack.h` + `src/dsp/tone_stack.cpp`)
   — the 4-band Bass/Mid/Treble/Presence stack the engine runs after every NAM
   model (low shelf 100Hz, peaking 1kHz Q0.7, high shelf 5kHz, peaking 8kHz Q0.5,
   each ±12dB). Frequencies and slopes match the Web Audio `BiquadFilterNode`
   chain the web app used to own privately, so moving it here didn't change how
   the web app sounds - and the desktop app, which had no tone controls at all,
   now matches it. Flat is bit-exact passthrough, so an un-EQ'd amp costs nothing.
-- `include/nam_studio/core.h` + `src/core.cpp` — the pre-existing #13
-  placeholder (`nam_studio::core::version()`), unchanged.
+- `include/openaxe/core.h` + `src/core.cpp` — the pre-existing #13
+  placeholder (`openaxe::core::version()`), unchanged.
 
 **Test suite** (`tests/`, CTest): `graph_validation_test` and `graph_rig_test`
 port the boundary-value matrix from `graphValidation.test.ts`/
@@ -120,7 +120,7 @@ surface.
 ## Rig state wire format (issues #119, #120)
 
 `nam_studio_serialize_state` / `nam_studio_serialize_state_ex` /
-`nam_studio_load_state` (`include/nam_studio/api.h`, implemented in
+`nam_studio_load_state` (`include/openaxe/api.h`, implemented in
 `src/serialization/{json rig_state sha256 base64}.{h,cpp}` — a hand-written
 dependency-free JSON module plus the state mapping) turn an entire rig into
 one JSON document and back. This is the single preset/scene model for host
@@ -380,12 +380,12 @@ impulse-response tests, and the combined-binary symbol-isolation regression
 test, against Debug builds:
 
 ```bash
-cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build packages/core/build
 ctest --test-dir packages/core/build --output-on-failure
 ```
 
-**Emscripten: verified for issue #22's first slice.** `nam_studio_core`
+**Emscripten: verified for issue #22's first slice.** `openaxe_core`
 itself stays a plain `STATIC` library (Emscripten's export/link flags only
 apply to a final linked module); a small `nam_studio_core_wasm` executable
 target (empty `src/wasm_entry.cpp`, no `main()` needed for the
@@ -404,15 +404,15 @@ from #13's scaffold and remain authored-but-untested.
 
 ### A gotcha worth knowing if you extend this
 
-`nam_studio_core` is a `STATIC` library. NeuralAmpModelerCore's architecture
+`openaxe_core` is a `STATIC` library. NeuralAmpModelerCore's architecture
 parsers (LSTM, WaveNet, ConvNet, Linear) each self-register via a static
 initializer with no other symbol anything here calls directly. A plain
 static-archive link only pulls in object files that resolve a currently
 undefined symbol, so those registration-only translation units get silently
 dropped — `get_dsp()` then fails at runtime with "No config parser
 registered for architecture: ...". Any executable that needs NAM model
-loading to actually work must link `nam_studio_core` with whole-archive
-semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>` (CMake
+loading to actually work must link `openaxe_core` with whole-archive
+semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>` (CMake
 3.24+, portable across GNU/Apple/MSVC linkers) — see `tests/CMakeLists.txt`
 for the pattern `nam_amp_test` uses.
 
@@ -424,7 +424,7 @@ to build it:**
    It (and anything that includes its headers, including each wrapper's
    own `.cpp`) must compile at C++14 - hence each algorithm gets its own
    `dragonfly_<algo>_reverb_vendor` CMake target with `CXX_STANDARD 14`,
-   linked into the C++20 `nam_studio_core` target. Mixing standards across
+   linked into the C++20 `openaxe_core` target. Mixing standards across
    translation units in one binary is fine; only same-TU consistency
    matters.
 2. freeverb3 needs `-DLIBFV3_FLOAT` defined (it picks its internal sample

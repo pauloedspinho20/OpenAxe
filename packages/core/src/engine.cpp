@@ -1,4 +1,4 @@
-#include "nam_studio/engine.h"
+#include "openaxe/engine.h"
 
 #include <algorithm>
 #include <array>
@@ -12,25 +12,25 @@
 #include <type_traits>
 #include <variant>
 
-#include "nam_studio/dsp/chorus.h"
-#include "nam_studio/dsp/convolver.h"
-#include "nam_studio/dsp/compressor.h"
-#include "nam_studio/dsp/delay.h"
-#include "nam_studio/dsp/dragonfly_early_reflections.h"
-#include "nam_studio/dsp/dragonfly_hall_reverb.h"
-#include "nam_studio/dsp/dragonfly_plate_reverb.h"
-#include "nam_studio/dsp/dragonfly_room_reverb.h"
-#include "nam_studio/dsp/equalizer.h"
-#include "nam_studio/dsp/flanger.h"
-#include "nam_studio/dsp/noise_gate.h"
-#include "nam_studio/dsp/phaser.h"
-#include "nam_studio/dsp/ping_pong_delay.h"
-#include "nam_studio/dsp/smoothing.h"
-#include "nam_studio/dsp/tone_stack.h"
-#include "nam_studio/dsp/tremolo.h"
-#include "nam_studio/dsp/wav.h"
+#include "openaxe/dsp/chorus.h"
+#include "openaxe/dsp/convolver.h"
+#include "openaxe/dsp/compressor.h"
+#include "openaxe/dsp/delay.h"
+#include "openaxe/dsp/dragonfly_early_reflections.h"
+#include "openaxe/dsp/dragonfly_hall_reverb.h"
+#include "openaxe/dsp/dragonfly_plate_reverb.h"
+#include "openaxe/dsp/dragonfly_room_reverb.h"
+#include "openaxe/dsp/equalizer.h"
+#include "openaxe/dsp/flanger.h"
+#include "openaxe/dsp/noise_gate.h"
+#include "openaxe/dsp/phaser.h"
+#include "openaxe/dsp/ping_pong_delay.h"
+#include "openaxe/dsp/smoothing.h"
+#include "openaxe/dsp/tone_stack.h"
+#include "openaxe/dsp/tremolo.h"
+#include "openaxe/dsp/wav.h"
 
-namespace nam_studio::engine {
+namespace openaxe::engine {
 namespace {
 
 // Largest ParamCount() among the wrapped DSP families (DragonflyHallReverb's
@@ -2180,4 +2180,4 @@ float AudioEngine::GetMeter(BlockId id) const {
 // number a UI should surface as "CPU" - not a process-wide figure.
 float AudioEngine::GetCpuLoad() const { return cpu_load_.load(std::memory_order_relaxed); }
 
-}  // namespace nam_studio::engine
+}  // namespace openaxe::engine

@@ -4,7 +4,7 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@nam/web", "dev"],
+      "runtimeArgs": ["--filter", "@openaxe/web", "dev"],
       "port": 5173
     }
   ]

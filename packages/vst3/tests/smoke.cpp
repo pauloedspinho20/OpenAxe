@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <vector>
 
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 int main() {
   NamStudioGraph* g = nam_studio_graph_create();

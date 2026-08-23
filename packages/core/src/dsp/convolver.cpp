@@ -1,4 +1,4 @@
-#include "nam_studio/dsp/convolver.h"
+#include "openaxe/dsp/convolver.h"
 
 #include <algorithm>
 #include <array>
@@ -6,7 +6,7 @@
 #include <complex>
 #include <vector>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -229,4 +229,4 @@ void Convolver::Process(float* samples, int num_frames) {
 // block boundary, whatever size the caller's blocks are.
 int Convolver::LatencyFrames() const { return 0; }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

@@ -12,7 +12,7 @@ import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Browser } from '../../../tone3000/browserStore'
 import { useTone3000Library } from '../../../tone3000/library'
 import styles from './AssetScreenButton.module.css'
-import { HardwareButton } from '@nam/ui'
+import { HardwareButton } from '@openaxe/ui'
 
 /** The 6 gear-type block kinds that have an asset to load - matches Tone3000's own Gear enum minus 'experimental'. */
 export type AssetGearType = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space' | 'cab'

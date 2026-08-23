@@ -1,8 +1,8 @@
 // Real end-to-end test: constructs the actual Dragonfly Hall Reverb DSP,
 // sweeps every exposed parameter, and processes a real stereo impulse
 // through it, checking for a genuine (non-silent, finite) reverb tail. Only
-// built if NAM_STUDIO_HAS_DRAGONFLY (see tests/CMakeLists.txt).
-#include "nam_studio/dsp/dragonfly_hall_reverb.h"
+// built if OPENAXE_HAS_DRAGONFLY (see tests/CMakeLists.txt).
+#include "openaxe/dsp/dragonfly_hall_reverb.h"
 
 #include <cmath>
 #include <string>
@@ -10,16 +10,16 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::DragonflyHallReverb;
+using openaxe::dsp::DragonflyHallReverb;
 
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(DragonflyHallReverb::ParamCount() == 18);
+  OPENAXE_EXPECT(DragonflyHallReverb::ParamCount() == 18);
   const auto& dry = DragonflyHallReverb::GetParamInfo(0);
-  NAM_EXPECT(std::string(dry.symbol) == "dry_level");
+  OPENAXE_EXPECT(std::string(dry.symbol) == "dry_level");
   const auto& modulation = DragonflyHallReverb::GetParamInfo(17);
-  NAM_EXPECT(std::string(modulation.symbol) == "modulation");
+  OPENAXE_EXPECT(std::string(modulation.symbol) == "modulation");
 }
 
 void TestGetSetEveryParam() {
@@ -27,9 +27,9 @@ void TestGetSetEveryParam() {
   for (int i = 0; i < DragonflyHallReverb::ParamCount(); ++i) {
     const auto& info = DragonflyHallReverb::GetParamInfo(i);
     reverb.SetParam(i, info.min_value);
-    NAM_EXPECT(reverb.GetParam(i) == info.min_value);
+    OPENAXE_EXPECT(reverb.GetParam(i) == info.min_value);
     reverb.SetParam(i, info.max_value);
-    NAM_EXPECT(reverb.GetParam(i) == info.max_value);
+    OPENAXE_EXPECT(reverb.GetParam(i) == info.max_value);
   }
 }
 
@@ -62,8 +62,8 @@ void TestProcessProducesFiniteReverbTail() {
     if (!std::isfinite(out_left[i]) || !std::isfinite(out_right[i])) all_finite = false;
     if (out_left[i] != 0.0f || out_right[i] != 0.0f) has_nonzero_tail = true;
   }
-  NAM_EXPECT(all_finite);
-  NAM_EXPECT(has_nonzero_tail);
+  OPENAXE_EXPECT(all_finite);
+  OPENAXE_EXPECT(has_nonzero_tail);
 
   reverb.Mute();
 }
@@ -75,5 +75,5 @@ int main() {
   TestGetSetEveryParam();
   TestProcessProducesFiniteReverbTail();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

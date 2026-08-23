@@ -4,10 +4,10 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { PowerGate } from './PowerGate'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useIOStore } from '@/state/ioStore'
-import { getNamStudio } from '@/native/namStudio'
+import { getOpenAxe } from '@/native/openaxe'
 
-vi.mock('@/native/namStudio', () => ({
-  getNamStudio: vi.fn(() => null),
+vi.mock('@/native/openaxe', () => ({
+  getOpenAxe: vi.fn(() => null),
 }))
 
 const baseProps = {
@@ -21,7 +21,7 @@ const baseProps = {
 
 describe('PowerGate', () => {
   beforeEach(() => {
-    vi.mocked(getNamStudio).mockReturnValue(null)
+    vi.mocked(getOpenAxe).mockReturnValue(null)
     useTone3000Auth.setState({ status: 'anonymous', user: null, error: null, pendingFlow: false })
     useIOStore.setState({
       inputDeviceId: '',
@@ -105,7 +105,7 @@ describe('PowerGate', () => {
   })
 
   it('always shows the output selector in the native (desktop) shell', () => {
-    vi.mocked(getNamStudio).mockReturnValue({} as never)
+    vi.mocked(getOpenAxe).mockReturnValue({} as never)
     useIOStore.setState({
       inputDevices: [{ deviceId: 'i', label: 'In', groupId: 'grp' }],
       outputDevices: [{ deviceId: 'o', label: 'Out', groupId: 'grp' }],

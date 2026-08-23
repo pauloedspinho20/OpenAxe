@@ -33,7 +33,11 @@ const KNOWN_TARGETS = ['base', 'automation-map']
 const targetArg = process.argv.find((a) => a.startsWith('--target='))
 let selectedTargets = [...KNOWN_TARGETS]
 if (targetArg) {
-  selectedTargets = targetArg.slice('--target='.length).split(',').map((t) => t.trim()).filter(Boolean)
+  selectedTargets = targetArg
+    .slice('--target='.length)
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
   for (const t of selectedTargets) {
     if (!KNOWN_TARGETS.includes(t)) {
       console.error(`Unknown --target '${t}' (known: ${KNOWN_TARGETS.join(', ')})`)
@@ -94,13 +98,15 @@ function cppFragmentName(cppFile, variantKey) {
 // so engine.cpp can #include both `<base>_params.inc` and `<base>_smoothing.inc`.
 function cppSmoothingFragmentName(cppFile, variantKey) {
   const base = cppFile.replace(/\.cpp$/, '')
-  return variantKey ? `${base}_${variantKey.replace(/-/g, '_')}_smoothing.inc` : `${base}_smoothing.inc`
+  return variantKey
+    ? `${base}_${variantKey.replace(/-/g, '_')}_smoothing.inc`
+    : `${base}_smoothing.inc`
 }
 
 const SMOOTHING_MODE_ENUM = {
-  none: 'nam_studio::dsp::SmoothingMode::kNone',
-  linear: 'nam_studio::dsp::SmoothingMode::kLinear',
-  exponential: 'nam_studio::dsp::SmoothingMode::kExponential',
+  none: 'openaxe::dsp::SmoothingMode::kNone',
+  linear: 'openaxe::dsp::SmoothingMode::kLinear',
+  exponential: 'openaxe::dsp::SmoothingMode::kExponential',
 }
 
 // Default smoothing policy when a param omits the field entirely: snap (no
@@ -209,7 +215,7 @@ const GENERATED_HEADER_CPP_SMOOTHING = (source) => `// GENERATED FILE - do not e
 // Produced by scripts/gen-param-schema.mjs from ${source}.
 // One ParamSmoothing row per param, in the same order as the matching
 // <base>_params.inc fragment, so engine.cpp can #include both into parallel
-// arrays. See nam_studio/dsp/smoothing.h for the struct and the ramp math.
+// arrays. See openaxe/dsp/smoothing.h for the struct and the ramp math.
 `
 
 function renderCppSmoothingFragment(target) {
@@ -281,7 +287,9 @@ function validateAutomationSection(schema) {
     throw new Error(`pluginAutomation.slotCount must be an integer >= 2 (got ${slotCount})`)
   }
   if (!Number.isInteger(paramsPerSlot) || paramsPerSlot < 1) {
-    throw new Error(`pluginAutomation.paramsPerSlot must be a positive integer (got ${paramsPerSlot})`)
+    throw new Error(
+      `pluginAutomation.paramsPerSlot must be a positive integer (got ${paramsPerSlot})`,
+    )
   }
   if (!masterSlot || !Array.isArray(masterSlot.params) || masterSlot.params.length < 1) {
     throw new Error('pluginAutomation.masterSlot.params must be a non-empty array')
@@ -335,7 +343,7 @@ function renderAutomationMap(auto) {
   const lines = []
   lines.push('// GENERATED FILE - do not edit by hand.')
   lines.push('// Produced by scripts/gen-param-schema.mjs --target=automation-map from')
-  lines.push("// packages/core/param_schema.json's \"pluginAutomation\" section.")
+  lines.push('// packages/core/param_schema.json\'s "pluginAutomation" section.')
   lines.push('// The stable automation-parameter map plugin hosts see (issue #121; design')
   lines.push('// note and alternatives considered in ../README.md). The numbers below are')
   lines.push('// frozen API surface: changing any of them remaps every host parameter id.')
@@ -343,9 +351,9 @@ function renderAutomationMap(auto) {
   lines.push('')
   lines.push('#include <cstddef>')
   lines.push('')
-  lines.push('#include "nam_studio/engine.h"  // kAutomation* constants asserted below')
+  lines.push('#include "openaxe/engine.h"  // kAutomation* constants asserted below')
   lines.push('')
-  lines.push('namespace nam_studio::automation {')
+  lines.push('namespace openaxe::automation {')
   lines.push('')
   lines.push(`inline constexpr int kSlotCount = ${slotCount};`)
   lines.push(`inline constexpr int kParamsPerSlot = ${paramsPerSlot};`)
@@ -364,17 +372,29 @@ function renderAutomationMap(auto) {
   lines.push('  return kMasterParamCount + (slot - kFirstBlockSlot) * kParamsPerSlot + entry;')
   lines.push('}')
   lines.push('')
-  lines.push('// Slot 0\'s fixed descriptors, verbatim from the schema. Core mirrors these')
+  lines.push("// Slot 0's fixed descriptors, verbatim from the schema. Core mirrors these")
   lines.push('// in engine.h (kMasterAutomation*) so the ABI can resolve them without')
   lines.push('// including this generated header.')
-  lines.push(`inline constexpr const char* kMasterSymbols[kMasterParamCount] = {${master.map((p) => cppStr(p.symbol)).join(', ')}};`)
-  lines.push(`inline constexpr const char* kMasterLabels[kMasterParamCount] = {${master.map((p) => cppStr(p.label)).join(', ')}};`)
-  lines.push(`inline constexpr float kMasterMin[kMasterParamCount] = {${master.map((p) => cppFloat(p.min)).join(', ')}};`)
-  lines.push(`inline constexpr float kMasterMax[kMasterParamCount] = {${master.map((p) => cppFloat(p.max)).join(', ')}};`)
-  lines.push(`inline constexpr const char* kMasterUnits[kMasterParamCount] = {${master.map((p) => cppStr(p.unit)).join(', ')}};`)
+  lines.push(
+    `inline constexpr const char* kMasterSymbols[kMasterParamCount] = {${master.map((p) => cppStr(p.symbol)).join(', ')}};`,
+  )
+  lines.push(
+    `inline constexpr const char* kMasterLabels[kMasterParamCount] = {${master.map((p) => cppStr(p.label)).join(', ')}};`,
+  )
+  lines.push(
+    `inline constexpr float kMasterMin[kMasterParamCount] = {${master.map((p) => cppFloat(p.min)).join(', ')}};`,
+  )
+  lines.push(
+    `inline constexpr float kMasterMax[kMasterParamCount] = {${master.map((p) => cppFloat(p.max)).join(', ')}};`,
+  )
+  lines.push(
+    `inline constexpr const char* kMasterUnits[kMasterParamCount] = {${master.map((p) => cppStr(p.unit)).join(', ')}};`,
+  )
   lines.push('// Native-unit default mapped into 0..1 - the construction-time position')
   lines.push('// hosts show before anything is loaded.')
-  lines.push(`inline constexpr float kMasterDefaultNormalized[kMasterParamCount] = {${defaults.join(', ')}};`)
+  lines.push(
+    `inline constexpr float kMasterDefaultNormalized[kMasterParamCount] = {${defaults.join(', ')}};`,
+  )
   lines.push('')
   lines.push('// Compile-time string equality - static_asserting raw pointer == would')
   lines.push('// compare identities of distinct literals, which nothing guarantees.')
@@ -386,27 +406,27 @@ function renderAutomationMap(auto) {
   lines.push('  return *a == *b;')
   lines.push('}')
   lines.push('')
-  lines.push('// Pin core\'s own copies of the constants to this file (both derive from the')
+  lines.push("// Pin core's own copies of the constants to this file (both derive from the")
   lines.push('// same schema section; a mismatch means one side was hand-edited).')
-  lines.push('static_assert(kSlotCount == nam_studio::engine::kAutomationSlotCount,')
+  lines.push('static_assert(kSlotCount == openaxe::engine::kAutomationSlotCount,')
   lines.push('              "slot count drifted between param_schema.json and engine.h");')
-  lines.push('static_assert(kParamsPerSlot == nam_studio::engine::kAutomationParamsPerSlot,')
+  lines.push('static_assert(kParamsPerSlot == openaxe::engine::kAutomationParamsPerSlot,')
   lines.push('              "params-per-slot drifted between param_schema.json and engine.h");')
-  lines.push('static_assert(kMasterParamCount <= nam_studio::engine::kAutomationParamsPerSlot,')
+  lines.push('static_assert(kMasterParamCount <= openaxe::engine::kAutomationParamsPerSlot,')
   lines.push('              "master slot overflows the stride");')
   for (let i = 0; i < master.length; i++) {
     lines.push(
-      `static_assert(StrEq(kMasterSymbols[${i}], nam_studio::engine::kMasterAutomationSymbols[${i}]),`,
+      `static_assert(StrEq(kMasterSymbols[${i}], openaxe::engine::kMasterAutomationSymbols[${i}]),`,
     )
     lines.push(`              "master param ${i} symbol drifted");`)
     lines.push(
-      `static_assert(kMasterMin[${i}] == nam_studio::engine::kMasterAutomationMin[${i}] &&` +
-        ` kMasterMax[${i}] == nam_studio::engine::kMasterAutomationMax[${i}],`,
+      `static_assert(kMasterMin[${i}] == openaxe::engine::kMasterAutomationMin[${i}] &&` +
+        ` kMasterMax[${i}] == openaxe::engine::kMasterAutomationMax[${i}],`,
     )
     lines.push(`              "master param ${master[i].symbol} range drifted");`)
   }
   lines.push('')
-  lines.push('}  // namespace nam_studio::automation')
+  lines.push('}  // namespace openaxe::automation')
   return lines.join('\n') + '\n'
 }
 
@@ -463,7 +483,9 @@ async function main() {
   for (const [path, content] of files) {
     writeFileSync(path, content)
   }
-  console.log(`Wrote ${files.size} generated param file(s) [target: ${selectedTargets.join(', ')}].`)
+  console.log(
+    `Wrote ${files.size} generated param file(s) [target: ${selectedTargets.join(', ')}].`,
+  )
 }
 
 main().catch((err) => {

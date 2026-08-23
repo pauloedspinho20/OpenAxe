@@ -18,7 +18,7 @@
 #include <thread>
 
 #include "audio.h"
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 namespace {
 
@@ -34,7 +34,7 @@ NamStudioGraph* MakePassthroughGraph(double sample_rate, int block_size) {
 }  // namespace
 
 int main() {
-  nam_desktop::AudioIO io;
+  openaxe_desktop::AudioIO io;
   const auto devices = io.ListDevices();
   if (devices.empty()) {
     std::printf("  Skipping: no audio devices on this host\n");

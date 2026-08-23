@@ -4,14 +4,14 @@
 add_executable(audio_io_test audio_io_test.cpp)
 target_include_directories(audio_io_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(audio_io_test PRIVATE
-  nam_desktop_lib
+  openaxe_desktop_lib
 )
 add_test(NAME audio_io COMMAND audio_io_test)
 
 add_executable(bridge_test bridge_test.cpp)
 target_include_directories(bridge_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(bridge_test PRIVATE
-  nam_desktop_lib
+  openaxe_desktop_lib
 )
 # bridge_test's TestSlimSizeMutationsWhileStreamRunning loads a genuinely
 # slimmable NAM capture so SetSlimSize actually rebuilds NAMCore's buffers
@@ -42,7 +42,7 @@ endif()
 add_executable(latency_test latency_test.cpp)
 target_include_directories(latency_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(latency_test PRIVATE
-  nam_desktop_lib
+  openaxe_desktop_lib
 )
 add_test(NAME latency COMMAND latency_test)
 
@@ -54,6 +54,6 @@ add_test(NAME latency COMMAND latency_test)
 add_executable(teardown_race_test teardown_race_test.cpp)
 target_include_directories(teardown_race_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(teardown_race_test PRIVATE
-  nam_desktop_lib
+  openaxe_desktop_lib
 )
 add_test(NAME teardown_race COMMAND teardown_race_test)

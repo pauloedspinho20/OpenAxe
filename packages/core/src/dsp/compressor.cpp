@@ -1,9 +1,9 @@
-#include "nam_studio/dsp/compressor.h"
+#include "openaxe/dsp/compressor.h"
 
 #include "Effects/Compressor.h"
 #include "internal/dspark_wrapper.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -45,7 +45,7 @@ using Character = dspark::Compressor<float>::Character;
 struct CompressorTraits {
   static constexpr int kParamCount = 8;
   static constexpr const DsparkParamInfo* kInfo = kParamInfo;
-  static constexpr const float* kDefaults = nam_studio::dsp::kDefaults;
+  static constexpr const float* kDefaults = openaxe::dsp::kDefaults;
 
   static void Apply(dspark::Compressor<float>& proc, const float* values, int index, float value) {
     (void)values;
@@ -121,4 +121,4 @@ float Compressor::GetParam(int index) const { return impl_->dsp.GetParam(index);
 // Store one param and push it into the processor. Real-time safe.
 void Compressor::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

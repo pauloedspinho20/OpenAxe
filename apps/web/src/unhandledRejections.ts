@@ -1,4 +1,4 @@
-import { toast } from '@nam/ui'
+import { toast } from '@openaxe/ui'
 
 /**
  * A rejected promise with no .catch() anywhere in its chain fails silently -

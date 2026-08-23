@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { SettingsDialog } from './SettingsDialog'
 
-vi.mock('../../../native/namStudio', () => ({ getNamStudio: vi.fn(() => null) }))
+vi.mock('../../../native/openaxe', () => ({ getOpenAxe: vi.fn(() => null) }))
 vi.mock('../../../settings/dataBundle', () => ({
   getAssetCacheStats: vi.fn().mockResolvedValue({ count: 3, bytes: 1024 }),
   clearAssetCache: vi.fn(),

@@ -1,10 +1,10 @@
-#include "nam_studio/dsp/wav.h"
+#include "openaxe/dsp/wav.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -233,4 +233,4 @@ std::vector<uint8_t> EncodeWavF32(const std::vector<float>& samples, double samp
   return out;
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

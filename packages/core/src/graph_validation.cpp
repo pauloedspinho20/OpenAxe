@@ -1,6 +1,6 @@
-#include "nam_studio/graph_validation.h"
+#include "openaxe/graph_validation.h"
 
-namespace nam_studio::graph {
+namespace openaxe::graph {
 namespace {
 
 enum class Side { kFrom, kTo };
@@ -69,4 +69,4 @@ bool IsEdgeOrderValid(const BlockMap& blocks, const EdgeRecord& edge) {
   return ColumnOf(blocks, edge.from.block_id) < ColumnOf(blocks, edge.to.block_id);
 }
 
-}  // namespace nam_studio::graph
+}  // namespace openaxe::graph

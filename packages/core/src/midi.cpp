@@ -1,8 +1,8 @@
-#include "nam_studio/midi.h"
+#include "openaxe/midi.h"
 
 #include <string>
 
-namespace nam_studio::midi {
+namespace openaxe::midi {
 
 std::optional<MidiMessage> ParseMidiMessage(const uint8_t* data, size_t size) {
   if (!data || size < 2) return std::nullopt;
@@ -96,4 +96,4 @@ bool IsValidAction(const MidiAction& action) {
   return false;
 }
 
-}  // namespace nam_studio::midi
+}  // namespace openaxe::midi

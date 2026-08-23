@@ -1,9 +1,9 @@
-#include "nam_studio/dsp/equalizer.h"
+#include "openaxe/dsp/equalizer.h"
 
 #include "Effects/Equalizer.h"
 #include "internal/dspark_wrapper.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -43,9 +43,9 @@ using EqualizerProc = dspark::Equalizer<float, kBandCount>;
 // band as one struct (frequency + gain + Q + type), so a single knob turn has
 // to be re-expanded into its two siblings' current values.
 struct EqualizerTraits {
-  static constexpr int kParamCount = nam_studio::dsp::kParamCount;
-  static constexpr const DsparkParamInfo* kInfo = nam_studio::dsp::kParamInfo;
-  static constexpr const float* kDefaults = nam_studio::dsp::kDefaults;
+  static constexpr int kParamCount = openaxe::dsp::kParamCount;
+  static constexpr const DsparkParamInfo* kInfo = openaxe::dsp::kParamInfo;
+  static constexpr const float* kDefaults = openaxe::dsp::kDefaults;
 
   // One-time setup, run before the defaults are seeded (setNumBands resets
   // every band, so it must not run after them).
@@ -102,4 +102,4 @@ float Equalizer::GetParam(int index) const { return impl_->dsp.GetParam(index); 
 // biquad coefficients is arithmetic, no allocation.
 void Equalizer::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

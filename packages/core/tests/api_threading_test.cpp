@@ -13,7 +13,7 @@
 // nam_studio_process, and the handshake that makes that safe lives in the
 // desktop shell - see bridge_test.cpp's TestConcurrentMutationsWhileStreamRunning,
 // which is the mutate-during-process stress this complements.
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 #include <atomic>
 #include <chrono>
@@ -38,11 +38,11 @@ void TestTier1ConcurrentSurfaceAgainstProcess() {
   const int32_t amp = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_AMP, 0, 1);
   const int32_t reverb = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_REVERB, 0, 2);
   const int32_t delay = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DELAY, 0, 3);
-  NAM_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, mixer, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(graph, mixer, 0, amp, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(graph, amp, 0, reverb, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(graph, reverb, 0, delay, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(graph, delay, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, mixer, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(graph, mixer, 0, amp, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(graph, amp, 0, reverb, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(graph, reverb, 0, delay, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(graph, delay, 0, NAM_STUDIO_OUT_RAIL, 0) >= 0);
   nam_studio_reset(graph, kSampleRate, kBlockSize);
 
   const int32_t blocks[4] = {amp, reverb, delay, mixer};
@@ -113,8 +113,8 @@ void TestTier1ConcurrentSurfaceAgainstProcess() {
   audio.join();
   for (auto& w : workers) w.join();
 
-  NAM_EXPECT(output_finite.load());
-  NAM_EXPECT(calls.load() > 0);
+  OPENAXE_EXPECT(output_finite.load());
+  OPENAXE_EXPECT(calls.load() > 0);
 
   nam_studio_graph_destroy(graph);
 }
@@ -123,5 +123,5 @@ void TestTier1ConcurrentSurfaceAgainstProcess() {
 
 int main() {
   TestTier1ConcurrentSurfaceAgainstProcess();
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

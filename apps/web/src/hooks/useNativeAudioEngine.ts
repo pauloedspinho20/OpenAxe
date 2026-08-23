@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from '@nam/ui'
+import { toast } from '@openaxe/ui'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
@@ -7,7 +7,7 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import { getNamStudio, type NamStudioBridge } from '../native/namStudio'
+import { getOpenAxe, type OpenAxeBridge } from '../native/openaxe'
 
 export interface NativeAudioEngineState {
   status: EngineStatus
@@ -55,7 +55,7 @@ function resolveDeviceId(id: string): number {
 
 /**
  * Native variant of useAudioEngine for the desktop shell (issue #15 M3): the
- * DSP runs in the C++ core through window.namStudio - no Web Audio at all.
+ * DSP runs in the C++ core through window.openAxe - no Web Audio at all.
  * Keeps the same AudioEngineState shape so App.tsx and the component tree are
  * reused verbatim. The `context`/`analyser`/`tunerAnalyser` values are plain-JS
  * shims (NativeAudioContext / NativeAnalyser) fed from the C++ monitor taps, so
@@ -68,7 +68,7 @@ export function useNativeAudioEngine() {
   const handlingStreamErrorRef = useRef(false)
   const unbindRef = useRef<(() => void) | null>(null)
   const rigRef = useRef<NativeGraphRig | null>(null)
-  const bridgeRef = useRef<NamStudioBridge | null>(null)
+  const bridgeRef = useRef<OpenAxeBridge | null>(null)
   const inputTapRef = useRef<Float32Array>(new Float32Array(0))
   const outputTapRef = useRef<Float32Array>(new Float32Array(0))
   const pollIntervalRef = useRef<number | null>(null)
@@ -102,7 +102,7 @@ export function useNativeAudioEngine() {
    * device reappears.
    */
   const handleStreamError = useCallback(
-    async (bridge: NamStudioBridge, message: string) => {
+    async (bridge: OpenAxeBridge, message: string) => {
       if (handlingStreamErrorRef.current) return
       handlingStreamErrorRef.current = true
       try {
@@ -197,7 +197,7 @@ export function useNativeAudioEngine() {
    * sequence.
    */
   const openAndStart = useCallback(
-    (bridge: NamStudioBridge, inputDeviceId: number, outputDeviceId: number) =>
+    (bridge: OpenAxeBridge, inputDeviceId: number, outputDeviceId: number) =>
       runExclusive(async () => {
         const io = useIOStore.getState()
         const opened = await bridge.open({
@@ -231,7 +231,7 @@ export function useNativeAudioEngine() {
   const powerOn = useCallback(
     async (opts?: NativeAudioEnginePowerOnOptions) => {
       if (startingRef.current || state.status === 'ready') return
-      const bridge = getNamStudio()
+      const bridge = getOpenAxe()
       if (!bridge) {
         setState({ ...IDLE, status: 'error', error: 'Native audio bridge unavailable' })
         return

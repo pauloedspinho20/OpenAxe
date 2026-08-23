@@ -40,8 +40,8 @@ run(true, skipUi)
 // (Makefiles/Ninja on macOS/Linux) don't. Try both.
 const candidates =
   process.platform === 'win32'
-    ? ['bin/Debug/nam_desktop.exe', 'bin/nam_desktop.exe']
-    : ['bin/nam_desktop']
+    ? ['bin/Debug/openaxe_desktop.exe', 'bin/openaxe_desktop.exe']
+    : ['bin/openaxe_desktop']
 const exe = candidates.map((c) => join(root, 'build', c)).find(existsSync)
 if (!exe) {
   console.error(
@@ -54,10 +54,10 @@ if (!exe) {
 // binary is exec'd straight from a shell/IDE, the *terminal* becomes the
 // "responsible process" and macOS silently denies the microphone (no prompt,
 // no sound). Launching the .app via `open` makes the bundle itself the
-// responsible identity (com.namwebstudio.desktop), so the prompt fires and
+// responsible identity (com.openaxe.desktop), so the prompt fires and
 // CoreAudio gets real input - exactly like the packaged build. `open` does not
 // forward the parent environment, so dev.mjs writes the bits the app reads
-// (NAM_STUDIO_UI_URL, NAM_DESKTOP_DEBUG, ...) to dev.env, which the bundle's
+// (OPENAXE_UI_URL, OPENAXE_DESKTOP_DEBUG, ...) to dev.env, which the bundle's
 // launcher shell sources before exec'ing the real binary in the same process.
 const LAUNCHER_SH = `#!/bin/sh
 # Dev-bundle launcher (issue #143): the .app is opened via LaunchServices so
@@ -68,16 +68,16 @@ _DEV_ENV="$(dirname "$0")/../Resources/dev.env"
 [ -f "$_DEV_ENV" ] && . "$_DEV_ENV"
 set +a
 _DEV_LOG="$(dirname "$0")/../Resources/dev.log"
-exec "$(dirname "$0")/nam_desktop_bin" "$@" >"$_DEV_LOG" 2>&1
+exec "$(dirname "$0")/openaxe_desktop_bin" "$@" >"$_DEV_LOG" 2>&1
 `
 
 function launchMacOSBundle(rawExe) {
   const plistSrc = join(root, 'packaging', 'Info.plist')
-  const appBundle = join(root, 'build', 'nam_desktop_dev.app')
+  const appBundle = join(root, 'build', 'openaxe_desktop_dev.app')
   const macOsDir = join(appBundle, 'Contents', 'MacOS')
   const resDir = join(appBundle, 'Contents', 'Resources')
-  const binInBundle = join(macOsDir, 'nam_desktop_bin')
-  const launcher = join(macOsDir, 'nam_desktop')
+  const binInBundle = join(macOsDir, 'openaxe_desktop_bin')
+  const launcher = join(macOsDir, 'openaxe_desktop')
   const plist = join(appBundle, 'Contents', 'Info.plist')
   const envFile = join(resDir, 'dev.env')
   const uiSrc = join(root, 'build', 'ui')
@@ -114,15 +114,14 @@ function launchMacOSBundle(rawExe) {
   }
 
   // Forward only the env vars the app actually reads (open drops the parent
-  // environment). --ui-url wins over any inherited NAM_STUDIO_UI_URL.
+  // environment). --ui-url wins over any inherited OPENAXE_UI_URL.
   const envLines = []
-  if (uiUrl) envLines.push(`NAM_STUDIO_UI_URL='${uiUrl}'`)
-  else if (process.env.NAM_STUDIO_UI_URL)
-    envLines.push(`NAM_STUDIO_UI_URL='${process.env.NAM_STUDIO_UI_URL}'`)
-  if (process.env.NAM_DESKTOP_DEBUG)
-    envLines.push(`NAM_DESKTOP_DEBUG='${process.env.NAM_DESKTOP_DEBUG}'`)
-  if (process.env.NAM_STUDIO_UI_DIR)
-    envLines.push(`NAM_STUDIO_UI_DIR='${process.env.NAM_STUDIO_UI_DIR}'`)
+  if (uiUrl) envLines.push(`OPENAXE_UI_URL='${uiUrl}'`)
+  else if (process.env.OPENAXE_UI_URL)
+    envLines.push(`OPENAXE_UI_URL='${process.env.OPENAXE_UI_URL}'`)
+  if (process.env.OPENAXE_DESKTOP_DEBUG)
+    envLines.push(`OPENAXE_DESKTOP_DEBUG='${process.env.OPENAXE_DESKTOP_DEBUG}'`)
+  if (process.env.OPENAXE_UI_DIR) envLines.push(`OPENAXE_UI_DIR='${process.env.OPENAXE_UI_DIR}'`)
   writeFileSync(envFile, envLines.join('\n') + (envLines.length ? '\n' : ''))
 
   const openArgs = ['-W', '-n', '-a', appBundle]
@@ -137,7 +136,7 @@ if (process.platform === 'darwin') {
 } else {
   const env = { ...process.env }
   if (uiUrl) {
-    env.NAM_STUDIO_UI_URL = uiUrl
+    env.OPENAXE_UI_URL = uiUrl
     console.log(`[nam/desktop] UI from ${uiUrl} (dev server)`)
   }
   console.log(`[nam/desktop] launching ${exe}`)

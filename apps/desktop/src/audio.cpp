@@ -12,7 +12,7 @@
 
 #include "debug_log.h"
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 namespace {
 // Sizes the monitor-tap ring buffers. Called from a non-audio thread
@@ -564,4 +564,4 @@ void AudioIO::EndSuspend() {
   state_.suspend.store(false, std::memory_order_release);
 }
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

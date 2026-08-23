@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from '@nam/ui'
+import { toast } from '@openaxe/ui'
 import { installUnhandledRejectionHandler } from './unhandledRejections'
 
-vi.mock('@nam/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@nam/ui')>()),
+vi.mock('@openaxe/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@openaxe/ui')>()),
   toast: { error: vi.fn() },
 }))
 

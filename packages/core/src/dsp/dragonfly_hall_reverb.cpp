@@ -1,4 +1,4 @@
-#include "nam_studio/dsp/dragonfly_hall_reverb.h"
+#include "openaxe/dsp/dragonfly_hall_reverb.h"
 
 // Pre-include anything that declares global-scope things (operator new,
 // etc.) BEFORE the anonymous namespace below - their include guards make
@@ -48,7 +48,7 @@ namespace {
 #include "DSP.cpp"
 }  // namespace
 
-namespace nam_studio {
+namespace openaxe {
 namespace dsp {
 namespace {
 
@@ -122,4 +122,4 @@ void DragonflyHallReverb::SetParam(int index, float value) {
 }
 
 }  // namespace dsp
-}  // namespace nam_studio
+}  // namespace openaxe

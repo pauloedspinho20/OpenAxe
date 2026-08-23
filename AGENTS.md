@@ -36,7 +36,7 @@ all the wiring needed for it to be picked up automatically.
 - `pnpm lint` — oxlint
 - `pnpm format:check` — Prettier (`pnpm format` to fix)
 - `pnpm build` — typecheck + production build for the **web app + `packages/ui`
-  only**. `@nam/desktop` is deliberately excluded (its build shells out to a
+  only**. `@openaxe/desktop` is deliberately excluded (its build shells out to a
   full native CMake/webview compile) — use `pnpm build:desktop` /
   `pnpm build:all` for that.
 - `pnpm test:run` — Vitest, one-shot, across every package that defines it
@@ -50,11 +50,11 @@ all the wiring needed for it to be picked up automatically.
 graph for building/testing — they're plain CMake/CTest:
 
 ```bash
-cmake -S packages/core -B packages/core/build -DNAM_STUDIO_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build packages/core/build
 ctest --test-dir packages/core/build --output-on-failure
 
-cmake -B apps/desktop/build -DNAM_DESKTOP_BUILD_TESTS=ON
+cmake -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON
 cmake --build apps/desktop/build
 ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
 ```
@@ -63,7 +63,7 @@ ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, la
 (`bash scripts/build-core-wasm.sh`, needs the Emscripten SDK on `PATH`) that
 overwrites the checked-in `apps/web/public/wasm-core/{js,wasm}` artifacts —
 run it and confirm the diff (or lack of one) whenever you change
-`packages/core`'s public ABI (`include/nam_studio/api.h`) or add a symbol the
+`packages/core`'s public ABI (`include/openaxe/api.h`) or add a symbol the
 web app calls (see `scripts/check-wasm-exports.mjs`, which catches the latter
 in CI without needing a rebuild).
 
@@ -97,20 +97,30 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Env vars
 
-| Var                    | Where                             | Purpose                                                                                                                                                                                           |
-| ---------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_PUBLISHABLE_KEY` | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                     |
-| `NAM_STUDIO_UI_URL`    | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged. |
-| `NAM_DESKTOP_DEBUG`    | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                |
+| Var                     | Where                             | Purpose                                                                                                                                                                                           |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                     |
+| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged. |
+| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                |
 
 ## Key decisions worth knowing before you edit
 
+- **The `extern "C"` ABI keeps its `nam_studio_*`/`NamStudio*`/`NAM_STUDIO_*`
+  spellings despite the OpenAxe rebrand (#151)** — those names are baked into
+  the committed prebuilt WASM artifacts (`apps/web/public/wasm-core/`), which
+  only Emscripten can regenerate. Renaming requires one atomic change:
+  `api.h` + `EXPORTED_FUNCTIONS` + `scripts/check-wasm-exports.mjs` + a wasm
+  rebuild with the artifacts re-committed. Everything around the ABI (include
+  tree, namespaces, CMake targets, npm scope) is `openaxe`-named. Same story
+  for persisted user data: the IndexedDB name (`nam-web-studio`), localStorage
+  keys, and the desktop keychain service name are deliberately unchanged so
+  users' saved rigs/settings/credentials survive the rebrand.
 - **One C++ engine, four shells** (see ARCHITECTURE.md) — if you're adding
   behavior a second front end would need too (routing rules, param
   semantics, model/IR handling), it belongs in `packages/core`, not a front
   end. `apps/desktop`'s bridge (`apps/desktop/src/bridge.cpp`) and the web
   worklet are both thin translation layers over the same `extern "C"` ABI
-  (`packages/core/include/nam_studio/api.h`) — they should stay thin.
+  (`packages/core/include/openaxe/api.h`) — they should stay thin.
 - **No backend, no accounts** — the web app runs entirely client-side
   (IndexedDB persistence, WASM DSP); Tone3000 is the one exception (a
   network service with no audio meaning — a model-library client, not

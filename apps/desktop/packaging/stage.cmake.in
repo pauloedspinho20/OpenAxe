@@ -3,23 +3,33 @@
 # rules (including those of FetchContent subprojects). Runs in cmake -P mode
 # with CPACK_TEMPORARY_INSTALL_DIRECTORY set to the CPack staging dir.
 #
-# @NAM_DESKTOP_BINARY@ and @NAM_DESKTOP_UI_DIR@ are baked in at configure time;
+# @OPENAXE_DESKTOP_BINARY@ and @OPENAXE_DESKTOP_UI_DIR@ are baked in at configure time;
 # the web UI is bundled into build/ui by scripts/build.mjs before cpack runs.
+# Brand icons live next to this script (openaxe.icns/.ico/openaxe-256.png).
 
 if(APPLE)
-  set(app "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/nam-studio-desktop.app")
+  set(app "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/openaxe-desktop.app")
   file(MAKE_DIRECTORY "${app}/Contents/MacOS")
   file(MAKE_DIRECTORY "${app}/Contents/Resources")
-  file(COPY "@NAM_DESKTOP_BINARY@" DESTINATION "${app}/Contents/MacOS")
+  file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${app}/Contents/MacOS")
   # file(COPY <dir> DESTINATION <dest>) nests the dir under its basename -> Resources/ui
-  file(COPY "@NAM_DESKTOP_UI_DIR@" DESTINATION "${app}/Contents/Resources")
-  file(COPY "@NAM_DESKTOP_PLIST@" DESTINATION "${app}/Contents")
+  file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${app}/Contents/Resources")
+  file(COPY "@OPENAXE_DESKTOP_PLIST@" DESTINATION "${app}/Contents")
+  # Dock/Finder icon (Info.plist's CFBundleIconFile points here).
+  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe.icns" DESTINATION "${app}/Contents/Resources")
 elseif(WIN32)
-  file(COPY "@NAM_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
-  file(COPY "@NAM_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
+  file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
+  file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
+  # Explorer icon is compiled into the exe via openaxe_desktop.rc; this copy is
+  # a convenience for shortcuts/installers that want a standalone .ico.
+  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe.ico" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
 else()
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
-  file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/nam-studio-desktop")
-  file(COPY "@NAM_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
-  file(COPY "@NAM_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/nam-studio-desktop")
+  file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
+  file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps")
+  file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
+  file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
+  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe-256.png"
+        DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps"
+        RENAME openaxe.png)
 endif()

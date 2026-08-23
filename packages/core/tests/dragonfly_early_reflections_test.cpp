@@ -1,8 +1,8 @@
 // Real end-to-end test: constructs the actual Dragonfly Early Reflections
 // DSP, sweeps every exposed parameter, and processes a real stereo impulse
 // through it, checking for a genuine (non-silent, finite) tail. Only built
-// if NAM_STUDIO_HAS_DRAGONFLY (see tests/CMakeLists.txt).
-#include "nam_studio/dsp/dragonfly_early_reflections.h"
+// if OPENAXE_HAS_DRAGONFLY (see tests/CMakeLists.txt).
+#include "openaxe/dsp/dragonfly_early_reflections.h"
 
 #include <cmath>
 #include <string>
@@ -10,16 +10,16 @@
 
 #include "test_harness.h"
 
-using nam_studio::dsp::DragonflyEarlyReflections;
+using openaxe::dsp::DragonflyEarlyReflections;
 
 namespace {
 
 void TestParamCountAndInfo() {
-  NAM_EXPECT(DragonflyEarlyReflections::ParamCount() == 7);
+  OPENAXE_EXPECT(DragonflyEarlyReflections::ParamCount() == 7);
   const auto& dry = DragonflyEarlyReflections::GetParamInfo(0);
-  NAM_EXPECT(std::string(dry.symbol) == "dry_level");
+  OPENAXE_EXPECT(std::string(dry.symbol) == "dry_level");
   const auto& high_cut = DragonflyEarlyReflections::GetParamInfo(6);
-  NAM_EXPECT(std::string(high_cut.symbol) == "high_cut");
+  OPENAXE_EXPECT(std::string(high_cut.symbol) == "high_cut");
 }
 
 void TestGetSetEveryParam() {
@@ -27,9 +27,9 @@ void TestGetSetEveryParam() {
   for (int i = 0; i < DragonflyEarlyReflections::ParamCount(); ++i) {
     const auto& info = DragonflyEarlyReflections::GetParamInfo(i);
     reverb.SetParam(i, info.min_value);
-    NAM_EXPECT(reverb.GetParam(i) == info.min_value);
+    OPENAXE_EXPECT(reverb.GetParam(i) == info.min_value);
     reverb.SetParam(i, info.max_value);
-    NAM_EXPECT(reverb.GetParam(i) == info.max_value);
+    OPENAXE_EXPECT(reverb.GetParam(i) == info.max_value);
   }
 }
 
@@ -59,8 +59,8 @@ void TestProcessProducesFiniteReverbTail() {
     if (!std::isfinite(out_left[i]) || !std::isfinite(out_right[i])) all_finite = false;
     if (out_left[i] != 0.0f || out_right[i] != 0.0f) has_nonzero_tail = true;
   }
-  NAM_EXPECT(all_finite);
-  NAM_EXPECT(has_nonzero_tail);
+  OPENAXE_EXPECT(all_finite);
+  OPENAXE_EXPECT(has_nonzero_tail);
 
   reverb.Mute();
 }
@@ -72,5 +72,5 @@ int main() {
   TestGetSetEveryParam();
   TestProcessProducesFiniteReverbTail();
 
-  return nam_studio::test::g_failures == 0 ? 0 : 1;
+  return openaxe::test::g_failures == 0 ? 0 : 1;
 }

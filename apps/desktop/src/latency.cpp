@@ -2,9 +2,9 @@
 
 #include <vector>
 
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 int MeasureDspLatencyFrames(double sample_rate, int block_size, int impulse_pos) {
   (void)sample_rate;
@@ -39,4 +39,4 @@ double LatencyMs(int frames, double sample_rate) {
   return sample_rate > 0.0 ? static_cast<double>(frames) / sample_rate * 1000.0 : -1.0;
 }
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

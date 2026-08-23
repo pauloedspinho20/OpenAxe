@@ -12,9 +12,9 @@
 //
 // Not constant-time, not hardened against side channels: it hashes files the
 // user chose, not secrets.
-namespace nam_studio::state {
+namespace openaxe::state {
 
 // Returns the 64-character lowercase hex digest of `size` bytes at `data`.
 std::string Sha256Hex(const uint8_t* data, size_t size);
 
-}  // namespace nam_studio::state
+}  // namespace openaxe::state

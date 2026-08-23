@@ -4,7 +4,7 @@ export interface HardwareButtonProps {
   label: string
   active?: boolean
   onClick: () => void
-  variant?: 'accent' | 'danger'
+  variant?: 'default' | 'accent' | 'danger'
   disabled?: boolean
   title?: string
   fullWidth?: boolean
@@ -15,7 +15,7 @@ export function HardwareButton({
   label,
   active = false,
   onClick,
-  variant = 'accent',
+  variant = 'default',
   disabled = false,
   title,
   fullWidth = false,

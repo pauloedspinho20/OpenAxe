@@ -9,7 +9,7 @@ import { OnboardingModal } from './components/global/OnboardingModal/OnboardingM
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
-import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@nam/ui'
+import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useMidiEngine } from './hooks/useMidiEngine'

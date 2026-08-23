@@ -1,9 +1,9 @@
-#include "nam_studio/dsp/pitch_detect.h"
+#include "openaxe/dsp/pitch_detect.h"
 
 #include <cmath>
 #include <cstdint>
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -100,4 +100,4 @@ std::optional<PitchResult> DetectPitch(const float* samples, int32_t count,
   return result;
 }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

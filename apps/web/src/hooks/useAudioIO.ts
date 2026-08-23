@@ -4,8 +4,8 @@
  * auto-resets input selection to default if the chosen device disappears.
  */
 import { useCallback, useEffect, useRef } from 'react'
-import { getNamStudio } from '../native/namStudio'
-import type { NamStudioDevice } from '../native/namStudio'
+import { getOpenAxe } from '../native/openaxe'
+import type { OpenAxeDevice } from '../native/openaxe'
 import { useIOStore } from '../state/ioStore'
 
 function mapDevice(device: MediaDeviceInfo) {
@@ -16,7 +16,7 @@ function mapDevice(device: MediaDeviceInfo) {
   }
 }
 
-function mapNativeDevice(device: NamStudioDevice) {
+function mapNativeDevice(device: OpenAxeDevice) {
   return {
     deviceId: String(device.id),
     label: device.name || 'Default',
@@ -26,7 +26,7 @@ function mapNativeDevice(device: NamStudioDevice) {
 
 /** Populate ioStore from the native bridge's RtAudio devices. Returns true if handled. */
 async function enumerateNative(): Promise<boolean> {
-  const bridge = getNamStudio()
+  const bridge = getOpenAxe()
   if (!bridge) return false
   try {
     const devices = await bridge.listDevices()
@@ -47,7 +47,7 @@ export function useAudioIO() {
   const enumeratedRef = useRef(false)
 
   const enumerate = useCallback(async () => {
-    // In the desktop shell the device list comes from RtAudio (window.namStudio),
+    // In the desktop shell the device list comes from RtAudio (window.openAxe),
     // not the browser's MediaDevices.
     if (await enumerateNative()) return
     try {
@@ -85,7 +85,7 @@ export function useAudioIO() {
     // Browser hot-plug detection only exists for the web MediaDevices API.
     // Native (desktop) devices don't emit devicechange, so there's no listener
     // to attach there.
-    if (getNamStudio()) return
+    if (getOpenAxe()) return
     if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return
 
     // Re-enumerate on hot-plug.
@@ -102,7 +102,7 @@ export function useAudioIO() {
    * Native output routing is owned by the C++ shell, so this is false there.
    */
   const outputSelectionSupported =
-    !getNamStudio() && typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype
+    !getOpenAxe() && typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype
 
   return { outputSelectionSupported }
 }

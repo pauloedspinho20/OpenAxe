@@ -2,9 +2,9 @@ import type { BlockKind } from './blocks/Block'
 
 /**
  * Thin TS wrapper around the single rig `AudioWorkletProcessor`
- * (`wasm-core/namStudioRigWorklet.js`), which owns one nam_studio_core module
+ * (`wasm-core/namStudioRigWorklet.js`), which owns one openaxe_core module
  * and one nam_studio_graph for the whole rig (issue #55). This is the web-path
- * counterpart to the desktop's NamStudioBridge: every block kind, every
+ * counterpart to the desktop's OpenAxeBridge: every block kind, every
  * connection, every param, trim, bypass, model/IR load and master-bus write is
  * a message resolved against the core's C ABI inside that one worklet, so the
  * web path contains no Web Audio signal routing of its own.
@@ -21,7 +21,7 @@ const PROCESSOR_NAME = 'nam-studio-rig-processor'
 const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
 const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
-/** packages/core/include/nam_studio/api.h's NamStudioBlockKind, indexed by web BlockKind. */
+/** packages/core/include/openaxe/api.h's OpenAxeBlockKind, indexed by web BlockKind. */
 const KIND_TO_CORE: Record<BlockKind, number> = {
   'noise-gate': 0,
   compressor: 1,

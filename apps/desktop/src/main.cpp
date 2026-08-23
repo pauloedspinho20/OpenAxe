@@ -20,9 +20,9 @@
 namespace {
 
 // Path to the bundled React UI (apps/web build). Skipped entirely when
-// NAM_STUDIO_UI_URL is set (dev-server mode, see below). Resolved, in order,
+// OPENAXE_UI_URL is set (dev-server mode, see below). Resolved, in order,
 // from:
-//   1. the NAM_STUDIO_UI_DIR env override,
+//   1. the OPENAXE_UI_DIR env override,
 //   2. <exeDir>/ui/index.html               (Windows ZIP: exe + ui in same dir),
 //   3. <exeDir>/../ui/index.html            (dev: build/bin + build/ui),
 //   4. <exeDir>/../Resources/ui/index.html  (packaged macOS .app bundle),
@@ -30,7 +30,7 @@ namespace {
 // Returns "" (-> placeholder console) when none exist.
 std::string UiIndexPath(const std::string& argv0) {
   namespace fs = std::filesystem;
-  if (const char* env = std::getenv("NAM_STUDIO_UI_DIR"); env && *env) {
+  if (const char* env = std::getenv("OPENAXE_UI_DIR"); env && *env) {
     fs::path p = fs::path(env) / "index.html";
     if (fs::exists(p)) return p.lexically_normal().string();
   }
@@ -42,7 +42,7 @@ std::string UiIndexPath(const std::string& argv0) {
       exe_dir / "ui" / "index.html",
       exe_dir / ".." / "ui" / "index.html",
       exe_dir / ".." / "Resources" / "ui" / "index.html",
-      exe_dir / ".." / "share" / "nam-studio-desktop" / "ui" / "index.html",
+      exe_dir / ".." / "share" / "openaxe-desktop" / "ui" / "index.html",
   };
   for (const auto& c : candidates) {
     const fs::path n = c.lexically_normal();
@@ -52,7 +52,7 @@ std::string UiIndexPath(const std::string& argv0) {
 }
 
 // M2 placeholder UI - a functional console that exercises the full
-// window.namStudio.* bridge (devices, stream control, graph topology, NAM
+// window.openAxe.* bridge (devices, stream control, graph topology, NAM
 // model loading, metering) against the real C++ DSP core. Replaced by the
 // real React UI (apps/web build) in issue #15 M3, which will navigate the
 // webview to the built index.html instead of set_html().
@@ -85,7 +85,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
 </head>
 <body>
 <header>
-  <h1>NAM Web Studio &mdash; desktop shell (M2 bridge console)</h1>
+  <h1>OpenAxe &mdash; desktop shell (M2 bridge console)</h1>
   <p>core version: <span id="ver">loading&hellip;</span></p>
 </header>
 <main>
@@ -129,7 +129,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
 </main>
 <script>
   const $ = (id) => document.getElementById(id);
-  const call = (method, arg) => window['namStudio.' + method](arg);
+  const call = (method, arg) => window['openAxe.' + method](arg);
 
   let lastError = null;
 
@@ -251,7 +251,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
 </html>)";
 
 template <typename Method>
-void Bind(webview::webview& w, nam_desktop::StudioBridge& bridge, const char* name,
+void Bind(webview::webview& w, openaxe_desktop::StudioBridge& bridge, const char* name,
           Method method) {
   w.bind(name, [&bridge, method](const std::string& req) { return (bridge.*method)(req); });
 }
@@ -267,13 +267,13 @@ int main(int argc, char** argv) {
   std::string argv0 = argc > 0 ? argv[0] : "";
 #endif
   try {
-    // Log to a file + install a crash backtrace handler (NAM_DESKTOP_DEBUG=1
+    // Log to a file + install a crash backtrace handler (OPENAXE_DESKTOP_DEBUG=1
     // also turns on the webview devtools / remote inspector). Log lives next
     // to the executable by default.
     const std::string exe_dir =
         argv0.empty() ? std::filesystem::current_path().string()
                       : std::filesystem::weakly_canonical(argv0).parent_path().string();
-    nam_desktop::InstallDebugLogging(exe_dir);
+    openaxe_desktop::InstallDebugLogging(exe_dir);
 
     // Construct the bridge BEFORE the webview. On exit the webview's
     // destructor drains its dispatch queue (pending JS getTap/meters calls
@@ -283,64 +283,64 @@ int main(int argc, char** argv) {
     // its state_ are still alive - otherwise a drained getTap touches freed
     // state_ (the exit-time heap corruption / std::terminate in
     // ~cocoa_wkwebview_engine).
-    nam_desktop::StudioBridge bridge;
+    openaxe_desktop::StudioBridge bridge;
 
-    webview::webview w(nam_desktop::DebugEnabled(), nullptr);
-    w.set_title("NAM Web Studio");
+    webview::webview w(openaxe_desktop::DebugEnabled(), nullptr);
+    w.set_title("OpenAxe");
     w.set_size(1280, 800, WEBVIEW_HINT_NONE);
 
-    // window.namStudio.* bridge surface (issue #15 M2). Each bind exposes a
+    // window.openAxe.* bridge surface (issue #15 M2). Each bind exposes a
     // global JS function; webview marshals its JSON args here and resolves
     // the JS promise with the returned JSON.
-    Bind(w, bridge, "namStudio.version", &nam_desktop::StudioBridge::HandleVersion);
-    Bind(w, bridge, "namStudio.listDevices", &nam_desktop::StudioBridge::HandleListDevices);
-    Bind(w, bridge, "namStudio.getConfig", &nam_desktop::StudioBridge::HandleGetConfig);
-    Bind(w, bridge, "namStudio.open", &nam_desktop::StudioBridge::HandleOpen);
-    Bind(w, bridge, "namStudio.close", &nam_desktop::StudioBridge::HandleClose);
-    Bind(w, bridge, "namStudio.start", &nam_desktop::StudioBridge::HandleStart);
-    Bind(w, bridge, "namStudio.stop", &nam_desktop::StudioBridge::HandleStop);
-    Bind(w, bridge, "namStudio.addBlock", &nam_desktop::StudioBridge::HandleAddBlock);
-    Bind(w, bridge, "namStudio.removeBlock", &nam_desktop::StudioBridge::HandleRemoveBlock);
-    Bind(w, bridge, "namStudio.moveBlock", &nam_desktop::StudioBridge::HandleMoveBlock);
-    Bind(w, bridge, "namStudio.connect", &nam_desktop::StudioBridge::HandleConnect);
-    Bind(w, bridge, "namStudio.disconnect", &nam_desktop::StudioBridge::HandleDisconnect);
-    Bind(w, bridge, "namStudio.setParam", &nam_desktop::StudioBridge::HandleSetParam);
-    Bind(w, bridge, "namStudio.getParam", &nam_desktop::StudioBridge::HandleGetParam);
-    Bind(w, bridge, "namStudio.blockInfo", &nam_desktop::StudioBridge::HandleBlockInfo);
-    Bind(w, bridge, "namStudio.listBlocks", &nam_desktop::StudioBridge::HandleListBlocks);
-    Bind(w, bridge, "namStudio.listEdges", &nam_desktop::StudioBridge::HandleListEdges);
-    Bind(w, bridge, "namStudio.loadModel", &nam_desktop::StudioBridge::HandleLoadModel);
-    Bind(w, bridge, "namStudio.loadModelJson", &nam_desktop::StudioBridge::HandleLoadModelJson);
-    Bind(w, bridge, "namStudio.unloadModel", &nam_desktop::StudioBridge::HandleUnloadModel);
-    Bind(w, bridge, "namStudio.setReverbAlgorithm",
-         &nam_desktop::StudioBridge::HandleSetReverbAlgorithm);
-    Bind(w, bridge, "namStudio.setDelayModel", &nam_desktop::StudioBridge::HandleSetDelayModel);
-    Bind(w, bridge, "namStudio.meters", &nam_desktop::StudioBridge::HandleMeters);
-    Bind(w, bridge, "namStudio.cpuLoad", &nam_desktop::StudioBridge::HandleCpuLoad);
-    Bind(w, bridge, "namStudio.getTap", &nam_desktop::StudioBridge::HandleGetTap);
-    Bind(w, bridge, "namStudio.takeStreamError", &nam_desktop::StudioBridge::HandleTakeStreamError);
-    Bind(w, bridge, "namStudio.setBypass", &nam_desktop::StudioBridge::HandleSetBypass);
-    Bind(w, bridge, "namStudio.setBlockTrim", &nam_desktop::StudioBridge::HandleSetBlockTrim);
-    Bind(w, bridge, "namStudio.loadIrWav", &nam_desktop::StudioBridge::HandleLoadIrWav);
-    Bind(w, bridge, "namStudio.unloadIr", &nam_desktop::StudioBridge::HandleUnloadIr);
-    Bind(w, bridge, "namStudio.setInputGain", &nam_desktop::StudioBridge::HandleSetInputGain);
-    Bind(w, bridge, "namStudio.setMasterLevel", &nam_desktop::StudioBridge::HandleSetMasterLevel);
-    Bind(w, bridge, "namStudio.setMasterMuted", &nam_desktop::StudioBridge::HandleSetMasterMuted);
-    Bind(w, bridge, "namStudio.setTunerMuted", &nam_desktop::StudioBridge::HandleSetTunerMuted);
-    Bind(w, bridge, "namStudio.secureStore", &nam_desktop::StudioBridge::HandleSecureStore);
-    Bind(w, bridge, "namStudio.secureLoad", &nam_desktop::StudioBridge::HandleSecureLoad);
-    Bind(w, bridge, "namStudio.secureDelete", &nam_desktop::StudioBridge::HandleSecureDelete);
+    Bind(w, bridge, "openAxe.version", &openaxe_desktop::StudioBridge::HandleVersion);
+    Bind(w, bridge, "openAxe.listDevices", &openaxe_desktop::StudioBridge::HandleListDevices);
+    Bind(w, bridge, "openAxe.getConfig", &openaxe_desktop::StudioBridge::HandleGetConfig);
+    Bind(w, bridge, "openAxe.open", &openaxe_desktop::StudioBridge::HandleOpen);
+    Bind(w, bridge, "openAxe.close", &openaxe_desktop::StudioBridge::HandleClose);
+    Bind(w, bridge, "openAxe.start", &openaxe_desktop::StudioBridge::HandleStart);
+    Bind(w, bridge, "openAxe.stop", &openaxe_desktop::StudioBridge::HandleStop);
+    Bind(w, bridge, "openAxe.addBlock", &openaxe_desktop::StudioBridge::HandleAddBlock);
+    Bind(w, bridge, "openAxe.removeBlock", &openaxe_desktop::StudioBridge::HandleRemoveBlock);
+    Bind(w, bridge, "openAxe.moveBlock", &openaxe_desktop::StudioBridge::HandleMoveBlock);
+    Bind(w, bridge, "openAxe.connect", &openaxe_desktop::StudioBridge::HandleConnect);
+    Bind(w, bridge, "openAxe.disconnect", &openaxe_desktop::StudioBridge::HandleDisconnect);
+    Bind(w, bridge, "openAxe.setParam", &openaxe_desktop::StudioBridge::HandleSetParam);
+    Bind(w, bridge, "openAxe.getParam", &openaxe_desktop::StudioBridge::HandleGetParam);
+    Bind(w, bridge, "openAxe.blockInfo", &openaxe_desktop::StudioBridge::HandleBlockInfo);
+    Bind(w, bridge, "openAxe.listBlocks", &openaxe_desktop::StudioBridge::HandleListBlocks);
+    Bind(w, bridge, "openAxe.listEdges", &openaxe_desktop::StudioBridge::HandleListEdges);
+    Bind(w, bridge, "openAxe.loadModel", &openaxe_desktop::StudioBridge::HandleLoadModel);
+    Bind(w, bridge, "openAxe.loadModelJson", &openaxe_desktop::StudioBridge::HandleLoadModelJson);
+    Bind(w, bridge, "openAxe.unloadModel", &openaxe_desktop::StudioBridge::HandleUnloadModel);
+    Bind(w, bridge, "openAxe.setReverbAlgorithm",
+         &openaxe_desktop::StudioBridge::HandleSetReverbAlgorithm);
+    Bind(w, bridge, "openAxe.setDelayModel", &openaxe_desktop::StudioBridge::HandleSetDelayModel);
+    Bind(w, bridge, "openAxe.meters", &openaxe_desktop::StudioBridge::HandleMeters);
+    Bind(w, bridge, "openAxe.cpuLoad", &openaxe_desktop::StudioBridge::HandleCpuLoad);
+    Bind(w, bridge, "openAxe.getTap", &openaxe_desktop::StudioBridge::HandleGetTap);
+    Bind(w, bridge, "openAxe.takeStreamError", &openaxe_desktop::StudioBridge::HandleTakeStreamError);
+    Bind(w, bridge, "openAxe.setBypass", &openaxe_desktop::StudioBridge::HandleSetBypass);
+    Bind(w, bridge, "openAxe.setBlockTrim", &openaxe_desktop::StudioBridge::HandleSetBlockTrim);
+    Bind(w, bridge, "openAxe.loadIrWav", &openaxe_desktop::StudioBridge::HandleLoadIrWav);
+    Bind(w, bridge, "openAxe.unloadIr", &openaxe_desktop::StudioBridge::HandleUnloadIr);
+    Bind(w, bridge, "openAxe.setInputGain", &openaxe_desktop::StudioBridge::HandleSetInputGain);
+    Bind(w, bridge, "openAxe.setMasterLevel", &openaxe_desktop::StudioBridge::HandleSetMasterLevel);
+    Bind(w, bridge, "openAxe.setMasterMuted", &openaxe_desktop::StudioBridge::HandleSetMasterMuted);
+    Bind(w, bridge, "openAxe.setTunerMuted", &openaxe_desktop::StudioBridge::HandleSetTunerMuted);
+    Bind(w, bridge, "openAxe.secureStore", &openaxe_desktop::StudioBridge::HandleSecureStore);
+    Bind(w, bridge, "openAxe.secureLoad", &openaxe_desktop::StudioBridge::HandleSecureLoad);
+    Bind(w, bridge, "openAxe.secureDelete", &openaxe_desktop::StudioBridge::HandleSecureDelete);
 
-    // NAM_STUDIO_UI_URL wins over the bundled copy: it points the webview at
+    // OPENAXE_UI_URL wins over the bundled copy: it points the webview at
     // an already-running dev server (Vite, http://127.0.0.1:5173) so the
     // native shell can run against `pnpm dev:web` with HMR - the bridge binds
-    // above are installed on the webview itself, so window.namStudio is there
+    // above are installed on the webview itself, so window.openAxe is there
     // whichever URL the UI comes from.
-    const char* ui_url_env = std::getenv("NAM_STUDIO_UI_URL");
+    const char* ui_url_env = std::getenv("OPENAXE_UI_URL");
     const bool use_dev_server =
-        ui_url_env && *ui_url_env && nam_desktop::IsTrustedUiUrl(ui_url_env);
+        ui_url_env && *ui_url_env && openaxe_desktop::IsTrustedUiUrl(ui_url_env);
     if (ui_url_env && *ui_url_env && !use_dev_server) {
-      std::cerr << "nam_desktop: refusing NAM_STUDIO_UI_URL=" << ui_url_env
+      std::cerr << "openaxe_desktop: refusing OPENAXE_UI_URL=" << ui_url_env
                 << " - only loopback http(s) UI origins are allowed (issue #71)\n";
     }
 
@@ -349,7 +349,7 @@ int main(int argc, char** argv) {
     // leave a blank page), else the M3 placeholder console which still
     // exercises the full bridge against the C++ core.
     const std::string ui = use_dev_server ? std::string() : UiIndexPath(argv0);
-    nam_desktop::HttpServer uiServer;
+    openaxe_desktop::HttpServer uiServer;
     // The UI server's port above is ephemeral (by design - see its header,
     // it must never fight Vite for 5173), so it can't be the Tone3000 OAuth
     // redirect_uri: an OAuth provider needs an exact, pre-registered value,
@@ -361,22 +361,22 @@ int main(int argc, char** argv) {
     // http://localhost:5173 (see apps/web/.env.example), so no bounce is
     // needed. See tone3000/config.ts's DESKTOP_OAUTH_REDIRECT_PORT.
     unsigned short ui_port = 0;
-    nam_desktop::HttpServer oauthRedirectServer;
+    openaxe_desktop::HttpServer oauthRedirectServer;
     if (use_dev_server) {
-      std::cerr << "nam_desktop: loading UI from " << ui_url_env << " (dev server)\n";
+      std::cerr << "openaxe_desktop: loading UI from " << ui_url_env << " (dev server)\n";
       w.navigate(ui_url_env);
     } else if (!ui.empty()) {
       const std::string uiDir = std::filesystem::path(ui).parent_path().string();
       if (uiServer.Start(uiDir, ui_port)) {
-        std::cerr << "nam_desktop: serving UI at http://127.0.0.1:" << ui_port << "\n";
-        if (!oauthRedirectServer.StartOAuthRedirect(nam_desktop::kOAuthRedirectPort, &ui_port)) {
-          std::cerr << "nam_desktop: OAuth redirect listener on port "
-                    << nam_desktop::kOAuthRedirectPort
+        std::cerr << "openaxe_desktop: serving UI at http://127.0.0.1:" << ui_port << "\n";
+        if (!oauthRedirectServer.StartOAuthRedirect(openaxe_desktop::kOAuthRedirectPort, &ui_port)) {
+          std::cerr << "openaxe_desktop: OAuth redirect listener on port "
+                    << openaxe_desktop::kOAuthRedirectPort
                     << " failed to start (already in use?) - Tone3000 login will not complete\n";
         }
         w.navigate("http://127.0.0.1:" + std::to_string(ui_port) + "/index.html");
       } else {
-        std::cerr << "nam_desktop: UI HTTP server failed to start; using placeholder\n";
+        std::cerr << "openaxe_desktop: UI HTTP server failed to start; using placeholder\n";
         w.set_html(kPlaceholderHtml);
       }
     } else {
@@ -384,7 +384,7 @@ int main(int argc, char** argv) {
     }
     w.run();
   } catch (const webview::exception& e) {
-    std::cerr << "nam_desktop: " << e.what() << '\n';
+    std::cerr << "openaxe_desktop: " << e.what() << '\n';
     return 1;
   }
   return 0;

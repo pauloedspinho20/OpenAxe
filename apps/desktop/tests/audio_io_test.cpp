@@ -6,7 +6,7 @@
 #include <thread>
 
 #include "audio.h"
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 // The audio callback test is deterministic - it calls RtProcessCallback with
 // fake buffers, no hardware needed. The open/start/stop test only runs when
@@ -42,7 +42,7 @@ void TestCallbackPassthrough() {
   constexpr int kBlock = 512;
 
   NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
-  nam_desktop::RtCallbackState state;
+  openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
 
@@ -56,7 +56,7 @@ void TestCallbackPassthrough() {
   float* in[2] = {in0, in1};
   float* out[2] = {out0, out1};
 
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   CHECK(state.callbacks.load() == 1);
   CHECK(state.frames_processed.load() == static_cast<unsigned int>(kFrames));
@@ -78,9 +78,9 @@ void TestCallbackAppliesInputGain() {
   constexpr float kGain = 0.5f;
 
   NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
-  nam_desktop::RtCallbackState state;
-  for (auto& ch : state.tap_in) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
-  for (auto& ch : state.tap_out) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  openaxe_desktop::RtCallbackState state;
+  for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   for (auto& ch : state.in_scratch) ch.assign(kBlock, 0.0f);
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
@@ -95,7 +95,7 @@ void TestCallbackAppliesInputGain() {
   float* in[2] = {in0, in1};
   float* out[2] = {out0, out1};
 
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   for (int i = 0; i < kFrames; ++i) {
     CHECK(out0[i] == 0.5f * kGain);
@@ -106,7 +106,7 @@ void TestCallbackAppliesInputGain() {
     CHECK(in1[i] == -0.25f);
   }
 
-  const nam_desktop::TapFrame tap = nam_desktop::ReadTap(state, /*input=*/true, kFrames);
+  const openaxe_desktop::TapFrame tap = openaxe_desktop::ReadTap(state, /*input=*/true, kFrames);
   CHECK(tap.frames == static_cast<unsigned int>(kFrames));
   for (unsigned int i = 0; i < tap.frames; ++i) {
     CHECK(tap.l[i] == 0.5f * kGain);
@@ -125,7 +125,7 @@ void TestCallbackInputGainEdgeCases() {
   constexpr int kBlock = 512;
 
   NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
-  nam_desktop::RtCallbackState state;
+  openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
 
@@ -140,14 +140,14 @@ void TestCallbackInputGainEdgeCases() {
   state.output_channels = 1;
 
   // Unity: scratch is empty, but unity never needs it.
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
   for (int i = 0; i < kFrames; ++i) CHECK(out0[i] == 0.5f);
 
   // Non-unity with a scratch too small for this block: untrimmed, not crashed.
   state.input_gain.store(0.25f, std::memory_order_relaxed);
   for (auto& ch : state.in_scratch) ch.assign(kFrames / 2, 0.0f);
   for (int i = 0; i < kFrames; ++i) out0[i] = 0.0f;
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
   for (int i = 0; i < kFrames; ++i) CHECK(out0[i] == 0.5f);
 
   nam_studio_graph_destroy(graph);
@@ -155,13 +155,13 @@ void TestCallbackInputGainEdgeCases() {
 
 void TestCallbackSilenceWhenNoGraph() {
   constexpr int kFrames = 32;
-  nam_desktop::RtCallbackState state;  // graph_ready defaults to false
+  openaxe_desktop::RtCallbackState state;  // graph_ready defaults to false
 
   float out0[kFrames], out1[kFrames];
   for (int i = 0; i < kFrames; ++i) out0[i] = out1[i] = 1.0f;
   float* out[2] = {out0, out1};
 
-  nam_desktop::RtProcessCallback(out, nullptr, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, nullptr, kFrames, &state);
 
   for (int i = 0; i < kFrames; ++i) {
     CHECK(out0[i] == 0.0f);
@@ -185,9 +185,9 @@ void TestTapConcurrentReadWrite() {
   constexpr int kBlock = 512;
 
   NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
-  nam_desktop::RtCallbackState state;
-  for (auto& ch : state.tap_in) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
-  for (auto& ch : state.tap_out) ch.assign(nam_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  openaxe_desktop::RtCallbackState state;
+  for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
+  for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
 
@@ -207,7 +207,7 @@ void TestTapConcurrentReadWrite() {
         in0[i] = value;
         in1[i] = value * 2.0f;
       }
-      nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+      openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
       ++k;
       callbacks_done.fetch_add(1, std::memory_order_relaxed);
     }
@@ -216,7 +216,7 @@ void TestTapConcurrentReadWrite() {
   std::thread reader([&] {
     while (!stop.load(std::memory_order_relaxed)) {
       for (const bool input : {true, false}) {
-        const nam_desktop::TapFrame tap = nam_desktop::ReadTap(state, input, kFrames * 4);
+        const openaxe_desktop::TapFrame tap = openaxe_desktop::ReadTap(state, input, kFrames * 4);
         for (unsigned int i = 0; i < tap.frames; ++i) {
           if (tap.r[i] != tap.l[i] * 2.0f) reader_failed.store(true, std::memory_order_relaxed);
         }
@@ -252,7 +252,7 @@ void TestCallbackHoldsSilenceOnStreamError() {
   constexpr int kBlock = 512;
 
   NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
-  nam_desktop::RtCallbackState state;
+  openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
   state.stream_error.store(true, std::memory_order_release);
@@ -271,7 +271,7 @@ void TestCallbackHoldsSilenceOnStreamError() {
   float* out[2] = {out0, out1};
 
   const unsigned int callbacks_before = state.callbacks.load();
-  nam_desktop::RtProcessCallback(out, in, kFrames, &state);
+  openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
 
   // Still counted as a callback (diagnostics keep working)...
   CHECK(state.callbacks.load() == callbacks_before + 1);
@@ -289,15 +289,15 @@ void TestCallbackHoldsSilenceOnStreamError() {
 // pending stream error - otherwise the JS layer's poll would immediately
 // treat a perfectly healthy stream as broken.
 void TestTakeStreamErrorDefaultsToNoError() {
-  nam_desktop::AudioIO io;
+  openaxe_desktop::AudioIO io;
   std::string message;
   CHECK(!io.TakeStreamError(&message));
   CHECK(message.empty());
 }
 
 void TestDeviceEnumeration() {
-  nam_desktop::AudioIO io;
-  std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
+  openaxe_desktop::AudioIO io;
+  std::vector<openaxe_desktop::AudioDeviceInfo> devices = io.ListDevices();
   // Hosts without audio hardware (e.g. CI) legitimately return an empty
   // list; only assert the call itself never throws.
   std::printf("  AudioIO::ListDevices: %zu device(s)\n", devices.size());
@@ -322,8 +322,8 @@ void TestDeviceEnumeration() {
 // internal duplex bridging) on this exact single-device setup - it's now the
 // regression test for the swap to JUCE's own from-scratch CoreAudio backend.
 void TestOpenStartStop() {
-  nam_desktop::AudioIO io;
-  const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
+  openaxe_desktop::AudioIO io;
+  const std::vector<openaxe_desktop::AudioDeviceInfo> devices = io.ListDevices();
   if (devices.empty()) {
     std::printf("  Skipping open/start/stop: no audio devices on this host\n");
     return;
@@ -371,8 +371,8 @@ void TestOpenStartStop() {
 // feedback loop the app has no way to fix - Open() must refuse the pairing
 // outright rather than let it happen.
 void TestOpenAcceptsSplitDevices() {
-  nam_desktop::AudioIO io;
-  const std::vector<nam_desktop::AudioDeviceInfo> devices = io.ListDevices();
+  openaxe_desktop::AudioIO io;
+  const std::vector<openaxe_desktop::AudioDeviceInfo> devices = io.ListDevices();
   if (devices.size() < 2) {
     std::printf("  Skipping split-device test: fewer than 2 devices on this host\n");
     return;

@@ -2,6 +2,10 @@
 
 VST3 + standalone plugin built with [iPlug2](https://github.com/iPlug2/iPlug2), linking directly against `packages/core`'s C++ DSP engine (#16). Scaffold stage: loads in a host, links the real core, passes audio through — later issues wire params, state chunks and UI.
 
+`assets/branding/` already carries the OpenAxe mark/lockup (SVG + a 256px PNG)
+so the editor has branding ready for JUCE/iPlug2 resource embedding on day one
+(see `packages/ui/assets/brand/` for the source of truth).
+
 ## Prerequisites
 
 ```bash
@@ -57,7 +61,7 @@ cmake --build packages/vst3/build --target nam_studio_standalone
 ## What the scaffold does
 
 - `CMakeLists.txt` reads the root `VERSION` file (`#54` — one source of truth, like `packages/core` and `apps/desktop`), `add_subdirectory(../../packages/core core)` and links `nam_studio_core` **with `WHOLE_ARCHIVE`** (NAM parsers self-register via static initializers — plain archive link drops them; see `packages/core/CMakeLists.txt`).
-- `config.h` — plugin name (`NAM Studio`), manufacturer, unique IDs (`Nms1`/`NwSt`), I/O (`1-1 2-2`), `PLUG_DOES_STATE_CHUNKS=1`, VST3 subcategory `Fx|Amp`. VST3 target only for now; CLAP/AU later.
+- `config.h` — plugin name (`OpenAxe`), manufacturer, unique IDs (`Nms1`/`NwSt`), I/O (`1-1 2-2`), `PLUG_DOES_STATE_CHUNKS=1`, VST3 subcategory `Fx|Amp`. VST3 target only for now; CLAP/AU later.
 - `src/plugin.{h,cpp}` — minimal `NamStudioPlugin : public iplug::Plugin`: `nam_studio_graph_create`/`destroy`, `nam_studio_reset` on sample-rate/block-size change, `nam_studio_process` passthrough.
 - `src/main_standalone.cpp` — standalone entry reusing the same DSP path.
 
@@ -192,7 +196,7 @@ Slot addressing pins TWO things as permanent API:
 | `param_schema.json` → `"pluginAutomation"`                                                                                                                                           | Single source of truth: counts + master descriptors                                                                   |
 | `scripts/gen-param-schema.mjs --target=automation-map`                                                                                                                               | Renders the header below; validates kinds fit the stride                                                              |
 | `generated/automation_param_map.h` (this package)                                                                                                                                    | Plugin-side constants, id layout helper, master metadata, static_asserts pinning core's copies                        |
-| `packages/core/include/nam_studio/engine.h` → `kAutomation*` / `kMasterAutomation*`                                                                                                  | Core's mirrored constants (asserted equal to the generated ones)                                                      |
+| `packages/core/include/openaxe/engine.h` → `kAutomation*` / `kMasterAutomation*`                                                                                                     | Core's mirrored constants (asserted equal to the generated ones)                                                      |
 | ABI: `nam_studio_bind_automation_slot`, `_unbind_…`, `_automation_slot_block`, `_automation_slot_param_count`, `_automation_slot_param_info`, `_set/get_automation_param_normalized` | Everything a plugin wrapper needs                                                                                     |
 | Rig state `"automationSlots"`                                                                                                                                                        | Bindings ride the document (`{"<slot>": {"blockId": "<doc id>"}}`); restored after blocks, soft-skipped when dangling |
 

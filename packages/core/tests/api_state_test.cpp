@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 #include "test_harness.h"
 
 namespace {
@@ -39,19 +39,19 @@ void BuildRig(NamStudioGraph* g) {
   const int32_t ppd = nam_studio_add_block(g, NAM_STUDIO_BLOCK_PING_PONG_DELAY, 3, 3);
   const int32_t mixer = nam_studio_add_block(g, NAM_STUDIO_BLOCK_MIXER, 0, 4);
 
-  NAM_EXPECT(nam_studio_connect(g, kInRail, 0, gate, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, kInRail, 0, comp, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, gate, 0, amp, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, amp, 0, split, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, split, 0, cab, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, split, 1, reverb, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, split, 2, delay, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, comp, 0, ppd, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, cab, 0, mixer, 0) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, reverb, 0, mixer, 1) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, delay, 0, mixer, 2) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, ppd, 0, mixer, 3) >= 0);
-  NAM_EXPECT(nam_studio_connect(g, mixer, 0, kOutRail, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, gate, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, comp, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, gate, 0, amp, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, amp, 0, split, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, split, 0, cab, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, split, 1, reverb, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, split, 2, delay, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, comp, 0, ppd, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, cab, 0, mixer, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, reverb, 0, mixer, 1) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, delay, 0, mixer, 2) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, ppd, 0, mixer, 3) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(g, mixer, 0, kOutRail, 0) >= 0);
 
   // Distinctive values everywhere, set BY SYMBOL via the info table (the same
   // path the loader must use).
@@ -87,7 +87,7 @@ void BuildRig(NamStudioGraph* g) {
         break;
       }
     }
-    NAM_EXPECT(found);  // the test itself only writes symbols that exist
+    OPENAXE_EXPECT(found);  // the test itself only writes symbols that exist
     if (!found) {
       std::fprintf(stderr, "  (BuildRig: symbol '%s' not found)\n", w.symbol);
     }
@@ -133,14 +133,14 @@ void ExpectParamMatches(NamStudioGraph* a, NamStudioGraph* b, int32_t block,
   const float va = GetParamBySymbol(a, block, symbol);
   const float vb = GetParamBySymbol(b, block, symbol);
   if (std::isnan(va)) {
-    NAM_EXPECT(std::isnan(vb));  // absent in both (e.g. skipped calibration)
+    OPENAXE_EXPECT(std::isnan(vb));  // absent in both (e.g. skipped calibration)
     return;
   }
   if (va != vb) {
     std::fprintf(stderr, "  (param mismatch block %d '%s': %g vs %g)\n", block, symbol,
                  static_cast<double>(va), static_cast<double>(vb));
   }
-  NAM_EXPECT(va == vb);
+  OPENAXE_EXPECT(va == vb);
 }
 
 }  // namespace
@@ -151,27 +151,27 @@ int main() {
 
   // ── Two-call sizing pattern ────────────────────────────────────────────
   const int32_t required = nam_studio_serialize_state(source, nullptr, 0);
-  NAM_EXPECT(required > 16);
+  OPENAXE_EXPECT(required > 16);
   std::vector<char> small(static_cast<size_t>(required) / 2);
-  NAM_EXPECT(nam_studio_serialize_state(source, small.data(),
+  OPENAXE_EXPECT(nam_studio_serialize_state(source, small.data(),
                                         static_cast<int32_t>(small.size())) == -1);
   std::vector<char> buffer(static_cast<size_t>(required));
   const int32_t written =
       nam_studio_serialize_state(source, buffer.data(), static_cast<int32_t>(buffer.size()));
-  NAM_EXPECT(written == required);
-  NAM_EXPECT(buffer.back() == '\0');
+  OPENAXE_EXPECT(written == required);
+  OPENAXE_EXPECT(buffer.back() == '\0');
   const std::string document(buffer.data());
 
   // The document carries the schema stamp and symbol-keyed params.
-  NAM_EXPECT(document.find("\"schemaVersion\": 1") != std::string::npos);
-  NAM_EXPECT(document.find("\"ping-pong-delay\"") != std::string::npos);
-  NAM_EXPECT(document.find("\"time\": 333") != std::string::npos);
-  NAM_EXPECT(document.find("\"reverbAlgorithm\": \"room\"") != std::string::npos);
-  NAM_EXPECT(document.find("\"delayModel\": \"analog\"") != std::string::npos);
+  OPENAXE_EXPECT(document.find("\"schemaVersion\": 1") != std::string::npos);
+  OPENAXE_EXPECT(document.find("\"ping-pong-delay\"") != std::string::npos);
+  OPENAXE_EXPECT(document.find("\"time\": 333") != std::string::npos);
+  OPENAXE_EXPECT(document.find("\"reverbAlgorithm\": \"room\"") != std::string::npos);
+  OPENAXE_EXPECT(document.find("\"delayModel\": \"analog\"") != std::string::npos);
 
   // ── Round-trip into a fresh graph ──────────────────────────────────────
   NamStudioGraph* restored = nam_studio_graph_create();
-  NAM_EXPECT(nam_studio_load_state(restored, document.c_str()) ==
+  OPENAXE_EXPECT(nam_studio_load_state(restored, document.c_str()) ==
              NAM_STUDIO_LOAD_STATE_OK);
 
   // Blocks: same count and same kinds/positions in the same order (ids line
@@ -179,26 +179,26 @@ int main() {
   for (int32_t id = 0; id < 9; ++id) {
     const int32_t count_a = nam_studio_block_param_count(source, id);
     const int32_t count_b = nam_studio_block_param_count(restored, id);
-    NAM_EXPECT(count_a == count_b);
+    OPENAXE_EXPECT(count_a == count_b);
     for (int32_t i = 0; i < count_a; ++i) {
       const char* symbol = nullptr;
       if (!nam_studio_block_param_info(source, id, i, nullptr, &symbol, nullptr, nullptr,
                                        nullptr)) {
-        NAM_EXPECT(false);  // count said this index exists
+        OPENAXE_EXPECT(false);  // count said this index exists
         continue;
       }
       ExpectParamMatches(source, restored, id, symbol);
     }
-    NAM_EXPECT(nam_studio_is_bypassed(source, id) == nam_studio_is_bypassed(restored, id));
-    NAM_EXPECT(nam_studio_get_block_input_trim(source, id) ==
+    OPENAXE_EXPECT(nam_studio_is_bypassed(source, id) == nam_studio_is_bypassed(restored, id));
+    OPENAXE_EXPECT(nam_studio_get_block_input_trim(source, id) ==
                nam_studio_get_block_input_trim(restored, id));
-    NAM_EXPECT(nam_studio_get_block_output_trim(source, id) ==
+    OPENAXE_EXPECT(nam_studio_get_block_output_trim(source, id) ==
                nam_studio_get_block_output_trim(restored, id));
   }
 
   // Master bus restored too.
-  NAM_EXPECT(nam_studio_get_master_level(restored) == 0.75f);
-  NAM_EXPECT(nam_studio_is_master_muted(restored) == 1);
+  OPENAXE_EXPECT(nam_studio_get_master_level(restored) == 0.75f);
+  OPENAXE_EXPECT(nam_studio_is_master_muted(restored) == 1);
 
   // ── Edges: probed structurally, since the ABI has no edge enumeration ──
   // mixer.in1 is already fed by the reverb, so a second cable into it must
@@ -208,16 +208,16 @@ int main() {
   const int32_t delay = 6;
   const int32_t ppd = 7;
   const int32_t mixer = 8;
-  NAM_EXPECT(nam_studio_connect(restored, cab, 0, mixer, 1) == -1);
-  NAM_EXPECT(nam_studio_connect(restored, reverb, 0, mixer, 2) == -1);
-  NAM_EXPECT(nam_studio_connect(restored, delay, 0, mixer, 3) == -1);
-  NAM_EXPECT(nam_studio_connect(restored, ppd, 0, mixer, 0) == -1);
+  OPENAXE_EXPECT(nam_studio_connect(restored, cab, 0, mixer, 1) == -1);
+  OPENAXE_EXPECT(nam_studio_connect(restored, reverb, 0, mixer, 2) == -1);
+  OPENAXE_EXPECT(nam_studio_connect(restored, delay, 0, mixer, 3) == -1);
+  OPENAXE_EXPECT(nam_studio_connect(restored, ppd, 0, mixer, 0) == -1);
   // The OUT rail's single input is taken by the mixer's output.
-  NAM_EXPECT(nam_studio_connect(restored, cab, 0, kOutRail, 0) == -1);
+  OPENAXE_EXPECT(nam_studio_connect(restored, cab, 0, kOutRail, 0) == -1);
   // Every input jack of the restored rig is legitimately taken, so the
   // positive control adds a fresh block first: the gate fans out into it.
   const int32_t extra = nam_studio_add_block(restored, NAM_STUDIO_BLOCK_FLANGER, 2, 5);
-  NAM_EXPECT(nam_studio_connect(restored, 0 /*gate*/, 0, extra, 0) >= 0);
+  OPENAXE_EXPECT(nam_studio_connect(restored, 0 /*gate*/, 0, extra, 0) >= 0);
   // (`restored` is now deliberately dirty; the audio check below reloads a
   // fresh graph from the same document instead of reusing it.)
 
@@ -240,7 +240,7 @@ int main() {
   // parallel with the delay, so instead rebuild the comparison rig from the
   // same document and leave both untouched.
   NamStudioGraph* clean = nam_studio_graph_create();
-  NAM_EXPECT(nam_studio_load_state(clean, document.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
+  OPENAXE_EXPECT(nam_studio_load_state(clean, document.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
 
   // Serialize-after-load must reproduce the original document byte for byte:
   // if state ever diverges, this pinpoints it far better than an audio
@@ -262,7 +262,7 @@ int main() {
         std::fclose(f);
       }
     }
-    NAM_EXPECT(document == std::string(buf2.data()));
+    OPENAXE_EXPECT(document == std::string(buf2.data()));
   }
 
   nam_studio_reset(source, 48000.0, kFrames);
@@ -306,29 +306,29 @@ int main() {
                "max_diff=%.9g first_bad=%d)\n",
                identical ? 1 : 0, any_signal ? 1 : 0, static_cast<double>(peak_a),
                static_cast<double>(peak_b), static_cast<double>(max_diff), first_bad);
-  NAM_EXPECT(identical);
-  NAM_EXPECT(any_signal);  // silence would make "identical" meaningless
+  OPENAXE_EXPECT(identical);
+  OPENAXE_EXPECT(any_signal);  // silence would make "identical" meaningless
 
   // ── Hard failures leave the graph untouched ────────────────────────────
-  NAM_EXPECT(nam_studio_load_state(clean, "{not json") == NAM_STUDIO_LOAD_STATE_PARSE_ERROR);
-  NAM_EXPECT(nam_studio_load_state(clean, "[1,2]") == NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
-  NAM_EXPECT(nam_studio_load_state(clean, "{\"schemaVersion\": \"x\"}") ==
+  OPENAXE_EXPECT(nam_studio_load_state(clean, "{not json") == NAM_STUDIO_LOAD_STATE_PARSE_ERROR);
+  OPENAXE_EXPECT(nam_studio_load_state(clean, "[1,2]") == NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
+  OPENAXE_EXPECT(nam_studio_load_state(clean, "{\"schemaVersion\": \"x\"}") ==
              NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
-  NAM_EXPECT(nam_studio_load_state(clean, "{\"blocks\": []}") ==
+  OPENAXE_EXPECT(nam_studio_load_state(clean, "{\"blocks\": []}") ==
              NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
-  NAM_EXPECT(nam_studio_load_state(
+  OPENAXE_EXPECT(nam_studio_load_state(
                  clean, "{\"schemaVersion\": 99, \"blocks\": [], \"edges\": []}") ==
              NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION);
   // Untouched: the amp still answers with its full param table.
-  NAM_EXPECT(nam_studio_block_param_count(clean, 2) > 0);
+  OPENAXE_EXPECT(nam_studio_block_param_count(clean, 2) > 0);
 
   // schemaVersion 1 explicit == implicit.
-  NAM_EXPECT(nam_studio_load_state(
+  OPENAXE_EXPECT(nam_studio_load_state(
                  clean, R"({"schemaVersion": 1, "blocks": [], "edges": [],
                             "masterLevel": 0.5, "masterMuted": false})") ==
              NAM_STUDIO_LOAD_STATE_OK);
-  NAM_EXPECT(nam_studio_get_master_level(clean) == 0.5f);
-  NAM_EXPECT(nam_studio_block_param_count(clean, 2) == 0);  // old rig cleared
+  OPENAXE_EXPECT(nam_studio_get_master_level(clean) == 0.5f);
+  OPENAXE_EXPECT(nam_studio_block_param_count(clean, 2) == 0);  // old rig cleared
 
   // ── Partial-failure tolerance (#64): one bad entry never aborts ────────
   {
@@ -350,26 +350,26 @@ int main() {
           ],
           "masterLevel": 0.9, "masterMuted": false
         })";
-    NAM_EXPECT(nam_studio_load_state(g, doc) == NAM_STUDIO_LOAD_STATE_OK);
+    OPENAXE_EXPECT(nam_studio_load_state(g, doc) == NAM_STUDIO_LOAD_STATE_OK);
     // chorus (a) + tremolo (c) restored - the teleporter and the duplicate-id
     // flanger are skipped, so tremolo lands on id 1. Unknown symbol on a,
     // non-numeric rate value on c: skipped params, not failures.
-    NAM_EXPECT(nam_studio_block_param_count(g, 0) == 4);   // chorus
-    NAM_EXPECT(GetParamBySymbol(g, 0, "rate") == 1.5f);
-    NAM_EXPECT(GetParamBySymbol(g, 0, "depth") == 0.7f);
-    NAM_EXPECT(nam_studio_block_param_count(g, 1) == 3);   // tremolo
-    NAM_EXPECT(nam_studio_is_bypassed(g, 1) == 1);
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, 0) == 4);   // chorus
+    OPENAXE_EXPECT(GetParamBySymbol(g, 0, "rate") == 1.5f);
+    OPENAXE_EXPECT(GetParamBySymbol(g, 0, "depth") == 0.7f);
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, 1) == 3);   // tremolo
+    OPENAXE_EXPECT(nam_studio_is_bypassed(g, 1) == 1);
     {
       // The untouched rate stands - compared against a fresh tremolo rather
       // than a hardcoded default, so the test survives default retunes.
       NamStudioGraph* reference = nam_studio_graph_create();
       nam_studio_add_block(reference, NAM_STUDIO_BLOCK_TREMOLO, 0, 0);
-      NAM_EXPECT(GetParamBySymbol(g, 1, "rate") == GetParamBySymbol(reference, 0, "rate"));
+      OPENAXE_EXPECT(GetParamBySymbol(g, 1, "rate") == GetParamBySymbol(reference, 0, "rate"));
       nam_studio_graph_destroy(reference);
     }
     // The valid edge survived: chorus -> tremolo means tremolo's input jack
     // is taken.
-    NAM_EXPECT(nam_studio_connect(g, 0, 0, 1, 0) == -1);
+    OPENAXE_EXPECT(nam_studio_connect(g, 0, 0, 1, 0) == -1);
     nam_studio_graph_destroy(g);
   }
 
@@ -401,15 +401,15 @@ int main() {
           ],
           "masterLevel": 0.85, "masterMuted": false
         })";
-    NAM_EXPECT(nam_studio_load_state(legacy, web_preset) == NAM_STUDIO_LOAD_STATE_OK);
+    OPENAXE_EXPECT(nam_studio_load_state(legacy, web_preset) == NAM_STUDIO_LOAD_STATE_OK);
 
     // amp = block 0. The legacy input_level/output_level keys became TRIMS -
     // they must NOT have been written into the amp family's calibration
     // params (those stay untouched at their defaults).
-    NAM_EXPECT(nam_studio_get_block_input_trim(legacy, 0) == 1.5f);
-    NAM_EXPECT(nam_studio_get_block_output_trim(legacy, 0) == 0.8f);
-    NAM_EXPECT(GetParamBySymbol(legacy, 0, "input_level") == 0.0f);
-    NAM_EXPECT(GetParamBySymbol(legacy, 0, "bass") == 1.0f);
+    OPENAXE_EXPECT(nam_studio_get_block_input_trim(legacy, 0) == 1.5f);
+    OPENAXE_EXPECT(nam_studio_get_block_output_trim(legacy, 0) == 0.8f);
+    OPENAXE_EXPECT(GetParamBySymbol(legacy, 0, "input_level") == 0.0f);
+    OPENAXE_EXPECT(GetParamBySymbol(legacy, 0, "bass") == 1.0f);
 
     // reverb = block 1: plate selected via the legacy select value, and the
     // abstractions mapped exactly as SetReverbControl would on a live rig.
@@ -425,21 +425,21 @@ int main() {
         const char* symbol = nullptr;
         if (!nam_studio_block_param_info(reference, rv, i, nullptr, &symbol, nullptr, nullptr,
                                          nullptr)) {
-          NAM_EXPECT(false);
+          OPENAXE_EXPECT(false);
           continue;
         }
-        NAM_EXPECT(GetParamBySymbol(reference, rv, symbol) ==
+        OPENAXE_EXPECT(GetParamBySymbol(reference, rv, symbol) ==
                    GetParamBySymbol(legacy, 1, symbol));
       }
       nam_studio_graph_destroy(reference);
     }
 
     // delay = block 2: 'tape' resolved from the string select.
-    NAM_EXPECT(GetParamBySymbol(legacy, 2, "model") == 2.0f);
-    NAM_EXPECT(GetParamBySymbol(legacy, 2, "time") == 380.0f);
+    OPENAXE_EXPECT(GetParamBySymbol(legacy, 2, "model") == 2.0f);
+    OPENAXE_EXPECT(GetParamBySymbol(legacy, 2, "time") == 380.0f);
 
     // Rails wired through their grid names.
-    NAM_EXPECT(nam_studio_is_master_muted(legacy) == 0);
+    OPENAXE_EXPECT(nam_studio_is_master_muted(legacy) == 0);
     nam_studio_graph_destroy(legacy);
   }
 
@@ -453,8 +453,8 @@ int main() {
     const int32_t needed = nam_studio_serialize_state(bare, nullptr, 0);
     std::vector<char> buf(static_cast<size_t>(needed));
     nam_studio_serialize_state(bare, buf.data(), needed);
-    NAM_EXPECT(std::strstr(buf.data(), "input_level") == nullptr);
-    NAM_EXPECT(std::strstr(buf.data(), "output_level") == nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "input_level") == nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "output_level") == nullptr);
 
     // ...but once the caller explicitly sets one, it must round-trip.
     {
@@ -473,11 +473,11 @@ int main() {
       const int32_t needed2 = nam_studio_serialize_state(bare, nullptr, 0);
       std::vector<char> buf2(static_cast<size_t>(needed2));
       nam_studio_serialize_state(bare, buf2.data(), needed2);
-      NAM_EXPECT(std::strstr(buf2.data(), "\"input_level\": -6.5") != nullptr);
+      OPENAXE_EXPECT(std::strstr(buf2.data(), "\"input_level\": -6.5") != nullptr);
 
       NamStudioGraph* reloaded = nam_studio_graph_create();
-      NAM_EXPECT(nam_studio_load_state(reloaded, buf2.data()) == NAM_STUDIO_LOAD_STATE_OK);
-      NAM_EXPECT(GetParamBySymbol(reloaded, 0, "input_level") == -6.5f);
+      OPENAXE_EXPECT(nam_studio_load_state(reloaded, buf2.data()) == NAM_STUDIO_LOAD_STATE_OK);
+      OPENAXE_EXPECT(GetParamBySymbol(reloaded, 0, "input_level") == -6.5f);
       nam_studio_graph_destroy(reloaded);
     }
     nam_studio_graph_destroy(bare);
@@ -499,11 +499,11 @@ int main() {
                 "to": { "blockId": "z", "port": 0 } }
             ],
             "masterLevel": 1.0, "masterMuted": false})";
-    NAM_EXPECT(nam_studio_load_state(g, doc) == NAM_STUDIO_LOAD_STATE_OK);
-    NAM_EXPECT(GetParamBySymbol(g, 0, "threshold") == -20.0f);
-    NAM_EXPECT(GetParamBySymbol(g, 1, "band0_gain") == 3.5f);
+    OPENAXE_EXPECT(nam_studio_load_state(g, doc) == NAM_STUDIO_LOAD_STATE_OK);
+    OPENAXE_EXPECT(GetParamBySymbol(g, 0, "threshold") == -20.0f);
+    OPENAXE_EXPECT(GetParamBySymbol(g, 1, "band0_gain") == 3.5f);
     // The edge resolved through the id map: z's input jack is taken.
-    NAM_EXPECT(nam_studio_connect(g, 1, 0, 0, 0) == -1);
+    OPENAXE_EXPECT(nam_studio_connect(g, 1, 0, 0, 0) == -1);
     nam_studio_graph_destroy(g);
   }
 
@@ -511,10 +511,10 @@ int main() {
   nam_studio_graph_destroy(restored);
   nam_studio_graph_destroy(clean);
 
-  if (::nam_studio::test::g_failures == 0) {
+  if (::openaxe::test::g_failures == 0) {
     std::printf("api_state_test passed\n");
     return 0;
   }
-  std::printf("api_state_test FAILED (%d)\n", ::nam_studio::test::g_failures);
+  std::printf("api_state_test FAILED (%d)\n", ::openaxe::test::g_failures);
   return 1;
 }

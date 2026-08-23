@@ -1,9 +1,9 @@
-#include "nam_studio/dsp/tremolo.h"
+#include "openaxe/dsp/tremolo.h"
 
 #include "Effects/Tremolo.h"
 #include "internal/dspark_wrapper.h"
 
-namespace nam_studio::dsp {
+namespace openaxe::dsp {
 
 namespace {
 
@@ -35,9 +35,9 @@ using Shape = dspark::Tremolo<float>::Shape;
 // defaults, optional one-time configuration, and how a param index maps onto
 // the vendored processor's setters. See internal/dspark_wrapper.h.
 struct TremoloTraits {
-  static constexpr int kParamCount = nam_studio::dsp::kParamCount;
-  static constexpr const DsparkParamInfo* kInfo = nam_studio::dsp::kParamInfo;
-  static constexpr const float* kDefaults = nam_studio::dsp::kDefaults;
+  static constexpr int kParamCount = openaxe::dsp::kParamCount;
+  static constexpr const DsparkParamInfo* kInfo = openaxe::dsp::kParamInfo;
+  static constexpr const float* kDefaults = openaxe::dsp::kDefaults;
 
   // Classic stereo tremolo is often a slow auto-pan; offset the right
   // channel's LFO by 180° instead of syncing both channels to the same LFO.
@@ -99,4 +99,4 @@ float Tremolo::GetParam(int index) const { return impl_->dsp.GetParam(index); }
 // params are plain coefficient updates.
 void Tremolo::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
-}  // namespace nam_studio::dsp
+}  // namespace openaxe::dsp

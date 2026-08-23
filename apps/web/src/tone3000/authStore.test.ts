@@ -159,8 +159,8 @@ describe('tone3000 authStore', () => {
 
 // issue #146: desktop reconnects silently from a refresh token a previous
 // launch persisted to the OS keychain (sessionStorage can't survive a
-// restart there - see client.ts). `window['namStudio.*']` is exactly what
-// native/namStudio.ts's getNamStudio() probes for, so stubbing those
+// restart there - see client.ts). `window['openAxe.*']` is exactly what
+// native/openaxe.ts's getOpenAxe() probes for, so stubbing those
 // specific dotted globals (jsdom's real `window` otherwise, unlike the
 // plain-object stub client.test.ts uses) is enough to simulate the bridge.
 describe('tone3000 authStore - native hydration', () => {
@@ -183,12 +183,12 @@ describe('tone3000 authStore - native hydration', () => {
   })
 
   it('reconnects and refreshes the user profile from a stored refresh token', async () => {
-    vi.stubGlobal('namStudio.version', vi.fn())
+    vi.stubGlobal('openAxe.version', vi.fn())
     vi.stubGlobal(
-      'namStudio.secureLoad',
+      'openAxe.secureLoad',
       vi.fn().mockResolvedValue({ ok: true, value: 'stored-refresh' }),
     )
-    vi.stubGlobal('namStudio.secureStore', vi.fn().mockResolvedValue({ ok: true }))
+    vi.stubGlobal('openAxe.secureStore', vi.fn().mockResolvedValue({ ok: true }))
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -207,12 +207,12 @@ describe('tone3000 authStore - native hydration', () => {
 
   it('handleTone3000CallbackOnLoad falls back to it when the URL carries no OAuth callback', async () => {
     setUrl('/')
-    vi.stubGlobal('namStudio.version', vi.fn())
+    vi.stubGlobal('openAxe.version', vi.fn())
     vi.stubGlobal(
-      'namStudio.secureLoad',
+      'openAxe.secureLoad',
       vi.fn().mockResolvedValue({ ok: true, value: 'stored-refresh' }),
     )
-    vi.stubGlobal('namStudio.secureStore', vi.fn().mockResolvedValue({ ok: true }))
+    vi.stubGlobal('openAxe.secureStore', vi.fn().mockResolvedValue({ ok: true }))
     vi.stubGlobal(
       'fetch',
       vi
@@ -234,10 +234,10 @@ describe('tone3000 authStore - native hydration', () => {
   it('handleTone3000CallbackOnLoad skips hydration when a real callback already connected', async () => {
     storePkce('verifier-a', 'state-1')
     setUrl('/?code=the-code&state=state-1')
-    vi.stubGlobal('namStudio.version', vi.fn())
+    vi.stubGlobal('openAxe.version', vi.fn())
     const secureLoad = vi.fn().mockResolvedValue({ ok: true, value: 'stored-refresh' })
-    vi.stubGlobal('namStudio.secureLoad', secureLoad)
-    vi.stubGlobal('namStudio.secureStore', vi.fn().mockResolvedValue({ ok: true }))
+    vi.stubGlobal('openAxe.secureLoad', secureLoad)
+    vi.stubGlobal('openAxe.secureStore', vi.fn().mockResolvedValue({ ok: true }))
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({

@@ -3,12 +3,12 @@
 // exponential one-pole in the schema) eases toward its target per-sample
 // instead of stepping once per buffer (the zipper-noise failure mode), and
 // that a param explicitly marked "none" (a reverb's dry/wet level) snaps to
-// its target on the very first sample. Exercises nam_studio::engine::
+// its target on the very first sample. Exercises openaxe::engine::
 // AudioEngine directly. Needs NAM_CORE_DIR/DRAGONFLY_DIR initialized, same
 // as engine_test.cpp.
-#include "nam_studio/engine.h"
+#include "openaxe/engine.h"
 
-#include "nam_studio/dsp/smoothing.h"
+#include "openaxe/dsp/smoothing.h"
 
 #include <cmath>
 #include <cstddef>
@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-using nam_studio::graph::BlockKind;
+using openaxe::graph::BlockKind;
 
 namespace {
 
@@ -37,7 +37,7 @@ void Check(bool ok, const char* file, int line, const std::string& msg) {
 #define EXPECT(cond) Check((cond), __FILE__, __LINE__, #cond)
 
 // Runs one mono buffer (duplicated to both channels) through the engine.
-std::vector<float> RunMono(nam_studio::engine::AudioEngine& engine, float value) {
+std::vector<float> RunMono(openaxe::engine::AudioEngine& engine, float value) {
   std::vector<float> input(kFrames, value);
   std::vector<float> output(kFrames, 0.0f);
   const float* in_ptrs[1] = {input.data()};
@@ -50,10 +50,10 @@ std::vector<float> RunMono(nam_studio::engine::AudioEngine& engine, float value)
 // mixer input level from 0 to 1 and inspect the single block where the change
 // takes effect.
 void ExponentialParamRampsSmoothly() {
-  nam_studio::engine::AudioEngine engine;
+  openaxe::engine::AudioEngine engine;
   const auto mixer = engine.AddBlock(BlockKind::kMixer, 0, 0);
-  EXPECT(engine.Connect(nam_studio::engine::kInRailId, 0, mixer, 0).ok);
-  EXPECT(engine.Connect(mixer, 0, nam_studio::engine::kOutRailId, 0).ok);
+  EXPECT(engine.Connect(openaxe::engine::kInRailId, 0, mixer, 0).ok);
+  EXPECT(engine.Connect(mixer, 0, openaxe::engine::kOutRailId, 0).ok);
   engine.Reset(kSampleRate, kFrames);
 
   // Start fully open (1.0) and settle so the smoothed level is ~1.0. We ramp
@@ -100,19 +100,19 @@ void ExponentialParamRampsSmoothly() {
 // effective time constant shrink ~N-fold and gives later-column branches
 // different gains, which is precisely the dry/wet-split failure mode.
 void SplitterFanOutRampsIdentically() {
-  nam_studio::engine::AudioEngine engine;
+  openaxe::engine::AudioEngine engine;
   const auto splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
   // Both branches fed by output port 0; cabs carry no IR, so they're pure
   // passthroughs standing in for the two paths of a dry/wet split.
   const auto cab_a = engine.AddBlock(BlockKind::kCab, 0, 1);
   const auto cab_b = engine.AddBlock(BlockKind::kCab, 0, 2);  // later column - the divergence case
   const auto mixer = engine.AddBlock(BlockKind::kMixer, 0, 3);
-  EXPECT(engine.Connect(nam_studio::engine::kInRailId, 0, splitter, 0).ok);
+  EXPECT(engine.Connect(openaxe::engine::kInRailId, 0, splitter, 0).ok);
   EXPECT(engine.Connect(splitter, 0, cab_a, 0).ok);
   EXPECT(engine.Connect(splitter, 0, cab_b, 0).ok);  // SAME port as cab_a
   EXPECT(engine.Connect(cab_a, 0, mixer, 0).ok);
   EXPECT(engine.Connect(cab_b, 0, mixer, 1).ok);
-  EXPECT(engine.Connect(mixer, 0, nam_studio::engine::kOutRailId, 0).ok);
+  EXPECT(engine.Connect(mixer, 0, openaxe::engine::kOutRailId, 0).ok);
   engine.Reset(kSampleRate, kFrames);
 
   for (int i = 0; i < 400; ++i) RunMono(engine, 0.5f);
@@ -152,9 +152,9 @@ void SplitterFanOutRampsIdentically() {
 // kLinear path no schema row uses yet (it must stay correct so the schema can
 // adopt it) and the exact-settle behaviour the engine's fast paths rely on.
 void RampStepUnitSemantics() {
-  using nam_studio::dsp::ParamSmoothing;
-  using nam_studio::dsp::RampStep;
-  using nam_studio::dsp::SmoothingMode;
+  using openaxe::dsp::ParamSmoothing;
+  using openaxe::dsp::RampStep;
+  using openaxe::dsp::SmoothingMode;
   const double dt = 1.0 / kSampleRate;
 
   // kNone snaps to the target immediately.

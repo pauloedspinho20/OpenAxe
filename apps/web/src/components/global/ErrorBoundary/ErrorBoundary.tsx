@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { HardwareButton } from '@nam/ui'
+import { HardwareButton } from '@openaxe/ui'
 import styles from './ErrorBoundary.module.css'
 
 interface ErrorBoundaryProps {

@@ -4,7 +4,7 @@
 #include <string>
 #include <thread>
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 // Fixed port registered with Tone3000 as the desktop app's OAuth
 // redirect_uri (http://127.0.0.1:54010/callback - see
@@ -55,4 +55,4 @@ class HttpServer {
   const unsigned short* oauth_target_port_ = nullptr;
 };
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

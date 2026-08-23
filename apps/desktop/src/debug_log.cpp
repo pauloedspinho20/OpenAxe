@@ -15,7 +15,7 @@
 #include <unistd.h>
 #endif
 
-namespace nam_desktop {
+namespace openaxe_desktop {
 
 namespace {
 
@@ -24,9 +24,9 @@ FILE* g_log_file = nullptr;
 std::atomic<bool> g_crash_installed{false};
 
 #ifdef _WIN32
-constexpr const char* kDefaultLog = "nam_desktop.log";
+constexpr const char* kDefaultLog = "openaxe_desktop.log";
 #else
-constexpr const char* kDefaultLog = "nam_desktop.log";
+constexpr const char* kDefaultLog = "openaxe_desktop.log";
 #endif
 
 void WriteLine(FILE* f, const char* line) {
@@ -70,7 +70,7 @@ void CrashHandler(int sig) {
 }  // namespace
 
 bool DebugEnabled() {
-  const char* v = std::getenv("NAM_DESKTOP_DEBUG");
+  const char* v = std::getenv("OPENAXE_DESKTOP_DEBUG");
   return v && *v && std::strcmp(v, "0") != 0;
 }
 
@@ -79,7 +79,7 @@ void InstallDebugLogging(const std::string& exe_dir) {
   // Crash backtraces aren't available via signal() on Windows; the log file is
   // still created. SEH/unhandled-exception capture is out of scope here.
 #endif
-  const char* override = std::getenv("NAM_DESKTOP_LOG");
+  const char* override = std::getenv("OPENAXE_DESKTOP_LOG");
   std::string path = override && *override ? override : exe_dir + "/" + kDefaultLog;
 
   FILE* f = std::fopen(path.c_str(), "a");
@@ -91,7 +91,7 @@ void InstallDebugLogging(const std::string& exe_dir) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
     g_log_file = f;
   }
-  std::fprintf(stderr, "nam_desktop: logging to %s\n", path.c_str());
+  std::fprintf(stderr, "openaxe_desktop: logging to %s\n", path.c_str());
 
   if (!g_crash_installed.exchange(true)) {
 #ifndef _WIN32
@@ -108,4 +108,4 @@ void WriteLog(const std::string& line) {
   WriteLine(g_log_file, line.c_str());
 }
 
-}  // namespace nam_desktop
+}  // namespace openaxe_desktop

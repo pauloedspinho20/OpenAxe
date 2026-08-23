@@ -5,7 +5,7 @@
 
 #include "audio.h"
 #include "latency.h"
-#include "nam_studio/api.h"
+#include "openaxe/api.h"
 
 // Issue #15 M5: latency validation against the <5ms target.
 //
@@ -33,8 +33,8 @@ void TestDspPassthroughLatency() {
   constexpr int kBlock = 256;
   constexpr int kImpulse = 8;
 
-  const int added = nam_desktop::MeasureDspLatencyFrames(kRate, kBlock, kImpulse);
-  const double ms = nam_desktop::LatencyMs(added, kRate);
+  const int added = openaxe_desktop::MeasureDspLatencyFrames(kRate, kBlock, kImpulse);
+  const double ms = openaxe_desktop::LatencyMs(added, kRate);
 
   // Passthrough is sample-accurate - the shell's processing must add no
   // latency, and certainly well under the 5ms budget.
@@ -87,17 +87,17 @@ void TestDelayLatency() {
     }
   }
   const int overhead = peak - expected;
-  const double overhead_ms = nam_desktop::LatencyMs(overhead, kRate);
+  const double overhead_ms = openaxe_desktop::LatencyMs(overhead, kRate);
   // Routing + block processing should add far less than the 5ms budget.
   CHECK(std::abs(overhead) < 128);
   CHECK(overhead_ms < 5.0);
   std::printf("  delay 100ms: measured %d frames (%.2f ms), overhead %d frames (%.3f ms)\n",
-              peak, nam_desktop::LatencyMs(peak, kRate), overhead, overhead_ms);
+              peak, openaxe_desktop::LatencyMs(peak, kRate), overhead, overhead_ms);
 }
 
 // Report the real device round-trip latency when a duplex device is available.
 void TestDeviceLatency() {
-  nam_desktop::AudioIO io;
+  openaxe_desktop::AudioIO io;
   if (io.ListDevices().empty()) {
     std::printf("  device latency: skipped (no audio devices on this host)\n");
     return;
@@ -113,7 +113,7 @@ void TestDeviceLatency() {
   }
 
   const long frames = io.StreamLatencyFrames();
-  const double one_way_ms = nam_desktop::LatencyMs(static_cast<int>(std::max(0L, frames)), 48000.0);
+  const double one_way_ms = openaxe_desktop::LatencyMs(static_cast<int>(std::max(0L, frames)), 48000.0);
   const double round_trip_ms = 2.0 * one_way_ms;
   const double buffer_ms = 128.0 / 48000.0 * 1000.0;  // one-way buffer-derived
   std::printf(

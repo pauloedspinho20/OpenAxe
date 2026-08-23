@@ -4,7 +4,7 @@
 
 #include "config.h"
 
-NamStudioPlugin::NamStudioPlugin(const iplug::InstanceInfo& info)
+OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
     : Plugin(info, MakeConfig(0, kNumPresets)) {
   graph_ = nam_studio_graph_create();
   // No params yet — issue #127 introduces the 302-entry slot map.
@@ -17,22 +17,22 @@ NamStudioPlugin::NamStudioPlugin(const iplug::InstanceInfo& info)
     pGraphics->AttachCornerResizer(iplug::igraphics::EUIResizerMode::Scale, false);
     pGraphics->AttachPanelBackground(iplug::COLOR_GRAY);
     const iplug::igraphics::IRECT b = pGraphics->GetBounds();
-    pGraphics->AttachControl(new iplug::igraphics::ITextControl(b.GetMidVPadded(40), "NAM Studio (scaffold)", iplug::igraphics::IText(24)));
+    pGraphics->AttachControl(new iplug::igraphics::ITextControl(b.GetMidVPadded(40), "OpenAxe (scaffold)", iplug::igraphics::IText(24)));
   };
 #endif
 }
 
-NamStudioPlugin::~NamStudioPlugin() { nam_studio_graph_destroy(graph_); }
+OpenAxePlugin::~OpenAxePlugin() { nam_studio_graph_destroy(graph_); }
 
 #if IPLUG_DSP
-void NamStudioPlugin::OnReset() {
+void OpenAxePlugin::OnReset() {
   sample_rate_ = GetSampleRate();
   max_block_size_ = GetBlockSize();
   // iPlug2 guarantees OnReset before first ProcessBlock and on SR/BS changes.
   nam_studio_reset(graph_, sample_rate_, max_block_size_);
 }
 
-void NamStudioPlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) {
+void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) {
   // Pass-through until later issues wire the graph + params.
   // Keep engine's reset contract: if host hands a larger block than last reset, re-reset.
   if (nFrames > max_block_size_) {

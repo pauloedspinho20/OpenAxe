@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
 # issue #54: root VERSION is the one source of truth
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" NAM_STUDIO_VERSION)
-string(STRIP "${NAM_STUDIO_VERSION}" NAM_STUDIO_VERSION)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" OPENAXE_VERSION)
+string(STRIP "${OPENAXE_VERSION}" OPENAXE_VERSION)
 
-project(nam_studio_vst3 VERSION ${NAM_STUDIO_VERSION} LANGUAGES CXX C)
+project(openaxe_vst3 VERSION ${OPENAXE_VERSION} LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,11 +70,11 @@ endif()
 
 # ── Core linkage smoke test (always builds) ───────────────────────────────
 # This is what makes iteration bearable without a host and what CI can build
-# even offline: a tiny executable that links nam_studio_core WHOLE_ARCHIVE and
+# even offline: a tiny executable that links openaxe_core WHOLE_ARCHIVE and
 # exercises the scaffold's contract (graph create/reset/process passthrough).
-add_executable(nam_studio_vst3_smoke tests/smoke.cpp)
-target_link_libraries(nam_studio_vst3_smoke PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
-target_include_directories(nam_studio_vst3_smoke PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(openaxe_vst3_smoke tests/smoke.cpp)
+target_link_libraries(openaxe_vst3_smoke PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+target_include_directories(openaxe_vst3_smoke PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ── VST3 + standalone targets (require iPlug2 + SDKs) ─────────────────────
 # SDK check — iPlug2's VST3 SDK is fetched via Dependencies/download scripts, not vendored.
@@ -87,21 +87,21 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   # VST3 target only for now; CLAP/AU later (issue #125 scope).
   set(PLUGIN_SOURCES src/plugin.cpp)
 
-  add_library(nam_studio_vst3 MODULE ${PLUGIN_SOURCES})
-  target_include_directories(nam_studio_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
-  target_link_libraries(nam_studio_vst3 PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
+  add_library(openaxe_vst3 MODULE ${PLUGIN_SOURCES})
+  target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
+  target_link_libraries(openaxe_vst3 PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
   if(TARGET iPlug2)
-    target_link_libraries(nam_studio_vst3 PRIVATE iPlug2)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2)
   endif()
-  target_compile_definitions(nam_studio_vst3 PRIVATE VST3_API=1)
+  target_compile_definitions(openaxe_vst3 PRIVATE VST3_API=1)
 
-  add_executable(nam_studio_standalone src/plugin.cpp src/main_standalone.cpp)
-  target_include_directories(nam_studio_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
-  target_link_libraries(nam_studio_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_studio_core>)
+  add_executable(openaxe_standalone src/plugin.cpp src/main_standalone.cpp)
+  target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
+  target_link_libraries(openaxe_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
   if(TARGET iPlug2)
-    target_link_libraries(nam_studio_standalone PRIVATE iPlug2)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2)
   endif()
-  target_compile_definitions(nam_studio_standalone PRIVATE STANDALONE_APP=1)
+  target_compile_definitions(openaxe_standalone PRIVATE STANDALONE_APP=1)
 elseif(IPLUG2_AVAILABLE)
   message(STATUS "packages/vst3: VST3 SDK not found — VST3/standalone targets skipped (smoke test still builds). Run iPlug2 Dependencies/download scripts or: ${iplug2_SOURCE_DIR}/Dependencies/download-iplug-sdks.sh")
 else()
