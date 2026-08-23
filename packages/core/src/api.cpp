@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "nam_studio/dsp/note_utils.h"
+#include "nam_studio/dsp/pitch_detect.h"
 #include "nam_studio/engine.h"
 #include "serialization/rig_state.h"
 
@@ -440,6 +442,27 @@ NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char
     case nam_studio::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
   }
   return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
+}
+
+// ── Tuner — pitch detection + note mapping (issue #123) ───────────────
+// Pure functions — no graph, no state, safe from any thread. The web tuner
+// forwards through these via WASM; native code calls them directly.
+
+float nam_studio_detect_pitch(const float* samples, int32_t count, double sample_rate) {
+  const auto result = nam_studio::dsp::DetectPitch(samples, count, sample_rate);
+  return result ? result->frequency : 0.0f;
+}
+
+int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
+                                     const char** out_name, int32_t* out_octave,
+                                     int32_t* out_cents) {
+  if (frequency <= 0.0f || !out_name || !out_octave || !out_cents) return 0;
+  if (reference_a4 <= 0.0) reference_a4 = 440.0;
+  const auto note = nam_studio::dsp::FrequencyToNote(frequency, reference_a4);
+  *out_name = note.name;
+  *out_octave = note.octave;
+  *out_cents = note.cents;
+  return 1;
 }
 
 // ── Missing-asset queries (issue #120) ──────────────────────────────────

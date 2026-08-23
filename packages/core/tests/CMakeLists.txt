@@ -24,6 +24,12 @@ add_executable(api_test api_test.cpp)
 target_link_libraries(api_test PRIVATE nam_studio_core)
 add_test(NAME api_test COMMAND api_test)
 
+# Tuner pitch detection + note mapping (issue #123): pure DSP, no vendored
+# dependency — builds unconditionally like wav_test/tone_stack_test.
+add_executable(pitch_detect_test pitch_detect_test.cpp)
+target_link_libraries(pitch_detect_test PRIVATE nam_studio_core)
+add_test(NAME pitch_detect_test COMMAND pitch_detect_test)
+
 # The JSON module is dependency-free, so it builds unconditionally. Its header
 # lives under src/ (it's private to the library), hence the extra include path.
 add_executable(json_test json_test.cpp)
