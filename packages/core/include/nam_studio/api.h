@@ -262,6 +262,61 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id);
 // Fraction of real-time budget the last nam_studio_process call used.
 float nam_studio_get_cpu_load(NamStudioGraph* graph);
 
+// ── Automation slot map (issue #121) ─────────────────────────────────────
+// VST3/AU/CLAP hosts need a fixed, session-stable parameter list; rigs are
+// dynamic grids addressed by (block_id, index). A fixed pool of
+// NAM_STUDIO_AUTOMATION_SLOT_COUNT slots mediates: slot 0 is permanently the
+// master bus (level/mute), slots 1..15 bind to live blocks. Host parameter id
+// <-> slot addressing is laid out in
+// packages/vst3/generated/automation_param_map.h (generated from
+// param_schema.json's "pluginAutomation" section); bindings ride the rig
+// state document ("automationSlots") and survive save/load.
+//
+// Values cross every function here normalized 0..1 and map linearly onto the
+// resolved param's [min, max] - native units never leave core. Bind/unbind
+// are control-thread calls; param get/set are lock-free like their
+// (block_id, index) counterparts.
+
+#define NAM_STUDIO_AUTOMATION_SLOT_COUNT 16
+#define NAM_STUDIO_AUTOMATION_PARAMS_PER_SLOT 20
+
+// Binds `slot` to `block_id` and returns 1. Slot values already written
+// through that slot re-apply onto the new target through its own ranges;
+// untouched entries leave the block alone. Returns 0 for slot 0 (permanently
+// the master bus), out-of-range slots, and unknown blocks. Not real-time safe.
+int32_t nam_studio_bind_automation_slot(NamStudioGraph* graph, int32_t slot,
+                                        int32_t block_id);
+// Clears a binding (remembered values survive a later rebind). Returns 1 on
+// success, 0 for slot 0 / out-of-range / already-unbound. Not real-time safe.
+int32_t nam_studio_unbind_automation_slot(NamStudioGraph* graph, int32_t slot);
+
+// The block bound to `slot`: its id, or -1 if unbound, -2 if out of range,
+// -3 for slot 0 (exists, permanently something else).
+int32_t nam_studio_automation_slot_block(NamStudioGraph* graph, int32_t slot);
+
+// Number of live entries `slot` exposes: 2 for the master slot, the frozen
+// stride (NAM_STUDIO_AUTOMATION_PARAMS_PER_SLOT) for block slots, 0 otherwise.
+int32_t nam_studio_automation_slot_param_count(NamStudioGraph* graph, int32_t slot);
+
+// Dynamic descriptor of one entry: the bound block's param table row (name/
+// symbol/min/max/unit), or the master slot's fixed descriptors. Returns 0 and
+// leaves outputs untouched when the entry resolves to nothing - unbound slot,
+// entry beyond the block's own table, bad indices. Optional out-params (pass
+// NULL to skip), mirroring nam_studio_block_param_info.
+int32_t nam_studio_automation_slot_param_info(NamStudioGraph* graph, int32_t slot,
+                                              int32_t entry, const char** out_name,
+                                              const char** out_symbol, float* out_min,
+                                              float* out_max, const char** out_unit);
+
+// Write one entry, normalized 0..1 (clamped). Applies to the bound target
+// where one resolves; always updates what the slot remembers either way.
+void nam_studio_set_automation_param_normalized(NamStudioGraph* graph, int32_t slot,
+                                                int32_t entry, float normalized);
+// Read one entry as 0..1: live from the bound target where one resolves, else
+// the last value written through the slot. 0.0 for invalid indices.
+float nam_studio_get_automation_param_normalized(NamStudioGraph* graph, int32_t slot,
+                                                 int32_t entry);
+
 // ── Rig state (de)serialization (issue #119) ─────────────────────────────
 // The one preset/scene model for host chunks, preset files, and (eventually)
 // IndexedDB - see packages/core/README.md's "Rig state wire format" for the

@@ -80,7 +80,9 @@ directly if you touch anything they might affect, don't just trust that CI
 will catch it (CI is currently off, see above):
 
 - `node scripts/gen-param-schema.mjs --check` — web `paramSchema.ts` /
-  `packages/core/param_schema.json` symbol/range agreement (issue #51)
+  `packages/core/param_schema.json` symbol/range agreement (issue #51), plus
+  the plugin automation-slot layout `packages/vst3/generated/automation_param_map.h`
+  (`--target=automation-map`; issue #121)
 - `node scripts/check-grid-dims.mjs` — grid row/col constants, TS vs. C++ (issue #61)
 - `node scripts/check-wasm-exports.mjs` — every `_nam_studio_*` symbol the web
   app calls is actually in `packages/core/CMakeLists.txt`'s

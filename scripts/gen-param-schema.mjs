@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // Generates C++ param-table fragments and a JS symbol->index map module from
 // packages/core/param_schema.json (issue #51's single source of truth for
-// effect-param names/symbols/ranges). Run with --check to verify the
-// checked-in generated files are up to date instead of overwriting them (used
-// in CI to fail the build on drift - see .github/workflows/ci.yml).
+// effect-param names/symbols/ranges), plus the plugin automation-slot layout
+// (issue #121 - see packages/vst3/README.md's design note). Run with --check
+// to verify the checked-in generated files are up to date instead of
+// overwriting them (used in CI to fail the build on drift - see
+// .github/workflows/ci.yml).
 //
 // Usage:
-//   node scripts/gen-param-schema.mjs          # regenerate in place
-//   node scripts/gen-param-schema.mjs --check  # exit 1 if stale, no writes
+//   node scripts/gen-param-schema.mjs                    # regenerate everything in place
+//   node scripts/gen-param-schema.mjs --check            # exit 1 if anything is stale, no writes
+//   node scripts/gen-param-schema.mjs --target=base      # only the original three outputs
+//   node scripts/gen-param-schema.mjs --target=automation-map --check
+//   ...--target accepts a comma list; omitting it selects every target.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -19,6 +24,23 @@ const SCHEMA_PATH = join(ROOT, 'packages/core/param_schema.json')
 const CPP_OUT_DIR = join(ROOT, 'packages/core/src/dsp/generated')
 const JS_OUT_PATH = join(ROOT, 'apps/web/public/wasm-core/generatedParams.js')
 const TS_RANGES_OUT_PATH = join(ROOT, 'apps/web/src/effects/generatedParamRanges.ts')
+const AUTOMATION_MAP_OUT_PATH = join(ROOT, 'packages/vst3/generated/automation_param_map.h')
+
+// Target selection: `--target=a,b` narrows the run to those outputs; no flag
+// means all of them (what CI's plain `--check` runs, so a new generated file
+// is drift-covered without touching ci.yml).
+const KNOWN_TARGETS = ['base', 'automation-map']
+const targetArg = process.argv.find((a) => a.startsWith('--target='))
+let selectedTargets = [...KNOWN_TARGETS]
+if (targetArg) {
+  selectedTargets = targetArg.slice('--target='.length).split(',').map((t) => t.trim()).filter(Boolean)
+  for (const t of selectedTargets) {
+    if (!KNOWN_TARGETS.includes(t)) {
+      console.error(`Unknown --target '${t}' (known: ${KNOWN_TARGETS.join(', ')})`)
+      process.exit(1)
+    }
+  }
+}
 
 const CHECK_ONLY = process.argv.includes('--check')
 
@@ -165,27 +187,182 @@ function renderTsRangesModule(ranges) {
   return lines.join('\n') + '\n'
 }
 
+// ── Plugin automation-slot layout (issue #121) ────────────────────────────
+//
+// The host-facing parameter table is fixed at plugin construction and its ids
+// persist across sessions, so every number that shapes it comes from ONE
+// place: param_schema.json's "pluginAutomation" section. This renders it into
+// packages/vst3/generated/automation_param_map.h for the plugin to include,
+// with static_asserts pinning core's own copies of the constants (engine.h)
+// to the same values - drift in either direction fails a build or CI.
+
+function validateAutomationSection(schema) {
+  const auto = schema.pluginAutomation
+  if (!auto) throw new Error('param_schema.json is missing the "pluginAutomation" section')
+  const { slotCount, paramsPerSlot, masterSlot } = auto
+  if (!Number.isInteger(slotCount) || slotCount < 2) {
+    throw new Error(`pluginAutomation.slotCount must be an integer >= 2 (got ${slotCount})`)
+  }
+  if (!Number.isInteger(paramsPerSlot) || paramsPerSlot < 1) {
+    throw new Error(`pluginAutomation.paramsPerSlot must be a positive integer (got ${paramsPerSlot})`)
+  }
+  if (!masterSlot || !Array.isArray(masterSlot.params) || masterSlot.params.length < 1) {
+    throw new Error('pluginAutomation.masterSlot.params must be a non-empty array')
+  }
+  if (masterSlot.params.length > paramsPerSlot) {
+    throw new Error('masterSlot has more params than paramsPerSlot allows')
+  }
+
+  // The whole point of the frozen stride: every kind/variant's param table
+  // must fit inside one slot, today and until someone consciously bumps
+  // paramsPerSlot (which remaps every host parameter id - see the design
+  // note). Fail loudly here rather than silently truncating a kind's
+  // automatable surface.
+  const offenders = []
+  for (const [kind, def] of Object.entries(schema.effects)) {
+    const sets = def.variants ? Object.entries(def.variants) : [[null, def]]
+    for (const [variant, set] of sets) {
+      if (set.params.length > paramsPerSlot) {
+        offenders.push(`${kind}${variant ? `/${variant}` : ''}: ${set.params.length}`)
+      }
+    }
+  }
+  if (offenders.length > 0) {
+    throw new Error(
+      `paramsPerSlot=${paramsPerSlot} is too small for: ${offenders.join(', ')}. ` +
+        'Bump pluginAutomation.paramsPerSlot (a breaking change - see packages/vst3/README.md) ' +
+        'or trim the offending param tables.',
+    )
+  }
+  return auto
+}
+
+function cppStr(s) {
+  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function renderAutomationMap(auto) {
+  const { slotCount, paramsPerSlot, masterSlot } = auto
+  const master = masterSlot.params
+  const blockSlots = slotCount - 1
+  const total = master.length + blockSlots * paramsPerSlot
+
+  // Normalized default per master param: where its native default sits in
+  // [min, max]. Hosts read this at construction, before any rig exists.
+  const defaults = master.map((p) => {
+    const norm = (p.default - p.min) / (p.max - p.min)
+    const clamped = Math.min(1, Math.max(0, norm))
+    return cppFloat(clamped)
+  })
+
+  const lines = []
+  lines.push('// GENERATED FILE - do not edit by hand.')
+  lines.push('// Produced by scripts/gen-param-schema.mjs --target=automation-map from')
+  lines.push("// packages/core/param_schema.json's \"pluginAutomation\" section.")
+  lines.push('// The stable automation-parameter map plugin hosts see (issue #121; design')
+  lines.push('// note and alternatives considered in ../README.md). The numbers below are')
+  lines.push('// frozen API surface: changing any of them remaps every host parameter id.')
+  lines.push('#pragma once')
+  lines.push('')
+  lines.push('#include <cstddef>')
+  lines.push('')
+  lines.push('#include "nam_studio/engine.h"  // kAutomation* constants asserted below')
+  lines.push('')
+  lines.push('namespace nam_studio::automation {')
+  lines.push('')
+  lines.push(`inline constexpr int kSlotCount = ${slotCount};`)
+  lines.push(`inline constexpr int kParamsPerSlot = ${paramsPerSlot};`)
+  lines.push('inline constexpr int kMasterSlotIndex = 0;  // permanently the master bus')
+  lines.push('inline constexpr int kFirstBlockSlot = 1;')
+  lines.push(`inline constexpr int kBlockSlotCount = ${blockSlots};`)
+  lines.push(`inline constexpr int kMasterParamCount = ${master.length};`)
+  lines.push(
+    `inline constexpr int kTotalPluginParams = kMasterParamCount + kBlockSlotCount * kParamsPerSlot;  // = ${total}`,
+  )
+  lines.push('')
+  lines.push('// Host parameter id of entry `entry` (0..kParamsPerSlot-1) on block slot')
+  lines.push('// `slot` (kFirstBlockSlot..kSlotCount-1). Master slot entries precede all')
+  lines.push('// block slots: id 0 is master level, id 1 master mute.')
+  lines.push('inline constexpr int SlotParamId(int slot, int entry) {')
+  lines.push('  return kMasterParamCount + (slot - kFirstBlockSlot) * kParamsPerSlot + entry;')
+  lines.push('}')
+  lines.push('')
+  lines.push('// Slot 0\'s fixed descriptors, verbatim from the schema. Core mirrors these')
+  lines.push('// in engine.h (kMasterAutomation*) so the ABI can resolve them without')
+  lines.push('// including this generated header.')
+  lines.push(`inline constexpr const char* kMasterSymbols[kMasterParamCount] = {${master.map((p) => cppStr(p.symbol)).join(', ')}};`)
+  lines.push(`inline constexpr const char* kMasterLabels[kMasterParamCount] = {${master.map((p) => cppStr(p.label)).join(', ')}};`)
+  lines.push(`inline constexpr float kMasterMin[kMasterParamCount] = {${master.map((p) => cppFloat(p.min)).join(', ')}};`)
+  lines.push(`inline constexpr float kMasterMax[kMasterParamCount] = {${master.map((p) => cppFloat(p.max)).join(', ')}};`)
+  lines.push(`inline constexpr const char* kMasterUnits[kMasterParamCount] = {${master.map((p) => cppStr(p.unit)).join(', ')}};`)
+  lines.push('// Native-unit default mapped into 0..1 - the construction-time position')
+  lines.push('// hosts show before anything is loaded.')
+  lines.push(`inline constexpr float kMasterDefaultNormalized[kMasterParamCount] = {${defaults.join(', ')}};`)
+  lines.push('')
+  lines.push('// Compile-time string equality - static_asserting raw pointer == would')
+  lines.push('// compare identities of distinct literals, which nothing guarantees.')
+  lines.push('constexpr bool StrEq(const char* a, const char* b) {')
+  lines.push("  while (*a != '\\0' && *a == *b) {")
+  lines.push('    ++a;')
+  lines.push('    ++b;')
+  lines.push('  }')
+  lines.push('  return *a == *b;')
+  lines.push('}')
+  lines.push('')
+  lines.push('// Pin core\'s own copies of the constants to this file (both derive from the')
+  lines.push('// same schema section; a mismatch means one side was hand-edited).')
+  lines.push('static_assert(kSlotCount == nam_studio::engine::kAutomationSlotCount,')
+  lines.push('              "slot count drifted between param_schema.json and engine.h");')
+  lines.push('static_assert(kParamsPerSlot == nam_studio::engine::kAutomationParamsPerSlot,')
+  lines.push('              "params-per-slot drifted between param_schema.json and engine.h");')
+  lines.push('static_assert(kMasterParamCount <= nam_studio::engine::kAutomationParamsPerSlot,')
+  lines.push('              "master slot overflows the stride");')
+  for (let i = 0; i < master.length; i++) {
+    lines.push(
+      `static_assert(StrEq(kMasterSymbols[${i}], nam_studio::engine::kMasterAutomationSymbols[${i}]),`,
+    )
+    lines.push(`              "master param ${i} symbol drifted");`)
+    lines.push(
+      `static_assert(kMasterMin[${i}] == nam_studio::engine::kMasterAutomationMin[${i}] &&` +
+        ` kMasterMax[${i}] == nam_studio::engine::kMasterAutomationMax[${i}],`,
+    )
+    lines.push(`              "master param ${master[i].symbol} range drifted");`)
+  }
+  lines.push('')
+  lines.push('}  // namespace nam_studio::automation')
+  return lines.join('\n') + '\n'
+}
+
 async function main() {
   const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'))
-  const { cppTargets, jsMaps, ranges } = buildTargets(schema)
-
   const files = new Map()
-  for (const target of cppTargets) {
-    files.set(join(CPP_OUT_DIR, target.fragmentName), renderCppFragment(target))
-  }
-  // Run through prettier so the checked-in file always matches what
-  // `pnpm format`/CI expects - otherwise --check would flag its own output.
-  const jsContent = await prettier.format(renderJsModule(jsMaps), {
-    ...(await prettier.resolveConfig(JS_OUT_PATH)),
-    filepath: JS_OUT_PATH,
-  })
-  files.set(JS_OUT_PATH, jsContent)
 
-  const tsRangesContent = await prettier.format(renderTsRangesModule(ranges), {
-    ...(await prettier.resolveConfig(TS_RANGES_OUT_PATH)),
-    filepath: TS_RANGES_OUT_PATH,
-  })
-  files.set(TS_RANGES_OUT_PATH, tsRangesContent)
+  if (selectedTargets.includes('base')) {
+    const { cppTargets, jsMaps, ranges } = buildTargets(schema)
+    for (const target of cppTargets) {
+      files.set(join(CPP_OUT_DIR, target.fragmentName), renderCppFragment(target))
+    }
+    // Run through prettier so the checked-in file always matches what
+    // `pnpm format`/CI expects - otherwise --check would flag its own output.
+    const jsContent = await prettier.format(renderJsModule(jsMaps), {
+      ...(await prettier.resolveConfig(JS_OUT_PATH)),
+      filepath: JS_OUT_PATH,
+    })
+    files.set(JS_OUT_PATH, jsContent)
+
+    const tsRangesContent = await prettier.format(renderTsRangesModule(ranges), {
+      ...(await prettier.resolveConfig(TS_RANGES_OUT_PATH)),
+      filepath: TS_RANGES_OUT_PATH,
+    })
+    files.set(TS_RANGES_OUT_PATH, tsRangesContent)
+  }
+
+  if (selectedTargets.includes('automation-map')) {
+    // Validation first: a schema that outgrows the frozen stride is exactly
+    // the drift this guard exists to catch (see validateAutomationSection).
+    validateAutomationSection(schema)
+    files.set(AUTOMATION_MAP_OUT_PATH, renderAutomationMap(schema.pluginAutomation))
+  }
 
   if (CHECK_ONLY) {
     let stale = []
@@ -202,11 +379,11 @@ async function main() {
     return
   }
 
-  mkdirSync(CPP_OUT_DIR, { recursive: true })
+  for (const path of files.keys()) mkdirSync(dirname(path), { recursive: true })
   for (const [path, content] of files) {
     writeFileSync(path, content)
   }
-  console.log(`Wrote ${files.size} generated param files.`)
+  console.log(`Wrote ${files.size} generated param file(s) [target: ${selectedTargets.join(', ')}].`)
 }
 
 main().catch((err) => {

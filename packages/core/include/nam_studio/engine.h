@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -51,6 +52,37 @@ inline constexpr BlockId kOutRailId = -2;
 // 32 MiB; a cab IR WAV 8 MiB. Loaders reject anything larger.
 inline constexpr size_t kMaxModelBytes = 32u * 1024u * 1024u;
 inline constexpr size_t kMaxIrBytes = 8u * 1024u * 1024u;
+
+// ── Automation slot map (issue #121) ─────────────────────────────────────
+// VST3/AU/CLAP hosts require a fixed parameter list declared once at
+// construction with ids that persist across sessions, but rigs are dynamic
+// grids addressed by (block_id, index). A fixed pool of slots mediates:
+// hosts automate (slot, entry) pairs whose meaning resolves through whatever
+// block is currently bound to that slot. The numbers below mirror
+// packages/core/param_schema.json's "pluginAutomation" section - the single
+// source of truth, from which packages/vst3/generated/automation_param_map.h
+// is generated and static_asserts these very constants agree.
+//
+// Both numbers are frozen API surface: changing either remaps every host
+// parameter id (a saved DAW project's lanes would land elsewhere). See
+// packages/vst3/README.md's design note before touching them.
+inline constexpr int kAutomationSlotCount = 16;
+// Frozen stride with headroom over today's widest table (reverb-hall, 18).
+inline constexpr int kAutomationParamsPerSlot = 20;
+// Slot 0 is permanently the master bus - it never binds to a block.
+inline constexpr int kMasterAutomationSlot = 0;
+
+// Slot 0's fixed descriptors, verbatim copies of the schema section's
+// masterSlot.params (the generated header asserts they agree element-wise).
+// Values cross the ABI normalized 0..1 and map linearly onto [min, max].
+inline constexpr int kMasterAutomationParamCount = 2;
+inline constexpr const char* kMasterAutomationSymbols[kMasterAutomationParamCount] = {"level",
+                                                                                       "muted"};
+inline constexpr const char* kMasterAutomationLabels[kMasterAutomationParamCount] = {
+    "Master Level", "Master Mute"};
+inline constexpr float kMasterAutomationMin[kMasterAutomationParamCount] = {0.0f, 0.0f};
+inline constexpr float kMasterAutomationMax[kMasterAutomationParamCount] = {1.5f, 1.0f};
+inline constexpr const char* kMasterAutomationUnits[kMasterAutomationParamCount] = {"x", ""};
 
 enum class ReverbAlgorithm {
   kHall,
@@ -268,6 +300,65 @@ class AudioEngine {
   void SetModelSourceInfo(BlockId id, const std::string& name, const std::string& path);
   void SetIrSourceInfo(BlockId id, const std::string& name, const std::string& path);
 
+  // ── Automation slots (issue #121) ──────────────────────────────────────
+  // The stable (slot, entry) surface plugin hosts automate instead of raw
+  // (block_id, index). See the constants above and packages/vst3/README.md's
+  // design note for the full model; in short:
+  //
+  //  - Slot 0 is permanently the master bus: its kMasterAutomationParamCount
+  //    entries are level/mute, resolved against the master bus itself.
+  //  - Slots 1..kAutomationSlotCount-1 bind to one live block each. Entry i of
+  //    a bound slot IS index i of that block's param table - display name,
+  //    range and unit resolve dynamically via ParamInfo, so hosts get generic
+  //    "Param N" placeholders at construction and real titles once bound
+  //    (formats' title-change notifications cover the swap).
+  //  - Values cross this boundary normalized 0..1 and map linearly onto the
+  //    resolved param's [min, max]. Writes go through to the bound block
+  //    immediately; reads resolve live from it, so web/bridge knob moves show
+  //    up on the host side too.
+  //  - Each slot remembers the last normalized value written through it. On
+  //    rebind, only those remembered entries are applied onto the new target
+  //    through ITS ranges - an automation lane's value survives rebinding to
+  //    a different kind without jumping, and untouched params keep whatever
+  //    the newly-bound block already had.
+  //
+  // Bind/unbind/list are control-thread calls (they mutate slot bookkeeping,
+  // which Process() never touches); param get/set are lock-free like their
+  // (block, index) counterparts and safe from host parameter threads.
+
+  // Binds `slot` to `block` and returns true. Rejects the master slot
+  // (permanently the bus), out-of-range slots, and unknown blocks.
+  bool BindAutomationSlot(int slot, BlockId block);
+  // Clears a binding. The slot's remembered values survive for a later
+  // rebind. Refuses slot 0; false for out-of-range slots and slot 0.
+  bool UnbindAutomationSlot(int slot);
+  // Block currently bound to `slot`, or -1 if unbound / -2 if the slot is
+  // out of range. Slot 0 reports -3: not bindable, not "unbound".
+  BlockId AutomationSlotBlock(int slot) const;
+  // How many live entries `slot` exposes: the master slot's fixed count, the
+  // frozen stride for block slots (entries beyond the bound block's own param
+  // count resolve to nothing), 0 for out-of-range slots.
+  int AutomationSlotParamCount(int slot) const;
+  // Dynamic descriptor for one entry - the bound block's ParamInfo, or the
+  // master slot's fixed descriptors, or nullopt when the entry resolves to
+  // nothing (unbound slot, entry beyond the block's table, bad indices).
+  std::optional<ParamDescriptor> AutomationParamInfo(int slot, int entry) const;
+  // Write one entry, normalized 0..1 (clamped). Goes through to the bound
+  // target immediately where one resolves; always updates the slot's
+  // remembered value either way.
+  void SetAutomationParamNormalized(int slot, int entry, float value);
+  // Read one entry as 0..1: live from the bound target where one resolves,
+  // otherwise the slot's remembered value.
+  float GetAutomationParamNormalized(int slot, int entry) const;
+
+  // Every currently-bound block slot (never the master slot), ascending by
+  // slot number - what serialization walks. Control-thread only.
+  struct AutomationSlotSnapshot {
+    int slot;
+    BlockId block;
+  };
+  std::vector<AutomationSlotSnapshot> ListBoundAutomationSlots() const;
+
   // ── Bypass / master bus (real-time safe, lock-free) ──────────────────
   // No-op if id is unknown. While bypassed, the block's DSP is skipped and
   // its port-0 input passes through to its output unchanged.
@@ -338,6 +429,24 @@ class AudioEngine {
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int num_frames);
 
+  // One automation slot's bookkeeping (issue #121). `mirror` holds this
+  // slot's last known normalized value per entry - written through the slot,
+  // or refreshed from the bound block when read (hence mutable: it's a
+  // cache of observable truth, not part of the engine's logical const state).
+  // `dirty` flags entries actually written through the slot, and ONLY those
+  // re-apply onto a newly bound target - so rebinding carries an automation
+  // lane's position without stomping untouched params of the new block.
+  // Process() never reads any of this - control-thread data.
+  struct AutomationSlotState {
+    bool bound = false;
+    BlockId block = -1;
+    mutable float mirror[kAutomationParamsPerSlot] = {};
+    bool dirty[kAutomationParamsPerSlot] = {};
+  };
+  // Pushes the slot's remembered values into its bound block (no-op entries:
+  // unbound, param index beyond the block's table). Shared by Bind and Set.
+  void ApplySlotMirror(AutomationSlotState& state);
+
   // Rebuilds exec_order_ (blocks sorted by column) and routing_ (flattened
   // edges) from rig_'s current topology. Called after every topology
   // mutation; never called from Process().
@@ -347,8 +456,7 @@ class AudioEngine {
   static std::string GraphIdOf(BlockId id);
 
   graph::GraphRig rig_;
-  std::unordered_map<BlockId, std::unique_ptr<BlockState>> block_states_;
-  // Guards block_states_ against AddBlock/RemoveBlock (control thread, write)
+  std::unordered_map<BlockId, std::unique_ptr<BlockState>> block_states_;  // Guards block_states_ against AddBlock/RemoveBlock (control thread, write)
   // racing FindBlockThreadSafe (webview thread, read) - see its doc comment.
   // Never taken by Process()/FindBlock() on the audio thread.
   mutable std::shared_mutex block_states_mutex_;
@@ -373,6 +481,11 @@ class AudioEngine {
   std::vector<std::vector<RoutingEdge>> incoming_;
   std::vector<float> ext_in_l_;
   std::vector<float> ext_in_r_;
+
+  // The automation slot pool (issue #121), index == slot number. Slot 0 is
+  // the master bus and stays permanently unbound - its entries resolve
+  // against master level/mute without touching this state's block field.
+  std::array<AutomationSlotState, kAutomationSlotCount> automation_slots_;
 };
 
 }  // namespace nam_studio::engine

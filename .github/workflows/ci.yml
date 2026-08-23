@@ -24,6 +24,12 @@ jobs:
       - name: Param schema drift check
         run: node scripts/gen-param-schema.mjs --check
 
+      # Covered by the plain --check above too (no --target means every
+      # target), kept explicit so the plugin-side artifact fails loudly on its
+      # own (issue #121).
+      - name: Plugin automation map drift check
+        run: node scripts/gen-param-schema.mjs --check --target=automation-map
+
       - name: Grid dimensions drift check
         run: node scripts/check-grid-dims.mjs
 

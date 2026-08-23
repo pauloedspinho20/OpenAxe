@@ -188,6 +188,12 @@ Field notes:
   params carry its loaded model's dBu calibration. They are serialized only
   while actually set (model-defined or user-written); restoring them cannot
   fabricate an override over whatever model gets loaded later.
+- **`automationSlots`** (issue #121, optional) maps automation slots to the
+  blocks they are bound to: `{"3": {"blockId": "0"}, "11": {"blockId": "1"}}`.
+  Slot 0 is permanently the master bus and never appears; values don't ride
+  here (they live in each block's own symbol-keyed params). Restored after
+  blocks exist; dangling or malformed entries skip with a count. See
+  packages/vst3/README.md's design note for the slot model itself.
 
 ### Embedded assets (issue #120)
 
@@ -297,7 +303,10 @@ field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`;
 IR embedded into a document that restores sample-identically after the source
 graph is destroyed (the sources exist nowhere on disk), plus the payload ->
 path -> missing fallback ladder, the size ceilings, and SHA-256/base64
-known-answer tests.
+known-answer tests; `tests/api_automation_slots_test.cpp` is issue #121's -
+slot values surviving kind-swapping rebinds, save/reload landing on the same
+control, master-slot immutability, and soft-failure tolerance for malformed
+binding documents.
 
 ## Vendored third-party DSP libraries
 
