@@ -335,7 +335,7 @@ void TestAmpToneStackAndPassthroughWithoutModel() {
 // A constant input on both channels - mono source duplicated to both, so pan
 // behaviour is visible on the stereo output.
 std::pair<std::vector<float>, std::vector<float>> RunStereo(AudioEngine& engine,
-                                                            float input_value) {
+                                                             float input_value) {
   std::vector<float> input_l(kFrames, input_value);
   std::vector<float> input_r(kFrames, input_value);
   std::vector<float> output_l(kFrames, 0.0f);
@@ -344,6 +344,23 @@ std::pair<std::vector<float>, std::vector<float>> RunStereo(AudioEngine& engine,
   float* out_ptrs[2] = {output_l.data(), output_r.data()};
   engine.Process(in_ptrs, 2, out_ptrs, 2, kFrames);
   return {output_l, output_r};
+}
+
+// Runs `blocks` buffers (discarding output) so a freshly-set, smoothed param
+// settles to its target before an exact-value assertion - see issue #122,
+// whose exponential ramp approaches the target asymptotically rather than
+// snapping. 400 blocks at kFrames=64 / 48kHz is ~0.5s, ~17 time constants.
+void SettleMono(AudioEngine& engine, float input_value, int blocks) {
+  for (int b = 0; b < blocks; ++b) RunMono(engine, input_value);
+}
+
+// Runs `blocks` stereo buffers and returns the final {left, right} outputs.
+std::pair<std::vector<float>, std::vector<float>> RunStereoSettled(AudioEngine& engine,
+                                                                   float input_value,
+                                                                   int blocks) {
+  std::pair<std::vector<float>, std::vector<float>> out;
+  for (int b = 0; b < blocks; ++b) out = RunStereo(engine, input_value);
+  return out;
 }
 
 // Mixer per-input level and pan: the DSP that used to live only in the web
@@ -376,9 +393,10 @@ void TestMixerPerInputLevelAndPan() {
     NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)] - 0.5f) < 1e-5f);
   }
 
-  // Per-input level scales the summed signal (0.5 * 0.5 = 0.25).
+  // Per-input level scales the summed signal (0.5 * 0.5 = 0.25). The level is
+  // exponentially smoothed (issue #122), so settle before the exact check.
   engine.SetParam(mixer, 0, 0.5f);
-  std::tie(l, r) = RunStereo(engine, 0.5f);
+  std::tie(l, r) = RunStereoSettled(engine, 0.5f, 400);
   for (int i = 0; i < kFrames; ++i) {
     NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)] - 0.25f) < 1e-5f);
     NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)] - 0.25f) < 1e-5f);
@@ -388,16 +406,19 @@ void TestMixerPerInputLevelAndPan() {
   // sqrt(2) at the extreme).
   engine.SetParam(mixer, 0, 1.0f);
   engine.SetParam(mixer, 1, -1.0f);
-  std::tie(l, r) = RunStereo(engine, 0.5f);
+  std::tie(l, r) = RunStereoSettled(engine, 0.5f, 400);
   for (int i = 0; i < kFrames; ++i) {
     NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)] - 0.5f * 1.41421356f) < 1e-5f);
-    NAM_EXPECT(r[static_cast<size_t>(i)] == 0.0f);
+    // Hard-left pans the signal fully right; with the (smoothed) pan eased to
+    // -1.0 the right channel approaches zero but only asymptotically, so assert
+    // it's negligible rather than bit-exact zero.
+    NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)]) < 1e-6f);
   }
 
   // Hard right: the reverse. cos(pi/2) is ~6e-17, so the left channel isn't
   // bit-exact zero - assert it's negligible rather than exactly zero.
   engine.SetParam(mixer, 1, 1.0f);
-  std::tie(l, r) = RunStereo(engine, 0.5f);
+  std::tie(l, r) = RunStereoSettled(engine, 0.5f, 400);
   for (int i = 0; i < kFrames; ++i) {
     NAM_EXPECT(std::fabs(l[static_cast<size_t>(i)]) < 1e-6f);
     NAM_EXPECT(std::fabs(r[static_cast<size_t>(i)] - 0.5f * 1.41421356f) < 1e-5f);
@@ -430,15 +451,16 @@ void TestSplitterPerOutputLevel() {
   NAM_EXPECT(std::fabs(engine.GetMeter(a) - 0.5f) < 1e-5f);
   NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
 
-  // out0_level halves branch a; branch b stays full.
+  // out0_level halves branch a; branch b stays full. The splitter output level
+  // is exponentially smoothed (issue #122), so settle before the exact check.
   engine.SetParam(splitter, 0, 0.5f);
-  RunMono(engine, 0.5f);
+  SettleMono(engine, 0.5f, 400);
   NAM_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
   NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
 
   // out1_level on the second port scales only branch b.
   engine.SetParam(splitter, 1, 0.25f);
-  RunMono(engine, 0.5f);
+  SettleMono(engine, 0.5f, 400);
   NAM_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
   NAM_EXPECT(std::fabs(engine.GetMeter(b) - 0.125f) < 1e-5f);
 }
@@ -465,7 +487,7 @@ void TestSplitterFanOutAndMixerFanInRouting() {
 
   const auto settled = [&](float input) {
     std::vector<float> output;
-    for (int i = 0; i < 40; ++i) output = RunMono(engine, input);
+    for (int i = 0; i < 400; ++i) output = RunMono(engine, input);
     return output;
   };
 

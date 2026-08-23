@@ -427,7 +427,16 @@ class AudioEngine {
   // Shared tail of LoadNamModel/LoadNamModelJson - see the definition.
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
-  void RunDsp(BlockState& state, int num_frames);
+  void RunDsp(BlockState& state, int start, int num_frames);
+  // Copy the schema-derived smoothing policy + the live ramp state for `state`
+  // from its current param mirror (issue #122). Called on the control thread
+  // whenever the param surface changes - AddBlock, reverb algorithm switch,
+  // model load - so the first block after a change eases from the current
+  // value rather than from zero.
+  void SeedSmoothing(BlockState& state);
+  // How many sub-blocks to split a buffer into for the SetParam-style ramp
+  // (generic DSP wrappers and the amp tone stack). See definition in engine.cpp.
+  static int SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state);
 
   // One automation slot's bookkeeping (issue #121). `mirror` holds this
   // slot's last known normalized value per entry - written through the slot,

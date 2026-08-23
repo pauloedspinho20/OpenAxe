@@ -100,6 +100,10 @@ if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_DSPAR
   target_link_libraries(engine_test PRIVATE nam_studio_core)
   add_test(NAME engine_test COMMAND engine_test)
 
+  add_executable(smoothing_test smoothing_test.cpp)
+  target_link_libraries(smoothing_test PRIVATE nam_studio_core)
+  add_test(NAME smoothing_test COMMAND smoothing_test)
+
   # Needs WHOLE_ARCHIVE for the same reason nam_amp_test does (see its own
   # comment above): NAMCore's architecture parsers self-register via static
   # initializers with no other referenced symbol, so a plain static-archive
