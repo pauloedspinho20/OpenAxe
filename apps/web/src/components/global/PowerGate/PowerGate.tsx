@@ -169,7 +169,19 @@ export function PowerGate({
           label={starting ? 'Starting…' : 'POWER ON'}
           onClick={() => onPowerOn()}
           disabled={starting}
+          fullWidth
         />
+        <HardwareButton
+          label="Continue without sound"
+          onClick={() => onPowerOn({ noSound: true })}
+          disabled={starting}
+          fullWidth
+        />
+        <p className={styles.tone3000Hint}>
+          No sound mode skips the audio device entirely - the grid, presets, and editing all still
+          work. The app switches back to normal audio automatically the moment a usable device is
+          available.
+        </p>
       </div>
     </div>
   )
