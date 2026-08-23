@@ -15,6 +15,7 @@
 #include "openaxe/dsp/delay.h"
 #include "openaxe/dsp/nam_amp.h"
 #include "openaxe/graph_rig.h"
+#include "openaxe/midi.h"
 
 // The real-time audio wiring layer graph_rig.h's own doc comment defers to a
 // "separate later concern" - this is that layer. GraphRig stays exactly as
@@ -112,6 +113,8 @@ enum class ReverbControl {
   kDryLevel,   // percent
 };
 
+inline constexpr int kReverbControlCount = 8;  // one per ReverbControl value
+
 struct ParamDescriptor {
   const char* name;
   const char* symbol;
@@ -165,14 +168,53 @@ struct IrAssetSource {
   std::string path;
 };
 
-// Not real-time safe: constructs/destroys DSP objects, allocates buffers,
-// parses model files. Callers must not invoke these concurrently with
-// Process() - there is no real host driving this from an audio thread yet
-// (native tests only), so full lock-free topology mutation is a documented
-// follow-up, not attempted here.
+// ── Concurrency contract (issue #211) ────────────────────────────────────
+// The methods fall into exactly two tiers, and the doc comment on each one
+// says which it is. The invariant the two tiers rest on: Process() reads
+// shared BlockState through (a) the atomic param/flag mirror and (b) plain
+// fields that are only ever written while the mutation protocol below is in
+// force - never while Process() could be running.
 //
-// Process() itself IS real-time safe once Reset() has been called: no
-// allocation, only atomic param loads and buffer copies/DSP calls.
+//   Tier 1 - real-time safe, callable from ANY thread concurrently with
+//   Process(): the generic param get/set (SetParam/GetParam/ParamCount/
+//   ParamInfo - the param mirror is std::atomic), SetReverbControl (resolves
+//   through cached per-block atomics, see ReverbControlSlot), bypass, I/O
+//   trims, master level/mutes, meters, cpu load. These take no locks and
+//   never touch the DSP objects.
+//
+//   Tier 2 - structural / DSP-swapping: AddBlock/RemoveBlock/MoveBlock/
+//   Connect/Disconnect, Reset, ClearTopology, LoadNamModel/LoadNamModelJson/
+//   UnloadNamModel, LoadIr/LoadIrWav/UnloadIr, SetReverbAlgorithm,
+//   SetDelayModel, the automation-slot bind/unbind, SetModelSourceInfo/
+//   SetIrSourceInfo, the state loader, and SetParam on an Amp-family block's
+//   slim-size param (which forwards synchronously into NAMCore). Every one
+//   of these constructs/destroys DSP objects, reallocates, or rewrites
+//   shared plain fields (param_count, the DspVariant, smoothing[], the ramp
+//   state, IR/convolution buffers, the tone stack), so they MUST be
+//   serialized against Process(): the caller must ensure no Process() call
+//   is in flight and none begins until the mutation is done.
+//
+//   The two front ends that exist today each guarantee that in their own
+//   way, and no code inside this class assumes one over the other:
+//     - apps/web: the core runs inside the AudioWorklet; every control
+//       message is dispatched on the same render thread as process(), so
+//       mutations interleave between callbacks and can never race one.
+//     - apps/desktop: StudioBridge::Mutate wraps every Tier-2 call in the
+//       suspend handshake (AudioIO::BeginSuspend/EndSuspend) - it raises a
+//       flag the audio callback observes, waits until a callback confirms it
+//       (no nam_studio_process in flight), runs the mutation, then lifts the
+//       flag. That handshake is the chosen protocol for a host that runs the
+//       audio thread separately from its control thread; a future VST3/mobile
+//       shell must provide an equivalent (or the same one) before calling any
+//       Tier-2 method.
+//
+//   The audio path itself is always lock-free: Process() takes no mutex,
+//   allocates nothing, and its only cross-thread reads are atomics. The plain
+//   fields it reads (kind, the DspVariant, smoothing[], smoothed[], ramp_*,
+//   tone, cab, the per-block buffers) are either immutable after AddBlock or
+//   written exclusively under the Tier-2 protocol. Fields that are purely
+//   control-thread data (the asset-source strings/bytes) are never read by
+//   Process() at all.
 class AudioEngine {
  public:
   AudioEngine();
@@ -216,13 +258,19 @@ class AudioEngine {
   void Process(const float* const* input, int input_channels, float* const* output,
                int output_channels, int num_frames);
 
-  // ── Params (generic, lock-free) ──────────────────────────────────────
+  // ── Params (generic, Tier 1 / lock-free) ─────────────────────────────
+  // All four are safe to call from any thread, concurrently with Process().
+  // The one exception is SetParam on an Amp-family block's slim-size param,
+  // which forwards synchronously into NAMCore and is Tier 2.
   int ParamCount(BlockId id) const;
   std::optional<ParamDescriptor> ParamInfo(BlockId id, int index) const;
   float GetParam(BlockId id, int index) const;
   void SetParam(BlockId id, int index, float value);
 
-  // ── NAM model management (off the audio thread) ─────────────────────
+  // ── NAM model management (Tier 2 - not real-time safe) ───────────────
+  // Constructs/resets DSP and reallocates inside NAMCore, so these must not
+  // run concurrently with Process() (see the class comment's Tier-2
+  // protocol). Callers suspend the audio thread around them.
   std::optional<dsp::NamLoadError> LoadNamModel(BlockId id, const std::string& file_path);
 
   // Same, from the .nam file's JSON content in memory - the form a browser or a
@@ -240,7 +288,7 @@ class AudioEngine {
   // engine's own sample rate (nothing is resampled here - a caller holding a
   // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
   // length <= 0 clears it, which returns the block to passthrough. No-op for
-  // every other kind. Not real-time safe: it allocates and transforms the IR.
+  // every other kind. Tier 2: it allocates and transforms the IR.
   void LoadIr(BlockId id, const float* samples, int length);
 
   // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
@@ -254,17 +302,26 @@ class AudioEngine {
   // Length of the IR installed on the block, 0 if none (or not a cab).
   int IrLength(BlockId id) const;
 
-  // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
-  // safe - reconstructs the underlying wrapper instance.
+  // Only meaningful for kReverb blocks; no-op otherwise. Tier 2: it
+  // reconstructs the underlying wrapper instance (destroys + rebuilds the
+  // DspVariant alternative Process() visits), so it must not run concurrently
+  // with Process().
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);
 
   // Apply one user-facing reverb control to whichever algorithm currently
   // backs the block (see ReverbControl). No-op for non-reverb blocks and for
-  // controls the current algorithm doesn't have. Real-time safe: it resolves
-  // to the same atomic param store SetParam writes.
+  // controls the current algorithm doesn't have. Real-time safe and callable
+  // from any thread: the control's target param (index + clamp range) is
+  // resolved once when the algorithm is installed (AddBlock /
+  // SetReverbAlgorithm) into a per-block atomic cache, so this never reads
+  // the live DspVariant - a knob drag on one thread can't race an algorithm
+  // swap on another (issue #211). It ends in the same atomic SetParam a raw
+  // index write would.
   void SetReverbControl(BlockId id, ReverbControl control, float value);
 
-  // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
+  // Only meaningful for kDelay blocks; no-op otherwise. Tier 2: it rewrites
+  // param_count and re-seeds the smoothing policy / ramp state (issue #211),
+  // so it must not run concurrently with Process().
   void SetDelayModel(BlockId id, dsp::Delay::Model model);
 
   // ── Per-block state readers for serialization (issue #119) ───────────
@@ -388,6 +445,64 @@ class AudioEngine {
   void SetTunerMuted(bool muted);
   bool IsTunerMuted() const;
 
+  // ── MIDI mapping (issue #124) ─────────────────────────────────────
+  // Mirrors apps/web/src/midi/{types,message,actions,midiConfigStore}.ts.
+  // Front ends supply only the transport (Web MIDI on web, the host's event
+  // list in a plugin, CoreMIDI/ALSA on desktop); the mapping model itself
+  // lives here so every front end reuses it. Bindings ride the rig state
+  // document (see serialization) and survive a DAW project reload.
+  //
+  // Binding mutation (Add/Remove/Clear, Arm/CancelLearn) is control-thread
+  // only (Tier 2): it mutates the mapping vector. HandleMidiMessage is safe
+  // from any thread (takes a shared lock) — a host's process callback forwards
+  // raw MIDI bytes plus a per-event sample offset and lets core resolve and
+  // apply the binding. The `sample_offset` is accepted for sample-accurate
+  // scheduling; this implementation resolves immediately (the offset is
+  // currently unused, since scene/slot actions are control-thread work — a
+  // future change can queue per-offset actions without changing the ABI).
+  //
+  // Learn mode: ArmMidiLearn stores the target action. The next trigger-edge
+  // HandleMidiMessage call that parses to a MidiMatch binds it (deduping the
+  // same action key and the same match key, mirroring midiStore.completeLearn)
+  // and returns kLearnCompleted instead of dispatching.
+
+  // Every mapping, in insertion order (what serialization walks).
+  std::vector<midi::MidiMapping> ListMidiMappings() const;
+  // How many mappings are stored.
+  size_t MidiMappingCount() const;
+  // One mapping by index, or nullopt for out-of-range.
+  std::optional<midi::MidiMapping> MidiMappingAt(size_t index) const;
+  // Adds a binding, deduping as midiStore does: any existing mapping whose
+  // action key == the new action's key, or whose match key == the new match's
+  // key, is removed first. Returns true on success (false for invalid match/action).
+  bool AddMidiMapping(const midi::MidiMatch& match, const midi::MidiAction& action);
+  // Removes the mapping at `index`; false if out-of-range.
+  bool RemoveMidiMapping(size_t index);
+  // Removes every mapping and cancels any active learn.
+  void ClearMidiMappings();
+
+  // Arms learn for `action`; returns false for invalid actions.
+  bool ArmMidiLearn(const midi::MidiAction& action);
+  void CancelMidiLearn();
+  bool IsMidiLearning() const;
+  std::optional<midi::MidiAction> MidiLearnTarget() const;
+
+  struct MidiHandleResult {
+    enum Kind { kNone = 0, kDispatched = 1, kLearnCompleted = 2 } kind = kNone;
+    // When kind != kNone, the action that fired or was learned.
+    std::optional<midi::MidiAction> action;
+    // Echo of the match that triggered it (useful for UI feedback).
+    std::optional<midi::MidiMatch> match;
+  };
+  // Feeds raw MIDI bytes through the mapping. `sample_offset` is the per-event
+  // offset within the current audio block (0 = block start). Currently
+  // dispatched immediately; a future implementation may schedule per offset
+  // without ABI change. Returns kNone when the bytes don't parse, aren't a
+  // trigger edge, or have no binding; kDispatched when a binding matched;
+  // kLearnCompleted when learn mode was active and consumed the message.
+  MidiHandleResult HandleMidiMessage(const uint8_t* data, size_t size,
+                                     int32_t sample_offset = 0);
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
@@ -424,10 +539,33 @@ class AudioEngine {
   const BlockState* FindBlockThreadSafe(BlockId id) const;
   void EnsureBuffers(BlockState& state);
   void SeedParamsFromDsp(BlockState& state);
+  // Re-resolve every user-facing ReverbControl onto the reverb block's
+  // currently installed algorithm: for each control, the target param index
+  // and its clamp range, published into BlockState::reverb_control_slots'
+  // atomics (issue #211). Called under the Tier-2 protocol from AddBlock and
+  // SetReverbAlgorithm, so SetReverbControl - which may run on any thread,
+  // even the audio thread - never has to read the live DspVariant.
+  void RefreshReverbControlSlots(BlockState& state);
   // Shared tail of LoadNamModel/LoadNamModelJson - see the definition.
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
-  void RunDsp(BlockState& state, int num_frames);
+  void RunDsp(BlockState& state, int start, int num_frames);
+  // Copy the schema-derived smoothing policy + the live ramp state for `state`
+  // from its current param mirror (issue #122). Called on the control thread
+  // whenever the param surface changes - AddBlock, reverb algorithm switch,
+  // model load - so the first block after a change eases from the current
+  // value rather than from zero.
+  void SeedSmoothing(BlockState& state);
+  // The descriptor for one param of an installed DSP object's own table
+  // (index assumed valid). Shares the single std::visit over the live
+  // DspVariant between ParamInfo and RefreshReverbControlSlots.
+  static std::optional<ParamDescriptor> ParamInfoOf(const BlockState& state, int index);
+  // How many sub-blocks to split a buffer into for the SetParam-style ramp
+  // (generic DSP wrappers and the amp tone stack). See definition in engine.cpp.
+  static int SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state);
+  // Advance a splitter's fan-out ramps by one buffer and freeze the snapshot
+  // its consumers replay from (issue #122). See definition in engine.cpp.
+  static void PublishSplitterRamps(BlockState& state, int num_frames, double sample_rate);
 
   // One automation slot's bookkeeping (issue #121). `mirror` holds this
   // slot's last known normalized value per entry - written through the slot,
@@ -486,6 +624,14 @@ class AudioEngine {
   // the master bus and stays permanently unbound - its entries resolve
   // against master level/mute without touching this state's block field.
   std::array<AutomationSlotState, kAutomationSlotCount> automation_slots_;
+
+  // MIDI mapping model (issue #124) — CC/PC/note-on → action bindings plus
+  // learn state. Control-thread mutations (Add/Remove/Clear, Arm/CancelLearn)
+  // take midi_mutex_ exclusively; HandleMidiMessage takes it shared for
+  // reading and, when learning, upgrades to exclusive to bind.
+  mutable std::shared_mutex midi_mutex_;
+  std::vector<midi::MidiMapping> midi_mappings_;
+  std::optional<midi::MidiAction> midi_learn_target_;
 };
 
 }  // namespace openaxe::engine

@@ -1,15 +1,75 @@
 # packages/vst3
 
-Placeholder for the VST3/CLAP/AU plugin built with iPlug2, linking directly
-against `packages/core`'s C++ DSP engine (#16). No plugin code lives here yet.
+VST3 + standalone plugin built with [iPlug2](https://github.com/iPlug2/iPlug2), linking directly against `packages/core`'s C++ DSP engine (#16). Scaffold stage: loads in a host, links the real core, passes audio through — later issues wire params, state chunks and UI.
 
 `assets/branding/` already carries the OpenAxe mark/lockup (SVG + a 256px PNG)
 so the editor has branding ready for JUCE/iPlug2 resource embedding on day one
 (see `packages/ui/assets/brand/` for the source of truth).
 
-This README currently carries the one design decision #16's phase-0 work had
-to settle before any parameter code could be written: how a dynamic grid rig
-presents a fixed, session-stable parameter list to hosts.
+## Prerequisites
+
+```bash
+# Core submodules (NAM, Dragonfly, DSPark) — same as packages/core/README.md
+git submodule update --init --recursive -- packages/core/third_party/nam-core
+git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+# Or all at once:
+git submodule update --init --recursive
+```
+
+iPlug2 itself is fetched at configure time via `FetchContent_Declare` (pinned `GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4` — never a floating ref, per #74). The VST3/AU/CLAP SDKs are **not** vendored as submodules; iPlug2 curates them under `Dependencies/` and provides `Scripts/download-iplug-sdks.sh` / `download-prebuilt-libs.sh`. Pinning iPlug2 pins the SDKs transitively — see `packages/vst3/CMakeLists.txt`'s comment for the trade-off and the alternative (submodules with `.gitmodules` SHAs) if offline reproducible builds are later required.
+
+## Build
+
+`packages/vst3` owns its own CMake build, separate from the pnpm/Turborepo graph (like `packages/core` and `apps/desktop`).
+
+### macOS
+
+```bash
+# VST3 bundle + standalone
+cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
+cmake --build packages/vst3/build --config Release
+# Smoke test (core linkage, passthrough — no host needed, no iPlug2 SDKs needed)
+./packages/vst3/build/nam_studio_vst3_smoke
+# Scan in a host: copy packages/vst3/build/nam_studio_vst3.vst3 to ~/Library/Audio/Plug-Ins/VST3/
+```
+
+### Windows
+
+```powershell
+cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
+cmake --build packages/vst3/build --config Release
+.\packages\vst3\build\Release\nam_studio_vst3_smoke.exe
+# Copy build\nam_studio_vst3.vst3 to %COMMONPROGRAMFILES%\VST3\
+```
+
+### Linux
+
+```bash
+cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
+cmake --build packages/vst3/build --config Release
+./packages/vst3/build/nam_studio_vst3_smoke
+# Copy build/nam_studio_vst3.vst3 to ~/.vst3/
+```
+
+Standalone iteration (no host, debugger-friendly):
+
+```bash
+cmake --build packages/vst3/build --target nam_studio_standalone
+./packages/vst3/build/nam_studio_standalone
+```
+
+## What the scaffold does
+
+- `CMakeLists.txt` reads the root `VERSION` file (`#54` — one source of truth, like `packages/core` and `apps/desktop`), `add_subdirectory(../../packages/core core)` and links `nam_studio_core` **with `WHOLE_ARCHIVE`** (NAM parsers self-register via static initializers — plain archive link drops them; see `packages/core/CMakeLists.txt`).
+- `config.h` — plugin name (`NAM Studio`), manufacturer, unique IDs (`Nms1`/`NwSt`), I/O (`1-1 2-2`), `PLUG_DOES_STATE_CHUNKS=1`, VST3 subcategory `Fx|Amp`. VST3 target only for now; CLAP/AU later.
+- `src/plugin.{h,cpp}` — minimal `NamStudioPlugin : public iplug::Plugin`: `nam_studio_graph_create`/`destroy`, `nam_studio_reset` on sample-rate/block-size change, `nam_studio_process` passthrough.
+- `src/main_standalone.cpp` — standalone entry reusing the same DSP path.
+
+Verification: builds on macOS/Windows/Linux; `.vst3` scans and instantiates in at least one host per platform; standalone runs. Audio is passthrough — expected at this stage.
+
+## Licensing
+
+This repo is GPLv3. Steinberg's VST3 SDK is dual-licensed GPLv3 / proprietary, so the GPLv3 arm applies cleanly. iPlug2 is MIT/zlib, CLAP is MIT. AAX requires an Avid agreement and is not covered here.
 
 ---
 

@@ -289,14 +289,18 @@ void TestCabIrConvolutionOverAbi() {
   OPENAXE_EXPECT(std::fabs(wet[64] - 0.5f) < 1e-4f);   // the echo, on time
   OPENAXE_EXPECT(std::fabs(wet[32]) < 1e-4f);          // nothing in between
 
-  // Mix at 0 is fully dry: the impulse survives, the echo doesn't.
+  // Mix at 0 is fully dry: the impulse survives, the echo doesn't. The cab's
+  // ir_mix is smoothed (exponential, 30 ms per the schema) per issue #122, so settle a few
+  // buffers after the change before asserting the steady state.
   nam_studio_set_param(graph, cab, 0, 0.0f);
+  for (int i = 0; i < 200; ++i) render(1.0f);
   const auto dry = render(1.0f);
   OPENAXE_EXPECT(std::fabs(dry[0] - 1.0f) < 1e-4f);
   OPENAXE_EXPECT(std::fabs(dry[64]) < 1e-4f);
 
   // Half wet halves the echo.
   nam_studio_set_param(graph, cab, 0, 0.5f);
+  for (int i = 0; i < 200; ++i) render(1.0f);
   const auto half = render(1.0f);
   OPENAXE_EXPECT(std::fabs(half[64] - 0.25f) < 1e-4f);
 

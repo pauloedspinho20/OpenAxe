@@ -13,7 +13,31 @@ target_include_directories(bridge_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../sr
 target_link_libraries(bridge_test PRIVATE
   openaxe_desktop_lib
 )
+# bridge_test's TestSlimSizeMutationsWhileStreamRunning loads a genuinely
+# slimmable NAM capture so SetSlimSize actually rebuilds NAMCore's buffers
+# under the stress (issue #211) - point it at the same example models the core
+# tests use.
+target_compile_definitions(bridge_test PRIVATE
+  NAM_CORE_EXAMPLE_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../packages/core/third_party/nam-core/example_models"
+)
 add_test(NAME bridge COMMAND bridge_test)
+
+# ThreadSanitizer build for the threading stress tests (issue #211's acceptance
+# criterion: mutate-during-process must pass under TSan). Instruments the core,
+# the desktop lib, and the test binaries - NOT JUCE/webview (a TSan build of
+# those is slow and they aren't what the stress tests exercise; mixing
+# instrumented and uninstrumented code is fine for the races under test). The
+# device-gated stress tests skip on hosts without a duplex audio device, so a
+# TSan run needs one to be meaningful. Requires a toolchain that ships a TSan
+# runtime - Linux GCC/Clang yes; Apple's Clang on macOS links no
+# libclang_rt.tsan for arm64, so this is for Linux CI.
+option(NAM_DESKTOP_ENABLE_TSAN "Instrument core/lib/tests with ThreadSanitizer" OFF)
+if(NAM_DESKTOP_ENABLE_TSAN)
+  target_compile_options(nam_studio_core PRIVATE -fsanitize=thread -g)
+  target_compile_options(nam_desktop_lib PRIVATE -fsanitize=thread -g)
+  add_compile_options(-fsanitize=thread -g)
+  add_link_options(-fsanitize=thread)
+endif()
 
 add_executable(latency_test latency_test.cpp)
 target_include_directories(latency_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

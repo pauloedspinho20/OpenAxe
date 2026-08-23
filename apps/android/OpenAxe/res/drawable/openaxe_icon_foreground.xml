@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Axe group from packages/ui/assets/brand/openaxe-mark.svg (issue #151).
-     The 512-unit source geometry is mapped into the 108x108 adaptive viewport
-     (scale 0.1266, centered) and shrunk further by the group scale so every
-     point clears the 66dp safe-zone circle. Rects are sharp-cornered here;
-     rounding is invisible at launcher sizes. -->
+<!-- OpenAxe definitive mark (axe + lightning) — dark shape on black, single path.
+     Source: packages/ui/assets/brand/openaxe-mark.svg (1024 units). Mapped into
+     adaptive 108 viewport with safe-zone scaling. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -17,23 +15,18 @@
     <group
         android:translateX="0"
         android:translateY="0"
-        android:scaleX="0.176"
-        android:scaleY="0.176">
+        android:scaleX="0.088"
+        android:scaleY="0.088">
       <path
-          android:fillColor="#eeece6"
-          android:pathData="M300,68 h42 a21,21 0 0 1 21,21 v358 a21,21 0 0 1 -21,21 h-42 a21,21 0 0 1 -21,-21 v-358 a21,21 0 0 1 21,-21 z" />
-      <path
-          android:fillColor="#ff5a1f"
-          android:pathData="M292,96 C244,92 196,96 150,108 C134,130 124,154 124,180 C126,212 142,244 176,268 C214,278 254,274 292,256 Z" />
-      <path
-          android:fillColor="#ffe9dd"
-          android:pathData="M150,108 C134,130 124,154 124,180 C126,212 142,244 176,268 C156,236 149,208 149,180 C149,150 148,128 150,108 Z" />
-      <path
-          android:fillColor="#c23503"
-          android:pathData="M348,108 h34 a15,15 0 0 1 15,15 v106 a15,15 0 0 1 -15,15 h-34 a15,15 0 0 1 -15,-15 v-106 a15,15 0 0 1 15,-15 z" />
-      <path
-          android:fillColor="#9c2b04"
-          android:pathData="M292,84 h56 a14,14 0 0 1 14,14 v156 a14,14 0 0 1 -14,14 h-56 a14,14 0 0 1 -14,-14 v-156 a14,14 0 0 1 14,-14 z" />
+          android:fillColor="#111111"
+          android:pathData="M0,345 L520,345 L840,95 L860,45 L980,95 L1024,160 L1024,240 L980,290 L850,330 L825,310 L540,430 L280,545 L145,1024 Z" />
     </group>
+  </group>
+  <group
+      android:translateX="0"
+      android:translateY="0"
+      android:scaleX="1"
+      android:scaleY="1">
+    <!-- Background handled by ic_launcher.xml's background color; this foreground is the mark -->
   </group>
 </vector>

@@ -24,6 +24,12 @@ add_executable(api_test api_test.cpp)
 target_link_libraries(api_test PRIVATE openaxe_core)
 add_test(NAME api_test COMMAND api_test)
 
+# Tuner pitch detection + note mapping (issue #123): pure DSP, no vendored
+# dependency — builds unconditionally like wav_test/tone_stack_test.
+add_executable(pitch_detect_test pitch_detect_test.cpp)
+target_link_libraries(pitch_detect_test PRIVATE openaxe_core)
+add_test(NAME pitch_detect_test COMMAND pitch_detect_test)
+
 # The JSON module is dependency-free, so it builds unconditionally. Its header
 # lives under src/ (it's private to the library), hence the extra include path.
 add_executable(json_test json_test.cpp)
@@ -73,6 +79,10 @@ else()
   message(WARNING "Skipping api_automation_slots_test - nam-core/dragonfly/dspark submodules must all be initialized")
 endif()
 
+add_executable(api_midi_test api_midi_test.cpp)
+target_link_libraries(api_midi_test PRIVATE openaxe_core)
+add_test(NAME api_midi_test COMMAND api_midi_test)
+
 if(OPENAXE_HAS_NAM_CORE)
   add_executable(nam_amp_test nam_amp_test.cpp)
   # WHOLE_ARCHIVE: NAMCore's architecture parsers (LSTM, WaveNet, ConvNet,
@@ -99,6 +109,18 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   add_executable(engine_test engine_test.cpp)
   target_link_libraries(engine_test PRIVATE openaxe_core)
   add_test(NAME engine_test COMMAND engine_test)
+
+  add_executable(smoothing_test smoothing_test.cpp)
+  target_link_libraries(smoothing_test PRIVATE openaxe_core)
+  add_test(NAME smoothing_test COMMAND smoothing_test)
+
+  # Concurrent stress for the Tier-1 (any-thread) core surface (issue #211):
+  # races nam_studio_process against the lock-free param/reverb-control/trim/
+  # master-bus calls. Plain link like engine_test - it loads no NAM model, so
+  # it doesn't need the whole-archive self-registering-parser treatment.
+  add_executable(api_threading_test api_threading_test.cpp)
+  target_link_libraries(api_threading_test PRIVATE openaxe_core)
+  add_test(NAME api_threading COMMAND api_threading_test)
 
   # Needs WHOLE_ARCHIVE for the same reason nam_amp_test does (see its own
   # comment above): NAMCore's architecture parsers self-register via static

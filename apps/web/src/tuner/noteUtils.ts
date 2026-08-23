@@ -1,3 +1,24 @@
+// Core note mapping lives in packages/core/src/dsp/note_utils.cpp (issue #123).
+// The TS implementation here is the presentational fallback; when the WASM
+// module is ready, `frequencyToNote` forwards to `nam_studio_frequency_to_note`
+// so every front end displays the same reading. Both paths are proven
+// equivalent by the ported suite in packages/core/tests (pitch_note_test)
+// and by noteUtils.test.ts here — see noteUtils.test.ts's WASM-parity case.
+// Keeping the TS path also preserves offline/test determinism when WASM
+// isn't loaded (Node/jsdom, etc.).
+import { ensureWasm, frequencyToNoteWasm } from './namStudioWasm'
+
+let wasmNoteMod: unknown | null = null
+let wasmNoteReady = false
+if (typeof window !== 'undefined') {
+  void ensureWasm()
+    .then((m) => {
+      wasmNoteMod = m
+      wasmNoteReady = m !== null
+    })
+    .catch(() => {})
+}
+
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
 
 export interface DetectedNote {
@@ -8,14 +29,27 @@ export interface DetectedNote {
   cents: number
 }
 
-/** Convert a frequency to the nearest note name/octave and how far off (in cents) it is - relative to a tunable A4 reference (concert pitch is 440Hz, but some players tune to 432/442 etc). */
-export function frequencyToNote(frequency: number, referenceA4 = 440): DetectedNote {
+/** TS fallback — identical arithmetic to the C++ in note_utils.cpp. */
+export function frequencyToNoteFallback(frequency: number, referenceA4 = 440): DetectedNote {
   const midiFloat = 69 + 12 * Math.log2(frequency / referenceA4)
   const midi = Math.round(midiFloat)
   const cents = Math.round((midiFloat - midi) * 100)
   const name = NOTE_NAMES[((midi % 12) + 12) % 12]!
   const octave = Math.floor(midi / 12) - 1
   return { name, octave, cents }
+}
+
+/** Convert a frequency to the nearest note name/octave and how far off (in cents) it is - relative to a tunable A4 reference (concert pitch is 440Hz, but some players tune to 432/442 etc). */
+export function frequencyToNote(frequency: number, referenceA4 = 440): DetectedNote {
+  if (wasmNoteReady && wasmNoteMod) {
+    try {
+      const r = frequencyToNoteWasm(frequency, referenceA4, wasmNoteMod as never)
+      if (r) return r as DetectedNote
+    } catch {
+      // fall through to TS fallback
+    }
+  }
+  return frequencyToNoteFallback(frequency, referenceA4)
 }
 
 export interface StringTuning {

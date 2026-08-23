@@ -93,6 +93,70 @@ function cppFragmentName(cppFile, variantKey) {
   return variantKey ? `${base}_${variantKey.replace(/-/g, '_')}_params.inc` : `${base}_params.inc`
 }
 
+// Parallel to cppFragmentName, but for the generated per-param smoothing
+// tables that back issue #122's sample-accurate ramping. Same fragment naming
+// so engine.cpp can #include both `<base>_params.inc` and `<base>_smoothing.inc`.
+function cppSmoothingFragmentName(cppFile, variantKey) {
+  const base = cppFile.replace(/\.cpp$/, '')
+  return variantKey
+    ? `${base}_${variantKey.replace(/-/g, '_')}_smoothing.inc`
+    : `${base}_smoothing.inc`
+}
+
+const SMOOTHING_MODE_ENUM = {
+  none: 'openaxe::dsp::SmoothingMode::kNone',
+  linear: 'openaxe::dsp::SmoothingMode::kLinear',
+  exponential: 'openaxe::dsp::SmoothingMode::kExponential',
+}
+
+// Default smoothing policy when a param omits the field entirely: snap (no
+// ramp). One-pole exponential and linear slew both need a time constant and a
+// range (the latter only for the linear slew rate).
+function smoothingOf(param) {
+  const s = param.smoothing
+  if (!s || !s.mode || s.mode === 'none') {
+    return { mode: 'none', timeConstant: 0, min: param.min ?? 0, max: param.max ?? 1 }
+  }
+  return {
+    mode: s.mode,
+    timeConstant: s.timeConstant ?? 0,
+    min: param.min ?? 0,
+    max: param.max ?? 1,
+  }
+}
+
+function cppSmoothingRow(param) {
+  const s = smoothingOf(param)
+  const mode = SMOOTHING_MODE_ENUM[s.mode] ?? SMOOTHING_MODE_ENUM.none
+  return `    {${mode}, ${cppFloat(s.timeConstant)}, ${cppFloat(s.min)}, ${cppFloat(s.max)}},`
+}
+
+// A ramp mode the engine can't run (or a typo'd one, which would otherwise
+// silently degrade to `none`), or an exponential/linear row without a positive
+// time constant (which would stall the ramp and poison SubBlocksForSmoothing's
+// sub-block math) must fail generation rather than ship as a broken table.
+function validateSmoothing(schema) {
+  for (const [kind, def] of Object.entries(schema.effects)) {
+    for (const param of def.params ?? []) {
+      const s = param.smoothing
+      if (!s || !s.mode) continue
+      if (!(s.mode in SMOOTHING_MODE_ENUM)) {
+        throw new Error(
+          `${kind}.${param.id ?? param.symbol}: unknown smoothing.mode '${s.mode}' (expected none|linear|exponential)`,
+        )
+      }
+      if (
+        (s.mode === 'linear' || s.mode === 'exponential') &&
+        !(typeof s.timeConstant === 'number' && s.timeConstant > 0)
+      ) {
+        throw new Error(
+          `${kind}.${param.id ?? param.symbol}: smoothing.mode '${s.mode}' requires a positive numeric timeConstant`,
+        )
+      }
+    }
+  }
+}
+
 function jsIdent(kind) {
   return kind
     .replace(/-([a-z])/g, (_, c) => c.toUpperCase())
@@ -143,6 +207,21 @@ function renderCppFragment(target) {
   return (
     GENERATED_HEADER_CPP('packages/core/param_schema.json') +
     target.params.map(cppRow).join('\n') +
+    '\n'
+  )
+}
+
+const GENERATED_HEADER_CPP_SMOOTHING = (source) => `// GENERATED FILE - do not edit by hand.
+// Produced by scripts/gen-param-schema.mjs from ${source}.
+// One ParamSmoothing row per param, in the same order as the matching
+// <base>_params.inc fragment, so engine.cpp can #include both into parallel
+// arrays. See openaxe/dsp/smoothing.h for the struct and the ramp math.
+`
+
+function renderCppSmoothingFragment(target) {
+  return (
+    GENERATED_HEADER_CPP_SMOOTHING('packages/core/param_schema.json') +
+    target.params.map(cppSmoothingRow).join('\n') +
     '\n'
   )
 }
@@ -356,9 +435,12 @@ async function main() {
   const files = new Map()
 
   if (selectedTargets.includes('base')) {
+    validateSmoothing(schema)
     const { cppTargets, jsMaps, ranges } = buildTargets(schema)
     for (const target of cppTargets) {
       files.set(join(CPP_OUT_DIR, target.fragmentName), renderCppFragment(target))
+      const smoothingName = target.fragmentName.replace('_params.inc', '_smoothing.inc')
+      files.set(join(CPP_OUT_DIR, smoothingName), renderCppSmoothingFragment(target))
     }
     // Run through prettier so the checked-in file always matches what
     // `pnpm format`/CI expects - otherwise --check would flag its own output.

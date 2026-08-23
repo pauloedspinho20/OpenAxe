@@ -15,6 +15,7 @@
 #include "json.h"
 #include "openaxe/block.h"
 #include "openaxe/dsp/delay.h"
+#include "openaxe/midi.h"
 #include "sha256.h"
 
 namespace openaxe::state {
@@ -296,6 +297,48 @@ std::string SerializeState(const AudioEngine& engine, bool embed_assets) {
         slots.Set(BlockIdToString(entry.slot), std::move(binding));
       }
       root.Set("automationSlots", std::move(slots));
+    }
+  }
+
+  // MIDI mappings (#124): array of {match:{type,channel,number}, action:{kind,...}}
+  {
+    const auto mappings = engine.ListMidiMappings();
+    if (!mappings.empty()) {
+      Value midi = Value::Array();
+      for (const auto& m : mappings) {
+        Value entry = Value::Object();
+        Value match = Value::Object();
+        const char* type_str = nullptr;
+        switch (m.match.type) {
+          case midi::MessageType::kNoteOn: type_str = "noteon"; break;
+          case midi::MessageType::kCc: type_str = "cc"; break;
+          case midi::MessageType::kPc: type_str = "pc"; break;
+        }
+        match.Set("type", Value::String(type_str));
+        match.Set("channel", Value::Number(m.match.channel));
+        match.Set("number", Value::Number(m.match.number));
+        entry.Set("match", std::move(match));
+        Value action = Value::Object();
+        switch (m.action.kind) {
+          case midi::ActionKind::kSlot:
+            action.Set("kind", Value::String("slot"));
+            action.Set("slot", Value::Number(m.action.slot));
+            break;
+          case midi::ActionKind::kScene:
+            action.Set("kind", Value::String("scene"));
+            action.Set("scene", Value::Number(m.action.scene));
+            break;
+          case midi::ActionKind::kNextScene:
+            action.Set("kind", Value::String("nextScene"));
+            break;
+          case midi::ActionKind::kPrevScene:
+            action.Set("kind", Value::String("prevScene"));
+            break;
+        }
+        entry.Set("action", std::move(action));
+        midi.items().push_back(std::move(entry));
+      }
+      root.Set("midiMappings", std::move(midi));
     }
   }
 
@@ -582,6 +625,7 @@ LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
 
   // ── Rebuild: clear first, exactly like applyPreset (#64) ────────────────
   engine.ClearTopology();
+  engine.ClearMidiMappings();
 
   // Pass 1 - place every well-formed block, recording doc-id -> new id so
   // edges can reference blocks regardless of how ids renumber.
@@ -790,6 +834,93 @@ LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
         ++outcome.stats.slots_restored;
       } else {
         ++outcome.stats.slots_skipped;
+      }
+    }
+  }
+
+  // ── MIDI mappings (#124) ────────────────────────────────────────────────
+  // Array of {match:{type,channel,number}, action:{kind,...}}. Restored
+  // after automation slots (order doesn't matter, but consistent). Each entry
+  // is validated; malformed ones skip with a count like every other soft
+  // failure. Midi state was cleared with the topology above, so restores here.
+  if (const Value* midi_doc = root.Find("midiMappings"); midi_doc != nullptr) {
+    if (!midi_doc->IsArray()) {
+      // Treat non-array like a soft skip of the whole section — not a hard failure.
+      outcome.stats.midi_skipped += 1;
+    } else {
+      for (const Value& entry : midi_doc->items()) {
+        if (!entry.IsObject()) {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+        const Value* match_obj = entry.Find("match");
+        const Value* action_obj = entry.Find("action");
+        if (!match_obj || !match_obj->IsObject() || !action_obj || !action_obj->IsObject()) {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+        const Value* type_v = match_obj->Find("type");
+        const Value* chan_v = match_obj->Find("channel");
+        const Value* num_v = match_obj->Find("number");
+        if (!type_v || !type_v->IsString() || !chan_v || !chan_v->IsNumber() ||
+            !num_v || !num_v->IsNumber()) {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+        midi::MidiMatch match;
+        const std::string& type_str = *type_v->AsString();
+        if (type_str == "noteon") match.type = midi::MessageType::kNoteOn;
+        else if (type_str == "cc") match.type = midi::MessageType::kCc;
+        else if (type_str == "pc") match.type = midi::MessageType::kPc;
+        else {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+        match.channel = static_cast<int>(chan_v->AsNumber());
+        match.number = static_cast<int>(num_v->AsNumber());
+
+        const Value* kind_v = action_obj->Find("kind");
+        if (!kind_v || !kind_v->IsString()) {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+        midi::MidiAction action;
+        const std::string& kind_str = *kind_v->AsString();
+        if (kind_str == "slot") {
+          const Value* slot_v = action_obj->Find("slot");
+          if (!slot_v || !slot_v->IsNumber()) {
+            ++outcome.stats.midi_skipped;
+            continue;
+          }
+          action.kind = midi::ActionKind::kSlot;
+          action.slot = static_cast<int>(slot_v->AsNumber());
+        } else if (kind_str == "scene") {
+          const Value* scene_v = action_obj->Find("scene");
+          if (!scene_v || !scene_v->IsNumber()) {
+            ++outcome.stats.midi_skipped;
+            continue;
+          }
+          action.kind = midi::ActionKind::kScene;
+          action.scene = static_cast<int>(scene_v->AsNumber());
+        } else if (kind_str == "nextScene") {
+          action.kind = midi::ActionKind::kNextScene;
+        } else if (kind_str == "prevScene") {
+          action.kind = midi::ActionKind::kPrevScene;
+        } else {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+
+        if (!midi::IsValidMatch(match) || !midi::IsValidAction(action)) {
+          ++outcome.stats.midi_skipped;
+          continue;
+        }
+
+        if (engine.AddMidiMapping(match, action)) {
+          ++outcome.stats.midi_restored;
+        } else {
+          ++outcome.stats.midi_skipped;
+        }
       }
     }
   }

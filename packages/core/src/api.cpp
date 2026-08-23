@@ -6,7 +6,10 @@
 #include <utility>
 #include <vector>
 
+#include "openaxe/dsp/note_utils.h"
+#include "openaxe/dsp/pitch_detect.h"
 #include "openaxe/engine.h"
+#include "openaxe/midi.h"
 #include "serialization/rig_state.h"
 
 namespace {
@@ -360,6 +363,168 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
 
 float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetCpuLoad(); }
 
+// ── MIDI mapping (issue #124) ─────────────────────────────────────────
+// Thin forwarders onto the MIDI model. Helpers are pure functions; the rest
+// delegates to AudioEngine's MIDI state (see engine.h for the threading
+// contract — mutations are control-thread only, Handle is any-thread).
+
+namespace {
+
+openaxe::midi::MessageType ToMidiMessageType(NamStudioMidiMessageType t) {
+  switch (t) {
+    case NAM_STUDIO_MIDI_NOTEON: return openaxe::midi::MessageType::kNoteOn;
+    case NAM_STUDIO_MIDI_CC: return openaxe::midi::MessageType::kCc;
+    case NAM_STUDIO_MIDI_PC: return openaxe::midi::MessageType::kPc;
+  }
+  return openaxe::midi::MessageType::kCc;
+}
+NamStudioMidiMessageType FromMidiMessageType(openaxe::midi::MessageType t) {
+  switch (t) {
+    case openaxe::midi::MessageType::kNoteOn: return NAM_STUDIO_MIDI_NOTEON;
+    case openaxe::midi::MessageType::kCc: return NAM_STUDIO_MIDI_CC;
+    case openaxe::midi::MessageType::kPc: return NAM_STUDIO_MIDI_PC;
+  }
+  return NAM_STUDIO_MIDI_CC;
+}
+openaxe::midi::ActionKind ToMidiActionKind(NamStudioMidiActionKind k) {
+  switch (k) {
+    case NAM_STUDIO_MIDI_ACTION_SLOT: return openaxe::midi::ActionKind::kSlot;
+    case NAM_STUDIO_MIDI_ACTION_SCENE: return openaxe::midi::ActionKind::kScene;
+    case NAM_STUDIO_MIDI_ACTION_NEXT_SCENE: return openaxe::midi::ActionKind::kNextScene;
+    case NAM_STUDIO_MIDI_ACTION_PREV_SCENE: return openaxe::midi::ActionKind::kPrevScene;
+  }
+  return openaxe::midi::ActionKind::kSlot;
+}
+NamStudioMidiActionKind FromMidiActionKind(openaxe::midi::ActionKind k) {
+  switch (k) {
+    case openaxe::midi::ActionKind::kSlot: return NAM_STUDIO_MIDI_ACTION_SLOT;
+    case openaxe::midi::ActionKind::kScene: return NAM_STUDIO_MIDI_ACTION_SCENE;
+    case openaxe::midi::ActionKind::kNextScene: return NAM_STUDIO_MIDI_ACTION_NEXT_SCENE;
+    case openaxe::midi::ActionKind::kPrevScene: return NAM_STUDIO_MIDI_ACTION_PREV_SCENE;
+  }
+  return NAM_STUDIO_MIDI_ACTION_SLOT;
+}
+
+}  // namespace
+
+int32_t nam_studio_midi_mapping_count(NamStudioGraph* graph) {
+  return static_cast<int32_t>(graph->engine.MidiMappingCount());
+}
+
+int32_t nam_studio_midi_get_mapping(NamStudioGraph* graph, int32_t index,
+                                    NamStudioMidiMessageType* out_type,
+                                    int32_t* out_channel, int32_t* out_number,
+                                    NamStudioMidiActionKind* out_kind,
+                                    int32_t* out_slot, int32_t* out_scene) {
+  const auto m = graph->engine.MidiMappingAt(static_cast<size_t>(index));
+  if (!m) return 0;
+  if (out_type) *out_type = FromMidiMessageType(m->match.type);
+  if (out_channel) *out_channel = m->match.channel;
+  if (out_number) *out_number = m->match.number;
+  if (out_kind) *out_kind = FromMidiActionKind(m->action.kind);
+  if (out_slot) *out_slot = m->action.slot;
+  if (out_scene) *out_scene = m->action.scene;
+  return 1;
+}
+
+int32_t nam_studio_midi_add_mapping(NamStudioGraph* graph,
+                                    NamStudioMidiMessageType type,
+                                    int32_t channel, int32_t number,
+                                    NamStudioMidiActionKind kind,
+                                    int32_t slot, int32_t scene) {
+  openaxe::midi::MidiMatch match{ToMidiMessageType(type), channel, number};
+  openaxe::midi::MidiAction action;
+  action.kind = ToMidiActionKind(kind);
+  action.slot = slot;
+  action.scene = scene;
+  return graph->engine.AddMidiMapping(match, action) ? 1 : 0;
+}
+
+int32_t nam_studio_midi_remove_mapping(NamStudioGraph* graph, int32_t index) {
+  return graph->engine.RemoveMidiMapping(static_cast<size_t>(index)) ? 1 : 0;
+}
+
+void nam_studio_midi_clear_mappings(NamStudioGraph* graph) { graph->engine.ClearMidiMappings(); }
+
+int32_t nam_studio_midi_arm_learn(NamStudioGraph* graph, NamStudioMidiActionKind kind,
+                                  int32_t slot, int32_t scene) {
+  openaxe::midi::MidiAction action;
+  action.kind = ToMidiActionKind(kind);
+  action.slot = slot;
+  action.scene = scene;
+  return graph->engine.ArmMidiLearn(action) ? 1 : 0;
+}
+
+void nam_studio_midi_cancel_learn(NamStudioGraph* graph) { graph->engine.CancelMidiLearn(); }
+
+int32_t nam_studio_midi_is_learning(NamStudioGraph* graph) {
+  return graph->engine.IsMidiLearning() ? 1 : 0;
+}
+
+int32_t nam_studio_midi_get_learn_target(NamStudioGraph* graph,
+                                         NamStudioMidiActionKind* out_kind,
+                                         int32_t* out_slot, int32_t* out_scene) {
+  const auto target = graph->engine.MidiLearnTarget();
+  if (!target) return 0;
+  if (out_kind) *out_kind = FromMidiActionKind(target->kind);
+  if (out_slot) *out_slot = target->slot;
+  if (out_scene) *out_scene = target->scene;
+  return 1;
+}
+
+int32_t nam_studio_midi_parse_message(const uint8_t* data, int32_t size,
+                                      NamStudioMidiMessageType* out_type,
+                                      int32_t* out_channel, int32_t* out_number,
+                                      int32_t* out_value) {
+  if (!data || size <= 0) return 0;
+  const auto msg = openaxe::midi::ParseMidiMessage(data, static_cast<size_t>(size));
+  if (!msg) return 0;
+  if (out_type) *out_type = FromMidiMessageType(msg->type);
+  if (out_channel) *out_channel = msg->channel;
+  if (out_number) *out_number = msg->number;
+  if (out_value) *out_value = msg->value;
+  return 1;
+}
+
+int32_t nam_studio_midi_is_trigger_edge(NamStudioMidiMessageType type, int32_t value) {
+  openaxe::midi::MessageType t = ToMidiMessageType(type);
+  openaxe::midi::MidiMessage m{t, 0, 0, value};
+  return openaxe::midi::IsTriggerEdge(m) ? 1 : 0;
+}
+
+int32_t nam_studio_midi_message_matches(NamStudioMidiMessageType msg_type,
+                                        int32_t msg_channel, int32_t msg_number,
+                                        NamStudioMidiMessageType match_type,
+                                        int32_t match_channel, int32_t match_number) {
+  openaxe::midi::MidiMessage msg{ToMidiMessageType(msg_type), msg_channel, msg_number, 0};
+  openaxe::midi::MidiMatch match{ToMidiMessageType(match_type), match_channel, match_number};
+  return openaxe::midi::MessageMatches(msg, match) ? 1 : 0;
+}
+
+int32_t nam_studio_midi_handle_message(NamStudioGraph* graph,
+                                       const uint8_t* data, int32_t size,
+                                       int32_t sample_offset,
+                                       NamStudioMidiActionKind* out_kind,
+                                       int32_t* out_slot, int32_t* out_scene,
+                                       NamStudioMidiMessageType* out_match_type,
+                                       int32_t* out_match_channel,
+                                       int32_t* out_match_number) {
+  if (!data || size <= 0) return 0;
+  const auto result = graph->engine.HandleMidiMessage(data, static_cast<size_t>(size), sample_offset);
+  if (result.kind == openaxe::engine::AudioEngine::MidiHandleResult::kNone) return 0;
+  if (result.action) {
+    if (out_kind) *out_kind = FromMidiActionKind(result.action->kind);
+    if (out_slot) *out_slot = result.action->slot;
+    if (out_scene) *out_scene = result.action->scene;
+  }
+  if (result.match) {
+    if (out_match_type) *out_match_type = FromMidiMessageType(result.match->type);
+    if (out_match_channel) *out_match_channel = result.match->channel;
+    if (out_match_number) *out_match_number = result.match->number;
+  }
+  return result.kind == openaxe::engine::AudioEngine::MidiHandleResult::kDispatched ? 1 : 2;
+}
+
 // ── Automation slot map (issue #121) ────────────────────────────────────
 // Thin forwarders onto AudioEngine's slot machinery - see api.h for the
 // caller-facing contracts and packages/vst3/README.md for the design.
@@ -440,6 +605,27 @@ NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char
     case openaxe::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
   }
   return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
+}
+
+// ── Tuner — pitch detection + note mapping (issue #123) ───────────────
+// Pure functions — no graph, no state, safe from any thread. The web tuner
+// forwards through these via WASM; native code calls them directly.
+
+float nam_studio_detect_pitch(const float* samples, int32_t count, double sample_rate) {
+  const auto result = openaxe::dsp::DetectPitch(samples, count, sample_rate);
+  return result ? result->frequency : 0.0f;
+}
+
+int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
+                                     const char** out_name, int32_t* out_octave,
+                                     int32_t* out_cents) {
+  if (frequency <= 0.0f || !out_name || !out_octave || !out_cents) return 0;
+  if (reference_a4 <= 0.0) reference_a4 = 440.0;
+  const auto note = openaxe::dsp::FrequencyToNote(frequency, reference_a4);
+  *out_name = note.name;
+  *out_octave = note.octave;
+  *out_cents = note.cents;
+  return 1;
 }
 
 // ── Missing-asset queries (issue #120) ──────────────────────────────────

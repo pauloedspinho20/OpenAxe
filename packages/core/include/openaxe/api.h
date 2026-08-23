@@ -27,6 +27,31 @@ extern "C" {
 // target (#15 desktop, #16 VST3, #17 mobile, #22 web/WASM) links against.
 typedef struct NamStudioGraph NamStudioGraph;
 
+// ── Threading contract (issue #211) ──────────────────────────────────────
+// Every function here is exactly one of two tiers, stated on the declaration:
+//
+//   Tier 1 - safe to call from ANY thread, concurrently with
+//   nam_studio_process, lock-free: nam_studio_get_param /
+//   nam_studio_set_param (EXCEPT the Amp-family slim-size param, which is
+//   Tier 2), nam_studio_block_param_count / _param_info (only where those
+//   read the DSP's param table, and those are control-thread calls - see the
+//   notes on them), nam_studio_set_reverb_control, the bypass/trim/master-bus
+//   calls, metering, and the automation-slot param get/set.
+//
+//   Tier 2 - structural / DSP-swapping: everything else that builds or
+//   replaces a block's DSP, rewrites its param table, loads a model/IR, or
+//   changes the topology. These mutate shared non-atomic BlockState fields,
+//   so the caller MUST ensure nam_studio_process is not running when it
+//   calls them - no process() call in flight and none starting until they
+//   return. The audio path itself stays lock-free; the exclusion is the
+//   caller's job. The two shipping shells each do it in their own way:
+//     - the desktop app wraps every Tier-2 call in its suspend handshake
+//       (StudioBridge::Mutate -> AudioIO::BeginSuspend/EndSuspend);
+//     - the web app runs inside the AudioWorklet, where control messages
+//       and process() share one thread and so can never race.
+//   A future shell must provide an equivalent handshake before calling any
+//   Tier-2 function.
+
 // Never returns NULL.
 NamStudioGraph* nam_studio_graph_create(void);
 // NULL is a no-op.
@@ -125,7 +150,11 @@ void nam_studio_reset(NamStudioGraph* graph, double sample_rate, int32_t max_blo
 void nam_studio_process(NamStudioGraph* graph, const float* const* input, int32_t input_channels,
                          float* const* output, int32_t output_channels, int32_t num_frames);
 
-// ── Params (generic across every block kind; lock-free) ────────────────
+// ── Params (generic across every block kind; Tier 1, lock-free) ────────
+// param_count/param_info read the block's atomic count and live DSP table:
+// they are safe from any thread for the count itself (issue #211), and the
+// info read visits the DSP's param table, so it must not race a Tier-2
+// algorithm/model swap (the desktop routes it through its control thread).
 
 // 0 for an unknown block or a kind with no wrapped DSP yet.
 int32_t nam_studio_block_param_count(NamStudioGraph* graph, int32_t block_id);
@@ -137,8 +166,10 @@ int32_t nam_studio_block_param_info(NamStudioGraph* graph, int32_t block_id, int
 float nam_studio_get_param(NamStudioGraph* graph, int32_t block_id, int32_t index);
 // No-op for an unknown block/index. Lock-free (safe from any thread) for
 // every param except an Amp-family block's Slim Size, which synchronously
-// forwards to NamAmp::SetSlimSize - not real-time safe, matching that
-// method's own documented contract (NAMCore may reallocate).
+// forwards to NamAmp::SetSlimSize - that one is Tier 2 (not real-time safe,
+// NAMCore may reallocate), so it must not run concurrently with
+// nam_studio_process; the desktop bridge routes it through its suspend
+// handshake (issue #211).
 void nam_studio_set_param(NamStudioGraph* graph, int32_t block_id, int32_t index, float value);
 
 // ── NAM model management (off the audio thread) ────────────────────────
@@ -178,15 +209,18 @@ int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t b
 
 // ── Reverb algorithm choice ─────────────────────────────────────────────
 
-// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_REVERB block. Not
-// real-time safe - reconstructs the underlying wrapper instance.
+// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_REVERB block. Tier
+// 2 - reconstructs the underlying wrapper instance (destroying and rebuilding
+// the DSP object nam_studio_process visits), so it must not run concurrently
+// with nam_studio_process; suspend audio around it.
 void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
                                       NamStudioReverbAlgorithm algorithm);
 
 // ── Delay model choice ──────────────────────────────────────────────────
 
-// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Not
-// real-time safe.
+// No-op if block_id is unknown or not a NAM_STUDIO_BLOCK_DELAY block. Tier 2
+// - rewrites the block's param table and re-seeds its smoothing/ramp state,
+// so it must not run concurrently with nam_studio_process.
 // ── Cab impulse responses ──────────────────────────────────────────────
 // Install an IR on a NAM_STUDIO_BLOCK_CAB block: `samples` is mono float audio
 // at the graph's own sample rate, `frames` its length. Nothing is resampled here,
@@ -219,9 +253,12 @@ int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id);
 // room size and damping are abstractions over the current algorithm's decay
 // and high cut, and the rest resolve to whichever symbol that algorithm uses
 // (Hall's pre-delay is `delay`, Room's is `predelay`, ...). No-op for
-// non-reverb blocks and for controls the current algorithm lacks. Every front
-// end should drive reverb through this rather than reimplementing the
-// per-algorithm mapping over nam_studio_set_param.
+// non-reverb blocks and for controls the current algorithm lacks. Tier 1:
+// resolves through a per-block atomic cache installed with the algorithm, so
+// it is safe from any thread and never races a set_reverb_algorithm on
+// another thread (issue #211). Every front end should drive reverb through
+// this rather than reimplementing the per-algorithm mapping over
+// nam_studio_set_param.
 typedef enum {
   NAM_STUDIO_REVERB_ROOM_SIZE = 0,   // 0..0.97
   NAM_STUDIO_REVERB_DAMPING = 1,     // 0..1
@@ -377,6 +414,119 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
 // until the next one.
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph);
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index);
+
+// ── Tuner — pitch detection + note mapping (issue #123) ────────────────
+// Pure functions over a buffer — no graph, no state. Safe from any thread.
+// These are the one detector every front end shares: web, desktop, plugin,
+// mobile. The web tuner's previous TS autocorrelation (apps/web/src/tuner/)
+// now forwards to these through WASM; the native path calls them directly.
+
+// Returns the detected fundamental in Hz, or 0 when no confident pitch was
+// found (silence, noise, chord). `samples` is mono float audio at
+// `sample_rate`. Returns 0 for null/empty buffers or invalid rates. The
+// searched range is 25..1500 Hz — a 5-string bass's low B up to past a
+// guitar's high frets — matching the TS defaults pitchDetect.ts used.
+float nam_studio_detect_pitch(const float* samples, int32_t count, double sample_rate);
+
+// Hz → note/cents mapping so all four front ends display the same reading.
+// `frequency` must be > 0. `reference_a4` is the A4 concert pitch (440).
+// Returns 1 on success, 0 if frequency <= 0 or any required out pointer is
+// null. `out_name` points at static storage (one of "C","C#",...,"B") and
+// stays valid forever; `out_octave` is the octave number; `out_cents` is
+// -50..50, 0 = dead on.
+int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
+                                     const char** out_name, int32_t* out_octave,
+                                     int32_t* out_cents);
+
+// ── MIDI mapping (issue #124) ──────────────────────────────────────────
+// The mapping model moved from TypeScript (apps/web/src/midi/*) into core
+// so every front end reuses it. Front ends supply only the transport (Web
+// MIDI on web, the host's event list in a plugin, CoreMIDI/ALSA on desktop).
+// Bindings ride the rig state document ("midiMappings") and survive a DAW
+// project reload (#119). Channel filtering is per-mapping (the match includes
+// the channel); `selectedInputId` remains a front-end-only preference.
+//
+// Mutation (add/remove/clear, arm/cancel learn) is control-thread only
+// (Tier 2): it mutates the mapping vector. Handle is safe from any thread
+// (takes a shared lock) — a host's process callback forwards raw MIDI bytes
+// plus a per-event sample offset and lets core resolve and apply the binding.
+// `sample_offset` is accepted for sample-accurate scheduling; this build
+// dispatches immediately (offset unused, since slot/scene actions are
+// control-thread work — a future build can queue per offset without changing
+// the ABI).
+
+typedef enum NamStudioMidiMessageType {
+  NAM_STUDIO_MIDI_NOTEON = 0,
+  NAM_STUDIO_MIDI_CC = 1,
+  NAM_STUDIO_MIDI_PC = 2,
+} NamStudioMidiMessageType;
+
+typedef enum NamStudioMidiActionKind {
+  NAM_STUDIO_MIDI_ACTION_SLOT = 0,        // slot 0-7, whatever scene is current
+  NAM_STUDIO_MIDI_ACTION_SCENE = 1,       // scene 0-63, absolute jump
+  NAM_STUDIO_MIDI_ACTION_NEXT_SCENE = 2,
+  NAM_STUDIO_MIDI_ACTION_PREV_SCENE = 3,
+} NamStudioMidiActionKind;
+
+// How many mappings are stored.
+int32_t nam_studio_midi_mapping_count(NamStudioGraph* graph);
+// One mapping by index. Returns 1 on success, 0 for out-of-range. Every
+// out-param is optional (pass NULL to skip).
+int32_t nam_studio_midi_get_mapping(NamStudioGraph* graph, int32_t index,
+                                    NamStudioMidiMessageType* out_type,
+                                    int32_t* out_channel, int32_t* out_number,
+                                    NamStudioMidiActionKind* out_kind,
+                                    int32_t* out_slot, int32_t* out_scene);
+// Adds a binding, deduping like the web's midiStore.completeLearn: any
+// existing mapping whose action key == the new action's key, or whose match
+// key == the new match's key, is removed first. Returns 1 on success, 0 for
+// invalid match/action. Control-thread only.
+int32_t nam_studio_midi_add_mapping(NamStudioGraph* graph,
+                                    NamStudioMidiMessageType type,
+                                    int32_t channel, int32_t number,
+                                    NamStudioMidiActionKind kind,
+                                    int32_t slot, int32_t scene);
+// Removes the mapping at `index`; returns 1 on success, 0 for out-of-range. Control-thread only.
+int32_t nam_studio_midi_remove_mapping(NamStudioGraph* graph, int32_t index);
+// Removes every mapping and cancels any active learn. Control-thread only.
+void nam_studio_midi_clear_mappings(NamStudioGraph* graph);
+
+// Arms learn for `action`; returns 1 on success, 0 for invalid action. Control-thread only.
+int32_t nam_studio_midi_arm_learn(NamStudioGraph* graph, NamStudioMidiActionKind kind,
+                                  int32_t slot, int32_t scene);
+void nam_studio_midi_cancel_learn(NamStudioGraph* graph);
+int32_t nam_studio_midi_is_learning(NamStudioGraph* graph);
+// The action currently being learned, or 0 if none. Every out-param optional.
+int32_t nam_studio_midi_get_learn_target(NamStudioGraph* graph,
+                                         NamStudioMidiActionKind* out_kind,
+                                         int32_t* out_slot, int32_t* out_scene);
+
+// Pure helpers, no graph — mirrors message.ts / actions.ts.
+int32_t nam_studio_midi_parse_message(const uint8_t* data, int32_t size,
+                                      NamStudioMidiMessageType* out_type,
+                                      int32_t* out_channel, int32_t* out_number,
+                                      int32_t* out_value);
+int32_t nam_studio_midi_is_trigger_edge(NamStudioMidiMessageType type, int32_t value);
+int32_t nam_studio_midi_message_matches(NamStudioMidiMessageType msg_type,
+                                        int32_t msg_channel, int32_t msg_number,
+                                        NamStudioMidiMessageType match_type,
+                                        int32_t match_channel, int32_t match_number);
+
+// Feeds raw MIDI bytes through the mapping. `sample_offset` is the per-event
+// offset within the current audio block (0 = block start). Currently
+// dispatched immediately; a future build may schedule per offset without ABI
+// change. Returns 0 for "no match / not trigger / not parseable", 1 for
+// "dispatched a bound action", 2 for "learn completed" (the message was
+// consumed to create a binding, not dispatched). When it returns 1 or 2,
+// out params (all optional) echo what fired or was learned.
+int32_t nam_studio_midi_handle_message(NamStudioGraph* graph,
+                                       const uint8_t* data, int32_t size,
+                                       int32_t sample_offset,
+                                       NamStudioMidiActionKind* out_kind,
+                                       int32_t* out_slot, int32_t* out_scene,
+                                       NamStudioMidiMessageType* out_match_type,
+                                       int32_t* out_match_channel,
+                                       int32_t* out_match_number);
 
 // nam_studio_load_state's result.
 typedef enum NamStudioLoadStateResult {
