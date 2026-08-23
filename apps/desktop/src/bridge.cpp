@@ -576,16 +576,41 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
 
     int32_t core_id = kUnknownBlock;
     int32_t index = -1;
+    bool slim_size = false;
     Call([&] {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
       core_id = it->second.core_id;
       index = ResolveParamIndex(key, core_id, graph_, blocks_, js_id);
+      if (index >= 0) {
+        const char* name = nullptr;
+        const char* sym = nullptr;
+        const char* unit = nullptr;
+        float min = 0, max = 0;
+        if (nam_studio_block_param_info(graph_, core_id, index, &name, &sym, &min, &max, &unit) &&
+            sym && std::strcmp(sym, "slim_size") == 0) {
+          slim_size = true;
+        }
+      }
     });
     if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
     if (index < 0) return JsonError("unknown param key");
-    // nam_studio_set_param is lock-free and thread-safe (see api.h).
-    nam_studio_set_param(graph_, core_id, index, value);
+    if (slim_size) {
+      // nam_studio_set_param forwards the Amp-family slim-size param
+      // synchronously into NAMCore, which may reallocate (issue #211) - it is
+      // Tier 2, not the lock-free atomic write the rest of the param surface
+      // is. Called straight from the webview thread it would race an in-flight
+      // nam_studio_process on the audio thread, so route it through the
+      // control thread's suspend handshake like every other structural
+      // mutation.
+      Call([&] {
+        Mutate([&] { nam_studio_set_param(graph_, core_id, index, value); },
+               /*reset_after=*/false);
+      });
+    } else {
+      // nam_studio_set_param is lock-free and thread-safe (see api.h).
+      nam_studio_set_param(graph_, core_id, index, value);
+    }
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setParam: ") + e.what());

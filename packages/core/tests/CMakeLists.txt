@@ -104,6 +104,14 @@ if(NAM_STUDIO_HAS_NAM_CORE AND NAM_STUDIO_HAS_DRAGONFLY AND NAM_STUDIO_HAS_DSPAR
   target_link_libraries(smoothing_test PRIVATE nam_studio_core)
   add_test(NAME smoothing_test COMMAND smoothing_test)
 
+  # Concurrent stress for the Tier-1 (any-thread) core surface (issue #211):
+  # races nam_studio_process against the lock-free param/reverb-control/trim/
+  # master-bus calls. Plain link like engine_test - it loads no NAM model, so
+  # it doesn't need the whole-archive self-registering-parser treatment.
+  add_executable(api_threading_test api_threading_test.cpp)
+  target_link_libraries(api_threading_test PRIVATE nam_studio_core)
+  add_test(NAME api_threading COMMAND api_threading_test)
+
   # Needs WHOLE_ARCHIVE for the same reason nam_amp_test does (see its own
   # comment above): NAMCore's architecture parsers self-register via static
   # initializers with no other referenced symbol, so a plain static-archive

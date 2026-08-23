@@ -112,6 +112,8 @@ enum class ReverbControl {
   kDryLevel,   // percent
 };
 
+inline constexpr int kReverbControlCount = 8;  // one per ReverbControl value
+
 struct ParamDescriptor {
   const char* name;
   const char* symbol;
@@ -165,14 +167,53 @@ struct IrAssetSource {
   std::string path;
 };
 
-// Not real-time safe: constructs/destroys DSP objects, allocates buffers,
-// parses model files. Callers must not invoke these concurrently with
-// Process() - there is no real host driving this from an audio thread yet
-// (native tests only), so full lock-free topology mutation is a documented
-// follow-up, not attempted here.
+// ── Concurrency contract (issue #211) ────────────────────────────────────
+// The methods fall into exactly two tiers, and the doc comment on each one
+// says which it is. The invariant the two tiers rest on: Process() reads
+// shared BlockState through (a) the atomic param/flag mirror and (b) plain
+// fields that are only ever written while the mutation protocol below is in
+// force - never while Process() could be running.
 //
-// Process() itself IS real-time safe once Reset() has been called: no
-// allocation, only atomic param loads and buffer copies/DSP calls.
+//   Tier 1 - real-time safe, callable from ANY thread concurrently with
+//   Process(): the generic param get/set (SetParam/GetParam/ParamCount/
+//   ParamInfo - the param mirror is std::atomic), SetReverbControl (resolves
+//   through cached per-block atomics, see ReverbControlSlot), bypass, I/O
+//   trims, master level/mutes, meters, cpu load. These take no locks and
+//   never touch the DSP objects.
+//
+//   Tier 2 - structural / DSP-swapping: AddBlock/RemoveBlock/MoveBlock/
+//   Connect/Disconnect, Reset, ClearTopology, LoadNamModel/LoadNamModelJson/
+//   UnloadNamModel, LoadIr/LoadIrWav/UnloadIr, SetReverbAlgorithm,
+//   SetDelayModel, the automation-slot bind/unbind, SetModelSourceInfo/
+//   SetIrSourceInfo, the state loader, and SetParam on an Amp-family block's
+//   slim-size param (which forwards synchronously into NAMCore). Every one
+//   of these constructs/destroys DSP objects, reallocates, or rewrites
+//   shared plain fields (param_count, the DspVariant, smoothing[], the ramp
+//   state, IR/convolution buffers, the tone stack), so they MUST be
+//   serialized against Process(): the caller must ensure no Process() call
+//   is in flight and none begins until the mutation is done.
+//
+//   The two front ends that exist today each guarantee that in their own
+//   way, and no code inside this class assumes one over the other:
+//     - apps/web: the core runs inside the AudioWorklet; every control
+//       message is dispatched on the same render thread as process(), so
+//       mutations interleave between callbacks and can never race one.
+//     - apps/desktop: StudioBridge::Mutate wraps every Tier-2 call in the
+//       suspend handshake (AudioIO::BeginSuspend/EndSuspend) - it raises a
+//       flag the audio callback observes, waits until a callback confirms it
+//       (no nam_studio_process in flight), runs the mutation, then lifts the
+//       flag. That handshake is the chosen protocol for a host that runs the
+//       audio thread separately from its control thread; a future VST3/mobile
+//       shell must provide an equivalent (or the same one) before calling any
+//       Tier-2 method.
+//
+//   The audio path itself is always lock-free: Process() takes no mutex,
+//   allocates nothing, and its only cross-thread reads are atomics. The plain
+//   fields it reads (kind, the DspVariant, smoothing[], smoothed[], ramp_*,
+//   tone, cab, the per-block buffers) are either immutable after AddBlock or
+//   written exclusively under the Tier-2 protocol. Fields that are purely
+//   control-thread data (the asset-source strings/bytes) are never read by
+//   Process() at all.
 class AudioEngine {
  public:
   AudioEngine();
@@ -216,13 +257,19 @@ class AudioEngine {
   void Process(const float* const* input, int input_channels, float* const* output,
                int output_channels, int num_frames);
 
-  // ── Params (generic, lock-free) ──────────────────────────────────────
+  // ── Params (generic, Tier 1 / lock-free) ─────────────────────────────
+  // All four are safe to call from any thread, concurrently with Process().
+  // The one exception is SetParam on an Amp-family block's slim-size param,
+  // which forwards synchronously into NAMCore and is Tier 2.
   int ParamCount(BlockId id) const;
   std::optional<ParamDescriptor> ParamInfo(BlockId id, int index) const;
   float GetParam(BlockId id, int index) const;
   void SetParam(BlockId id, int index, float value);
 
-  // ── NAM model management (off the audio thread) ─────────────────────
+  // ── NAM model management (Tier 2 - not real-time safe) ───────────────
+  // Constructs/resets DSP and reallocates inside NAMCore, so these must not
+  // run concurrently with Process() (see the class comment's Tier-2
+  // protocol). Callers suspend the audio thread around them.
   std::optional<dsp::NamLoadError> LoadNamModel(BlockId id, const std::string& file_path);
 
   // Same, from the .nam file's JSON content in memory - the form a browser or a
@@ -240,7 +287,7 @@ class AudioEngine {
   // engine's own sample rate (nothing is resampled here - a caller holding a
   // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
   // length <= 0 clears it, which returns the block to passthrough. No-op for
-  // every other kind. Not real-time safe: it allocates and transforms the IR.
+  // every other kind. Tier 2: it allocates and transforms the IR.
   void LoadIr(BlockId id, const float* samples, int length);
 
   // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
@@ -254,17 +301,26 @@ class AudioEngine {
   // Length of the IR installed on the block, 0 if none (or not a cab).
   int IrLength(BlockId id) const;
 
-  // Only meaningful for kReverb blocks; no-op otherwise. Not real-time
-  // safe - reconstructs the underlying wrapper instance.
+  // Only meaningful for kReverb blocks; no-op otherwise. Tier 2: it
+  // reconstructs the underlying wrapper instance (destroys + rebuilds the
+  // DspVariant alternative Process() visits), so it must not run concurrently
+  // with Process().
   void SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm);
 
   // Apply one user-facing reverb control to whichever algorithm currently
   // backs the block (see ReverbControl). No-op for non-reverb blocks and for
-  // controls the current algorithm doesn't have. Real-time safe: it resolves
-  // to the same atomic param store SetParam writes.
+  // controls the current algorithm doesn't have. Real-time safe and callable
+  // from any thread: the control's target param (index + clamp range) is
+  // resolved once when the algorithm is installed (AddBlock /
+  // SetReverbAlgorithm) into a per-block atomic cache, so this never reads
+  // the live DspVariant - a knob drag on one thread can't race an algorithm
+  // swap on another (issue #211). It ends in the same atomic SetParam a raw
+  // index write would.
   void SetReverbControl(BlockId id, ReverbControl control, float value);
 
-  // Only meaningful for kDelay blocks; no-op otherwise. Not real-time safe.
+  // Only meaningful for kDelay blocks; no-op otherwise. Tier 2: it rewrites
+  // param_count and re-seeds the smoothing policy / ramp state (issue #211),
+  // so it must not run concurrently with Process().
   void SetDelayModel(BlockId id, dsp::Delay::Model model);
 
   // ── Per-block state readers for serialization (issue #119) ───────────
@@ -424,6 +480,13 @@ class AudioEngine {
   const BlockState* FindBlockThreadSafe(BlockId id) const;
   void EnsureBuffers(BlockState& state);
   void SeedParamsFromDsp(BlockState& state);
+  // Re-resolve every user-facing ReverbControl onto the reverb block's
+  // currently installed algorithm: for each control, the target param index
+  // and its clamp range, published into BlockState::reverb_control_slots'
+  // atomics (issue #211). Called under the Tier-2 protocol from AddBlock and
+  // SetReverbAlgorithm, so SetReverbControl - which may run on any thread,
+  // even the audio thread - never has to read the live DspVariant.
+  void RefreshReverbControlSlots(BlockState& state);
   // Shared tail of LoadNamModel/LoadNamModelJson - see the definition.
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
@@ -434,6 +497,10 @@ class AudioEngine {
   // model load - so the first block after a change eases from the current
   // value rather than from zero.
   void SeedSmoothing(BlockState& state);
+  // The descriptor for one param of an installed DSP object's own table
+  // (index assumed valid). Shares the single std::visit over the live
+  // DspVariant between ParamInfo and RefreshReverbControlSlots.
+  static std::optional<ParamDescriptor> ParamInfoOf(const BlockState& state, int index);
   // How many sub-blocks to split a buffer into for the SetParam-style ramp
   // (generic DSP wrappers and the amp tone stack). See definition in engine.cpp.
   static int SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state);
