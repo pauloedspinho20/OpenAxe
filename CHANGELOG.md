@@ -7,13 +7,6 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-08-23
-
-### Fixed
-
-- fix(ci): make Desktop Release dispatchable for existing tag v0.2.0 (0ad5864)
-- fix(ci): don't use [skip ci] for release commits — it skips Desktop Release (725eecf)
-
 ## [0.2.0] - 2026-08-23
 
 ### Added

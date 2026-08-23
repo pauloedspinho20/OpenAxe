@@ -11,12 +11,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to release (e.g. v0.2.0) — must already exist'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -39,7 +33,6 @@ jobs:
         with:
           # packages/core uses git submodules for its DSP dependencies
           submodules: recursive
-          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -71,12 +64,7 @@ jobs:
       - name: Verify tag matches VERSION
         shell: bash
         run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            tag_version="${{ inputs.tag }}"
-            tag_version="${tag_version#v}"
-          else
-            tag_version="${GITHUB_REF_NAME#v}"
-          fi
+          tag_version="${GITHUB_REF_NAME#v}"
           file_version="$(cat VERSION)"
           if [ "$tag_version" != "$file_version" ]; then
             echo "::error::tag v$tag_version does not match VERSION file ($file_version) - bump VERSION (node scripts/sync-version.mjs) and re-tag"
@@ -89,7 +77,6 @@ jobs:
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
           files: apps/desktop/build/openaxe-desktop-*.${{ matrix.artifact }}
           fail_on_unmatched_files: true
           generate_release_notes: true
