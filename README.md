@@ -1,10 +1,6 @@
 # <img src="./apps/desktop/packaging/openaxe-256.png" width="28" valign="middle" alt="OpenAxe logo" /> OpenAxe
 
-A free, open-source guitar/bass amp, cabinet, and effects suite — in the spirit of Amplitube / Guitar Rig — built on [Neural Amp Modeler](https://github.com/sdatkinson/NeuralAmpModelerCore) (NAM). Runs as a **web app** today; planned for **desktop**, **VST3/CLAP/AU/AAX plugin**, and **mobile** (iOS + Android) — all sharing the same C++ DSP engine and design system.
-
-> Formerly "NAM Web Studio" — rebranded in [#151](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/151). "NAM" in upstream contexts (the [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore) library, the `.nam` model format, Tone3000's catalog) still refers to the upstream project; only the product name changed.
-
-Runs entirely in the browser: no native app required, no backend, no account. Works offline once installed as a PWA.
+A free, open-source guitar/bass amp, cabinet, and effects suite — in the spirit of Amplitube / Guitar Rig — built on [Neural Amp Modeler](https://github.com/sdatkinson/NeuralAmpModelerCore) (NAM). Runs as a **web app**; **desktop**, **VST3/CLAP/AU/AAX plugin**, Planed: **mobile** (iOS + Android) — all sharing the same C++ DSP engine and design system.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the C++ core and the four front
 ends divide responsibility (what belongs in `packages/core` vs a front end, the
@@ -40,10 +36,10 @@ per-target status of that split, the migration order, and the latency budget).
 
 ### Why these choices
 
-- **C++ for DSP core, not Rust** — All 3 vendored DSP libraries are C++ (Dragonfly, DSPark, NAMCore). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
-- **Desktop: C++ + webview.h, not Electron** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. Tauri v2 kept as an alternative for its bundling/signing tooling.
+- **C++ for DSP core** — All 3 vendored DSP libraries are C++ (Dragonfly, DSPark, NAMCore). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
+- **Desktop: C++ + webview.h** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. Tauri v2 kept as an alternative for its bundling/signing tooling.
 - **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. iOS/AUv3 for mobile. WebAudio Module (WAM) for browser.
-- **Mobile: Native shells, not Tauri v2 mobile or React Native** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
+- **Mobile: Native shells** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
 
 ### What every platform shares
 
@@ -187,7 +183,7 @@ VS Code users: the same steps are available as tasks (**Terminal → Run Task**)
 
 See [packages/core/README.md](./packages/core/README.md) for what's implemented so far (audio graph engine, NAM inference, all four Dragonfly Reverb algorithms), vendored-library licensing, and known build gotchas.
 
-### Desktop app (`apps/desktop`, issue #15)
+### Desktop app (`apps/desktop`)
 
 The native desktop shell reuses the web UI and drives `packages/core` directly (no Web Audio in the audio path). See [apps/desktop/README.md](./apps/desktop/README.md) for architecture, the full command list, and a debugging guide.
 
