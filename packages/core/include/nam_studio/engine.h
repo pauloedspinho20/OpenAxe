@@ -437,6 +437,9 @@ class AudioEngine {
   // How many sub-blocks to split a buffer into for the SetParam-style ramp
   // (generic DSP wrappers and the amp tone stack). See definition in engine.cpp.
   static int SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state);
+  // Advance a splitter's fan-out ramps by one buffer and freeze the snapshot
+  // its consumers replay from (issue #122). See definition in engine.cpp.
+  static void PublishSplitterRamps(BlockState& state, int num_frames, double sample_rate);
 
   // One automation slot's bookkeeping (issue #121). `mirror` holds this
   // slot's last known normalized value per entry - written through the slot,

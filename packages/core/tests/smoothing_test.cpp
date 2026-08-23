@@ -90,6 +90,62 @@ void ExponentialParamRampsSmoothly() {
   }
 }
 
+// Splitter fan-out: N branches hanging off ONE output port must all replay an
+// identical gain curve in the transition buffer. The ramp state lives on the
+// splitter and advances exactly once per buffer (PublishSplitterRamps), with
+// consumers recomputing the curve read-only from the frozen snapshot - the
+// naive alternative (advancing inside each consumer's edge sum) makes the
+// effective time constant shrink ~N-fold and gives later-column branches
+// different gains, which is precisely the dry/wet-split failure mode.
+void SplitterFanOutRampsIdentically() {
+  nam_studio::engine::AudioEngine engine;
+  const auto splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
+  // Both branches fed by output port 0; cabs carry no IR, so they're pure
+  // passthroughs standing in for the two paths of a dry/wet split.
+  const auto cab_a = engine.AddBlock(BlockKind::kCab, 0, 1);
+  const auto cab_b = engine.AddBlock(BlockKind::kCab, 0, 2);  // later column - the divergence case
+  const auto mixer = engine.AddBlock(BlockKind::kMixer, 0, 3);
+  EXPECT(engine.Connect(nam_studio::engine::kInRailId, 0, splitter, 0).ok);
+  EXPECT(engine.Connect(splitter, 0, cab_a, 0).ok);
+  EXPECT(engine.Connect(splitter, 0, cab_b, 0).ok);  // SAME port as cab_a
+  EXPECT(engine.Connect(cab_a, 0, mixer, 0).ok);
+  EXPECT(engine.Connect(cab_b, 0, mixer, 1).ok);
+  EXPECT(engine.Connect(mixer, 0, nam_studio::engine::kOutRailId, 0).ok);
+  engine.Reset(kSampleRate, kFrames);
+
+  for (int i = 0; i < 400; ++i) RunMono(engine, 0.5f);
+
+  // Automate out0_level 1 -> 0.5. With identical per-branch curves the mixer
+  // sums to input * 2 * g(i), where g is the one-pole from the schema's
+  // exponential policy (tau = 0.03s) applied i+1 times from the settled 1.0.
+  engine.SetParam(splitter, 0, 0.5f);
+  const double tau = 0.03;
+  const double base = std::exp(-1.0 / (kSampleRate * tau));
+  const auto out = RunMono(engine, 0.5f);
+
+  double worst = 0.0;
+  for (int i = 0; i < kFrames; ++i) {
+    const double g = 0.5 + 0.5 * std::pow(base, i + 1);
+    const double expected = 0.5 * 2.0 * g;  // input * two identical branches
+    worst = std::max(worst, std::fabs(static_cast<double>(out[static_cast<size_t>(i)]) - expected));
+  }
+  if (worst >= 2e-4) {
+    std::fprintf(stderr,
+                 "splitter fan-out diverged from the shared ramp curve "
+                 "(worst |out - expected| = %g): branches saw different gains\n",
+                 worst);
+    EXPECT(false);
+  }
+
+  // And it settles with both branches halved: input 0.5 * gain 0.5, summed
+  // across the two branches = 0.5.
+  for (int i = 0; i < 400; ++i) RunMono(engine, 0.5f);
+  const auto settled = RunMono(engine, 0.5f);
+  for (int i = 0; i < kFrames; ++i) {
+    EXPECT(std::fabs(settled[static_cast<size_t>(i)] - 0.5f) < 1e-3f);
+  }
+}
+
 // Note on "none"-mode params (the other half of issue #122's contract: where a
 // wrapped DSP already smooths internally - reverb dry/wet, compressor
 // threshold, amp calibration - the engine must NOT re-smooth). Those params
@@ -105,6 +161,7 @@ void ExponentialParamRampsSmoothly() {
 
 int main() {
   ExponentialParamRampsSmoothly();
+  SplitterFanOutRampsIdentically();
   if (g_failures != 0) {
     std::fprintf(stderr, "\n%d smoothing checks failed\n", g_failures);
     return 1;
