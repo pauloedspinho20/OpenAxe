@@ -59,6 +59,8 @@ struct LoadStats {
   int assets_missing = 0;   // referenced but unresolvable - see missing_assets below
   int slots_restored = 0;   // automation slot bindings re-bound (#121)
   int slots_skipped = 0;    // out-of-range slots, dangling block ids, refused binds
+  int midi_restored = 0;    // MIDI bindings restored (#124)
+  int midi_skipped = 0;     // malformed MIDI entries
 };
 
 struct LoadOutcome {

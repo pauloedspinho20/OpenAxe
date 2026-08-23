@@ -422,6 +422,96 @@ int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
                                      const char** out_name, int32_t* out_octave,
                                      int32_t* out_cents);
 
+// ── MIDI mapping (issue #124) ──────────────────────────────────────────
+// The mapping model moved from TypeScript (apps/web/src/midi/*) into core
+// so every front end reuses it. Front ends supply only the transport (Web
+// MIDI on web, the host's event list in a plugin, CoreMIDI/ALSA on desktop).
+// Bindings ride the rig state document ("midiMappings") and survive a DAW
+// project reload (#119). Channel filtering is per-mapping (the match includes
+// the channel); `selectedInputId` remains a front-end-only preference.
+//
+// Mutation (add/remove/clear, arm/cancel learn) is control-thread only
+// (Tier 2): it mutates the mapping vector. Handle is safe from any thread
+// (takes a shared lock) — a host's process callback forwards raw MIDI bytes
+// plus a per-event sample offset and lets core resolve and apply the binding.
+// `sample_offset` is accepted for sample-accurate scheduling; this build
+// dispatches immediately (offset unused, since slot/scene actions are
+// control-thread work — a future build can queue per offset without changing
+// the ABI).
+
+typedef enum NamStudioMidiMessageType {
+  NAM_STUDIO_MIDI_NOTEON = 0,
+  NAM_STUDIO_MIDI_CC = 1,
+  NAM_STUDIO_MIDI_PC = 2,
+} NamStudioMidiMessageType;
+
+typedef enum NamStudioMidiActionKind {
+  NAM_STUDIO_MIDI_ACTION_SLOT = 0,        // slot 0-7, whatever scene is current
+  NAM_STUDIO_MIDI_ACTION_SCENE = 1,       // scene 0-63, absolute jump
+  NAM_STUDIO_MIDI_ACTION_NEXT_SCENE = 2,
+  NAM_STUDIO_MIDI_ACTION_PREV_SCENE = 3,
+} NamStudioMidiActionKind;
+
+// How many mappings are stored.
+int32_t nam_studio_midi_mapping_count(NamStudioGraph* graph);
+// One mapping by index. Returns 1 on success, 0 for out-of-range. Every
+// out-param is optional (pass NULL to skip).
+int32_t nam_studio_midi_get_mapping(NamStudioGraph* graph, int32_t index,
+                                    NamStudioMidiMessageType* out_type,
+                                    int32_t* out_channel, int32_t* out_number,
+                                    NamStudioMidiActionKind* out_kind,
+                                    int32_t* out_slot, int32_t* out_scene);
+// Adds a binding, deduping like the web's midiStore.completeLearn: any
+// existing mapping whose action key == the new action's key, or whose match
+// key == the new match's key, is removed first. Returns 1 on success, 0 for
+// invalid match/action. Control-thread only.
+int32_t nam_studio_midi_add_mapping(NamStudioGraph* graph,
+                                    NamStudioMidiMessageType type,
+                                    int32_t channel, int32_t number,
+                                    NamStudioMidiActionKind kind,
+                                    int32_t slot, int32_t scene);
+// Removes the mapping at `index`; returns 1 on success, 0 for out-of-range. Control-thread only.
+int32_t nam_studio_midi_remove_mapping(NamStudioGraph* graph, int32_t index);
+// Removes every mapping and cancels any active learn. Control-thread only.
+void nam_studio_midi_clear_mappings(NamStudioGraph* graph);
+
+// Arms learn for `action`; returns 1 on success, 0 for invalid action. Control-thread only.
+int32_t nam_studio_midi_arm_learn(NamStudioGraph* graph, NamStudioMidiActionKind kind,
+                                  int32_t slot, int32_t scene);
+void nam_studio_midi_cancel_learn(NamStudioGraph* graph);
+int32_t nam_studio_midi_is_learning(NamStudioGraph* graph);
+// The action currently being learned, or 0 if none. Every out-param optional.
+int32_t nam_studio_midi_get_learn_target(NamStudioGraph* graph,
+                                         NamStudioMidiActionKind* out_kind,
+                                         int32_t* out_slot, int32_t* out_scene);
+
+// Pure helpers, no graph — mirrors message.ts / actions.ts.
+int32_t nam_studio_midi_parse_message(const uint8_t* data, int32_t size,
+                                      NamStudioMidiMessageType* out_type,
+                                      int32_t* out_channel, int32_t* out_number,
+                                      int32_t* out_value);
+int32_t nam_studio_midi_is_trigger_edge(NamStudioMidiMessageType type, int32_t value);
+int32_t nam_studio_midi_message_matches(NamStudioMidiMessageType msg_type,
+                                        int32_t msg_channel, int32_t msg_number,
+                                        NamStudioMidiMessageType match_type,
+                                        int32_t match_channel, int32_t match_number);
+
+// Feeds raw MIDI bytes through the mapping. `sample_offset` is the per-event
+// offset within the current audio block (0 = block start). Currently
+// dispatched immediately; a future build may schedule per offset without ABI
+// change. Returns 0 for "no match / not trigger / not parseable", 1 for
+// "dispatched a bound action", 2 for "learn completed" (the message was
+// consumed to create a binding, not dispatched). When it returns 1 or 2,
+// out params (all optional) echo what fired or was learned.
+int32_t nam_studio_midi_handle_message(NamStudioGraph* graph,
+                                       const uint8_t* data, int32_t size,
+                                       int32_t sample_offset,
+                                       NamStudioMidiActionKind* out_kind,
+                                       int32_t* out_slot, int32_t* out_scene,
+                                       NamStudioMidiMessageType* out_match_type,
+                                       int32_t* out_match_channel,
+                                       int32_t* out_match_number);
+
 // nam_studio_load_state's result.
 typedef enum NamStudioLoadStateResult {
   NAM_STUDIO_LOAD_STATE_OK = 0,

@@ -15,6 +15,7 @@
 #include "nam_studio/dsp/delay.h"
 #include "nam_studio/dsp/nam_amp.h"
 #include "nam_studio/graph_rig.h"
+#include "nam_studio/midi.h"
 
 // The real-time audio wiring layer graph_rig.h's own doc comment defers to a
 // "separate later concern" - this is that layer. GraphRig stays exactly as
@@ -444,6 +445,64 @@ class AudioEngine {
   void SetTunerMuted(bool muted);
   bool IsTunerMuted() const;
 
+  // ── MIDI mapping (issue #124) ─────────────────────────────────────
+  // Mirrors apps/web/src/midi/{types,message,actions,midiConfigStore}.ts.
+  // Front ends supply only the transport (Web MIDI on web, the host's event
+  // list in a plugin, CoreMIDI/ALSA on desktop); the mapping model itself
+  // lives here so every front end reuses it. Bindings ride the rig state
+  // document (see serialization) and survive a DAW project reload.
+  //
+  // Binding mutation (Add/Remove/Clear, Arm/CancelLearn) is control-thread
+  // only (Tier 2): it mutates the mapping vector. HandleMidiMessage is safe
+  // from any thread (takes a shared lock) — a host's process callback forwards
+  // raw MIDI bytes plus a per-event sample offset and lets core resolve and
+  // apply the binding. The `sample_offset` is accepted for sample-accurate
+  // scheduling; this implementation resolves immediately (the offset is
+  // currently unused, since scene/slot actions are control-thread work — a
+  // future change can queue per-offset actions without changing the ABI).
+  //
+  // Learn mode: ArmMidiLearn stores the target action. The next trigger-edge
+  // HandleMidiMessage call that parses to a MidiMatch binds it (deduping the
+  // same action key and the same match key, mirroring midiStore.completeLearn)
+  // and returns kLearnCompleted instead of dispatching.
+
+  // Every mapping, in insertion order (what serialization walks).
+  std::vector<midi::MidiMapping> ListMidiMappings() const;
+  // How many mappings are stored.
+  size_t MidiMappingCount() const;
+  // One mapping by index, or nullopt for out-of-range.
+  std::optional<midi::MidiMapping> MidiMappingAt(size_t index) const;
+  // Adds a binding, deduping as midiStore does: any existing mapping whose
+  // action key == the new action's key, or whose match key == the new match's
+  // key, is removed first. Returns true on success (false for invalid match/action).
+  bool AddMidiMapping(const midi::MidiMatch& match, const midi::MidiAction& action);
+  // Removes the mapping at `index`; false if out-of-range.
+  bool RemoveMidiMapping(size_t index);
+  // Removes every mapping and cancels any active learn.
+  void ClearMidiMappings();
+
+  // Arms learn for `action`; returns false for invalid actions.
+  bool ArmMidiLearn(const midi::MidiAction& action);
+  void CancelMidiLearn();
+  bool IsMidiLearning() const;
+  std::optional<midi::MidiAction> MidiLearnTarget() const;
+
+  struct MidiHandleResult {
+    enum Kind { kNone = 0, kDispatched = 1, kLearnCompleted = 2 } kind = kNone;
+    // When kind != kNone, the action that fired or was learned.
+    std::optional<midi::MidiAction> action;
+    // Echo of the match that triggered it (useful for UI feedback).
+    std::optional<midi::MidiMatch> match;
+  };
+  // Feeds raw MIDI bytes through the mapping. `sample_offset` is the per-event
+  // offset within the current audio block (0 = block start). Currently
+  // dispatched immediately; a future implementation may schedule per offset
+  // without ABI change. Returns kNone when the bytes don't parse, aren't a
+  // trigger edge, or have no binding; kDispatched when a binding matched;
+  // kLearnCompleted when learn mode was active and consumed the message.
+  MidiHandleResult HandleMidiMessage(const uint8_t* data, size_t size,
+                                     int32_t sample_offset = 0);
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
@@ -565,6 +624,14 @@ class AudioEngine {
   // the master bus and stays permanently unbound - its entries resolve
   // against master level/mute without touching this state's block field.
   std::array<AutomationSlotState, kAutomationSlotCount> automation_slots_;
+
+  // MIDI mapping model (issue #124) — CC/PC/note-on → action bindings plus
+  // learn state. Control-thread mutations (Add/Remove/Clear, Arm/CancelLearn)
+  // take midi_mutex_ exclusively; HandleMidiMessage takes it shared for
+  // reading and, when learning, upgrades to exclusive to bind.
+  mutable std::shared_mutex midi_mutex_;
+  std::vector<midi::MidiMapping> midi_mappings_;
+  std::optional<midi::MidiAction> midi_learn_target_;
 };
 
 }  // namespace nam_studio::engine

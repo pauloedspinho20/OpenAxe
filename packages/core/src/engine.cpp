@@ -1738,6 +1738,128 @@ std::vector<AudioEngine::AutomationSlotSnapshot> AudioEngine::ListBoundAutomatio
   return out;
 }
 
+// ── MIDI mapping (issue #124) ──────────────────────────────────────────
+
+std::vector<midi::MidiMapping> AudioEngine::ListMidiMappings() const {
+  std::shared_lock lock(midi_mutex_);
+  return midi_mappings_;
+}
+
+size_t AudioEngine::MidiMappingCount() const {
+  std::shared_lock lock(midi_mutex_);
+  return midi_mappings_.size();
+}
+
+std::optional<midi::MidiMapping> AudioEngine::MidiMappingAt(size_t index) const {
+  std::shared_lock lock(midi_mutex_);
+  if (index >= midi_mappings_.size()) return std::nullopt;
+  return midi_mappings_[index];
+}
+
+bool AudioEngine::AddMidiMapping(const midi::MidiMatch& match, const midi::MidiAction& action) {
+  if (!midi::IsValidMatch(match) || !midi::IsValidAction(action)) return false;
+  std::unique_lock lock(midi_mutex_);
+  const std::string action_key = midi::ActionKey(action);
+  const std::string match_key = midi::MatchKey(match);
+  // Dedup like midiStore.completeLearn: remove any mapping that shares the
+  // same action key or the same match key, then append.
+  midi_mappings_.erase(
+      std::remove_if(midi_mappings_.begin(), midi_mappings_.end(),
+                     [&](const midi::MidiMapping& m) {
+                       return midi::ActionKey(m.action) == action_key ||
+                              midi::MatchKey(m.match) == match_key;
+                     }),
+      midi_mappings_.end());
+  midi_mappings_.push_back(midi::MidiMapping{match, action});
+  return true;
+}
+
+bool AudioEngine::RemoveMidiMapping(size_t index) {
+  std::unique_lock lock(midi_mutex_);
+  if (index >= midi_mappings_.size()) return false;
+  midi_mappings_.erase(midi_mappings_.begin() + static_cast<std::ptrdiff_t>(index));
+  return true;
+}
+
+void AudioEngine::ClearMidiMappings() {
+  std::unique_lock lock(midi_mutex_);
+  midi_mappings_.clear();
+  midi_learn_target_.reset();
+}
+
+bool AudioEngine::ArmMidiLearn(const midi::MidiAction& action) {
+  if (!midi::IsValidAction(action)) return false;
+  std::unique_lock lock(midi_mutex_);
+  midi_learn_target_ = action;
+  return true;
+}
+
+void AudioEngine::CancelMidiLearn() {
+  std::unique_lock lock(midi_mutex_);
+  midi_learn_target_.reset();
+}
+
+bool AudioEngine::IsMidiLearning() const {
+  std::shared_lock lock(midi_mutex_);
+  return midi_learn_target_.has_value();
+}
+
+std::optional<midi::MidiAction> AudioEngine::MidiLearnTarget() const {
+  std::shared_lock lock(midi_mutex_);
+  return midi_learn_target_;
+}
+
+AudioEngine::MidiHandleResult AudioEngine::HandleMidiMessage(const uint8_t* data, size_t size,
+                                                             int32_t sample_offset) {
+  (void)sample_offset;  // accepted for ABI-level sample-accurate scheduling; dispatched immediately today
+  MidiHandleResult result;
+  const auto maybe_msg = midi::ParseMidiMessage(data, size);
+  if (!maybe_msg) return result;
+  if (!midi::IsTriggerEdge(*maybe_msg)) return result;
+
+  // Take shared lock to read learn target + mappings. If learning, we need to
+  // upgrade to exclusive to bind — do it by releasing shared and taking unique.
+  {
+    std::shared_lock lock(midi_mutex_);
+    if (midi_learn_target_.has_value()) {
+      const midi::MidiAction target = *midi_learn_target_;
+      // Copy needed keys before releasing lock; the bind will dedup under exclusive.
+      lock.unlock();
+      std::unique_lock ulock(midi_mutex_);
+      if (!midi_learn_target_.has_value() || midi::ActionKey(*midi_learn_target_) != midi::ActionKey(target)) {
+        // Lost race — another thread cancelled or re-armed.
+        return result;
+      }
+      const midi::MidiMatch match{maybe_msg->type, maybe_msg->channel, maybe_msg->number};
+      const std::string action_key = midi::ActionKey(target);
+      const std::string match_key = midi::MatchKey(match);
+      midi_mappings_.erase(
+          std::remove_if(midi_mappings_.begin(), midi_mappings_.end(),
+                         [&](const midi::MidiMapping& m) {
+                           return midi::ActionKey(m.action) == action_key ||
+                                  midi::MatchKey(m.match) == match_key;
+                         }),
+          midi_mappings_.end());
+      midi_mappings_.push_back(midi::MidiMapping{match, target});
+      midi_learn_target_.reset();
+      result.kind = MidiHandleResult::kLearnCompleted;
+      result.action = target;
+      result.match = match;
+      return result;
+    }
+
+    for (const auto& mapping : midi_mappings_) {
+      if (midi::MessageMatches(*maybe_msg, mapping.match)) {
+        result.kind = MidiHandleResult::kDispatched;
+        result.action = mapping.action;
+        result.match = mapping.match;
+        return result;
+      }
+    }
+  }
+  return result;
+}
+
 // ── Reverb algorithm choice ─────────────────────────────────────────────
 
 namespace {
