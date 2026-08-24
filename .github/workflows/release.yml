@@ -81,7 +81,7 @@ jobs:
         run: pnpm --filter @openaxe/desktop package
 
       - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: apps/desktop/build/openaxe-desktop-*.${{ matrix.artifact }}
           fail_on_unmatched_files: true
