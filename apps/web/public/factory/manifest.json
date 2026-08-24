@@ -1,10 +1,62 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-24",
+  "updatedAt": "2026-08-25",
   "packs": {
-    "amp": [],
-    "amp-cab": [],
-    "pedal": [],
-    "cab": []
+    "amp": [
+      {
+        "id": "6505-gain-range-pack",
+        "name": "6505 Gain Range Pack — High Gain",
+        "url": "/factory/amp/6505-gain-range-pack.nam",
+        "sourceUrl": "https://www.tone3000.com/tones/6505-gain-range-pack-high-gain-29230"
+      },
+      {
+        "id": "marshall-jvm410h-full-pack",
+        "name": "Marshall JVM410H Full Pack",
+        "url": "/factory/amp/marshall-jvm410h-full-pack.nam",
+        "sourceUrl": "https://www.tone3000.com/tones/marshall-jvm410h-full-pack-67714"
+      }
+    ],
+    "amp-cab": [
+      {
+        "id": "1968-marshall-super-lead-12000-drive-a2",
+        "name": "1968 Marshall Super Lead 12xxx Drive A2",
+        "url": "/factory/amp-cab/1968-marshall-super-lead-12000-drive-a2.nam",
+        "sourceUrl": "https://www.tone3000.com/tones/1968-marshall-super-lead-12-000-series-drive-a2-72145"
+      },
+      {
+        "id": "fender-deluxe-reverb-reissue-iconic-clean-a2",
+        "name": "Fender Deluxe Reverb Reissue — Iconic Clean A2",
+        "url": "/factory/amp-cab/fender-deluxe-reverb-reissue-iconic-clean-a2.nam",
+        "sourceUrl": "https://www.tone3000.com/tones/fender-deluxe-reverb-reissue-iconic-clean-a2-69174"
+      },
+      {
+        "id": "marshall-jmp-50-lead-1969-plexi-a2",
+        "name": "Marshall JMP 50 Lead 1969 Plexi A2",
+        "url": "/factory/amp-cab/marshall-jmp-50-lead-1969-plexi-a2.nam",
+        "sourceUrl": "https://www.tone3000.com/tones/marshall-jmp-50-lead-1969-plexi-a2-65578"
+      }
+    ],
+    "pedal": [
+      {
+        "id": "ibanez-ts9-tube-screamer",
+        "name": "Ibanez TS9 Tube Screamer",
+        "url": "/factory/pedal/ibanez-ts9-tube-screamer.nam",
+        "sourceUrl": "https://www.tone3000.com/tones/ibanez-ts9-tube-screamer-36827"
+      }
+    ],
+    "cab": [
+      {
+        "id": "mesa-standard-oversized-4x12-v30-2012",
+        "name": "Mesa Standard Oversized 4x12 V30 (2012)",
+        "url": "/factory/cab/mesa-standard-oversized-4x12-v30-2012.wav",
+        "sourceUrl": "https://www.tone3000.com/tones/mesa-standard-oversized-4x12-20122013-v30-26222"
+      },
+      {
+        "id": "orange-ppc412-straight-multi-mics",
+        "name": "Orange PPC412 Straight — Multi Mics",
+        "url": "/factory/cab/orange-ppc412-straight-multi-mics.wav",
+        "sourceUrl": "https://www.tone3000.com/tones/orange-ppc412-straight-multi-mics-70608"
+      }
+    ]
   }
 }
