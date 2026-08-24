@@ -65,6 +65,22 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/core/third_party/nam-core/
   endif()
 endif()
 
+# ── Native file dialogs (issue #129): portable-file-dialogs (MIT) ───────
+# Reuse the same single-header picker apps/desktop uses (popen AppleScript/
+# Win32/zenity-kdialog). Header-only, so offline builds just skip Pick* tests.
+FetchContent_Declare(
+  portable_file_dialogs
+  GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs
+  GIT_TAG 0.1.0
+  GIT_SHALLOW TRUE
+)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+FetchContent_MakeAvailable(portable_file_dialogs)
+if(EXISTS "${portable_file_dialogs_SOURCE_DIR}/portable-file-dialogs.h")
+  add_compile_definitions(OPENAXE_HAS_PFD)
+  include_directories("${portable_file_dialogs_SOURCE_DIR}")
+endif()
+
 # ── Config header (plugin identity) ──────────────────────────────────────
 # config.h is checked in; no generation step.
 
@@ -93,6 +109,10 @@ add_executable(openaxe_vst3_state_test tests/state_test.cpp src/plugin_state.cpp
 target_link_libraries(openaxe_vst3_state_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
 target_include_directories(openaxe_vst3_state_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_executable(openaxe_vst3_asset_test tests/asset_loading_test.cpp src/asset_loading.cpp)
+target_link_libraries(openaxe_vst3_asset_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+target_include_directories(openaxe_vst3_asset_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
+
 # Foundational chunking/FTZ/suspend choice is documented in plugin.h/.cpp;
 # the tests above keep the audio-path contract honest even when the host
 # and iPlug2 SDKs aren't present (mirrors the desktop latency_test + #43/#59
@@ -105,6 +125,7 @@ add_test(NAME vst3_latency COMMAND openaxe_vst3_latency_test)
 add_test(NAME vst3_suspend COMMAND openaxe_vst3_suspend_test)
 add_test(NAME vst3_param_surface COMMAND openaxe_vst3_param_surface_test)
 add_test(NAME vst3_state COMMAND openaxe_vst3_state_test)
+add_test(NAME vst3_asset COMMAND openaxe_vst3_asset_test)
 
 # ── VST3 + standalone targets (require iPlug2 + SDKs) ─────────────────────
 # SDK check — iPlug2's VST3 SDK is fetched via Dependencies/download scripts, not vendored.
@@ -115,7 +136,7 @@ endif()
 
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   # VST3 target only for now; CLAP/AU later (issue #125 scope).
-  set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp)
+  set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp)
 
   add_library(openaxe_vst3 MODULE ${PLUGIN_SOURCES})
   target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
@@ -125,7 +146,7 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   endif()
   target_compile_definitions(openaxe_vst3 PRIVATE VST3_API=1)
 
-  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/main_standalone.cpp)
+  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/main_standalone.cpp)
   target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
   target_link_libraries(openaxe_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
   if(TARGET iPlug2)

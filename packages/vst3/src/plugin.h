@@ -52,6 +52,23 @@ class OpenAxePlugin final : public iplug::Plugin {
   // everything resolved; otherwise display names for UI relink affordance.
   std::vector<std::string> GetMissingAssets() const;
 
+  // ── Asset loading (issue #129) ────────────────────────────────────────
+  // All Tier-2 (suspended). Prefer in-memory JSON/WAV forms so a restored
+  // session never stages a temp file (#47). Size guards before core (#69).
+  // Dialog helpers remember last dir per type.
+  int LoadNamModelFromPath(int32_t block_id, const std::string& path, std::string* error = nullptr);
+  int LoadNamModelFromJson(int32_t block_id, const std::string& json, std::string* error = nullptr);
+  int LoadIrWavFromPath(int32_t block_id, const std::string& path, std::string* error = nullptr);
+  int LoadIrWavFromBytes(int32_t block_id, const std::vector<uint8_t>& wav_bytes, std::string* error = nullptr);
+  // Dialog → load (returns LoadResult as int; *error has readable message).
+  // Empty path / cancel returns Cancelled without touching the graph.
+  int PickAndLoadNamModel(int32_t block_id, std::string* error = nullptr);
+  int PickAndLoadIrWav(int32_t block_id, std::string* error = nullptr);
+  // For UI display: sample rate / loudness / slim breakpoints etc.
+  // Returns false when block has no model.
+  bool GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
+                    double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const;
+
   // Suspend handshake — control thread only. Mirrors
   // apps/desktop/src/audio.cpp's BeginSuspend/EndSuspend contract (see
   // AudioEngine's Tier 2 docs): BeginSuspend raises suspend_requested_ and
