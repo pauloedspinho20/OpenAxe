@@ -117,6 +117,40 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
       <Dot cx="20" cy="18" r={0.9} />
     </>
   ),
+  // Send/Return relays (issue #274): a Send takes a cable in and hops its
+  // signal implicitly to the paired Return, which carries it out. The arrow
+  // shows the implicit hop's direction; the dots under it mark the pair
+  // number (one dot = 1, two = 2).
+  'send-1': (
+    <>
+      <path d="M3 12h13" />
+      <path d="M16 7l5 5-5 5" />
+      <Dot cx="8" cy="17" />
+    </>
+  ),
+  'send-2': (
+    <>
+      <path d="M3 12h13" />
+      <path d="M16 7l5 5-5 5" />
+      <Dot cx="6.5" cy="17" />
+      <Dot cx="10.5" cy="17" />
+    </>
+  ),
+  'return-1': (
+    <>
+      <path d="M8 7l-5 5 5 5" />
+      <path d="M3 12h18" />
+      <Dot cx="8" cy="17" />
+    </>
+  ),
+  'return-2': (
+    <>
+      <path d="M8 7l-5 5 5 5" />
+      <path d="M3 12h18" />
+      <Dot cx="6.5" cy="17" />
+      <Dot cx="10.5" cy="17" />
+    </>
+  ),
   'noise-gate': (
     <>
       <path d="M3 14v-4l3-2M3 10h3M6 8h0" />

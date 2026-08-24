@@ -4,15 +4,31 @@ export type { EffectParams } from '../../effects/Effect'
 
 /**
  * Every placeable grid block kind: the 10 synthetic effects, `mixer`,
- * `splitter`, and the Tone3000 gear categories (`amp`/`amp-cab`/`pedal`/
+ * `splitter`, the Tone3000 gear categories (`amp`/`amp-cab`/`pedal`/
  * `outboard`/`space`/`cab`) - these 6 gear kinds are named to match
  * Tone3000's own `Gear` enum exactly (see tone3000/types.ts), so a block's
  * `kind` doubles as the gear filter for browsing. Only `cab` is a genuinely
  * different asset type (an IR, convolved); the other 5 are all NAM model
  * captures, structurally identical - see AmpBlock's doc comment.
+ *
+ * The four Send/Return kinds (issue #274) are routing relays, not effects:
+ * a Send N is input-only and hops its signal implicitly (no cable) to the
+ * Return N, which is output-only. They carry no params, bypass or asset.
  */
 export type BlockKind =
-  EffectKind | 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space' | 'cab' | 'mixer' | 'splitter'
+  | EffectKind
+  | 'amp'
+  | 'amp-cab'
+  | 'pedal'
+  | 'outboard'
+  | 'space'
+  | 'cab'
+  | 'mixer'
+  | 'splitter'
+  | 'send-1'
+  | 'return-1'
+  | 'send-2'
+  | 'return-2'
 
 /**
  * The minimal shape the graph engine needs from any block - a strict subset

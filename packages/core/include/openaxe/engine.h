@@ -513,12 +513,15 @@ class AudioEngine {
   // A flattened, pre-resolved copy of one GraphRig edge (int ids instead of
   // Jack/string), rebuilt by RecomputeRouting() whenever topology changes so
   // Process() only ever reads it - no GraphRig lookups or allocation on the
-  // real-time path.
+  // real-time path. `implicit` marks a Send->Return link synthesized by
+  // RecomputeRouting (issue #274): not a drawn cable (never persisted, never
+  // validated by CanConnect), and exempt from the column-order rule.
   struct RoutingEdge {
     BlockId from;
     int from_port;
     BlockId to;
     int to_port;
+    bool implicit = false;
   };
 
   // Unguarded: only for Process()'s routing loop (the audio thread), which
@@ -592,6 +595,15 @@ class AudioEngine {
   int ColumnOfBlock(BlockId id) const;
   static BlockId ParseGraphId(const std::string& graph_id);
   static std::string GraphIdOf(BlockId id);
+  // RecomputeRouting's exec-order phase: a topological sort of exec_order_
+  // honoring every routing_ edge (cables + implicit Send->Return links). The
+  // links are the one exception to the column rule - a Return may sit left of
+  // its Send - so a plain column sort is not always a valid order. Ready nodes
+  // are picked by ascending column (then id) to stay deterministic and close
+  // to the old behaviour. Cables alone are always acyclic, so a cycle must
+  // contain an implicit link, which RebuildExecOrder drops and retries.
+  std::vector<BlockId> TopologicalOrder() const;
+  void RebuildExecOrder();
 
   graph::GraphRig rig_;
   std::unordered_map<BlockId, std::unique_ptr<BlockState>> block_states_;  // Guards block_states_ against AddBlock/RemoveBlock (control thread, write)
