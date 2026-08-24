@@ -6,7 +6,7 @@
   min-width: 0;
   padding: var(--sp-1);
   background: var(--panel-raised);
-  /*  border: 1px solid transparent; */
+  border: 1px solid var(--block-color, transparent);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-panel);
   cursor: grab;
@@ -105,7 +105,7 @@
 }
 
 .kindIcon {
-  color: var(--ink-2);
+  color: var(--block-color, var(--ink-2));
   flex-shrink: 0;
 }
 

@@ -1,3 +1,4 @@
+export * from '../icons'
 export { Panel } from './Panel/Panel'
 export type { PanelProps } from './Panel/Panel'
 export { Led } from './Led/Led'

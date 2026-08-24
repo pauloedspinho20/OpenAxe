@@ -20,17 +20,20 @@
   letter-spacing: 0.02em;
   color: var(--ink-1);
   background: var(--panel);
-  border: 1px solid var(--seam);
+  border: 1px solid var(--block-color, var(--seam));
   border-radius: var(--r-sm);
   padding: var(--sp-2) var(--sp-3);
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--sp-1);
+  min-width: 64px;
+  text-align: center;
 }
 
 .option > svg {
-  color: var(--ink-3);
+  color: var(--block-color, var(--ink-3));
   flex-shrink: 0;
 }
 

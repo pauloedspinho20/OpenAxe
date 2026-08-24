@@ -73,7 +73,15 @@
       "btnHoverBorder": "rgb(255 255 255 / 20%)",
       "btnActiveHighlight": "rgb(255 255 255 / 6%)",
       "dangerBgDim": "rgb(255 59 48 / 14%)",
-      "dangerGlowDim": "rgb(255 59 48 / 25%)"
+      "dangerGlowDim": "rgb(255 59 48 / 25%)",
+      "blockTone": "#ff8a3d",
+      "blockDrive": "#e8b84a",
+      "blockDynamics": "#e8c547",
+      "blockFilter": "#4ec9a6",
+      "blockMod": "#7ab8ff",
+      "blockTime": "#a78bfa",
+      "blockSpace": "#5fdc7a",
+      "blockUtility": "#9aa0a6"
     }
   },
   "spacing": {

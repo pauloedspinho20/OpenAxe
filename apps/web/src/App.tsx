@@ -9,7 +9,16 @@ import { OnboardingModal } from './components/global/OnboardingModal/OnboardingM
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
-import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
+import {
+  HardwareButton,
+  Led,
+  MidiIcon,
+  PowerIcon,
+  SettingsIcon,
+  Toggle,
+  Toaster,
+  Wordmark,
+} from '@openaxe/ui'
 import pkg from '../package.json'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
@@ -130,15 +139,29 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
-          <HardwareButton label="SETTINGS" onClick={openSettings} title="Open app settings" />
+          <HardwareButton
+            label="Settings"
+            icon={<SettingsIcon size={16} />}
+            iconOnly
+            onClick={openSettings}
+            title="Open app settings"
+          />
           <HardwareButton
             label="MIDI"
+            icon={<MidiIcon size={16} />}
+            iconOnly
             active={midiConnected}
             onClick={openMidiManager}
             title={midiStatusTitle}
           />
           {isReady && (
-            <HardwareButton label="POWER OFF" active onClick={() => void engine.powerOff()} />
+            <HardwareButton
+              label="Power off"
+              icon={<PowerIcon size={16} />}
+              iconOnly
+              active
+              onClick={() => void engine.powerOff()}
+            />
           )}
         </div>
       </header>

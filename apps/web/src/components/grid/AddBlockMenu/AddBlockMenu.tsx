@@ -1,7 +1,7 @@
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BLOCK_OPTIONS } from '../blockOptions'
-import { BlockIcon } from '../blockIcons'
-import { Dialog } from '@openaxe/ui'
+import { BlockIcon, Dialog } from '@openaxe/ui'
+import { blockColorVar } from '../blockColors'
 import styles from './AddBlockMenu.module.css'
 
 export interface AddBlockMenuProps {
@@ -33,9 +33,10 @@ export function AddBlockMenu({ open, onPick, onClose }: AddBlockMenuProps) {
                 }
                 title={option.disabled ? option.vendor : undefined}
                 onClick={() => !option.disabled && onPick(option.kind)}
+                style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
               >
-                <BlockIcon kind={option.kind} size={12} />
-                {option.label}
+                <BlockIcon kind={option.kind} size={18} />
+                <span>{option.label}</span>
               </button>
             ))}
           </div>
