@@ -8,6 +8,7 @@
 
 #include "config.h"
 
+#include "asset_loading.h"
 #include "automation_params.h"
 #include "plugin_state.h"
 #include "presets.h"
@@ -248,6 +249,56 @@ std::vector<std::string> OpenAxePlugin::GetMissingAssets() const {
   // No suspend needed — MissingAssets reads atomic-adjacent state set by
   // Restore/UnserializeState, and that state is only written while suspended.
   return openaxe_vst3::state::MissingAssets(graph_);
+}
+
+int OpenAxePlugin::LoadNamModelFromPath(int32_t block_id, const std::string& path, std::string* error) {
+  int res = static_cast<int>(openaxe_vst3::assets::LoadResult::UnknownBlock);
+  WithSuspend([&] { res = static_cast<int>(openaxe_vst3::assets::LoadNamModelFromPath(graph_, block_id, path, error)); });
+  return res;
+}
+int OpenAxePlugin::LoadNamModelFromJson(int32_t block_id, const std::string& json, std::string* error) {
+  int res = static_cast<int>(openaxe_vst3::assets::LoadResult::UnknownBlock);
+  WithSuspend([&] { res = static_cast<int>(openaxe_vst3::assets::LoadNamModelFromJson(graph_, block_id, json, error)); });
+  return res;
+}
+int OpenAxePlugin::LoadIrWavFromPath(int32_t block_id, const std::string& path, std::string* error) {
+  int res = static_cast<int>(openaxe_vst3::assets::LoadResult::UnknownBlock);
+  WithSuspend([&] { res = static_cast<int>(openaxe_vst3::assets::LoadIrWavFromPath(graph_, block_id, path, error)); });
+  return res;
+}
+int OpenAxePlugin::LoadIrWavFromBytes(int32_t block_id, const std::vector<uint8_t>& wav_bytes, std::string* error) {
+  int res = static_cast<int>(openaxe_vst3::assets::LoadResult::UnknownBlock);
+  WithSuspend([&] {
+    res = static_cast<int>(openaxe_vst3::assets::LoadIrWavFromBytes(graph_, block_id, wav_bytes.data(), wav_bytes.size(), error));
+  });
+  return res;
+}
+int OpenAxePlugin::PickAndLoadNamModel(int32_t block_id, std::string* error) {
+  auto path = openaxe_vst3::assets::PickNamFile();
+  if (!path) {
+    if (error) *error = "cancelled";
+    return static_cast<int>(openaxe_vst3::assets::LoadResult::Cancelled);
+  }
+  return LoadNamModelFromPath(block_id, *path, error);
+}
+int OpenAxePlugin::PickAndLoadIrWav(int32_t block_id, std::string* error) {
+  auto path = openaxe_vst3::assets::PickIrWavFile();
+  if (!path) {
+    if (error) *error = "cancelled";
+    return static_cast<int>(openaxe_vst3::assets::LoadResult::Cancelled);
+  }
+  return LoadIrWavFromPath(block_id, *path, error);
+}
+bool OpenAxePlugin::GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
+                                 double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const {
+  auto info = openaxe_vst3::assets::GetModelInfo(graph_, block_id);
+  if (!info || !info->has_model) return false;
+  if (out_sample_rate) *out_sample_rate = info->sample_rate;
+  if (out_has_loudness) *out_has_loudness = info->has_loudness ? 1 : 0;
+  if (out_loudness_db) *out_loudness_db = info->loudness_db;
+  if (out_is_slimmable) *out_is_slimmable = info->is_slimmable ? 1 : 0;
+  if (out_bp_count) *out_bp_count = info->slim_breakpoint_count;
+  return true;
 }
 
 void OpenAxePlugin::OnParamChange(int paramIdx) {
