@@ -73,7 +73,7 @@ jobs:
         run: pnpm build
 
       - name: Cache iPlug2 SDKs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             packages/vst3/build/_deps/iplug2-src/Dependencies
