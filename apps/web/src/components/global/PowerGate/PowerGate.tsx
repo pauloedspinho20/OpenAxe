@@ -1,4 +1,5 @@
 import { HardwareButton, Wordmark } from '@openaxe/ui'
+import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
 import { getOpenAxe } from '@/native/openaxe'
@@ -52,7 +53,7 @@ export function PowerGate({
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
-        <Wordmark variant="hero" />
+        <Wordmark variant="hero" version={pkg.version} />
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
 

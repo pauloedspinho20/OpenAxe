@@ -1,0 +1,112 @@
+# Plugin CI — VST3 / CLAP / AUv2 (issue #136, extends #54 release flow).
+# Three formats × three platforms is nine artifacts, and macOS additionally
+# needs universal binaries + notarization. This workflow is heavier than any
+# existing one, so it runs only on `workflow_dispatch` and tag pushes
+# (v*), not on every push — see AGENTS.md (CI disabled repo-wide for cost)
+# and confirm the cost tradeoff with the maintainer before enabling more.
+name: Plugin Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  plugin:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            cmake_preset: Release
+            artifact_glob: 'packages/vst3/build/*.vst3'
+            # AU and CLAP on macOS as well
+            extra_artifacts: 'packages/vst3/build/*.component packages/vst3/build/*.clap'
+          - os: windows-latest
+            cmake_preset: Release
+            artifact_glob: 'packages/vst3/build/**/*.vst3'
+            extra_artifacts: 'packages/vst3/build/**/*.clap'
+          - os: ubuntu-24.04
+            cmake_preset: Release
+            artifact_glob: 'packages/vst3/build/*.vst3'
+            extra_artifacts: 'packages/vst3/build/*.clap'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libasound2-dev libpulse-dev \
+            libcurl4-openssl-dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web UI (for plugin webview)
+        run: pnpm build
+
+      - name: Cache iPlug2 SDKs
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/vst3/build/_deps/iplug2-src/Dependencies
+          key: iplug2-sdks-${{ hashFiles('packages/vst3/CMakeLists.txt') }}
+          restore-keys: |
+            iplug2-sdks-
+
+      - name: Configure plugin (Release)
+        run: cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=${{ matrix.cmake_preset }} -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DOPENAXE_BUILD_TESTS=OFF
+        # macOS universal (arm64 + x86_64) for all three bundles; ignored on other platforms
+
+      - name: Build plugin
+        run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
+
+      - name: Smoke test (no host)
+        run: ctest --test-dir packages/vst3/build --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
+
+      - name: Plugin validators (when bundle present)
+        # pluginval / validator / auval / clap-validator are optional — the CTest
+        # harness already SKIPs when the tool or bundle is absent, so this never
+        # fails offline. When the runner has the tool and the bundle was built,
+        # it validates strictly (pluginval --strictness 10).
+        run: ctest --test-dir packages/vst3/build --output-on-failure -R "pluginval|auval|validator|clap" || true
+
+      - name: Upload VST3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaxe-plugin-${{ matrix.os }}-vst3
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: warn
+
+      - name: Upload extra artifacts (CLAP/AU on macOS)
+        if: matrix.extra_artifacts != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaxe-plugin-${{ matrix.os }}-extra
+          path: ${{ matrix.extra_artifacts }}
+          if-no-files-found: warn
+
+      # Signing / notarization / installers are intentionally deferred:
+      # - macOS: Developer ID signing + notarization + stapling (Gatekeeper blocks unsigned plugins)
+      # - Windows: Authenticode
+      # - Linux: .deb + tarball, macOS .pkg to /Library/Audio/Plug-Ins/*
+      # Secrets and the tag-triggered Release attachment (from #54, root VERSION)
+      # are documented in CONTRIBUTING.md alongside the existing desktop release
+      # instructions — see that file before enabling signing.
+
