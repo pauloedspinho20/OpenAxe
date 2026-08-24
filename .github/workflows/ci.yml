@@ -12,9 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -78,3 +78,46 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 7
+
+  # Cloudflare Pages preview — https://openaxe.pages.dev
+  # Deploys the Vite SPA (apps/web/dist) to Cloudflare Pages on every push to
+  # main/dev. Preview deployments for PRs are handled automatically by the
+  # Cloudflare GitHub integration; this job covers direct pushes and ensures
+  # the dist is built with the same pnpm/frozen-lockfile pipeline as CI.
+  # Uses cloudflare/pages-action@v1 (Wrangler-based). Requires repo secrets:
+  #   CLOUDFLARE_API_TOKEN (Pages:Edit) and CLOUDFLARE_ACCOUNT_ID.
+  # Project name `openaxe` → https://openaxe.pages.dev (production = main,
+  # branch `dev` → https://dev.openaxe.pages.dev). If secrets are missing the
+  # job is skipped gracefully.
+  deploy:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web
+        run: pnpm build
+
+      - name: Deploy to Cloudflare Pages
+        if: secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != ''
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: openaxe
+          directory: apps/web/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
