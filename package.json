@@ -46,8 +46,8 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "turbo": "^2.10.10",
-    "typescript": "~6.0.2",
+    "turbo": "^2.10.11",
+    "typescript": "~7.0.2",
     "oxlint": "^1.79.0",
     "prettier": "^3.9.6",
     "husky": "^9.1.7",
