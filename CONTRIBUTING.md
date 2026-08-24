@@ -95,6 +95,36 @@ a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview / `node scr
 >    If RELEASE_PAT is missing the workflow falls back to GITHUB_TOKEN and the
 >    push will be rejected by branch protection (intentional — add the secret).
 
+## Releasing (plugin builds) — same flow, heavier matrix
+
+The plugin reuses the same `VERSION` + tag flow as desktop, but its matrix is
+nine artifacts (VST3/CLAP/AU × 3 OS, macOS universal `arm64;x86_64`) and
+macOS **must** be signed/notarized or Gatekeeper blocks the install.
+
+See `.github/workflows/plugin.yml` (and `release.yml` for desktop):
+
+1. `VERSION` → tag `v*` flow is identical (auto-release, or manual `vX.Y.Z`).
+2. Pushing the `v*` tag triggers `plugin.yml` on all three runners. It:
+   - `pnpm build` the web UI (for the webview), configures `packages/vst3`
+     with `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` on macOS, builds all three
+     bundles, runs `ctest` (smoke + `pluginval --strictness 10`/`auval`/`validator`/`clap-validator` — `SKIP` when tool/bundle absent), then
+     `cpack` to `.pkg` (macOS `productbuild` → `/Library/Audio/Plug-Ins/*`), `.msi`/`ZIP` (Windows `WIX`), `.deb`+`.tar.gz` (Linux).
+   - Attaches every installer/bundle as a public asset on the same GitHub
+     Release that `release.yml` created for desktop — versioned from `VERSION`.
+3. **Signing / notarization** runs only when the matching secrets are present;
+   otherwise the workflow builds **unsigned** dev artifacts (same as `desktop.yml`):
+   - **macOS:** `APPLE_DEVELOPER_ID_CERTIFICATE_P12` (base64 `.p12`), `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — `codesign --options runtime --timestamp` + `xcrun notarytool submit --wait` + `xcrun stapler staple`.
+   - **Windows:** `WINDOWS_CERTIFICATE_P12` (base64), `WINDOWS_CERTIFICATE_PASSWORD` — `signtool sign` / `AzureSignTool` (Authenticode).
+   - **Linux:** no signing; `.deb` maintainer `OpenAxe <dev@openaxe.local>`.
+     Add each as repo secret `Settings → Secrets → Actions`. If a secret is
+     missing the corresponding step is skipped with a `::warning::` and the
+     artifact is still uploaded unsigned — intentional for forks.
+
+> **Cost note:** `plugin.yml` is the heaviest workflow in the repo. It is
+> intentionally `workflow_dispatch` + `tags: v*` only (not `push`/`pull_request`)
+> — see `AGENTS.md` (CI disabled repo-wide for cost). Confirm the cost
+> tradeoff with the maintainer before enabling it on `push`.
+
 ## Commit / PR expectations
 
 - Keep PRs scoped to one task from one epic where possible.
