@@ -17,6 +17,7 @@ namespace openaxe::dsp {
 //   - time:     50–1000 ms, default 250 — delay time
 //   - feedback: 0–0.9, default 0.5 — regeneration
 //   - tone:     200–12000 Hz, default 6000 — lowpass cutoff in feedback path
+//   - width:    0–1, default 1 — stereo width (0 mono center, 1 hard left/right ping-pong)
 //
 // BaseEffect handles dry/wet crossfade. This DSP outputs only the wet echo
 // on the active channel per repeat; the silent channel outputs zero.

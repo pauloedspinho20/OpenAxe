@@ -312,8 +312,8 @@
           "max": 10,
           "unit": "Hz",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {
@@ -323,8 +323,8 @@
           "max": 10,
           "unit": "ms",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {
@@ -334,8 +334,8 @@
           "max": 30,
           "unit": "ms",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {
@@ -361,8 +361,8 @@
           "max": 10,
           "unit": "Hz",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {
@@ -372,8 +372,8 @@
           "max": 5,
           "unit": "ms",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {
@@ -394,8 +394,8 @@
           "max": 3,
           "unit": "ms",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         }
       ]
@@ -410,8 +410,8 @@
           "max": 5,
           "unit": "Hz",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {
@@ -522,6 +522,17 @@
             "mode": "exponential",
             "timeConstant": 0.02
           }
+        },
+        {
+          "symbol": "width",
+          "label": "Width",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
         }
       ]
     },
@@ -628,8 +639,8 @@
           "max": 1,
           "unit": "x",
           "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         },
         {

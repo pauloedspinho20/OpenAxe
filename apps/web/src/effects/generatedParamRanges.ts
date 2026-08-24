@@ -72,6 +72,7 @@ export const PARAM_RANGES = Object.freeze({
     time: { min: 50, max: 1000 },
     feedback: { min: 0, max: 0.9 },
     tone: { min: 200, max: 12000 },
+    width: { min: 0, max: 1 },
   }),
   delay: Object.freeze({
     time: { min: 10, max: 1000 },

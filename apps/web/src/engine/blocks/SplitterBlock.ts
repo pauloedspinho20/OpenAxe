@@ -1,5 +1,6 @@
 import type { Block, EffectParams } from './Block'
 
+/** @deprecated Web Audio staging replaced by `engine.cpp` per-output level (issue #263). Kept for tests only. */
 /** Fixed number of independent output jacks. */
 export const SPLITTER_OUTPUT_COUNT = 4
 
