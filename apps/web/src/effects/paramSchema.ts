@@ -61,7 +61,6 @@ function range(kind: RangeKind, symbol: string): SymbolRange {
 }
 
 const dB = (value: number) => `${value.toFixed(0)}dB`
-const ms = (value: number) => `${Math.round(value * 1000)}ms`
 const percent = (value: number) => `${Math.round(value * 100)}%`
 const hz = (value: number) =>
   value >= 1000 ? `${(value / 1000).toFixed(1)}kHz` : `${Math.round(value)}Hz`
@@ -350,7 +349,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       ...range('flanger', 'depth'),
       step: 0.1,
       defaultValue: 2,
-      formatValue: ms,
+      formatValue: msRaw,
     },
     {
       key: 'delay',

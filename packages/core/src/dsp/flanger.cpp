@@ -30,11 +30,9 @@ struct Channel {
   float phase = 0.0f;
 
   // (Re)allocate the buffer for the longest delay the current params can ask
-  // for, plus a sample of slack for the fractional read below. Only reallocates
-  // when size changes (see chorus.cpp fix for #263).
+  // for, plus a sample of slack for the fractional read below.
   void Prepare(float sample_rate, float max_delay_ms) {
     const int size = static_cast<int>(std::ceil(max_delay_ms * sample_rate / 1000.0f)) + 1;
-    if (static_cast<int>(buffer.size()) == size) return;
     buffer.assign(static_cast<size_t>(size), 0.0f);
     write_pos = 0;
   }

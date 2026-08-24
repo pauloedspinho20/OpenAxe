@@ -36,11 +36,9 @@ struct Channel {
 
   // (Re)allocate the buffer for the longest delay the current params can ask
   // for. +1 sample of slack so the fractional read below always has a second
-  // sample to interpolate towards. Only reallocates when size changes to avoid
-  // audio-thread allocation on every knob tweak (see issue #263 worklet realloc).
+  // sample to interpolate towards.
   void Prepare(float sample_rate, float max_delay_ms) {
     const int size = static_cast<int>(std::ceil(max_delay_ms * sample_rate / 1000.0f)) + 1;
-    if (static_cast<int>(buffer.size()) == size) return;
     buffer.assign(static_cast<size_t>(size), 0.0f);
     write_pos = 0;
   }
