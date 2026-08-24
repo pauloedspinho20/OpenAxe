@@ -418,6 +418,217 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        case 'loadSoundfont': {
+          const bytes = new Uint8Array(message.bytes, 0, message.byteLength)
+          if (bytes.length === 0) {
+            reply.error = 'empty soundfont'
+            break
+          }
+          const ptr = module._malloc(bytes.length)
+          try {
+            module.HEAPU8.set(bytes, ptr)
+            const res = module._nam_studio_song_load_soundfont(this.graph, ptr, bytes.length)
+            if (res !== 0) {
+              reply.error = `soundfont load failed: ${res}`
+              break
+            }
+            reply.ok = true
+          } finally {
+            module._free(ptr)
+          }
+          break
+        }
+        case 'unloadSoundfont': {
+          module._nam_studio_song_unload_soundfont(this.graph)
+          reply.ok = true
+          break
+        }
+        case 'scheduleSongEvent': {
+          const ok = module._nam_studio_song_schedule_event(
+            this.graph,
+            message.kind,
+            message.channel,
+            message.key,
+            message.value,
+            message.deltaFrames,
+          )
+          if (reply) reply.ok = !!ok
+          else reply = { ok: !!ok }
+          break
+        }
+        case 'clearSongEvents': {
+          module._nam_studio_song_clear_events(this.graph)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'songStart': {
+          module._nam_studio_song_start(this.graph)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'songStop': {
+          module._nam_studio_song_stop(this.graph)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'songSeek': {
+          module._nam_studio_song_seek(this.graph, message.position)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'songPosition': {
+          reply.position = Number(module._nam_studio_song_get_position(this.graph))
+          reply.ok = true
+          break
+        }
+        case 'songIsPlaying': {
+          reply.ok = !!module._nam_studio_song_is_playing(this.graph)
+          break
+        }
+        case 'setBusGain': {
+          module._nam_studio_bus_set_gain(this.graph, message.bus, message.gain)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'setBusPan': {
+          module._nam_studio_bus_set_pan(this.graph, message.bus, message.pan)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'setBusMute': {
+          module._nam_studio_bus_set_mute(this.graph, message.bus, message.muted)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'setBusSolo': {
+          module._nam_studio_bus_set_solo(this.graph, message.bus, message.soloed)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'getBusMeter': {
+          reply.meter = module._nam_studio_get_bus_meter(this.graph, message.bus)
+          reply.ok = true
+          break
+        }
+        case 'clipCreate': {
+          const id = module._nam_studio_clip_create(this.graph)
+          if (id < 0) {
+            reply.error = 'clip limit reached'
+            break
+          }
+          reply.clipId = id
+          reply.ok = true
+          break
+        }
+        case 'clipDestroy': {
+          module._nam_studio_clip_destroy(this.graph, message.clipId)
+          reply.ok = true
+          break
+        }
+        case 'clipFeedPcm': {
+          const data = new Float32Array(message.data)
+          const frames = message.frames
+          if (!data || frames <= 0) {
+            reply.error = 'empty pcm'
+            break
+          }
+          const ptr = module._malloc(data.length * BYTES_PER_FLOAT)
+          try {
+            module.HEAPF32.set(data, ptr >> 2)
+            const accepted = module._nam_studio_clip_feed_pcm(this.graph, message.clipId, ptr, frames)
+            reply.frames = accepted
+            reply.ok = true
+          } finally {
+            module._free(ptr)
+          }
+          break
+        }
+        case 'clipPlay': {
+          module._nam_studio_clip_play(this.graph, message.clipId)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'clipStop': {
+          module._nam_studio_clip_stop(this.graph, message.clipId)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'clipSeek': {
+          module._nam_studio_clip_seek(this.graph, message.clipId, message.position)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'clipGetPosition': {
+          reply.position = Number(module._nam_studio_clip_get_position(this.graph, message.clipId))
+          reply.ok = true
+          break
+        }
+        case 'clipGetFrames': {
+          reply.frames = module._nam_studio_clip_get_frames(this.graph, message.clipId)
+          reply.ok = true
+          break
+        }
+        case 'captureStart': {
+          module._nam_studio_capture_start(this.graph, message.source, message.bus)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'captureStop': {
+          module._nam_studio_capture_stop(this.graph)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'captureRead': {
+          const cap = message.capacityFrames
+          if (!cap || cap <= 0) {
+            reply.error = 'invalid capacity'
+            break
+          }
+          const ptr = module._malloc(cap * 2 * BYTES_PER_FLOAT)
+          try {
+            const got = module._nam_studio_capture_read(this.graph, ptr, cap)
+            const out = new Float32Array(got * 2)
+            if (got > 0) out.set(module.HEAPF32.subarray(ptr >> 2, (ptr >> 2) + got * 2))
+            reply.data = out.buffer
+            reply.frames = got
+            reply.ok = true
+            // Transfer the buffer back
+            this.port.postMessage(reply, [reply.data])
+            return
+          } finally {
+            module._free(ptr)
+          }
+        }
+        case 'captureAvailable': {
+          reply.available = module._nam_studio_capture_available_frames(this.graph)
+          reply.ok = true
+          break
+        }
+        case 'jamConfigure': {
+          module._nam_studio_jam_configure(this.graph, message.seconds)
+          if (reply) reply.ok = true
+          break
+        }
+        case 'jamLift': {
+          const cap = message.capacityFrames
+          if (!cap || cap <= 0) {
+            reply.error = 'invalid capacity'
+            break
+          }
+          const ptr = module._malloc(cap * 2 * BYTES_PER_FLOAT)
+          try {
+            const got = module._nam_studio_jam_lift(this.graph, ptr, cap)
+            const out = new Float32Array(got * 2)
+            if (got > 0) out.set(module.HEAPF32.subarray(ptr >> 2, (ptr >> 2) + got * 2))
+            reply.data = out.buffer
+            reply.frames = got
+            reply.ok = true
+            this.port.postMessage(reply, [reply.data])
+            return
+          } finally {
+            module._free(ptr)
+          }
+        }
         case 'dispose': {
           module._nam_studio_graph_destroy(this.graph)
           this.graph = null

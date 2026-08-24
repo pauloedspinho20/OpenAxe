@@ -69,6 +69,12 @@ interface WorkletReply {
   error?: string
   info?: RigModelInfo | null
   meters?: Record<string, number>
+  clipId?: number
+  frames?: number
+  position?: number
+  meter?: number
+  available?: number
+  data?: ArrayBuffer
 }
 
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
@@ -292,6 +298,152 @@ export class RigWorkletNode {
   async meters(): Promise<Record<string, number>> {
     const reply = await this.request({ type: 'meters' })
     return reply.meters ?? {}
+  }
+
+  // ── Song player / transport / mixer (session, #152-#156) ───────────────
+
+  async loadSoundfont(bytes: Uint8Array): Promise<void> {
+    const reply = await this.request(
+      { type: 'loadSoundfont', bytes: bytes.buffer, byteLength: bytes.byteLength },
+      [bytes.buffer],
+    )
+    if (!reply.ok) throw new Error(reply.error ?? 'loadSoundfont failed')
+  }
+
+  async unloadSoundfont(): Promise<void> {
+    const reply = await this.request({ type: 'unloadSoundfont' })
+    if (!reply.ok) throw new Error(reply.error ?? 'unloadSoundfont failed')
+  }
+
+  scheduleSongEvent(
+    kind: number,
+    channel: number,
+    key: number,
+    value: number,
+    deltaFrames: number,
+  ): void {
+    this.send({ type: 'scheduleSongEvent', kind, channel, key, value, deltaFrames })
+  }
+
+  clearSongEvents(): void {
+    this.send({ type: 'clearSongEvents' })
+  }
+
+  songStart(): void {
+    this.send({ type: 'songStart' })
+  }
+
+  songStop(): void {
+    this.send({ type: 'songStop' })
+  }
+
+  songSeek(position: number): void {
+    this.send({ type: 'songSeek', position })
+  }
+
+  async songPosition(): Promise<number> {
+    const reply = await this.request({ type: 'songPosition' })
+    return reply.position ?? 0
+  }
+
+  async songIsPlaying(): Promise<boolean> {
+    const reply = await this.request({ type: 'songIsPlaying' })
+    return !!reply.ok
+  }
+
+  setBusGain(bus: number, gain: number): void {
+    this.send({ type: 'setBusGain', bus, gain })
+  }
+
+  setBusPan(bus: number, pan: number): void {
+    this.send({ type: 'setBusPan', bus, pan })
+  }
+
+  setBusMute(bus: number, muted: boolean): void {
+    this.send({ type: 'setBusMute', bus, muted: muted ? 1 : 0 })
+  }
+
+  setBusSolo(bus: number, soloed: boolean): void {
+    this.send({ type: 'setBusSolo', bus, soloed: soloed ? 1 : 0 })
+  }
+
+  async getBusMeter(bus: number): Promise<number> {
+    const reply = await this.request({ type: 'getBusMeter', bus })
+    return reply.meter ?? 0
+  }
+
+  // ── Clip players (#155) ───────────────────────────────────────────────
+
+  async clipCreate(): Promise<number> {
+    const reply = await this.request({ type: 'clipCreate' })
+    if (!reply.ok || reply.clipId === undefined) throw new Error(reply.error ?? 'clipCreate failed')
+    return reply.clipId
+  }
+
+  async clipDestroy(clipId: number): Promise<void> {
+    await this.request({ type: 'clipDestroy', clipId })
+  }
+
+  async clipFeedPcm(clipId: number, interleaved: Float32Array): Promise<number> {
+    const frames = interleaved.length / 2
+    const reply = await this.request(
+      { type: 'clipFeedPcm', clipId, frames, data: interleaved.buffer },
+      [interleaved.buffer],
+    )
+    return reply.frames ?? 0
+  }
+
+  clipPlay(clipId: number): void {
+    this.send({ type: 'clipPlay', clipId })
+  }
+
+  clipStop(clipId: number): void {
+    this.send({ type: 'clipStop', clipId })
+  }
+
+  clipSeek(clipId: number, position: number): void {
+    this.send({ type: 'clipSeek', clipId, position })
+  }
+
+  async clipGetPosition(clipId: number): Promise<number> {
+    const reply = await this.request({ type: 'clipGetPosition', clipId })
+    return reply.position ?? 0
+  }
+
+  async clipGetFrames(clipId: number): Promise<number> {
+    const reply = await this.request({ type: 'clipGetFrames', clipId })
+    return reply.frames ?? 0
+  }
+
+  // ── Capture + jam (#157) ──────────────────────────────────────────────
+
+  captureStart(source: number, bus: number): void {
+    this.send({ type: 'captureStart', source, bus })
+  }
+
+  captureStop(): void {
+    this.send({ type: 'captureStop' })
+  }
+
+  async captureRead(capacityFrames: number): Promise<Float32Array> {
+    const reply = await this.request({ type: 'captureRead', capacityFrames })
+    if (!reply.ok || !reply.data) return new Float32Array(0)
+    return new Float32Array(reply.data)
+  }
+
+  async captureAvailable(): Promise<number> {
+    const reply = await this.request({ type: 'captureAvailable' })
+    return reply.available ?? 0
+  }
+
+  jamConfigure(seconds: number): void {
+    this.send({ type: 'jamConfigure', seconds })
+  }
+
+  async jamLift(capacityFrames: number): Promise<Float32Array> {
+    const reply = await this.request({ type: 'jamLift', capacityFrames })
+    if (!reply.ok || !reply.data) return new Float32Array(0)
+    return new Float32Array(reply.data)
   }
 
   // ── Teardown ────────────────────────────────────────────────────────────

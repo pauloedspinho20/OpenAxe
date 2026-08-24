@@ -96,6 +96,7 @@ constexpr int32_t kUnknownBlock = -3;
 // engine. Mirrors the web UI's caps in apps/web/.../assetLimits.ts.
 constexpr size_t kMaxNamModelJsonBytes = 32 * 1024 * 1024;  // 32 MB
 constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
+constexpr size_t kMaxSoundfontBytes = 32 * 1024 * 1024;    // 32 MB — SF2/SF3 (#165)
 
 }  // namespace
 
@@ -930,6 +931,23 @@ std::vector<uint8_t> DecodeBase64(const std::string& text) {
   return out;
 }
 
+std::string EncodeBase64(const uint8_t* data, size_t len) {
+  static constexpr char kAlphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve(((len + 2) / 3) * 4);
+  for (size_t i = 0; i < len; i += 3) {
+    uint32_t triple = static_cast<uint32_t>(data[i]) << 16;
+    if (i + 1 < len) triple |= static_cast<uint32_t>(data[i + 1]) << 8;
+    if (i + 2 < len) triple |= static_cast<uint32_t>(data[i + 2]);
+    out.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+    out.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+    out.push_back(i + 1 < len ? kAlphabet[(triple >> 6) & 0x3F] : '=');
+    out.push_back(i + 2 < len ? kAlphabet[triple & 0x3F] : '=');
+  }
+  return out;
+}
+
 // { blockId, wavBase64 } - install a cab IR from the bytes of a WAV file. The
 // core decodes and resamples it (nam_studio_load_ir_wav), so this handler only
 // has to get the bytes across and serialize the mutation like any other.
@@ -1037,6 +1055,321 @@ std::string StudioBridge::HandleSetTunerMuted(const std::string& req) {
     return JsonError(std::string("setTunerMuted: ") + e.what());
   }
 }
+
+
+// ── Session: song player, transport, mixer, clips, capture (issues #152-#157) ──
+
+std::string StudioBridge::HandleLoadSoundfont(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string b64 = o.value("soundfontBase64", o.value("sf2Base64", std::string()));
+    if (b64.empty()) return JsonError("loadSoundfont: no data");
+    auto bytes = DecodeBase64(b64);
+    if (bytes.empty()) return JsonError("loadSoundfont: could not decode base64");
+    if (bytes.size() > kMaxSoundfontBytes) return JsonError("loadSoundfont: file too large (max 32 MB)");
+    if (bytes.size() < 4 || std::memcmp(bytes.data(), "RIFF", 4) != 0) return JsonError("loadSoundfont: not a SoundFont file");
+    int res = -1;
+    Call([&] { Mutate([&] { res = static_cast<int>(nam_studio_song_load_soundfont(graph_, bytes.data(), static_cast<int32_t>(bytes.size()))); }, false); });
+    if (res != 0) return JsonError("loadSoundfont: core rejected file");
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("loadSoundfont: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleUnloadSoundfont(const std::string& req) {
+  (void)req;
+  Call([&] { Mutate([&] { nam_studio_song_unload_soundfont(graph_); }, false); });
+  return (json{{"ok", true}}).dump();
+}
+
+std::string StudioBridge::HandleSongScheduleEvent(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int kind = o.value("kind", 0);
+    const int channel = o.value("channel", 0);
+    const int key = o.value("key", 0);
+    const int value = o.value("value", 0);
+    const int delta = o.value("deltaFrames", 0);
+    const int ok = nam_studio_song_schedule_event(graph_, static_cast<NamStudioSongEventKind>(kind), channel, key, value, delta);
+    return (json{{"ok", ok != 0}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("songScheduleEvent: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSongClearEvents(const std::string& req) {
+  (void)req;
+  nam_studio_song_clear_events(graph_);
+  return (json{{"ok", true}}).dump();
+}
+
+std::string StudioBridge::HandleSongStart(const std::string& req) {
+  (void)req;
+  nam_studio_song_start(graph_);
+  return (json{{"ok", true}}).dump();
+}
+
+std::string StudioBridge::HandleSongStop(const std::string& req) {
+  (void)req;
+  nam_studio_song_stop(graph_);
+  return (json{{"ok", true}}).dump();
+}
+
+std::string StudioBridge::HandleSongSeek(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int64_t pos = o.value("position", 0);
+    nam_studio_song_seek(graph_, pos);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("songSeek: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSongPosition(const std::string& req) {
+  (void)req;
+  return (json{{"ok", true}, {"position", nam_studio_song_get_position(graph_)}}).dump();
+}
+
+std::string StudioBridge::HandleSongIsPlaying(const std::string& req) {
+  (void)req;
+  return (json{{"ok", true}, {"playing", nam_studio_song_is_playing(graph_) != 0}}).dump();
+}
+
+std::string StudioBridge::HandleSetBusGain(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_bus_set_gain(graph_, o.value("bus", 0), o.value("gain", 1.0f));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setBusGain: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSetBusPan(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_bus_set_pan(graph_, o.value("bus", 0), o.value("pan", 0.0f));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setBusPan: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSetBusMute(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_bus_set_mute(graph_, o.value("bus", 0), o.value("muted", false) ? 1 : 0);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setBusMute: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSetBusSolo(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_bus_set_solo(graph_, o.value("bus", 0), o.value("soloed", false) ? 1 : 0);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setBusSolo: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleGetBusMeter(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int bus = o.value("bus", 0);
+    return (json{{"ok", true}, {"meter", nam_studio_get_bus_meter(graph_, bus)}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("getBusMeter: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipCreate(const std::string& req) {
+  (void)req;
+  int32_t id = -1;
+  Call([&] { Mutate([&] { id = nam_studio_clip_create(graph_); }, false); });
+  if (id < 0) return JsonError("clipCreate: limit reached");
+  return (json{{"ok", true}, {"clipId", id}}).dump();
+}
+
+std::string StudioBridge::HandleClipDestroy(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int32_t id = o.value("clipId", -1);
+    Call([&] { Mutate([&] { nam_studio_clip_destroy(graph_, id); }, false); });
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipDestroy: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipFeedPcm(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int32_t id = o.value("clipId", -1);
+    const std::string b64 = o.value("dataBase64", std::string());
+    const int32_t frames = o.value("frames", 0);
+    if (b64.empty() || frames <= 0) return JsonError("clipFeedPcm: no data");
+    auto bytes = DecodeBase64(b64);
+    if (bytes.size() < static_cast<size_t>(frames * 2 * 4)) return JsonError("clipFeedPcm: data too short");
+    const float* data = reinterpret_cast<const float*>(bytes.data());
+    int32_t accepted = 0;
+    Call([&] { accepted = nam_studio_clip_feed_pcm(graph_, id, data, frames); });
+    return (json{{"ok", true}, {"frames", accepted}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipFeedPcm: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipPlay(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_clip_play(graph_, o.value("clipId", -1));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipPlay: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipStop(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_clip_stop(graph_, o.value("clipId", -1));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipStop: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipSeek(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_clip_seek(graph_, o.value("clipId", -1), o.value("position", 0));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipSeek: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipGetPosition(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    return (json{{"ok", true}, {"position", nam_studio_clip_get_position(graph_, o.value("clipId", -1))}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipGetPosition: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipGetFrames(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    return (json{{"ok", true}, {"frames", nam_studio_clip_get_frames(graph_, o.value("clipId", -1))}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipGetFrames: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleClipGetBus(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    return (json{{"ok", true}, {"bus", nam_studio_clip_get_bus(graph_, o.value("clipId", -1))}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("clipGetBus: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleCaptureStart(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int source = o.value("source", 0);
+    const int bus = o.value("bus", 0);
+    nam_studio_capture_start(graph_, static_cast<NamStudioCaptureSource>(source), bus);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("captureStart: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleCaptureStop(const std::string& req) {
+  (void)req;
+  nam_studio_capture_stop(graph_);
+  return (json{{"ok", true}}).dump();
+}
+
+std::string StudioBridge::HandleCaptureRead(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int32_t cap = o.value("capacityFrames", 0);
+    if (cap <= 0) return JsonError("captureRead: invalid capacity");
+    std::vector<float> out(static_cast<size_t>(cap * 2));
+    const int32_t got = nam_studio_capture_read(graph_, out.data(), cap);
+    out.resize(static_cast<size_t>(got * 2));
+    const std::string b64 = EncodeBase64(reinterpret_cast<const uint8_t*>(out.data()), out.size() * sizeof(float));
+    return (json{{"ok", true}, {"frames", got}, {"dataBase64", b64}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("captureRead: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleCaptureAvailable(const std::string& req) {
+  (void)req;
+  return (json{{"ok", true}, {"available", nam_studio_capture_available_frames(graph_)}}).dump();
+}
+
+std::string StudioBridge::HandleJamConfigure(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    nam_studio_jam_configure(graph_, o.value("seconds", 10));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("jamConfigure: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleJamLift(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int32_t cap = o.value("capacityFrames", 0);
+    if (cap <= 0) return JsonError("jamLift: invalid capacity");
+    std::vector<float> out(static_cast<size_t>(cap * 2));
+    const int32_t got = nam_studio_jam_lift(graph_, out.data(), cap);
+    out.resize(static_cast<size_t>(got * 2));
+    const std::string b64 = EncodeBase64(reinterpret_cast<const uint8_t*>(out.data()), out.size() * sizeof(float));
+    return (json{{"ok", true}, {"frames", got}, {"dataBase64", b64}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("jamLift: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleJamAvailable(const std::string& req) {
+  (void)req;
+  return (json{{"ok", true}, {"available", nam_studio_jam_available_frames(graph_)}}).dump();
+}
+
+
 
 std::string StudioBridge::HandleMeters(const std::string&) {
   json out = json::array();
