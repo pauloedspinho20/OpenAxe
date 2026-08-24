@@ -40,6 +40,9 @@ jobs:
       - name: Version sync check
         run: node scripts/sync-version.mjs --check
 
+      - name: Design tokens drift check
+        run: node packages/ui/scripts/generate-tokens.mjs --check
+
       - name: Lint
         run: pnpm lint
 

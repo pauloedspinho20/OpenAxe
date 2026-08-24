@@ -22,6 +22,9 @@ public/dev-test/
 # in-repo. packages/core/build/ itself stays ignored.
 packages/core/build/
 
+# VST3 build tree (repopulated on every build)
+packages/vst3/build/
+
 # Native desktop build tree (apps/desktop/CMakeLists.txt + FetchContent deps)
 apps/desktop/build/
 

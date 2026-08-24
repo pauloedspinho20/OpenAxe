@@ -1,14 +1,35 @@
 #pragma once
 
-// Minimal iPlug2 plugin wrapping packages/core (issue #125).
-// Construct/destroy NamStudioGraph, reset on sample-rate/block-size changes,
-// pass audio through. No params/UI yet — later issues land there.
+// iPlug2 plugin wrapping packages/core (issues #125, #126, #127).
+// Audio path responsibilities (issue #126):
+//   - ProcessBlock is lock-free: no allocation, no mutex, no IO. Only the
+//     FTZ/DAZ guard and nam_studio_process are on the hot path.
+//   - All Tier-2 mutations (topology, model/IR loads, algorithm switches,
+//     nam_studio_reset) are serialized against ProcessBlock via the suspend
+//     handshake below — ported from apps/desktop/src/audio.cpp's
+//     AudioIO::BeginSuspend/EndSuspend (fix for #43/#53/#59). ProcessBlock
+//     observes suspend_requested_ and silences + bumps suspend_ack_; the
+//     control thread waits for that ack before touching the graph.
+//   - Host block sizes larger than the last nam_studio_reset's max_block_size
+//     are handled by chunking inside ProcessBlock (never by re-resetting on
+//     the audio thread — that would allocate).
+//   - Zero reported latency (PLUG_LATENCY 0; latency_test proves the DSP path
+//     adds none) and bus arrangements 1-1 2-2 (core folds mono/stereo itself).
+
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "IPlug_include_in_plug_hdr.h"
 
 #include "openaxe/api.h"
 
-const int kNumPresets = 1;
+#include "editor.h"
+
+const int kNumPresets = 2;  // Clean Boost, Ambient Swell — generated from same rows as web
 
 class OpenAxePlugin final : public iplug::Plugin {
  public:
@@ -18,10 +39,88 @@ class OpenAxePlugin final : public iplug::Plugin {
 #if IPLUG_DSP
   void ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) override;
   void OnReset() override;
+  void OnActivate(bool enable) override;
+  void OnParamChange(int paramIdx) override;
+  bool SerializeState(IByteChunk& chunk) const override;
+  int UnserializeState(const IByteChunk& chunk, int startPos) override;
+  void ProcessMidiMsg(const IMidiMsg& msg) override;
 #endif
 
+  // Portable JSON round-trip (same document as the host chunk, just on disk)
+  // — web ↔ desktop ↔ plugin share this. Useful for .json preset import/export
+  // and for tests that don't have an IByteChunk.
+  bool SavePortableJson(const std::string& path) const;
+  int LoadPortableJson(const std::string& path);
+
+  // Missing assets from the last Restore/UnserializeState (#120). Empty when
+  // everything resolved; otherwise display names for UI relink affordance.
+  std::vector<std::string> GetMissingAssets() const;
+
+  // ── Asset loading (issue #129) ────────────────────────────────────────
+  // All Tier-2 (suspended). Prefer in-memory JSON/WAV forms so a restored
+  // session never stages a temp file (#47). Size guards before core (#69).
+  // Dialog helpers remember last dir per type.
+  int LoadNamModelFromPath(int32_t block_id, const std::string& path, std::string* error = nullptr);
+  int LoadNamModelFromJson(int32_t block_id, const std::string& json, std::string* error = nullptr);
+  int LoadIrWavFromPath(int32_t block_id, const std::string& path, std::string* error = nullptr);
+  int LoadIrWavFromBytes(int32_t block_id, const std::vector<uint8_t>& wav_bytes, std::string* error = nullptr);
+  // Dialog → load (returns LoadResult as int; *error has readable message).
+  // Empty path / cancel returns Cancelled without touching the graph.
+  int PickAndLoadNamModel(int32_t block_id, std::string* error = nullptr);
+  int PickAndLoadIrWav(int32_t block_id, std::string* error = nullptr);
+  // For UI display: sample rate / loudness / slim breakpoints etc.
+  // Returns false when block has no model.
+  bool GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
+                    double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const;
+
+  // Editor shell (issue #132) — webview hosting the shared React app.
+  // Exposed for state persistence and host window embedding; the audio path
+  // never touches the editor (open/close must not disturb audio).
+  openaxe_vst3::editor::Editor& GetEditor();
+  const openaxe_vst3::editor::Editor& GetEditor() const;
+
+  // Suspend handshake — control thread only. Mirrors
+  // apps/desktop/src/audio.cpp's BeginSuspend/EndSuspend contract (see
+  // AudioEngine's Tier 2 docs): BeginSuspend raises suspend_requested_ and
+  // waits for ProcessBlock to observe it (bump suspend_ack_), guaranteeing no
+  // nam_studio_process is in flight before the caller mutates the graph.
+  // Returns false on timeout (audio thread stalled); mutation is still safe
+  // in that case, matching the desktop fallback of stopping the stream.
+  bool BeginSuspend() const;
+  void EndSuspend() const;
+
+  // Control-thread helper that mutates the graph under the handshake (e.g. for
+  // future model loads / topology edits from the UI thread). Runs `fn` while
+  // suspended and resets if sample-rate or block-size changed.
+  template <typename Fn>
+  void WithSuspend(Fn&& fn) const {
+    const bool suspended = BeginSuspend();
+    (void)suspended;
+    fn();
+    EndSuspend();
+  }
+  template <typename Fn>
+  void WithSuspend(Fn&& fn) {
+    const bool suspended = BeginSuspend();
+    (void)suspended;
+    fn();
+    EndSuspend();
+  }
+
  private:
-  NamStudioGraph* graph_ = nullptr;
-  double sample_rate_ = 48000.0;
-  int max_block_size_ = 0;
+  mutable NamStudioGraph* graph_ = nullptr;
+  mutable double sample_rate_ = 48000.0;
+  mutable int max_block_size_ = 0;
+
+  // Suspend handshake state — same shape as RtCallbackState::suspend +
+  // suspended_callbacks in apps/desktop/src/audio.h. Audio thread only reads
+  // suspend_requested_ and bumps suspend_ack_; control thread only writes
+  // suspend_requested_ and waits on suspend_ack_.
+  mutable std::atomic<bool> suspend_requested_{false};
+  mutable std::atomic<unsigned> suspend_ack_{0};
+
+  // Editor shell — owned here, borrowed graph pointer (no audio thread touch
+  // on open/close). Mutable so SerializeState (const) can read editor size
+  // for chunk inclusion.
+  mutable std::unique_ptr<openaxe_vst3::editor::Editor> editor_;
 };

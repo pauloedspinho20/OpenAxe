@@ -65,16 +65,82 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/core/third_party/nam-core/
   endif()
 endif()
 
+# ── Native file dialogs (issue #129): portable-file-dialogs (MIT) ───────
+# Reuse the same single-header picker apps/desktop uses (popen AppleScript/
+# Win32/zenity-kdialog). Header-only, so offline builds just skip Pick* tests.
+FetchContent_Declare(
+  portable_file_dialogs
+  GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs
+  GIT_TAG 0.1.0
+  GIT_SHALLOW TRUE
+)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+FetchContent_MakeAvailable(portable_file_dialogs)
+if(EXISTS "${portable_file_dialogs_SOURCE_DIR}/portable-file-dialogs.h")
+  add_compile_definitions(OPENAXE_HAS_PFD)
+  include_directories("${portable_file_dialogs_SOURCE_DIR}")
+endif()
+
 # ── Config header (plugin identity) ──────────────────────────────────────
 # config.h is checked in; no generation step.
 
-# ── Core linkage smoke test (always builds) ───────────────────────────────
-# This is what makes iteration bearable without a host and what CI can build
-# even offline: a tiny executable that links openaxe_core WHOLE_ARCHIVE and
-# exercises the scaffold's contract (graph create/reset/process passthrough).
-add_executable(openaxe_vst3_smoke tests/smoke.cpp)
-target_link_libraries(openaxe_vst3_smoke PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_smoke PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
+# ── Editor shell (issue #132): webview + shared React ───────────────────
+# Like apps/desktop (webview/webview 0.12 + nlohmann/json for the bridge),
+# the plugin editor hosts the shared React SPA via a webview rather than an
+# IGraphics fork. Header-only, so offline builds still work — the editor
+# compiles as a stub without the webview headers.
+set(WEBVIEW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WEBVIEW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(WEBVIEW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(WEBVIEW_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+set(WEBVIEW_BUILD_STATIC_LIBRARY OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  webview
+  GIT_REPOSITORY https://github.com/webview/webview
+  GIT_TAG 0.12.0
+  GIT_SHALLOW TRUE
+)
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json
+  GIT_TAG v3.11.3
+  GIT_SHALLOW TRUE
+)
+set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+# FetchContent may fail offline — don't break smoke tests.
+FetchContent_GetProperties(webview)
+if(NOT webview_POPULATED)
+  FetchContent_Populate(webview)
+endif()
+if(EXISTS "${webview_SOURCE_DIR}/webview.h" OR EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
+  add_compile_definitions(OPENAXE_HAS_WEBVIEW)
+  if(EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
+    include_directories("${webview_SOURCE_DIR}/core/include")
+  else()
+    include_directories("${webview_SOURCE_DIR}")
+  endif()
+  if(APPLE)
+    enable_language(OBJCXX)
+  endif()
+  message(STATUS "packages/vst3: webview available — editor will use webview shell")
+else()
+  message(STATUS "packages/vst3: webview not available — editor builds as stub (offline)")
+endif()
+FetchContent_GetProperties(nlohmann_json)
+if(NOT nlohmann_json_POPULATED)
+  FetchContent_Populate(nlohmann_json)
+endif()
+if(EXISTS "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp")
+  include_directories("${nlohmann_json_SOURCE_DIR}/include")
+endif()
+
+# ── Tests (issue #130) ─────────────────────────────────────────────────────
+# Structured like apps/desktop/tests/: tests/CMakeLists.txt owns every
+# executable + CTest, including the validator harness and the realtime-safety
+# + TSan instrumentation. Single entry point:
+#   ctest --test-dir packages/vst3/build --output-on-failure
+enable_testing()
+add_subdirectory(tests)
 
 # ── VST3 + standalone targets (require iPlug2 + SDKs) ─────────────────────
 # SDK check — iPlug2's VST3 SDK is fetched via Dependencies/download scripts, not vendored.
@@ -83,27 +149,168 @@ if(IPLUG2_AVAILABLE AND EXISTS "${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK
   set(VST3_SDK_AVAILABLE ON)
 endif()
 
+# ── Plugin sources (shared across all formats) ───────────────────────
+# Editor shell (issue #132) hosts the shared React app via webview — thin
+# bridge like desktop, no IGraphics fork. Primitives (issue #133) reuse the
+# same React primitives via the webview — no IControl fork. Grid/cables/
+# inspector (issue #134) reuses GridEditor/BlockInspector via the same webview.
+set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp)
+
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
-  # VST3 target only for now; CLAP/AU later (issue #125 scope).
-  set(PLUGIN_SOURCES src/plugin.cpp)
+  # VST3 target (issue #125) — the first format, always built when SDK present.
 
   add_library(openaxe_vst3 MODULE ${PLUGIN_SOURCES})
-  target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
+  target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
   target_link_libraries(openaxe_vst3 PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  if(TARGET webview)
+    target_link_libraries(openaxe_vst3 PRIVATE webview::core)
+  endif()
+  if(TARGET nlohmann_json)
+    target_link_libraries(openaxe_vst3 PRIVATE nlohmann_json::nlohmann_json)
+  endif()
   if(TARGET iPlug2)
     target_link_libraries(openaxe_vst3 PRIVATE iPlug2)
   endif()
   target_compile_definitions(openaxe_vst3 PRIVATE VST3_API=1)
+  if(APPLE)
+    # webview Cocoa backend is Objective-C++ on macOS
+    set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(openaxe_vst3 PRIVATE -Wno-auto-var-id)
+    endif()
+  endif()
 
-  add_executable(openaxe_standalone src/plugin.cpp src/main_standalone.cpp)
-  target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
+  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/main_standalone.cpp)
+  target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
   target_link_libraries(openaxe_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  if(TARGET webview)
+    target_link_libraries(openaxe_standalone PRIVATE webview::core)
+  endif()
+  if(TARGET nlohmann_json)
+    target_link_libraries(openaxe_standalone PRIVATE nlohmann_json::nlohmann_json)
+  endif()
   if(TARGET iPlug2)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2)
   endif()
   target_compile_definitions(openaxe_standalone PRIVATE STANDALONE_APP=1)
+  if(APPLE)
+    set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(openaxe_standalone PRIVATE -Wno-auto-var-id)
+    endif()
+  endif()
 elseif(IPLUG2_AVAILABLE)
   message(STATUS "packages/vst3: VST3 SDK not found — VST3/standalone targets skipped (smoke test still builds). Run iPlug2 Dependencies/download scripts or: ${iplug2_SOURCE_DIR}/Dependencies/download-iplug-sdks.sh")
 else()
   message(STATUS "packages/vst3: iPlug2 not available — VST3/standalone targets skipped (smoke test still builds). Run: git submodule update --init --recursive && cmake -B build")
+endif()
+
+# ── CLAP target (issue #135) ─────────────────────────────────────────
+# VST3 alone leaves out Bitwig (where CLAP is the better citizen). iPlug2
+# builds all three formats from one source tree. The plugin's 302 param IDs
+# stay stable across formats — AU and CLAP expose the same slot-major IDs
+# (2 + (slot-1)*20 + entry) so a lane's meaning never collides across
+# formats. `.aupreset`/`.vstpreset` share the same JSON chunk (issue #128).
+set(CLAP_SDK_AVAILABLE OFF)
+if(IPLUG2_AVAILABLE AND EXISTS "${iplug2_SOURCE_DIR}/Dependencies/IPlug/CLAP_SDK/include/clap/clap.h")
+  set(CLAP_SDK_AVAILABLE ON)
+endif()
+# CLAP dynamic parameters: CLAP can rescan its param list at runtime, so in
+# theory the plugin could mirror the rig exactly and skip the fixed slot map.
+# Evaluated and rejected as the primary design — it would fork behaviour
+# per format (VST3/AU must be static), and the formats we most need are the
+# ones whose lists must be static. A CLAP build can still simulate a dynamic
+# list cheaply by rescanning after rebinds, but the slot map stays the source
+# of truth for all formats (capability flag, not a second implementation).
+if(IPLUG2_AVAILABLE AND CLAP_SDK_AVAILABLE)
+  add_library(openaxe_clap MODULE ${PLUGIN_SOURCES})
+  target_include_directories(openaxe_clap PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  target_link_libraries(openaxe_clap PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  if(TARGET webview)
+    target_link_libraries(openaxe_clap PRIVATE webview::core)
+  endif()
+  if(TARGET nlohmann_json)
+    target_link_libraries(openaxe_clap PRIVATE nlohmann_json::nlohmann_json)
+  endif()
+  if(TARGET iPlug2)
+    target_link_libraries(openaxe_clap PRIVATE iPlug2)
+  endif()
+  if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/CLAP.cmake")
+    include("${iplug2_SOURCE_DIR}/Scripts/cmake/CLAP.cmake")
+    if(TARGET iPlug2::CLAP)
+      target_link_libraries(openaxe_clap PRIVATE iPlug2::CLAP)
+    endif()
+    if(COMMAND iplug_configure_clap)
+      iplug_configure_clap(openaxe_clap OpenAxe)
+    endif()
+  endif()
+  target_compile_definitions(openaxe_clap PRIVATE CLAP_API=1)
+  set_target_properties(openaxe_clap PROPERTIES OUTPUT_NAME "OpenAxe" PREFIX "" SUFFIX ".clap" EXCLUDE_FROM_ALL TRUE)
+  if(APPLE)
+    set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(openaxe_clap PRIVATE -Wno-auto-var-id)
+    endif()
+  endif()
+  message(STATUS "packages/vst3: CLAP target enabled — OpenAxe.clap")
+else()
+  if(IPLUG2_AVAILABLE)
+    message(STATUS "packages/vst3: CLAP SDK not found — CLAP target skipped (run ${iplug2_SOURCE_DIR}/Dependencies/download-iplug-sdks.sh or ${iplug2_SOURCE_DIR}/Dependencies/download-clap-sdks.sh)")
+  endif()
+endif()
+
+# ── AUv2 target (issue #135, macOS only) ──────────────────────────────
+# Logic/GarageBand gate: auval -v aufx Nms1 NwSt must be clean. Same Plugin
+# class, same 302 IDs, same chunk — parameter IDs stay stable and don't
+# collide across VST3/AU/CLAP. AUv3 (app extension) is out of scope (#17).
+if(APPLE AND IPLUG2_AVAILABLE)
+  # AU wrapper sources are header-only except the iPlug AU glue; we build
+  # the same PLUGIN_SOURCES with AU_API defined and produce a .component
+  # bundle. The host loads it via AudioComponentManager, not a plain dlopen.
+  add_library(openaxe_au MODULE ${PLUGIN_SOURCES})
+  target_include_directories(openaxe_au PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  target_link_libraries(openaxe_au PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  if(TARGET webview)
+    target_link_libraries(openaxe_au PRIVATE webview::core)
+  endif()
+  if(TARGET nlohmann_json)
+    target_link_libraries(openaxe_au PRIVATE nlohmann_json::nlohmann_json)
+  endif()
+  if(TARGET iPlug2)
+    target_link_libraries(openaxe_au PRIVATE iPlug2)
+  endif()
+  if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/AUv2.cmake")
+    include("${iplug2_SOURCE_DIR}/Scripts/cmake/AUv2.cmake")
+    if(TARGET iPlug2::AUv2)
+      target_link_libraries(openaxe_au PRIVATE iPlug2::AUv2)
+    endif()
+  endif()
+  target_compile_definitions(openaxe_au PRIVATE AU_API=1)
+  # Minimal AU bundle — the validator scans bundles, not plain .so.
+  # iPlug's own AUv2.cmake would wire a custom Info.plist; we keep the
+  # default bundle plist so offline smoke builds don't require that file.
+  # Not part of the default `cmake --build` — hosts build it explicitly
+  # (`cmake --build --target openaxe_au`) so offline smoke tests stay green.
+  set_target_properties(openaxe_au PROPERTIES
+    BUNDLE TRUE
+    BUNDLE_EXTENSION "component"
+    OUTPUT_NAME "OpenAxe"
+    PREFIX ""
+    EXCLUDE_FROM_ALL TRUE
+  )
+  # APPL needs Obj-C++ for the AU glue + webview.
+  set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(openaxe_au PRIVATE -Wno-auto-var-id)
+  endif()
+  find_library(AUDIOUNIT_FW AudioUnit)
+  find_library(AUDIOTOOLBOX_FW AudioToolbox)
+  if(AUDIOUNIT_FW)
+    target_link_libraries(openaxe_au PRIVATE ${AUDIOUNIT_FW} ${AUDIOTOOLBOX_FW})
+  endif()
+  message(STATUS "packages/vst3: AUv2 target enabled — OpenAxe.component")
+else()
+  if(IPLUG2_AVAILABLE AND NOT APPLE)
+    message(STATUS "packages/vst3: AUv2 skipped — macOS only")
+  endif()
 endif()
