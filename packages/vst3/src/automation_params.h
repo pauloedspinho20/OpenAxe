@@ -55,11 +55,18 @@
 
 // Forward-declare iPlug's types without pulling in IPlug headers when the SDK
 // isn't present (smoke/latency builds still include this header for its
-// helpers and the HostParamId layout test).
+// helpers and the HostParamId layout test). When a format is being built
+// (VST3_API/AU_API/CLAP_API), IPlug headers define `iplug::Plugin` as an
+// alias to the format's base class, not a plain class — so we must not
+// forward-declare it as a class in that case.
+#if defined(VST3_API) || defined(AU_API) || defined(CLAP_API) || defined(STANDALONE_APP)
+#include "IPlug_include_in_plug_hdr.h"
+#else
 namespace iplug {
 class IParam;
 class Plugin;
 }  // namespace iplug
+#endif
 
 namespace openaxe_vst3::params {
 
