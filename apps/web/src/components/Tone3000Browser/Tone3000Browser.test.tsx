@@ -4,6 +4,20 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Tone3000Browser } from './Tone3000Browser'
 import { useTone3000Browser } from '../../tone3000/browserStore'
 
+vi.mock('../../tone3000/factoryGear', () => ({
+  loadFactoryManifest: vi.fn().mockResolvedValue({ version: 1, packs: {} }),
+  factoryGearFor: vi.fn().mockReturnValue([]),
+  allFactoryGear: vi.fn().mockReturnValue([]),
+  cacheFactoryGear: vi.fn(),
+  deleteCachedAsset: vi.fn(),
+}))
+
+vi.mock('../../engine/assetCache', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../engine/assetCache')>('../../engine/assetCache')
+  return { ...actual, getCachedAsset: vi.fn().mockResolvedValue(null) }
+})
+
 vi.mock('../../tone3000/library', () => ({
   Tone3000Library: {
     refresh: vi.fn(),
@@ -70,9 +84,10 @@ describe('components/Tone3000Browser', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the four scope tabs', () => {
+  it('renders the five scope tabs', () => {
     render(<Tone3000Browser target={null} context={null} />)
     expect(screen.getByRole('button', { name: 'ALL' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /FACTORY/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /LIBRARY/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'FAVORITES' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /MY MODELS/ })).toBeInTheDocument()

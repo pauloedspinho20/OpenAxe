@@ -14,6 +14,14 @@ import {
 import { importTone3000Asset } from '../../tone3000/importService'
 import type { BlockLoadTarget } from '../../tone3000/importService'
 import type { Tone, Tone3000Model } from '../../tone3000/types'
+import {
+  allFactoryGear,
+  cacheFactoryGear,
+  factoryGearFor,
+  loadFactoryManifest,
+} from '../../tone3000/factoryGear'
+import type { FactoryGearEntry } from '../../tone3000/factoryGear'
+import { deleteCachedAsset, getCachedAsset } from '../../engine/assetCache'
 import { Dialog, HardwareButton, OutlineButton } from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
 
@@ -26,7 +34,7 @@ interface Props {
   context: AudioContext | null
 }
 
-type Scope = 'browse' | 'library' | 'favorites' | 'created'
+type Scope = 'browse' | 'factory' | 'library' | 'favorites' | 'created'
 type ViewMode = 'list' | 'cards'
 
 interface SearchState {
@@ -76,10 +84,46 @@ export function Tone3000Browser({ target, context }: Props) {
   const [tags, setTags] = useState<string[]>([])
   const [makesValue, setMakesValue] = useState('')
   const [tagsValue, setTagsValue] = useState('')
+  const [loadingFactoryId, setLoadingFactoryId] = useState<string | null>(null)
+  const [factoryError, setFactoryError] = useState<string | null>(null)
+  const [factoryVersion, setFactoryVersion] = useState(0)
+  const [factoryCachedIds, setFactoryCachedIds] = useState<Set<string>>(new Set())
+  const [factoryLoading, setFactoryLoading] = useState(false)
+  const [bulkDownloading, setBulkDownloading] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
 
   useEffect(() => {
     void Tone3000Library.refresh()
   }, [])
+
+  // Load factory manifest when the dialog opens — no auth, plain fetch.
+  useEffect(() => {
+    if (!browser.open) return
+    setFactoryLoading(true)
+    void loadFactoryManifest()
+      .then(() => setFactoryVersion((v) => v + 1))
+      .catch((err: unknown) => setFactoryError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setFactoryLoading(false))
+  }, [browser.open])
+
+  // Track which factory assets are already cached so the row can show
+  // LOAD vs DOWNLOAD without re-fetching on every render.
+  useEffect(() => {
+    if (!browser.open) return
+    // Depends on factoryVersion so it re-runs after manifest loads.
+    void (async () => {
+      const all = allFactoryGear()
+      const cached = new Set<string>()
+      await Promise.all(
+        all.map(async (entry) => {
+          const blob = await getCachedAsset(entry.id)
+          if (blob) cached.add(entry.id)
+        }),
+      )
+      setFactoryCachedIds(cached)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browser.open, factoryVersion])
 
   // Debounce the free-text query (rate limit is 100 req/min).
   useEffect(() => {
@@ -125,7 +169,7 @@ export function Tone3000Browser({ target, context }: Props) {
   // from different endpoints, and Favorites/Created skip the free-text/
   // format/sort/makes/tags filters only the search endpoint supports.
   useEffect(() => {
-    if (scope === 'library' || !browser.target) return
+    if (scope === 'library' || scope === 'factory' || !browser.target) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -297,6 +341,68 @@ export function Tone3000Browser({ target, context }: Props) {
     close()
   }
 
+  const loadFactoryGear = async (entry: FactoryGearEntry) => {
+    if (!target || !context) return
+    setFactoryError(null)
+    setLoadingFactoryId(entry.id)
+    try {
+      const blob = await cacheFactoryGear(entry)
+      if (entry.slot === 'model') {
+        await target.loadModel(await blob.text(), { id: entry.id, name: entry.name })
+      } else {
+        const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
+        target.loadIR(audioBuffer, { id: entry.id, name: entry.name })
+      }
+      setFactoryCachedIds((prev) => new Set(prev).add(entry.id))
+      close()
+    } catch (err) {
+      setFactoryError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoadingFactoryId(null)
+    }
+  }
+
+  const removeFactoryGear = async (entry: FactoryGearEntry) => {
+    await deleteCachedAsset(entry.id)
+    setFactoryCachedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(entry.id)
+      return next
+    })
+  }
+
+  const downloadAllFactory = async () => {
+    const all = allFactoryGear()
+    if (all.length === 0) return
+    setBulkDownloading(true)
+    setFactoryError(null)
+    setBulkProgress({ done: 0, total: all.length })
+    let done = 0
+    const results = await Promise.allSettled(
+      all.map(async (entry) => {
+        try {
+          await cacheFactoryGear(entry)
+        } finally {
+          done += 1
+          setBulkProgress({ done, total: all.length })
+        }
+      }),
+    )
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed > 0) setFactoryError(`${failed} factory asset(s) failed to download.`)
+    // Refresh cached set
+    const cached = new Set<string>()
+    await Promise.all(
+      all.map(async (entry) => {
+        const blob = await getCachedAsset(entry.id)
+        if (blob) cached.add(entry.id)
+      }),
+    )
+    setFactoryCachedIds(cached)
+    setBulkDownloading(false)
+    setBulkProgress(null)
+  }
+
   const close = () => {
     browser.closeBrowser()
     setScope('browse')
@@ -308,6 +414,7 @@ export function Tone3000Browser({ target, context }: Props) {
     setError(null)
     setNeedsConnect(false)
     setImportError(null)
+    setFactoryError(null)
   }
 
   if (!browser.open || !browser.target) return null
@@ -322,6 +429,9 @@ export function Tone3000Browser({ target, context }: Props) {
       matchesQuery(e.creator, search.query) ||
       matchesQuery(e.toneTitle ?? '', search.query),
   )
+  const factoryEntries = factoryGearFor(gear).filter((e) => matchesQuery(e.name, search.query))
+  // Key for useEffect above — read to keep factoryVersion as a dep without lint.
+  void factoryVersion
 
   return (
     <Dialog
@@ -338,6 +448,13 @@ export function Tone3000Browser({ target, context }: Props) {
             onClick={() => setScope('browse')}
           >
             ALL
+          </button>
+          <button
+            type="button"
+            className={`${styles.tab} ${scope === 'factory' ? styles.tabActive : ''}`}
+            onClick={() => setScope('factory')}
+          >
+            FACTORY ({factoryGearFor(gear).length})
           </button>
           <button
             type="button"
@@ -385,9 +502,10 @@ export function Tone3000Browser({ target, context }: Props) {
     >
       {auth.error && <p className={styles.error}>{auth.error}</p>}
       {importError && <p className={styles.error}>{importError}</p>}
+      {factoryError && <p className={styles.error}>{factoryError}</p>}
       {error && <p className={styles.error}>{error}</p>}
 
-      {scope !== 'library' && (
+      {scope !== 'library' && scope !== 'factory' && (
         <div className={styles.body}>
           <div className={styles.filters}>
             <input
@@ -632,6 +750,79 @@ export function Tone3000Browser({ target, context }: Props) {
                 </div>
               </li>
             ))}
+          </ul>
+        </div>
+      )}
+
+      {scope === 'factory' && (
+        <div className={styles.body}>
+          <div className={styles.filters}>
+            <input
+              type="text"
+              placeholder="Filter factory…"
+              value={search.query}
+              onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+              className={styles.input}
+            />
+          </div>
+          {factoryLoading && <p className={styles.hint}>Loading factory…</p>}
+          {!factoryLoading && factoryGearFor(gear).length === 0 && (
+            <p className={styles.hint}>
+              No factory models for {GEAR_LABELS[gear].toLowerCase()} yet.
+            </p>
+          )}
+          {!factoryLoading && factoryGearFor(gear).length > 0 && factoryEntries.length === 0 && (
+            <p className={styles.hint}>No factory models match.</p>
+          )}
+          {allFactoryGear().length > 0 && (
+            <div className={styles.factoryBulk}>
+              <OutlineButton
+                disabled={bulkDownloading || allFactoryGear().length === 0}
+                onClick={() => void downloadAllFactory()}
+              >
+                {bulkDownloading && bulkProgress
+                  ? `DOWNLOADING… ${bulkProgress.done}/${bulkProgress.total}`
+                  : `DOWNLOAD ALL (${allFactoryGear().length})`}
+              </OutlineButton>
+              <span className={`label ${styles.hint}`} style={{ padding: 0 }}>
+                Downloads every factory model for offline use
+              </span>
+            </div>
+          )}
+          <ul className={listClass}>
+            {factoryEntries.map((entry) => {
+              const cached = factoryCachedIds.has(entry.id)
+              const loading = loadingFactoryId === entry.id
+              return (
+                <li key={entry.id} className={cardClass}>
+                  <div className={styles.libraryRow}>
+                    <div className={styles.libraryInfo}>
+                      <span className={styles.cardTitle}>{entry.name}</span>
+                      <span className={`label ${styles.cardMeta}`}>
+                        {entry.gear} · {entry.slot === 'ir' ? 'IR' : 'NAM'}
+                        {cached ? ' · cached' : ''}
+                      </span>
+                    </div>
+                    <OutlineButton
+                      disabled={!target || loading || bulkDownloading}
+                      onClick={() => void loadFactoryGear(entry)}
+                    >
+                      {loading ? 'LOADING…' : cached ? 'LOAD' : 'DOWNLOAD'}
+                    </OutlineButton>
+                    {cached && (
+                      <OutlineButton
+                        variant="danger"
+                        disabled={loading || bulkDownloading}
+                        onClick={() => void removeFactoryGear(entry)}
+                        aria-label={`Remove ${entry.name} from factory cache`}
+                      >
+                        ×
+                      </OutlineButton>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

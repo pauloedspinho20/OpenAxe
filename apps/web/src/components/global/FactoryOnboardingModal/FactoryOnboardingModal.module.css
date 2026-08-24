@@ -1,0 +1,33 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.text {
+  font-family: var(--font-display);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-1);
+}
+
+.hint {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.error {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--led-hot);
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 2px solid var(--led-hot);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}

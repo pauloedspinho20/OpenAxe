@@ -6,12 +6,14 @@ import { SceneBar } from './components/scenes/SceneBar/SceneBar'
 import { SceneManager } from './components/scenes/SceneManager/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser/Tone3000Browser'
 import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal'
+import { FactoryOnboardingModal } from './components/global/FactoryOnboardingModal/FactoryOnboardingModal'
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
 import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
+import { useFactoryOnboarding } from './hooks/useFactoryOnboarding'
 import { useMidiEngine } from './hooks/useMidiEngine'
 import { useOnboarding } from './hooks/useOnboarding'
 import { useSceneEngine } from './hooks/useSceneEngine'
@@ -46,6 +48,7 @@ function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
   const onboarding = useOnboarding()
+  const factoryOnboarding = useFactoryOnboarding()
   const isReady = engine.status === 'ready'
   const browser = useTone3000Browser()
   const auth = useTone3000Auth()
@@ -212,6 +215,7 @@ function App() {
         onPowerOn={(opts) => void engine.powerOn(opts)}
       />
       <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
+      <FactoryOnboardingModal open={factoryOnboarding.open} onDismiss={factoryOnboarding.dismiss} />
       <Toaster />
     </div>
   )
