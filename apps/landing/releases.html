@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101010" />
+    <title>Releases — OpenAxe downloads for every version</title>
+    <meta
+      name="description"
+      content="Every OpenAxe release — desktop (dmg/zip/deb) and VST3/CLAP/AU bundles. Download any version from GitHub Releases, plus the live web app on Vercel."
+    />
+    <link rel="canonical" href="https://pauloedspinho20.github.io/OpenAxe/releases.html" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/openaxe-32.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Releases — OpenAxe" />
+    <meta property="og:url" content="https://pauloedspinho20.github.io/OpenAxe/releases.html" />
+    <meta property="og:image" content="https://pauloedspinho20.github.io/OpenAxe/og-image.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "OpenAxe Releases",
+        "description": "Every OpenAxe desktop and plugin release.",
+        "url": "https://pauloedspinho20.github.io/OpenAxe/releases.html",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "OpenAxe",
+          "url": "https://pauloedspinho20.github.io/OpenAxe/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header" role="banner">
+      <div class="container">
+        <a class="brand" href="/" aria-label="OpenAxe home">
+          <img src="/icons/openaxe-32.png" alt="" width="28" height="28" aria-hidden="true" />
+          OPEN<span>AXE</span> <span class="beta" aria-label="beta">BETA</span>
+        </a>
+        <nav class="nav" aria-label="Primary">
+          <a href="/">Home</a>
+          <a href="/releases.html" aria-current="page">Releases</a>
+          <a href="https://github.com/pauloedspinho20/OpenAxe/releases" rel="noopener">GitHub</a>
+          <a data-web-app href="https://nam-web-studio-sae2-iota.vercel.app" rel="noopener"
+            >Web app ↗</a
+          >
+          <button
+            id="theme-toggle"
+            class="btn btn-ghost"
+            style="padding: 6px 10px; font-size: 12px"
+            type="button"
+          >
+            ☾ Carbon
+          </button>
+        </nav>
+      </div>
+    </header>
+    <main id="main" class="section">
+      <div class="container">
+        <h1 style="font-family: var(--font-display); font-size: 28px; margin: 0 0 var(--sp-2)">
+          Releases
+        </h1>
+        <p class="sub">
+          Every <code>v*</code> tag publishes to
+          <a href="https://github.com/pauloedspinho20/OpenAxe/releases">GitHub Releases</a>. This
+          page mirrors them for SEO and convenience — canonical download URLs remain the Release
+          assets. Web app lives on
+          <a data-web-app href="https://nam-web-studio-sae2-iota.vercel.app" rel="noopener"
+            >Vercel</a
+          >.
+        </p>
+        <div id="download-root" aria-live="polite">
+          <p class="muted">Loading releases…</p>
+          <noscript
+            ><p>
+              Enable JavaScript or
+              <a href="https://github.com/pauloedspinho20/OpenAxe/releases">browse on GitHub</a>.
+            </p></noscript
+          >
+        </div>
+        <p style="margin-top: var(--sp-6); font-size: 12px; color: var(--ink-3)">
+          Tip: <code>gh release download v0.2.3 --repo pauloedspinho20/OpenAxe</code> fetches a tag
+          from the CLI.
+        </p>
+      </div>
+    </main>
+    <footer class="site-footer" role="contentinfo">
+      <div class="container">
+        <div>© <span id="footer-year">2026</span> OpenAxe Contributors · GPLv3</div>
+        <div class="footer-links">
+          <a href="/">Home</a> <a href="https://github.com/pauloedspinho20/OpenAxe">GitHub</a>
+        </div>
+      </div>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

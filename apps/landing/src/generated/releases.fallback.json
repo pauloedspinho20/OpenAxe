@@ -1,0 +1,130 @@
+{
+  "generated_at": "2026-08-24T17:09:28.662Z",
+  "repo": "pauloedspinho20/OpenAxe",
+  "releases": [
+    {
+      "tag_name": "v0.2.3",
+      "name": "v0.2.3",
+      "published_at": "2026-08-24T16:26:10Z",
+      "prerelease": false,
+      "html_url": "https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.3",
+      "body": "**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.2...v0.2.3\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.2...v0.2.3\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.2...v0.2.3\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.2...v0.2.3",
+      "assets": [
+        {
+          "name": "openaxe-desktop-0.2.3.deb",
+          "size": 3150788,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.3/openaxe-desktop-0.2.3.deb",
+          "content_type": "application/x-debian-package"
+        },
+        {
+          "name": "openaxe-desktop-0.2.3.dmg",
+          "size": 2611475,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.3/openaxe-desktop-0.2.3.dmg",
+          "content_type": "application/x-apple-diskimage"
+        },
+        {
+          "name": "openaxe-desktop-0.2.3.zip",
+          "size": 1687147,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.3/openaxe-desktop-0.2.3.zip",
+          "content_type": "application/zip"
+        },
+        {
+          "name": "openaxe-plugin-macos-14-v0.2.3.tar.gz",
+          "size": 13178137,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.3/openaxe-plugin-macos-14-v0.2.3.tar.gz",
+          "content_type": "application/gzip"
+        }
+      ]
+    },
+    {
+      "tag_name": "v0.2.2",
+      "name": "v0.2.2",
+      "published_at": "2026-08-24T16:02:07Z",
+      "prerelease": false,
+      "html_url": "https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.2",
+      "body": "## What's Changed\n* fix(native): roll back phantom edge when bridge rejects connect (#63) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/86\n* build: pin @chromatic-com/storybook to 5.3.0 (#74) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/88\n* docs: fix RtAudio→JUCE audio-backend drift (#77) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/94\n* security(tone3000): don't persist refresh token in localStorage (#76) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/93\n* fix(presets): don't abort applyPreset on one bad model/IR (#64) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/91\n* perf(web): memoize BlockCard; stop whole-grid re-render on param change (#67) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/92\n* perf(web): coalesce per-param worklet messages per frame (#78) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/90\n* build: enable strict-peer-dependencies (#79) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/89\n* fix(native): count loaded IRs in countActiveHeavyBlocks (#65) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/87\n* Fix/066 perblock adjacency by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/98\n* fix(core+web): stop reconcile storm resetting the native audio engine (#62) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/100\n* fix(web+desktop): guard user NAM/IR file loads with size + type caps (#69) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/102\n* fix(desktop): only load the UI from a trusted loopback URL (#71) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/103\n* test(desktop): round-trip every symbol-mapped effect kind's param keys (#41) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/106\n* test(web): add real-WASM integration test for the Web->WASM ABI boundary (#80) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/107\n* build(core): catch WASM EXPORTED_FUNCTIONS drift before it ships (#70) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/108\n* test(ui): add characterization tests for packages/ui's leaf primitives (#68) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/109\n* fix(web): dispatch useAudioEngine to a single hook, not both (#44) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/111\n* docs: add root AGENTS.md orientation doc for executors (#75) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/110\n* fix(web): add a top-level error boundary and unhandled-rejection handler (#50) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/112\n* build: add a versioning system + tag-triggered GitHub Releases (#54) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/113\n* build(web): generate UI knob ranges from the core param schema (#72) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/116\n* fix(web): give NativeAnalyser the frequency-domain surface the art needs (#114) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/117\n* fix(desktop): apply the Input TRIM knob on the native path (#115) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/139\n* chore(repo): add a one-shot setup task that also repairs the toolchain by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/140\n* Fix native desktop device selection + exit-time heap corruption by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/142\n* test(web): unit tests for low-coverage modules + coverage gate (#141) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/145\n* fix(desktop): Tone3000 catalog clicks and WKWebView-only text clipping (#146) by @pauloedspinho20 in https://github.",
+      "assets": [
+        {
+          "name": "openaxe-desktop-0.2.2.deb",
+          "size": 3150804,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.2/openaxe-desktop-0.2.2.deb",
+          "content_type": "application/x-debian-package"
+        },
+        {
+          "name": "openaxe-desktop-0.2.2.dmg",
+          "size": 2611477,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.2/openaxe-desktop-0.2.2.dmg",
+          "content_type": "application/x-apple-diskimage"
+        },
+        {
+          "name": "openaxe-desktop-0.2.2.zip",
+          "size": 1687146,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.2/openaxe-desktop-0.2.2.zip",
+          "content_type": "application/zip"
+        },
+        {
+          "name": "openaxe-plugin-macos-14-v0.2.2.tar.gz",
+          "size": 13178147,
+          "download_count": 1,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.2/openaxe-plugin-macos-14-v0.2.2.tar.gz",
+          "content_type": "application/gzip"
+        }
+      ]
+    },
+    {
+      "tag_name": "v0.2.1",
+      "name": "v0.2.1",
+      "published_at": "2026-08-23T23:36:27Z",
+      "prerelease": false,
+      "html_url": "https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.1",
+      "body": "**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.0...v0.2.1\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.0...v0.2.1",
+      "assets": [
+        {
+          "name": "openaxe-desktop-0.2.1.dmg",
+          "size": 2608973,
+          "download_count": 1,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.1/openaxe-desktop-0.2.1.dmg",
+          "content_type": "application/x-apple-diskimage"
+        },
+        {
+          "name": "openaxe-desktop-0.2.1.zip",
+          "size": 1685617,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.1/openaxe-desktop-0.2.1.zip",
+          "content_type": "application/zip"
+        }
+      ]
+    },
+    {
+      "tag_name": "v0.2.0",
+      "name": "v0.2.0",
+      "published_at": "2026-08-23T23:35:59Z",
+      "prerelease": false,
+      "html_url": "https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.0",
+      "body": "## What's Changed\n* feat(design-system): extract tokens, create shared components, scaffold Storybook by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/23\n* Dev to main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/24\n* feat(monorepo): scaffold pnpm + Turborepo workspace by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/25\n* Feat/monorepo scaffold by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/26\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/27\n* feat(core): vendor DSP libraries, port audio graph engine, wrap NAM inference by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/28\n* feat(core): add real-time extern \"C\" processing ABI by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/29\n* feat(web): compile packages/core to WASM, wire real Dragonfly Reverb into the app by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/30\n* feat(core): wrap BYOD's Diode Clipper by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/31\n* Feat/cpp dsp core realtime abi by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/32\n* feat: wire Diode Clipper into a new Drive BlockKind, end to end by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/33\n* feat(core): add Tube Screamer, Zen Drive, MXR Distortion+ drive models by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/34\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/35\n* Feat/more drive models by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/36\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/37\n* fix(web): ship wasm to prod and stop p5 parsing the bundle by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/38\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/39\n* feat(desktop): native desktop app reusing the web UI (issue #15) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/40\n* feat(core+web): drive the C++ graph from the web path via one rig worklet by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/58\n* fix(desktop): replace RtAudio with JUCE to fix reproducible CoreAudio crash by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/60\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/85\n* fix(core+web): align grid dims TS<->C++ and rebuild WASM (#61) by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/95\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/97\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/99\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/105\n* Dev to main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/212\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/220\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/commits/v0.2.0\n\n## What's Changed\n* feat(design-system): extract tokens, create shared components, scaffold Storybook by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/23\n* Dev to main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/24\n* feat(monorepo): scaffold pnpm + Turborepo workspace by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/25\n* Feat/monorepo scaffold by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/26\n* Dev by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/27\n* feat(core): vendor DSP libraries, port audio graph engine, wrap NAM inference by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/28\n* feat(core): add real-time extern \"C\" processing ABI by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/29\n",
+      "assets": [
+        {
+          "name": "openaxe-desktop-0.2.0.dmg",
+          "size": 2608978,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.0/openaxe-desktop-0.2.0.dmg",
+          "content_type": "application/x-apple-diskimage"
+        },
+        {
+          "name": "openaxe-desktop-0.2.0.zip",
+          "size": 1685618,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.0/openaxe-desktop-0.2.0.zip",
+          "content_type": "application/zip"
+        }
+      ]
+    }
+  ]
+}
