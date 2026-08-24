@@ -44,6 +44,9 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/.gitkeep
 .idea
 .DS_Store
 *.suo

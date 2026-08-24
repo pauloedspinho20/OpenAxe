@@ -1,7 +1,27 @@
 {
   "name": "openaxe",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.2",
+  "description": "OpenAxe — guitar/bass amp + cab + effects suite (web + desktop + VST3 plugin) built on Neural Amp Modeler",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pauloedspinho20/OpenAxe.git"
+  },
+  "homepage": "https://github.com/pauloedspinho20/OpenAxe#readme",
+  "bugs": {
+    "url": "https://github.com/pauloedspinho20/OpenAxe/issues"
+  },
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "guitar",
+    "amp-sim",
+    "nam",
+    "wasm",
+    "dsp",
+    "vst3",
+    "audio",
+    "gpl"
+  ],
   "packageManager": "pnpm@10.16.1",
   "scripts": {
     "dev": "turbo run dev --filter=@openaxe/web",

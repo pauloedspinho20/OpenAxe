@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose an enhancement
+title: 'feat: '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check open epics (`epic` label) first. Reference the epic # if this belongs to one.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What use case does this unblock?
+      placeholder: As a guitarist I want ... so that ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Sketch the change (UI, DSP, API, etc.)
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked existing issues/epics and this is not a duplicate
+          required: true
+        - label: I considered licensing (GPLv3-compatible) if this ports upstream DSP
+          required: false

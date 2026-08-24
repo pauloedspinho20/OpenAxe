@@ -1,7 +1,25 @@
 {
   "name": "@openaxe/web",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.2",
+  "description": "OpenAxe web app — Vite + React + AudioWorklet + WASM",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pauloedspinho20/OpenAxe.git",
+    "directory": "apps/web"
+  },
+  "homepage": "https://github.com/pauloedspinho20/OpenAxe#readme",
+  "bugs": {
+    "url": "https://github.com/pauloedspinho20/OpenAxe/issues"
+  },
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "guitar",
+    "amp-sim",
+    "nam",
+    "wasm",
+    "audio"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

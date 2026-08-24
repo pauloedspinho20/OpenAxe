@@ -434,6 +434,69 @@
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
+    },
+    {
+      "label": "WASM: Build core (Emscripten)",
+      "type": "shell",
+      "command": "bash scripts/build-core-wasm.sh",
+      "detail": "Compiles packages/core to WASM via Emscripten — overwrites apps/web/public/wasm-core/{js,wasm}. Needs emsdk on PATH. Run after changing include/openaxe/api.h or EXPORTED_FUNCTIONS",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Drift: gen-param-schema --check",
+      "type": "shell",
+      "command": "node scripts/gen-param-schema.mjs --check",
+      "detail": "Checks web paramSchema.ts ↔ packages/core param_schema.json agreement (issue #51). Run without --check to fix. For plugin automation map use next task",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Drift: gen-param-schema (automation-map) --check",
+      "type": "shell",
+      "command": "node scripts/gen-param-schema.mjs --check --target=automation-map",
+      "detail": "Checks plugin automation slot layout packages/vst3/generated/automation_param_map.h (issue #121, --target=automation-map)",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Drift: check-grid-dims --check",
+      "type": "shell",
+      "command": "node scripts/check-grid-dims.mjs --check",
+      "detail": "Checks grid row/col constants TS (gridConfig.ts) vs C++ (grid_config.h) — issue #61. Use --fix to repair",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Drift: check-wasm-exports --check",
+      "type": "shell",
+      "command": "node scripts/check-wasm-exports.mjs --check",
+      "detail": "Checks every _nam_studio_* symbol the web app calls is in packages/core CMake EXPORTED_FUNCTIONS — issue #70. Use --fix to rewrite CMakeLists.txt",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Drift: sync-version --check",
+      "type": "shell",
+      "command": "node scripts/sync-version.mjs --check",
+      "detail": "Checks every package.json version matches root VERSION file — issue #54. Run without --check to sync",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Storybook",
+      "type": "shell",
+      "command": "pnpm build-storybook",
+      "detail": "Static Storybook build, scans packages/ui stories — mirrors ci.yml Build Storybook step",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
     }
   ]
 }
