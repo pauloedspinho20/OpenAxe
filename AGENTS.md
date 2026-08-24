@@ -99,6 +99,7 @@ will catch it (CI is currently off, see above):
   `EXPORTED_FUNCTIONS` (issue #70)
 - `node scripts/sync-version.mjs --check` — every `package.json`'s
   `"version"` matches the root `VERSION` file (issue #54)
+- `node packages/ui/scripts/generate-tokens.mjs --check` — `packages/ui/tokens/design-tokens.json` → `packages/ui/tokens/{colors,spacing,typography,shadows}.css` and optionally `packages/vst3/generated/tokens.h` (`--target=cpp`; issue #131)
 
 Each has a `--fix`/write mode (`sync-version.mjs`'s is the no-flag default,
 not `--fix`); a fix still requires re-running the relevant build (wasm
