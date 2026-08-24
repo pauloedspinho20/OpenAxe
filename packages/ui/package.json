@@ -1,6 +1,6 @@
 {
   "name": "@openaxe/ui",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "OpenAxe shared design system — primitives, tokens, Wordmark",
   "repository": {
