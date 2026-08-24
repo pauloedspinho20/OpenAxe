@@ -141,20 +141,18 @@ void PingPongDelay::Process(const float* const* input, float* const* output, int
   impl_->filter.SetCutoff(impl_->tone, sr);
 
   for (int i = 0; i < num_frames; ++i) {
-    const float inL = input[0][i];
-    const float inR = input[1][i];
+    const float in = input[0][i] * 0.5f + input[1][i] * 0.5f;
 
     const float left_tap = impl_->left.ReadTap(time_ms, sr);
     const float right_tap = impl_->right.ReadTap(time_ms, sr);
 
-    // True stereo: cross-couple the inputs so that left input's first echo is
-    // hard right, right input's first echo is hard left, preserving the dry's
-    // stereo image. Width scales the wet panning: 1 = hard left/right, 0 = mono center.
-    impl_->right.buffer[static_cast<size_t>(impl_->right.write_pos)] = inL + impl_->filter.Process(left_tap) * fb;
-    impl_->left.buffer[static_cast<size_t>(impl_->left.write_pos)] = inR + impl_->filter.Process(right_tap) * fb;
+    // Mono sum for the initial input ensures the classic ping-pong where the
+    // first echo is hard right, second hard left, etc., even for mono guitar.
+    // True stereo is preserved via the dry path (mixed in the engine), while
+    // the wet ping-pongs hard. Width scales the wet panning: 1 = hard, 0 = mono center.
+    impl_->right.buffer[static_cast<size_t>(impl_->right.write_pos)] = in + impl_->filter.Process(left_tap) * fb;
+    impl_->left.buffer[static_cast<size_t>(impl_->left.write_pos)] = impl_->filter.Process(right_tap) * fb;
 
-    // Width: interpolate between mono (center, both channels same) and hard ping-pong.
-    // At width 0, both outputs are mono sum of taps; at 1, hard left/right as above.
     const float mono = (left_tap + right_tap) * 0.5f;
     output[0][i] = mono * (1.0f - width) + left_tap * width;
     output[1][i] = mono * (1.0f - width) + right_tap * width;
