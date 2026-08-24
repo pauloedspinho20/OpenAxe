@@ -75,9 +75,9 @@ struct Channel {
 
 struct Phaser::Impl {
   std::array<Channel, 2> channels;
-  float rate = 0.3f;
-  float depth = 0.7f;
-  float feedback = 0.5f;
+  float rate = 0.2f;
+  float depth = 0.8f;
+  float feedback = 0.6f;
   int stages = 4;
   float sample_rate = 48000.0f;
 };

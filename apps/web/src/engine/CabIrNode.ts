@@ -1,4 +1,7 @@
 /**
+ * @deprecated Replaced by `RigWorkletNode` (single rig worklet, issue #55/#263).
+ * Kept for `CabBlock` legacy staging and its tests only.
+ *
  * Cabinet IR convolution as an `AudioWorkletNode`, backed by `packages/core`'s
  * own convolver (`wasm-core/cabWorklet.js`).
  *
