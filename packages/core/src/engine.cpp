@@ -1014,6 +1014,8 @@ void AudioEngine::Reset(double sample_rate, int max_block_size) {
   ext_in_l_.assign(static_cast<size_t>(max_block_size), 0.0f);
   ext_in_r_.assign(static_cast<size_t>(max_block_size), 0.0f);
   EnsureSessionBuffers();
+  EnsureCaptureBuffers();
+  EnsureJamBuffers();
   if (song_tsf_ && sample_rate > 0) {
     tsf_set_output(static_cast<tsf*>(song_tsf_.get()), TSF_STEREO_INTERLEAVED,
                    static_cast<int>(sample_rate), 0.0f);
@@ -1441,17 +1443,9 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
     std::fill_n(grid_bus_l.data(), num_frames, 0.0f);
     std::fill_n(grid_bus_r.data(), num_frames, 0.0f);
   }
-  // Render song bus into its own buffers (handles event timing internally).
+  // Render song bus and clip players into their own buses.
   RenderSongBus(num_frames);
-  // Take buses are silent in Phase 1 — zero them (they have no producer yet).
-  for (int b = kBusTake0; b < kSessionBusCount; ++b) {
-    auto& l = session_bus_l_[static_cast<size_t>(b)];
-    auto& r = session_bus_r_[static_cast<size_t>(b)];
-    if (static_cast<int>(l.size()) < num_frames) l.assign(static_cast<size_t>(num_frames), 0.0f);
-    if (static_cast<int>(r.size()) < num_frames) r.assign(static_cast<size_t>(num_frames), 0.0f);
-    std::fill_n(l.data(), num_frames, 0.0f);
-    std::fill_n(r.data(), num_frames, 0.0f);
-  }
+  RenderClipBuses(num_frames);
   // Mix: sum buses into session_mix, applying gain/pan/mute/solo + per-bus meters.
   if (static_cast<int>(session_mix_l_.size()) < num_frames) session_mix_l_.assign(static_cast<size_t>(num_frames), 0.0f);
   if (static_cast<int>(session_mix_r_.size()) < num_frames) session_mix_r_.assign(static_cast<size_t>(num_frames), 0.0f);
@@ -1510,6 +1504,9 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       output[1][i] = r;
     }
   }
+  // Capture taps + jam ring (post-mix, sample-synced with the same transport).
+  WriteCaptureAndJam(num_frames);
+
   // Advance transport clock (single sample-synced clock for song+clips+capture).
   if (song_playing_.load(std::memory_order_relaxed)) {
     song_position_.fetch_add(num_frames, std::memory_order_relaxed);
@@ -2513,6 +2510,21 @@ void AudioEngine::EnsureSessionBuffers() {
   session_mix_r_.assign(n, 0.0f);
 }
 
+void AudioEngine::EnsureCaptureBuffers() {
+  if (capture_buf_.size() != static_cast<size_t>(kCaptureCapacityFrames * 2)) {
+    capture_buf_.assign(static_cast<size_t>(kCaptureCapacityFrames * 2), 0.0f);
+  }
+}
+
+void AudioEngine::EnsureJamBuffers() {
+  std::unique_lock lock(jam_mutex_);
+  const size_t need = static_cast<size_t>(jam_capacity_frames_ * 2);
+  if (jam_buf_.size() != need) {
+    jam_buf_.assign(need, 0.0f);
+    jam_head_.store(0, std::memory_order_relaxed);
+  }
+}
+
 AudioEngine::SongLoadResult AudioEngine::LoadSongSoundfont(const uint8_t* bytes, size_t size) {
   if (!bytes || size == 0) return SongLoadResult::kInvalidFormat;
   if (size > kMaxIrBytes * 4) return SongLoadResult::kTooLarge;  // SF2 ceiling reuses IR scale ×4 (~32 MiB)
@@ -2664,6 +2676,243 @@ bool AudioEngine::IsBusSoloed(int bus) const {
 float AudioEngine::GetBusMeter(int bus) const {
   if (!IsValidSessionBus(bus)) return 0.0f;
   return session_buses_[static_cast<size_t>(bus)].meter.load(std::memory_order_relaxed);
+}
+
+// ── Clip players (issue #155) ─────────────────────────────────────────
+
+AudioEngine::Clip* AudioEngine::FindClip(int32_t clip_id) {
+  for (auto& c : clips_) if (c && c->id == clip_id) return c.get();
+  return nullptr;
+}
+const AudioEngine::Clip* AudioEngine::FindClip(int32_t clip_id) const {
+  for (auto& c : clips_) if (c && c->id == clip_id) return c.get();
+  return nullptr;
+}
+
+int32_t AudioEngine::ClipCreate() {
+  std::unique_lock lock(clips_mutex_);
+  int slot = -1;
+  for (int i = 0; i < kMaxClips; ++i) if (!clips_[static_cast<size_t>(i)]) { slot = i; break; }
+  if (slot == -1) return -1;
+  int bus = kBusTake0 + slot;
+  auto clip = std::make_unique<Clip>();
+  clip->id = next_clip_id_.fetch_add(1, std::memory_order_relaxed);
+  clip->bus = bus;
+  // Pre-allocate fixed PCM capacity so feed never reallocates on the RT path.
+  clip->pcm.assign(static_cast<size_t>(kClipMaxFrames * 2), 0.0f);
+  clip->frames.store(0, std::memory_order_relaxed);
+  clip->position.store(0, std::memory_order_relaxed);
+  clip->playing.store(false, std::memory_order_relaxed);
+  int id = clip->id;
+  clips_[static_cast<size_t>(slot)] = std::move(clip);
+  return id;
+}
+
+void AudioEngine::ClipDestroy(int32_t clip_id) {
+  std::unique_lock lock(clips_mutex_);
+  for (auto& c : clips_) if (c && c->id == clip_id) { c.reset(); break; }
+}
+
+int32_t AudioEngine::ClipFeedPcm(int32_t clip_id, const float* interleaved, int32_t frames) {
+  if (!interleaved || frames <= 0) return 0;
+  std::shared_lock lock(clips_mutex_);
+  Clip* clip = FindClip(clip_id);
+  if (!clip) return 0;
+  int cur = clip->frames.load(std::memory_order_relaxed);
+  if (cur >= kClipMaxFrames) return 0;
+  if (cur + frames > kClipMaxFrames) frames = kClipMaxFrames - cur;
+  if (frames <= 0) return 0;
+  // Ensure pcm vector has enough capacity (it was pre-reserved).
+  if (clip->pcm.size() < static_cast<size_t>(kClipMaxFrames * 2)) {
+    clip->pcm.resize(static_cast<size_t>(kClipMaxFrames * 2));
+  }
+  float* dst = clip->pcm.data() + static_cast<size_t>(cur * 2);
+  std::copy_n(interleaved, static_cast<size_t>(frames * 2), dst);
+  clip->frames.store(cur + frames, std::memory_order_release);
+  return frames;
+}
+
+void AudioEngine::ClipPlay(int32_t clip_id) {
+  if (auto* c = FindClip(clip_id)) c->playing.store(true, std::memory_order_relaxed);
+}
+void AudioEngine::ClipStop(int32_t clip_id) {
+  if (auto* c = FindClip(clip_id)) c->playing.store(false, std::memory_order_relaxed);
+}
+void AudioEngine::ClipSeek(int32_t clip_id, int64_t position_frames) {
+  if (auto* c = FindClip(clip_id)) {
+    int f = c->frames.load(std::memory_order_relaxed);
+    if (position_frames < 0) position_frames = 0;
+    if (position_frames > f) position_frames = f;
+    c->position.store(position_frames, std::memory_order_relaxed);
+  }
+}
+int64_t AudioEngine::ClipGetPosition(int32_t clip_id) const {
+  if (auto* c = FindClip(clip_id)) return c->position.load(std::memory_order_relaxed);
+  return 0;
+}
+int32_t AudioEngine::ClipIsPlaying(int32_t clip_id) const {
+  if (auto* c = FindClip(clip_id)) return c->playing.load(std::memory_order_relaxed) ? 1 : 0;
+  return 0;
+}
+int32_t AudioEngine::ClipGetFrames(int32_t clip_id) const {
+  if (auto* c = FindClip(clip_id)) return c->frames.load(std::memory_order_relaxed);
+  return 0;
+}
+int32_t AudioEngine::ClipGetBus(int32_t clip_id) const {
+  if (auto* c = FindClip(clip_id)) return c->bus;
+  return -1;
+}
+
+void AudioEngine::RenderClipBuses(int num_frames) {
+  // Zero all take buses first; clips that are playing will overwrite.
+  for (int b = kBusTake0; b < kSessionBusCount; ++b) {
+    auto& l = session_bus_l_[static_cast<size_t>(b)];
+    auto& r = session_bus_r_[static_cast<size_t>(b)];
+    if (static_cast<int>(l.size()) < num_frames) l.assign(static_cast<size_t>(num_frames), 0.0f);
+    if (static_cast<int>(r.size()) < num_frames) r.assign(static_cast<size_t>(num_frames), 0.0f);
+    std::fill_n(l.data(), num_frames, 0.0f);
+    std::fill_n(r.data(), num_frames, 0.0f);
+  }
+  // RT path: iterate clips without taking clips_mutex_ (Tier-2 suspend guarantees no concurrent create/destroy/feed).
+  for (auto& up : clips_) {
+    if (!up) continue;
+    Clip& clip = *up;
+    if (!clip.playing.load(std::memory_order_relaxed)) continue;
+    int bus = clip.bus;
+    if (bus < kBusTake0 || bus >= kSessionBusCount) continue;
+    auto& out_l = session_bus_l_[static_cast<size_t>(bus)];
+    auto& out_r = session_bus_r_[static_cast<size_t>(bus)];
+    if (static_cast<int>(out_l.size()) < num_frames) out_l.assign(static_cast<size_t>(num_frames), 0.0f);
+    if (static_cast<int>(out_r.size()) < num_frames) out_r.assign(static_cast<size_t>(num_frames), 0.0f);
+    int frames = clip.frames.load(std::memory_order_acquire);
+    int64_t pos = clip.position.load(std::memory_order_relaxed);
+    for (int i = 0; i < num_frames; ++i) {
+      if (pos >= frames) {
+        // EOF: stop and silence remainder.
+        clip.playing.store(false, std::memory_order_relaxed);
+        break;
+      }
+      const float* pcm = clip.pcm.data();
+      out_l[static_cast<size_t>(i)] = pcm[static_cast<size_t>(pos * 2)];
+      out_r[static_cast<size_t>(i)] = pcm[static_cast<size_t>(pos * 2 + 1)];
+      ++pos;
+    }
+    if (pos >= frames) clip.playing.store(false, std::memory_order_relaxed);
+    clip.position.store(pos, std::memory_order_relaxed);
+  }
+}
+
+// ── Capture + jam (issue #157) ───────────────────────────────────────
+
+void AudioEngine::CaptureStart(CaptureSource source, int32_t bus) {
+  EnsureCaptureBuffers();
+  capture_source_ = source;
+  capture_bus_ = bus;
+  capture_head_.store(0, std::memory_order_relaxed);
+  capture_tail_.store(0, std::memory_order_relaxed);
+  capture_active_.store(true, std::memory_order_release);
+}
+void AudioEngine::CaptureStop() { capture_active_.store(false, std::memory_order_release); }
+int32_t AudioEngine::CaptureIsActive() const { return capture_active_.load(std::memory_order_relaxed) ? 1 : 0; }
+int32_t AudioEngine::CaptureAvailableFrames() const {
+  int head = capture_head_.load(std::memory_order_relaxed);
+  int tail = capture_tail_.load(std::memory_order_relaxed);
+  return head - tail;
+}
+int32_t AudioEngine::CaptureRead(float* out_interleaved, int32_t capacity_frames) {
+  if (!out_interleaved || capacity_frames <= 0) return 0;
+  int head = capture_head_.load(std::memory_order_acquire);
+  int tail = capture_tail_.load(std::memory_order_relaxed);
+  int avail = head - tail;
+  if (avail <= 0) return 0;
+  int to_read = std::min(avail, capacity_frames);
+  for (int i = 0; i < to_read; ++i) {
+    int idx = (tail + i) % kCaptureCapacityFrames;
+    out_interleaved[static_cast<size_t>(i * 2)] = capture_buf_[static_cast<size_t>(idx * 2)];
+    out_interleaved[static_cast<size_t>(i * 2 + 1)] = capture_buf_[static_cast<size_t>(idx * 2 + 1)];
+  }
+  capture_tail_.store(tail + to_read, std::memory_order_release);
+  return to_read;
+}
+void AudioEngine::JamConfigure(int32_t seconds) {
+  if (seconds < 1) seconds = 1;
+  if (seconds > 60) seconds = 60;
+  int new_cap = static_cast<int>(sample_rate_ > 0 ? sample_rate_ * seconds : 48000 * seconds);
+  if (new_cap < 1024) new_cap = 1024;
+  std::unique_lock lock(jam_mutex_);
+  jam_capacity_frames_ = new_cap;
+  jam_buf_.assign(static_cast<size_t>(new_cap * 2), 0.0f);
+  jam_head_.store(0, std::memory_order_relaxed);
+}
+int32_t AudioEngine::JamLift(float* out_interleaved, int32_t capacity_frames) {
+  if (!out_interleaved || capacity_frames <= 0) return 0;
+  int64_t head = jam_head_.load(std::memory_order_acquire);
+  int cap = jam_capacity_frames_;
+  int64_t avail = std::min<int64_t>(head, cap);
+  int to_read = static_cast<int>(std::min<int64_t>(avail, capacity_frames));
+  if (to_read <= 0) return 0;
+  int64_t start = head - to_read;
+  for (int i = 0; i < to_read; ++i) {
+    int idx = static_cast<int>((start + i) % cap);
+    out_interleaved[static_cast<size_t>(i * 2)] = jam_buf_[static_cast<size_t>(idx * 2)];
+    out_interleaved[static_cast<size_t>(i * 2 + 1)] = jam_buf_[static_cast<size_t>(idx * 2 + 1)];
+  }
+  return to_read;
+}
+int64_t AudioEngine::JamAvailableFrames() const {
+  int64_t head = jam_head_.load(std::memory_order_relaxed);
+  return std::min<int64_t>(head, jam_capacity_frames_);
+}
+
+void AudioEngine::WriteCaptureAndJam(int num_frames) {
+  if (num_frames <= 0) return;
+  // Determine source for capture (master post-mix is default).
+  const float* src_l = session_mix_l_.data();
+  const float* src_r = session_mix_r_.data();
+  if (capture_source_ == CaptureSource::kDryInput) {
+    src_l = ext_in_l_.data();
+    src_r = ext_in_r_.data();
+  } else if (capture_source_ == CaptureSource::kBus) {
+    if (IsValidSessionBus(capture_bus_)) {
+      src_l = session_bus_l_[static_cast<size_t>(capture_bus_)].data();
+      src_r = session_bus_r_[static_cast<size_t>(capture_bus_)].data();
+    }
+  }
+  // Capture FIFO (only when active).
+  if (capture_active_.load(std::memory_order_relaxed)) {
+    int head = capture_head_.load(std::memory_order_relaxed);
+    int tail = capture_tail_.load(std::memory_order_acquire);
+    int avail = head - tail;
+    int free = kCaptureCapacityFrames - avail;
+    // Overrun policy: drop oldest (advance tail) to make room, keeping newest.
+    if (num_frames > free) {
+      int drop = num_frames - free;
+      capture_tail_.store(tail + drop, std::memory_order_release);
+      tail += drop;
+    }
+    for (int i = 0; i < num_frames; ++i) {
+      int idx = (head + i) % kCaptureCapacityFrames;
+      // Need to handle wrap of head beyond int? head is monotonic int.
+      capture_buf_[static_cast<size_t>(idx * 2)] = src_l[i];
+      capture_buf_[static_cast<size_t>(idx * 2 + 1)] = src_r[i];
+    }
+    capture_head_.store(head + num_frames, std::memory_order_release);
+  }
+  // Jam ring (always-on, overwriting).
+  {
+    int cap = jam_capacity_frames_;
+    if (static_cast<int>(jam_buf_.size()) != cap * 2) {
+      // Lazy init if Reset hasn't sized it (e.g., before first Process).
+      jam_buf_.assign(static_cast<size_t>(cap * 2), 0.0f);
+    }
+    int64_t head = jam_head_.load(std::memory_order_relaxed);
+    for (int i = 0; i < num_frames; ++i) {
+      int idx = static_cast<int>((head + i) % cap);
+      jam_buf_[static_cast<size_t>(idx * 2)] = session_mix_l_[static_cast<size_t>(i)];
+      jam_buf_[static_cast<size_t>(idx * 2 + 1)] = session_mix_r_[static_cast<size_t>(i)];
+    }
+    jam_head_.store(head + num_frames, std::memory_order_release);
+  }
 }
 
 void AudioEngine::DispatchSongEvent(const SongEvent& ev) {

@@ -542,6 +542,33 @@ class AudioEngine {
   bool IsBusSoloed(int bus) const;
   float GetBusMeter(int bus) const;
 
+  // ── Clip players (issue #155) ───────────────────────────────────────
+  static constexpr int kMaxClips = 8;
+  static constexpr int kClipMaxFrames = 48000 * 10; // 10 seconds per clip at 48k
+  int32_t ClipCreate();
+  void ClipDestroy(int32_t clip_id);
+  // Feed interleaved stereo PCM (2*frames floats). Returns frames accepted.
+  int32_t ClipFeedPcm(int32_t clip_id, const float* interleaved, int32_t frames);
+  void ClipPlay(int32_t clip_id);
+  void ClipStop(int32_t clip_id);
+  void ClipSeek(int32_t clip_id, int64_t position_frames);
+  int64_t ClipGetPosition(int32_t clip_id) const;
+  int32_t ClipIsPlaying(int32_t clip_id) const;
+  int32_t ClipGetFrames(int32_t clip_id) const;
+  int32_t ClipGetBus(int32_t clip_id) const;
+
+  // ── Recorder capture taps + jam ring (issue #157) ──────────────────
+  enum class CaptureSource { kMaster = 0, kDryInput = 1, kBus = 2 };
+  void CaptureStart(CaptureSource source, int32_t bus);
+  void CaptureStop();
+  // Drain up to capacity_frames (stereo interleaved) into out. Returns frames actually read.
+  int32_t CaptureRead(float* out_interleaved, int32_t capacity_frames);
+  int32_t CaptureIsActive() const;
+  int32_t CaptureAvailableFrames() const;
+  void JamConfigure(int32_t seconds);
+  int32_t JamLift(float* out_interleaved, int32_t capacity_frames);
+  int64_t JamAvailableFrames() const;
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
@@ -717,8 +744,41 @@ class AudioEngine {
   std::vector<float> session_mix_l_;
   std::vector<float> session_mix_r_;
 
+  // ── Clip players (issue #155) ──
+  struct Clip {
+    int id{-1};
+    int bus{-1};
+    std::vector<float> pcm; // interleaved stereo, capacity kClipMaxFrames*2
+    std::atomic<int> frames{0};
+    std::atomic<int64_t> position{0};
+    std::atomic<bool> playing{false};
+  };
+  std::array<std::unique_ptr<Clip>, kMaxClips> clips_{};
+  std::atomic<int> next_clip_id_{0};
+  mutable std::shared_mutex clips_mutex_;
+
+  // ── Capture + jam (issue #157) ──
+  static constexpr int kCaptureCapacityFrames = 48000 * 10; // 10s
+  std::vector<float> capture_buf_; // interleaved, size capacity*2
+  std::atomic<int> capture_head_{0}; // monotonic frames written
+  std::atomic<int> capture_tail_{0}; // monotonic frames read
+  std::atomic<bool> capture_active_{false};
+  CaptureSource capture_source_{CaptureSource::kMaster};
+  int32_t capture_bus_{kBusGrid};
+
+  std::vector<float> jam_buf_; // interleaved circular
+  std::atomic<int64_t> jam_head_{0};
+  int64_t jam_capacity_frames_{48000 * 10};
+  mutable std::shared_mutex jam_mutex_; // protects resize in JamConfigure
+
   void EnsureSessionBuffers();
+  void EnsureCaptureBuffers();
+  void EnsureJamBuffers();
   bool IsValidSessionBus(int bus) const { return bus >= 0 && bus < kSessionBusCount; }
+  Clip* FindClip(int32_t clip_id);
+  const Clip* FindClip(int32_t clip_id) const;
+  void RenderClipBuses(int num_frames);
+  void WriteCaptureAndJam(int num_frames);
   void DispatchSongEvent(const SongEvent& ev);
   void RenderSongBus(int num_frames);
 };

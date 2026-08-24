@@ -399,6 +399,49 @@ void nam_studio_bus_set_solo(NamStudioGraph* graph, int32_t bus, int32_t soloed)
 int32_t nam_studio_bus_is_soloed(NamStudioGraph* graph, int32_t bus);
 float nam_studio_get_bus_meter(NamStudioGraph* graph, int32_t bus);
 
+// ── Clip players (issue #155) ────────────────────────────────────────
+// Fixed max 8 take buses (see NAM_STUDIO_BUS_TAKE0). Storage is
+// pre-allocated per clip (kClipMaxFrames*2 interleaved) so control-thread
+// feed never reallocates on the RT path. End-of-clip stops at EOF.
+// Tier 2: create/destroy/feed (allocate / resize). Tier 1: play/stop/seek/position (atomics).
+
+#define NAM_STUDIO_MAX_CLIPS 8
+#define NAM_STUDIO_CLIP_MAX_FRAMES (48000 * 10)
+
+int32_t nam_studio_clip_create(NamStudioGraph* graph);
+void nam_studio_clip_destroy(NamStudioGraph* graph, int32_t clip_id);
+// Feed interleaved stereo PCM (2*frames floats). Returns frames accepted (0 = full/invalid).
+int32_t nam_studio_clip_feed_pcm(NamStudioGraph* graph, int32_t clip_id,
+                                 const float* interleaved, int32_t frames);
+void nam_studio_clip_play(NamStudioGraph* graph, int32_t clip_id);
+void nam_studio_clip_stop(NamStudioGraph* graph, int32_t clip_id);
+void nam_studio_clip_seek(NamStudioGraph* graph, int32_t clip_id, int64_t position_frames);
+int64_t nam_studio_clip_get_position(NamStudioGraph* graph, int32_t clip_id);
+int32_t nam_studio_clip_is_playing(NamStudioGraph* graph, int32_t clip_id);
+int32_t nam_studio_clip_get_frames(NamStudioGraph* graph, int32_t clip_id);
+int32_t nam_studio_clip_get_bus(NamStudioGraph* graph, int32_t clip_id);
+
+// ── Recorder capture taps + jam ring (issue #157) ────────────────────
+// Capture: lock-free stereo FIFO written in Process(), drained off-thread.
+// Source selects what is tapped. Jam: always-on circular ring holding last
+// N seconds of post-master mix, lift snapshots it without a prior start.
+// Tier 1: start/stop/read/lift (atomics + SPSC). JamConfigure is Tier 2 (realloc).
+
+typedef enum NamStudioCaptureSource {
+  NAM_STUDIO_CAPTURE_MASTER = 0,
+  NAM_STUDIO_CAPTURE_DRY_INPUT = 1,
+  NAM_STUDIO_CAPTURE_BUS = 2,
+} NamStudioCaptureSource;
+
+void nam_studio_capture_start(NamStudioGraph* graph, NamStudioCaptureSource source, int32_t bus);
+void nam_studio_capture_stop(NamStudioGraph* graph);
+int32_t nam_studio_capture_is_active(NamStudioGraph* graph);
+int32_t nam_studio_capture_available_frames(NamStudioGraph* graph);
+int32_t nam_studio_capture_read(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames);
+void nam_studio_jam_configure(NamStudioGraph* graph, int32_t seconds);
+int32_t nam_studio_jam_lift(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames);
+int64_t nam_studio_jam_available_frames(NamStudioGraph* graph);
+
 // ── Metering ────────────────────────────────────────────────────────────
 
 // Peak |sample| over the last nam_studio_process call, 0 for an unknown block.

@@ -195,6 +195,139 @@ void TestSampleRateIndependence() {
   }
 }
 
+std::vector<float> MakeSinePCM(int frames, float freq, double sr) {
+  std::vector<float> pcm(static_cast<size_t>(frames * 2));
+  for (int i = 0; i < frames; ++i) {
+    float s = std::sin(6.2831853f * freq * i / static_cast<float>(sr)) * 0.5f;
+    pcm[static_cast<size_t>(i * 2)] = s;
+    pcm[static_cast<size_t>(i * 2 + 1)] = s;
+  }
+  return pcm;
+}
+
+void TestClipFeedAndPlayback() {
+  NamStudioGraph* g = nam_studio_graph_create();
+  nam_studio_reset(g, kSampleRate, kBlockSize);
+  int32_t clip = nam_studio_clip_create(g);
+  OPENAXE_EXPECT(clip >= 0);
+  // Feed 512 frames of sine in two chunks (continuity).
+  auto chunk1 = MakeSinePCM(256, 440.0f, kSampleRate);
+  auto chunk2 = MakeSinePCM(256, 440.0f, kSampleRate);
+  OPENAXE_EXPECT(nam_studio_clip_feed_pcm(g, clip, chunk1.data(), 256) == 256);
+  OPENAXE_EXPECT(nam_studio_clip_feed_pcm(g, clip, chunk2.data(), 256) == 256);
+  OPENAXE_EXPECT(nam_studio_clip_get_frames(g, clip) == 512);
+  int32_t bus = nam_studio_clip_get_bus(g, clip);
+  OPENAXE_EXPECT(bus >= NAM_STUDIO_BUS_TAKE0 && bus < NAM_STUDIO_BUS_COUNT);
+  // Play and verify bus meter becomes audible.
+  nam_studio_clip_play(g, clip);
+  OPENAXE_EXPECT(nam_studio_clip_is_playing(g, clip) == 1);
+  RunMono(g, 0.0f);
+  OPENAXE_EXPECT(nam_studio_get_bus_meter(g, bus) > 0.1f);
+  OPENAXE_EXPECT(nam_studio_clip_get_position(g, clip) == kBlockSize);
+  // Seek to 0 and verify position.
+  nam_studio_clip_seek(g, clip, 0);
+  OPENAXE_EXPECT(nam_studio_clip_get_position(g, clip) == 0);
+  // Play to EOF: after 512 frames, clip should stop.
+  nam_studio_clip_seek(g, clip, 0);
+  nam_studio_clip_play(g, clip);
+  for (int i = 0; i < 4; ++i) RunMono(g, 0.0f);
+  OPENAXE_EXPECT(nam_studio_clip_is_playing(g, clip) == 0);
+  OPENAXE_EXPECT(nam_studio_clip_get_position(g, clip) == 512);
+  // Destroy frees.
+  nam_studio_clip_destroy(g, clip);
+  OPENAXE_EXPECT(nam_studio_clip_get_frames(g, clip) == 0);
+  nam_studio_graph_destroy(g);
+}
+
+void TestClipConcurrent() {
+  NamStudioGraph* g = nam_studio_graph_create();
+  nam_studio_reset(g, kSampleRate, kBlockSize);
+  int32_t c0 = nam_studio_clip_create(g);
+  int32_t c1 = nam_studio_clip_create(g);
+  OPENAXE_EXPECT(c0 != c1);
+  OPENAXE_EXPECT(c0 >= 0 && c1 >= 0);
+  auto pcm0 = MakeSinePCM(256, 220.0f, kSampleRate);
+  auto pcm1 = MakeSinePCM(256, 330.0f, kSampleRate);
+  nam_studio_clip_feed_pcm(g, c0, pcm0.data(), 256);
+  nam_studio_clip_feed_pcm(g, c1, pcm1.data(), 256);
+  nam_studio_clip_play(g, c0);
+  nam_studio_clip_play(g, c1);
+  auto out = RunMono(g, 0.0f);
+  float peak = 0.0f;
+  for (float s : out) peak = std::max(peak, std::fabs(s));
+  // Two clips summed pre-master should be louder than one.
+  OPENAXE_EXPECT(peak > 0.2f);
+  OPENAXE_EXPECT(nam_studio_clip_is_playing(g, c0) == 1);
+  OPENAXE_EXPECT(nam_studio_clip_is_playing(g, c1) == 1);
+  // Max 8 clips.
+  for (int i = 2; i < 8; ++i) {
+    int32_t c = nam_studio_clip_create(g);
+    OPENAXE_EXPECT(c >= 0);
+  }
+  OPENAXE_EXPECT(nam_studio_clip_create(g) == -1);
+  nam_studio_graph_destroy(g);
+}
+
+void TestCaptureContinuityAndOverrun() {
+  NamStudioGraph* g = nam_studio_graph_create();
+  nam_studio_reset(g, kSampleRate, kBlockSize);
+  // Capture master: feed grid with constant, capture 4 blocks, drain in chunks.
+  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 0);
+  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, cab, 0);
+  nam_studio_connect(g, cab, 0, NAM_STUDIO_OUT_RAIL, 0);
+  nam_studio_reset(g, kSampleRate, kBlockSize);
+  nam_studio_capture_start(g, NAM_STUDIO_CAPTURE_MASTER, 0);
+  OPENAXE_EXPECT(nam_studio_capture_is_active(g) == 1);
+  for (int i = 0; i < 4; ++i) RunMono(g, 0.5f);
+  OPENAXE_EXPECT(nam_studio_capture_available_frames(g) == 4 * kBlockSize);
+  std::vector<float> out(4 * kBlockSize * 2, 0.0f);
+  int32_t got = nam_studio_capture_read(g, out.data(), 2 * kBlockSize);
+  OPENAXE_EXPECT(got == 2 * kBlockSize);
+  OPENAXE_EXPECT(nam_studio_capture_available_frames(g) == 2 * kBlockSize);
+  // Remaining drain.
+  got = nam_studio_capture_read(g, out.data(), 4 * kBlockSize);
+  OPENAXE_EXPECT(got == 2 * kBlockSize);
+  OPENAXE_EXPECT(nam_studio_capture_available_frames(g) == 0);
+  // Overrun: fill beyond capacity (10s) should drop oldest, not crash.
+  nam_studio_capture_start(g, NAM_STUDIO_CAPTURE_MASTER, 0);
+  // Capacity is 48000*10 = 480000 frames, we write 500000 -> overrun by 20000, should keep newest 480k.
+  for (int i = 0; i < 4000; ++i) RunMono(g, 0.1f); // 4000*128=512k frames
+  int32_t avail = nam_studio_capture_available_frames(g);
+  OPENAXE_EXPECT(avail == 48000 * 10);
+  std::vector<float> big(48000 * 10 * 2, 0.0f);
+  got = nam_studio_capture_read(g, big.data(), 48000 * 10);
+  OPENAXE_EXPECT(got == 48000 * 10);
+  nam_studio_capture_stop(g);
+  OPENAXE_EXPECT(nam_studio_capture_is_active(g) == 0);
+  nam_studio_graph_destroy(g);
+}
+
+void TestJamLift() {
+  NamStudioGraph* g = nam_studio_graph_create();
+  nam_studio_reset(g, kSampleRate, kBlockSize);
+  nam_studio_jam_configure(g, 2); // 2 seconds ring
+  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 0);
+  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, cab, 0);
+  nam_studio_connect(g, cab, 0, NAM_STUDIO_OUT_RAIL, 0);
+  nam_studio_reset(g, kSampleRate, kBlockSize);
+  // Write 1 second of audio (48000 frames) via Process, jam always records.
+  for (int i = 0; i < 375; ++i) RunMono(g, 0.3f); // 375*128=48000
+  OPENAXE_EXPECT(nam_studio_jam_available_frames(g) == 48000);
+  std::vector<float> out(48000 * 2, 0.0f);
+  int32_t got = nam_studio_jam_lift(g, out.data(), 48000);
+  OPENAXE_EXPECT(got == 48000);
+  // Check captured data is ~0.3 (allow master=1).
+  OPENAXE_EXPECT(std::fabs(out[0] - 0.3f) < 1e-3f);
+  // After lift, available stays (non-destructive).
+  OPENAXE_EXPECT(nam_studio_jam_available_frames(g) == 48000);
+  // Write another 2 seconds -> ring should hold only last 2s (96000 frames) = capacity.
+  for (int i = 0; i < 750; ++i) RunMono(g, 0.4f); // 96000 frames
+  OPENAXE_EXPECT(nam_studio_jam_available_frames(g) == 96000);
+  got = nam_studio_jam_lift(g, out.data(), 48000);
+  OPENAXE_EXPECT(got == 48000); // our out buffer is only 48000, so truncated
+  nam_studio_graph_destroy(g);
+}
+
 } // namespace
 
 int main() {
@@ -203,5 +336,9 @@ int main() {
   TestAudibleToneWithoutGrid();
   TestSessionMixer();
   TestSampleRateIndependence();
+  TestClipFeedAndPlayback();
+  TestClipConcurrent();
+  TestCaptureContinuityAndOverrun();
+  TestJamLift();
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

@@ -731,6 +731,76 @@ float nam_studio_get_bus_meter(NamStudioGraph* graph, int32_t bus) {
   return graph ? graph->engine.GetBusMeter(bus) : 0.0f;
 }
 
+// ── Clip players (issue #155) ─────────────────────────────────────────
+
+int32_t nam_studio_clip_create(NamStudioGraph* graph) {
+  return graph ? graph->engine.ClipCreate() : -1;
+}
+void nam_studio_clip_destroy(NamStudioGraph* graph, int32_t clip_id) {
+  if (graph) graph->engine.ClipDestroy(clip_id);
+}
+int32_t nam_studio_clip_feed_pcm(NamStudioGraph* graph, int32_t clip_id,
+                                 const float* interleaved, int32_t frames) {
+  return graph ? graph->engine.ClipFeedPcm(clip_id, interleaved, frames) : 0;
+}
+void nam_studio_clip_play(NamStudioGraph* graph, int32_t clip_id) {
+  if (graph) graph->engine.ClipPlay(clip_id);
+}
+void nam_studio_clip_stop(NamStudioGraph* graph, int32_t clip_id) {
+  if (graph) graph->engine.ClipStop(clip_id);
+}
+void nam_studio_clip_seek(NamStudioGraph* graph, int32_t clip_id, int64_t position_frames) {
+  if (graph) graph->engine.ClipSeek(clip_id, position_frames);
+}
+int64_t nam_studio_clip_get_position(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipGetPosition(clip_id) : 0;
+}
+int32_t nam_studio_clip_is_playing(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipIsPlaying(clip_id) : 0;
+}
+int32_t nam_studio_clip_get_frames(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipGetFrames(clip_id) : 0;
+}
+int32_t nam_studio_clip_get_bus(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipGetBus(clip_id) : -1;
+}
+
+// ── Capture + jam (issue #157) ────────────────────────────────────────
+
+void nam_studio_capture_start(NamStudioGraph* graph, NamStudioCaptureSource source, int32_t bus) {
+  if (!graph) return;
+  using CS = openaxe::engine::AudioEngine::CaptureSource;
+  CS s = CS::kMaster;
+  switch (source) {
+    case NAM_STUDIO_CAPTURE_MASTER: s = CS::kMaster; break;
+    case NAM_STUDIO_CAPTURE_DRY_INPUT: s = CS::kDryInput; break;
+    case NAM_STUDIO_CAPTURE_BUS: s = CS::kBus; break;
+    default: s = CS::kMaster; break;
+  }
+  graph->engine.CaptureStart(s, bus);
+}
+void nam_studio_capture_stop(NamStudioGraph* graph) {
+  if (graph) graph->engine.CaptureStop();
+}
+int32_t nam_studio_capture_is_active(NamStudioGraph* graph) {
+  return graph ? graph->engine.CaptureIsActive() : 0;
+}
+int32_t nam_studio_capture_available_frames(NamStudioGraph* graph) {
+  return graph ? graph->engine.CaptureAvailableFrames() : 0;
+}
+int32_t nam_studio_capture_read(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames) {
+  return graph ? graph->engine.CaptureRead(out_interleaved, capacity_frames) : 0;
+}
+void nam_studio_jam_configure(NamStudioGraph* graph, int32_t seconds) {
+  if (graph) graph->engine.JamConfigure(seconds);
+}
+int32_t nam_studio_jam_lift(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames) {
+  return graph ? graph->engine.JamLift(out_interleaved, capacity_frames) : 0;
+}
+int64_t nam_studio_jam_available_frames(NamStudioGraph* graph) {
+  return graph ? graph->engine.JamAvailableFrames() : 0;
+}
+
 // ── Missing-asset queries (issue #120) ──────────────────────────────────
 
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {
