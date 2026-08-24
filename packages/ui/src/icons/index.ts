@@ -1,3 +1,3 @@
 export { Icon, Dot, type IconProps } from './Icon'
 export { BlockIcon, TunerIcon, type BlockKind } from './BlockIcons'
-export { SettingsIcon, MidiIcon, PowerIcon } from './HeaderIcons'
+export { InputIcon, MidiIcon, OutputIcon, PowerIcon, SettingsIcon } from './HeaderIcons'

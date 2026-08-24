@@ -38,3 +38,21 @@ export function PowerIcon(props: IconProps) {
     </Icon>
   )
 }
+
+export function InputIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 12H13M10 8l4 4-4 4" />
+      <path d="M16 7v10" />
+    </Icon>
+  )
+}
+
+export function OutputIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M11 12H21M18 8l4 4-4 4" />
+      <path d="M8 7v10" />
+    </Icon>
+  )
+}
