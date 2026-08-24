@@ -4,6 +4,11 @@
 #include <cmath>
 #include <vector>
 
+// Phase 0 commons (issue #268) — shared Biquad, SVF, EnvelopeFollower etc.
+#include "internal/biquad.h"
+#include "internal/envelope_follower.h"
+#include "internal/svf_tpt.h"
+
 namespace openaxe::dsp {
 
 namespace {

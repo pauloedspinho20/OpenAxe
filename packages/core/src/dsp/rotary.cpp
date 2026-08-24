@@ -4,6 +4,10 @@
 #include <cmath>
 #include <vector>
 
+#include "internal/biquad.h"
+#include "internal/delay_line.h"
+#include "internal/variable_delay.h"
+
 namespace openaxe::dsp {
 
 namespace {
