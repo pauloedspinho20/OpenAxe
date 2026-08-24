@@ -50,7 +50,7 @@ jobs:
           # user-owned repos). Falls back to GITHUB_TOKEN if secret not set.
           token: ${{ secrets.RELEASE_PAT != '' && secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v4
         with:
