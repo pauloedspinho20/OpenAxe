@@ -250,6 +250,120 @@ export class GraphRig implements GraphRigControls, PresetRig {
     this.worklet.setTunerMuted(muted)
   }
 
+  // ── Song player / transport / mixer / clips / capture (session, #152-#161) ──
+
+  async loadSoundfont(bytes: Uint8Array): Promise<void> {
+    return this.worklet.loadSoundfont(bytes)
+  }
+
+  async unloadSoundfont(): Promise<void> {
+    return this.worklet.unloadSoundfont()
+  }
+
+  scheduleSongEvent(kind: number, channel: number, key: number, value: number, deltaFrames: number): void {
+    this.worklet.scheduleSongEvent(kind, channel, key, value, deltaFrames)
+  }
+
+  clearSongEvents(): void {
+    this.worklet.clearSongEvents()
+  }
+
+  songStart(): void {
+    this.worklet.songStart()
+  }
+
+  songStop(): void {
+    this.worklet.songStop()
+  }
+
+  songSeek(position: number): void {
+    this.worklet.songSeek(position)
+  }
+
+  async songPosition(): Promise<number> {
+    return this.worklet.songPosition()
+  }
+
+  async songIsPlaying(): Promise<boolean> {
+    return this.worklet.songIsPlaying()
+  }
+
+  setBusGain(bus: number, gain: number): void {
+    this.worklet.setBusGain(bus, gain)
+  }
+
+  setBusPan(bus: number, pan: number): void {
+    this.worklet.setBusPan(bus, pan)
+  }
+
+  setBusMute(bus: number, muted: boolean): void {
+    this.worklet.setBusMute(bus, muted)
+  }
+
+  setBusSolo(bus: number, soloed: boolean): void {
+    this.worklet.setBusSolo(bus, soloed)
+  }
+
+  async getBusMeter(bus: number): Promise<number> {
+    return this.worklet.getBusMeter(bus)
+  }
+
+  async clipCreate(): Promise<number> {
+    return this.worklet.clipCreate()
+  }
+
+  async clipDestroy(clipId: number): Promise<void> {
+    return this.worklet.clipDestroy(clipId)
+  }
+
+  async clipFeedPcm(clipId: number, interleaved: Float32Array): Promise<number> {
+    return this.worklet.clipFeedPcm(clipId, interleaved)
+  }
+
+  clipPlay(clipId: number): void {
+    this.worklet.clipPlay(clipId)
+  }
+
+  clipStop(clipId: number): void {
+    this.worklet.clipStop(clipId)
+  }
+
+  clipSeek(clipId: number, position: number): void {
+    this.worklet.clipSeek(clipId, position)
+  }
+
+  async clipGetPosition(clipId: number): Promise<number> {
+    return this.worklet.clipGetPosition(clipId)
+  }
+
+  async clipGetFrames(clipId: number): Promise<number> {
+    return this.worklet.clipGetFrames(clipId)
+  }
+
+  captureStart(source: number, bus: number): void {
+    this.worklet.captureStart(source, bus)
+  }
+
+  captureStop(): void {
+    this.worklet.captureStop()
+  }
+
+  async captureRead(capacityFrames: number): Promise<Float32Array> {
+    return this.worklet.captureRead(capacityFrames)
+  }
+
+  async captureAvailable(): Promise<number> {
+    return this.worklet.captureAvailable()
+  }
+
+  jamConfigure(seconds: number): void {
+    this.worklet.jamConfigure(seconds)
+  }
+
+  async jamLift(capacityFrames: number): Promise<Float32Array> {
+    return this.worklet.jamLift(capacityFrames)
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true

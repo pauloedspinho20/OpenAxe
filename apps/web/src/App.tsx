@@ -20,6 +20,12 @@ import { useSceneHotkeys } from './hooks/useSceneHotkeys'
 import { useTheme } from './hooks/useTheme'
 import { useTone3000Target } from './hooks/useTone3000Target'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
+import { useSongEngine } from './songs/useSongEngine'
+import { SongsLibrary, openSongsLibrary } from './songs/SongsLibrary'
+import { PlayerWidget } from './songs/PlayerWidget'
+import { SheetViewer } from './songs/SheetViewer'
+import { PracticeToolkit } from './songs/PracticeToolkit'
+import { useSongsStore } from './songs/songsStore'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { installFactoryScenes } from './scenes/factoryScenes'
@@ -84,6 +90,11 @@ function App() {
   useSceneEngine(engine.rig, engine.context, engine.status)
   useSceneHotkeys()
   useMidiEngine()
+  useSongEngine()
+
+  useEffect(() => {
+    void useSongsStore.getState().load()
+  }, [])
 
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
@@ -130,6 +141,7 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
+          <HardwareButton label="SONGS" onClick={openSongsLibrary} title="Browse songs — import, play, practice" />
           <HardwareButton label="SETTINGS" onClick={openSettings} title="Open app settings" />
           <HardwareButton
             label="MIDI"
@@ -153,6 +165,8 @@ function App() {
       )}
       <SceneBar rig={engine.rig} context={engine.context} />
 
+      <PlayerWidget />
+
       <main className={styles.main}>
         <GridEditor
           rig={engine.rig}
@@ -161,6 +175,8 @@ function App() {
           outputSelectionSupported={outputSelectionSupported}
           context={engine.context}
         />
+        <SheetViewer />
+        <PracticeToolkit />
       </main>
 
       <footer className={styles.footer}>
@@ -192,6 +208,7 @@ function App() {
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
+      <SongsLibrary />
       <SceneManager />
       <MidiManager />
       <SettingsDialog
