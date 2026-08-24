@@ -146,33 +146,57 @@ export function FactoryManager({ open, onClose }: FactoryManagerProps) {
                 const cached = cachedIds.has(entry.id)
                 const loading = downloadingId === entry.id
                 return (
-                  <li key={entry.id} className={styles.row}>
-                    <div className={styles.info}>
-                      <span className={styles.name}>{entry.name}</span>
-                      <span className={`label ${styles.meta}`}>
-                        {GEAR_LABELS[entry.gear] ?? entry.gear} ·{' '}
-                        {entry.slot === 'ir' ? 'IR' : 'NAM'}
-                        {cached ? ' · cached' : ''}
+                  <li key={entry.id} className={styles.card}>
+                    <div className={styles.cardHeader}>
+                      {entry.imageUrl && (
+                        <div className={styles.cardImageContainer}>
+                          <img
+                            src={entry.imageUrl}
+                            alt=""
+                            className={styles.cardImage}
+                            loading="lazy"
+                            draggable={false}
+                          />
+                          {cached && <span className={styles.badge}>CACHED</span>}
+                        </div>
+                      )}
+                      <span className={styles.cardInfo}>
+                        <span className={styles.cardTitle}>{entry.title}</span>
+                        <span className={`label ${styles.cardMeta}`}>
+                          {GEAR_LABELS[entry.gear] ?? entry.gear} · {entry.format.toUpperCase()} ·
+                          Factory
+                        </span>
+                        <span className={`label ${styles.cardCredit}`}>
+                          Captured by {entry.creator ?? 'Factory'}
+                        </span>
                       </span>
                     </div>
-                    <div className={styles.actions}>
-                      {cached ? (
-                        <OutlineButton
-                          variant="danger"
-                          disabled={bulkDownloading || !!downloadingId}
-                          onClick={() => void handleRemove(entry)}
-                          aria-label={`Remove ${entry.name}`}
-                        >
-                          ×
-                        </OutlineButton>
-                      ) : (
-                        <OutlineButton
-                          disabled={bulkDownloading || !!downloadingId}
-                          onClick={() => void handleDownload(entry)}
-                        >
-                          {loading ? 'Downloading…' : 'Download'}
-                        </OutlineButton>
-                      )}
+                    <div className={styles.modelRow}>
+                      <span className={styles.modelName}>
+                        {entry.name}
+                        <span className={`label ${styles.modelSize}`}>
+                          {entry.format.toUpperCase()} · {GEAR_LABELS[entry.gear] ?? entry.gear}
+                        </span>
+                      </span>
+                      <div className={styles.actions}>
+                        {cached ? (
+                          <OutlineButton
+                            variant="danger"
+                            disabled={bulkDownloading || !!downloadingId}
+                            onClick={() => void handleRemove(entry)}
+                            aria-label={`Remove ${entry.name}`}
+                          >
+                            ×
+                          </OutlineButton>
+                        ) : (
+                          <OutlineButton
+                            disabled={bulkDownloading || !!downloadingId}
+                            onClick={() => void handleDownload(entry)}
+                          >
+                            {loading ? 'Downloading…' : 'Download'}
+                          </OutlineButton>
+                        )}
+                      </div>
                     </div>
                   </li>
                 )

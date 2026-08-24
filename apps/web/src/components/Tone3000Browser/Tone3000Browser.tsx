@@ -795,31 +795,57 @@ export function Tone3000Browser({ target, context }: Props) {
               const loading = loadingFactoryId === entry.id
               return (
                 <li key={entry.id} className={cardClass}>
-                  <div className={styles.libraryRow}>
-                    <div className={styles.libraryInfo}>
-                      <span className={styles.cardTitle}>{entry.name}</span>
-                      <span className={`label ${styles.cardMeta}`}>
-                        {entry.gear} · {entry.slot === 'ir' ? 'IR' : 'NAM'}
-                        {cached ? ' · cached' : ''}
-                      </span>
-                    </div>
-                    <OutlineButton
-                      disabled={!target || loading || bulkDownloading}
-                      onClick={() => void loadFactoryGear(entry)}
-                    >
-                      {loading ? 'LOADING…' : cached ? 'LOAD' : 'DOWNLOAD'}
-                    </OutlineButton>
-                    {cached && (
-                      <OutlineButton
-                        variant="danger"
-                        disabled={loading || bulkDownloading}
-                        onClick={() => void removeFactoryGear(entry)}
-                        aria-label={`Remove ${entry.name} from factory cache`}
-                      >
-                        ×
-                      </OutlineButton>
+                  <div className={styles.cardHeader} style={{ cursor: 'default' }}>
+                    {entry.imageUrl && (
+                      <div className={styles.cardImageContainer}>
+                        <img
+                          src={entry.imageUrl}
+                          alt=""
+                          className={styles.cardImage}
+                          loading="lazy"
+                          draggable={false}
+                        />
+                        {cached && <span className={styles.inLibraryBadge}>CACHED</span>}
+                      </div>
                     )}
+                    <span className={styles.cardInfo}>
+                      <span className={styles.cardTitle}>{entry.title}</span>
+                      <span className={`label ${styles.cardMeta}`}>
+                        {entry.gear} · {entry.format.toUpperCase()} · Factory
+                      </span>
+                      <span className={`label ${styles.cardCredit}`}>
+                        Captured by {entry.creator ?? 'Factory'}
+                      </span>
+                    </span>
                   </div>
+                  <ul className={styles.modelList}>
+                    <li className={styles.modelRow}>
+                      <span className={styles.modelName}>
+                        {entry.name}
+                        <span className={`label ${styles.modelSize}`}>
+                          {entry.format.toUpperCase()} · {entry.gear}
+                        </span>
+                      </span>
+                      <span style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                        <OutlineButton
+                          disabled={!target || loading || bulkDownloading}
+                          onClick={() => void loadFactoryGear(entry)}
+                        >
+                          {loading ? 'LOADING…' : cached ? 'LOAD' : 'DOWNLOAD'}
+                        </OutlineButton>
+                        {cached && (
+                          <OutlineButton
+                            variant="danger"
+                            disabled={loading || bulkDownloading}
+                            onClick={() => void removeFactoryGear(entry)}
+                            aria-label={`Remove ${entry.name} from factory cache`}
+                          >
+                            ×
+                          </OutlineButton>
+                        )}
+                      </span>
+                    </li>
+                  </ul>
                 </li>
               )
             })}

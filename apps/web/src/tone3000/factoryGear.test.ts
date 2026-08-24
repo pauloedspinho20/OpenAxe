@@ -30,6 +30,8 @@ describe('buildFactoryGearEntries', () => {
         gear: 'amp',
         slot: 'model',
         name: 'Apple Amp',
+        title: 'Apple Amp',
+        format: 'nam',
         url: '/factory/amp/apple.nam',
       },
       {
@@ -37,6 +39,8 @@ describe('buildFactoryGearEntries', () => {
         gear: 'amp',
         slot: 'model',
         name: 'Zebra Amp',
+        title: 'Zebra Amp',
+        format: 'nam',
         url: '/factory/amp/zebra.nam',
       },
     ])
@@ -73,6 +77,8 @@ describe('factoryGearFor / firstFactoryGearFor / allFactoryGear', () => {
         gear: 'amp',
         slot: 'model',
         name: 'Fender Deluxe',
+        title: 'Fender Deluxe',
+        format: 'nam',
         url: '/factory/amp/fender.nam',
       },
     ])
@@ -82,6 +88,8 @@ describe('factoryGearFor / firstFactoryGearFor / allFactoryGear', () => {
         gear: 'cab',
         slot: 'ir',
         name: 'Mesa 4x12',
+        title: 'Mesa 4x12',
+        format: 'ir',
         url: '/factory/cab/mesa.wav',
       },
     ])
@@ -151,6 +159,8 @@ describe('cacheFactoryGear', () => {
       gear: 'amp' as const,
       slot: 'model' as const,
       name: 'Test Amp',
+      title: 'Test Amp',
+      format: 'nam' as const,
       url: '/factory/amp/test.nam',
     }
     const result = await cacheFactoryGear(entry)

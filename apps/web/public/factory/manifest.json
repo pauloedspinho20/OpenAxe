@@ -6,12 +6,22 @@
       {
         "id": "6505-gain-range-pack",
         "name": "6505 Gain Range Pack — High Gain",
+        "title": "6505+ Gain Range Pack (High Gain) NAM Profiles",
+        "creator": "AmpsPedalsPickups",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/hjwvffqiagd.jpg",
+        "description": "Peavey 6505+ USA 120w RED Channel — gain-range pack with Clean Channel bonus. Captured at +13dBu.",
+        "format": "nam",
         "url": "/factory/amp/6505-gain-range-pack.nam",
         "sourceUrl": "https://www.tone3000.com/tones/6505-gain-range-pack-high-gain-29230"
       },
       {
         "id": "marshall-jvm410h-full-pack",
         "name": "Marshall JVM410H Full Pack",
+        "title": "Marshall JVM410H FULL Pack NAM Profiles",
+        "creator": "AmpsPedalsPickups",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/hbziuwyvtyq.jpg",
+        "description": "80+ A2 captures across CLEAN/CRUNCH/OD1/OD2 × Green/Orange/Red.",
+        "format": "nam",
         "url": "/factory/amp/marshall-jvm410h-full-pack.nam",
         "sourceUrl": "https://www.tone3000.com/tones/marshall-jvm410h-full-pack-67714"
       }
@@ -20,18 +30,33 @@
       {
         "id": "1968-marshall-super-lead-12000-drive-a2",
         "name": "1968 Marshall Super Lead 12xxx Drive A2",
+        "title": "1968 Marshall Super Lead 12 000 Series Drive A2 NAM Profiles",
+        "creator": "AmalgamAudio",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/yr0vjrmivr.jpg",
+        "description": "P2 B2 M7 T4 VI6 VII0 · Marshall 4x12 G12H30 55Hz Pulsonic · R121/R160/U87",
+        "format": "nam",
         "url": "/factory/amp-cab/1968-marshall-super-lead-12000-drive-a2.nam",
         "sourceUrl": "https://www.tone3000.com/tones/1968-marshall-super-lead-12-000-series-drive-a2-72145"
       },
       {
         "id": "fender-deluxe-reverb-reissue-iconic-clean-a2",
         "name": "Fender Deluxe Reverb Reissue — Iconic Clean A2",
+        "title": "Fender Deluxe Reverb Reissue Iconic Clean A2 NAM Profiles",
+        "creator": "AmalgamAudio",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/di92rvz3lcs.jpg",
+        "description": "V3.5 T5 B4.5 Lo Input · Fender 1x12 C12K · R121/M160/U87",
+        "format": "nam",
         "url": "/factory/amp-cab/fender-deluxe-reverb-reissue-iconic-clean-a2.nam",
         "sourceUrl": "https://www.tone3000.com/tones/fender-deluxe-reverb-reissue-iconic-clean-a2-69174"
       },
       {
         "id": "marshall-jmp-50-lead-1969-plexi-a2",
         "name": "Marshall JMP 50 Lead 1969 Plexi A2",
+        "title": "Marshall JMP-50 Lead 1969 Plexi A2 NAM Profiles",
+        "creator": "AmalgamAudio",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/l8379m3e0xl.jpg",
+        "description": "P4 B6 M8 T6 VI8 VII2 · Marshall 4x12 G12H 30W 55Hz · R121/M160/U87",
+        "format": "nam",
         "url": "/factory/amp-cab/marshall-jmp-50-lead-1969-plexi-a2.nam",
         "sourceUrl": "https://www.tone3000.com/tones/marshall-jmp-50-lead-1969-plexi-a2-65578"
       }
@@ -40,6 +65,11 @@
       {
         "id": "ibanez-ts9-tube-screamer",
         "name": "Ibanez TS9 Tube Screamer",
+        "title": "Ibanez TS9 Tube Screamer NAM Profiles",
+        "creator": "StudioAmpCaptures",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/c3mw35bi9jv.jpg",
+        "description": "Reissue green TS9 — Clarett+ Pre / Radial JCR Reamp / Calibrated Model.",
+        "format": "nam",
         "url": "/factory/pedal/ibanez-ts9-tube-screamer.nam",
         "sourceUrl": "https://www.tone3000.com/tones/ibanez-ts9-tube-screamer-36827"
       }
@@ -48,12 +78,22 @@
       {
         "id": "mesa-standard-oversized-4x12-v30-2012",
         "name": "Mesa Standard Oversized 4x12 V30 (2012)",
+        "title": "Mesa Standard Oversized 4x12 - 2012/2013 - V30 IR Profiles",
+        "creator": "jpisoutoftune",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/km6kr4j5x3i.jpeg",
+        "description": "SM58 bottom-left + SM57 bottom-right · JP2C Green power · No post EQ.",
+        "format": "ir",
         "url": "/factory/cab/mesa-standard-oversized-4x12-v30-2012.wav",
         "sourceUrl": "https://www.tone3000.com/tones/mesa-standard-oversized-4x12-20122013-v30-26222"
       },
       {
         "id": "orange-ppc412-straight-multi-mics",
         "name": "Orange PPC412 Straight — Multi Mics",
+        "title": "Orange PPC412 (straight) [multi mics] IR Profiles",
+        "creator": "kenazmusic",
+        "imageUrl": "https://api.tone3000.com/storage/v1/object/public/images/hrthec1q9uc.jpg",
+        "description": "Bottom-left speaker · SM57 / MD421 Kompakt / sE V7X / Royer R-10.",
+        "format": "ir",
         "url": "/factory/cab/orange-ppc412-straight-multi-mics.wav",
         "sourceUrl": "https://www.tone3000.com/tones/orange-ppc412-straight-multi-mics-70608"
       }

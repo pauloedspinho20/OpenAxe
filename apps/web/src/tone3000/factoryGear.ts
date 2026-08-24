@@ -12,12 +12,12 @@
  * `https://cdn.example/...` (needs CORS).
  */
 import { fetchWithCache, getCachedAsset } from '../engine/assetCache'
-import type { Gear, Tone3000Slot } from './types'
+import type { Gear, Tone3000Slot, ToneFormat } from './types'
 
 export interface FactoryManifestEntry {
   /** Stable slug within its gear pack, e.g. `fender-deluxe-reverb-head-2`. */
   id: string
-  /** Display name, e.g. `Fender Deluxe Reverb Head 2`. */
+  /** Display name, e.g. `Fender Deluxe Reverb Head 2`. Also the single model's name when `title` is present. */
   name: string
   /** Static URL to fetch bytes from — relative or absolute. */
   url: string
@@ -25,6 +25,16 @@ export interface FactoryManifestEntry {
   size?: number
   /** Optional SHA-256 for future integrity checks. */
   sha256?: string
+  /** Original Tone3000 page, for reference only — not fetched at runtime. */
+  sourceUrl?: string
+  /** Rich card metadata baked at curation time so the factory cards can be pixel-identical to Tone3000 browse cards without any runtime auth. */
+  title?: string
+  creator?: string
+  imageUrl?: string | null
+  description?: string | null
+  downloadsCount?: number
+  format?: ToneFormat
+  license?: string
 }
 
 export interface FactoryManifest {
@@ -41,6 +51,15 @@ export interface FactoryGearEntry {
   name: string
   url: string
   size?: number
+  /** Baked Tone3000 card metadata — present when the curator added it, so factory cards can be identical to browse cards without auth. */
+  sourceUrl?: string
+  title: string
+  creator?: string
+  imageUrl?: string | null
+  description?: string | null
+  downloadsCount?: number
+  format: ToneFormat
+  license?: string
 }
 
 const FACTORY_GEARS: Gear[] = ['amp', 'amp-cab', 'pedal', 'cab'] as const
@@ -103,7 +122,15 @@ function buildEntriesForGear(
       slot,
       name: e.name,
       url: e.url,
+      title: e.title ?? e.name,
+      format: e.format ?? (gear === 'cab' ? 'ir' : 'nam'),
       ...(e.size !== undefined ? { size: e.size } : {}),
+      ...(e.sourceUrl ? { sourceUrl: e.sourceUrl } : {}),
+      ...(e.creator ? { creator: e.creator } : {}),
+      ...(e.imageUrl !== undefined ? { imageUrl: e.imageUrl } : {}),
+      ...(e.description !== undefined ? { description: e.description } : {}),
+      ...(e.downloadsCount !== undefined ? { downloadsCount: e.downloadsCount } : {}),
+      ...(e.license ? { license: e.license } : {}),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -153,7 +180,15 @@ export function buildFactoryGearEntries(
       slot,
       name: e.name,
       url: e.url,
+      title: e.title ?? e.name,
+      format: e.format ?? (gear === 'cab' ? 'ir' : 'nam'),
       ...(e.size !== undefined ? { size: e.size } : {}),
+      ...(e.sourceUrl ? { sourceUrl: e.sourceUrl } : {}),
+      ...(e.creator ? { creator: e.creator } : {}),
+      ...(e.imageUrl !== undefined ? { imageUrl: e.imageUrl } : {}),
+      ...(e.description !== undefined ? { description: e.description } : {}),
+      ...(e.downloadsCount !== undefined ? { downloadsCount: e.downloadsCount } : {}),
+      ...(e.license ? { license: e.license } : {}),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
