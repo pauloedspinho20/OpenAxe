@@ -1,5 +1,6 @@
 {
-  "$note": "Static transcription of the CSS custom properties in ./*.css, which remain the live source of truth consumed at runtime (see index.css). This file exists to satisfy issue #13's 'single source of truth' target shape; a generator that derives CSS (and later C++/Kotlin/Swift constants) from this JSON is future work, not yet wired up.",
+  "$note": "Single source of truth for design tokens — generates packages/ui/tokens/*.css and optionally packages/vst3/generated/tokens.h via packages/ui/scripts/generate-tokens.mjs (issue #131). Do not edit the CSS by hand.",
+  "$generated": "packages/ui/scripts/generate-tokens.mjs",
   "color": {
     "dark": {
       "chassis": "#101010",
@@ -85,7 +86,28 @@
     "sp7": "48px",
     "radiusSm": "3px",
     "radiusMd": "6px",
-    "radiusLg": "10px"
+    "radiusLg": "10px",
+    "screwSize": "4px",
+    "screwOffset": "8px",
+    "ledSizeSm": "6px",
+    "toggleWidth": "30px",
+    "toggleHeight": "16px",
+    "toggleThumb": "12px",
+    "toggleTravel": "14px",
+    "faderTrackHeight": "130px",
+    "faderTrackWidth": "28px",
+    "faderThumbW": "22px",
+    "faderThumbH": "11px",
+    "faderThumbOffset": "-9px",
+    "meterSegmentW": "20px",
+    "meterSegmentH": "6px",
+    "inputHeight": "32px",
+    "jackSize": "12px",
+    "jackWrapSize": "14px",
+    "jackOffset": "-6px",
+    "railMinWidth": "80px",
+    "gridMinRow": "96px",
+    "gridMinCol": "100px"
   },
   "typography": {
     "fontDisplay": "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
