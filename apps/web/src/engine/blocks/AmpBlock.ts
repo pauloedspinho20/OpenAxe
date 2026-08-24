@@ -13,6 +13,7 @@ export interface SlimmableInfo {
   currentSize: number
 }
 
+/** @deprecated Replaced by `RigBlock` + `RigWorkletNode` (issue #263). Kept for tests only. */
 /** Every gear category that's a NAM model capture rather than an IR - see CabBlock for the IR case. */
 export type NamModelBlockKind = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space'
 

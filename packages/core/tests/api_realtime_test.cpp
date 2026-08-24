@@ -102,9 +102,10 @@ void TestEndToEndDsparkRig() {
   const int32_t tremolo = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_TREMOLO, 0, 3);
 
   OPENAXE_EXPECT(nam_studio_block_param_count(graph, compressor) == 8);
-  OPENAXE_EXPECT(nam_studio_block_param_count(graph, eq) == 12);
-  OPENAXE_EXPECT(nam_studio_block_param_count(graph, gate) == 6);
-  OPENAXE_EXPECT(nam_studio_block_param_count(graph, tremolo) == 3);
+  // eq / gate / tremolo now have an extra engine mix (hybrid dry/wet, #263)
+  OPENAXE_EXPECT(nam_studio_block_param_count(graph, eq) == 13);
+  OPENAXE_EXPECT(nam_studio_block_param_count(graph, gate) == 7);
+  OPENAXE_EXPECT(nam_studio_block_param_count(graph, tremolo) == 4);
 
   const char* name = nullptr;
   OPENAXE_EXPECT(nam_studio_block_param_info(graph, compressor, 0, &name, nullptr, nullptr, nullptr,

@@ -1,5 +1,6 @@
 import type { Block, EffectParams } from './Block'
 
+/** @deprecated Web Audio staging replaced by `engine.cpp` per-input level/pan (issue #263). Kept for tests only. */
 /** Fixed number of independent input jacks - covers 3 grid rows plus one spare. */
 export const MIXER_INPUT_COUNT = 4
 

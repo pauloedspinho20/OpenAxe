@@ -5,3 +5,4 @@
     {"Time", "time", 50.0f, 1000.0f, "ms"},
     {"Feedback", "feedback", 0.0f, 0.9f, "%"},
     {"Tone", "tone", 200.0f, 12000.0f, "Hz"},
+    {"Width", "width", 0.0f, 1.0f, "x"},

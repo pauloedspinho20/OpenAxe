@@ -99,10 +99,10 @@ jobs:
         run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
 
       - name: Smoke test (no host)
-        run: ctest --test-dir packages/vst3/build --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
 
       - name: Plugin validators (when bundle present)
-        run: ctest --test-dir packages/vst3/build --output-on-failure -R "pluginval|auval|validator|clap" || true
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "pluginval|auval|validator|clap" || true
 
       # ── Signing (only when secrets are present, otherwise builds unsigned) ──
 
@@ -177,8 +177,12 @@ jobs:
 
       - name: Create tarball (fallback)
         if: always()
+        shell: bash
+        continue-on-error: true
         run: |
-          tar -czf "openaxe-plugin-${{ matrix.os }}-${{ github.ref_name }}.tar.gz" -C packages/vst3/build --exclude="_deps" --exclude="CMakeFiles" . || zip -r "openaxe-plugin-${{ matrix.os }}-${{ github.ref_name }}.zip" packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
+          ref="${{ github.ref_name }}"
+          safe_ref="${ref//\//-}"
+          tar -czf "openaxe-plugin-${{ matrix.os }}-${safe_ref}.tar.gz" -C packages/vst3/build --exclude="_deps" --exclude="CMakeFiles" . 2>/dev/null || zip -r "openaxe-plugin-${{ matrix.os }}-${safe_ref}.zip" packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
           ls -lh openaxe-plugin-* 2>/dev/null || ls -lh packages/vst3/build/openaxe-* 2>/dev/null || true
 
       - name: Upload VST3 artifact
