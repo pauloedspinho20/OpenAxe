@@ -29,7 +29,6 @@ else()
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps")
   file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
   file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
-  file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe-256.png"
-        DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps"
-        RENAME openaxe.png)
+  file(COPY_FILE "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe-256.png"
+        "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps/openaxe.png")
 endif()
