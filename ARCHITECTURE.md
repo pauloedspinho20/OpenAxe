@@ -175,7 +175,7 @@ flowchart TB
         MOBILE["apps/ios · apps/android<br/>SwiftUI / Compose"]
     end
 
-    ABI["packages/core/include/openaxe/api.h<br/>extern &quot;C&quot; ABI<br/>int ids · float params · no exceptions"]
+    ABI["packages/core/include/openaxe/api.h<br/>extern 'C' ABI<br/>int ids · float params · no exceptions"]
 
     subgraph core["packages/core (the one engine)"]
         GR["graph_rig<br/>topology + routing rules"]
@@ -200,7 +200,7 @@ flowchart LR
         UI["user gesture"]
     end
 
-    subgraph abi["extern &quot;C&quot; boundary"]
+    subgraph abi["extern 'C' boundary"]
         SETP["nam_studio_set_param"]
         ADD["nam_studio_add_block / connect"]
         LOAD["nam_studio_load_nam_model_json<br/>nam_studio_load_ir_wav"]
