@@ -8,6 +8,7 @@ import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
 import { getOpenAxe, type OpenAxeBridge } from '../native/openaxe'
+import { getDISample } from '../diSamples'
 
 export interface NativeAudioEngineState {
   status: EngineStatus
@@ -21,6 +22,9 @@ export interface NativeAudioEngineState {
    * rig exists for editing only. Cleared automatically the moment a duplex
    * device is found and the stream opens for real - see the recovery effect. */
   noSound: boolean
+  diPlaying: boolean
+  diSampleId: string | null
+  diError: string | null
 }
 
 export interface NativeAudioEnginePowerOnOptions {
@@ -37,6 +41,9 @@ const IDLE: NativeAudioEngineState = {
   tunerAnalyser: null,
   micGranted: false,
   noSound: false,
+  diPlaying: false,
+  diSampleId: null,
+  diError: null,
 }
 
 const LATENCY_BUFFER: Record<string, number> = { interactive: 128, balanced: 256, playback: 512 }
@@ -145,6 +152,68 @@ export function useNativeAudioEngine() {
     if (!bridge) return
     void bridge.setInputGain({ gain: inputGain }).catch(() => {})
   }, [inputGain, state.status])
+
+  // ── DI audition (loops through the graph, muting live mic) ───────────────
+  const diPlayingRef = useRef(false)
+  const inputDeviceId = useIOStore((s) => s.inputDeviceId)
+  const inputChannel = useIOStore((s) => s.inputChannel)
+
+  const stopDI = useCallback(() => {
+    const bridge = bridgeRef.current
+    if (bridge) void bridge.stopDI().catch(() => {})
+    diPlayingRef.current = false
+    setState((s) => (s.diPlaying ? { ...s, diPlaying: false } : s))
+  }, [])
+
+  const playDI = useCallback(
+    async (sampleId: string) => {
+      const sample = getDISample(sampleId)
+      if (!sample) {
+        setState((s) => ({ ...s, diError: `Unknown DI sample: ${sampleId}` }))
+        return
+      }
+      const bridge = bridgeRef.current
+      if (!bridge || state.status !== 'ready') {
+        setState((s) => ({ ...s, diError: 'Audio engine not ready' }))
+        return
+      }
+      if (diPlayingRef.current) {
+        // Stop previous without awaiting — bridge is synchronous enough.
+        try {
+          await bridge.stopDI()
+        } catch {}
+      }
+      try {
+        const response = await fetch(sample.url)
+        if (!response.ok) throw new Error(`Failed to fetch ${sample.url}: ${response.status}`)
+        const arrayBuffer = await response.arrayBuffer()
+        const bytes = new Uint8Array(arrayBuffer)
+        let binary = ''
+        const chunk = 0x8000
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+        }
+        const base64 = btoa(binary)
+        const loaded = await bridge.loadDIWav({ wavBase64: base64 })
+        if (!loaded.ok) throw new Error(loaded.error ?? 'loadDIWav failed')
+        const played = await bridge.playDI({ loop: true })
+        if (!played.ok) throw new Error(played.error ?? 'playDI failed')
+        diPlayingRef.current = true
+        setState((s) => ({ ...s, diPlaying: true, diSampleId: sampleId, diError: null }))
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setState((s) => ({ ...s, diError: msg }))
+        console.warn('[useNativeAudioEngine] DI playback failed:', msg)
+      }
+    },
+    [state.status],
+  )
+
+  // Auto-stop DI when live input changes (all-triggers).
+  useEffect(() => {
+    if (diPlayingRef.current) stopDI()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputDeviceId, inputChannel])
 
   // While the engine is running, keep the analysers fed from the latest native
   // taps and drive block meters from the core's real peaks. No-op in no-sound
@@ -258,6 +327,9 @@ export function useNativeAudioEngine() {
             tunerAnalyser: null,
             micGranted: false,
             noSound: true,
+            diPlaying: false,
+            diSampleId: null,
+            diError: null,
           })
           return
         }
@@ -278,6 +350,9 @@ export function useNativeAudioEngine() {
           tunerAnalyser,
           micGranted: true, // native input is always available (device, not permission)
           noSound: false,
+          diPlaying: false,
+          diSampleId: null,
+          diError: null,
         })
       } catch (error) {
         setState({
@@ -338,6 +413,11 @@ export function useNativeAudioEngine() {
   }, [state.status, state.noSound, openAndStart])
 
   const powerOff = useCallback(async () => {
+    // Stop DI first so the audio thread isn't still reading its buffer.
+    try {
+      await bridgeRef.current?.stopDI().catch(() => {})
+    } catch {}
+    diPlayingRef.current = false
     unbindRef.current?.()
     unbindRef.current = null
     inputTapRef.current = new Float32Array(0)
@@ -355,5 +435,5 @@ export function useNativeAudioEngine() {
     setState(IDLE)
   }, [runExclusive])
 
-  return { ...state, powerOn, powerOff }
+  return { ...state, powerOn, powerOff, playDI, stopDI }
 }

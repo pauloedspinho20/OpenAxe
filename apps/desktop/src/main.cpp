@@ -325,6 +325,9 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "openAxe.setBlockTrim", &openaxe_desktop::StudioBridge::HandleSetBlockTrim);
     Bind(w, bridge, "openAxe.loadIrWav", &openaxe_desktop::StudioBridge::HandleLoadIrWav);
     Bind(w, bridge, "openAxe.unloadIr", &openaxe_desktop::StudioBridge::HandleUnloadIr);
+    Bind(w, bridge, "openAxe.loadDIWav", &openaxe_desktop::StudioBridge::HandleLoadDIWav);
+    Bind(w, bridge, "openAxe.playDI", &openaxe_desktop::StudioBridge::HandlePlayDI);
+    Bind(w, bridge, "openAxe.stopDI", &openaxe_desktop::StudioBridge::HandleStopDI);
     Bind(w, bridge, "openAxe.setInputGain", &openaxe_desktop::StudioBridge::HandleSetInputGain);
     Bind(w, bridge, "openAxe.setMasterLevel", &openaxe_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "openAxe.setMasterMuted", &openaxe_desktop::StudioBridge::HandleSetMasterMuted);

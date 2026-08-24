@@ -114,6 +114,16 @@ struct RtCallbackState {
   std::atomic<float> input_gain{1.0f};
   std::array<std::vector<float>, 2> in_scratch;
 
+  // DI audition — replaces live input when playing (issue #273). The UI
+  // thread writes di_buffer/di_playing via SetDIBuffer/PlayDI/StopDI;
+  // the audio thread only reads when di_playing is true, so no lock is
+  // taken on the real-time path. Loads happen while stopped, so the
+  // audio thread never sees a torn write.
+  std::vector<float> di_buffer;           // mono, graph sample rate
+  std::atomic<size_t> di_pos{0};
+  std::atomic<bool> di_playing{false};
+  std::atomic<bool> di_loop{true};
+
   // Monitor tap: ring buffers holding the most recent input (pre-graph) and
   // output (post-graph) stereo frames, captured by the audio thread and read
   // by the UI/control thread to drive facade analysers (block/input meters,
@@ -209,6 +219,13 @@ class AudioIO {
   // it's a single atomic store, no suspend handshake needed.
   void SetInputGain(float gain);
   float InputGain() const;
+
+  // DI audition (issue #273): replaces live input with a looping buffer
+  // when active, still through input_gain and the graph.
+  void SetDIBuffer(const std::vector<float>& samples);
+  void PlayDI(bool loop);
+  void StopDI();
+  bool IsDIPlaying() const;
 
   // Start/stop the stream. Start() arms the callback's graph pointer, so it
   // is not real-time safe; call it from the UI thread before audio flows.

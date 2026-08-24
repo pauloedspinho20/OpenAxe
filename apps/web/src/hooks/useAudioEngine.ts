@@ -6,6 +6,7 @@ import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
 import { getOpenAxe } from '../native/openaxe'
 import { useNativeAudioEngine } from './useNativeAudioEngine'
+import { getDISample } from '../diSamples'
 
 export type EngineStatus = 'off' | 'starting' | 'ready' | 'error'
 
@@ -29,11 +30,20 @@ export interface AudioEngineState {
    * a mic connects successfully, whether that's this initial no-sound skip
    * recovering on its own or a later manual device change. */
   noSound: boolean
+  /** DI audition: true while a DI sample is looping through the rig. */
+  diPlaying: boolean
+  /** Which DI sample is currently playing (or last selected while stopped). */
+  diSampleId: string | null
+  diError: string | null
 }
 
 export interface AudioEngineActions {
   powerOn: (opts?: AudioEnginePowerOnOptions) => Promise<void>
   powerOff: () => Promise<void>
+  /** Start looping the given DI sample through the rig (muting live mic). */
+  playDI: (sampleId: string) => Promise<void>
+  /** Stop DI playback and restore live mic. */
+  stopDI: () => void
 }
 
 const IDLE_STATE: AudioEngineState = {
@@ -45,6 +55,9 @@ const IDLE_STATE: AudioEngineState = {
   tunerAnalyser: null,
   micGranted: false,
   noSound: false,
+  diPlaying: false,
+  diSampleId: null,
+  diError: null,
 }
 
 /**
@@ -76,12 +89,20 @@ export function useWebAudioEngine() {
   const trimRef = useRef<GainNode | null>(null)
   const tunerAnalyserRef = useRef<AnalyserNode | null>(null)
   const connectingRef = useRef(false)
+  // ── DI audition ───────────────────────────────────────────────────────
+  const diSourceRef = useRef<AudioBufferSourceNode | null>(null)
+  const diGainRef = useRef<GainNode | null>(null)
+  const diBufferCache = useRef<Map<string, AudioBuffer>>(new Map())
+  const diPlayingRef = useRef(false)
 
   // Sync input gain to the trim node when it changes while the engine is running.
   const inputGain = useIOStore((s) => s.inputGain)
   useEffect(() => {
     if (trimRef.current && contextRef.current) {
       trimRef.current.gain.setTargetAtTime(inputGain, contextRef.current.currentTime, 0.01)
+    }
+    if (diGainRef.current && contextRef.current) {
+      diGainRef.current.gain.setTargetAtTime(inputGain, contextRef.current.currentTime, 0.01)
     }
   }, [inputGain])
 
@@ -202,6 +223,155 @@ export function useWebAudioEngine() {
     }
   }, [])
 
+  // ── DI audition (loops through the rig, muting live mic) ───────────────
+
+  const stopDI = useCallback(() => {
+    const ctx = contextRef.current
+    const rig = rigRef.current
+    const source = diSourceRef.current
+    const gain = diGainRef.current
+    if (!source && !gain) {
+      if (diPlayingRef.current) {
+        diPlayingRef.current = false
+        setState((s) => (s.diPlaying ? { ...s, diPlaying: false } : s))
+      }
+      return
+    }
+    try {
+      source?.stop()
+    } catch {
+      // already stopped
+    }
+    try {
+      source?.disconnect()
+    } catch {}
+    try {
+      gain?.disconnect()
+    } catch {}
+    diSourceRef.current = null
+    diGainRef.current = null
+    diPlayingRef.current = false
+
+    // Restore live mic path if one existed before DI took over.
+    if (ctx && rig && trimRef.current) {
+      try {
+        rig.connectInput(trimRef.current)
+      } catch {}
+      if (tunerAnalyserRef.current) {
+        try {
+          trimRef.current.connect(tunerAnalyserRef.current)
+        } catch {}
+      }
+    }
+    setState((s) => (s.diPlaying ? { ...s, diPlaying: false } : s))
+  }, [])
+
+  const playDI = useCallback(
+    async (sampleId: string) => {
+      const sample = getDISample(sampleId)
+      if (!sample) {
+        setState((s) => ({ ...s, diError: `Unknown DI sample: ${sampleId}` }))
+        return
+      }
+      const ctx = contextRef.current
+      const rig = rigRef.current
+      if (!ctx || !rig || state.status !== 'ready') {
+        setState((s) => ({ ...s, diError: 'Audio engine not ready' }))
+        return
+      }
+
+      // Stop any current DI first (ensures no double-voice).
+      if (diPlayingRef.current) stopDI()
+
+      try {
+        let buffer = diBufferCache.current.get(sampleId)
+        if (!buffer) {
+          const response = await fetch(sample.url)
+          if (!response.ok) throw new Error(`Failed to fetch ${sample.url}: ${response.status}`)
+          const arrayBuffer = await response.arrayBuffer()
+          // decodeAudioData returns Promise in modern browsers; callback form is legacy.
+          buffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+          diBufferCache.current.set(sampleId, buffer)
+        }
+
+        if (ctx.state === 'suspended') await ctx.resume().catch(() => {})
+
+        // Mute live mic: disconnect trim from rig/tuner (router->trim stays, so restore is trivial).
+        if (trimRef.current) {
+          try {
+            rig.disconnectInput()
+          } catch {}
+          try {
+            trimRef.current.disconnect()
+          } catch {}
+        }
+
+        const gain = new GainNode(ctx, { gain: useIOStore.getState().inputGain })
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+        source.loop = true
+        source.connect(gain)
+        // Route DI through the rig (GraphRig tracks the single input source).
+        // Disconnect any previous mic input first so DI is exclusive.
+        try {
+          rig.disconnectInput()
+        } catch {}
+        rig.connectInput(gain)
+        if (tunerAnalyserRef.current) gain.connect(tunerAnalyserRef.current)
+
+        diSourceRef.current = source
+        diGainRef.current = gain
+        diPlayingRef.current = true
+        setState((s) => ({ ...s, diPlaying: true, diSampleId: sampleId, diError: null }))
+
+        source.start()
+        source.onended = () => {
+          // onended fires on stop() too; only clear if still the active source.
+          if (diSourceRef.current === source) stopDI()
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setState((s) => ({ ...s, diError: msg }))
+        // Ensure mic is restored on failure.
+        if (trimRef.current && rig) {
+          try {
+            rig.connectInput(trimRef.current)
+          } catch {}
+          if (tunerAnalyserRef.current) {
+            try {
+              trimRef.current.connect(tunerAnalyserRef.current)
+            } catch {}
+          }
+        }
+        console.warn('[useAudioEngine] DI playback failed:', msg)
+      }
+    },
+    [state.status, stopDI],
+  )
+
+  // Auto-stop DI when the live input device/channel changes (all-triggers rule).
+  useEffect(() => {
+    if (diPlayingRef.current) stopDI()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputDeviceId, inputChannel])
+
+  // Keep diSampleId in state even when stopped so the UI remembers selection.
+  // Initialise from the persisted DI store's selection if engine has none yet.
+  useEffect(() => {
+    if (state.diSampleId) return
+    try {
+      const raw = localStorage.getItem('openaxe-di-audition')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { state?: { selectedId?: string } }
+      const id = parsed?.state?.selectedId ?? null
+      if (id && getDISample(id)) setState((s) => ({ ...s, diSampleId: id }))
+      else if (!id) {
+        // Fallback to default guitar-clean if nothing persisted.
+        setState((s) => ({ ...s, diSampleId: 'guitar-clean' }))
+      }
+    } catch {}
+  }, [state.diSampleId])
+
   // Reconnect mic when the input device or channel routing changes live.
   // Skipped once right after a no-sound power-on (see powerOn below) so
   // choosing "Continue without sound" doesn't immediately trigger the very
@@ -267,7 +437,8 @@ export function useWebAudioEngine() {
         tunerAnalyserRef.current = tunerAnalyser
 
         const noSound = opts?.noSound ?? false
-        setState({
+        setState((s) => ({
+          ...s,
           status: 'ready',
           error: null,
           rig,
@@ -276,7 +447,9 @@ export function useWebAudioEngine() {
           tunerAnalyser,
           micGranted: false,
           noSound,
-        })
+          diPlaying: false,
+          diError: null,
+        }))
 
         if (noSound) {
           skipNextAutoConnectRef.current = true
@@ -300,6 +473,7 @@ export function useWebAudioEngine() {
   )
 
   const powerOff = useCallback(async () => {
+    stopDI()
     unbindRef.current?.()
     unbindRef.current = null
     teardownMic()
@@ -310,10 +484,11 @@ export function useWebAudioEngine() {
     await state.context?.close()
     contextRef.current = null
     rigRef.current = null
+    diBufferCache.current.clear()
     setState(IDLE_STATE)
-  }, [state.rig, state.context, state.analyser, state.tunerAnalyser])
+  }, [state.rig, state.context, state.analyser, state.tunerAnalyser, stopDI])
 
-  return { ...state, powerOn, powerOff }
+  return { ...state, powerOn, powerOff, playDI, stopDI }
 }
 
 // Engine dispatcher (issue #15 M3, issue #44): in the desktop shell the audio

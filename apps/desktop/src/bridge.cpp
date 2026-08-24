@@ -17,6 +17,7 @@
 #include "debug_log.h"
 #include "openaxe/api.h"
 #include "openaxe/core.h"
+#include "openaxe/dsp/wav.h"
 #include "secure_storage.h"
 
 namespace openaxe_desktop {
@@ -1036,6 +1037,49 @@ std::string StudioBridge::HandleSetTunerMuted(const std::string& req) {
   } catch (const std::exception& e) {
     return JsonError(std::string("setTunerMuted: ") + e.what());
   }
+}
+
+std::string StudioBridge::HandleLoadDIWav(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string encoded = o.value("wavBase64", "");
+    if (encoded.empty()) return JsonError("loadDIWav: no wav data");
+    const std::vector<uint8_t> bytes = DecodeBase64(encoded);
+    if (bytes.empty()) return JsonError("loadDIWav: could not decode the base64 payload");
+    if (bytes.size() > kMaxIrWavBytes) return JsonError("loadDIWav: file too large (max 8 MB)");
+    if (bytes.size() < 12 || std::memcmp(bytes.data(), "RIFF", 4) != 0 ||
+        std::memcmp(bytes.data() + 8, "WAVE", 4) != 0)
+      return JsonError("loadDIWav: not a WAV file");
+    auto decoded = openaxe::dsp::DecodeWav(bytes.data(), bytes.size());
+    if (!decoded) return JsonError("loadDIWav: the core could not decode this file");
+    std::vector<float> samples = decoded->samples;
+    if (decoded->sample_rate > 0 && decoded->sample_rate != graph_sample_rate_) {
+      samples = openaxe::dsp::ResampleMono(samples, decoded->sample_rate, graph_sample_rate_);
+    }
+    if (samples.empty()) return JsonError("loadDIWav: decoded to empty buffer");
+    audio_.SetDIBuffer(samples);
+    return (json{{"ok", true}, {"frames", static_cast<int>(samples.size())}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("loadDIWav: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandlePlayDI(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const bool loop = o.value("loop", true);
+    audio_.PlayDI(loop);
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("playDI: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleStopDI(const std::string&) {
+  audio_.StopDI();
+  return (json{{"ok", true}}).dump();
 }
 
 std::string StudioBridge::HandleMeters(const std::string&) {

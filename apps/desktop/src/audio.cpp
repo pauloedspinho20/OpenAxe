@@ -122,16 +122,52 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   const float* in_ptrs[2] = {in_l, in_r};
   float* out_ptrs[2] = {out_l, out_r};
 
-  // Input TRIM (issue #115). Applied here, before both the graph and the tap,
-  // so the meter/tuner see the trimmed signal like they do on the web path.
-  // The backend's input buffers are never written to - the scaled copy lands
-  // in the scratch buffers SetGraph sized on a non-audio thread. If they're
-  // too small for this block (a backend handing us more frames than the block
-  // size we were armed with), the trim is skipped rather than allocated for:
-  // a wrong level for one block beats a malloc on the audio thread.
+  // DI audition (issue #273): when active, replaces live input with the
+  // looping DI buffer, still through input_gain and the graph/tap.
   const float gain = state->input_gain.load(std::memory_order_relaxed);
-  if (in_l && gain != 1.0f && state->in_scratch[0].size() >= n_frames &&
-      (!in_r || state->in_scratch[1].size() >= n_frames)) {
+  if (state->di_playing.load(std::memory_order_relaxed)) {
+    const size_t size = state->di_buffer.size();
+    if (size > 0 && state->in_scratch[0].size() >= n_frames) {
+      size_t pos = state->di_pos.load(std::memory_order_relaxed);
+      for (unsigned int i = 0; i < n_frames; ++i) {
+        const float s = state->di_buffer[(pos + i) % size];
+        state->in_scratch[0][i] = s * gain;
+      }
+      in_ptrs[0] = state->in_scratch[0].data();
+      in_l = in_ptrs[0];
+      if (in_ch >= 2 && state->in_scratch[1].size() >= n_frames) {
+        for (unsigned int i = 0; i < n_frames; ++i) state->in_scratch[1][i] = state->in_scratch[0][i];
+        in_ptrs[1] = state->in_scratch[1].data();
+        in_r = in_ptrs[1];
+      } else if (in_ch >= 2) {
+        in_ptrs[1] = nullptr;
+        in_r = nullptr;
+      }
+      size_t new_pos = pos + n_frames;
+      if (state->di_loop.load(std::memory_order_relaxed)) {
+        new_pos %= size;
+      } else if (new_pos >= size) {
+        new_pos = size;
+        state->di_playing.store(false, std::memory_order_relaxed);
+      }
+      state->di_pos.store(new_pos, std::memory_order_relaxed);
+    } else if (size == 0) {
+      // No DI data — treat as silence but keep playing flag so UI doesn't spin.
+      if (state->in_scratch[0].size() >= n_frames) {
+        for (unsigned int i = 0; i < n_frames; ++i) state->in_scratch[0][i] = 0.0f;
+        in_ptrs[0] = state->in_scratch[0].data();
+        in_l = in_ptrs[0];
+        if (in_ch >= 2 && state->in_scratch[1].size() >= n_frames) {
+          for (unsigned int i = 0; i < n_frames; ++i) state->in_scratch[1][i] = 0.0f;
+          in_ptrs[1] = state->in_scratch[1].data();
+          in_r = in_ptrs[1];
+        }
+      }
+    }
+  } else if (in_l && gain != 1.0f && state->in_scratch[0].size() >= n_frames &&
+             (!in_r || state->in_scratch[1].size() >= n_frames)) {
+    // Input TRIM (issue #115) for live input at non-unity — same scratch
+    // path as DI, but from the live buffer.
     for (unsigned int i = 0; i < n_frames; ++i) state->in_scratch[0][i] = in_l[i] * gain;
     in_ptrs[0] = state->in_scratch[0].data();
     if (in_r) {
@@ -492,6 +528,29 @@ void AudioIO::SetInputGain(float gain) {
 }
 
 float AudioIO::InputGain() const { return state_.input_gain.load(std::memory_order_relaxed); }
+
+void AudioIO::SetDIBuffer(const std::vector<float>& samples) {
+  // Called with di_playing==false, so the audio thread isn't reading.
+  state_.di_playing.store(false, std::memory_order_release);
+  state_.di_pos.store(0, std::memory_order_release);
+  state_.di_buffer = samples;
+}
+
+void AudioIO::PlayDI(bool loop) {
+  if (state_.di_buffer.empty()) return;
+  state_.di_pos.store(0, std::memory_order_release);
+  state_.di_loop.store(loop, std::memory_order_release);
+  state_.di_playing.store(true, std::memory_order_release);
+}
+
+void AudioIO::StopDI() {
+  state_.di_playing.store(false, std::memory_order_release);
+  state_.di_pos.store(0, std::memory_order_release);
+}
+
+bool AudioIO::IsDIPlaying() const {
+  return state_.di_playing.load(std::memory_order_relaxed);
+}
 
 bool AudioIO::Start() {
   std::lock_guard<std::mutex> lock(io_mutex_);
