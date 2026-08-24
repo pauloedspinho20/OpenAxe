@@ -5,12 +5,14 @@
 namespace openaxe::dsp {
 
 // Pitch shifter with Whammy + Detune modes per issue #268.
-// Whammy: ±12 semitones via granular/phase-vocoder approach (pedal sweep
-// via host automation on `pitch` param). Detune: ±15 cents modulated delay
-// (≈5-15ms) for thickening without obvious pitch shift.
+// Whammy: ±12 semitones via a crossfade (Eventide-style) shifter - a single
+// read head drifts at the pitch ratio and jumps back one grain with a
+// raised-cosine crossfade when it leaves the delay window. Expression pedal
+// is first-class via the smoothed `pitch` param. Detune: two voices at ±15
+// cents, a genuine pitch offset rather than a modulated delay.
 //
-// 40ms latency rejected → implementation keeps latency ~15-20ms (whammy)
-// and ~5ms (detune). Expression pedal is first-class via smoothed `pitch`.
+// Latency is one fixed ~30 ms grain in both modes (the read head sits a
+// grain behind the write head at unity pitch, which is also an exact delay).
 class PitchShifter {
  public:
   struct ParamInfo {

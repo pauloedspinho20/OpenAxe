@@ -5,8 +5,10 @@
 namespace openaxe::dsp {
 
 // Granular delay with pristine↔lo-fi character via `character` knob,
-// Freeze/Hold per issue #268. Circular buffer 2–3s, 2 overlapping Hann grains,
-// per-grain pitch/jitter/spread, diffuser, Lagrange3 interpolation.
+// Freeze/Hold per issue #268. Circular buffer 2–3s, 2 overlapping Hann grains
+// (window-normalised, so pitch=0 is an exact delay), per-grain ±12 st
+// resampling for `pitch`, Lagrange3 interpolation. Feedback taps the grain
+// output (not the raw delay), matching the original design.
 //
 // Parameters (see granular_delay.cpp):
 //   time 10-2000ms, grain_size 10-500ms, density 1-50Hz, pitch -12..12st,

@@ -23,12 +23,6 @@ struct RingMod::Impl {
   float drive = 0.3f;
   float sample_rate = 48000.0f;
   float phase = 0.0f;
-
-  void UpdatePhase(float& ph, float freq, float sr, int frames) {
-    // phase advance per sample
-    float inc = 6.28318530718f * freq / sr;
-    ph = std::fmod(ph + inc * frames, 6.28318530718f);
-  }
 };
 
 RingMod::RingMod() : impl_(std::make_unique<Impl>()) {}

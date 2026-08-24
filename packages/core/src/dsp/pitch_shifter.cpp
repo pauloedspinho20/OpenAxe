@@ -4,9 +4,7 @@
 #include <cmath>
 #include <vector>
 
-#include "internal/delay_line.h"
 #include "internal/lagrange3.h"
-#include "internal/variable_delay.h"
 
 namespace openaxe::dsp {
 
@@ -16,6 +14,26 @@ constexpr int kPitchParam = 1;
 constexpr int kDetuneParam = 2;
 constexpr int kParamCount = 3;
 
+// Crossfade pitch shifter (Eventide-style, issue #268). A single read head
+// advances at `pitch_factor` samples per sample relative to the write head;
+// the lag between them therefore drifts by (1 - pitch_factor) per sample.
+// When the lag leaves [min_lag, max_lag] the head is jumped back by one grain
+// and the discontinuity is masked by a raised-cosine crossfade to a second,
+// post-jump head that runs alongside it for the next grain. Unity pitch never
+// jumps, so a 0-st whammy is an exact ~30 ms delay, not a granular warble.
+// RT-safe: Process allocates nothing.
+constexpr float kGrainMs = 30.0f;
+constexpr float kMinLagMs = 5.0f;
+
+struct Voice {
+  // Primary read head, as a lag (samples) behind the write head.
+  float lag = 0.0f;
+  // Secondary head used during a crossfade.
+  float lag2 = 0.0f;
+  // Fade progress in samples; >= kGrainMs means no crossfade is active.
+  float fade = kGrainMs;
+};
+
 const PitchShifter::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/pitch_shifter_params.inc"
 };
@@ -23,149 +41,132 @@ const PitchShifter::ParamInfo kParamInfo[kParamCount] = {
 } // namespace
 
 struct PitchShifter::Impl {
-  float mode = 1; // 0 detune,1 whammy default whammy
+  float mode = 1; // 0 detune, 1 whammy
   float pitch = 0; // semitones
   float detune_cents = 5;
   float sr = 48000;
-  // circular buffer for delay-line shifter
   std::vector<float> buf[2];
-  int write_pos = 0;
   int buf_size = 0;
-  float lfo_phase[2] = {0,0};
-  float read_phase[2] = {0,0};
+  struct ChannelState {
+    int write_pos = 0;
+    Voice voices[2]; // whammy uses [0]; detune uses both, ±cents
+  } ch[2];
+  float grain_samps = 0.0f;
+  float min_lag = 0.0f;
 
-  void Resize(float s){
+  void Resize(float s) {
     sr = s;
-    int size = static_cast<int>(s * 2.5f) + 2048;
-    for(int ch=0;ch<2;++ch){
-      buf[ch].assign(size,0.0f);
+    buf_size = static_cast<int>(s * 2.5f) + 2048;
+    grain_samps = kGrainMs * s / 1000.0f;
+    min_lag = kMinLagMs * s / 1000.0f;
+    for (int c = 0; c < 2; ++c) {
+      buf[c].assign(static_cast<size_t>(buf_size), 0.0f);
+      ch[c].write_pos = 0;
+      for (auto& v : ch[c].voices) {
+        v.lag = 0.03f * s;
+        v.lag2 = v.lag;
+        v.fade = grain_samps;
+      }
     }
-    buf_size = size;
-    write_pos = 0;
-    lfo_phase[0]=lfo_phase[1]=0;
-    read_phase[0]=read_phase[1]=0;
   }
 
-  float ReadLinear(const std::vector<float>& b, float pos) const {
-    int size = (int)b.size();
-    int i0 = (int)std::floor(pos);
-    float frac = pos - (float)i0;
-    while(i0<0) i0+=size;
-    i0%=size;
-    int i1=(i0+1)%size;
-    return b[i0]*(1-frac)+b[i1]*frac;
+  // Lagrange3-interpolated fractional read at `pos` samples behind-or-ahead of
+  // the write head (negative positions wrap forward, i.e. read history).
+  float Read(int channel, float pos) const {
+    return internal::ReadLagrange3(buf[channel], pos);
   }
 };
 
-PitchShifter::PitchShifter(): impl_(std::make_unique<Impl>()){ impl_->Resize(48000); }
-PitchShifter::~PitchShifter()=default;
+PitchShifter::PitchShifter() : impl_(std::make_unique<Impl>()) { impl_->Resize(48000); }
+PitchShifter::~PitchShifter() = default;
 
-void PitchShifter::Reset(double sample_rate){
+void PitchShifter::Reset(double sample_rate) {
   impl_->Resize(static_cast<float>(sample_rate));
 }
 
-void PitchShifter::Process(const float* const* input, float* const* output, int num_frames){
+void PitchShifter::Process(const float* const* input, float* const* output, int num_frames) {
   const float sr = impl_->sr;
   const int mode = static_cast<int>(impl_->mode);
-  const float pitch_st = impl_->pitch;
-  const float detune_c = impl_->detune_cents;
-  // pitch factor
-  float pitch_factor = std::pow(2.0f, pitch_st/12.0f);
-  // detune factor: cents to ratio
-  float detune_factor = std::pow(2.0f, detune_c/1200.0f);
+  const float grain = impl_->grain_samps;
+  const float min_lag = impl_->min_lag;
+  const float max_lag = min_lag + grain;
 
-  int size = impl_->buf_size;
-  int wp = impl_->write_pos;
+  // Whammy: one voice at `pitch` semitones. Detune: two voices at ±`cents`,
+  // which is a genuine pitch offset (not an LFO-modulated delay).
+  const float whammy_factor = std::pow(2.0f, impl_->pitch / 12.0f);
+  const float detune_factor = std::pow(2.0f, impl_->detune_cents / 1200.0f);
+  const float factors[2] = {detune_factor, 1.0f / detune_factor};
 
-  for(int ch=0; ch<2; ++ch){
-    auto &buf = impl_->buf[ch];
-    float lfo = impl_->lfo_phase[ch];
-    float rphase = impl_->read_phase[ch];
+  for (int c = 0; c < 2; ++c) {
+    auto& buf = impl_->buf[c];
+    auto& st = impl_->ch[c];
+    const int voice_count = (mode == 0) ? 2 : 1;
 
-    for(int i=0;i<num_frames;++i){
-      float in = input[ch][i];
-      buf[wp] = in;
+    for (int i = 0; i < num_frames; ++i) {
+      buf[st.write_pos] = input[c][i];
 
-      float out=0;
-      if(mode==0){ // detune: modulated delay 5-15ms
-        // detune uses dual delay lines with LFO varying delay ~5ms +/-2ms
-        float base_ms = 7.0f;
-        float mod_depth_ms = 2.0f * (std::fabs(detune_factor-1.0f)*100.0f); // scale with detune
-        // LFO ~0.8Hz for detune
-        float lfo_val = std::sin(lfo);
-        lfo += 6.28318530718f*0.8f/sr;
-        if(lfo>=6.28318530718f) lfo-=6.28318530718f;
-        float delay_ms = base_ms + mod_depth_ms * lfo_val * 0.5f;
-        // apply detune pitch via reading speed tweak: slight resampling
-        float delay_samps = delay_ms * sr / 1000.0f;
-        // read pos slightly off to create cents shift: move read pointer at detune rate
-        // maintain separate read pointer drifting at detune_factor
-        // simple approach: delay + fractional offset driven by detune cents
-        float read_pos = (float)wp - delay_samps;
-        // add tiny pitch offset: advance read at detune speed
-        // we approximate by offsetting by cents * time
-        // keep it simple: just variable delay is enough for detune thickening
-        while(read_pos<0) read_pos+=size;
-        // also slightly resample for pitch: use linear interpolation with pitch factor
-        // for detune, pitch_factor ~1, so just read
-        out = impl_->ReadLinear(buf, read_pos);
-        // add dry through engine mix? this block outputs wet only, detuned voice
-      } else { // whammy: granular pitch shift with ~20ms grains, Hann crossfade
-        // maintain two read heads offset by half grain for crossfade
-        const float grain_ms = 30.0f;
-        const float grain_samps = grain_ms * sr / 1000.0f;
-        // read pointer moves at pitch_factor speed
-        // we advance rphase by pitch_factor each sample relative to write
-        // rphase is distance behind write
-        // increment read offset
-        rphase += pitch_factor;
-        // wrap within grain window: keep read within [grain, 2*grain] behind write to avoid glitches
-        float window = grain_samps;
-        // compute read pos: wp - window - fmod(rphase, window)
-        float phase_in_grain = std::fmod(rphase, window);
-        float read_pos1 = (float)wp - window - phase_in_grain;
-        float read_pos2 = read_pos1 - window*0.5f; // second grain half offset
-        while(read_pos1<0) read_pos1+=size;
-        while(read_pos2<0) read_pos2+=size;
-        float s1 = impl_->ReadLinear(buf, read_pos1);
-        float s2 = impl_->ReadLinear(buf, read_pos2);
-        // Hann window for crossfade
-        float w1 = 0.5f*(1 - std::cos(6.28318530718f*phase_in_grain/window));
-        float w2 = 0.5f*(1 - std::cos(6.28318530718f*(phase_in_grain+window*0.5f)/window));
-        // Actually w2 phase offset; simpler triangle crossfade via Hann
-        // Normalize
-        float window2 = std::fmod(phase_in_grain+window*0.5f, window);
-        float w1h = 0.5f - 0.5f*std::cos(6.28318530718f*phase_in_grain/window);
-        float w2h = 0.5f - 0.5f*std::cos(6.28318530718f*window2/window);
-        // Use equal power crossfade: sum and normalize
-        out = (s1*w1h + s2*w2h) * 0.9f;
-        // Compensate amplitude: Hann crossfade sum ~1
-        // when pitch bend is 0 (factor 1), grains are aligned; crossfade still works (chorus-like)
+      float out = 0.0f;
+      for (int v = 0; v < voice_count; ++v) {
+        const float factor = (mode == 0) ? factors[v] : whammy_factor;
+        Voice& voice = st.voices[v];
+
+        // Write head advances 1, read head advances `factor`, so the lag
+        // changes by (1 - factor) per sample. Bounded, so rphase-style
+        // float stall (issue #268 review) is impossible by construction.
+        voice.lag += 1.0f - factor;
+        const bool fading = voice.fade < grain;
+        if (fading) voice.lag2 += 1.0f - factor;
+
+        // Keep the read head inside [min_lag, max_lag]; jump and crossfade.
+        if (factor >= 1.0f && voice.lag < min_lag) {
+          if (!fading) voice.lag2 = voice.lag;
+          voice.lag += grain;
+          voice.fade = 0.0f;
+        } else if (factor < 1.0f && voice.lag > max_lag) {
+          if (!fading) voice.lag2 = voice.lag;
+          voice.lag -= grain;
+          voice.fade = 0.0f;
+        }
+
+        float s = impl_->Read(c, static_cast<float>(st.write_pos) - voice.lag);
+        if (voice.fade < grain) {
+          // Raised-cosine crossfade: old head out, new head in. Both heads are
+          // windowed to ~0 at their jump, so the ~30 ms handoff is click-free.
+          const float u = voice.fade / grain;
+          const float w_old = 0.5f + 0.5f * std::cos(3.14159265359f * u);
+          const float w_new = 1.0f - w_old;
+          const float s_old = impl_->Read(c, static_cast<float>(st.write_pos) - voice.lag2);
+          s = s_old * w_old + s * w_new;
+          voice.fade += 1.0f;
+          if (voice.fade >= grain) voice.fade = grain;
+        }
+        out += s;
       }
-      output[ch][i]=out;
-      wp = (wp+1)%size;
+      if (mode == 0) out *= 0.5f; // two detune voices sum to ~unity
+
+      output[c][i] = out;
+      st.write_pos = (st.write_pos + 1) % impl_->buf_size;
     }
-    impl_->lfo_phase[ch]=lfo;
-    impl_->read_phase[ch]=rphase;
   }
-  impl_->write_pos = wp;
 }
 
-int PitchShifter::ParamCount(){ return kParamCount; }
-const PitchShifter::ParamInfo& PitchShifter::GetParamInfo(int index){ return kParamInfo[static_cast<size_t>(index)]; }
-float PitchShifter::GetParam(int index) const{
-  switch(index){
+int PitchShifter::ParamCount() { return kParamCount; }
+const PitchShifter::ParamInfo& PitchShifter::GetParamInfo(int index) {
+  return kParamInfo[static_cast<size_t>(index)];
+}
+float PitchShifter::GetParam(int index) const {
+  switch (index) {
     case kModeParam: return impl_->mode;
     case kPitchParam: return impl_->pitch;
     case kDetuneParam: return impl_->detune_cents;
     default: return 0;
   }
 }
-void PitchShifter::SetParam(int index,float value){
-  switch(index){
-    case kModeParam: impl_->mode = std::clamp(std::round(value),0.0f,1.0f); break;
-    case kPitchParam: impl_->pitch = std::clamp(value,-12.0f,12.0f); break;
-    case kDetuneParam: impl_->detune_cents = std::clamp(value,-15.0f,15.0f); break;
+void PitchShifter::SetParam(int index, float value) {
+  switch (index) {
+    case kModeParam: impl_->mode = std::clamp(std::round(value), 0.0f, 1.0f); break;
+    case kPitchParam: impl_->pitch = std::clamp(value, -12.0f, 12.0f); break;
+    case kDetuneParam: impl_->detune_cents = std::clamp(value, -15.0f, 15.0f); break;
     default: break;
   }
 }

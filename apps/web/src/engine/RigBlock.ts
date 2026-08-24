@@ -1,4 +1,5 @@
 import type { EffectParams } from '../effects/Effect'
+import { mapStringParam } from '../effects/stringParamMaps'
 import type { BlockKind } from './blocks/Block'
 import type { PresetBlock } from '../presets/types'
 import type { RigModelInfo, RigWorkletNode } from './RigWorkletNode'
@@ -69,47 +70,20 @@ export class RigBlock implements PresetBlock {
         this.worklet.setParam(this.id, key, map[value] ?? 0)
         continue
       }
-      if (key === 'character' && typeof value === 'string') {
-        const map: Record<string, number> = { clean: 0, opto: 1, fet: 2, varimu: 3 }
-        this.worklet.setParam(this.id, key, map[value] ?? 0)
-        continue
-      }
-      if (key === 'shape' && typeof value === 'string') {
-        const map: Record<string, number> = { sine: 0, triangle: 1, square: 2 }
-        this.worklet.setParam(this.id, key, map[value] ?? 0)
-        continue
-      }
-      // new select params (numeric enums backed by string UI)
+      // shape/character and the Phase-2 select params are string selects backed
+      // by numeric core params - one shared map module (issue #268), so web and
+      // desktop can't drift. Non-enum strings are forwarded only when numeric;
+      // anything else is skipped, not silently zeroed.
       if (typeof value === 'string') {
-        const stereoMap: Record<string, number> = { mono: 0, stereo: 1 }
-        const tremModeMap: Record<string, number> = { normal: 0, harmonic: 1 }
-        const filterTypeMap: Record<string, number> = { wah: 0, envelope: 1, ladder: 2 }
-        const filterModeMap: Record<string, number> = { pedal: 0, env: 1, lfo: 2 }
-        const pitchModeMap: Record<string, number> = { detune: 0, whammy: 1 }
-        const freezeMap: Record<string, number> = { off: 0, on: 1 }
-        const speedMap: Record<string, number> = { stop: 0, chorale: 1, tremolo: 2 }
-        let mapped: number | undefined
-        if (key === 'stereo') mapped = stereoMap[value]
-        else if (key === 'mode' && this.kind === 'tremolo') mapped = tremModeMap[value]
-        else if (key === 'type') mapped = filterTypeMap[value]
-        else if (key === 'mode' && this.kind === 'filter') mapped = filterModeMap[value]
-        else if (key === 'mode' && this.kind === 'pitch-shifter') mapped = pitchModeMap[value]
-        else if (key === 'freeze') mapped = freezeMap[value]
-        else if (key === 'speed') mapped = speedMap[value]
+        const mapped = mapStringParam(this.kind, key, value)
         if (mapped !== undefined) {
           this.worklet.setParam(this.id, key, mapped)
           continue
         }
-        // generic fallback: handle string-typed enums like stereo/mode generically
-        const genericMaps: Record<string, Record<string, number>> = {
-          stereo: stereoMap,
-          freeze: freezeMap,
-          speed: speedMap,
-        }
-        if (genericMaps[key] && genericMaps[key][value] !== undefined) {
-          this.worklet.setParam(this.id, key, genericMaps[key][value])
-          continue
-        }
+        const n = Number.parseFloat(value)
+        if (!Number.isFinite(n)) continue
+        this.worklet.setParam(this.id, key, n)
+        continue
       }
       const num = toNumber(value)
       this.worklet.setParam(this.id, key, num)

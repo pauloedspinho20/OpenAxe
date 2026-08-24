@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "internal/biquad.h"
+
 namespace openaxe::dsp {
 
 namespace {
@@ -15,28 +17,6 @@ constexpr int kParamCount = 5;
 
 const Tremolo::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/tremolo_params.inc"
-};
-
-struct Biquad {
-  float b0=1,b1=0,b2=0,a1=0,a2=0,z1=0,z2=0;
-  void Reset(){ z1=z2=0; }
-  void SetLowpass(float freq,float q,float sr){
-    float w0=6.28318530718f*freq/sr;
-    float alpha=std::sin(w0)/(2*q);
-    float cosw=std::cos(w0);
-    float a0=1+alpha;
-    b0=(1-cosw)*0.5f/a0; b1=(1-cosw)/a0; b2=b0; a1=(-2*cosw)/a0; a2=(1-alpha)/a0;
-  }
-  void SetHighpass(float freq,float q,float sr){
-    float w0=6.28318530718f*freq/sr;
-    float alpha=std::sin(w0)/(2*q);
-    float cosw=std::cos(w0);
-    float a0=1+alpha;
-    b0=(1+cosw)*0.5f/a0; b1=-(1+cosw)/a0; b2=b0; a1=(-2*cosw)/a0; a2=(1-alpha)/a0;
-  }
-  float Process(float x){
-    float y=b0*x+z1; z1=b1*x - a1*y + z2; z2=b2*x - a2*y; return y;
-  }
 };
 
 inline float ShapeValue(float phase, int shape){
@@ -68,9 +48,9 @@ struct Tremolo::Impl {
   int shape=0;
   int stereo=1; // default stereo per prior Configure true
   int mode=0; // 0 normal,1 harmonic
-  float sr=48000;
-  float phase=0;
-  Biquad lpL, lpR, hpL, hpR;
+  float sr = 48000;
+  float phase = 0;
+  internal::Biquad lpL, lpR, hpL, hpR;
 
   void ResetFilters(){
     lpL.Reset(); lpR.Reset(); hpL.Reset(); hpR.Reset();
@@ -100,14 +80,10 @@ void Tremolo::Process(const float* const* input, float* const* output, int num_f
   float phase = impl_->phase;
   float inc = rate / sr;
 
-  // harmonic crossover if needed - set filters each block
-  if(mode==1){
-    // keep crossover at 800Hz
-    // filters already set on Reset; ensure set with current sr
-    // Do per block to avoid per sample overhead: coefficients already
-  }
+  // Harmonic-mode crossover filters are (re)seeded on Reset with the current
+  // sample rate; nothing to do per block.
 
-  for(int i=0;i<num_frames;++i){
+  for (int i = 0; i < num_frames; ++i) {
     float base_phase = phase;
     float phaseR = stereo ? std::fmod(base_phase+0.5f,1.0f) : base_phase;
     float modL = ShapeValue(base_phase, shape);

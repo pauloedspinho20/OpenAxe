@@ -1,6 +1,6 @@
-// End-to-end test for the DSPark-backed Tremolo wrapper (kTremolo): verifies
-// full-depth modulation actually sweeps the output amplitude, and that depth 0
-// is a passthrough. Only built if OPENAXE_HAS_DSPARK.
+// End-to-end test for the Tremolo wrapper (kTremolo): verifies full-depth
+// modulation actually sweeps the output amplitude, and that depth 0 is a
+// passthrough. Hand-written DSP (issue #268), no vendor dependency.
 #include "openaxe/dsp/tremolo.h"
 
 #include <algorithm>

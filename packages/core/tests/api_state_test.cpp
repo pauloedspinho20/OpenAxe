@@ -507,6 +507,70 @@ int main() {
     nam_studio_graph_destroy(g);
   }
 
+  // ── Phase-2 kinds (issue #268) serialize and restore ────────────────────
+  {
+    NamStudioGraph* g = nam_studio_graph_create();
+    struct KindWrite {
+      int32_t block; // index into blocks[]
+      const char* symbol;
+      float value;
+    };
+    const KindWrite writes[] = {
+        {0, "frequency", 700.0f},
+        {0, "drive", 0.8f},
+        {1, "type", 2.0f},
+        {1, "frequency", 900.0f},
+        {1, "mode", 1.0f},
+        {2, "pitch", -5.0f},
+        {2, "detune_cents", 12.0f},
+        {3, "time", 500.0f},
+        {3, "freeze", 1.0f},
+        {3, "character", 0.7f},
+        {4, "speed", 2.0f},
+        {4, "crossover", 950.0f},
+    };
+    int32_t blocks[5] = {0};
+    int next = 0;
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_RING_MOD, 0, 0);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_FILTER, 0, 1);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_PITCH_SHIFTER, 0, 2);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_GRANULAR_DELAY, 0, 3);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_ROTARY, 0, 4);
+    for (const KindWrite& w : writes) {
+      bool found = false;
+      for (int32_t i = 0; i < nam_studio_block_param_count(g, blocks[w.block]); ++i) {
+        const char* symbol = nullptr;
+        if (!nam_studio_block_param_info(g, blocks[w.block], i, nullptr, &symbol, nullptr,
+                                         nullptr, nullptr)) {
+          continue;
+        }
+        if (std::strcmp(symbol, w.symbol) == 0) {
+          nam_studio_set_param(g, blocks[w.block], i, w.value);
+          found = true;
+          break;
+        }
+      }
+      OPENAXE_EXPECT(found);
+    }
+    // Phase-2 kinds serialize under their kind string names.
+    const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    std::vector<char> buf(static_cast<size_t>(needed));
+    nam_studio_serialize_state(g, buf.data(), needed);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"ring-mod\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"granular-delay\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"rotary\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
+
+    NamStudioGraph* r = nam_studio_graph_create();
+    OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
+    for (const KindWrite& w : writes) {
+      OPENAXE_EXPECT(GetParamBySymbol(r, blocks[w.block], w.symbol) == w.value);
+    }
+    nam_studio_graph_destroy(r);
+    nam_studio_graph_destroy(g);
+  }
+
   nam_studio_graph_destroy(source);
   nam_studio_graph_destroy(restored);
   nam_studio_graph_destroy(clean);
