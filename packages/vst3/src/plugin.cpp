@@ -9,6 +9,8 @@
 #include "config.h"
 
 #include "automation_params.h"
+#include "plugin_state.h"
+#include "presets.h"
 
 #if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <xmmintrin.h>
@@ -56,6 +58,18 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
   // isn't present this is a no-op; when it is, hosts see Master + Slot 1..15
   // groups at construction and automation lanes persist across sessions.
   openaxe_vst3::params::RegisterParams(*this);
+  // Factory presets — generated from the same row layouts as web (issue #128).
+  // We build the JSON via the same row→graph→serialize pipeline, then store
+  // as IByteChunk presets so hosts show them in their preset menus and
+  // RestorePreset can suspend+swap without dropout.
+  {
+    auto presets = openaxe_vst3::presets::BuildFactoryPresets();
+    for (auto& p : presets) {
+      IByteChunk chunk;
+      chunk.PutStr(p.json.c_str());
+      MakePresetFromChunk(p.name.c_str(), chunk);
+    }
+  }
 #endif
 
 #if IPLUG_EDITOR
@@ -152,7 +166,7 @@ void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs
   }
 }
 
-bool OpenAxePlugin::BeginSuspend() {
+bool OpenAxePlugin::BeginSuspend() const {
   // Matches AudioIO::BeginSuspend semantics: if the host isn't currently
   // inside ProcessBlock (no reliable way to know from the plugin API), we
   // still raise the flag and wait one ack cycle. If the audio thread is
@@ -174,7 +188,67 @@ bool OpenAxePlugin::BeginSuspend() {
   return false;
 }
 
-void OpenAxePlugin::EndSuspend() { suspend_requested_.store(false, std::memory_order_release); }
+void OpenAxePlugin::EndSuspend() const { suspend_requested_.store(false, std::memory_order_release); }
+
+bool OpenAxePlugin::SerializeState(IByteChunk& chunk) const {
+  // Host is saving the project / .vstpreset — produce a self-contained JSON
+  // document with embedded assets (issue #128). Suspend to get a consistent
+  // snapshot; serialize allocates and reads topology.
+  std::string json;
+  WithSuspend([&] { json = openaxe_vst3::state::SerializeForHost(graph_); });
+  if (json.empty()) return false;
+  chunk.Clear();
+  chunk.PutStr(json.c_str());
+  return true;
+}
+
+int OpenAxePlugin::UnserializeState(const IByteChunk& chunk, int startPos) {
+  WDL_String json;
+  int endPos = chunk.GetStr(json, startPos);
+  if (endPos <= startPos || json.GetLength() == 0) {
+    // No chunk data — let the host's param fallback handle it (and don't
+    // claim we consumed anything beyond startPos).
+    return startPos;
+  }
+  // Restore topology + params. State helpers do the single reset (#62) and
+  // leave the graph untouched on parse / version errors (#64 graceful).
+  // Must be suspended (Tier 2).
+  WithSuspend([&] {
+    (void)openaxe_vst3::state::Restore(graph_, json.Get(), sample_rate_, max_block_size_);
+  });
+  // Hosts that also serialized params after the JSON (some iPlug callers do
+  // PutChunk of params) will have trailing bytes — try to apply them for
+  // forward-compat, but don't fail if absent.
+  if (endPos < chunk.Size()) {
+    const int afterParams = UnserializeParams(chunk, endPos);
+    if (afterParams > endPos) endPos = afterParams;
+  }
+  // For preset switching without glitches: the host will call this back-to-back;
+  // suspend ensures ProcessBlock silences during the swap (no dropout due to
+  // concurrent access, though a brief silence is audible — acceptable for
+  // Phase 1, #128 Program change bullet).
+  return endPos;
+}
+
+bool OpenAxePlugin::SavePortableJson(const std::string& path) const {
+  bool ok = false;
+  WithSuspend([&] { ok = openaxe_vst3::state::SavePortableJson(graph_, path); });
+  return ok;
+}
+
+int OpenAxePlugin::LoadPortableJson(const std::string& path) {
+  int result = NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
+  WithSuspend([&] {
+    result = openaxe_vst3::state::LoadPortableJson(graph_, path, sample_rate_, max_block_size_);
+  });
+  return result;
+}
+
+std::vector<std::string> OpenAxePlugin::GetMissingAssets() const {
+  // No suspend needed — MissingAssets reads atomic-adjacent state set by
+  // Restore/UnserializeState, and that state is only written while suspended.
+  return openaxe_vst3::state::MissingAssets(graph_);
+}
 
 void OpenAxePlugin::OnParamChange(int paramIdx) {
   // Host -> core automation write (issue #127). Host hands us a normalized
