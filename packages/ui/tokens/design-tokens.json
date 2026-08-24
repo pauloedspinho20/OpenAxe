@@ -81,7 +81,9 @@
       "blockMod": "#7ab8ff",
       "blockTime": "#a78bfa",
       "blockSpace": "#5fdc7a",
-      "blockUtility": "#9aa0a6"
+      "blockUtility": "#9aa0a6",
+      "blockCore": "#ff8a3d",
+      "blockEffects": "#7ab8ff"
     }
   },
   "spacing": {

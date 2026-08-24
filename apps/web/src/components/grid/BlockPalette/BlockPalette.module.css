@@ -52,7 +52,7 @@
   color: var(--ink-1);
   background: var(--panel-raised);
   border: 1px solid var(--block-color, var(--seam-strong));
-  border-radius: var(--r-sm);
+  border-radius: var(--r-lg);
   padding: var(--sp-2) var(--sp-3);
   cursor: grab;
   touch-action: none;
@@ -64,6 +64,10 @@
   gap: var(--sp-1);
   min-width: 64px;
   text-align: center;
+  transition:
+    border-radius 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .shelf .chip > svg {
@@ -100,18 +104,32 @@
   font-size: 11px;
   color: var(--ink-1);
   background: var(--panel-raised);
-  border: 1px solid var(--accent);
-  border-radius: var(--r-sm);
+  border: 1px solid var(--block-color, var(--accent));
+  border-radius: var(--r-lg);
   padding: var(--sp-2) var(--sp-3);
   box-shadow: var(--shadow-panel);
   opacity: 0.9;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: var(--sp-1);
+  min-width: 64px;
+  text-align: center;
+  transition:
+    min-width 0.2s ease,
+    min-height 0.2s ease,
+    border-radius 0.2s ease,
+    padding 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .ghostOverGrid {
-  border-color: var(--led-on);
-  color: var(--led-on);
+  min-width: var(--grid-min-col);
+  min-height: var(--grid-min-row);
+  padding: var(--sp-1);
+  border-color: var(--block-color, var(--accent));
+  border-radius: var(--r-lg);
+  color: var(--block-color, var(--ink-1));
 }

@@ -12,11 +12,20 @@ export function SettingsIcon(props: IconProps) {
 export function MidiIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <rect x="3" y="7" width="18" height="10" rx="1.2" />
-      <path d="M8 7V5M12 7V5M16 7V5" />
-      <circle cx="8.5" cy="12" r="1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-      <circle cx="15.5" cy="12" r="1" fill="currentColor" stroke="none" />
+      <text
+        x="12"
+        y="15.5"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontFamily="var(--font-display)"
+        fontSize="7"
+        fontWeight="700"
+        letterSpacing="0.6"
+        fill="currentColor"
+        stroke="none"
+      >
+        MIDI
+      </text>
     </Icon>
   )
 }
