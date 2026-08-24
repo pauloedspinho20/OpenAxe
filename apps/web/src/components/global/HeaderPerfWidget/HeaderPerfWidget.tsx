@@ -55,7 +55,9 @@ export function HeaderPerfWidget({ context }: HeaderPerfWidgetProps) {
     // For desktop (native), poll getConfig() for the real device round-trip latency.
     // The NativeAudioContext shim always reports 0 for baseLatency/outputLatency,
     // so the web path's ctx.baseLatency would always show 0ms on desktop.
-    const isNative = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>)['openAxe.getConfig']
+    const isNative =
+      typeof window !== 'undefined' &&
+      !!(window as unknown as Record<string, unknown>)['openAxe.getConfig']
     if (isNative) {
       const pollNative = async () => {
         try {
@@ -63,7 +65,10 @@ export function HeaderPerfWidget({ context }: HeaderPerfWidgetProps) {
           const bridge = getOpenAxe()
           if (bridge) {
             const cfg = await bridge.getConfig()
-            nativeLatency = typeof cfg.latencyMs === 'number' && cfg.latencyMs >= 0 ? Math.round(cfg.latencyMs) : null
+            nativeLatency =
+              typeof cfg.latencyMs === 'number' && cfg.latencyMs >= 0
+                ? Math.round(cfg.latencyMs)
+                : null
           }
         } catch {
           // ignore — will retry next tick

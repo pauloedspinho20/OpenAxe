@@ -79,7 +79,12 @@ export function SettingsDialog({
   const [deleteConfirming, setDeleteConfirming] = useState(false)
   const [signOutOnDelete, setSignOutOnDelete] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [nativeConfig, setNativeConfig] = useState<{ sampleRate: number; bufferFrames: number; latencyMs: number; latencyFrames: number } | null>(null)
+  const [nativeConfig, setNativeConfig] = useState<{
+    sampleRate: number
+    bufferFrames: number
+    latencyMs: number
+    latencyFrames: number
+  } | null>(null)
 
   const refreshCacheStats = () => {
     void getAssetCacheStats().then(setCacheStats)
@@ -438,13 +443,17 @@ export function SettingsDialog({
               </div>
               <div className={styles.diagItem}>
                 <span className={styles.diagValue}>
-                  {nativeConfig && nativeConfig.latencyMs >= 0 ? `${Math.round(nativeConfig.latencyMs)} ms` : '—'}
+                  {nativeConfig && nativeConfig.latencyMs >= 0
+                    ? `${Math.round(nativeConfig.latencyMs)} ms`
+                    : '—'}
                 </span>
                 <span className={`label ${styles.diagLabel}`}>Round-trip Latency</span>
               </div>
               <div className={styles.diagItem}>
                 <span className={styles.diagValue}>
-                  {nativeConfig && nativeConfig.latencyFrames >= 0 ? `${nativeConfig.latencyFrames} frames` : '—'}
+                  {nativeConfig && nativeConfig.latencyFrames >= 0
+                    ? `${nativeConfig.latencyFrames} frames`
+                    : '—'}
                 </span>
                 <span className={`label ${styles.diagLabel}`}>Latency Frames</span>
               </div>
@@ -472,7 +481,8 @@ export function SettingsDialog({
         </div>
         {isNative && nativeConfig && (
           <p className={styles.sectionHint}>
-            Round-trip is input + output buffering reported by {nativeConfig.latencyFrames >= 0 ? 'the device' : '—'} at {nativeConfig.sampleRate} Hz.
+            Round-trip is input + output buffering reported by{' '}
+            {nativeConfig.latencyFrames >= 0 ? 'the device' : '—'} at {nativeConfig.sampleRate} Hz.
             Lower buffer = lower latency but higher CPU.
           </p>
         )}
