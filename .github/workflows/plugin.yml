@@ -182,7 +182,7 @@ jobs:
           ls -lh openaxe-plugin-* 2>/dev/null || ls -lh packages/vst3/build/openaxe-* 2>/dev/null || true
 
       - name: Upload VST3 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-vst3
           path: ${{ matrix.artifact_glob }}
@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload extra artifacts (CLAP/AU on macOS)
         if: matrix.extra_artifacts != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-extra
           path: ${{ matrix.extra_artifacts }}
@@ -198,7 +198,7 @@ jobs:
 
       - name: Upload installers
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-installers
           path: |
