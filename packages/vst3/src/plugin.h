@@ -18,13 +18,15 @@
 
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "IPlug_include_in_plug_hdr.h"
 
 #include "openaxe/api.h"
 
-const int kNumPresets = 1;
+const int kNumPresets = 2;  // Clean Boost, Ambient Swell — generated from same rows as web
 
 class OpenAxePlugin final : public iplug::Plugin {
  public:
@@ -36,7 +38,19 @@ class OpenAxePlugin final : public iplug::Plugin {
   void OnReset() override;
   void OnActivate(bool enable) override;
   void OnParamChange(int paramIdx) override;
+  bool SerializeState(IByteChunk& chunk) const override;
+  int UnserializeState(const IByteChunk& chunk, int startPos) override;
 #endif
+
+  // Portable JSON round-trip (same document as the host chunk, just on disk)
+  // — web ↔ desktop ↔ plugin share this. Useful for .json preset import/export
+  // and for tests that don't have an IByteChunk.
+  bool SavePortableJson(const std::string& path) const;
+  int LoadPortableJson(const std::string& path);
+
+  // Missing assets from the last Restore/UnserializeState (#120). Empty when
+  // everything resolved; otherwise display names for UI relink affordance.
+  std::vector<std::string> GetMissingAssets() const;
 
   // Suspend handshake — control thread only. Mirrors
   // apps/desktop/src/audio.cpp's BeginSuspend/EndSuspend contract (see
@@ -45,12 +59,19 @@ class OpenAxePlugin final : public iplug::Plugin {
   // nam_studio_process is in flight before the caller mutates the graph.
   // Returns false on timeout (audio thread stalled); mutation is still safe
   // in that case, matching the desktop fallback of stopping the stream.
-  bool BeginSuspend();
-  void EndSuspend();
+  bool BeginSuspend() const;
+  void EndSuspend() const;
 
   // Control-thread helper that mutates the graph under the handshake (e.g. for
   // future model loads / topology edits from the UI thread). Runs `fn` while
   // suspended and resets if sample-rate or block-size changed.
+  template <typename Fn>
+  void WithSuspend(Fn&& fn) const {
+    const bool suspended = BeginSuspend();
+    (void)suspended;
+    fn();
+    EndSuspend();
+  }
   template <typename Fn>
   void WithSuspend(Fn&& fn) {
     const bool suspended = BeginSuspend();
@@ -60,14 +81,14 @@ class OpenAxePlugin final : public iplug::Plugin {
   }
 
  private:
-  NamStudioGraph* graph_ = nullptr;
-  double sample_rate_ = 48000.0;
-  int max_block_size_ = 0;
+  mutable NamStudioGraph* graph_ = nullptr;
+  mutable double sample_rate_ = 48000.0;
+  mutable int max_block_size_ = 0;
 
   // Suspend handshake state — same shape as RtCallbackState::suspend +
   // suspended_callbacks in apps/desktop/src/audio.h. Audio thread only reads
   // suspend_requested_ and bumps suspend_ack_; control thread only writes
   // suspend_requested_ and waits on suspend_ack_.
-  std::atomic<bool> suspend_requested_{false};
-  std::atomic<unsigned> suspend_ack_{0};
+  mutable std::atomic<bool> suspend_requested_{false};
+  mutable std::atomic<unsigned> suspend_ack_{0};
 };
