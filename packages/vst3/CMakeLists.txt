@@ -152,8 +152,9 @@ endif()
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   # VST3 target only for now; CLAP/AU later (issue #125 scope).
   # Editor shell (issue #132) hosts the shared React app via webview — thin
-  # bridge like desktop, no IGraphics fork.
-  set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp)
+  # bridge like desktop, no IGraphics fork. Primitives (issue #133) reuse the
+  # same React primitives via the webview — no IControl fork.
+  set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp)
 
   add_library(openaxe_vst3 MODULE ${PLUGIN_SOURCES})
   target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
@@ -176,7 +177,7 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
     endif()
   endif()
 
-  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/main_standalone.cpp)
+  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/main_standalone.cpp)
   target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/WDL)
   target_link_libraries(openaxe_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
   if(TARGET webview)
