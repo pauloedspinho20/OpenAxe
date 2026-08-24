@@ -58,6 +58,23 @@ cmake --build packages/vst3/build --target nam_studio_standalone
 ./packages/vst3/build/nam_studio_standalone
 ```
 
+### VSCode tasks
+
+`.vscode/tasks.json` mirrors the CLI above — **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for:
+
+- **VST: Configure (Release / Debug)** — `cmake -S packages/vst3 -B packages/vst3/build`
+- **VST: Build / Build (Debug)** — `cmake --build packages/vst3/build` (smoke tests build even without SDK)
+- **VST: Test** — `ctest --test-dir packages/vst3/build --output-on-failure` (single entry point from `AGENTS.md`; validators `SKIP` when tool/bundle absent)
+- **VST: Full check** — Configure + Build + Test in sequence
+- **VST: Standalone** — builds and runs `openaxe_standalone`
+- **VST: Install bundle (macOS)** — copies `OpenAxe.vst3` to `~/Library/Audio/Plug-Ins/VST3/` so hosts can scan it (`~/.vst3/` on Linux, `%COMMONPROGRAMFILES%\VST3\` on Windows — copy manually there)
+- **VST: Reveal VST3 bundle** — `ls -lh` the built bundle(s)
+- **VST: Generate design tokens (CSS / C++ header / all)** and **VST: Design tokens drift check** — `packages/ui/scripts/generate-tokens.mjs` (`--target=css` primary, `--target=cpp` optional; `--check` is what CI runs)
+- **VST: TSan / RTSan build & test** — `OPENAXE_VST3_ENABLE_TSAN` / `RTSAN` instrumented builds
+- **VST: Validators** — `pluginval` (strictness 10), `auval`, VST3 `validator`, `clap-validator` filtered via `ctest -R`
+
+The same task palette also exists for **C++** (`C++: Configure/Build/Test`) and **Desktop** (`Desktop: Configure/Build/Test/Package`).
+
 ## What the scaffold does
 
 - `CMakeLists.txt` reads the root `VERSION` file (`#54` — one source of truth, like `packages/core` and `apps/desktop`), `add_subdirectory(../../packages/core core)` and links `nam_studio_core` **with `WHOLE_ARCHIVE`** (NAM parsers self-register via static initializers — plain archive link drops them; see `packages/core/CMakeLists.txt`).

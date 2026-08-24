@@ -60,13 +60,15 @@ ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, la
 
 cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build
-ctest --test-dir packages/vst3/build --output-on-failure   # smoke, latency, suspend, realtime_safety + validators (pluginval, auval, VST3 validator, clap-validator — skip if tool/bundle absent)
+ctest --test-dir packages/vst3/build --output-on-failure   # smoke, latency, suspend, realtime_safety, editor + validators (pluginval, auval, VST3 validator, clap-validator — skip if tool/bundle absent)
 # ThreadSanitizer over the concurrent suspend stress (issue #130):
 cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build packages/vst3/build && ctest --test-dir packages/vst3/build --output-on-failure
 # RealtimeSanitizer (Clang 18+, optional):
 cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_RTSAN=ON
 ```
+
+`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop** and **Full check** flows.
 
 `packages/core`'s WASM build is a separate, manual step
 (`bash scripts/build-core-wasm.sh`, needs the Emscripten SDK on `PATH`) that

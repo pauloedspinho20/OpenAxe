@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -25,6 +26,8 @@
 #include "IPlug_include_in_plug_hdr.h"
 
 #include "openaxe/api.h"
+
+#include "editor.h"
 
 const int kNumPresets = 2;  // Clean Boost, Ambient Swell — generated from same rows as web
 
@@ -69,6 +72,12 @@ class OpenAxePlugin final : public iplug::Plugin {
   bool GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
                     double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const;
 
+  // Editor shell (issue #132) — webview hosting the shared React app.
+  // Exposed for state persistence and host window embedding; the audio path
+  // never touches the editor (open/close must not disturb audio).
+  openaxe_vst3::editor::Editor& GetEditor();
+  const openaxe_vst3::editor::Editor& GetEditor() const;
+
   // Suspend handshake — control thread only. Mirrors
   // apps/desktop/src/audio.cpp's BeginSuspend/EndSuspend contract (see
   // AudioEngine's Tier 2 docs): BeginSuspend raises suspend_requested_ and
@@ -108,4 +117,9 @@ class OpenAxePlugin final : public iplug::Plugin {
   // suspend_requested_ and waits on suspend_ack_.
   mutable std::atomic<bool> suspend_requested_{false};
   mutable std::atomic<unsigned> suspend_ack_{0};
+
+  // Editor shell — owned here, borrowed graph pointer (no audio thread touch
+  // on open/close). Mutable so SerializeState (const) can read editor size
+  // for chunk inclusion.
+  mutable std::unique_ptr<openaxe_vst3::editor::Editor> editor_;
 };
