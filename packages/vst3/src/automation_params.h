@@ -47,6 +47,7 @@
 //     symbols as automatable target for volume: callers should refuse to bind
 //     or warn, not silently map them.
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 

@@ -123,6 +123,16 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     }
   })
 
+  it("the amp's slim_size knob matches the core", () => {
+    const core = coreParamsFor('amp').get('slim_size')
+    expect(core).toBeDefined()
+    const web = (BLOCK_PARAM_SCHEMAS.amp ?? []).find((f) => f.key === 'slim_size')
+    expect(web?.control).toBe('knob')
+    if (web?.control === 'knob') {
+      expect({ min: web.min, max: web.max }).toEqual({ min: core!.min, max: core!.max })
+    }
+  })
+
   it('covers every effect kind the core implements', () => {
     // Every core effect kind is either compared symbol-by-symbol below or is one
     // of the documented exceptions in EXCLUDED_KINDS.
@@ -163,9 +173,9 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
 
   it.each(SYMBOL_KINDS)('%s: no UI field targets a param the core does not have', (kind) => {
     const core = coreParamsFor(kind)
-    // `mix` and the I/O trims are engine-level staging rather than DSP params
+    // `mix`/`level` and the I/O trims are engine-level staging rather than DSP params
     // on some kinds, so they are allowed to have no entry in the core table.
-    const staging = new Set(['mix', 'input_level', 'output_level'])
+    const staging = new Set(['mix', 'level', 'input_level', 'output_level'])
     const unknown = [...webFieldsFor(kind).keys()].filter(
       (key) => !core.has(key) && !staging.has(key),
     )
