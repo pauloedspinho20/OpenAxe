@@ -49,9 +49,10 @@
   font-size: 11px;
   font-weight: bold;
   letter-spacing: 0.02em;
-  color: var(--ink-1);
-  background: var(--panel-raised);
-  border: 1px solid var(--block-color, var(--seam-strong));
+  color: color-mix(in srgb, var(--block-color, var(--ink-1)) 72%, var(--ink-1));
+  background: color-mix(in srgb, var(--block-color, var(--panel-raised)) 8%, var(--panel-raised));
+  border: 1px solid
+    color-mix(in srgb, var(--block-color, var(--seam-strong)) 32%, var(--seam-strong));
   border-radius: var(--r-lg);
   padding: var(--sp-2) var(--sp-3);
   cursor: grab;
@@ -65,9 +66,11 @@
   min-width: 64px;
   text-align: center;
   transition:
-    border-radius 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
+    border-radius 0.45s ease,
+    border-color 0.45s ease,
+    background-color 0.45s ease,
+    color 0.45s ease,
+    transform 0.45s ease;
 }
 
 .shelf .chip > svg {
@@ -76,12 +79,13 @@
 }
 
 .chip:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--block-color, var(--ink-1));
+  background: color-mix(in srgb, var(--block-color) 14%, var(--panel-raised));
+  border-color: var(--block-color, var(--seam-strong));
 }
 
 .chip:focus-visible {
-  outline: 1px solid var(--accent);
+  outline: 1px solid var(--block-color, var(--accent));
   outline-offset: 2px;
 }
 
@@ -102,9 +106,10 @@
   pointer-events: none;
   font-family: var(--font-display);
   font-size: 11px;
-  color: var(--ink-1);
-  background: var(--panel-raised);
-  border: 1px solid var(--block-color, var(--accent));
+  color: color-mix(in srgb, var(--block-color, var(--ink-1)) 72%, var(--ink-1));
+  background: color-mix(in srgb, var(--block-color, var(--panel-raised)) 10%, var(--panel-raised));
+  border: 1px solid
+    color-mix(in srgb, var(--block-color, var(--seam-strong)) 36%, var(--seam-strong));
   border-radius: var(--r-lg);
   padding: var(--sp-2) var(--sp-3);
   box-shadow: var(--shadow-panel);
@@ -117,18 +122,20 @@
   min-width: 64px;
   text-align: center;
   transition:
-    min-width 0.2s ease,
-    min-height 0.2s ease,
-    border-radius 0.2s ease,
-    padding 0.2s ease,
-    border-color 0.2s ease,
-    background-color 0.2s ease;
+    min-width 0.45s ease,
+    min-height 0.45s ease,
+    border-radius 0.45s ease,
+    padding 0.45s ease,
+    border-color 0.45s ease,
+    background-color 0.45s ease,
+    color 0.45s ease;
 }
 
 .ghostOverGrid {
   min-width: var(--grid-min-col);
   min-height: var(--grid-min-row);
   padding: var(--sp-1);
+  background: color-mix(in srgb, var(--block-color) 14%, var(--panel-raised));
   border-color: var(--block-color, var(--accent));
   border-radius: var(--r-lg);
   color: var(--block-color, var(--ink-1));

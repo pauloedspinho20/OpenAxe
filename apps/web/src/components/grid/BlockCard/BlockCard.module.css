@@ -5,8 +5,8 @@
   height: 100%;
   min-width: 0;
   padding: var(--sp-1);
-  background: var(--panel-raised);
-  border: 1px solid var(--block-color, transparent);
+  background: color-mix(in srgb, var(--block-color, var(--panel-raised)) 7%, var(--panel-raised));
+  border: 1px solid color-mix(in srgb, var(--block-color, transparent) 34%, transparent);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-panel);
   cursor: grab;
@@ -14,11 +14,17 @@
   overflow: visible;
   align-items: center;
   justify-content: space-between;
+  transition:
+    background-color 0.45s ease,
+    border-color 0.45s ease,
+    box-shadow 0.45s ease;
 }
 
 .card:hover {
+  background: color-mix(in srgb, var(--block-color) 11%, var(--panel-raised));
+  border-color: color-mix(in srgb, var(--block-color) 45%, var(--seam-strong));
   box-shadow:
-    0 0 0 2px var(--ink-3),
+    0 0 0 2px color-mix(in srgb, var(--block-color) 26%, transparent),
     var(--shadow-panel);
 }
 
@@ -43,15 +49,16 @@
 }
 
 .card:focus-visible {
-  outline: 1px solid var(--accent);
+  outline: 1px solid var(--block-color, var(--accent));
   outline-offset: 2px;
 }
 
 .cardSelected,
 .cardSelected:hover {
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--block-color) 14%, var(--panel-raised));
+  border-color: var(--block-color, var(--accent));
   box-shadow:
-    0 0 0 2px var(--accent),
+    0 0 0 2px var(--block-color, var(--accent)),
     var(--shadow-panel);
 }
 
@@ -89,7 +96,7 @@
   font-size: 11px;
   letter-spacing: 0.02em;
   font-weight: bold;
-  color: var(--ink-1);
+  color: color-mix(in srgb, var(--block-color, var(--ink-1)) 78%, var(--ink-1));
 }
 
 .status {
@@ -97,7 +104,7 @@
   z-index: 1;
   font-family: var(--font-display);
   font-size: 8px;
-  color: var(--ink-2);
+  color: color-mix(in srgb, var(--block-color, var(--ink-2)) 46%, var(--ink-2));
   overflow: hidden;
   text-overflow: ellipsis;
   /* white-space: nowrap; */
