@@ -12,7 +12,7 @@ Native desktop shell (macOS, Windows, Linux) for OpenAxe (issue #15).
 - **Audio I/O:** JUCE `juce_audio_devices` (issue #15 M1) — CoreAudio / WASAPI / ALSA (see `src/audio.*`) —
   WASAPI / ALSA / JACK, fetched via CMake. The real-time callback calls
   `nam_studio_process` directly: same process, zero IPC, no Web Audio.
-- **Tests:** `cmake -B build -DOPENAXE_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
+- **Tests:** `cmake -S apps/desktop -B build -DOPENAXE_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
   (`ctest --test-dir build`). The callback wiring is tested with fake buffers
   (no hardware needed); the open/start/stop test uses a real device pair when
   the host has one and skips otherwise, so CI stays green headless.

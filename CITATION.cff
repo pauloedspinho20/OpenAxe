@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: OpenAxe
+message: If you use OpenAxe, please cite this repository.
+type: software
+authors:
+  - given-names: Paulo
+    family-names: Pinho
+    alias: pauloedspinho20
+    website: https://github.com/pauloedspinho20
+repository-code: https://github.com/pauloedspinho20/OpenAxe
+url: https://github.com/pauloedspinho20/OpenAxe
+license: GPL-3.0-only
+keywords:
+  - guitar
+  - amp-sim
+  - nam
+  - wasm
+  - dsp
+  - vst3
+  - audio
