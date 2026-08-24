@@ -54,6 +54,7 @@ void ZeroOutputs(float** outputs, int nChansOut, int nFrames) {
 OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
     : Plugin(info, MakeConfig(openaxe_vst3::params::HostParamCount(), kNumPresets)) {
   graph_ = nam_studio_graph_create();
+  editor_ = std::make_unique<openaxe_vst3::editor::Editor>(graph_);
 #if IPLUG_DSP
   // Declare the full stable 302-param list (issue #127 / #121). When the SDK
   // isn't present this is a no-op; when it is, hosts see Master + Slot 1..15
@@ -198,6 +199,11 @@ bool OpenAxePlugin::SerializeState(IByteChunk& chunk) const {
   std::string json;
   WithSuspend([&] { json = openaxe_vst3::state::SerializeForHost(graph_); });
   if (json.empty()) return false;
+  // Persist editor size (issue #132) alongside the rig — hosts that save the
+  // chunk also save the window size; ignored when absent (defaults).
+  if (editor_) {
+    json = openaxe_vst3::editor::SizeToStateJson(editor_->GetSize(), json);
+  }
   chunk.Clear();
   chunk.PutStr(json.c_str());
   return true;
@@ -210,6 +216,11 @@ int OpenAxePlugin::UnserializeState(const IByteChunk& chunk, int startPos) {
     // No chunk data — let the host's param fallback handle it (and don't
     // claim we consumed anything beyond startPos).
     return startPos;
+  }
+  // Restore editor size (issue #132) before topology — size never touches audio.
+  if (editor_) {
+    const auto sz = openaxe_vst3::editor::SizeFromStateJson(json.Get());
+    editor_->SetSize(sz.width, sz.height);
   }
   // Restore topology + params. State helpers do the single reset (#62) and
   // leave the graph untouched on parse / version errors (#64 graceful).
@@ -299,6 +310,15 @@ bool OpenAxePlugin::GetModelInfo(int32_t block_id, double* out_sample_rate, int*
   if (out_is_slimmable) *out_is_slimmable = info->is_slimmable ? 1 : 0;
   if (out_bp_count) *out_bp_count = info->slim_breakpoint_count;
   return true;
+}
+
+openaxe_vst3::editor::Editor& OpenAxePlugin::GetEditor() {
+  if (!editor_) editor_ = std::make_unique<openaxe_vst3::editor::Editor>(graph_);
+  return *editor_;
+}
+const openaxe_vst3::editor::Editor& OpenAxePlugin::GetEditor() const {
+  if (!editor_) editor_ = std::make_unique<openaxe_vst3::editor::Editor>(graph_);
+  return *editor_;
 }
 
 void OpenAxePlugin::OnParamChange(int paramIdx) {

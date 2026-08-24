@@ -45,6 +45,12 @@ target_link_libraries(openaxe_vst3_realtime_safety_test PRIVATE $<LINK_LIBRARY:W
 target_include_directories(openaxe_vst3_realtime_safety_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_test(NAME vst3_realtime_safety COMMAND openaxe_vst3_realtime_safety_test)
 
+# Editor shell — webview hosting the shared React app (#132)
+add_executable(openaxe_vst3_editor_test editor_test.cpp ../src/editor.cpp)
+target_link_libraries(openaxe_vst3_editor_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME vst3_editor COMMAND openaxe_vst3_editor_test)
+
 # ── ThreadSanitizer over the concurrent suspend stress (issue #130) ─────────
 # Mirrors apps/desktop/tests/CMakeLists.txt's NAM_DESKTOP_ENABLE_TSAN shape.
 # Run: cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_TSAN=ON
