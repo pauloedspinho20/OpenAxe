@@ -54,7 +54,7 @@ cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_B
 cmake --build packages/core/build
 ctest --test-dir packages/core/build --output-on-failure
 
-cmake -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON
+cmake -S apps/desktop -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON
 cmake --build apps/desktop/build
 ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
 
@@ -78,11 +78,7 @@ run it and confirm the diff (or lack of one) whenever you change
 web app calls (see `scripts/check-wasm-exports.mjs`, which catches the latter
 in CI without needing a rebuild).
 
-**GitHub Actions is currently disabled repo-wide** (deliberately, for cost —
-confirmed with the maintainer). `ci.yml` and `desktop.yml` exist and are
-correctly configured, but nothing runs them; treat "CI is green" as
-unverifiable until it's re-enabled, and rely on running the commands above
-locally instead.
+**GitHub Actions is enabled** — `ci.yml` (lint/format/build/test/e2e + 5 drift checks + Storybook), `desktop.yml` (3-OS), `plugin.yml` (tags + PR) and `release.yml` run on every push/PR to `main`/`dev` and on `v*` tags. `plugin.yml` stays `workflow_dispatch` + `v*` + `pull_request` (cost-heaviest matrix — confirm with maintainer before broadening triggers). Treat “CI is green” as required for merge (see branch protection in `CONTRIBUTING.md`).
 
 ## Drift-guard scripts
 

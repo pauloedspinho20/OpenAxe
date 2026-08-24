@@ -1,0 +1,23 @@
+# Binary / generated — don't diff, don't auto-merge
+*.wasm binary
+*.vst3 binary
+*.dmg binary
+*.pkg binary
+*.msi binary
+*.deb binary
+*.zip binary
+*.tar.gz binary
+apps/web/public/wasm-core/* binary linguist-generated
+packages/vst3/generated/* linguist-generated
+packages/vst3/build/** linguist-generated
+packages/core/build/** linguist-generated
+apps/desktop/build/** linguist-generated
+
+# Lockfile — keep ours on merge conflicts (pnpm will re-resolve if needed)
+pnpm-lock.yaml merge=binary linguist-generated
+
+# Design tokens generated CSS — still text but marked generated
+packages/ui/tokens/colors.css linguist-generated
+packages/ui/tokens/spacing.css linguist-generated
+packages/ui/tokens/typography.css linguist-generated
+packages/ui/tokens/shadows.css linguist-generated
