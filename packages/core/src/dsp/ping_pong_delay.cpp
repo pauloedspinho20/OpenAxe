@@ -11,7 +11,8 @@ namespace {
 constexpr int kTimeParam = 0;
 constexpr int kFeedbackParam = 1;
 constexpr int kToneParam = 2;
-constexpr int kParamCount = 3;
+constexpr int kWidthParam = 3;
+constexpr int kParamCount = 4;
 
 // Generated from packages/core/param_schema.json (issue #51) - run
 // scripts/gen-param-schema.mjs after editing the schema.
@@ -105,6 +106,7 @@ struct PingPongDelay::Impl {
   float time_ms = 250.0f;
   float feedback = 0.5f;
   float tone = 6000.0f;
+  float width = 1.0f;
   float sample_rate = 48000.0f;
 
   // Re-allocate both lines and clear the shared tone filter.
@@ -126,20 +128,16 @@ void PingPongDelay::Reset(double sample_rate) {
   impl_->ApplySampleRate();
 }
 
-// The cross-coupling described on Impl above, per sample: the input is summed
-// to mono (a ping-pong's repeats alternate hard left/right, so a stereo input
-// image would fight the effect), then each line's tap is filtered and written
-// into the *other* line. The left output therefore carries the even repeats and
-// the right the odd ones, and one delay time drives both.
-//
-// Note both writes run the same filter instance, so its state is shared between
-// the two feedback paths - deliberate: it is one tape/BBD-style tone stage in a
-// single feedback loop that happens to cross channels, not two independent ones.
-// Output is wet-only; the dry/wet mix belongs to the caller.
+// The cross-coupling described on Impl above, per sample: the input is kept
+// stereo for true stereo ping-pong (left input's echo goes right, right input's
+// echo goes left), so that a hard-left dry remains hard-left when mixed, and
+// the wet ping-pongs hard left/right. Summing to mono (previous) made the left
+// channel appear centered at low mix. Width 0 = mono (center), 1 = hard left/right.
 void PingPongDelay::Process(const float* const* input, float* const* output, int num_frames) {
   const float sr = impl_->sample_rate;
   const float fb = impl_->feedback;
   const float time_ms = impl_->time_ms;
+  const float width = impl_->width;
   impl_->filter.SetCutoff(impl_->tone, sr);
 
   for (int i = 0; i < num_frames; ++i) {
@@ -149,16 +147,17 @@ void PingPongDelay::Process(const float* const* input, float* const* output, int
     const float left_tap = impl_->left.ReadTap(time_ms, sr);
     const float right_tap = impl_->right.ReadTap(time_ms, sr);
 
-    // True stereo: preserve the stereo image by cross-coupling the inputs.
-    // Left input's echo goes to the right delay, right input's echo to the left,
-    // so that a hard-left dry remains hard-left when mixed, and the wet
-    // ping-pongs hard left/right. Summing to mono (previous) made the left
-    // channel appear centered at low mix.
+    // True stereo: cross-couple the inputs so that left input's first echo is
+    // hard right, right input's first echo is hard left, preserving the dry's
+    // stereo image. Width scales the wet panning: 1 = hard left/right, 0 = mono center.
     impl_->right.buffer[static_cast<size_t>(impl_->right.write_pos)] = inL + impl_->filter.Process(left_tap) * fb;
     impl_->left.buffer[static_cast<size_t>(impl_->left.write_pos)] = inR + impl_->filter.Process(right_tap) * fb;
 
-    output[0][i] = left_tap;
-    output[1][i] = right_tap;
+    // Width: interpolate between mono (center, both channels same) and hard ping-pong.
+    // At width 0, both outputs are mono sum of taps; at 1, hard left/right as above.
+    const float mono = (left_tap + right_tap) * 0.5f;
+    output[0][i] = mono * (1.0f - width) + left_tap * width;
+    output[1][i] = mono * (1.0f - width) + right_tap * width;
 
     impl_->left.Advance();
     impl_->right.Advance();
@@ -166,7 +165,7 @@ void PingPongDelay::Process(const float* const* input, float* const* output, int
 }
 
 // Param surface: time (ms, shared by both lines), feedback (0..0.9), tone
-// (Hz cutoff in the feedback path).
+// (Hz cutoff in the feedback path), width (0..1, stereo width).
 int PingPongDelay::ParamCount() { return kParamCount; }
 
 // Name/symbol/range/unit for one param index.
@@ -180,17 +179,19 @@ float PingPongDelay::GetParam(int index) const {
     case kTimeParam:     return impl_->time_ms;
     case kFeedbackParam: return impl_->feedback;
     case kToneParam:     return impl_->tone;
+    case kWidthParam:    return impl_->width;
     default:             return 0.0f;
   }
 }
 
-// Store one param - all three real-time safe (the buffers are already sized
+// Store one param - all real-time safe (the buffers are already sized
 // for the maximum delay, so a time change only moves the read taps).
 void PingPongDelay::SetParam(int index, float value) {
   switch (index) {
     case kTimeParam:     impl_->time_ms = value; break;
     case kFeedbackParam: impl_->feedback = value; break;
     case kToneParam:     impl_->tone = value; break;
+    case kWidthParam:    impl_->width = value; break;
     default: return;
   }
 }

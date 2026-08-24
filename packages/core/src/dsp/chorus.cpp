@@ -64,10 +64,10 @@ struct Channel {
 
 struct Chorus::Impl {
   std::array<Channel, 2> channels;
-  float rate = 0.5f;
-  float depth = 5.0f;
-  float delay = 8.0f;
-  float feedback = 0.2f;
+  float rate = 0.2f;
+  float depth = 0.8f;
+  float delay = 5.5f;
+  float feedback = 0.15f;
   float sample_rate = 48000.0f;
 
   // Size both delay lines for the worst case the current settings allow -

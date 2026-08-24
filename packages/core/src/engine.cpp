@@ -739,15 +739,16 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     SeedParamsFromDsp(*state);
   }
   // Engine-level mix for the wet-only effects (hybrid, issue #263): append a
-  // 0..1 mix after the DSP's own table. Most default fully wet so existing
-  // rigs are unchanged; delay/ping-pong default 10% wet per user feedback.
+  // 0..1 mix after the DSP's own table. Chorus/flanger/phaser/tremolo/eq/gate
+  // default 40% wet for a subtle effect, delay/ping-pong 10% per user feedback.
   // Delay/ping-pong also get an additional level (volume) param after mix.
   if (NeedsEngineMix(kind)) {
     const int dspCount = DspParamCountFor(kind);
     const int mixIdx = EngineMixIndexFor(kind);
     const int total = dspCount + 1 + (NeedsEngineLevel(kind) ? 1 : 0);
     state->param_count.store(total, std::memory_order_relaxed);
-    const float defaultMix = (kind == graph::BlockKind::kDelay || kind == graph::BlockKind::kPingPongDelay) ? 0.1f : 1.0f;
+    float defaultMix = 0.4f;
+    if (kind == graph::BlockKind::kDelay || kind == graph::BlockKind::kPingPongDelay) defaultMix = 0.1f;
     state->params[static_cast<size_t>(mixIdx)].store(defaultMix, std::memory_order_relaxed);
     if (NeedsEngineLevel(kind)) {
       const int levelIdx = EngineLevelIndexFor(kind);

@@ -59,10 +59,10 @@ struct Channel {
 
 struct Flanger::Impl {
   std::array<Channel, 2> channels;
-  float rate = 0.3f;
-  float depth = 2.0f;
-  float feedback = 0.5f;
-  float delay = 1.0f;
+  float rate = 0.2f;
+  float depth = 0.4f;
+  float feedback = 0.25f;
+  float delay = 0.3f;
   float sample_rate = 48000.0f;
 
   // Size both delay lines for the longest delay the current settings allow -
