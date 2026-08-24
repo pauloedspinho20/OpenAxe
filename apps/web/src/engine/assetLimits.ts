@@ -6,6 +6,7 @@
  */
 export const MAX_MODEL_BYTES = 32 * 1024 * 1024 // 32 MB
 export const MAX_IR_BYTES = 8 * 1024 * 1024 // 8 MB
+export const MAX_SOUNDFONT_BYTES = 32 * 1024 * 1024 // 32 MB — SF2/SF3 for the song player (#165), same ceiling as kMaxModelBytes
 
 /** Thrown when a user file fails a pre-load guard; surfaced as a load error. */
 export class AssetLoadError extends Error {}
@@ -29,6 +30,16 @@ export function assertIrFile(file: File): void {
   }
 }
 
+export function assertSoundfontFile(file: File): void {
+  const name = file.name.toLowerCase()
+  if (!name.endsWith('.sf2') && !name.endsWith('.sf3')) {
+    throw new AssetLoadError('SoundFont must be .sf2 or .sf3')
+  }
+  if (file.size > MAX_SOUNDFONT_BYTES) {
+    throw new AssetLoadError(`SoundFont too large (max ${MAX_SOUNDFONT_BYTES / 1024 / 1024} MB)`)
+  }
+}
+
 /** After reading bytes: confirm the model text is a JSON document. */
 export function assertModelText(text: string): void {
   const head = text.trimStart()[0]
@@ -48,4 +59,12 @@ export function assertIrBytes(buf: ArrayBuffer): void {
   if (riff !== 0x46464952 || wave !== 0x45564157) {
     throw new AssetLoadError('Not a WAV file')
   }
+}
+
+export function assertSoundfontBytes(buf: ArrayBuffer): void {
+  if (buf.byteLength < 4) throw new AssetLoadError('Not a SoundFont file')
+  const view = new DataView(buf)
+  // SF2 is RIFF sfbk, SF3 is RIFF sfbk with ogg — check RIFF.
+  const riff = view.getUint32(0, true)
+  if (riff !== 0x46464952) throw new AssetLoadError('Not a SoundFont file')
 }

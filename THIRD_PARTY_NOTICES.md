@@ -2,19 +2,21 @@
 
 OpenAxe is licensed [GPLv3](./LICENSE). It wraps or vendors the following third-party components, each under its own license. The combined work is distributed as GPLv3; LGPL/MIT/BSD components remain under their original terms.
 
-| Component                                     | Path                                                     | License                   | Upstream                                               |
-| --------------------------------------------- | -------------------------------------------------------- | ------------------------- | ------------------------------------------------------ |
-| NeuralAmpModelerCore (NAM)                    | `packages/core/third_party/nam-core` (submodule)         | MIT                       | https://github.com/sdatkinson/NeuralAmpModelerCore     |
-| Dragonfly Reverb                              | `packages/core/third_party/dragonfly-reverb` (submodule) | GPLv3                     | https://github.com/michaelwillis/dragonfly-reverb      |
-| DPF (distrho plugin framework, via Dragonfly) | `packages/core/third_party/dragonfly-reverb/dpf`         | ISC/MIT                   | https://github.com/DISTRHO/DPF                         |
+| Component                                     | Path                                                         | License                   | Upstream                                               |
+| --------------------------------------------- | ------------------------------------------------------------ | ------------------------- | ------------------------------------------------------ |
+| NeuralAmpModelerCore (NAM)                    | `packages/core/third_party/nam-core` (submodule)             | MIT                       | https://github.com/sdatkinson/NeuralAmpModelerCore     |
+| Dragonfly Reverb                              | `packages/core/third_party/dragonfly-reverb` (submodule)     | GPLv3                     | https://github.com/michaelwillis/dragonfly-reverb      |
+| DPF (distrho plugin framework, via Dragonfly) | `packages/core/third_party/dragonfly-reverb/dpf`             | ISC/MIT                   | https://github.com/DISTRHO/DPF                         |
 | TinySoundFont (SF2 synth)                     | `packages/core/third_party/tinysoundfont` (vendored `tsf.h`) | MIT                       | https://github.com/schellingb/TinySoundFont            |
-| DSPark (effects)                              | `packages/core/third_party/dspark` (or vendored)         | MIT                       | https://github.com/sdatkinson/DSPark (check submodule) |
-| Eigen (via NAMCore)                           | `packages/core/third_party/nam-core/Eigen`               | MPL2                      | https://eigen.tuxfamily.org                            |
-| iPlug2                                        | `packages/vst3` FetchContent `d54f690`                   | MIT                       | https://github.com/iPlug2/iPlug2                       |
-| VST3 SDK / AU SDK / CLAP                      | fetched via iPlug2                                       | GPLv3/MIT (per SDK)       | Steinberg / Apple / CLAP                               |
-| JUCE `audio_devices`                          | `apps/desktop` (juce via CPM)                            | GPLv3 / commercial (JUCE) | https://github.com/juce-framework/JUCE                 |
-| webview.h                                     | `apps/desktop`                                           | MIT                       | https://github.com/webview/webview                     |
-| React / Vite / Zustand / tone3000 client      | `apps/web` npm                                           | MIT                       | —                                                      |
+| alphaTab (notation import)                    | `packages/songbook` (`@coderline/alphatab` `1.8.x`)          | MPL-2.0                   | https://github.com/CoderLine/alphaTab                  |
+| FluidR3_GM (default GM SoundFont)             | `apps/web/public/soundfonts/FluidR3_GM.sf2` (subset, lazy)   | MIT                       | https://github.com/FluidSynth/fluid-soundfont          |
+| DSPark (effects)                              | `packages/core/third_party/dspark` (or vendored)             | MIT                       | https://github.com/sdatkinson/DSPark (check submodule) |
+| Eigen (via NAMCore)                           | `packages/core/third_party/nam-core/Eigen`                   | MPL2                      | https://eigen.tuxfamily.org                            |
+| iPlug2                                        | `packages/vst3` FetchContent `d54f690`                       | MIT                       | https://github.com/iPlug2/iPlug2                       |
+| VST3 SDK / AU SDK / CLAP                      | fetched via iPlug2                                           | GPLv3/MIT (per SDK)       | Steinberg / Apple / CLAP                               |
+| JUCE `audio_devices`                          | `apps/desktop` (juce via CPM)                                | GPLv3 / commercial (JUCE) | https://github.com/juce-framework/JUCE                 |
+| webview.h                                     | `apps/desktop`                                               | MIT                       | https://github.com/webview/webview                     |
+| React / Vite / Zustand / tone3000 client      | `apps/web` npm                                               | MIT                       | —                                                      |
 
 > If you add a vendored source, add a row here and note the original project/license/version in a comment near the port and in the PR description (see `CONTRIBUTING.md#Licensing rules`).
 
