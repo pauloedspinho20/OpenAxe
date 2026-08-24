@@ -1,0 +1,17 @@
+web:
+  - apps/web/**/*
+  - packages/ui/**/*
+desktop:
+  - apps/desktop/**/*
+core:
+  - packages/core/**/*
+plugin:
+  - packages/vst3/**/*
+ci:
+  - .github/workflows/**/*
+  - scripts/**/*
+  - turbo.json
+  - pnpm-workspace.yaml
+docs:
+  - '**/*.md'
+  - .github/ISSUE_TEMPLATE/**/*

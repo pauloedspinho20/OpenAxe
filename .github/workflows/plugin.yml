@@ -1,15 +1,21 @@
 # Plugin CI — VST3 / CLAP / AUv2 (issue #136, extends #54 release flow).
 # Three formats × three platforms is nine artifacts, and macOS additionally
-# needs universal binaries + notarization. This workflow is heavier than any
-# existing one, so it runs only on `workflow_dispatch` and tag pushes
-# (v*), not on every push — see AGENTS.md (CI disabled repo-wide for cost)
-# and confirm the cost tradeoff with the maintainer before enabling more.
+# needs universal binaries + notarization. This workflow is the heaviest
+# in the repo — tag pushes always run it; PRs run it without signing/
+# packaging (see `if:` guards). Confirm cost before broadening triggers.
 name: Plugin Build
 
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - packages/vst3/**
+      - packages/core/**
+      - packages/ui/tokens/**
+      - .github/workflows/plugin.yml
 
 permissions:
   contents: write

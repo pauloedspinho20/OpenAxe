@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "oxc.oxlint-vscode",
+    "ms-vscode.cpptools",
+    "ms-vscode.cmake-tools",
+    "ms-playwright.playwright",
+    "csstools.postcss",
+    "bradlc.vscode-tailwindcss"
+  ]
+}

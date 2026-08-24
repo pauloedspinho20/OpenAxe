@@ -1,7 +1,23 @@
 {
   "name": "@openaxe/ui",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "private": true,
+  "description": "OpenAxe shared design system — primitives, tokens, Wordmark",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pauloedspinho20/OpenAxe.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://github.com/pauloedspinho20/OpenAxe#readme",
+  "bugs": {
+    "url": "https://github.com/pauloedspinho20/OpenAxe/issues"
+  },
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "design-system",
+    "react",
+    "tokens"
+  ],
   "type": "module",
   "sideEffects": [
     "**/*.css"

@@ -1,0 +1,6 @@
+# DCO — Developer Certificate of Origin (https://developercertificate.org/)
+# Enabled via the DCO GitHub App (https://github.com/apps/dco) — requires
+# every commit to have `Signed-off-by: Name <email>` (git commit -s).
+# No CLA; see CONTRIBUTING.md#DCO.
+require:
+  members: false

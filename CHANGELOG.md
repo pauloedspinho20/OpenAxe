@@ -7,6 +7,31 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-24
+
+### Added
+
+- OSS hygiene: `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`, `THIRD_PARTY_NOTICES.md`, issue/PR templates, `FUNDING.yml` (GitHub Sponsors), `dependabot.yml`, `labeler.yml`, `stale.yml`, `DCO.yml`
+- VS Code: `WASM: Build core`, 5 drift `--check` tasks, `Build Storybook`, `.vscode/{extensions,settings,launch}.json` (Chrome + lldb for desktop/plugin/core)
+- Repo: `.gitattributes` (binary/generated, `pnpm-lock.yaml` merge), package metadata (`repository`/`bugs`/`homepage`/`license`)
+
+### Changed
+
+- **Branching:** `dev → main` now via **merge commit** (`--no-ff`), not squash — fixes recurring `added in both` conflicts on `plugin.yml`/`CMakeLists.txt` (PR #244)
+- **CI enabled:** `ci.yml`/`desktop.yml`/`plugin.yml` (added `pull_request` path-filtered) + 5 drift checks must pass; removed `AGENTS.md` disabled banner
+- **Docs:** `README.md` platform statuses (Desktop Live, VST3 Beta, DSP/design-system Partial), full 46-task catalog + drift guards + WASM + branching; `CONTRIBUTING.md` expanded setup, branching, DCO (`git commit -s`), fork/unsigned notes; `AGENTS.md` fixed `cmake -S` typo
+- `VERSION` 0.2.0 → 0.2.2; `LICENSE` copyright 2024-2026 OpenAxe Contributors
+
+### Fixed
+
+- Merge PR #244 locally via merge commit (took `dev` superset for `.github/workflows/plugin.yml` signing/installers + `packages/vst3/CMakeLists.txt` CPack block)
+
+## [0.2.1] - 2026-08-23
+
+### Fixed
+
+- Tag `v0.2.1` (hot-fix docs) — no functional change since `0.2.0`; reconciled `VERSION` drift noted in release flow audit
+
 ## [0.2.0] - 2026-08-23
 
 ### Added

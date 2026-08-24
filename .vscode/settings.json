@@ -1,0 +1,16 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxlint": "explicit"
+  },
+  "files.associations": {
+    "*.css": "css"
+  },
+  "cmake.configureOnOpen": false,
+  "C_Cpp.default.cppStandard": "c++20",
+  "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

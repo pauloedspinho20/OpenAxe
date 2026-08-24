@@ -1,0 +1,57 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Web: Chrome (Vite)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/apps/web",
+      "preLaunchTask": "Web: Dev server"
+    },
+    {
+      "name": "Desktop: lldb (openaxe_desktop)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/desktop/build/bin/openaxe_desktop",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "lldb",
+      "preLaunchTask": "Desktop: Build",
+      "environment": [{ "name": "OPENAXE_DESKTOP_DEBUG", "value": "1" }]
+    },
+    {
+      "name": "VST: lldb (openaxe_standalone)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/packages/vst3/build/openaxe_standalone",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "lldb",
+      "preLaunchTask": "VST: Build"
+    },
+    {
+      "name": "Core: lldb (ctest)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/usr/bin/ctest",
+      "args": [
+        "--test-dir",
+        "packages/core/build",
+        "--output-on-failure",
+        "-R",
+        "${input:testFilter}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "lldb"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "testFilter",
+      "type": "promptString",
+      "description": "CTest regex filter (e.g. smoke, latency, param_surface)",
+      "default": "smoke"
+    }
+  ]
+}
