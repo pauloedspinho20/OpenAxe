@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { GridEditor } from './components/grid/GridEditor/GridEditor'
 import { MidiManager } from './components/midi/MidiManager/MidiManager'
 import { PresetManager } from './components/presets/PresetManager/PresetManager'
@@ -30,6 +30,7 @@ import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
 import { hydrateSceneStore } from './state/sceneStore'
 import { installFactoryPresets } from './presets/factoryPresets'
+import { useUpdateCheck } from './hooks/useUpdateCheck'
 
 import styles from './App.module.css'
 
@@ -71,6 +72,9 @@ function App() {
       ? 'MIDI not enabled'
       : `MIDI: ${midiInputCount} input${midiInputCount === 1 ? '' : 's'}, ${midiMappingCount} mapping${midiMappingCount === 1 ? '' : 's'}`
 
+  const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
+  const toastedTagRef = useRef<string | null>(null)
+
   // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
   // library metadata, and make sure the bundled starter presets/scenes exist.
   // Network-free when Tone3000 isn't configured.
@@ -84,6 +88,14 @@ function App() {
   useSceneEngine(engine.rig, engine.context, engine.status)
   useSceneHotkeys()
   useMidiEngine()
+
+  // Post-power-on update toast — PowerGate already shows the banner pre-power-on
+  useEffect(() => {
+    if (isReady && updateLatest && toastedTagRef.current !== updateLatest.tag) {
+      toastedTagRef.current = updateLatest.tag
+      // also surface via persistent in-app banner; toast is optional transient
+    }
+  }, [isReady, updateLatest])
 
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
@@ -144,6 +156,28 @@ function App() {
       </header>
 
       {engine.error && <div className={styles.errorBanner}>{engine.error}</div>}
+      {updateLatest && isReady && (
+        <div className={styles.updateBanner} role="status" aria-live="polite">
+          <span>New version {updateLatest.tag} available</span>
+          <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <a
+              href="https://pauloedspinho20.github.io/OpenAxe/#download"
+              target="_blank"
+              rel="noopener"
+            >
+              Download
+            </a>
+            <button
+              type="button"
+              className={styles.updateDismiss}
+              onClick={dismissUpdate}
+              aria-label="Dismiss update"
+            >
+              Dismiss
+            </button>
+          </span>
+        </div>
+      )}
       {io.micError && engine.status === 'ready' && !engine.micGranted && (
         <div className={styles.errorBanner}>
           {io.micError.includes('NotAllowedError') || io.micError.includes('Permission')

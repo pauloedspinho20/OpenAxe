@@ -5,9 +5,19 @@ import { PowerGate } from './PowerGate'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useIOStore } from '@/state/ioStore'
 import { getOpenAxe } from '@/native/openaxe'
+import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 
 vi.mock('@/native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
+}))
+
+vi.mock('@/hooks/useUpdateCheck', () => ({
+  useUpdateCheck: vi.fn(() => ({
+    latest: null,
+    checking: false,
+    dismiss: vi.fn(),
+    refresh: vi.fn(),
+  })),
 }))
 
 const baseProps = {
@@ -112,5 +122,47 @@ describe('PowerGate', () => {
     })
     render(<PowerGate {...baseProps} outputSelectionSupported={false} />)
     expect(screen.getByLabelText('Output device')).toBeInTheDocument()
+  })
+
+  it('shows footer links on web and hides on desktop', () => {
+    render(<PowerGate {...baseProps} />)
+    expect(screen.getByRole('link', { name: /Download desktop/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument()
+
+    vi.mocked(getOpenAxe).mockReturnValue({} as never)
+    render(<PowerGate {...baseProps} status="off" />)
+    // second render's footer should be hidden via isNative; query all
+    const links = screen.getAllByRole('link', { name: 'GitHub' })
+    // web instance still has GitHub link; desktop one should not add a second Download link
+    expect(links.length).toBe(1)
+  })
+
+  it('shows update banner when a newer version exists', () => {
+    vi.mocked(useUpdateCheck).mockReturnValue({
+      latest: {
+        tag: 'v0.3.0',
+        htmlUrl: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.3.0',
+        publishedAt: null,
+      },
+      checking: false,
+      dismiss: vi.fn(),
+      refresh: vi.fn(),
+    } as never)
+    render(<PowerGate {...baseProps} />)
+    expect(screen.getByText('New version v0.3.0 available')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Download' })).toBeInTheDocument()
+  })
+
+  it('dismisses the update banner', () => {
+    const dismiss = vi.fn()
+    vi.mocked(useUpdateCheck).mockReturnValue({
+      latest: { tag: 'v0.3.0', htmlUrl: '', publishedAt: null },
+      checking: false,
+      dismiss,
+      refresh: vi.fn(),
+    } as never)
+    render(<PowerGate {...baseProps} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss update notification' }))
+    expect(dismiss).toHaveBeenCalled()
   })
 })
