@@ -3,6 +3,10 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(VST3_API) || defined(AU_API) || defined(STANDALONE_APP) || defined(CLAP_API)
+#include "IPlug_include_in_plug_hdr.h"
+#endif
+
 namespace openaxe_vst3::params {
 
 std::string DisplayForSlotEntry(NamStudioGraph* graph, int slot, int entry, float normalized) {
@@ -59,9 +63,7 @@ std::string GroupForSlot(int slot) {
   return std::string(buf);
 }
 
-#if defined(VST3_API) || defined(AU_API) || defined(STANDALONE_APP)
-#include "IPlug_include_in_plug_hdr.h"
-
+#if defined(VST3_API) || defined(AU_API) || defined(STANDALONE_APP) || defined(CLAP_API)
 void RegisterParams(iplug::Plugin& plugin) {
   using namespace openaxe::automation;
   // iPlug's Plugin is also an IEditorDelegate: GetParam / InitParamRange etc.
