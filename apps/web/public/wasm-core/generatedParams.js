@@ -48,7 +48,7 @@ export const PHASER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, sta
 
 export const TREMOLO_PARAMS = Object.freeze({ rate: 0, depth: 1, shape: 2 })
 
-export const PINGPONGDELAY_PARAMS = Object.freeze({ time: 0, feedback: 1, tone: 2 })
+export const PINGPONGDELAY_PARAMS = Object.freeze({ time: 0, feedback: 1, tone: 2, width: 3 })
 
 export const DELAY_PARAMS = Object.freeze({
   time: 0,

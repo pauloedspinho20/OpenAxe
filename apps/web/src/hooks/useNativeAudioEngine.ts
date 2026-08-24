@@ -210,17 +210,18 @@ export function useNativeAudioEngine() {
         const started = await bridge.start()
         if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
 
-        const context = new NativeAudioContext(SAMPLE_RATE)
+        const actualRate = typeof opened.sampleRate === 'number' ? opened.sampleRate : SAMPLE_RATE
+        const context = new NativeAudioContext(actualRate)
         const analyser = new NativeAnalyser({
           fftSize: 256,
-          sampleRate: SAMPLE_RATE,
+          sampleRate: actualRate,
           read: () => outputTapRef.current,
         })
         // Large fftSize: the tuner's autocorrelation needs a wide window to
         // resolve low bass (~31Hz needs >1500 samples per cycle at 48kHz).
         const tunerAnalyser = new NativeAnalyser({
           fftSize: 4096,
-          sampleRate: SAMPLE_RATE,
+          sampleRate: actualRate,
           read: () => inputTapRef.current,
         })
         return { context, analyser, tunerAnalyser }
