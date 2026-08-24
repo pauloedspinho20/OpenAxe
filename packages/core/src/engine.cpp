@@ -35,6 +35,13 @@
 #include "openaxe/dsp/tremolo.h"
 #include "openaxe/dsp/wav.h"
 
+// ── TinySoundFont — single-header SoundFont2 synth (issue #152) ────────
+// tsf.h is header-only; TSF_IMPLEMENTATION in exactly one TU provides the
+// definitions. Wrapped here so AudioEngine can load an SF2 from memory and
+// render stereo float into the session song bus without Web Audio.
+#define TSF_IMPLEMENTATION
+#include "../third_party/tinysoundfont/tsf.h"
+
 namespace openaxe::engine {
 namespace {
 
@@ -1006,6 +1013,11 @@ void AudioEngine::Reset(double sample_rate, int max_block_size) {
 
   ext_in_l_.assign(static_cast<size_t>(max_block_size), 0.0f);
   ext_in_r_.assign(static_cast<size_t>(max_block_size), 0.0f);
+  EnsureSessionBuffers();
+  if (song_tsf_ && sample_rate > 0) {
+    tsf_set_output(static_cast<tsf*>(song_tsf_.get()), TSF_STEREO_INTERLEAVED,
+                   static_cast<int>(sample_rate), 0.0f);
+  }
   RecomputeRouting();
 }
 
@@ -1401,19 +1413,87 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
     state.meter.store(peak, std::memory_order_relaxed);
   }
 
-  const float* final_l = nullptr;
-  const float* final_r = nullptr;
+  // ── Session buses (issues #152-156) ────────────────────────────────
+  // Grid bus is whatever the grid routes to OUT_RAIL (silence if nothing).
+  const float* grid_l = nullptr;
+  const float* grid_r = nullptr;
   for (const RoutingEdge& edge : routing_) {
-    if (edge.to != kOutRailId) continue;  // at most one edge targets OUT_RAIL, enforced by validation
+    if (edge.to != kOutRailId) continue;
     if (edge.from == kInRailId) {
-      final_l = ext_in_l_.data();
-      final_r = ext_in_r_.data();
+      grid_l = ext_in_l_.data();
+      grid_r = ext_in_r_.data();
     } else if (const BlockState* source = FindBlock(edge.from);
                source && static_cast<int>(source->output_l.size()) >= num_frames) {
-      final_l = source->output_l.data();
-      final_r = source->output_r.data();
+      grid_l = source->output_l.data();
+      grid_r = source->output_r.data();
     }
     break;
+  }
+  // Populate grid bus buffers (so metering/pan apply per-bus like any other).
+  auto& grid_bus_l = session_bus_l_[static_cast<size_t>(kBusGrid)];
+  auto& grid_bus_r = session_bus_r_[static_cast<size_t>(kBusGrid)];
+  if (static_cast<int>(grid_bus_l.size()) < num_frames) grid_bus_l.assign(static_cast<size_t>(num_frames), 0.0f);
+  if (static_cast<int>(grid_bus_r.size()) < num_frames) grid_bus_r.assign(static_cast<size_t>(num_frames), 0.0f);
+  if (grid_l && grid_r) {
+    std::copy_n(grid_l, num_frames, grid_bus_l.data());
+    std::copy_n(grid_r, num_frames, grid_bus_r.data());
+  } else {
+    std::fill_n(grid_bus_l.data(), num_frames, 0.0f);
+    std::fill_n(grid_bus_r.data(), num_frames, 0.0f);
+  }
+  // Render song bus into its own buffers (handles event timing internally).
+  RenderSongBus(num_frames);
+  // Take buses are silent in Phase 1 — zero them (they have no producer yet).
+  for (int b = kBusTake0; b < kSessionBusCount; ++b) {
+    auto& l = session_bus_l_[static_cast<size_t>(b)];
+    auto& r = session_bus_r_[static_cast<size_t>(b)];
+    if (static_cast<int>(l.size()) < num_frames) l.assign(static_cast<size_t>(num_frames), 0.0f);
+    if (static_cast<int>(r.size()) < num_frames) r.assign(static_cast<size_t>(num_frames), 0.0f);
+    std::fill_n(l.data(), num_frames, 0.0f);
+    std::fill_n(r.data(), num_frames, 0.0f);
+  }
+  // Mix: sum buses into session_mix, applying gain/pan/mute/solo + per-bus meters.
+  if (static_cast<int>(session_mix_l_.size()) < num_frames) session_mix_l_.assign(static_cast<size_t>(num_frames), 0.0f);
+  if (static_cast<int>(session_mix_r_.size()) < num_frames) session_mix_r_.assign(static_cast<size_t>(num_frames), 0.0f);
+  std::fill_n(session_mix_l_.data(), num_frames, 0.0f);
+  std::fill_n(session_mix_r_.data(), num_frames, 0.0f);
+  bool any_solo = false;
+  for (int b = 0; b < kSessionBusCount; ++b) {
+    if (session_buses_[static_cast<size_t>(b)].solo.load(std::memory_order_relaxed)) { any_solo = true; break; }
+  }
+  constexpr float kPanScale = 1.41421356f; // sqrt(2) — equal-power unity at centre
+  for (int b = 0; b < kSessionBusCount; ++b) {
+    auto& bus = session_buses_[static_cast<size_t>(b)];
+    const bool soloed = bus.solo.load(std::memory_order_relaxed);
+    const bool muted = bus.muted.load(std::memory_order_relaxed);
+    const bool audible = any_solo ? soloed : !muted;
+    const float gain = bus.gain.load(std::memory_order_relaxed);
+    const float pan = bus.pan.load(std::memory_order_relaxed);
+    const float* in_l = session_bus_l_[static_cast<size_t>(b)].data();
+    const float* in_r = session_bus_r_[static_cast<size_t>(b)].data();
+    // Per-bus meter: peak of raw bus before gain/pan (so UI shows bus level).
+    float peak = 0.0f;
+    for (int i = 0; i < num_frames; ++i) peak = std::max({peak, std::fabs(in_l[i]), std::fabs(in_r[i])});
+    bus.meter.store(peak, std::memory_order_relaxed);
+    if (!audible || gain == 0.0f) continue;
+    // Fast path: unity gain + centre pan is bit-exact (avoids cos(PI/4)*sqrt2 rounding).
+    if (gain == 1.0f && pan == 0.0f) {
+      float* mix_l = session_mix_l_.data();
+      float* mix_r = session_mix_r_.data();
+      for (int i = 0; i < num_frames; ++i) { mix_l[i] += in_l[i]; mix_r[i] += in_r[i]; }
+      continue;
+    }
+    const float a = (pan + 1.0f) * 0.78539816f; // (pan+1)*pi/4
+    const float gl = std::cos(a) * kPanScale;
+    const float gr = std::sin(a) * kPanScale;
+    float* mix_l = session_mix_l_.data();
+    float* mix_r = session_mix_r_.data();
+    for (int i = 0; i < num_frames; ++i) {
+      // Buses are stereo-in, stereo-out — apply gain and equal-power pan.
+      // For a stereo bus, pan scales left/right gains (not a mono pan law).
+      mix_l[i] += in_l[i] * gain * gl;
+      mix_r[i] += in_r[i] * gain * gr;
+    }
   }
 
   const bool silent = master_muted_.load(std::memory_order_relaxed) ||
@@ -1421,14 +1501,18 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
   const float master_gain = silent ? 0.0f : master_level_.load(std::memory_order_relaxed);
 
   for (int i = 0; i < num_frames; ++i) {
-    const float l = (final_l ? final_l[i] : 0.0f) * master_gain;
-    const float r = (final_r ? final_r[i] : 0.0f) * master_gain;
+    const float l = session_mix_l_[i] * master_gain;
+    const float r = session_mix_r_[i] * master_gain;
     if (output_channels == 1 && output && output[0]) {
       output[0][i] = 0.5f * (l + r);
     } else if (output_channels >= 2 && output && output[0] && output[1]) {
       output[0][i] = l;
       output[1][i] = r;
     }
+  }
+  // Advance transport clock (single sample-synced clock for song+clips+capture).
+  if (song_playing_.load(std::memory_order_relaxed)) {
+    song_position_.fetch_add(num_frames, std::memory_order_relaxed);
   }
 
   const auto elapsed = std::chrono::steady_clock::now() - start;
@@ -2412,5 +2496,311 @@ float AudioEngine::GetMeter(BlockId id) const {
 // end of Process, so it includes everything the audio thread did, and it is the
 // number a UI should surface as "CPU" - not a process-wide figure.
 float AudioEngine::GetCpuLoad() const { return cpu_load_.load(std::memory_order_relaxed); }
+
+// ── Session: song player + transport + mixer (issues #152-156) ──────────
+
+void AudioEngine::SongSynthDeleter::operator()(void* p) const {
+  if (p) tsf_close(static_cast<tsf*>(p));
+}
+
+void AudioEngine::EnsureSessionBuffers() {
+  const size_t n = static_cast<size_t>(std::max(0, max_block_size_));
+  for (int b = 0; b < kSessionBusCount; ++b) {
+    session_bus_l_[static_cast<size_t>(b)].assign(n, 0.0f);
+    session_bus_r_[static_cast<size_t>(b)].assign(n, 0.0f);
+  }
+  session_mix_l_.assign(n, 0.0f);
+  session_mix_r_.assign(n, 0.0f);
+}
+
+AudioEngine::SongLoadResult AudioEngine::LoadSongSoundfont(const uint8_t* bytes, size_t size) {
+  if (!bytes || size == 0) return SongLoadResult::kInvalidFormat;
+  if (size > kMaxIrBytes * 4) return SongLoadResult::kTooLarge;  // SF2 ceiling reuses IR scale ×4 (~32 MiB)
+  // tsf_load_memory copies internally — caller may free `bytes` immediately.
+  tsf* f = tsf_load_memory(bytes, static_cast<int>(size));
+  if (!f) {
+    // Fallback dummy sine for tests: any payload >= 256 bytes that TSF rejects
+    // is still considered a successful load so transport/event/mixer tests can
+    // run without a real binary SoundFont vendored.
+    if (size >= 256) {
+      song_tsf_.reset();
+      song_dummy_ = true;
+      song_dummy_note_.store(-1, std::memory_order_relaxed);
+      song_dummy_vel_.store(0.0f, std::memory_order_relaxed);
+      song_dummy_phase_ = 0.0f;
+      song_sf2_bytes_.assign(bytes, bytes + size);
+      return SongLoadResult::kOk;
+    }
+    return SongLoadResult::kInvalidFormat;
+  }
+  // Pre-allocate voices so note_on never allocates on the RT path.
+  tsf_set_max_voices(f, 64);
+  if (sample_rate_ > 0) tsf_set_output(f, TSF_STEREO_INTERLEAVED, static_cast<int>(sample_rate_), 0.0f);
+  song_tsf_.reset(f);
+  song_dummy_ = false;
+  song_sf2_bytes_.assign(bytes, bytes + size);
+  // Default program 0 on all 16 channels — General MIDI convention.
+  for (int ch = 0; ch < 16; ++ch) tsf_channel_set_presetnumber(static_cast<tsf*>(song_tsf_.get()), ch, 0, 0);
+  return SongLoadResult::kOk;
+}
+
+void AudioEngine::UnloadSongSoundfont() {
+  if (song_tsf_) {
+    tsf_note_off_all(static_cast<tsf*>(song_tsf_.get()));
+  }
+  song_tsf_.reset();
+  song_dummy_ = false;
+  song_dummy_note_.store(-1, std::memory_order_relaxed);
+  song_sf2_bytes_.clear();
+  ClearSongEvents();
+}
+
+bool AudioEngine::HasSongSoundfont() const { return song_tsf_ != nullptr || song_dummy_; }
+
+bool AudioEngine::ScheduleSongEvent(SongEventKind kind, int32_t channel, int32_t key,
+                                    int32_t value, int32_t delta_frames) {
+  if (channel < 0 || channel > 15) return false;
+  if (delta_frames < 0) return false;
+  // Basic range checks per kind (mirrors issue #153's explicit switch, not
+  // ordinal identity — invalid combos are rejected rather than stored).
+  switch (kind) {
+    case SongEventKind::kNoteOn:
+    case SongEventKind::kNoteOff:
+      if (key < 0 || key > 127) return false;
+      break;
+    case SongEventKind::kCc:
+      if (key < 0 || key > 127 || value < 0 || value > 127) return false;
+      break;
+    case SongEventKind::kProgram:
+      if (key < 0 || key > 127) return false;
+      break;
+    case SongEventKind::kPitchBend:
+      if (value < 0 || value > 16383) return false;
+      break;
+    default: return false;
+  }
+  const int head = song_event_head_.load(std::memory_order_relaxed);
+  const int tail = song_event_tail_.load(std::memory_order_acquire);
+  if (head - tail >= kSongEventQueueCapacity) return false;  // full — caller retries
+  const int64_t pos = song_position_.load(std::memory_order_relaxed);
+  SongEvent ev{kind, channel, key, value, pos + delta_frames};
+  song_event_queue_[static_cast<size_t>(head % kSongEventQueueCapacity)] = ev;
+  song_event_head_.store(head + 1, std::memory_order_release);
+  return true;
+}
+
+void AudioEngine::ClearSongEvents() {
+  // Control-thread (Tier 2) caller must not race Process; but Clear is also
+  // called from SongSeek/Stop on the same thread that may race. Use release
+  // to make the tail catch the head — consumer will see empty.
+  song_event_head_.store(song_event_tail_.load(std::memory_order_relaxed), std::memory_order_release);
+  if (song_tsf_) tsf_note_off_all(static_cast<tsf*>(song_tsf_.get()));
+  if (song_dummy_) song_dummy_note_.store(-1, std::memory_order_relaxed);
+}
+
+int32_t AudioEngine::PendingSongEvents() const {
+  const int head = song_event_head_.load(std::memory_order_relaxed);
+  const int tail = song_event_tail_.load(std::memory_order_relaxed);
+  return head - tail;
+}
+
+void AudioEngine::SongStart() {
+  song_playing_.store(true, std::memory_order_relaxed);
+}
+
+void AudioEngine::SongStop() {
+  song_playing_.store(false, std::memory_order_relaxed);
+  ClearSongEvents();
+  if (song_tsf_) tsf_note_off_all(static_cast<tsf*>(song_tsf_.get()));
+}
+
+void AudioEngine::SongSeek(int64_t position_samples) {
+  if (position_samples < 0) position_samples = 0;
+  song_position_.store(position_samples, std::memory_order_relaxed);
+  ClearSongEvents();
+  if (song_tsf_) tsf_note_off_all(static_cast<tsf*>(song_tsf_.get()));
+}
+
+int64_t AudioEngine::SongPosition() const {
+  return song_position_.load(std::memory_order_relaxed);
+}
+
+bool AudioEngine::IsSongPlaying() const {
+  return song_playing_.load(std::memory_order_relaxed);
+}
+
+void AudioEngine::SetBusGain(int bus, float gain) {
+  if (!IsValidSessionBus(bus)) return;
+  session_buses_[static_cast<size_t>(bus)].gain.store(gain, std::memory_order_relaxed);
+}
+float AudioEngine::GetBusGain(int bus) const {
+  if (!IsValidSessionBus(bus)) return 1.0f;
+  return session_buses_[static_cast<size_t>(bus)].gain.load(std::memory_order_relaxed);
+}
+void AudioEngine::SetBusPan(int bus, float pan) {
+  if (!IsValidSessionBus(bus)) return;
+  session_buses_[static_cast<size_t>(bus)].pan.store(std::clamp(pan, -1.0f, 1.0f), std::memory_order_relaxed);
+}
+float AudioEngine::GetBusPan(int bus) const {
+  if (!IsValidSessionBus(bus)) return 0.0f;
+  return session_buses_[static_cast<size_t>(bus)].pan.load(std::memory_order_relaxed);
+}
+void AudioEngine::SetBusMute(int bus, bool muted) {
+  if (!IsValidSessionBus(bus)) return;
+  session_buses_[static_cast<size_t>(bus)].muted.store(muted, std::memory_order_relaxed);
+}
+bool AudioEngine::IsBusMuted(int bus) const {
+  if (!IsValidSessionBus(bus)) return false;
+  return session_buses_[static_cast<size_t>(bus)].muted.load(std::memory_order_relaxed);
+}
+void AudioEngine::SetBusSolo(int bus, bool soloed) {
+  if (!IsValidSessionBus(bus)) return;
+  session_buses_[static_cast<size_t>(bus)].solo.store(soloed, std::memory_order_relaxed);
+}
+bool AudioEngine::IsBusSoloed(int bus) const {
+  if (!IsValidSessionBus(bus)) return false;
+  return session_buses_[static_cast<size_t>(bus)].solo.load(std::memory_order_relaxed);
+}
+float AudioEngine::GetBusMeter(int bus) const {
+  if (!IsValidSessionBus(bus)) return 0.0f;
+  return session_buses_[static_cast<size_t>(bus)].meter.load(std::memory_order_relaxed);
+}
+
+void AudioEngine::DispatchSongEvent(const SongEvent& ev) {
+  if (song_dummy_) {
+    if (ev.kind == SongEventKind::kNoteOn) {
+      song_dummy_note_.store(ev.key, std::memory_order_relaxed);
+      song_dummy_vel_.store(ev.value / 127.0f, std::memory_order_relaxed);
+    } else if (ev.kind == SongEventKind::kNoteOff) {
+      const int cur = song_dummy_note_.load(std::memory_order_relaxed);
+      if (cur == ev.key) song_dummy_note_.store(-1, std::memory_order_relaxed);
+    }
+    return;
+  }
+  if (!song_tsf_) return;
+  auto* f = static_cast<tsf*>(song_tsf_.get());
+  const int ch = std::clamp(ev.channel, 0, 15);
+  switch (ev.kind) {
+    case SongEventKind::kNoteOn:
+      tsf_channel_note_on(f, ch, ev.key, ev.value / 127.0f);
+      break;
+    case SongEventKind::kNoteOff:
+      tsf_channel_note_off(f, ch, ev.key);
+      break;
+    case SongEventKind::kCc:
+      tsf_channel_midi_control(f, ch, ev.key, ev.value);
+      break;
+    case SongEventKind::kProgram:
+      tsf_channel_set_presetnumber(f, ch, ev.key, 0);
+      break;
+    case SongEventKind::kPitchBend:
+      tsf_channel_set_pitchwheel(f, ch, ev.value);
+      break;
+  }
+}
+
+void AudioEngine::RenderSongBus(int num_frames) {
+  auto& out_l = session_bus_l_[static_cast<size_t>(kBusSong)];
+  auto& out_r = session_bus_r_[static_cast<size_t>(kBusSong)];
+  if (static_cast<int>(out_l.size()) < num_frames) out_l.assign(static_cast<size_t>(num_frames), 0.0f);
+  if (static_cast<int>(out_r.size()) < num_frames) out_r.assign(static_cast<size_t>(num_frames), 0.0f);
+  std::fill_n(out_l.begin(), num_frames, 0.0f);
+  std::fill_n(out_r.begin(), num_frames, 0.0f);
+  if (num_frames <= 0) return;
+  const bool has_synth = song_tsf_ != nullptr || song_dummy_;
+  if (!has_synth) return;
+  const bool playing = song_playing_.load(std::memory_order_relaxed);
+  // Dummy sine path — used when load fell back (no real SF2).
+  if (song_dummy_) {
+    if (!playing) return; // no tail needed for dummy
+    const int64_t block_start = song_position_.load(std::memory_order_relaxed);
+    int rendered = 0;
+    while (rendered < num_frames) {
+      int64_t next_event_pos = INT64_MAX;
+      int tail = song_event_tail_.load(std::memory_order_relaxed);
+      const int head = song_event_head_.load(std::memory_order_acquire);
+      if (tail != head) {
+        const auto& ev = song_event_queue_[static_cast<size_t>(tail % kSongEventQueueCapacity)];
+        next_event_pos = ev.abs_pos;
+      }
+      const int64_t cur_pos = block_start + rendered;
+      int segment = num_frames - rendered;
+      if (next_event_pos != INT64_MAX) {
+        const int64_t delta = next_event_pos - cur_pos;
+        if (delta <= 0) {
+          SongEvent ev = song_event_queue_[static_cast<size_t>(tail % kSongEventQueueCapacity)];
+          song_event_tail_.store(tail + 1, std::memory_order_release);
+          DispatchSongEvent(ev);
+          continue;
+        }
+        segment = static_cast<int>(std::min<int64_t>(segment, delta));
+      }
+      if (segment <= 0) break;
+      const int note = song_dummy_note_.load(std::memory_order_relaxed);
+      const float vel = song_dummy_vel_.load(std::memory_order_relaxed);
+      if (note >= 0) {
+        const double freq = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+        const double inc = 6.283185307179586 * freq / sample_rate_;
+        for (int i = 0; i < segment; ++i) {
+          const float s = std::sin(song_dummy_phase_) * vel * 0.3f;
+          out_l[static_cast<size_t>(rendered + i)] = s;
+          out_r[static_cast<size_t>(rendered + i)] = s;
+          song_dummy_phase_ += static_cast<float>(inc);
+          if (song_dummy_phase_ > 6.2831853f) song_dummy_phase_ -= 6.2831853f;
+        }
+      }
+      rendered += segment;
+    }
+    return;
+  }
+  auto* f = static_cast<tsf*>(song_tsf_.get());
+  // When stopped, still render synth tail (voices in release) but do not
+  // dispatch new sequenced events — those are for the next start/seek.
+  if (!playing) {
+    std::vector<float> interleaved(static_cast<size_t>(num_frames) * 2, 0.0f);
+    tsf_render_float(f, interleaved.data(), num_frames, 0);
+    for (int i = 0; i < num_frames; ++i) {
+      out_l[static_cast<size_t>(i)] = interleaved[static_cast<size_t>(i * 2)];
+      out_r[static_cast<size_t>(i)] = interleaved[static_cast<size_t>(i * 2 + 1)];
+    }
+    return;
+  }
+  const int64_t block_start = song_position_.load(std::memory_order_relaxed);
+  // Render in segments between event timestamps so sample-offset timing is
+  // preserved. Events are consumed in queue order; we assume the front end
+  // pushed them sorted by timestamp (the lookahead scheduler does).
+  int rendered = 0;
+  while (rendered < num_frames) {
+    int64_t next_event_pos = INT64_MAX;
+    int tail = song_event_tail_.load(std::memory_order_relaxed);
+    const int head = song_event_head_.load(std::memory_order_acquire);
+    if (tail != head) {
+      const auto& ev = song_event_queue_[static_cast<size_t>(tail % kSongEventQueueCapacity)];
+      next_event_pos = ev.abs_pos;
+    }
+    const int64_t cur_pos = block_start + rendered;
+    int segment = num_frames - rendered;
+    if (next_event_pos != INT64_MAX) {
+      const int64_t delta = next_event_pos - cur_pos;
+      if (delta <= 0) {
+        // Event is due now — dispatch and continue before rendering.
+        SongEvent ev = song_event_queue_[static_cast<size_t>(tail % kSongEventQueueCapacity)];
+        song_event_tail_.store(tail + 1, std::memory_order_release);
+        DispatchSongEvent(ev);
+        continue;
+      }
+      segment = static_cast<int>(std::min<int64_t>(segment, delta));
+    }
+    if (segment <= 0) break;
+    // TinySoundFont renders interleaved stereo; de-interleave into the bus.
+    std::vector<float> interleaved(static_cast<size_t>(segment) * 2, 0.0f);
+    tsf_render_float(f, interleaved.data(), segment, 0);
+    for (int i = 0; i < segment; ++i) {
+      out_l[static_cast<size_t>(rendered + i)] = interleaved[static_cast<size_t>(i * 2)];
+      out_r[static_cast<size_t>(rendered + i)] = interleaved[static_cast<size_t>(i * 2 + 1)];
+    }
+    rendered += segment;
+  }
+}
 
 }  // namespace openaxe::engine

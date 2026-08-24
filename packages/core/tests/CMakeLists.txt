@@ -203,3 +203,7 @@ if(OPENAXE_HAS_DSPARK)
 else()
   message(WARNING "Skipping compressor_test/equalizer_test/noise_gate_test/tremolo_test - packages/core/third_party/dspark not initialized")
 endif()
+
+add_executable(session_test session_test.cpp)
+target_link_libraries(session_test PRIVATE openaxe_core)
+add_test(NAME session_test COMMAND session_test)

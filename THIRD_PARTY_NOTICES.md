@@ -7,6 +7,7 @@ OpenAxe is licensed [GPLv3](./LICENSE). It wraps or vendors the following third-
 | NeuralAmpModelerCore (NAM)                    | `packages/core/third_party/nam-core` (submodule)         | MIT                       | https://github.com/sdatkinson/NeuralAmpModelerCore     |
 | Dragonfly Reverb                              | `packages/core/third_party/dragonfly-reverb` (submodule) | GPLv3                     | https://github.com/michaelwillis/dragonfly-reverb      |
 | DPF (distrho plugin framework, via Dragonfly) | `packages/core/third_party/dragonfly-reverb/dpf`         | ISC/MIT                   | https://github.com/DISTRHO/DPF                         |
+| TinySoundFont (SF2 synth)                     | `packages/core/third_party/tinysoundfont` (vendored `tsf.h`) | MIT                       | https://github.com/schellingb/TinySoundFont            |
 | DSPark (effects)                              | `packages/core/third_party/dspark` (or vendored)         | MIT                       | https://github.com/sdatkinson/DSPark (check submodule) |
 | Eigen (via NAMCore)                           | `packages/core/third_party/nam-core/Eigen`               | MPL2                      | https://eigen.tuxfamily.org                            |
 | iPlug2                                        | `packages/vst3` FetchContent `d54f690`                   | MIT                       | https://github.com/iPlug2/iPlug2                       |
