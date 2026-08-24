@@ -71,10 +71,23 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     try {
       const result = await applyPreset(context, preset, rig, useGraphStore)
       if (result.missingAssets.length > 0) {
-        setMissingAssetsNote(
-          `Loaded, but ${result.missingAssets.length} model/IR reference(s) aren't cached on this device: ` +
-            result.missingAssets.map((a) => a.name).join(', '),
-        )
+        const factoryMissing = result.missingAssets.filter((a) => a.id.startsWith('factory:'))
+        const toneMissing = result.missingAssets.filter((a) => !a.id.startsWith('factory:'))
+        const parts: string[] = []
+        if (factoryMissing.length > 0) {
+          parts.push(
+            `${factoryMissing.length} factory model/IR(s) not yet downloaded: ` +
+              factoryMissing.map((a) => a.name).join(', ') +
+              ' — open FACTORY in header or Settings → Factory pack, or place a block → Factory tab.',
+          )
+        }
+        if (toneMissing.length > 0) {
+          parts.push(
+            `${toneMissing.length} model/IR reference(s) aren't cached: ` +
+              toneMissing.map((a) => a.name).join(', '),
+          )
+        }
+        setMissingAssetsNote(parts.join(' '))
       }
       closeManager()
     } catch (err) {

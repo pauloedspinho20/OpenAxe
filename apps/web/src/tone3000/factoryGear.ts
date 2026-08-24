@@ -166,6 +166,23 @@ export async function isFactoryCached(id: string): Promise<boolean> {
   return (await getCachedAsset(id)) !== null
 }
 
+/** Find a factory entry by its stable id (e.g. `factory:amp:…`). Requires manifest loaded — see `loadFactoryManifest`. */
+export function getFactoryEntryById(id: string): FactoryGearEntry | undefined {
+  return allFactoryGear().find((e) => e.id === id)
+}
+
+/** Like `getFactoryEntryById` but ensures the manifest is loaded first. */
+export async function ensureFactoryEntryById(id: string): Promise<FactoryGearEntry | undefined> {
+  let entry = getFactoryEntryById(id)
+  if (entry) return entry
+  try {
+    await loadFactoryManifest()
+  } catch {
+    return undefined
+  }
+  return getFactoryEntryById(id)
+}
+
 /** Exported for testing — build entries from raw manifest entries. */
 export function buildFactoryGearEntries(
   gear: Gear,

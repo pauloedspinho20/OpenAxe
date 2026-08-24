@@ -10,6 +10,7 @@ import { IN_RAIL, OUT_RAIL } from '../engine/gridConfig'
 import type { BlockKind, EffectParams } from '../engine/blocks/Block'
 import type { Preset, PresetBlockData, PresetEdgeData } from '../presets/types'
 import { createEmptyBank, loadSceneBank, saveSceneBank } from './sceneBankStore'
+import { getCachedAsset } from '../engine/assetCache'
 import { cacheFactoryGear, firstFactoryGearFor, loadFactoryManifest } from '../tone3000/factoryGear'
 import type { FactoryGearEntry } from '../tone3000/factoryGear'
 
@@ -174,18 +175,44 @@ export async function installFactoryScenes(): Promise<void> {
   // otherwise pure IndexedDB writes, which can't reject) - a real network
   // fetch failure here must not become an unhandled rejection or block the
   // rest of setup, so cache each factory asset independently and continue past
-  // one that fails. A preset referencing an uncached id just skips loading
-  // that block's model/IR when applied (see presets/apply.ts), the same
-  // graceful degradation an unreachable Tone3000 asset already gets.
-  await Promise.all(
-    gearUsedByStarterPresets(starterPresets).map((entry) =>
-      cacheFactoryGear(entry).catch((err: unknown) =>
-        console.warn(`[factoryScenes] failed to cache factory gear "${entry.id}":`, err),
-      ),
-    ),
-  )
+  // one that fails.
+  const toCache = gearUsedByStarterPresets(starterPresets)
+  const results = await Promise.allSettled(toCache.map((entry) => cacheFactoryGear(entry)))
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      const entry = toCache[i]
+      console.warn(`[factoryScenes] failed to cache factory gear "${entry?.id ?? i}":`, r.reason)
+    }
+  })
 
-  for (const preset of starterPresets) {
+  // If a factory file isn't reachable (404/offline or not yet hosted), don't
+  // seed a preset that would immediately toast "missing locally" on first
+  // boot for new users — keep only presets whose factory deps actually cached.
+  // Bypass has no factory dep and always survives this filter.
+  const stillMissing = new Set<string>()
+  await Promise.all(
+    toCache.map(async (entry, i) => {
+      if (results[i]?.status === 'rejected') {
+        stillMissing.add(entry.id)
+      } else {
+        const blob = await getCachedAsset(entry.id).catch(() => null)
+        if (!blob) stillMissing.add(entry.id)
+      }
+    }),
+  )
+  const filteredPresets = starterPresets.filter((preset) => {
+    for (const b of preset.blocks) {
+      if (b.modelId && stillMissing.has(b.modelId)) return false
+      if (b.irId && stillMissing.has(b.irId)) return false
+    }
+    return true
+  })
+  const finalPresets =
+    filteredPresets.length > 0
+      ? filteredPresets
+      : [buildChainPreset(starterPresetId(0), 'Bypass', [])]
+
+  for (const preset of finalPresets) {
     const existing = await getPreset(preset.id)
     if (!existing) await savePreset(preset)
   }
@@ -194,7 +221,7 @@ export async function installFactoryScenes(): Promise<void> {
   bank.scenes[0] = {
     index: 0,
     name: DEFAULT_SCENE_NAME,
-    slots: starterPresets.map((p) => p.id),
+    slots: finalPresets.map((p) => p.id),
   }
   bank.activeScene = 0
   bank.activeSlot = 0

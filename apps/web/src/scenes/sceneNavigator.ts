@@ -148,11 +148,26 @@ async function applySlot(scene: number, slot: number, mySeq: number): Promise<Sc
     if (mySeq !== seq) return { ok: false, reason: 'superseded', scene, slot, presetId }
     useEngineVersion.getState().bump()
     if (result.missingAssets.length > 0) {
-      toast.warning(
-        `${result.missingAssets.length} model/IR reference(s) aren't cached on this device: ` +
-          result.missingAssets.map((a) => a.name).join(', '),
-        { description: 'The scene loaded, but those assets are missing locally.' },
-      )
+      const factoryMissing = result.missingAssets.filter((a) => a.id.startsWith('factory:'))
+      const toneMissing = result.missingAssets.filter((a) => !a.id.startsWith('factory:'))
+      if (factoryMissing.length > 0) {
+        toast.warning(
+          `${factoryMissing.length} factory model/IR(s) not yet downloaded: ` +
+            factoryMissing.map((a) => a.name).join(', '),
+          {
+            description:
+              'Open FACTORY in the header or Settings → Factory pack to download — or place a block → Factory tab. The scene loaded with other blocks.',
+            duration: 7000,
+          },
+        )
+      }
+      if (toneMissing.length > 0) {
+        toast.warning(
+          `${toneMissing.length} model/IR reference(s) aren't cached on this device: ` +
+            toneMissing.map((a) => a.name).join(', '),
+          { description: 'The scene loaded, but those assets are missing locally.' },
+        )
+      }
     }
     return { ok: true, scene, slot, presetId, missingAssets: result.missingAssets }
   } catch (err) {

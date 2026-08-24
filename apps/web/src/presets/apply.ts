@@ -3,6 +3,7 @@ import type { GraphState } from '../state/graphStore'
 import { getCachedAsset } from '../engine/assetCache'
 import { NAM_MODEL_KINDS } from '../engine/blocks/blockRegistry'
 import type { Preset, PresetBlockData, PresetBlock, PresetRig } from './types'
+import { cacheFactoryGear, ensureFactoryEntryById } from '../tone3000/factoryGear'
 
 export interface MissingAsset {
   blockId: string
@@ -30,7 +31,15 @@ async function applyBlockAsset(
 ): Promise<void> {
   if (NAM_MODEL_KINDS.has(data.kind)) {
     if (data.modelId) {
-      const blob = await getCachedAsset(data.modelId)
+      let blob = await getCachedAsset(data.modelId)
+      if (!blob && data.modelId.startsWith('factory:')) {
+        try {
+          const entry = await ensureFactoryEntryById(data.modelId)
+          if (entry) blob = await cacheFactoryGear(entry)
+        } catch {
+          // leave blob null → missing
+        }
+      }
       if (blob) {
         try {
           const json = await blob.text()
@@ -63,7 +72,15 @@ async function applyBlockAsset(
 
   if (data.kind === 'cab') {
     if (data.irId) {
-      const blob = await getCachedAsset(data.irId)
+      let blob = await getCachedAsset(data.irId)
+      if (!blob && data.irId.startsWith('factory:')) {
+        try {
+          const entry = await ensureFactoryEntryById(data.irId)
+          if (entry) blob = await cacheFactoryGear(entry)
+        } catch {
+          // leave blob null → missing
+        }
+      }
       if (blob) {
         try {
           const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
