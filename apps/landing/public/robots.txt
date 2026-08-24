@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pauloedspinho20.github.io/OpenAxe/sitemap.xml

@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#101010" />
+
+    <!-- Primary SEO -->
+    <title>OpenAxe — Free open-source guitar amp & effects suite (NAM)</title>
+    <meta
+      name="description"
+      content="Free, open-source guitar & bass amp + cab + 10 effects suite built on Neural Amp Modeler (NAM). Runs in the browser (WASM), as a native desktop app, and as a VST3/CLAP/AU plugin — one C++ engine, zero latency tricks."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="OpenAxe Contributors" />
+    <meta
+      name="keywords"
+      content="guitar amp sim, bass amp, NAM, Neural Amp Modeler, free amp sim, open source, VST3, guitar effects, cabinet IR, audio dsp"
+    />
+    <link rel="canonical" href="https://pauloedspinho20.github.io/OpenAxe/" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/openaxe-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/openaxe-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/openaxe-180.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OpenAxe" />
+    <meta
+      property="og:title"
+      content="OpenAxe — Free open-source guitar amp & effects suite (NAM)"
+    />
+    <meta
+      property="og:description"
+      content="Browser, desktop, and VST3 — one C++ engine. NAM amp captures, 10 effects, modular 3×8 grid. Free & GPLv3."
+    />
+    <meta property="og:url" content="https://pauloedspinho20.github.io/OpenAxe/" />
+    <meta property="og:image" content="https://pauloedspinho20.github.io/OpenAxe/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="OpenAxe wordmark on Carbon chassis" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="OpenAxe — Free open-source guitar amp & effects suite (NAM)"
+    />
+    <meta
+      name="twitter:description"
+      content="Free, open-source guitar & bass rig. NAM amps, 10 effects, modular grid. Web, desktop, VST3 — one engine."
+    />
+    <meta name="twitter:image" content="https://pauloedspinho20.github.io/OpenAxe/og-image.png" />
+
+    <!-- Preconnect for web app CTA -->
+    <link rel="preconnect" href="https://nam-web-studio-sae2-iota.vercel.app" />
+
+    <!-- JSON-LD: SoftwareApplication -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "OpenAxe",
+        "applicationCategory": "MusicApplication",
+        "operatingSystem": "Web, Windows, macOS, Linux",
+        "description": "Free, open-source guitar/bass amp, cabinet and effects suite built on Neural Amp Modeler. Web app (WASM), desktop app (C++ + JUCE), VST3/CLAP/AU plugin — one C++ engine.",
+        "url": "https://pauloedspinho20.github.io/OpenAxe/",
+        "installUrl": "https://github.com/pauloedspinho20/OpenAxe/releases",
+        "isAccessibleForFree": true,
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "author": { "@type": "Organization", "name": "OpenAxe Contributors" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "screenshot": "https://pauloedspinho20.github.io/OpenAxe/og-image.png",
+        "softwareVersion": "0.2.3",
+        "releaseNotes": "https://github.com/pauloedspinho20/OpenAxe/releases"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is OpenAxe free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes — GPLv3, free and open source. Web app, desktop app, and VST3 are all free with no accounts."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is NAM?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Neural Amp Modeler — an open-source neural network that captures real amps/pedals. OpenAxe runs NAMCore natively in C++ (and via WASM in the browser)."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need to install anything to try it?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No — open the web app at nam-web-studio-sae2-iota.vercel.app and play. Desktop and VST are optional."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" role="banner">
+      <div class="container">
+        <a class="brand" href="/" aria-label="OpenAxe home">
+          <img src="/icons/openaxe-32.png" alt="" width="28" height="28" aria-hidden="true" />
+          OPEN<span>AXE</span>
+          <span class="ver" id="landing-version" aria-label="version v0.2.3">v0.2.3</span>
+          <span class="beta" aria-label="beta">BETA</span>
+        </a>
+        <nav class="nav" aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#platforms">Platforms</a>
+          <a href="#download">Download</a>
+          <a href="/releases.html">Releases</a>
+          <a href="https://github.com/pauloedspinho20/OpenAxe" rel="noopener">GitHub</a>
+          <button
+            id="theme-toggle"
+            class="btn btn-ghost"
+            style="padding: 6px 10px; font-size: 12px"
+            type="button"
+            aria-label="Toggle Carbon / Aluminum finish"
+          >
+            ☾ Carbon
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Hero -->
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="container hero-grid">
+          <div>
+            <div class="eyebrow">
+              <i class="dot" aria-hidden="true"></i> Free & open source · GPLv3
+            </div>
+            <h1 id="hero-title">A guitar rig that <em>lives</em> everywhere you play.</h1>
+            <p class="lead">
+              Amp + cab + 10 effects in a modular 3×8 grid, built on
+              <strong>Neural Amp Modeler</strong>. Web app in your browser, native desktop app, and
+              VST3/CLAP/AU in your DAW — <strong>one C++ engine</strong>, no latency tricks.
+            </p>
+            <div class="hero-ctas">
+              <a
+                class="btn btn-primary"
+                data-web-app
+                href="https://nam-web-studio-sae2-iota.vercel.app"
+                rel="noopener"
+                >↗ Open web app — no install</a
+              >
+              <a id="download-cta" class="btn btn-ghost" href="#download">⬇ Download desktop</a>
+            </div>
+            <p class="hero-note">
+              No accounts. No telemetry. Your rigs stay in IndexedDB / on disk.
+            </p>
+          </div>
+
+          <div class="hero-card" role="img" aria-label="Signal chain preview">
+            <div class="screen">
+              <pre><span class="dim">Input →</span> [IN] → <span class="hot">AMP</span> (NAM) → <span class="hot">CAB</span> (IR) → GATE → COMP → EQ → CHORUS → DELAY → REVERB → [OUT] → Master
+<span class="dim">3 rows × 8 columns · drag to move · cable to connect · one engine</span>
+
+<span class="dim"> Amp:  </span> NeuralAmpModelerCore — any .nam capture
+<span class="dim"> Cab:  </span> zero-latency partitioned convolver (IR .wav)
+<span class="dim"> Effects:</span> Dragonfly Reverb · DSPark · BYOD · Airwindows</pre>
+            </div>
+            <div class="bar">
+              <span class="pill"
+                ><i aria-hidden="true"></i> Engine: openaxe_core — zero added latency</span
+              >
+              <span class="muted">48 kHz · 128 frames</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="section" id="features" aria-labelledby="features-title">
+        <div class="container">
+          <h2 id="features-title">Everything a rig needs — one graph</h2>
+          <p class="sub">
+            OpenAxe converges on <em>all logic in <code>packages/core</code></em> (DSP, routing,
+            param ranges, model/IR loading). Front ends own only presentation + device integration —
+            so web, desktop, and VST behave identically.
+          </p>
+          <div class="grid3">
+            <article class="card">
+              <h3>AMP — NAM captures</h3>
+              <p>
+                Any <code>.nam</code> — amps, pedals, outboard. Same <code>NamAmp</code> inference
+                everywhere (WASM worklet on web, direct C++ on desktop/VST).
+              </p>
+              <ul>
+                <li>Tone stack + <code>slim_size</code> for slimmable captures</li>
+                <li>Per-block I/O trims &amp; bypass</li>
+                <li>Tone3000 catalog integration</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Effects — 10, best-in-class</h3>
+              <p>
+                Gate · Compressor · EQ · Chorus · Flanger · Phaser · Tremolo · Delay · Ping-Pong ·
+                Reverb (Dragonfly hall/room/plate/early).
+              </p>
+              <ul>
+                <li>Engine-generic <code>mix</code> for 7 wet effects</li>
+                <li>Reverb expert mode + native DSP mixes</li>
+                <li>Metering from core (peak per block)</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Cab — IR convolution</h3>
+              <p>
+                Zero-latency partitioned convolver + <code>wav.cpp</code> decode/resample. Hand the
+                core bytes — no Web Audio decode on native.
+              </p>
+              <ul>
+                <li><code>ir_mix</code> + IR .wav loading</li>
+                <li>Mixer / Splitter utilities</li>
+                <li>Master bus level &amp; mute</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Platforms -->
+      <section class="section" id="platforms" aria-labelledby="platforms-title">
+        <div class="container">
+          <h2 id="platforms-title">One engine, four shells</h2>
+          <p class="sub">
+            Every front end talks to the same <code>extern "C"</code> ABI
+            (<code>packages/core/include/openaxe/api.h</code>). Same routing, same params, same
+            sound.
+          </p>
+          <div class="platforms" role="list">
+            <div class="platform" role="listitem">
+              <span class="status status-live">Live</span>
+              <h3>Web</h3>
+              <p>Vite + React + AudioWorklet + WASM. ~15 ms round-trip. PWA offline planned.</p>
+            </div>
+            <div class="platform" role="listitem">
+              <span class="status status-live">Live</span>
+              <h3>Desktop</h3>
+              <p>
+                C++ + webview.h + JUCE audio_devices. &lt;5 ms. Reuses web UI, calls core directly.
+              </p>
+            </div>
+            <div class="platform" role="listitem">
+              <span class="status status-beta">Beta</span>
+              <h3>VST3 / CLAP / AU</h3>
+              <p>
+                iPlug2 + <code>packages/core</code> (WHOLE_ARCHIVE). Zero latency to report to host.
+              </p>
+            </div>
+            <div class="platform" role="listitem">
+              <span class="status status-planned">Planned</span>
+              <h3>iOS / Android</h3>
+              <p>SwiftUI / Compose + C++ via ObjC++ / JNI. Direct audio, no JS bridge.</p>
+            </div>
+          </div>
+          <p class="muted" style="margin-top: var(--sp-4); font-size: 12px">
+            Design tokens are the single source (<code>packages/ui/tokens/design-tokens.json</code>
+            → CSS + <code>packages/vst3/generated/tokens.h</code>). Carbon / Aluminum finishes in
+            this landing are the same tokens the app ships.
+          </p>
+        </div>
+      </section>
+
+      <!-- Download -->
+      <section class="section" id="download" aria-labelledby="download-title">
+        <div class="container">
+          <h2 id="download-title">Download</h2>
+          <p class="sub">
+            Every <code>v*</code> tag publishes installers via GitHub Releases. The web app needs no
+            download —
+            <a data-web-app href="https://nam-web-studio-sae2-iota.vercel.app" rel="noopener"
+              >open it in your browser</a
+            >.
+          </p>
+
+          <div class="download">
+            <div id="download-root" aria-live="polite" aria-busy="true">
+              <p class="muted">Loading releases…</p>
+              <noscript
+                ><p>
+                  Enable JavaScript to see live download buttons, or
+                  <a href="https://github.com/pauloedspinho20/OpenAxe/releases"
+                    >browse releases on GitHub</a
+                  >.
+                </p></noscript
+              >
+            </div>
+
+            <aside class="card" aria-label="Quick links">
+              <h3>Quick links</h3>
+              <ul>
+                <li>
+                  <a data-web-app href="https://nam-web-studio-sae2-iota.vercel.app" rel="noopener"
+                    >↗ Open web app (Vercel)</a
+                  >
+                </li>
+                <li>
+                  <a id="pages-canonical" href="https://pauloedspinho20.github.io/OpenAxe/"
+                    >This landing — GitHub Pages</a
+                  >
+                </li>
+                <li><a href="/releases.html">All releases archive</a></li>
+                <li>
+                  <a href="https://github.com/pauloedspinho20/OpenAxe/releases">GitHub Releases</a>
+                </li>
+                <li>
+                  <a href="https://github.com/pauloedspinho20/OpenAxe#readme">README &amp; docs</a>
+                </li>
+              </ul>
+              <p style="margin-top: var(--sp-4); font-size: 12px; color: var(--ink-3)">
+                Checksums &amp; signatures: see the Release notes on GitHub. Desktop builds are
+                unsigned dev artifacts — signing/notarization tracked in
+                <a href="https://github.com/pauloedspinho20/OpenAxe/issues/136">#136</a>.
+              </p>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- Open source -->
+      <section class="section" id="open-source" aria-labelledby="oss-title">
+        <div class="container">
+          <h2 id="oss-title">Free &amp; open — forever</h2>
+          <p class="sub">
+            GPLv3. No accounts, no paywalls. Vendored DSP: Dragonfly (GPLv3), NAMCore (MIT), DSPark,
+            BYOD, Airwindows, ChowPhaser. iPlug2 is MIT.
+          </p>
+          <div class="grid3">
+            <article class="card">
+              <h3>Contribute</h3>
+              <p>
+                Start with <code>AGENTS.md</code> → <code>CONTRIBUTING.md</code> →
+                <code>ARCHITECTURE.md</code>.
+              </p>
+              <p style="margin-top: var(--sp-3)">
+                <a
+                  href="https://github.com/pauloedspinho20/OpenAxe/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"
+                  >Good first issues</a
+                >
+                ·
+                <a href="https://github.com/pauloedspinho20/OpenAxe/blob/dev/CONTRIBUTING.md"
+                  >DCO sign-off</a
+                >
+              </p>
+            </article>
+            <article class="card">
+              <h3>Design system</h3>
+              <p>
+                Tokens in <code>design-tokens.json</code> generate CSS + C++ <code>tokens.h</code>.
+                Primitives: Knob · Fader · Led · Meter · Toggle · Panel.
+              </p>
+              <p style="margin-top: var(--sp-3)">
+                <a href="https://github.com/pauloedspinho20/OpenAxe/tree/dev/packages/ui"
+                  >packages/ui</a
+                >
+                · Storybook
+              </p>
+            </article>
+            <article class="card">
+              <h3>Cite &amp; sponsor</h3>
+              <p>
+                <code>CITATION.cff</code> for academic use. Sponsor via <code>FUNDING.yml</code>.
+              </p>
+              <p style="margin-top: var(--sp-3)">
+                <a href="https://github.com/pauloedspinho20/OpenAxe/blob/dev/CITATION.cff"
+                  >CITATION.cff</a
+                >
+                ·
+                <a href="https://github.com/sponsors/pauloedspinho20">Sponsor</a>
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer" role="contentinfo">
+      <div class="container">
+        <div>
+          © <span id="footer-year">2026</span> OpenAxe Contributors · GPLv3 ·
+          <a href="https://github.com/pauloedspinho20/OpenAxe">GitHub</a>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/pauloedspinho20/OpenAxe/blob/dev/LICENSE">License</a>
+          <a href="https://github.com/pauloedspinho20/OpenAxe/blob/dev/THIRD_PARTY_NOTICES.md"
+            >Notices</a
+          >
+          <a href="https://github.com/pauloedspinho20/OpenAxe/blob/dev/SECURITY.md">Security</a>
+          <a data-web-app href="https://nam-web-studio-sae2-iota.vercel.app" rel="noopener"
+            >Web app</a
+          >
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
