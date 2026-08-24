@@ -99,10 +99,10 @@ jobs:
         run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
 
       - name: Smoke test (no host)
-        run: ctest --test-dir packages/vst3/build --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
 
       - name: Plugin validators (when bundle present)
-        run: ctest --test-dir packages/vst3/build --output-on-failure -R "pluginval|auval|validator|clap" || true
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "pluginval|auval|validator|clap" || true
 
       # ── Signing (only when secrets are present, otherwise builds unsigned) ──
 
