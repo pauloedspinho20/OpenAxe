@@ -84,48 +84,13 @@ endif()
 # ── Config header (plugin identity) ──────────────────────────────────────
 # config.h is checked in; no generation step.
 
-# ── Core linkage smoke test (always builds) ───────────────────────────────
-# This is what makes iteration bearable without a host and what CI can build
-# even offline: a tiny executable that links openaxe_core WHOLE_ARCHIVE and
-# exercises the scaffold's contract (graph create/reset/process passthrough).
-add_executable(openaxe_vst3_smoke tests/smoke.cpp)
-target_link_libraries(openaxe_vst3_smoke PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_smoke PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
-
-# ── Issue #126: latency + suspend stress (always builds, no host/SDK needed) ─
-add_executable(openaxe_vst3_latency_test tests/latency_test.cpp)
-target_link_libraries(openaxe_vst3_latency_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_latency_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_executable(openaxe_vst3_suspend_test tests/suspend_test.cpp)
-target_link_libraries(openaxe_vst3_suspend_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_suspend_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_executable(openaxe_vst3_param_surface_test tests/param_surface_test.cpp src/automation_params.cpp)
-target_link_libraries(openaxe_vst3_param_surface_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_param_surface_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_executable(openaxe_vst3_state_test tests/state_test.cpp src/plugin_state.cpp src/presets.cpp)
-target_link_libraries(openaxe_vst3_state_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_state_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_executable(openaxe_vst3_asset_test tests/asset_loading_test.cpp src/asset_loading.cpp)
-target_link_libraries(openaxe_vst3_asset_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_asset_test PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR})
-
-# Foundational chunking/FTZ/suspend choice is documented in plugin.h/.cpp;
-# the tests above keep the audio-path contract honest even when the host
-# and iPlug2 SDKs aren't present (mirrors the desktop latency_test + #43/#59
-# stress-test shape from issue #126's Verification; param_surface_test guards
-# #127's stable 302-id layout and slim_size routing).
-
+# ── Tests (issue #130) ─────────────────────────────────────────────────────
+# Structured like apps/desktop/tests/: tests/CMakeLists.txt owns every
+# executable + CTest, including the validator harness and the realtime-safety
+# + TSan instrumentation. Single entry point:
+#   ctest --test-dir packages/vst3/build --output-on-failure
 enable_testing()
-add_test(NAME vst3_smoke COMMAND openaxe_vst3_smoke)
-add_test(NAME vst3_latency COMMAND openaxe_vst3_latency_test)
-add_test(NAME vst3_suspend COMMAND openaxe_vst3_suspend_test)
-add_test(NAME vst3_param_surface COMMAND openaxe_vst3_param_surface_test)
-add_test(NAME vst3_state COMMAND openaxe_vst3_state_test)
-add_test(NAME vst3_asset COMMAND openaxe_vst3_asset_test)
+add_subdirectory(tests)
 
 # ── VST3 + standalone targets (require iPlug2 + SDKs) ─────────────────────
 # SDK check — iPlug2's VST3 SDK is fetched via Dependencies/download scripts, not vendored.

@@ -46,7 +46,7 @@ all the wiring needed for it to be picked up automatically.
   one), not as a substitute for unit tests
 - `pnpm build-storybook` — static Storybook build, scans `packages/ui`'s stories
 
-`packages/core` and `apps/desktop` are **not** part of the pnpm/Turborepo
+`packages/core`, `apps/desktop` and `packages/vst3` are **not** part of the pnpm/Turborepo
 graph for building/testing — they're plain CMake/CTest:
 
 ```bash
@@ -57,6 +57,15 @@ ctest --test-dir packages/core/build --output-on-failure
 cmake -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON
 cmake --build apps/desktop/build
 ctest --test-dir apps/desktop/build --output-on-failure   # audio_io, bridge, latency
+
+cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
+cmake --build packages/vst3/build
+ctest --test-dir packages/vst3/build --output-on-failure   # smoke, latency, suspend, realtime_safety + validators (pluginval, auval, VST3 validator, clap-validator — skip if tool/bundle absent)
+# ThreadSanitizer over the concurrent suspend stress (issue #130):
+cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build packages/vst3/build && ctest --test-dir packages/vst3/build --output-on-failure
+# RealtimeSanitizer (Clang 18+, optional):
+cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_RTSAN=ON
 ```
 
 `packages/core`'s WASM build is a separate, manual step
