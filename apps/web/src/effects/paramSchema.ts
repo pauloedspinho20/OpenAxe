@@ -61,7 +61,6 @@ function range(kind: RangeKind, symbol: string): SymbolRange {
 }
 
 const dB = (value: number) => `${value.toFixed(0)}dB`
-const ms = (value: number) => `${Math.round(value * 1000)}ms`
 const percent = (value: number) => `${Math.round(value * 100)}%`
 const hz = (value: number) =>
   value >= 1000 ? `${(value / 1000).toFixed(1)}kHz` : `${Math.round(value)}Hz`
@@ -176,6 +175,16 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: -80,
       formatValue: dB,
     },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
+      formatValue: percent,
+    },
   ],
   compressor: [
     {
@@ -259,7 +268,22 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
     },
   ],
-  eq: [...eqBand(0, 100), ...eqBand(1, 500), ...eqBand(2, 2000), ...eqBand(3, 6000)],
+  eq: [
+    ...eqBand(0, 100),
+    ...eqBand(1, 500),
+    ...eqBand(2, 2000),
+    ...eqBand(3, 6000),
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
+      formatValue: percent,
+    },
+  ],
   chorus: [
     {
       key: 'rate',
@@ -267,7 +291,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('chorus', 'rate'),
       step: 0.05,
-      defaultValue: 0.5,
+      defaultValue: 0.2,
       formatValue: hz,
     },
     {
@@ -276,8 +300,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('chorus', 'depth'),
       step: 0.1,
-      defaultValue: 5,
-      formatValue: ms,
+      defaultValue: 0.8,
+      formatValue: msRaw,
     },
     {
       key: 'delay',
@@ -285,7 +309,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('chorus', 'delay'),
       step: 0.5,
-      defaultValue: 8,
+      defaultValue: 5.5,
       formatValue: msRaw,
     },
     {
@@ -294,7 +318,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('chorus', 'feedback'),
       step: 0.01,
-      defaultValue: 0.2,
+      defaultValue: 0.15,
+      formatValue: percent,
+    },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
       formatValue: percent,
     },
   ],
@@ -305,7 +339,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('flanger', 'rate'),
       step: 0.05,
-      defaultValue: 0.3,
+      defaultValue: 0.2,
       formatValue: hz,
     },
     {
@@ -314,8 +348,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('flanger', 'depth'),
       step: 0.1,
-      defaultValue: 2,
-      formatValue: ms,
+      defaultValue: 0.4,
+      formatValue: msRaw,
     },
     {
       key: 'delay',
@@ -323,7 +357,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('flanger', 'delay'),
       step: 0.05,
-      defaultValue: 1,
+      defaultValue: 0.3,
       formatValue: msRaw,
     },
     {
@@ -332,7 +366,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('flanger', 'feedback'),
       step: 0.01,
-      defaultValue: 0.5,
+      defaultValue: 0.25,
+      formatValue: percent,
+    },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
       formatValue: percent,
     },
   ],
@@ -343,7 +387,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('phaser', 'rate'),
       step: 0.05,
-      defaultValue: 0.3,
+      defaultValue: 0.2,
       formatValue: hz,
     },
     {
@@ -352,7 +396,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('phaser', 'depth'),
       step: 0.01,
-      defaultValue: 0.7,
+      defaultValue: 0.6,
       formatValue: percent,
     },
     {
@@ -361,7 +405,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       control: 'knob',
       ...range('phaser', 'feedback'),
       step: 0.01,
-      defaultValue: 0.5,
+      defaultValue: 0.35,
       formatValue: percent,
     },
     {
@@ -372,6 +416,16 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 4,
       formatValue: plain,
+    },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
+      formatValue: percent,
     },
   ],
   tremolo: [
@@ -407,6 +461,16 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       ],
       defaultValue: 'sine',
       primary: true,
+    },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
+      formatValue: percent,
     },
   ],
   // 3 character models: Digital (clean), Analog (BBD-style filtering +
@@ -474,6 +538,26 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: hz,
       visible: (v) => v.model === 'tape',
     },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.1,
+      formatValue: percent,
+    },
+    {
+      key: 'level',
+      label: 'Level',
+      control: 'knob',
+      min: 0,
+      max: 1.5,
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
+    },
   ],
   'ping-pong-delay': [
     {
@@ -502,6 +586,36 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 50,
       defaultValue: 6000,
       formatValue: hz,
+    },
+    {
+      key: 'width',
+      label: 'Width',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
+    },
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.1,
+      formatValue: percent,
+    },
+    {
+      key: 'level',
+      label: 'Level',
+      control: 'knob',
+      min: 0,
+      max: 1.5,
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
     },
   ],
   // Four Dragonfly Reverb algorithms (packages/core): Hall, Room, Plate,
@@ -698,6 +812,17 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
   },
 ]
 
+const SLIM_SIZE_FIELD: KnobField = {
+  key: 'slim_size',
+  label: 'Slim',
+  control: 'knob',
+  ...range('amp', 'slim_size'),
+  step: 0.01,
+  defaultValue: 1,
+  formatValue: percent,
+  group: 'Quality',
+}
+
 /**
  * Schema entries for grid block kinds beyond the 10 effects. The 5 NAM
  * model kinds (amp/amp-cab/pedal/outboard/space) each get the same 4-band
@@ -705,7 +830,11 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
  * dedicated action in the inspector, but the tone controls go through the
  * same generic knob panel as everything else.
  */
-const AMP_CONTROLS: ParamFieldSchema[] = [...AMP_TONE_STACK, ...IN_OUT_LEVEL_FIELDS]
+const AMP_CONTROLS: ParamFieldSchema[] = [
+  ...AMP_TONE_STACK,
+  SLIM_SIZE_FIELD,
+  ...IN_OUT_LEVEL_FIELDS,
+]
 
 export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
   amp: AMP_CONTROLS,
@@ -763,6 +892,55 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
     formatValue: percent,
     group: `Out ${i + 1}`,
   })),
+}
+
+/** Raw Dragonfly reverb params for an algorithm variant, from generated ranges (issue #263 expert mode). */
+export function getReverbRawSchemas(algorithm: string): ParamFieldSchema[] {
+  const variant = (
+    PARAM_RANGES.reverb as Record<string, Record<string, { min: number; max: number }>>
+  )[algorithm]
+  if (!variant) return []
+  const fields: ParamFieldSchema[] = []
+  for (const [symbol, range] of Object.entries(variant)) {
+    // Map symbol to label/unit formatting: use symbol as label (capitalize) and infer formatter from range span.
+    const label = symbol
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+    const span = range.max - range.min
+    let step = 1
+    let format = plain
+    if (symbol.includes('cut') || symbol.includes('xo') || symbol.includes('freq')) {
+      step = span > 1000 ? 10 : 1
+      format = hz
+    } else if (symbol.includes('decay')) {
+      step = 0.1
+      format = plain
+    } else if (symbol.includes('delay') || symbol.includes('predelay')) {
+      step = 1
+      format = msRaw
+    } else if (range.max <= 1 && range.min >= 0) {
+      step = 0.01
+      format = percent
+    } else if (span <= 10) {
+      step = 0.1
+      format = plain
+    }
+    // Default to midpoint of range; actual core default will be seeded via block creation,
+    // but this provides a sensible initial knob position until user touches it.
+    const mid = (range.min + range.max) / 2
+    fields.push({
+      key: symbol,
+      label,
+      control: 'knob',
+      min: range.min,
+      max: range.max,
+      step,
+      defaultValue: Number.isFinite(mid) ? Math.round(mid * 100) / 100 : range.min,
+      formatValue: format,
+    })
+  }
+  return fields
 }
 
 /** Looks up the field schema for any grid block kind - the 11 effect kinds plus the 4 new ones. */

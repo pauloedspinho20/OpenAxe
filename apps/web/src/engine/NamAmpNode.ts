@@ -1,4 +1,7 @@
 /**
+ * @deprecated Replaced by `RigWorkletNode` (single rig worklet, issue #55/#263).
+ * Kept for `AmpBlock` legacy staging and its tests only.
+ *
  * A NAM amp as an `AudioWorkletNode`, backed by `packages/core`'s own NAM
  * inference compiled to WASM (`wasm-core/ampWorklet.js`).
  *

@@ -49,6 +49,34 @@ export function HeaderPerfWidget({ context }: HeaderPerfWidgetProps) {
     let lastFrame = performance.now()
     let lastReport = lastFrame
     let load = 0
+    let nativeLatency: number | null = null
+    let nativePoll: number | null = null
+
+    // For desktop (native), poll getConfig() for the real device round-trip latency.
+    // The NativeAudioContext shim always reports 0 for baseLatency/outputLatency,
+    // so the web path's ctx.baseLatency would always show 0ms on desktop.
+    const isNative =
+      typeof window !== 'undefined' &&
+      !!(window as unknown as Record<string, unknown>)['openAxe.getConfig']
+    if (isNative) {
+      const pollNative = async () => {
+        try {
+          const { getOpenAxe } = await import('../../../native/openaxe')
+          const bridge = getOpenAxe()
+          if (bridge) {
+            const cfg = await bridge.getConfig()
+            nativeLatency =
+              typeof cfg.latencyMs === 'number' && cfg.latencyMs >= 0
+                ? Math.round(cfg.latencyMs)
+                : null
+          }
+        } catch {
+          // ignore — will retry next tick
+        }
+      }
+      void pollNative()
+      nativePoll = window.setInterval(() => void pollNative(), 1000)
+    }
 
     const tick = (now: number) => {
       const delta = now - lastFrame
@@ -59,15 +87,20 @@ export function HeaderPerfWidget({ context }: HeaderPerfWidgetProps) {
       if (now - lastReport >= REPORT_INTERVAL_MS) {
         lastReport = now
         const ctx = contextRef.current
-        const latencyMs = ctx
-          ? Math.round((ctx.baseLatency + (ctx.outputLatency || 0)) * 1000)
-          : null
+        const latencyMs = isNative
+          ? nativeLatency
+          : ctx
+            ? Math.round((ctx.baseLatency + (ctx.outputLatency || 0)) * 1000)
+            : null
         setStats({ cpuPercent: Math.round(load * 100), memMB: readMemoryMB(), latencyMs })
       }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      if (nativePoll !== null) window.clearInterval(nativePoll)
+    }
   }, [])
 
   return (
