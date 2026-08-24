@@ -361,4 +361,22 @@ void OpenAxePlugin::OnParamChange(int paramIdx) {
   }
 }
 
+void OpenAxePlugin::ProcessMidiMsg(const IMidiMsg& msg) {
+  // Plugin MIDI bus — issue #124. The host forwards its event list
+  // sample-accurately; the transport is CoreMIDI/ALSA/JACK on desktop
+  // and the host's own event queue in a DAW. Core owns the mapping
+  // model (which CC controls which param, learn mode, channel filter)
+  // so every front end reuses it — this shell only forwards raw bytes
+  // plus the per-event sample offset (mOffset) and lets core resolve
+  // and apply the binding. Safe from any thread (shared lock), so
+  // calling from the audio thread preserves sample accuracy.
+  uint8_t data[3] = {msg.mStatus, msg.mData1, msg.mData2};
+  int size = 3;
+  // PC has only 2 bytes; the third is unused but core's parser tolerates it.
+  if ((msg.mStatus & 0xF0) == 0xC0) size = 2;
+  // Core returns 0 = not a trigger / no binding, 1 = dispatched, 2 = learn
+  // completed — we don't need to act on it here (the core already applied).
+  nam_studio_midi_handle_message(graph_, data, size, msg.mOffset, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
 #endif
