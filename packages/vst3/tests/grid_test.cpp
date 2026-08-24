@@ -141,12 +141,19 @@ void TestAutomationSlotBindingFromInspector() {
   const int32_t gate = openaxe_vst3::grid::AddBlock(g, "noise-gate", 0, 0);
   nam_studio_reset(g, 48000.0, 128);
   // Inspector control → automation slot binding (slot-map #121#127)
+  openaxe_vst3::grid::ClearParamTitlesChanged();
+  CHECK(!openaxe_vst3::grid::PollParamTitlesChanged());
   CHECK(openaxe_vst3::grid::BindAutomationSlot(g, 1, gate));
   CHECK(nam_studio_automation_slot_block(g, 1) == gate);
+  CHECK(openaxe_vst3::grid::PollParamTitlesChanged()); // titles changed on rebind
+  openaxe_vst3::grid::ClearParamTitlesChanged();
+  CHECK(!openaxe_vst3::grid::PollParamTitlesChanged());
   CHECK(openaxe_vst3::grid::UnbindAutomationSlot(g, 1));
   CHECK(nam_studio_automation_slot_block(g, 1) == -1);
+  CHECK(openaxe_vst3::grid::PollParamTitlesChanged());
+  openaxe_vst3::grid::ClearParamTitlesChanged();
   nam_studio_graph_destroy(g);
-  std::printf("  Automation slot binding from inspector: ok\n");
+  std::printf("  Automation slot binding from inspector + titles changed: ok\n");
 }
 
 void TestRenderingCostNotWholeGrid() {
