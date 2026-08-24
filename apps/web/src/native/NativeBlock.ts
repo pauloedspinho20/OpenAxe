@@ -126,6 +126,29 @@ export class NativeBlock implements PresetBlock {
       } else if (key === 'shape' && typeof value === 'string') {
         const map: Record<string, number> = { sine: 0, triangle: 1, square: 2 }
         mappedValue = map[value] ?? 0
+      } else if (typeof value === 'string') {
+        const stereoMap: Record<string, number> = { mono: 0, stereo: 1 }
+        const tremModeMap: Record<string, number> = { normal: 0, harmonic: 1 }
+        const filterTypeMap: Record<string, number> = { wah: 0, envelope: 1, ladder: 2 }
+        const filterModeMap: Record<string, number> = { pedal: 0, env: 1, lfo: 2 }
+        const pitchModeMap: Record<string, number> = { detune: 0, whammy: 1 }
+        const freezeMap: Record<string, number> = { off: 0, on: 1 }
+        const speedMap: Record<string, number> = { stop: 0, chorale: 1, tremolo: 2 }
+        if (key === 'stereo' && stereoMap[value] !== undefined) mappedValue = stereoMap[value]
+        else if (key === 'mode' && this.kind === 'tremolo' && tremModeMap[value] !== undefined)
+          mappedValue = tremModeMap[value]
+        else if (key === 'type' && filterTypeMap[value] !== undefined)
+          mappedValue = filterTypeMap[value]
+        else if (key === 'mode' && this.kind === 'filter' && filterModeMap[value] !== undefined)
+          mappedValue = filterModeMap[value]
+        else if (
+          key === 'mode' &&
+          this.kind === 'pitch-shifter' &&
+          pitchModeMap[value] !== undefined
+        )
+          mappedValue = pitchModeMap[value]
+        else if (key === 'freeze' && freezeMap[value] !== undefined) mappedValue = freezeMap[value]
+        else if (key === 'speed' && speedMap[value] !== undefined) mappedValue = speedMap[value]
       }
       void this.bridge
         .setParam({ blockId: this.id, key, value: toNumber(mappedValue) })

@@ -21,10 +21,15 @@
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 #include "openaxe/dsp/dragonfly_room_reverb.h"
 #include "openaxe/dsp/equalizer.h"
+#include "openaxe/dsp/filter.h"
 #include "openaxe/dsp/flanger.h"
+#include "openaxe/dsp/granular_delay.h"
 #include "openaxe/dsp/noise_gate.h"
 #include "openaxe/dsp/phaser.h"
 #include "openaxe/dsp/ping_pong_delay.h"
+#include "openaxe/dsp/pitch_shifter.h"
+#include "openaxe/dsp/ring_mod.h"
+#include "openaxe/dsp/rotary.h"
 #include "openaxe/dsp/smoothing.h"
 #include "openaxe/dsp/tone_stack.h"
 #include "openaxe/dsp/tremolo.h"
@@ -88,6 +93,11 @@ inline bool NeedsEngineMix(graph::BlockKind kind) {
     case graph::BlockKind::kTremolo:
     case graph::BlockKind::kDelay:
     case graph::BlockKind::kPingPongDelay:
+    case graph::BlockKind::kRingMod:
+    case graph::BlockKind::kFilter:
+    case graph::BlockKind::kPitchShifter:
+    case graph::BlockKind::kGranularDelay:
+    case graph::BlockKind::kRotary:
       return true;
     default:
       return false;
@@ -103,6 +113,11 @@ inline int DspParamCountFor(graph::BlockKind kind) {
     case graph::BlockKind::kTremolo: return dsp::Tremolo::ParamCount();
     case graph::BlockKind::kDelay: return dsp::Delay::ParamCount();
     case graph::BlockKind::kPingPongDelay: return dsp::PingPongDelay::ParamCount();
+    case graph::BlockKind::kRingMod: return dsp::RingMod::ParamCount();
+    case graph::BlockKind::kFilter: return dsp::Filter::ParamCount();
+    case graph::BlockKind::kPitchShifter: return dsp::PitchShifter::ParamCount();
+    case graph::BlockKind::kGranularDelay: return dsp::GranularDelay::ParamCount();
+    case graph::BlockKind::kRotary: return dsp::Rotary::ParamCount();
     default: return 0;
   }
 }
@@ -152,7 +167,8 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp, dsp::DragonflyHallR
                                  dsp::DragonflyRoomReverb, dsp::DragonflyPlateReverb,
                                  dsp::DragonflyEarlyReflections, dsp::Chorus, dsp::Flanger,
                                  dsp::Phaser, dsp::Delay, dsp::PingPongDelay, dsp::Compressor,
-                                 dsp::Equalizer, dsp::NoiseGate, dsp::Tremolo>;
+                                 dsp::Equalizer, dsp::NoiseGate, dsp::Tremolo, dsp::RingMod,
+                                 dsp::Filter, dsp::PitchShifter, dsp::GranularDelay, dsp::Rotary>;
 
 // Per-param smoothing policies, generated from param_schema.json by
 // scripts/gen-param-schema.mjs (issue #122). These are the schema-derived,
@@ -214,6 +230,21 @@ constexpr dsp::ParamSmoothing kDragonflyPlateReverbSmoothing[] = {
 };
 constexpr dsp::ParamSmoothing kDragonflyEarlyReflectionsSmoothing[] = {
 #include "dsp/generated/dragonfly_early_reflections_smoothing.inc"
+};
+constexpr dsp::ParamSmoothing kRingModSmoothing[] = {
+#include "dsp/generated/ring_mod_smoothing.inc"
+};
+constexpr dsp::ParamSmoothing kFilterSmoothing[] = {
+#include "dsp/generated/filter_smoothing.inc"
+};
+constexpr dsp::ParamSmoothing kPitchShifterSmoothing[] = {
+#include "dsp/generated/pitch_shifter_smoothing.inc"
+};
+constexpr dsp::ParamSmoothing kGranularDelaySmoothing[] = {
+#include "dsp/generated/granular_delay_smoothing.inc"
+};
+constexpr dsp::ParamSmoothing kRotarySmoothing[] = {
+#include "dsp/generated/rotary_smoothing.inc"
 };
 
 }  // namespace
@@ -599,6 +630,26 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       table = kTremoloSmoothing;
       count = dsp::Tremolo::ParamCount();
       break;
+    case graph::BlockKind::kRingMod:
+      table = kRingModSmoothing;
+      count = dsp::RingMod::ParamCount();
+      break;
+    case graph::BlockKind::kFilter:
+      table = kFilterSmoothing;
+      count = dsp::Filter::ParamCount();
+      break;
+    case graph::BlockKind::kPitchShifter:
+      table = kPitchShifterSmoothing;
+      count = dsp::PitchShifter::ParamCount();
+      break;
+    case graph::BlockKind::kGranularDelay:
+      table = kGranularDelaySmoothing;
+      count = dsp::GranularDelay::ParamCount();
+      break;
+    case graph::BlockKind::kRotary:
+      table = kRotarySmoothing;
+      count = dsp::Rotary::ParamCount();
+      break;
     default:
       break;
   }
@@ -736,6 +787,26 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   } else if (kind == graph::BlockKind::kTremolo) {
     state->dsp.emplace<dsp::Tremolo>();
     state->param_count.store(dsp::Tremolo::ParamCount(), std::memory_order_relaxed);
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kRingMod) {
+    state->dsp.emplace<dsp::RingMod>();
+    state->param_count.store(dsp::RingMod::ParamCount(), std::memory_order_relaxed);
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kFilter) {
+    state->dsp.emplace<dsp::Filter>();
+    state->param_count.store(dsp::Filter::ParamCount(), std::memory_order_relaxed);
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kPitchShifter) {
+    state->dsp.emplace<dsp::PitchShifter>();
+    state->param_count.store(dsp::PitchShifter::ParamCount(), std::memory_order_relaxed);
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kGranularDelay) {
+    state->dsp.emplace<dsp::GranularDelay>();
+    state->param_count.store(dsp::GranularDelay::ParamCount(), std::memory_order_relaxed);
+    SeedParamsFromDsp(*state);
+  } else if (kind == graph::BlockKind::kRotary) {
+    state->dsp.emplace<dsp::Rotary>();
+    state->param_count.store(dsp::Rotary::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
   // Engine-level mix for the wet-only effects (hybrid, issue #263): append a

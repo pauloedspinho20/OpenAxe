@@ -79,6 +79,38 @@ export class RigBlock implements PresetBlock {
         this.worklet.setParam(this.id, key, map[value] ?? 0)
         continue
       }
+      // new select params (numeric enums backed by string UI)
+      if (typeof value === 'string') {
+        const stereoMap: Record<string, number> = { mono: 0, stereo: 1 }
+        const tremModeMap: Record<string, number> = { normal: 0, harmonic: 1 }
+        const filterTypeMap: Record<string, number> = { wah: 0, envelope: 1, ladder: 2 }
+        const filterModeMap: Record<string, number> = { pedal: 0, env: 1, lfo: 2 }
+        const pitchModeMap: Record<string, number> = { detune: 0, whammy: 1 }
+        const freezeMap: Record<string, number> = { off: 0, on: 1 }
+        const speedMap: Record<string, number> = { stop: 0, chorale: 1, tremolo: 2 }
+        let mapped: number | undefined
+        if (key === 'stereo') mapped = stereoMap[value]
+        else if (key === 'mode' && this.kind === 'tremolo') mapped = tremModeMap[value]
+        else if (key === 'type') mapped = filterTypeMap[value]
+        else if (key === 'mode' && this.kind === 'filter') mapped = filterModeMap[value]
+        else if (key === 'mode' && this.kind === 'pitch-shifter') mapped = pitchModeMap[value]
+        else if (key === 'freeze') mapped = freezeMap[value]
+        else if (key === 'speed') mapped = speedMap[value]
+        if (mapped !== undefined) {
+          this.worklet.setParam(this.id, key, mapped)
+          continue
+        }
+        // generic fallback: handle string-typed enums like stereo/mode generically
+        const genericMaps: Record<string, Record<string, number>> = {
+          stereo: stereoMap,
+          freeze: freezeMap,
+          speed: speedMap,
+        }
+        if (genericMaps[key] && genericMaps[key][value] !== undefined) {
+          this.worklet.setParam(this.id, key, genericMaps[key][value])
+          continue
+        }
+      }
       const num = toNumber(value)
       this.worklet.setParam(this.id, key, num)
     }

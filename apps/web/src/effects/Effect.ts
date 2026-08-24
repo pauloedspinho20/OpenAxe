@@ -17,6 +17,11 @@ export type EffectKind =
   | 'delay'
   | 'ping-pong-delay'
   | 'reverb'
+  | 'ring-mod'
+  | 'filter'
+  | 'pitch-shifter'
+  | 'granular-delay'
+  | 'rotary'
 
 /**
  * Common interface every pedal/rack effect implements, so EffectsChain can

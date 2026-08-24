@@ -1,102 +1,164 @@
 #include "openaxe/dsp/tremolo.h"
 
-#include "Effects/Tremolo.h"
-#include "internal/dspark_wrapper.h"
+#include <algorithm>
+#include <cmath>
 
 namespace openaxe::dsp {
 
 namespace {
-
 constexpr int kRateParam = 0;
 constexpr int kDepthParam = 1;
 constexpr int kShapeParam = 2;
-constexpr int kParamCount = 3;
+constexpr int kStereoParam = 3;
+constexpr int kModeParam = 4;
+constexpr int kParamCount = 5;
 
-// Generated from packages/core/param_schema.json (issue #51) - run
-// scripts/gen-param-schema.mjs after editing the schema.
-const DsparkParamInfo kParamInfo[kParamCount] = {
+const Tremolo::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/tremolo_params.inc"
 };
 
-// Sensible starting point rather than DSPark's own defaults: a 4Hz half-depth
-// sine is the classic amp tremolo. DsparkEffect seeds the processor with these
-// on construction and after every Reset.
-constexpr float kDefaults[kParamCount] = {
-    4.0f,  // rate
-    0.5f,  // depth
-    0.0f,  // shape (Sine)
-};
-
-using Shape = dspark::Tremolo<float>::Shape;
-
-}  // namespace
-
-// The policy DsparkEffect<> needs for this effect: the param table, the
-// defaults, optional one-time configuration, and how a param index maps onto
-// the vendored processor's setters. See internal/dspark_wrapper.h.
-struct TremoloTraits {
-  static constexpr int kParamCount = openaxe::dsp::kParamCount;
-  static constexpr const DsparkParamInfo* kInfo = openaxe::dsp::kParamInfo;
-  static constexpr const float* kDefaults = openaxe::dsp::kDefaults;
-
-  // Classic stereo tremolo is often a slow auto-pan; offset the right
-  // channel's LFO by 180° instead of syncing both channels to the same LFO.
-  static void Configure(dspark::Tremolo<float>& proc) { proc.setStereo(true); }
-
-  static void Apply(dspark::Tremolo<float>& proc, const float* values, int index, float value) {
-    (void)values;
-    switch (index) {
-      case kRateParam:
-        proc.setRate(value);
-        break;
-      case kDepthParam:
-        proc.setDepth(value);
-        break;
-      case kShapeParam:
-        proc.setShape(static_cast<Shape>(static_cast<int>(value)));
-        break;
-      default:
-        break;
-    }
+struct Biquad {
+  float b0=1,b1=0,b2=0,a1=0,a2=0,z1=0,z2=0;
+  void Reset(){ z1=z2=0; }
+  void SetLowpass(float freq,float q,float sr){
+    float w0=6.28318530718f*freq/sr;
+    float alpha=std::sin(w0)/(2*q);
+    float cosw=std::cos(w0);
+    float a0=1+alpha;
+    b0=(1-cosw)*0.5f/a0; b1=(1-cosw)/a0; b2=b0; a1=(-2*cosw)/a0; a2=(1-alpha)/a0;
+  }
+  void SetHighpass(float freq,float q,float sr){
+    float w0=6.28318530718f*freq/sr;
+    float alpha=std::sin(w0)/(2*q);
+    float cosw=std::cos(w0);
+    float a0=1+alpha;
+    b0=(1+cosw)*0.5f/a0; b1=-(1+cosw)/a0; b2=b0; a1=(-2*cosw)/a0; a2=(1-alpha)/a0;
+  }
+  float Process(float x){
+    float y=b0*x+z1; z1=b1*x - a1*y + z2; z2=b2*x - a2*y; return y;
   }
 };
 
-// Pimpl so the vendored dspark:: types stay out of the public header.
+inline float ShapeValue(float phase, int shape){
+  // phase 0..1
+  switch(shape){
+    case 1: { // triangle
+      float t=phase*4;
+      if(t<1) return t;
+      if(t<3) return 2-t;
+      return t-4;
+    }
+    case 2: { // square with slight slew 2%
+      const float slew=0.02f;
+      if(phase < slew) return -1 + (phase/slew)*2;
+      if(phase < 0.5f) return 1;
+      if(phase < 0.5f+slew) return 1 - ((phase-0.5f)/slew)*2;
+      return -1;
+    }
+    default: // sine
+      return std::sin(phase*6.28318530718f);
+  }
+}
+
+} // namespace
+
 struct Tremolo::Impl {
-  DsparkEffect<dspark::Tremolo<float>, TremoloTraits> dsp;
+  float rate=4.0f;
+  float depth=0.5f;
+  int shape=0;
+  int stereo=1; // default stereo per prior Configure true
+  int mode=0; // 0 normal,1 harmonic
+  float sr=48000;
+  float phase=0;
+  Biquad lpL, lpR, hpL, hpR;
+
+  void ResetFilters(){
+    lpL.Reset(); lpR.Reset(); hpL.Reset(); hpR.Reset();
+    lpL.SetLowpass(800,0.707f,sr);
+    lpR.SetLowpass(800,0.707f,sr);
+    hpL.SetHighpass(800,0.707f,sr);
+    hpR.SetHighpass(800,0.707f,sr);
+  }
 };
 
-Tremolo::Tremolo() : impl_(std::make_unique<Impl>()) {}
-Tremolo::~Tremolo() = default;
+Tremolo::Tremolo(): impl_(std::make_unique<Impl>()){}
+Tremolo::~Tremolo()=default;
 
-// Re-prepare the processor for a new sample rate (the LFO's phase increment
-// depends on it) and re-seed every param. Allocates - not real-time safe.
-void Tremolo::Reset(double sample_rate) { impl_->dsp.Reset(sample_rate); }
-
-// Amplitude modulation: the LFO scales the signal's gain, with the right
-// channel's LFO 180 degrees out of phase (setStereo above) so the effect reads
-// as an auto-pan across the stereo field. Real-time safe.
-void Tremolo::Process(const float* const* input, float* const* output, int num_frames) {
-  impl_->dsp.Process(input, output, num_frames);
+void Tremolo::Reset(double sample_rate){
+  impl_->sr = static_cast<float>(sample_rate);
+  impl_->phase=0;
+  impl_->ResetFilters();
 }
 
-// Param surface: rate (Hz), depth (0..1), shape (0=Sine, 1=Triangle,
-// 2=Square - the enum DSPark's Tremolo::Shape defines).
-int Tremolo::ParamCount() {
-  return DsparkEffect<dspark::Tremolo<float>, TremoloTraits>::ParamCount();
+void Tremolo::Process(const float* const* input, float* const* output, int num_frames){
+  const float sr = impl_->sr;
+  const float rate = impl_->rate;
+  const float depth = impl_->depth;
+  const int shape = impl_->shape;
+  const int stereo = impl_->stereo;
+  const int mode = impl_->mode;
+  float phase = impl_->phase;
+  float inc = rate / sr;
+
+  // harmonic crossover if needed - set filters each block
+  if(mode==1){
+    // keep crossover at 800Hz
+    // filters already set on Reset; ensure set with current sr
+    // Do per block to avoid per sample overhead: coefficients already
+  }
+
+  for(int i=0;i<num_frames;++i){
+    float base_phase = phase;
+    float phaseR = stereo ? std::fmod(base_phase+0.5f,1.0f) : base_phase;
+    float modL = ShapeValue(base_phase, shape);
+    float modR = ShapeValue(phaseR, shape);
+    float gainL = 1.0f - depth * (1.0f - modL) * 0.5f;
+    float gainR = 1.0f - depth * (1.0f - modR) * 0.5f;
+
+    if(mode==0){
+      output[0][i]= input[0][i]*gainL;
+      output[1][i]= input[1][i]*gainR;
+    } else {
+      // harmonic: split each channel into low/high, modulate opposite phase
+      float lowL = impl_->lpL.Process(input[0][i]);
+      float highL = impl_->hpL.Process(input[0][i]);
+      float lowR = impl_->lpR.Process(input[1][i]);
+      float highR = impl_->hpR.Process(input[1][i]);
+      // opposite phase: highs use opposite gain to lows
+      float invGainL = 1.0f - depth * (1.0f + modL) * 0.5f; // inverted
+      float invGainR = 1.0f - depth * (1.0f + modR) * 0.5f;
+      // lows get gain, highs get inverse gain (or vice versa)
+      output[0][i]= lowL*gainL + highL*invGainL;
+      output[1][i]= lowR*gainR + highR*invGainR;
+    }
+
+    phase += inc;
+    if(phase>=1.0f) phase-=1.0f;
+  }
+  impl_->phase=phase;
 }
 
-// Name/symbol/range/unit for one param index.
-const Tremolo::ParamInfo& Tremolo::GetParamInfo(int index) {
-  return DsparkEffect<dspark::Tremolo<float>, TremoloTraits>::GetParamInfo(index);
+int Tremolo::ParamCount(){ return kParamCount; }
+const Tremolo::ParamInfo& Tremolo::GetParamInfo(int index){ return kParamInfo[static_cast<size_t>(index)]; }
+float Tremolo::GetParam(int index) const{
+  switch(index){
+    case kRateParam: return impl_->rate;
+    case kDepthParam: return impl_->depth;
+    case kShapeParam: return static_cast<float>(impl_->shape);
+    case kStereoParam: return static_cast<float>(impl_->stereo);
+    case kModeParam: return static_cast<float>(impl_->mode);
+    default: return 0;
+  }
+}
+void Tremolo::SetParam(int index,float value){
+  switch(index){
+    case kRateParam: impl_->rate = std::clamp(value,0.1f,20.0f); break;
+    case kDepthParam: impl_->depth = std::clamp(value,0.0f,1.0f); break;
+    case kShapeParam: impl_->shape = std::clamp((int)std::round(value),0,2); break;
+    case kStereoParam: impl_->stereo = value>=0.5f?1:0; break;
+    case kModeParam: impl_->mode = value>=0.5f?1:0; break;
+    default: break;
+  }
 }
 
-// Current value of one param, from DsparkEffect's own mirror of the values it
-// pushed into the processor (the vendored types have no getters).
-float Tremolo::GetParam(int index) const { return impl_->dsp.GetParam(index); }
-
-// Store one param and push it into the processor. Real-time safe - all three
-// params are plain coefficient updates.
-void Tremolo::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
-
-}  // namespace openaxe::dsp
+} // namespace openaxe::dsp

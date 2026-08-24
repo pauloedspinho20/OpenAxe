@@ -52,6 +52,11 @@ const char* BlockKindToString(graph::BlockKind kind) {
     case graph::BlockKind::kCab: return "cab";
     case graph::BlockKind::kMixer: return "mixer";
     case graph::BlockKind::kSplitter: return "splitter";
+    case graph::BlockKind::kRingMod: return "ring-mod";
+    case graph::BlockKind::kFilter: return "filter";
+    case graph::BlockKind::kPitchShifter: return "pitch-shifter";
+    case graph::BlockKind::kGranularDelay: return "granular-delay";
+    case graph::BlockKind::kRotary: return "rotary";
   }
   return nullptr;  // unreachable for a valid enum value
 }
@@ -76,6 +81,11 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
       {"cab", graph::BlockKind::kCab},
       {"mixer", graph::BlockKind::kMixer},
       {"splitter", graph::BlockKind::kSplitter},
+      {"ring-mod", graph::BlockKind::kRingMod},
+      {"filter", graph::BlockKind::kFilter},
+      {"pitch-shifter", graph::BlockKind::kPitchShifter},
+      {"granular-delay", graph::BlockKind::kGranularDelay},
+      {"rotary", graph::BlockKind::kRotary},
   };
   const auto it = kMap.find(text);
   if (it == kMap.end()) return false;
