@@ -17,11 +17,15 @@
 #include <utility>
 #include <vector>
 
+#include "openaxe/dsp/chorus.h"
 #include "openaxe/dsp/compressor.h"
+#include "openaxe/dsp/delay.h"
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 #include "openaxe/dsp/equalizer.h"
+#include "openaxe/dsp/flanger.h"
 #include "openaxe/dsp/noise_gate.h"
+#include "openaxe/dsp/phaser.h"
 #include "openaxe/dsp/tremolo.h"
 #include "test_harness.h"
 
@@ -555,6 +559,51 @@ void TestMasterAndTunerMuteAreIndependentAndBothSilence() {
   for (float sample : RunMono(engine, 0.7f)) OPENAXE_EXPECT(std::fabs(sample - 0.7f) < 1e-6f);
 }
 
+void TestModulationEffects() {
+  // Chorus should produce non-silent wet with mix=1, and dry with mix=0
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kChorus,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,64);
+    for(int i=0;i<20;i++) RunMono(eng, 0.3f);
+    auto outWet = RunMono(eng, 0.3f);
+    float maxWet=0; for(float v: outWet) maxWet=std::max(maxWet, std::fabs(v));
+    OPENAXE_EXPECT(maxWet > 0.05f);
+    int mixIdx = 4; // chorus has 4 dsp params, mix at 4
+    eng.SetParam(id, mixIdx, 0.0f);
+    for(int i=0;i<200;i++) RunMono(eng, 0.3f);
+    auto outDry = RunMono(eng, 0.3f);
+    float maxDry=0; for(float v: outDry) maxDry=std::max(maxDry, std::fabs(v));
+    OPENAXE_EXPECT(std::fabs(maxDry-0.3f) < 0.05f);
+  }
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kFlanger,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,64);
+    for(int i=0;i<20;i++) RunMono(eng, 0.3f);
+    auto out = RunMono(eng, 0.3f);
+    float max=0; bool finite=true;
+    for(float v: out) { max=std::max(max, std::fabs(v)); if(!std::isfinite(v)) finite=false; }
+    OPENAXE_EXPECT(finite);
+    OPENAXE_EXPECT(max < 2.0f && max > 0.05f);
+  }
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kPhaser,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,64);
+    for(int i=0;i<20;i++) RunMono(eng, 0.3f);
+    auto out = RunMono(eng, 0.3f);
+    float max=0; for(float v: out) max=std::max(max, std::fabs(v));
+    OPENAXE_EXPECT(max > 0.05f);
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -573,6 +622,7 @@ int main() {
   TestAmpToneStackAndPassthroughWithoutModel();
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
+  TestModulationEffects();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

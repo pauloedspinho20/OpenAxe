@@ -111,6 +111,14 @@ inline int EngineMixIndexFor(graph::BlockKind kind) {
 }
 constexpr dsp::ParamSmoothing kEngineMixSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f};
 constexpr ParamDescriptor kEngineMixDescriptor{"Mix", "mix", 0.0f, 1.0f, "x"};
+constexpr dsp::ParamSmoothing kEngineLevelSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.5f};
+constexpr ParamDescriptor kEngineLevelDescriptor{"Level", "level", 0.0f, 1.5f, "x"};
+inline bool NeedsEngineLevel(graph::BlockKind kind) {
+  return kind == graph::BlockKind::kDelay || kind == graph::BlockKind::kPingPongDelay;
+}
+inline int EngineLevelIndexFor(graph::BlockKind kind) {
+  return DspParamCountFor(kind) + 1; // after mix
+}
 
 // The five block kinds backed by a NAM capture. They are structurally
 // identical - only the UI's gear category and labelling differ - so everything
@@ -602,6 +610,10 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
   if (NeedsEngineMix(state.kind)) {
     const int mixIdx = EngineMixIndexFor(state.kind);
     if (mixIdx < pc && mixIdx < kMaxParamsPerBlock) state.smoothing[static_cast<size_t>(mixIdx)] = kEngineMixSmoothing;
+    if (NeedsEngineLevel(state.kind)) {
+      const int levelIdx = EngineLevelIndexFor(state.kind);
+      if (levelIdx < pc && levelIdx < kMaxParamsPerBlock) state.smoothing[static_cast<size_t>(levelIdx)] = kEngineLevelSmoothing;
+    }
   }
   // Seed the live ramp state from the current param mirror.
   for (int i = 0; i < pc; ++i) {
@@ -727,13 +739,20 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     SeedParamsFromDsp(*state);
   }
   // Engine-level mix for the wet-only effects (hybrid, issue #263): append a
-  // 0..1 mix after the DSP's own table, default fully wet so existing rigs are
-  // unchanged. Stored as a regular param so presets/automation persist it.
+  // 0..1 mix after the DSP's own table. Most default fully wet so existing
+  // rigs are unchanged; delay/ping-pong default 10% wet per user feedback.
+  // Delay/ping-pong also get an additional level (volume) param after mix.
   if (NeedsEngineMix(kind)) {
     const int dspCount = DspParamCountFor(kind);
     const int mixIdx = EngineMixIndexFor(kind);
-    state->param_count.store(dspCount + 1, std::memory_order_relaxed);
-    state->params[static_cast<size_t>(mixIdx)].store(1.0f, std::memory_order_relaxed);
+    const int total = dspCount + 1 + (NeedsEngineLevel(kind) ? 1 : 0);
+    state->param_count.store(total, std::memory_order_relaxed);
+    const float defaultMix = (kind == graph::BlockKind::kDelay || kind == graph::BlockKind::kPingPongDelay) ? 0.1f : 1.0f;
+    state->params[static_cast<size_t>(mixIdx)].store(defaultMix, std::memory_order_relaxed);
+    if (NeedsEngineLevel(kind)) {
+      const int levelIdx = EngineLevelIndexFor(kind);
+      state->params[static_cast<size_t>(levelIdx)].store(1.0f, std::memory_order_relaxed);
+    }
   }
   if (kind == graph::BlockKind::kCab) {
     // Cab stays std::monostate - its DSP is the pair of convolvers above, not a
@@ -1278,6 +1297,19 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
               }
             }
           }
+          // Engine-level level (volume) for delay/ping-pong after mix
+          if (NeedsEngineLevel(state.kind)) {
+            const int levelIdx = EngineLevelIndexFor(state.kind);
+            const double level = std::clamp(state.smoothed[static_cast<size_t>(levelIdx)], 0.0, 1.5);
+            if (level != 1.0) {
+              const float gain = static_cast<float>(level);
+              for (int i = 0; i < len; ++i) {
+                const int idx = start + i;
+                state.output_l[static_cast<size_t>(idx)] *= gain;
+                state.output_r[static_cast<size_t>(idx)] *= gain;
+              }
+            }
+          }
         }
       }
     }
@@ -1369,6 +1401,9 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfoOf(const BlockState& state,
   // Engine-level mix is the last index for the 8 wet-only effects (issue #263).
   if (NeedsEngineMix(state.kind) && index == EngineMixIndexFor(state.kind)) {
     return kEngineMixDescriptor;
+  }
+  if (NeedsEngineLevel(state.kind) && index == EngineLevelIndexFor(state.kind)) {
+    return kEngineLevelDescriptor;
   }
   return std::visit(
       [&](const auto& d) -> std::optional<ParamDescriptor> {
@@ -2119,22 +2154,32 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   auto* delay = std::get_if<dsp::Delay>(&state->dsp);
   if (!delay) return;
 
-  // Preserve engine mix across model switches (hybrid dry/wet, #263).
+  // Preserve engine mix/level across model switches (hybrid dry/wet, #263).
   float savedMix = 1.0f;
+  float savedLevel = 1.0f;
   bool hadMix = false;
+  bool hadLevel = false;
   if (NeedsEngineMix(state->kind)) {
     const int mixIdx = EngineMixIndexFor(state->kind);
     if (mixIdx < state->param_count.load(std::memory_order_relaxed)) {
       savedMix = state->params[static_cast<size_t>(mixIdx)].load(std::memory_order_relaxed);
       hadMix = true;
     }
+    if (NeedsEngineLevel(state->kind)) {
+      const int levelIdx = EngineLevelIndexFor(state->kind);
+      if (levelIdx < state->param_count.load(std::memory_order_relaxed)) {
+        savedLevel = state->params[static_cast<size_t>(levelIdx)].load(std::memory_order_relaxed);
+        hadLevel = true;
+      }
+    }
   }
   delay->SetModel(model);
   // Reset param_count in case it changes (it doesn't currently — same count
   // for all models — but kept for parity with other model-switch methods).
-  // Include the engine mix if present.
+  // Include the engine mix/level if present.
   if (NeedsEngineMix(state->kind)) {
-    state->param_count.store(dsp::Delay::ParamCount() + 1, std::memory_order_relaxed);
+    const int total = dsp::Delay::ParamCount() + 1 + (NeedsEngineLevel(state->kind) ? 1 : 0);
+    state->param_count.store(total, std::memory_order_relaxed);
   } else {
     state->param_count.store(dsp::Delay::ParamCount(), std::memory_order_relaxed);
   }
@@ -2142,6 +2187,10 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   if (hadMix) {
     const int mixIdx = EngineMixIndexFor(state->kind);
     state->params[static_cast<size_t>(mixIdx)].store(savedMix, std::memory_order_relaxed);
+  }
+  if (hadLevel) {
+    const int levelIdx = EngineLevelIndexFor(state->kind);
+    state->params[static_cast<size_t>(levelIdx)].store(savedLevel, std::memory_order_relaxed);
   }
   // Same param table across delay models, so the policy is unchanged - this
   // just re-seeds the live ramp state from the (re-defaulted) mirror.

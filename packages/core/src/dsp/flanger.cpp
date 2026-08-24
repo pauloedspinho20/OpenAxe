@@ -147,7 +147,7 @@ float Flanger::GetParam(int index) const {
 
 // Store one param. Real-time safe except for the base delay, which resizes
 // the delay lines and so must run between blocks (which is how the engine
-// applies params anyway).
+// applies params anyway). Only reallocates when the value actually changes.
 void Flanger::SetParam(int index, float value) {
   switch (index) {
     case kRateParam:
@@ -160,8 +160,10 @@ void Flanger::SetParam(int index, float value) {
       impl_->feedback = value;
       break;
     case kDelayParam:
-      impl_->delay = value;
-      impl_->ApplySampleRate();
+      if (impl_->delay != value) {
+        impl_->delay = value;
+        impl_->ApplySampleRate();
+      }
       break;
     default:
       return;

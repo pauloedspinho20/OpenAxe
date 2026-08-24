@@ -79,6 +79,7 @@ export function SettingsDialog({
   const [deleteConfirming, setDeleteConfirming] = useState(false)
   const [signOutOnDelete, setSignOutOnDelete] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [nativeConfig, setNativeConfig] = useState<{ sampleRate: number; bufferFrames: number; latencyMs: number; latencyFrames: number } | null>(null)
 
   const refreshCacheStats = () => {
     void getAssetCacheStats().then(setCacheStats)
@@ -101,6 +102,39 @@ export function SettingsDialog({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // For desktop, poll getConfig() for the real device latency/buffer info.
+  // The NativeAudioContext shim always reports 0 for baseLatency/outputLatency,
+  // so the diagnostics would otherwise show 0ms/48000Hz even when the device
+  // is running at a different rate or buffer size.
+  useEffect(() => {
+    if (!open || !isNative) return
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const bridge = getOpenAxe()
+        if (!bridge) return
+        const cfg = await bridge.getConfig()
+        if (cancelled) return
+        if (typeof cfg.sampleRate === 'number' && typeof cfg.bufferFrames === 'number') {
+          setNativeConfig({
+            sampleRate: cfg.sampleRate,
+            bufferFrames: cfg.bufferFrames,
+            latencyMs: typeof cfg.latencyMs === 'number' ? cfg.latencyMs : -1,
+            latencyFrames: typeof cfg.latencyFrames === 'number' ? cfg.latencyFrames : -1,
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+    void poll()
+    const id = window.setInterval(() => void poll(), 1000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [open, isNative])
 
   if (!open) return null
 
@@ -381,26 +415,67 @@ export function SettingsDialog({
             <span className={`label ${styles.diagLabel}`}>Engine State</span>
           </div>
           <div className={styles.diagItem}>
-            <span className={styles.diagValue}>{context ? `${context.sampleRate} Hz` : '—'}</span>
+            <span className={styles.diagValue}>
+              {isNative
+                ? nativeConfig
+                  ? `${nativeConfig.sampleRate} Hz`
+                  : context
+                    ? `${context.sampleRate} Hz`
+                    : '—'
+                : context
+                  ? `${context.sampleRate} Hz`
+                  : '—'}
+            </span>
             <span className={`label ${styles.diagLabel}`}>Sample Rate</span>
           </div>
-          <div className={styles.diagItem}>
-            <span className={styles.diagValue}>
-              {context ? `${Math.round(context.baseLatency * 1000)} ms` : '—'}
-            </span>
-            <span className={`label ${styles.diagLabel}`}>Base Latency</span>
-          </div>
-          <div className={styles.diagItem}>
-            <span className={styles.diagValue}>
-              {context ? `${Math.round((context.outputLatency || 0) * 1000)} ms` : '—'}
-            </span>
-            <span className={`label ${styles.diagLabel}`}>Output Latency</span>
-          </div>
+          {isNative ? (
+            <>
+              <div className={styles.diagItem}>
+                <span className={styles.diagValue}>
+                  {nativeConfig ? `${nativeConfig.bufferFrames} frames` : '—'}
+                </span>
+                <span className={`label ${styles.diagLabel}`}>Buffer Frames</span>
+              </div>
+              <div className={styles.diagItem}>
+                <span className={styles.diagValue}>
+                  {nativeConfig && nativeConfig.latencyMs >= 0 ? `${Math.round(nativeConfig.latencyMs)} ms` : '—'}
+                </span>
+                <span className={`label ${styles.diagLabel}`}>Round-trip Latency</span>
+              </div>
+              <div className={styles.diagItem}>
+                <span className={styles.diagValue}>
+                  {nativeConfig && nativeConfig.latencyFrames >= 0 ? `${nativeConfig.latencyFrames} frames` : '—'}
+                </span>
+                <span className={`label ${styles.diagLabel}`}>Latency Frames</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.diagItem}>
+                <span className={styles.diagValue}>
+                  {context ? `${Math.round(context.baseLatency * 1000)} ms` : '—'}
+                </span>
+                <span className={`label ${styles.diagLabel}`}>Base Latency</span>
+              </div>
+              <div className={styles.diagItem}>
+                <span className={styles.diagValue}>
+                  {context ? `${Math.round((context.outputLatency || 0) * 1000)} ms` : '—'}
+                </span>
+                <span className={`label ${styles.diagLabel}`}>Output Latency</span>
+              </div>
+            </>
+          )}
           <div className={styles.diagItem}>
             <span className={styles.diagValue}>{rig?.countActiveHeavyBlocks() ?? 0}</span>
             <span className={`label ${styles.diagLabel}`}>Amps/Cabs Loaded</span>
           </div>
         </div>
+        {isNative && nativeConfig && (
+          <p className={styles.sectionHint}>
+            Round-trip is input + output buffering reported by {nativeConfig.latencyFrames >= 0 ? 'the device' : '—'} at {nativeConfig.sampleRate} Hz.
+            Lower buffer = lower latency but higher CPU.
+          </p>
+        )}
       </section>
 
       {/* Tone3000 account */}

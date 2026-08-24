@@ -173,9 +173,9 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
 
   it.each(SYMBOL_KINDS)('%s: no UI field targets a param the core does not have', (kind) => {
     const core = coreParamsFor(kind)
-    // `mix` and the I/O trims are engine-level staging rather than DSP params
+    // `mix`/`level` and the I/O trims are engine-level staging rather than DSP params
     // on some kinds, so they are allowed to have no entry in the core table.
-    const staging = new Set(['mix', 'input_level', 'output_level'])
+    const staging = new Set(['mix', 'level', 'input_level', 'output_level'])
     const unknown = [...webFieldsFor(kind).keys()].filter(
       (key) => !core.has(key) && !staging.has(key),
     )

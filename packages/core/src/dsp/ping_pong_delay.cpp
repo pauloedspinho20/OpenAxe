@@ -143,13 +143,19 @@ void PingPongDelay::Process(const float* const* input, float* const* output, int
   impl_->filter.SetCutoff(impl_->tone, sr);
 
   for (int i = 0; i < num_frames; ++i) {
-    const float in = input[0][i] * 0.5f + input[1][i] * 0.5f;
+    const float inL = input[0][i];
+    const float inR = input[1][i];
 
     const float left_tap = impl_->left.ReadTap(time_ms, sr);
     const float right_tap = impl_->right.ReadTap(time_ms, sr);
 
-    impl_->right.buffer[static_cast<size_t>(impl_->right.write_pos)] = in + impl_->filter.Process(left_tap) * fb;
-    impl_->left.buffer[static_cast<size_t>(impl_->left.write_pos)] = impl_->filter.Process(right_tap) * fb;
+    // True stereo: preserve the stereo image by cross-coupling the inputs.
+    // Left input's echo goes to the right delay, right input's echo to the left,
+    // so that a hard-left dry remains hard-left when mixed, and the wet
+    // ping-pongs hard left/right. Summing to mono (previous) made the left
+    // channel appear centered at low mix.
+    impl_->right.buffer[static_cast<size_t>(impl_->right.write_pos)] = inL + impl_->filter.Process(left_tap) * fb;
+    impl_->left.buffer[static_cast<size_t>(impl_->left.write_pos)] = inR + impl_->filter.Process(right_tap) * fb;
 
     output[0][i] = left_tap;
     output[1][i] = right_tap;

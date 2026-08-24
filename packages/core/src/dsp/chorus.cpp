@@ -156,7 +156,9 @@ float Chorus::GetParam(int index) const {
 // Store one param. Real-time safe except for the base delay, which resizes
 // the delay lines (ApplySampleRate) and so must not be called from the audio
 // thread - the engine routes param writes through its own atomic mirror and
-// applies them between blocks for exactly this reason.
+// applies them between blocks for exactly this reason. Only reallocates when
+// the value actually changes to avoid clearing the delay line every block
+// (which would silence the chorus, see engine_test failure).
 void Chorus::SetParam(int index, float value) {
   switch (index) {
     case kRateParam:
@@ -166,8 +168,10 @@ void Chorus::SetParam(int index, float value) {
       impl_->depth = value;
       break;
     case kDelayParam:
-      impl_->delay = value;
-      impl_->ApplySampleRate();
+      if (impl_->delay != value) {
+        impl_->delay = value;
+        impl_->ApplySampleRate();
+      }
       break;
     case kFeedbackParam:
       impl_->feedback = value;
