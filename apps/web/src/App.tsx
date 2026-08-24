@@ -10,6 +10,7 @@ import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
 import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
+import pkg from '../package.json'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useMidiEngine } from './hooks/useMidiEngine'
@@ -90,7 +91,7 @@ function App() {
     <div className={styles.chassis}>
       <header className={styles.header}>
         <div className={`${styles.headerGroup} ${styles.brand}`}>
-          <Wordmark />
+          <Wordmark version={pkg.version} />
         </div>
 
         <div className={`${styles.headerGroup} ${styles.status}`}>

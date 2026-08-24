@@ -1,5 +1,7 @@
 import styles from './Wordmark.module.css'
 import markUrl from './assets/openaxe-256.png'
+import pkg from '../../../package.json'
+import type { CSSProperties } from 'react'
 
 // PNG mark so the Wordmark needs no runtime SVG fetch (works in Storybook,
 // the web app and the desktop bundle alike). Uses the final 256 png.
@@ -18,26 +20,95 @@ function AxeMark({ size = 24 }: { size?: number }) {
 
 export interface WordmarkProps {
   variant?: 'inline' | 'hero'
+  version?: string // e.g. "0.2.0" — normalised to "v0.2.0" inside
+  showBeta?: boolean // default: derived as major(version) === 0
+  style?: CSSProperties
 }
 
-export function Wordmark({ variant = 'inline' }: WordmarkProps) {
+function normaliseVersion(input?: string): string | undefined {
+  if (!input) return undefined
+  const trimmed = input.trim()
+  if (!trimmed) return undefined
+  const withoutV = trimmed.replace(/^v/i, '')
+  if (!withoutV) return undefined
+  return `v${withoutV}`
+}
+
+function majorOf(version?: string): number | undefined {
+  if (!version) return undefined
+  const withoutV = version.replace(/^v/i, '').trim()
+  const majorStr = withoutV.split('.')[0]
+  const n = Number(majorStr)
+  if (Number.isNaN(n)) return undefined
+  return n
+}
+
+function resolveFallbackVersion(): string | undefined {
+  try {
+    return (pkg as { version?: string }).version
+  } catch {
+    return undefined
+  }
+}
+
+export function Wordmark({
+  variant = 'inline',
+  version: versionProp,
+  showBeta: showBetaProp,
+  style,
+}: WordmarkProps) {
+  const fallback = resolveFallbackVersion()
+  const rawVersion = versionProp ?? fallback
+  const version = normaliseVersion(rawVersion)
+  const major = majorOf(version)
+  const showBeta =
+    showBetaProp !== undefined ? showBetaProp : major !== undefined ? major === 0 : false
+
   if (variant === 'hero') {
     return (
-      <div className={styles.hero}>
+      <div className={styles.hero} style={style}>
         <AxeMark size={200} />
         <p>
           OPEN<span>AXE</span>
         </p>
+        {(version || showBeta) && (
+          <div
+            className={styles.metaRow}
+            role="group"
+            aria-label={version ? `version ${version} ${showBeta ? 'beta' : ''}`.trim() : 'beta'}
+          >
+            {version && (
+              <span className={styles.version} aria-label={`version ${version}`}>
+                {version}
+              </span>
+            )}
+            {showBeta && (
+              <span className={styles.beta} aria-label="beta">
+                BETA
+              </span>
+            )}
+          </div>
+        )}
       </div>
     )
   }
 
   return (
-    <div className={styles.inline}>
+    <div className={styles.inline} style={style}>
       <AxeMark size={40} />
       <p>
         OPEN<span>AXE</span>
       </p>
+      {version && (
+        <span className={styles.version} aria-label={`version ${version}`}>
+          {version}
+        </span>
+      )}
+      {showBeta && (
+        <span className={styles.beta} aria-label="beta">
+          BETA
+        </span>
+      )}
     </div>
   )
 }
