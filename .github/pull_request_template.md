@@ -3,6 +3,7 @@
 ## Summary
 
 <!-- What does this change and why? Link epic/issue: Fixes #... -->
+<!-- Base branch: dev for all feature PRs (only dev→main targets main) — see CONTRIBUTING.md#Branching -->
 
 ## Checklist
 

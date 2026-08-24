@@ -72,8 +72,9 @@ All checks must pass before merge — CI runs them on every push/PR to `main`/`d
 
 ## Branching
 
-- **Feature branches** → `dev` via **squash** (one commit per feature, Conventional Commits `feat:`/`fix:`/`feat!:`).
-- **`dev` → `main`** via **merge commit** (`--no-ff`) — not squash. This preserves ancestry so the next `dev→main` doesn't conflict on `added in both` files (e.g. `plugin.yml`, `CMakeLists.txt`) and keeps `git merge-base` advancing. See `README.md#Branching`.
+- **All feature branches → `dev`** (including Dependabot — `target-branch: dev` in `.github/dependabot.yml`). Open every pull request with base `dev`.
+- Feature `→ dev` merges via **squash** (one commit per feature, Conventional Commits `feat:`/`fix:`/`feat!:`).
+- **`dev` → `main`** is the **only** PR that targets `main`, via **merge commit** (`--no-ff`) — not squash. This preserves ancestry so the next `dev→main` doesn't conflict on `added in both` files (e.g. `plugin.yml`, `CMakeLists.txt`) and keeps `git merge-base` advancing. See `README.md#Branching`. After human review on `dev`, open the release PR `dev→main`.
 - Branch protection on `main`/`dev` requires PR + required CI checks; `deleteBranchOnMerge` enabled.
 - Use `.gitattributes` for generated/lockfile merge strategy.
 
