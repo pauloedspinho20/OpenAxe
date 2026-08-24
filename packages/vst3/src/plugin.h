@@ -43,6 +43,7 @@ class OpenAxePlugin final : public iplug::Plugin {
   void OnParamChange(int paramIdx) override;
   bool SerializeState(IByteChunk& chunk) const override;
   int UnserializeState(const IByteChunk& chunk, int startPos) override;
+  void ProcessMidiMsg(const IMidiMsg& msg) override;
 #endif
 
   // Portable JSON round-trip (same document as the host chunk, just on disk)

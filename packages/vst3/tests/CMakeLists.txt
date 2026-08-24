@@ -63,6 +63,12 @@ target_link_libraries(openaxe_vst3_grid_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIV
 target_include_directories(openaxe_vst3_grid_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 
+# MIDI mapping — host event bus forwarding to core (issue #124)
+add_executable(openaxe_vst3_midi_test midi_test.cpp)
+target_link_libraries(openaxe_vst3_midi_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+target_include_directories(openaxe_vst3_midi_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME vst3_midi COMMAND openaxe_vst3_midi_test)
+
 # ── ThreadSanitizer over the concurrent suspend stress (issue #130) ─────────
 # Mirrors apps/desktop/tests/CMakeLists.txt's NAM_DESKTOP_ENABLE_TSAN shape.
 # Run: cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_TSAN=ON
