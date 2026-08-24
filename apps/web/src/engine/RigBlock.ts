@@ -111,8 +111,12 @@ export class RigBlock implements PresetBlock {
   }
 
   /** Install a cab IR from a decoded AudioBuffer (folded to mono, at context rate). */
-  loadIR(buffer: AudioBuffer, _mix?: number, info?: { id: string; name: string }): void {
+  loadIR(buffer: AudioBuffer, mix?: number, info?: { id: string; name: string }): void {
     this.loadedIr = info ?? null
+    if (typeof mix === 'number') {
+      this.params = { ...this.params, irMix: mix }
+      this.worklet.setParam(this.id, 'irMix', mix)
+    }
     const samples = toMonoSamples(buffer)
     void this.worklet.loadIr(this.id, samples).catch(() => {
       this.loadedIr = null

@@ -123,6 +123,16 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     }
   })
 
+  it("the amp's slim_size knob matches the core", () => {
+    const core = coreParamsFor('amp').get('slim_size')
+    expect(core).toBeDefined()
+    const web = (BLOCK_PARAM_SCHEMAS.amp ?? []).find((f) => f.key === 'slim_size')
+    expect(web?.control).toBe('knob')
+    if (web?.control === 'knob') {
+      expect({ min: web.min, max: web.max }).toEqual({ min: core!.min, max: core!.max })
+    }
+  })
+
   it('covers every effect kind the core implements', () => {
     // Every core effect kind is either compared symbol-by-symbol below or is one
     // of the documented exceptions in EXCLUDED_KINDS.

@@ -72,6 +72,46 @@ constexpr int kMixerParamCount = graph::kMixerInputCount * kMixerParamsPerInput;
 // replacement for the web SplitterBlock's per-output GainNode.
 constexpr int kSplitterParamCount = graph::kSplitterOutputCount;
 
+// ── Engine-level wet/dry mix (hybrid dry/wet, issue #263) ─────────────────
+// The 8 wet-only effects below are 100% wet out of their DSP; the engine owns
+// a single 0..1 mix that blends dry input with wet output post-DSP. Compressor,
+// reverb and cab keep their native mix params and are excluded. Stored as the
+// last param index for the kind, so ParamInfo/GetParam/SetParam see it as a
+// regular param and automation/presets persist it without engine-specific API.
+inline bool NeedsEngineMix(graph::BlockKind kind) {
+  switch (kind) {
+    case graph::BlockKind::kNoiseGate:
+    case graph::BlockKind::kEq:
+    case graph::BlockKind::kChorus:
+    case graph::BlockKind::kFlanger:
+    case graph::BlockKind::kPhaser:
+    case graph::BlockKind::kTremolo:
+    case graph::BlockKind::kDelay:
+    case graph::BlockKind::kPingPongDelay:
+      return true;
+    default:
+      return false;
+  }
+}
+inline int DspParamCountFor(graph::BlockKind kind) {
+  switch (kind) {
+    case graph::BlockKind::kNoiseGate: return dsp::NoiseGate::ParamCount();
+    case graph::BlockKind::kEq: return dsp::Equalizer::ParamCount();
+    case graph::BlockKind::kChorus: return dsp::Chorus::ParamCount();
+    case graph::BlockKind::kFlanger: return dsp::Flanger::ParamCount();
+    case graph::BlockKind::kPhaser: return dsp::Phaser::ParamCount();
+    case graph::BlockKind::kTremolo: return dsp::Tremolo::ParamCount();
+    case graph::BlockKind::kDelay: return dsp::Delay::ParamCount();
+    case graph::BlockKind::kPingPongDelay: return dsp::PingPongDelay::ParamCount();
+    default: return 0;
+  }
+}
+inline int EngineMixIndexFor(graph::BlockKind kind) {
+  return DspParamCountFor(kind);  // mix is appended after the DSP's table
+}
+constexpr dsp::ParamSmoothing kEngineMixSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f};
+constexpr ParamDescriptor kEngineMixDescriptor{"Mix", "mix", 0.0f, 1.0f, "x"};
+
 // The five block kinds backed by a NAM capture. They are structurally
 // identical - only the UI's gear category and labelling differ - so everything
 // model-related in this file keys off this rather than a specific kind.
@@ -454,11 +494,15 @@ void AudioEngine::EnsureBuffers(BlockState& state) {
 // loads).
 void AudioEngine::SeedParamsFromDsp(BlockState& state) {
   const int count = state.param_count.load(std::memory_order_relaxed);
+  // Engine-level mix (issue #263) is not a DSP param — don't overwrite it with
+  // the DSP's GetParam (which would return 0 for that index).
+  int limit = count;
+  if (NeedsEngineMix(state.kind)) limit = std::min(limit, DspParamCountFor(state.kind));
   std::visit(
       [&](auto& d) {
         using T = std::decay_t<decltype(d)>;
         if constexpr (!std::is_same_v<T, std::monostate> && !std::is_same_v<T, dsp::NamAmp>) {
-          for (int i = 0; i < count; ++i) {
+          for (int i = 0; i < limit; ++i) {
             state.params[static_cast<size_t>(i)].store(d.GetParam(i), std::memory_order_relaxed);
           }
         }
@@ -554,6 +598,10 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
     for (int i = 0; i < count && i < pc && i < kMaxParamsPerBlock; ++i) {
       state.smoothing[static_cast<size_t>(i)] = table[i];
     }
+  }
+  if (NeedsEngineMix(state.kind)) {
+    const int mixIdx = EngineMixIndexFor(state.kind);
+    if (mixIdx < pc && mixIdx < kMaxParamsPerBlock) state.smoothing[static_cast<size_t>(mixIdx)] = kEngineMixSmoothing;
   }
   // Seed the live ramp state from the current param mirror.
   for (int i = 0; i < pc; ++i) {
@@ -677,6 +725,15 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->dsp.emplace<dsp::Tremolo>();
     state->param_count.store(dsp::Tremolo::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
+  }
+  // Engine-level mix for the wet-only effects (hybrid, issue #263): append a
+  // 0..1 mix after the DSP's own table, default fully wet so existing rigs are
+  // unchanged. Stored as a regular param so presets/automation persist it.
+  if (NeedsEngineMix(kind)) {
+    const int dspCount = DspParamCountFor(kind);
+    const int mixIdx = EngineMixIndexFor(kind);
+    state->param_count.store(dspCount + 1, std::memory_order_relaxed);
+    state->params[static_cast<size_t>(mixIdx)].store(1.0f, std::memory_order_relaxed);
   }
   if (kind == graph::BlockKind::kCab) {
     // Cab stays std::monostate - its DSP is the pair of convolvers above, not a
@@ -900,8 +957,11 @@ void AudioEngine::ApplyRealtimeParams(BlockState& state) {
           // state.smoothed[i] is the eased value for this sub-block; feeding it
           // (not the raw atomic target) is what removes the zipper noise a host
           // automating a gain param would otherwise produce (issue #122).
+          // Engine-level mix (issue #263) is not a DSP param — skip it.
           const int pc = state.param_count.load(std::memory_order_relaxed);
-          for (int i = 0; i < pc; ++i) {
+          int limit = pc;
+          if (NeedsEngineMix(state.kind)) limit = std::min(limit, DspParamCountFor(state.kind));
+          for (int i = 0; i < limit; ++i) {
             d.SetParam(i, state.smoothed[static_cast<size_t>(i)]);
           }
         }
@@ -1189,6 +1249,35 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
           }
           ApplyRealtimeParams(state);
           RunDsp(state, start, len);
+          // Engine-level wet/dry mix (hybrid dry/wet, issue #263): blend dry
+          // input with wet DSP output per sub-block using the smoothed mix for
+          // this slice. Bypass already dominates above, so this only runs on
+          // the wet path. Fully wet (mix==1) is the common case and keeps the
+          // fast path; fully dry copies input.
+          if (NeedsEngineMix(state.kind)) {
+            const int mixIdx = EngineMixIndexFor(state.kind);
+            const double mix = std::clamp(state.smoothed[static_cast<size_t>(mixIdx)], 0.0, 1.0);
+            if (mix < 1.0) {
+              if (mix <= 0.0) {
+                std::copy_n(&state.input_l[0][static_cast<size_t>(start)], len,
+                            &state.output_l[static_cast<size_t>(start)]);
+                std::copy_n(&state.input_r[0][static_cast<size_t>(start)], len,
+                            &state.output_r[static_cast<size_t>(start)]);
+              } else {
+                const float dryGain = 1.0f - static_cast<float>(mix);
+                const float wetGain = static_cast<float>(mix);
+                for (int i = 0; i < len; ++i) {
+                  const int idx = start + i;
+                  state.output_l[static_cast<size_t>(idx)] =
+                      state.input_l[0][static_cast<size_t>(idx)] * dryGain +
+                      state.output_l[static_cast<size_t>(idx)] * wetGain;
+                  state.output_r[static_cast<size_t>(idx)] =
+                      state.input_r[0][static_cast<size_t>(idx)] * dryGain +
+                      state.output_r[static_cast<size_t>(idx)] * wetGain;
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1277,6 +1366,10 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfo(BlockId id, int index) con
 
 // The shared std::visit over a block's live DSP for a valid index.
 std::optional<ParamDescriptor> AudioEngine::ParamInfoOf(const BlockState& state, int index) {
+  // Engine-level mix is the last index for the 8 wet-only effects (issue #263).
+  if (NeedsEngineMix(state.kind) && index == EngineMixIndexFor(state.kind)) {
+    return kEngineMixDescriptor;
+  }
   return std::visit(
       [&](const auto& d) -> std::optional<ParamDescriptor> {
         using T = std::decay_t<decltype(d)>;
@@ -2026,11 +2119,30 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
   auto* delay = std::get_if<dsp::Delay>(&state->dsp);
   if (!delay) return;
 
+  // Preserve engine mix across model switches (hybrid dry/wet, #263).
+  float savedMix = 1.0f;
+  bool hadMix = false;
+  if (NeedsEngineMix(state->kind)) {
+    const int mixIdx = EngineMixIndexFor(state->kind);
+    if (mixIdx < state->param_count.load(std::memory_order_relaxed)) {
+      savedMix = state->params[static_cast<size_t>(mixIdx)].load(std::memory_order_relaxed);
+      hadMix = true;
+    }
+  }
   delay->SetModel(model);
   // Reset param_count in case it changes (it doesn't currently — same count
   // for all models — but kept for parity with other model-switch methods).
-  state->param_count.store(dsp::Delay::ParamCount(), std::memory_order_relaxed);
+  // Include the engine mix if present.
+  if (NeedsEngineMix(state->kind)) {
+    state->param_count.store(dsp::Delay::ParamCount() + 1, std::memory_order_relaxed);
+  } else {
+    state->param_count.store(dsp::Delay::ParamCount(), std::memory_order_relaxed);
+  }
   SeedParamsFromDsp(*state);
+  if (hadMix) {
+    const int mixIdx = EngineMixIndexFor(state->kind);
+    state->params[static_cast<size_t>(mixIdx)].store(savedMix, std::memory_order_relaxed);
+  }
   // Same param table across delay models, so the policy is unchanged - this
   // just re-seeds the live ramp state from the (re-defaulted) mirror.
   SeedSmoothing(*state);

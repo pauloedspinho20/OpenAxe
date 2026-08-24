@@ -100,9 +100,10 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
 
   OPENAXE_EXPECT(engine.ParamCount(compressor) == openaxe::dsp::Compressor::ParamCount());
-  OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount());
-  OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount());
-  OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount());
+  // eq / noise_gate / tremolo now expose an additional engine-level mix (hybrid dry/wet, #263)
+  OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
 
   OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
   OPENAXE_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);

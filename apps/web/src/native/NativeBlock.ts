@@ -184,12 +184,16 @@ export class NativeBlock implements PresetBlock {
    * samples (see NativeAudioBuffer) because nothing on this path can decode
    * audio - the core does it, along with resampling to the stream's rate.
    */
-  loadIR(buffer: AudioBuffer, _mix?: number, info?: { id: string; name: string }): void {
+  loadIR(buffer: AudioBuffer, mix?: number, info?: { id: string; name: string }): void {
     if (!isNativeAudioBuffer(buffer)) {
       console.warn('[native] loadIR was given a decoded AudioBuffer with no file bytes; ignoring')
       return
     }
     this.loadedIr = info ?? null
+    if (typeof mix === 'number') {
+      this.params = { ...this.params, irMix: mix }
+      void this.bridge.setParam({ blockId: this.id, key: 'irMix', value: mix })
+    }
     void this.bridge
       .loadIrWav({ blockId: this.id, wavBase64: toBase64(buffer.nativeFileBytes) })
       .then((result) => {
