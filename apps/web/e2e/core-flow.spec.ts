@@ -50,7 +50,18 @@ test.beforeEach(async ({ page }) => {
     )
   })
   await page.reload()
-  // Dismiss the first-run walkthrough so it doesn't sit on top of everything else.
+  // Dismiss first-run walkthroughs so they don't sit on top of everything else.
+  // Two modals can appear on a fresh DB: the onboarding walkthrough and the
+  // factory-pack prompt (see useOnboarding / useFactoryOnboarding). Factory
+  // renders on top (later in App.tsx), so it must be dismissed first.
+  const factoryNotNow = page.getByRole('button', { name: 'Not now' })
+  if (await factoryNotNow.isVisible().catch(() => false)) {
+    await factoryNotNow.click()
+  }
+  const factoryGotIt = page.getByRole('button', { name: 'Got it' })
+  if (await factoryGotIt.isVisible().catch(() => false)) {
+    await factoryGotIt.click()
+  }
   const onboardingClose = page.getByRole('button', { name: "Let's go" })
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
@@ -72,15 +83,15 @@ test('gates the app behind a power-on overlay until started', async ({ page }) =
 test('places a block, auto-opens the Tone3000 catalog, and powers on', async ({ page }) => {
   await powerOn(page)
 
-  // Scene slot 1 ("Clean") is the factory default and loads a Compressor +
-  // EQ (+ auto Mixer) into columns 1-3 on every fresh session (see
-  // factoryScenes.ts) - column 4 is the first actually-empty cell.
-  await page.getByRole('button', { name: 'Add a block at row 1, column 4' }).click()
+  // Fresh installs now boot into the factory Bypass preset (empty grid) when
+  // no factory pack is manifest-listed (see factoryScenes.ts). The first
+  // empty cell is row 1 col 1.
+  await page.getByRole('button', { name: 'Add a block at row 1, column 1', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Amp', exact: true }).click()
 
   // A freshly placed core block never has a model loaded yet - the catalog
   // should open on its own (see openCatalogForNewBlock.ts).
-  const catalog = page.getByRole('dialog', { name: 'Tone3000 catalog' })
+  const catalog = page.getByRole('dialog', { name: /Tone3000 catalog/i })
   await expect(catalog).toBeVisible()
   await catalog.getByRole('button', { name: 'Close' }).click()
   await expect(catalog).not.toBeVisible()
@@ -95,14 +106,11 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
 
   await powerOn(page)
 
-  // Scene slot 1 ("Clean") is the factory default and loads a Compressor +
-  // EQ (+ auto Mixer) into columns 1-3 on every fresh session (see
-  // factoryScenes.ts) - column 4 is the first actually-empty cell. Reverb
-  // is used (rather than Compressor) so the new block's accessible name
-  // doesn't collide with the factory Compressor already on the grid.
-  await page.getByRole('button', { name: 'Add a block at row 1, column 4' }).click()
+  // Fresh installs boot into Bypass (empty grid) when no factory pack is
+  // manifest-listed (see factoryScenes.ts). Place Reverb at the first cell.
+  await page.getByRole('button', { name: 'Add a block at row 1, column 1', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Reverb' }).click()
-  await page.getByRole('dialog', { name: 'Tone3000 catalog' }).waitFor({ state: 'hidden' })
+  await page.getByRole('dialog', { name: /Tone3000 catalog/i }).waitFor({ state: 'hidden' })
 
   await page.getByRole('button', { name: 'PRESETS' }).click()
   const presetDialog = page.getByRole('dialog', { name: 'PRESETS' })
@@ -114,9 +122,17 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
 
   // Reload to a clean grid, then bring the saved preset back.
   await page.reload()
-  const onboardingClose = page.getByRole('button', { name: "Let's go" })
-  if (await onboardingClose.isVisible().catch(() => false)) {
-    await onboardingClose.click()
+  const factoryNotNow2 = page.getByRole('button', { name: 'Not now' })
+  if (await factoryNotNow2.isVisible().catch(() => false)) {
+    await factoryNotNow2.click()
+  }
+  const factoryGotIt2 = page.getByRole('button', { name: 'Got it' })
+  if (await factoryGotIt2.isVisible().catch(() => false)) {
+    await factoryGotIt2.click()
+  }
+  const onboardingClose2 = page.getByRole('button', { name: "Let's go" })
+  if (await onboardingClose2.isVisible().catch(() => false)) {
+    await onboardingClose2.click()
   }
   await powerOn(page)
 

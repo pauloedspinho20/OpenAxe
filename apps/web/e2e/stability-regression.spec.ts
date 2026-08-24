@@ -50,6 +50,15 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     )
   })
   await page.reload()
+  // Factory renders on top of onboarding (later in App.tsx), so dismiss it first.
+  const factoryNotNow = page.getByRole('button', { name: 'Not now' })
+  if (await factoryNotNow.isVisible().catch(() => false)) {
+    await factoryNotNow.click()
+  }
+  const factoryGotIt = page.getByRole('button', { name: 'Got it' })
+  if (await factoryGotIt.isVisible().catch(() => false)) {
+    await factoryGotIt.click()
+  }
   const onboardingClose = page.getByRole('button', { name: "Let's go" })
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
@@ -58,16 +67,26 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Power on' }).click()
   await expect(page.getByRole('button', { name: 'Power off' })).toBeVisible({ timeout: 30000 })
 
-  // Scene slot 1 ("Clean") is the factory default and loads a Compressor +
-  // EQ (+ auto Mixer) into row 1, columns 1-3, on every fresh session (see
-  // factoryScenes.ts). This test wants a genuinely empty grid to build its
-  // own full chain on (and needs the Compressor/EQ kinds free of name
-  // collisions for the bypass/enable/remove steps below), so it switches to
-  // slot 8 ("Bypass") - the factory scene with an empty chain. Even an
-  // "empty" chain still gets a merge Mixer (see buildFactoryPreset), so that
-  // one block is removed before the grid is truly empty.
-  await page.getByRole('button', { name: '8 Bypass' }).click()
-  await page.getByRole('button', { name: 'Remove Mixer' }).click()
+  // Fresh installs now boot into Bypass (empty grid) when no factory pack is
+  // manifest-listed (see factoryScenes.ts). Older factoryScenes booted with
+  // Compressor+EQ+Mixer in slot 1 and required switching to slot 8 Bypass and
+  // removing its Mixer. New factoryScenes builds only Bypass at slot 1 when
+  // manifest is empty, so the grid is already empty but we keep a tolerant
+  // path for either state.
+  const bypassCandidates = [
+    page.getByRole('button', { name: '1 Bypass' }),
+    page.getByRole('button', { name: '8 Bypass' }),
+  ]
+  for (const cand of bypassCandidates) {
+    if (await cand.isVisible().catch(() => false)) {
+      await cand.click()
+      break
+    }
+  }
+  const mixer = page.getByRole('button', { name: 'Remove Mixer' })
+  if (await mixer.isVisible().catch(() => false)) {
+    await mixer.click()
+  }
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
   // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
