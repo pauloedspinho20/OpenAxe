@@ -51,6 +51,12 @@ target_link_libraries(openaxe_vst3_editor_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCH
 target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_test(NAME vst3_editor COMMAND openaxe_vst3_editor_test)
 
+# Shared React primitives — no IControl fork (#133)
+add_executable(openaxe_vst3_primitives_test primitives_test.cpp ../src/primitives.cpp ../src/automation_params.cpp ../src/editor.cpp)
+target_link_libraries(openaxe_vst3_primitives_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+target_include_directories(openaxe_vst3_primitives_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME vst3_primitives COMMAND openaxe_vst3_primitives_test)
+
 # ── ThreadSanitizer over the concurrent suspend stress (issue #130) ─────────
 # Mirrors apps/desktop/tests/CMakeLists.txt's NAM_DESKTOP_ENABLE_TSAN shape.
 # Run: cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_TSAN=ON
