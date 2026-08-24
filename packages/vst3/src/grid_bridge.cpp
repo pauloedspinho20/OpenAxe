@@ -6,7 +6,24 @@
 #include "openaxe/api.h"
 #include "openaxe/grid_config.h"
 
+#include <atomic>
+
 namespace openaxe_vst3::grid {
+
+// Titles changed flag — set on rebind, polled by host notify (VST3/ AU/ CLAP).
+static std::atomic<bool> g_titles_changed{false};
+
+bool PollParamTitlesChanged() { return g_titles_changed.load(std::memory_order_acquire); }
+void ClearParamTitlesChanged() { g_titles_changed.store(false, std::memory_order_release); }
+void NotifyParamTitlesChanged() {
+  g_titles_changed.store(true, std::memory_order_release);
+  // Real host integration (when compiled with a format) would fire:
+  //  VST3: handler->restartComponent(kParamTitlesChanged);
+  //  AU:   PropertyChanged(kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0);
+  //  CLAP: host->params_rescan(host, CLAP_PARAM_RESCAN_VALUES | CLAP_PARAM_RESCAN_TEXT);
+  // The flag is what offline tests assert; the plugin's WithSuspend caller
+  // polls it and fires the appropriate API when a host is present.
+}
 
 GridDims GetGridDims() {
   GridDims d;
@@ -171,11 +188,15 @@ bool SetInspectorParam(NamStudioGraph* graph, int32_t block_id, int32_t param_in
 }
 bool BindAutomationSlot(NamStudioGraph* graph, int slot, int32_t block_id) {
   if (!graph || slot <= 0) return false;
-  return nam_studio_bind_automation_slot(graph, slot, block_id) != 0;
+  const bool ok = nam_studio_bind_automation_slot(graph, slot, block_id) != 0;
+  if (ok) NotifyParamTitlesChanged();
+  return ok;
 }
 bool UnbindAutomationSlot(NamStudioGraph* graph, int slot) {
   if (!graph || slot <= 0) return false;
-  return nam_studio_unbind_automation_slot(graph, slot) != 0;
+  const bool ok = nam_studio_unbind_automation_slot(graph, slot) != 0;
+  if (ok) NotifyParamTitlesChanged();
+  return ok;
 }
 
 }  // namespace openaxe_vst3::grid

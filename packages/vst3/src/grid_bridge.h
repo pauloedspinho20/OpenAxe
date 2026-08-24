@@ -88,7 +88,13 @@ std::vector<InspectorParam> GetInspectorParams(NamStudioGraph* graph, int32_t bl
 bool SetInspectorParam(NamStudioGraph* graph, int32_t block_id, int32_t param_index, float value);
 
 // Automation slot binding from the inspector (issue #127 slot map).
+// After a rebind the host's param titles have changed — the plugin must
+// fire the format's notification (VST3 restartComponent, AU property,
+// CLAP rescan). Offline this sets a pollable flag.
 bool BindAutomationSlot(NamStudioGraph* graph, int slot, int32_t block_id);
 bool UnbindAutomationSlot(NamStudioGraph* graph, int slot);
+bool PollParamTitlesChanged();
+void ClearParamTitlesChanged();
+void NotifyParamTitlesChanged();
 
 }  // namespace openaxe_vst3::grid
