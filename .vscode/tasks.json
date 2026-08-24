@@ -288,6 +288,152 @@
       "dependsOn": ["Desktop: Build", "Desktop: C++ tests", "Test (run once)"],
       "group": "test",
       "problemMatcher": []
+    },
+    {
+      "label": "VST: Configure (Release)",
+      "type": "shell",
+      "command": "cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release",
+      "detail": "Configures the VST3 + standalone plugin (iPlug2 + core, WHOLE_ARCHIVE). Fetches iPlug2 via FetchContent (pinned d54f690) — offline smoke tests still configure. See packages/vst3/README.md",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Configure (Debug)",
+      "type": "shell",
+      "command": "cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Debug",
+      "detail": "Debug configure for the VST3 plugin — enables sanitizers and richer diagnostics (use with TSan/RTSan tasks)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Build",
+      "type": "shell",
+      "command": "cmake --build packages/vst3/build --config Release",
+      "detail": "Builds the VST3 bundle + standalone (needs Configure). Smoke/latency/suspend/realtime/editor tests build even without the VST3 SDK or a host",
+      "group": { "kind": "build", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["VST: Configure (Release)"]
+    },
+    {
+      "label": "VST: Build (Debug)",
+      "type": "shell",
+      "command": "cmake --build packages/vst3/build --config Debug",
+      "detail": "Debug build — pairs with Configure (Debug), for TSan/RTSan instrumented builds",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["VST: Configure (Debug)"]
+    },
+    {
+      "label": "VST: Test",
+      "type": "shell",
+      "command": "ctest --test-dir packages/vst3/build --output-on-failure",
+      "detail": "Runs the VST3 CTest suite (smoke, latency, suspend, param_surface, state, asset, realtime_safety, editor + validators that SKIP when tool/bundle absent) — the single AGENTS.md entry point",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "dependsOn": ["VST: Build"]
+    },
+    {
+      "label": "VST: Full check (Configure + Build + Test)",
+      "detail": "What CI runs locally for the plugin — Configure (Release), Build, Test (13/13 with validators SKIP offline)",
+      "dependsOrder": "sequence",
+      "dependsOn": ["VST: Configure (Release)", "VST: Build", "VST: Test"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Standalone",
+      "type": "shell",
+      "command": "cmake --build packages/vst3/build --target openaxe_standalone && ./packages/vst3/build/openaxe_standalone",
+      "detail": "Builds and runs the standalone plugin (no DAW needed, same DSP as VST3 — debugger-friendly)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Install bundle (macOS) to ~/Library/Audio/Plug-Ins/VST3/",
+      "type": "shell",
+      "command": "mkdir -p ~/Library/Audio/Plug-Ins/VST3 && cp -R packages/vst3/build/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/VST3/ 2>/dev/null || cp -R packages/vst3/build/openaxe_vst3.vst3 ~/Library/Audio/Plug-Ins/VST3/ 2>/dev/null || echo 'Bundle not yet built — run VST: Build first (looks for OpenAxe.vst3 / openaxe_vst3.vst3)'",
+      "detail": "Copies the built .vst3 bundle into the macOS user VST3 dir so a host can scan it (Linux: ~/.vst3/, Windows: %COMMONPROGRAMFILES%\\VST3\\)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Reveal VST3 bundle",
+      "type": "shell",
+      "command": "ls -lh packages/vst3/build/*.vst3 2>/dev/null || ls -lh packages/vst3/build/Release/*.vst3 2>/dev/null || ls -lh packages/vst3/build/openaxe*.vst3 2>/dev/null || echo 'No bundle yet — run VST: Build'",
+      "detail": "Shows the built VST3 bundle(s) and their sizes",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Generate design tokens (CSS)",
+      "type": "shell",
+      "command": "node packages/ui/scripts/generate-tokens.mjs --target=css",
+      "detail": "Regenerates packages/ui/tokens/{colors,spacing,typography,shadows}.css from design-tokens.json (light/dark palettes — primary target for web/desktop/plugin React, issue #131)",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Generate design tokens (C++ header)",
+      "type": "shell",
+      "command": "node packages/ui/scripts/generate-tokens.mjs --target=cpp",
+      "detail": "Generates packages/vst3/generated/tokens.h (IColor(a,r,g,b) with rgb(.../...%) resolved, constexpr float spacing) — optional for native controls, issue #131",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Generate design tokens (all)",
+      "type": "shell",
+      "command": "node packages/ui/scripts/generate-tokens.mjs",
+      "detail": "Regenerates both CSS and the optional C++ header from design-tokens.json — run after editing the JSON",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Design tokens drift check",
+      "type": "shell",
+      "command": "node packages/ui/scripts/generate-tokens.mjs --check",
+      "detail": "Fails if the generated CSS/C++ drift from design-tokens.json — what CI runs (.github/workflows/ci.yml)",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: TSan build & test",
+      "type": "shell",
+      "command": "cmake -S packages/vst3 -B packages/vst3/build-tsan -DOPENAXE_VST3_ENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo && cmake --build packages/vst3/build-tsan -j && ctest --test-dir packages/vst3/build-tsan --output-on-failure",
+      "detail": "ThreadSanitizer over the concurrent suspend/editor stress (issue #130) — Linux GCC/Clang only (Apple Clang ships no libclang_rt.tsan for arm64)",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: RTSan build & test (Clang 18+)",
+      "type": "shell",
+      "command": "cmake -S packages/vst3 -B packages/vst3/build-rtsan -DOPENAXE_VST3_ENABLE_RTSAN=ON && cmake --build packages/vst3/build-rtsan -j && ctest --test-dir packages/vst3/build-rtsan --output-on-failure -R realtime",
+      "detail": "RealtimeSanitizer over the realtime_safety test (issue #130) — traps allocations/locks/syscalls on the audio thread, Clang 18+ only",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Validators (pluginval/auval/VST3 validator/clap-validator)",
+      "type": "shell",
+      "command": "ctest --test-dir packages/vst3/build --output-on-failure -R 'pluginval|auval|validator|clap'",
+      "detail": "Runs the host validator CTests — SKIP with a message when the external tool or built bundle is absent, validate strictly when present (pluginval --strictness 10, auval -v aufx Nms1 NwSt)",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
     }
   ]
 }
