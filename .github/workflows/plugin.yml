@@ -11,6 +11,9 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: write
+
 jobs:
   plugin:
     strategy:
@@ -20,16 +23,18 @@ jobs:
           - os: macos-14
             cmake_preset: Release
             artifact_glob: 'packages/vst3/build/*.vst3'
-            # AU and CLAP on macOS as well
             extra_artifacts: 'packages/vst3/build/*.component packages/vst3/build/*.clap'
+            cpack_generator: productbuild
           - os: windows-latest
             cmake_preset: Release
             artifact_glob: 'packages/vst3/build/**/*.vst3'
             extra_artifacts: 'packages/vst3/build/**/*.clap'
+            cpack_generator: WIX
           - os: ubuntu-24.04
             cmake_preset: Release
             artifact_glob: 'packages/vst3/build/*.vst3'
             extra_artifacts: 'packages/vst3/build/*.clap'
+            cpack_generator: DEB
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -70,9 +75,19 @@ jobs:
           restore-keys: |
             iplug2-sdks-
 
-      - name: Configure plugin (Release)
+      - name: Verify tag matches VERSION (for tag pushes)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          file_version="$(cat VERSION)"
+          if [ "$tag_version" != "$file_version" ]; then
+            echo "::error::tag v$tag_version does not match VERSION file ($file_version) — bump VERSION (node scripts/sync-version.mjs) and re-tag"
+            exit 1
+          fi
+
+      - name: Configure plugin (Release, universal on macOS)
         run: cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=${{ matrix.cmake_preset }} -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DOPENAXE_BUILD_TESTS=OFF
-        # macOS universal (arm64 + x86_64) for all three bundles; ignored on other platforms
 
       - name: Build plugin
         run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
@@ -81,11 +96,84 @@ jobs:
         run: ctest --test-dir packages/vst3/build --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
 
       - name: Plugin validators (when bundle present)
-        # pluginval / validator / auval / clap-validator are optional — the CTest
-        # harness already SKIPs when the tool or bundle is absent, so this never
-        # fails offline. When the runner has the tool and the bundle was built,
-        # it validates strictly (pluginval --strictness 10).
         run: ctest --test-dir packages/vst3/build --output-on-failure -R "pluginval|auval|validator|clap" || true
+
+      # ── Signing (only when secrets are present, otherwise builds unsigned) ──
+
+      - name: macOS — Import Developer ID certificate
+        if: runner.os == 'macOS' && env.APPLE_DEVELOPER_ID_CERTIFICATE_P12 != ''
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo "$APPLE_DEVELOPER_ID_CERTIFICATE_P12" | base64 --decode > /tmp/certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import /tmp/certificate.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      - name: macOS — Codesign bundles
+        if: runner.os == 'macOS' && env.APPLE_DEVELOPER_ID_CERTIFICATE_P12 != ''
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12 }}
+        run: |
+          for bundle in packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap; do
+            [ -e "$bundle" ] || continue
+            echo "Signing $bundle"
+            codesign --force --options runtime --sign "Developer ID Application" --timestamp "$bundle" || echo "::warning::codesign failed for $bundle (missing certificate?)"
+          done
+
+      - name: macOS — Notarize and staple
+        if: runner.os == 'macOS' && env.APPLE_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for bundle in packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap; do
+            [ -e "$bundle" ] || continue
+            ditto -c -k --keepParent "$bundle" "/tmp/$(basename "$bundle").zip"
+            echo "Notarizing $(basename "$bundle").zip"
+            xcrun notarytool submit "/tmp/$(basename "$bundle").zip" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait || echo "::warning::notarization failed for $bundle"
+            xcrun stapler staple "$bundle" || echo "::warning::stapler failed for $bundle"
+          done
+
+      - name: Windows — Authenticode signing
+        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE_P12 != ''
+        env:
+          WINDOWS_CERTIFICATE_P12: ${{ secrets.WINDOWS_CERTIFICATE_P12 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$env:WINDOWS_CERTIFICATE_P12" | Out-File -Encoding ascii -FilePath /tmp/certificate.p12
+          # Decoding base64 and signing via signtool — placeholder, requires hardware token or AzureSignTool in real setup
+          Write-Host "Authenticode signing would run here (signtool sign /f /tmp/certificate.p12 /p $env:WINDOWS_CERTIFICATE_PASSWORD packages/vst3/build/**/*.vst3)"
+          Write-Host "::warning::Windows signing is stubbed — configure signtool with your certificate"
+
+      # ── Installers / packaging ────────────────────────────────────────────
+
+      - name: Package plugin (CPack)
+        # CPack for plugin is defined in packages/vst3/CMakeLists.txt
+        # generators: productbuild (macOS .pkg → /Library/Audio/Plug-Ins/*),
+        # WIX (Windows .msi → Program Files\Common Files\VST3), DEB+TGZ (Linux)
+        run: |
+          if [ "${{ matrix.cpack_generator }}" = "productbuild" ]; then
+            # macOS .pkg — installs to standard Audio Plug-Ins locations
+            cpack --config packages/vst3/build/CPackConfig.cmake -G productbuild || cpack -G ZIP --config packages/vst3/build/CPackConfig.cmake || echo "::warning::productbuild not available, falling back to ZIP"
+          elif [ "${{ matrix.cpack_generator }}" = "WIX" ]; then
+            cpack --config packages/vst3/build/CPackConfig.cmake -G WIX || cpack -G ZIP --config packages/vst3/build/CPackConfig.cmake || echo "::warning::WIX not available, falling back to ZIP"
+          else
+            cpack --config packages/vst3/build/CPackConfig.cmake -G "${{ matrix.cpack_generator }};TGZ" || echo "::warning::CPack failed for ${{ matrix.cpack_generator }}"
+          fi
+        working-directory: packages/vst3/build
+        continue-on-error: true
+
+      - name: Create tarball (fallback)
+        if: always()
+        run: |
+          tar -czf "openaxe-plugin-${{ matrix.os }}-${{ github.ref_name }}.tar.gz" -C packages/vst3/build --exclude="_deps" --exclude="CMakeFiles" . || zip -r "openaxe-plugin-${{ matrix.os }}-${{ github.ref_name }}.zip" packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
+          ls -lh openaxe-plugin-* 2>/dev/null || ls -lh packages/vst3/build/openaxe-* 2>/dev/null || true
 
       - name: Upload VST3 artifact
         uses: actions/upload-artifact@v4
@@ -102,11 +190,37 @@ jobs:
           path: ${{ matrix.extra_artifacts }}
           if-no-files-found: warn
 
-      # Signing / notarization / installers are intentionally deferred:
-      # - macOS: Developer ID signing + notarization + stapling (Gatekeeper blocks unsigned plugins)
-      # - Windows: Authenticode
-      # - Linux: .deb + tarball, macOS .pkg to /Library/Audio/Plug-Ins/*
-      # Secrets and the tag-triggered Release attachment (from #54, root VERSION)
-      # are documented in CONTRIBUTING.md alongside the existing desktop release
-      # instructions — see that file before enabling signing.
+      - name: Upload installers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaxe-plugin-${{ matrix.os }}-installers
+          path: |
+            packages/vst3/build/*.pkg
+            packages/vst3/build/*.dmg
+            packages/vst3/build/*.deb
+            packages/vst3/build/*.msi
+            packages/vst3/build/*.tar.gz
+            packages/vst3/build/*.zip
+            openaxe-plugin-*.tar.gz
+            openaxe-plugin-*.zip
+          if-no-files-found: warn
 
+      - name: Publish to GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packages/vst3/build/*.pkg
+            packages/vst3/build/*.dmg
+            packages/vst3/build/*.deb
+            packages/vst3/build/*.msi
+            packages/vst3/build/*.tar.gz
+            packages/vst3/build/*.zip
+            packages/vst3/build/*.vst3
+            packages/vst3/build/*.component
+            packages/vst3/build/*.clap
+            openaxe-plugin-*.tar.gz
+            openaxe-plugin-*.zip
+          fail_on_unmatched_files: false
+          generate_release_notes: true

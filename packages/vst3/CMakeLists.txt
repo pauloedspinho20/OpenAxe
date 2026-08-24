@@ -314,3 +314,40 @@ else()
     message(STATUS "packages/vst3: AUv2 skipped — macOS only")
   endif()
 endif()
+
+# ── Packaging (CPack, issue #136) ──────────────────────────────────────
+# Produces installers for the three plugin formats, versioned from the root
+# VERSION file (like desktop). Artifacts are attached to the tag-triggered
+# Release (see plugin.yml) — same flow as desktop's release.yml (#54).
+set(CPACK_PACKAGE_NAME "openaxe-plugin")
+set(CPACK_PACKAGE_VENDOR "OpenAxe")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenAxe — guitar/bass amp + cab + effects (VST3/CLAP/AU)")
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "openaxe-plugin")
+set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}")
+
+# Install the built bundles to standard locations (CPack + workflow's
+# productbuild/WIX/DEB generators handle the platform specifics).
+if(TARGET openaxe_vst3)
+  install(TARGETS openaxe_vst3 LIBRARY DESTINATION "Library/Audio/Plug-Ins/VST3" NAMELINK_SKIP)
+  # Also allow manual copy from build dir (what the smoke test + validators use)
+endif()
+if(TARGET openaxe_clap)
+  install(TARGETS openaxe_clap LIBRARY DESTINATION "Library/Audio/Plug-Ins/CLAP" NAMELINK_SKIP)
+endif()
+if(TARGET openaxe_au)
+  install(TARGETS openaxe_au LIBRARY DESTINATION "Library/Audio/Plug-Ins/Components" NAMELINK_SKIP)
+endif()
+# Fallback tarball always works (even when productbuild/WIX/DEB are missing)
+set(CPACK_GENERATOR "TGZ")
+if(APPLE)
+  list(APPEND CPACK_GENERATOR "productbuild")
+elseif(WIN32)
+  list(APPEND CPACK_GENERATOR "WIX;ZIP")
+else()
+  list(APPEND CPACK_GENERATOR "DEB")
+  set(CPACK_DEBIAN_PACKAGE_MAINTAINER "OpenAxe <dev@openaxe.local>")
+  set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+endif()
+include(CPack)
