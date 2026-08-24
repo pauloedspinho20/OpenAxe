@@ -1,6 +1,11 @@
 import type { Effect } from './Effect'
 
 /**
+ * @deprecated Replaced by the single rig worklet + `packages/core` graph (issue #263).
+ * Web audio routing, per-effect worklets and this chain topology are now owned by
+ * `GraphRig`/`RigWorkletNode` and `engine.cpp`. Kept only for type-surface and
+ * legacy tests; do not use for new code.
+ *
  * An ordered list of effects wired input -> effect[0] -> effect[1] -> ... ->
  * output. Reordering rewires the chain rather than the individual effects
  * (each effect's own bypass/mix state is untouched by its position).

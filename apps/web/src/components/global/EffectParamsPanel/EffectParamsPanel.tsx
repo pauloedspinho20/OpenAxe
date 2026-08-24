@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Knob } from '@openaxe/ui'
 import type { Block, EffectParams } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
@@ -38,7 +38,25 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * silently revert it back to the store's stale copy.
  */
 export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
-  const [values, setValues] = useState<EffectParams>(() => block.getParams())
+  const [values, setValues] = useState<EffectParams>(() => ({
+    ...block.getParams(),
+    ...useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params,
+  }))
+  // Keep local values in sync when the store changes externally (undo, preset load, MIDI).
+  // Use a stable key (JSON) so unrelated store updates don't retrigger the sync.
+  const storeParamsKey = useGraphStore((s) => {
+    const p = s.blocks.find((b) => b.id === blockId)?.params
+    return p ? JSON.stringify(p) : ''
+  })
+  const storeParams = storeParamsKey ? (JSON.parse(storeParamsKey) as EffectParams) : undefined
+  useEffect(() => {
+    if (storeParams) setValues((prev) => ({ ...prev, ...storeParams }))
+  }, [storeParamsKey])
+  // Also sync when switching blocks (block instance identity changes).
+  useEffect(() => {
+    const latest = useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params
+    setValues({ ...block.getParams(), ...(latest ?? {}) })
+  }, [block, blockId])
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
 
   const setParam = (key: string, value: number | string) => {

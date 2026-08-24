@@ -17,11 +17,15 @@
 #include <utility>
 #include <vector>
 
+#include "openaxe/dsp/chorus.h"
 #include "openaxe/dsp/compressor.h"
+#include "openaxe/dsp/delay.h"
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 #include "openaxe/dsp/equalizer.h"
+#include "openaxe/dsp/flanger.h"
 #include "openaxe/dsp/noise_gate.h"
+#include "openaxe/dsp/phaser.h"
 #include "openaxe/dsp/tremolo.h"
 #include "test_harness.h"
 
@@ -100,9 +104,10 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
 
   OPENAXE_EXPECT(engine.ParamCount(compressor) == openaxe::dsp::Compressor::ParamCount());
-  OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount());
-  OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount());
-  OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount());
+  // eq / noise_gate / tremolo now expose an additional engine-level mix (hybrid dry/wet, #263)
+  OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
 
   OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
   OPENAXE_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);
@@ -554,6 +559,108 @@ void TestMasterAndTunerMuteAreIndependentAndBothSilence() {
   for (float sample : RunMono(engine, 0.7f)) OPENAXE_EXPECT(std::fabs(sample - 0.7f) < 1e-6f);
 }
 
+void TestModulationEffects() {
+  // Chorus should produce non-silent wet with mix=1, and dry with mix=0
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kChorus,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,64);
+    for(int i=0;i<20;i++) RunMono(eng, 0.3f);
+    auto outWet = RunMono(eng, 0.3f);
+    float maxWet=0; for(float v: outWet) maxWet=std::max(maxWet, std::fabs(v));
+    std::printf("chorus wet %f\n", maxWet);
+    OPENAXE_EXPECT(maxWet > 0.05f);
+    int mixIdx = 4; // chorus has 4 dsp params, mix at 4
+    eng.SetParam(id, mixIdx, 0.0f);
+    for(int i=0;i<200;i++) RunMono(eng, 0.3f);
+    auto outDry = RunMono(eng, 0.3f);
+    float maxDry=0; for(float v: outDry) maxDry=std::max(maxDry, std::fabs(v));
+    std::printf("chorus dry %f\n", maxDry);
+    OPENAXE_EXPECT(std::fabs(maxDry-0.3f) < 0.05f);
+  }
+  // Ping-pong true stereo and mix
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kPingPongDelay,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,128);
+    // width 1 hard, mix 0.5, time 100
+    eng.SetParam(id, 3, 1.0f); // width
+    eng.SetParam(id, 4, 0.5f); // mix
+    eng.SetParam(id, 0, 100.0f); // time
+    // warmup with silence
+    for(int i=0;i<10;i++) {
+      std::vector<float> inL(128,0), inR(128,0), outL(128,0), outR(128,0);
+      const float* in[2]={inL.data(), inR.data()};
+      float* out[2]={outL.data(), outR.data()};
+      eng.Process(in,2,out,2,128);
+    }
+    // impulse on left only
+    std::vector<float> inL(128,0), inR(128,0), outL(128,0), outR(128,0);
+    inL[0]=1.0f;
+    const float* in[2]={inL.data(), inR.data()};
+    float* out[2]={outL.data(), outR.data()};
+    eng.Process(in,2,out,2,128);
+    std::printf("pingpong impulse L in, outL0 %f outR0 %f (expect dry 0.5 left)\n", outL[0], outR[0]);
+    // With mix 0.5, dry 0.5*in + wet*0.5, wet at time 0 is 0, so should be 0.5 left
+    // Allow some tolerance for level and smoothing
+    OPENAXE_EXPECT(outL[0] > 0.3f && outL[0] < 0.8f);
+    OPENAXE_EXPECT(std::fabs(outR[0]) < 0.2f);
+    // Next block after 100ms (0.1 sec = 4800 samples = ~37 blocks of 128), first echo should be on right
+    // With mix 0.5 and feedback 0.5, the echo should be 0.5*0.5=0.25 on right
+    bool foundEcho = false;
+    for(int i=0;i<50;i++) {
+      std::vector<float> in2(128,0), inR2(128,0), oL(128,0), oR(128,0);
+      const float* in2Ptr[2]={in2.data(), inR2.data()};
+      float* out2Ptr[2]={oL.data(), oR.data()};
+      eng.Process(in2Ptr,2,out2Ptr,2,128);
+      float maxL=0, maxR=0;
+      for(int j=0;j<128;j++) { maxL=std::max(maxL, std::fabs(oL[j])); maxR=std::max(maxR, std::fabs(oR[j])); }
+      if(maxL > 0.05f || maxR > 0.05f) {
+        std::printf("pingpong echo at block %d maxL %f maxR %f\n", i, maxL, maxR);
+        foundEcho = true;
+        OPENAXE_EXPECT(maxR > 0.05f);
+        break;
+      }
+      if(i==49) {
+        std::printf("no echo found after 50 blocks\n");
+        for(int p=0;p<eng.ParamCount(id);p++) {
+          auto info = eng.ParamInfo(id,p);
+          if(info) std::printf(" param %d %s %f\n", p, info->symbol, eng.GetParam(id,p));
+        }
+      }
+    }
+    OPENAXE_EXPECT(foundEcho);
+  }
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kFlanger,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,64);
+    for(int i=0;i<20;i++) RunMono(eng, 0.3f);
+    auto out = RunMono(eng, 0.3f);
+    float max=0; bool finite=true;
+    for(float v: out) { max=std::max(max, std::fabs(v)); if(!std::isfinite(v)) finite=false; }
+    OPENAXE_EXPECT(finite);
+    OPENAXE_EXPECT(max < 2.0f && max > 0.05f);
+  }
+  {
+    AudioEngine eng;
+    auto id = eng.AddBlock(BlockKind::kPhaser,0,0);
+    eng.Connect(kInRailId,0,id,0);
+    eng.Connect(id,0,kOutRailId,0);
+    eng.Reset(48000,64);
+    for(int i=0;i<20;i++) RunMono(eng, 0.3f);
+    auto out = RunMono(eng, 0.3f);
+    float max=0; for(float v: out) max=std::max(max, std::fabs(v));
+    OPENAXE_EXPECT(max > 0.05f);
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -572,6 +679,7 @@ int main() {
   TestAmpToneStackAndPassthroughWithoutModel();
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
+  TestModulationEffects();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }
