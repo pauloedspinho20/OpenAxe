@@ -50,6 +50,19 @@ importers:
 
   apps/desktop: {}
 
+  apps/landing:
+    dependencies:
+      '@openaxe/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.2.0
+        version: 8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(yaml@2.9.0)
+
   apps/web:
     dependencies:
       '@openaxe/ui':

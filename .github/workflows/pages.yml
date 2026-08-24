@@ -1,0 +1,74 @@
+name: Pages — landing
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'apps/landing/**'
+      - 'packages/ui/**'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'apps/landing/**'
+      - 'packages/ui/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch releases (best-effort)
+        run: pnpm --filter @openaxe/landing fetch:releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Build landing
+        run: pnpm --filter @openaxe/landing build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/landing/dist
+
+      # PR preview as plain artifact (not Pages)
+      - name: Upload preview artifact (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: landing-preview-${{ github.sha }}
+          path: apps/landing/dist
+          if-no-files-found: error
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

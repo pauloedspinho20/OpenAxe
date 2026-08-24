@@ -1,0 +1,13 @@
+{
+  "name": "OpenAxe",
+  "short_name": "OpenAxe",
+  "description": "Free, open-source guitar/bass amp + cab + effects suite built on Neural Amp Modeler.",
+  "start_url": "/OpenAxe/",
+  "display": "standalone",
+  "background_color": "#101010",
+  "theme_color": "#101010",
+  "icons": [
+    { "src": "/OpenAxe/icons/openaxe-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/OpenAxe/icons/openaxe-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
