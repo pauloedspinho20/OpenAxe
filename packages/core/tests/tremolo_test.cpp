@@ -1,6 +1,6 @@
-// End-to-end test for the DSPark-backed Tremolo wrapper (kTremolo): verifies
-// full-depth modulation actually sweeps the output amplitude, and that depth 0
-// is a passthrough. Only built if OPENAXE_HAS_DSPARK.
+// End-to-end test for the Tremolo wrapper (kTremolo): verifies full-depth
+// modulation actually sweeps the output amplitude, and that depth 0 is a
+// passthrough. Hand-written DSP (issue #268), no vendor dependency.
 #include "openaxe/dsp/tremolo.h"
 
 #include <algorithm>
@@ -15,12 +15,16 @@ using openaxe::dsp::Tremolo;
 namespace {
 
 void TestParamCountAndInfo() {
-  OPENAXE_EXPECT(Tremolo::ParamCount() == 3);
+  OPENAXE_EXPECT(Tremolo::ParamCount() == 5);
   const auto& rate = Tremolo::GetParamInfo(0);
   OPENAXE_EXPECT(std::string(rate.symbol) == "rate");
   const auto& shape = Tremolo::GetParamInfo(2);
   OPENAXE_EXPECT(std::string(shape.symbol) == "shape");
   OPENAXE_EXPECT(shape.min_value == 0.0f && shape.max_value == 2.0f);
+  const auto& stereo = Tremolo::GetParamInfo(3);
+  OPENAXE_EXPECT(std::string(stereo.symbol) == "stereo");
+  const auto& mode = Tremolo::GetParamInfo(4);
+  OPENAXE_EXPECT(std::string(mode.symbol) == "mode");
 }
 
 void TestGetSetEveryParam() {

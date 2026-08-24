@@ -46,7 +46,42 @@ export const FLANGER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, de
 
 export const PHASER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, stages: 3 })
 
-export const TREMOLO_PARAMS = Object.freeze({ rate: 0, depth: 1, shape: 2 })
+export const TREMOLO_PARAMS = Object.freeze({ rate: 0, depth: 1, shape: 2, stereo: 3, mode: 4 })
+
+export const RINGMOD_PARAMS = Object.freeze({ frequency: 0, drive: 1 })
+
+export const FILTER_PARAMS = Object.freeze({
+  type: 0,
+  frequency: 1,
+  q: 2,
+  drive: 3,
+  sensitivity: 4,
+  mode: 5,
+  lfo_rate: 6,
+})
+
+export const PITCHSHIFTER_PARAMS = Object.freeze({ mode: 0, pitch: 1, detune_cents: 2 })
+
+export const GRANULARDELAY_PARAMS = Object.freeze({
+  time: 0,
+  grain_size: 1,
+  density: 2,
+  pitch: 3,
+  jitter: 4,
+  feedback: 5,
+  spread: 6,
+  character: 7,
+  freeze: 8,
+})
+
+export const ROTARY_PARAMS = Object.freeze({
+  speed: 0,
+  drive: 1,
+  horn_level: 2,
+  drum_level: 3,
+  mic_distance: 4,
+  crossover: 5,
+})
 
 export const PINGPONGDELAY_PARAMS = Object.freeze({ time: 0, feedback: 1, tone: 2, width: 3 })
 

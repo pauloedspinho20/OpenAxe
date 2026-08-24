@@ -23,9 +23,14 @@
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 #include "openaxe/dsp/equalizer.h"
+#include "openaxe/dsp/filter.h"
 #include "openaxe/dsp/flanger.h"
+#include "openaxe/dsp/granular_delay.h"
 #include "openaxe/dsp/noise_gate.h"
 #include "openaxe/dsp/phaser.h"
+#include "openaxe/dsp/pitch_shifter.h"
+#include "openaxe/dsp/ring_mod.h"
+#include "openaxe/dsp/rotary.h"
 #include "openaxe/dsp/tremolo.h"
 #include "test_harness.h"
 
@@ -102,18 +107,35 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   const BlockId eq = engine.AddBlock(BlockKind::kEq, 0, 1);
   const BlockId noise_gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 2);
   const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
+  // Phase-2 kinds (issue #268): every one is a wet-only DSP kind that also
+  // gets the engine-level mix, so param_count must be dsp + 1.
+  const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
+  const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
+  const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
+  const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
+  const BlockId rotary = engine.AddBlock(BlockKind::kRotary, 0, 8);
 
   OPENAXE_EXPECT(engine.ParamCount(compressor) == openaxe::dsp::Compressor::ParamCount());
   // eq / noise_gate / tremolo now expose an additional engine-level mix (hybrid dry/wet, #263)
   OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(rotary) == openaxe::dsp::Rotary::ParamCount() + 1);
 
   OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
   OPENAXE_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);
   OPENAXE_EXPECT(engine.Connect(eq, 0, noise_gate, 0).ok);
   OPENAXE_EXPECT(engine.Connect(noise_gate, 0, tremolo, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(tremolo, 0, kOutRailId, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(tremolo, 0, ring_mod, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ring_mod, 0, filter, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(filter, 0, pitch, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(pitch, 0, granular, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(granular, 0, rotary, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(rotary, 0, kOutRailId, 0).ok);
   engine.Reset(48000.0, kFrames);
 
   // A loud sine through the full chain: every stage engaged, output must stay

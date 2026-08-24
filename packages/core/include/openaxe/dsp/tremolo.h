@@ -2,26 +2,20 @@
 
 #include <memory>
 
-#include "openaxe/dsp/dspark_param.h"
-
 namespace openaxe::dsp {
 
-// Tremolo block (kTremolo), backed by dspark::Tremolo<float> (packages/core/
-// third_party/dspark) through the shared DsparkEffect adapter. Classic
-// amplitude modulation: a per-channel phasor sweeps a gain from 1 down to
-// (1 - depth) at the LFO rate, with sine/triangle/square waveforms. Stereo
-// mode offsets the right channel's LFO by 180° for a slow auto-pan effect.
-//
-// Parameters (see tremolo.cpp's kParamInfo):
-//   - Rate: 0.1–20 Hz, default 4 — LFO speed
-//   - Depth: 0–1, default 0.5 — modulation depth (1 = full amplitude cut)
-//   - Shape: 0–2, default 0 — Sine / Triangle / Square waveform select
-//
-// Outputs the fully-modulated signal; BaseEffect blends it against the dry
-// input, matching every other wrapper in this codebase.
+// Tremolo with mono/stereo toggle + harmonic mode per issue #268.
+// Stereo: mono=same gain, stereo=180° anti-phase auto-pan.
+// Harmonic: crossover split, highs/lows opposite phase.
 class Tremolo {
  public:
-  using ParamInfo = DsparkParamInfo;
+  struct ParamInfo {
+    const char* name;
+    const char* symbol;
+    float min_value;
+    float max_value;
+    const char* unit;
+  };
 
   Tremolo();
   ~Tremolo();

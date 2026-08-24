@@ -30,6 +30,11 @@ enum class BlockKind {
   kCab,
   kMixer,
   kSplitter,
+  kRingMod,
+  kFilter,
+  kPitchShifter,
+  kGranularDelay,
+  kRotary,
 };
 
 inline constexpr int kMixerInputCount = 4;

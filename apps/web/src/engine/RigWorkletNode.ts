@@ -41,6 +41,11 @@ const KIND_TO_CORE: Record<BlockKind, number> = {
   cab: 15,
   mixer: 16,
   splitter: 17,
+  'ring-mod': 18,
+  filter: 19,
+  'pitch-shifter': 20,
+  'granular-delay': 21,
+  rotary: 22,
 }
 
 /** What the core reports about a loaded capture (`nam_studio_block_model_info`). */

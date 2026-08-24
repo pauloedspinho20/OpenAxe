@@ -1,4 +1,5 @@
 import type { EffectParams } from '../effects/Effect'
+import { mapStringParam } from '../effects/stringParamMaps'
 import type { BlockKind } from './blocks/Block'
 import type { PresetBlock } from '../presets/types'
 import type { RigModelInfo, RigWorkletNode } from './RigWorkletNode'
@@ -69,14 +70,19 @@ export class RigBlock implements PresetBlock {
         this.worklet.setParam(this.id, key, map[value] ?? 0)
         continue
       }
-      if (key === 'character' && typeof value === 'string') {
-        const map: Record<string, number> = { clean: 0, opto: 1, fet: 2, varimu: 3 }
-        this.worklet.setParam(this.id, key, map[value] ?? 0)
-        continue
-      }
-      if (key === 'shape' && typeof value === 'string') {
-        const map: Record<string, number> = { sine: 0, triangle: 1, square: 2 }
-        this.worklet.setParam(this.id, key, map[value] ?? 0)
+      // shape/character and the Phase-2 select params are string selects backed
+      // by numeric core params - one shared map module (issue #268), so web and
+      // desktop can't drift. Non-enum strings are forwarded only when numeric;
+      // anything else is skipped, not silently zeroed.
+      if (typeof value === 'string') {
+        const mapped = mapStringParam(this.kind, key, value)
+        if (mapped !== undefined) {
+          this.worklet.setParam(this.id, key, mapped)
+          continue
+        }
+        const n = Number.parseFloat(value)
+        if (!Number.isFinite(n)) continue
+        this.worklet.setParam(this.id, key, n)
         continue
       }
       const num = toNumber(value)
