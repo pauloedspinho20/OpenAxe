@@ -141,6 +141,41 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Dragonfly Reverb',
     vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
   },
+  {
+    kind: 'ring-mod',
+    label: 'Ring Mod',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/NAM-Web-Studio/tree/main/packages/core',
+  },
+  {
+    kind: 'filter',
+    label: 'Filter',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/NAM-Web-Studio/tree/main/packages/core',
+  },
+  {
+    kind: 'pitch-shifter',
+    label: 'Pitch Shifter',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/NAM-Web-Studio/tree/main/packages/core',
+  },
+  {
+    kind: 'granular-delay',
+    label: 'Granular Delay',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/NAM-Web-Studio/tree/main/packages/core',
+  },
+  {
+    kind: 'rotary',
+    label: 'Rotary',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/NAM-Web-Studio/tree/main/packages/core',
+  },
 ]
 
 export const BLOCK_KIND_LABELS: Record<BlockKind, string> = Object.fromEntries(

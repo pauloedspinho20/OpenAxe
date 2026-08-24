@@ -31,6 +31,11 @@ export type ArtVariant =
   | 'delay'
   | 'ping-pong-delay'
   | 'reverb'
+  | 'ring-mod'
+  | 'filter'
+  | 'pitch-shifter'
+  | 'granular-delay'
+  | 'rotary'
   | 'cab'
   | 'mixer'
   | 'splitter'
@@ -287,6 +292,11 @@ const ART_VARIANT_KINDS = new Set<string>([
   'delay',
   'ping-pong-delay',
   'reverb',
+  'ring-mod',
+  'filter',
+  'pitch-shifter',
+  'granular-delay',
+  'rotary',
   'cab',
   'mixer',
   'splitter',
@@ -320,6 +330,16 @@ export function createArtDrawer(variant: ArtVariant): DrawFn {
       return createOrbDrawer({ colorRole: 'ledWarn' })
     case 'eq':
       return createBarsDrawer()
+    case 'filter':
+      return createSweepDrawer()
+    case 'ring-mod':
+      return createParticlesDrawer({ count: 30, speed: 2.2, spread: 0.25, colorRole: 'accent' })
+    case 'pitch-shifter':
+      return createParticlesDrawer({ count: 35, speed: 1.4, spread: 0.35, colorRole: 'ledOn' })
+    case 'rotary':
+      return createParticlesDrawer({ count: 50, speed: 1.0, spread: 0.38, colorRole: 'ink2' })
+    case 'granular-delay':
+      return createPulseRingsDrawer({ stereo: true })
     case 'cab':
       return createConeDrawer()
     case 'mixer':

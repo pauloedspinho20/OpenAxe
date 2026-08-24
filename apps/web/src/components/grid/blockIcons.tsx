@@ -186,6 +186,41 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
       <path d="M10 20c.8-2.7 3.2-2.7 4 0" />
     </>
   ),
+  'ring-mod': (
+    <>
+      <circle cx="12" cy="12" r="7" />
+      <path d="M3 12h18M12 5v14" />
+      <Dot cx="12" cy="12" />
+    </>
+  ),
+  filter: (
+    <>
+      <path d="M3 6h18l-6 8v4l-6-4v-8z" />
+      <path d="M9 11h6" />
+    </>
+  ),
+  'pitch-shifter': (
+    <>
+      <path d="M4 16l4-8 4 8M6 14h4" />
+      <path d="M13 8l5 4-5 4" />
+    </>
+  ),
+  'granular-delay': (
+    <>
+      <rect x="3" y="8" width="18" height="8" rx="1" />
+      <path d="M6 12h3M10.5 12h3M15 12h3" />
+      <Dot cx="7.5" cy="12" r={0.6} />
+      <Dot cx="12" cy="12" r={0.6} />
+      <Dot cx="16.5" cy="12" r={0.6} />
+    </>
+  ),
+  rotary: (
+    <>
+      <circle cx="12" cy="10" r="5" />
+      <path d="M12 15v5M8 18h8" />
+      <path d="M9 8c1.5 2 4.5 2 6 0" />
+    </>
+  ),
 }
 
 export function BlockIcon({ kind, ...rest }: { kind: BlockKind } & IconProps) {
