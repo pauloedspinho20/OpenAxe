@@ -148,9 +148,7 @@ describe('historyStore', () => {
   it('does not push duplicate snapshots', () => {
     useGraphStore.getState().addBlock('compressor', 0, 0)
     const before = useHistoryStore.getState().canUndo
-    // set same params again — snapshot unchanged, should not push
-    const id = useGraphStore.getState().blocks[0]!.id
-    // load same graph again via loadGraph with identical data
+    // load same graph again via loadGraph with identical data — should not push duplicate
     const state = useGraphStore.getState()
     useGraphStore
       .getState()
