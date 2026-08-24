@@ -64,10 +64,10 @@ struct Channel {
 
 struct Chorus::Impl {
   std::array<Channel, 2> channels;
-  float rate = 0.5f;
-  float depth = 5.0f;
-  float delay = 8.0f;
-  float feedback = 0.2f;
+  float rate = 0.2f;
+  float depth = 0.8f;
+  float delay = 5.5f;
+  float feedback = 0.15f;
   float sample_rate = 48000.0f;
 
   // Size both delay lines for the worst case the current settings allow -
@@ -156,7 +156,9 @@ float Chorus::GetParam(int index) const {
 // Store one param. Real-time safe except for the base delay, which resizes
 // the delay lines (ApplySampleRate) and so must not be called from the audio
 // thread - the engine routes param writes through its own atomic mirror and
-// applies them between blocks for exactly this reason.
+// applies them between blocks for exactly this reason. Only reallocates when
+// the value actually changes to avoid clearing the delay line every block
+// (which would silence the chorus, see engine_test failure).
 void Chorus::SetParam(int index, float value) {
   switch (index) {
     case kRateParam:
@@ -166,8 +168,10 @@ void Chorus::SetParam(int index, float value) {
       impl_->depth = value;
       break;
     case kDelayParam:
-      impl_->delay = value;
-      impl_->ApplySampleRate();
+      if (impl_->delay != value) {
+        impl_->delay = value;
+        impl_->ApplySampleRate();
+      }
       break;
     case kFeedbackParam:
       impl_->feedback = value;

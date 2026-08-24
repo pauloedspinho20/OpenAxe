@@ -60,6 +60,25 @@ export class RigBlock implements PresetBlock {
         this.worklet.setReverbAlgorithm(this.id, value)
         continue
       }
+      if (key === 'model' && typeof value === 'string') {
+        // Delay model string select — map to numeric and go through setParam
+        // (worklet resolves "model" symbol to the correct index). NativeBlock
+        // uses the dedicated setDelayModel path; either works as long as the
+        // string is mapped to 0/1/2.
+        const map: Record<string, number> = { digital: 0, analog: 1, tape: 2 }
+        this.worklet.setParam(this.id, key, map[value] ?? 0)
+        continue
+      }
+      if (key === 'character' && typeof value === 'string') {
+        const map: Record<string, number> = { clean: 0, opto: 1, fet: 2, varimu: 3 }
+        this.worklet.setParam(this.id, key, map[value] ?? 0)
+        continue
+      }
+      if (key === 'shape' && typeof value === 'string') {
+        const map: Record<string, number> = { sine: 0, triangle: 1, square: 2 }
+        this.worklet.setParam(this.id, key, map[value] ?? 0)
+        continue
+      }
       const num = toNumber(value)
       this.worklet.setParam(this.id, key, num)
     }
@@ -111,8 +130,12 @@ export class RigBlock implements PresetBlock {
   }
 
   /** Install a cab IR from a decoded AudioBuffer (folded to mono, at context rate). */
-  loadIR(buffer: AudioBuffer, _mix?: number, info?: { id: string; name: string }): void {
+  loadIR(buffer: AudioBuffer, mix?: number, info?: { id: string; name: string }): void {
     this.loadedIr = info ?? null
+    if (typeof mix === 'number') {
+      this.params = { ...this.params, irMix: mix }
+      this.worklet.setParam(this.id, 'irMix', mix)
+    }
     const samples = toMonoSamples(buffer)
     void this.worklet.loadIr(this.id, samples).catch(() => {
       this.loadedIr = null
