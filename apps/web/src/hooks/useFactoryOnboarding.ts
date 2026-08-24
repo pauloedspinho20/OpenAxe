@@ -20,5 +20,10 @@ export function useFactoryOnboarding() {
     setDismissed(true)
   }, [])
 
-  return { open: !dismissed, dismiss }
+  const reset = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY)
+    setDismissed(false)
+  }, [])
+
+  return { open: !dismissed, dismiss, reset }
 }

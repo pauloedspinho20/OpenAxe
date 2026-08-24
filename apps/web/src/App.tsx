@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { GridEditor } from './components/grid/GridEditor/GridEditor'
 import { MidiManager } from './components/midi/MidiManager/MidiManager'
 import { PresetManager } from './components/presets/PresetManager/PresetManager'
@@ -6,6 +6,7 @@ import { SceneBar } from './components/scenes/SceneBar/SceneBar'
 import { SceneManager } from './components/scenes/SceneManager/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser/Tone3000Browser'
 import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal'
+import { FactoryManager } from './components/global/FactoryManager/FactoryManager'
 import { FactoryOnboardingModal } from './components/global/FactoryOnboardingModal/FactoryOnboardingModal'
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
@@ -49,6 +50,7 @@ function App() {
   const { theme, setTheme } = useTheme()
   const onboarding = useOnboarding()
   const factoryOnboarding = useFactoryOnboarding()
+  const [factoryManagerOpen, setFactoryManagerOpen] = useState(false)
   const isReady = engine.status === 'ready'
   const browser = useTone3000Browser()
   const auth = useTone3000Auth()
@@ -132,6 +134,11 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
+          <HardwareButton
+            label="FACTORY"
+            onClick={() => setFactoryManagerOpen(true)}
+            title="Browse and download the factory pack — also per-block via inspector → Factory tab and in Settings"
+          />
           <HardwareButton label="SETTINGS" onClick={openSettings} title="Open app settings" />
           <HardwareButton
             label="MIDI"
@@ -216,6 +223,7 @@ function App() {
       />
       <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
       <FactoryOnboardingModal open={factoryOnboarding.open} onDismiss={factoryOnboarding.dismiss} />
+      <FactoryManager open={factoryManagerOpen} onClose={() => setFactoryManagerOpen(false)} />
       <Toaster />
     </div>
   )

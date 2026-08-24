@@ -117,8 +117,9 @@ export function FactoryOnboardingModal({ open, onDismiss }: FactoryOnboardingMod
               </OutlineButton>
             </div>
             <p className={styles.hint} style={{ marginTop: 8 }}>
-              You can always download or remove factory models later from any block&apos;s Factory
-              tab. Each model can be swapped from the block inspector.
+              You can always download or remove factory models later — from any block&apos;s
+              inspector → Factory tab, from the header&apos;s <strong>FACTORY</strong> button, or in
+              Settings → Factory pack.
             </p>
           </>
         )}

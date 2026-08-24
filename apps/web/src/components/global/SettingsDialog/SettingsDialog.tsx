@@ -15,6 +15,12 @@ import {
   readDataBundleFromFile,
   type DataBundle,
 } from '../../../settings/dataBundle'
+import { getCachedAsset } from '../../../engine/assetCache'
+import {
+  allFactoryGear,
+  cacheFactoryGear,
+  loadFactoryManifest,
+} from '../../../tone3000/factoryGear'
 import { Dialog, HardwareButton, Knob, Toggle } from '@openaxe/ui'
 import styles from './SettingsDialog.module.css'
 
@@ -79,16 +85,41 @@ export function SettingsDialog({
   const [deleteConfirming, setDeleteConfirming] = useState(false)
   const [signOutOnDelete, setSignOutOnDelete] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [factoryStats, setFactoryStats] = useState<{ total: number; cached: number } | null>(null)
+  const [factoryError, setFactoryError] = useState<string | null>(null)
+  const [factoryProgress, setFactoryProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  )
 
   const refreshCacheStats = () => {
     void getAssetCacheStats().then(setCacheStats)
   }
 
+  const refreshFactoryStats = async () => {
+    try {
+      await loadFactoryManifest()
+      const all = allFactoryGear()
+      let cached = 0
+      await Promise.all(
+        all.map(async (e) => {
+          const blob = await getCachedAsset(e.id)
+          if (blob) cached += 1
+        }),
+      )
+      setFactoryStats({ total: all.length, cached })
+    } catch {
+      setFactoryStats({ total: 0, cached: 0 })
+    }
+  }
+
   useEffect(() => {
     if (!open) return
     refreshCacheStats()
+    void refreshFactoryStats()
     setStatusMessage(null)
     setErrorMessage(null)
+    setFactoryError(null)
+    setFactoryProgress(null)
     setImportPreview(null)
     setDeleteConfirming(false)
   }, [open])
@@ -168,11 +199,45 @@ export function SettingsDialog({
     try {
       await clearAssetCache()
       refreshCacheStats()
+      void refreshFactoryStats()
       setStatusMessage('Cache cleared.')
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(null)
+    }
+  }
+
+  const handleFactoryDownloadAll = async () => {
+    setBusy('factory')
+    setFactoryError(null)
+    setFactoryProgress(null)
+    try {
+      await loadFactoryManifest()
+      const all = allFactoryGear()
+      if (all.length === 0) return
+      let done = 0
+      setFactoryProgress({ done: 0, total: all.length })
+      const results = await Promise.allSettled(
+        all.map(async (entry) => {
+          try {
+            await cacheFactoryGear(entry)
+          } finally {
+            done += 1
+            setFactoryProgress({ done, total: all.length })
+          }
+        }),
+      )
+      const failed = results.filter((r) => r.status === 'rejected').length
+      if (failed > 0) setFactoryError(`${failed} factory asset(s) failed to download.`)
+      else setStatusMessage(`Factory pack ready — ${all.length} file(s) cached.`)
+      refreshCacheStats()
+      void refreshFactoryStats()
+    } catch (err) {
+      setFactoryError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+      setFactoryProgress(null)
     }
   }
 
@@ -418,6 +483,48 @@ export function SettingsDialog({
             <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
           )}
         </div>
+      </section>
+
+      {/* Factory pack */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Factory Pack</span>
+        <div className={styles.row}>
+          <p className={styles.sectionHint}>
+            {factoryStats
+              ? factoryStats.total === 0
+                ? 'No factory models are curated yet.'
+                : `${factoryStats.cached}/${factoryStats.total} factory file(s) cached locally.`
+              : 'Loading…'}
+          </p>
+          <HardwareButton
+            label={
+              factoryProgress
+                ? `Downloading… ${factoryProgress.done}/${factoryProgress.total}`
+                : `Download all factory (${factoryStats?.total ?? 0})`
+            }
+            disabled={
+              busy === 'factory' ||
+              !factoryStats?.total ||
+              factoryStats.cached === factoryStats.total
+            }
+            onClick={() => void handleFactoryDownloadAll()}
+            title={
+              factoryStats && factoryStats.cached === factoryStats.total && factoryStats.total > 0
+                ? 'All factory files already cached'
+                : 'Download every factory model/IR for offline use'
+            }
+          />
+        </div>
+        {factoryProgress && (
+          <p className={styles.sectionHint}>
+            Downloading… {factoryProgress.done}/{factoryProgress.total}
+          </p>
+        )}
+        {factoryError && <p className={styles.errorText}>{factoryError}</p>}
+        <p className={styles.sectionHint}>
+          Also available per-block via the inspector → Factory tab, or via the header&apos;s FACTORY
+          button. Each block can swap its factory model independently.
+        </p>
       </section>
 
       {/* Cache */}
