@@ -354,10 +354,10 @@ int main() {
     // chorus (a) + tremolo (c) restored - the teleporter and the duplicate-id
     // flanger are skipped, so tremolo lands on id 1. Unknown symbol on a,
     // non-numeric rate value on c: skipped params, not failures.
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, 0) == 4);   // chorus
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, 0) == 5);   // chorus + mix
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "rate") == 1.5f);
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "depth") == 0.7f);
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, 1) == 3);   // tremolo
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, 1) == 4);   // tremolo + mix
     OPENAXE_EXPECT(nam_studio_is_bypassed(g, 1) == 1);
     {
       // The untouched rate stands - compared against a fresh tremolo rather

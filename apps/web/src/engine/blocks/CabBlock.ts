@@ -7,6 +7,7 @@ export interface LoadedAssetInfo {
   name: string
 }
 
+/** @deprecated Replaced by `RigBlock` + `RigWorkletNode` (issue #263). Kept for tests only. */
 /** Headroom above unity, matching the Mix/Level convention used everywhere else (master, mixer, effects). */
 const MAX_LEVEL = 1.5
 
