@@ -7,6 +7,12 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-24
+
+### Changed
+
+- chore: dependabot PRs target dev, docs clarify dev as only base (648955c)
+
 ## [0.2.2] - 2026-08-24
 
 ### Added
