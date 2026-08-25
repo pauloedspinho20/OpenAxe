@@ -188,17 +188,9 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="IN"
-            icon={<InputIcon size={14} />}
             onClick={() => setInputDialogOpen(true)}
             title="Input device and channel"
           />
-
-          {/*   <HardwareButton
-            fullWidth
-            label="TUNER"
-            onClick={() => setTunerOpen(true)}
-            title="Open the full-size tuner (mutes output)"
-          /> */}
 
           <button
             type="button"
@@ -211,6 +203,7 @@ export function GridEditor({
               <Tuner analyser={tunerAnalyser} />
             </div>
           </button>
+
           <Knob
             label="Trim"
             value={inputGain}
@@ -240,7 +233,6 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="OUT"
-            icon={<OutputIcon size={14} />}
             onClick={() => setOutputDialogOpen(true)}
             title="Output device and channel"
           />

@@ -1,4 +1,6 @@
+import type { Gear } from '@/tone3000/types'
 import type { EffectKind, EffectParams } from '../../effects/Effect'
+import type { NamModelBlockKind } from './AmpBlock'
 
 export type { EffectParams } from '../../effects/Effect'
 
@@ -16,19 +18,7 @@ export type { EffectParams } from '../../effects/Effect'
  * Return N, which is output-only. They carry no params, bypass or asset.
  */
 export type BlockKind =
-  | EffectKind
-  | 'amp'
-  | 'amp-cab'
-  | 'pedal'
-  | 'outboard'
-  | 'space'
-  | 'cab'
-  | 'mixer'
-  | 'splitter'
-  | 'send-1'
-  | 'return-1'
-  | 'send-2'
-  | 'return-2'
+  EffectKind | Gear | 'mixer' | 'splitter' | 'send-1' | 'return-1' | 'send-2' | 'return-2'
 
 /**
  * The minimal shape the graph engine needs from any block - a strict subset

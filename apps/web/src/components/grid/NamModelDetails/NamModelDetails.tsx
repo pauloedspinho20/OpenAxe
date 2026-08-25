@@ -1,11 +1,6 @@
 import type { Tone3000LibraryEntry } from '../../../tone3000/library'
 import { Dialog } from '@openaxe/ui'
 import styles from './NamModelDetails.module.css'
-import type { BlockInstance } from '@/state/graphStore'
-import type { Block } from '@/engine/blocks/Block'
-import { AssetScreenButton, type AssetGearType } from '../AssetScreenButton/AssetScreenButton'
-import type { AmpBlock } from '@/engine/blocks/AmpBlock'
-import type { CabBlock } from '@/engine/blocks/CabBlock'
 
 export interface NamModelDetailsProps {
   open: boolean
@@ -35,63 +30,10 @@ function formatDate(iso: string | null): string | null {
 }
 
 export interface NamModelProps {
-  instance: BlockInstance
-  block: Block | null
   kindLabel: string
   loadedName: string | null
   entry: Tone3000LibraryEntry | null
   onClick?: () => void
-  context: AudioContext | null
-}
-
-/**
- * NAM-model preview — intended for the left side of the
- * BlockInspector. Shows the Tone3000 hero image when available, otherwise a
- * placeholder with the gear label. Clicking it is expected to open the full
- * {@link NamModelDetails} dialog.
- */
-export function NamModel({
-  instance,
-  block,
-  kindLabel,
-  loadedName,
-  entry,
-  context,
-}: NamModelProps) {
-  const heroImage = entry?.tone?.images?.[0] ?? entry?.imageUrl ?? null
-  const title = entry?.tone?.title ?? entry?.toneTitle ?? entry?.name ?? loadedName ?? kindLabel
-  const hasImage = Boolean(heroImage)
-  return (
-    <div className={`${hasImage ? styles.imageWrapper : ''}`}>
-      <div
-        className={`${hasImage ? styles.image : ''}`}
-        style={hasImage ? { backgroundImage: `url(${heroImage})` } : undefined}
-      >
-        {hasImage ? (
-          <div className={styles.infoContainer}>
-            <span className={styles.info}>
-              <span className={styles.title}>{title}</span>
-              {entry?.creator && <span className={styles.creator}>by {entry.creator}</span>}
-            </span>
-
-            {block && (
-              <AssetScreenButton
-                blockId={instance.id}
-                gearType={instance.kind as AssetGearType}
-                block={block as AmpBlock | CabBlock}
-                context={context}
-              />
-            )}
-          </div>
-        ) : (
-          <span className={styles.empty}>
-            <span className={styles.emptyName}>{title}</span>
-            <span className={`label ${styles.emptyHint}`}>No image</span>
-          </span>
-        )}
-      </div>
-    </div>
-  )
 }
 
 /**

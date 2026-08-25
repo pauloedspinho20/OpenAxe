@@ -13,24 +13,23 @@ import { useTone3000Browser } from '../../../tone3000/browserStore'
 import { useTone3000Library } from '../../../tone3000/library'
 import styles from './AssetScreenButton.module.css'
 import { HardwareButton } from '@openaxe/ui'
-
-/** The 6 gear-type block kinds that have an asset to load - matches Tone3000's own Gear enum minus 'experimental'. */
-export type AssetGearType = 'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'space' | 'cab'
+import type { Gear } from '@/tone3000/types'
 
 export interface AssetScreenButtonProps {
   blockId: string
-  gearType: AssetGearType
+  gearType: Gear
   block: AmpBlock | CabBlock
   context: AudioContext | null
 }
 
-const GEAR_LABELS: Record<AssetGearType, string> = {
+const GEAR_LABELS: Record<Gear, string> = {
   amp: 'Amp Model',
   'amp-cab': 'Amp+Cab Model',
   pedal: 'Pedal Model',
   outboard: 'Outboard Model',
   space: 'Space Model',
   cab: 'Cab IR',
+  experimental: 'Experimental',
 }
 
 /**
@@ -99,7 +98,7 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
         <HardwareButton
           onClick={() => openBrowser({ blockId, slot: isIr ? 'ir' : 'model', gear: gearType })}
           title={`Browse Tone3000 ${label.toLowerCase()}s - or drop a ${isIr ? 'cabinet IR' : '.nam model'} file here`}
-          label={loaded ? 'CATALOG' : emptyText}
+          label={loaded ? 'MODELS' : emptyText}
         ></HardwareButton>
         <HardwareButton
           onClick={() => fileInputRef.current?.click()}

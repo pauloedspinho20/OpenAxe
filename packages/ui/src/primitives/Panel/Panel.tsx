@@ -17,7 +17,7 @@ export function Panel({ label, labelUrl, url, corner, children, className }: Pan
       {(label ?? corner) && (
         <div className={styles.header}>
           <div className={styles.labelContainer}>
-            {label && <span className="label">{label}</span>}
+            {label && <span className={styles.label}>{label}</span>}
             {url && labelUrl && (
               <span className="label">
                 By{' '}
@@ -31,10 +31,6 @@ export function Panel({ label, labelUrl, url, corner, children, className }: Pan
         </div>
       )}
       <div className={styles.body}>{children}</div>
-      {/*  <span className={`${styles.screw} ${styles.tl}`} />
-      <span className={`${styles.screw} ${styles.tr}`} />
-      <span className={`${styles.screw} ${styles.bl}`} />
-      <span className={`${styles.screw} ${styles.br}`} /> */}
     </section>
   )
 }

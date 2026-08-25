@@ -100,11 +100,3 @@
   height: 100%;
   min-height: 132px;
 }
-
-.artLabel {
-  position: absolute;
-  top: var(--sp-2);
-  left: var(--sp-2);
-  z-index: 2;
-  color: var(--ink-2);
-}

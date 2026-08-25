@@ -10,11 +10,11 @@
 }
 
 .panel {
-  width: min(420px, 100%);
+  width: min(440px, 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-5);
+  gap: var(--sp-6);
   text-align: center;
 }
 
@@ -80,11 +80,21 @@
 
 .deviceRow {
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: center;
+  flex-direction: row;
   gap: var(--sp-2);
   width: 100%;
+}
+
+@media (max-width: var(--mw-sm)) {
+  .deviceRow {
+    flex-direction: column;
+  }
+
+  .deviceRow .field {
+    width: 100%;
+  }
 }
 
 .deviceField {

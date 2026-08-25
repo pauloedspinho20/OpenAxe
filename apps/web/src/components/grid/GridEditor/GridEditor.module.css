@@ -15,7 +15,6 @@
 }
 .paletteAndInspectorItem > * {
   height: 100%;
-  padding: 0 !important;
 }
 
 @media (max-width: var(--mw-xl)) {

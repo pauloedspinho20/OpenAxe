@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { HardwareButton, Knob, MixerIcon, Panel } from '@openaxe/ui'
+import { useEffect, useRef, useState } from 'react'
+import { HardwareButton, IconButton, Knob, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { useEngineVersion } from '../../../state/engineVersion'
@@ -9,13 +9,15 @@ import { NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
-import { NamModelDetails, NamModel } from '../NamModelDetails/NamModelDetails'
+import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
 import { AudioReactiveArt } from '../audioArt/AudioReactiveArt'
 import { toArtVariant } from '../audioArt/sketches'
 import { getParamSchema, getReverbRawSchemas } from '../../../effects/paramSchema'
 import type { EffectParams } from '../../../effects/Effect'
-import { BLOCK_KIND_LABELS } from '../blockOptions'
+import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
+import { useTone3000Browser } from '@/tone3000/browserStore'
+import type { Gear } from '@/tone3000/types'
 
 function RawReverbPanel({
   blockId,
@@ -106,6 +108,9 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const instance = blocks.find((b) => b.id === selectedBlockId) ?? null
   const [reverbExpert, setReverbExpert] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const openBrowser = useTone3000Browser((s) => s.openBrowser)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // The selected block can disappear (removed, or a preset load replaced
   // the whole graph) without anything telling the selection store - drop a
@@ -134,12 +139,16 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   }
 
   const block = rig?.getBlock(instance.id) ?? null
+  const blockId = instance.id
+  const bypassed = instance.bypass ?? false
+  const isReverb = instance.kind === 'reverb'
+  const isIr = instance.kind === 'cab'
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
+  const vendor = BLOCK_KIND_VENDORS[instance.kind]
+  const vendorUrl = BLOCK_KIND_VENDOR_URLS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
-  const bypassed = instance.bypass ?? false
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
-  const isReverb = instance.kind === 'reverb'
   const reverbAlgorithm = (instance.params.reverbAlgorithm as string) ?? 'hall'
   const expertSchemas = isReverb && reverbExpert ? getReverbRawSchemas(reverbAlgorithm) : []
   const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
@@ -147,26 +156,39 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
   const artVariant = toArtVariant(instance.kind)
   const artAnalyser = analyser
+  const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
+
+  const panelLabel = isNamCore ? loaded?.name : label
+  const panelLabelUrl = isNamCore ? libraryEntry?.creator : vendor
+  const panelUrl = isNamCore ? libraryEntry?.sourceUrl : vendorUrl
+
   return (
-    <Panel>
+    <Panel
+      label={panelLabel}
+      labelUrl={panelLabelUrl}
+      url={panelUrl}
+      corner={
+        isNamCore && (
+          <div className={styles.screenRow}>
+            <HardwareButton
+              onClick={() =>
+                openBrowser({ blockId, slot: isIr ? 'ir' : 'model', gear: instance.kind as Gear })
+              }
+              title={`Browse Tone3000 ${label.toLowerCase()}s - or drop a ${isIr ? 'cabinet IR' : '.nam model'} file here`}
+              label={loaded ? 'MODELS' : emptyText}
+            ></HardwareButton>
+            <HardwareButton
+              onClick={() => fileInputRef.current?.click()}
+              label={`UPLOAD ${isIr ? 'IR' : 'NAM'}`}
+            ></HardwareButton>
+          </div>
+        )
+      }
+    >
+      <div className={styles.background}>
+        <AudioReactiveArt analyser={artAnalyser} variant={artVariant} />
+      </div>
       <div className={styles.inspectorLayout}>
-        <div className={styles.background}>
-          {isNamCore ? (
-            <NamModel
-              kindLabel={label}
-              loadedName={loaded?.name ?? null}
-              entry={libraryEntry}
-              instance={instance}
-              block={block}
-              context={context}
-            />
-          ) : (
-            <div className={styles.artSquare}>
-              <span className={`label ${styles.artLabel}`}>{label}</span>
-              <AudioReactiveArt analyser={artAnalyser} variant={artVariant} />
-            </div>
-          )}
-        </div>
         <div className={styles.content}>
           {!block && <p className={styles.empty}>Power on to edit this block.</p>}
 
@@ -178,23 +200,24 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                 block={block}
               />
               <div className={styles.buttons}>
-                <button
-                  type="button"
-                  className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
+                <HardwareButton
+                  icon={<PowerIcon size={14} />}
+                  active={!bypassed}
+                  iconOnly
                   onClick={() => {
                     useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
                     ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
                   }}
-                  title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+                  label={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
                   aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-                ></button>
+                ></HardwareButton>
                 {isNamCore && (
                   <HardwareButton
-                    label="Load"
-                    icon={<MixerIcon size={16} />}
+                    label="Model Details"
+                    icon={<MixerIcon size={15} />}
                     onClick={() => setDetailsOpen(true)}
                     iconOnly
-                  />
+                  ></HardwareButton>
                 )}
               </div>
               {block && analyser && <LiveMeter variant="medium" analyser={analyser} />}

@@ -1,4 +1,4 @@
-import { HardwareButton, Select, Wordmark } from '@openaxe/ui'
+import { HardwareButton, PowerIcon, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
@@ -156,28 +156,31 @@ export function PowerGate({
                 ))}
               </Select>
             )}
+            <Select
+              label="Latency"
+              id="powergate-latency"
+              value={latencyHint}
+              onChange={(e) => onLatencyChange(e.target.value as LatencyHint)}
+              disabled={starting}
+              aria-label="Latency mode"
+              className={styles.deviceField}
+            >
+              {LATENCY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
           </div>
         )}
 
-        <Select
-          value={latencyHint}
-          onChange={(e) => onLatencyChange(e.target.value as LatencyHint)}
-          disabled={starting}
-          aria-label="Latency mode"
-        >
-          {LATENCY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
-
         <HardwareButton
-          variant="accent"
           label={starting ? 'Starting…' : 'POWER ON'}
+          iconOnly
+          icon={<PowerIcon />}
           onClick={() => onPowerOn()}
           disabled={starting}
-          fullWidth
+          size="large"
         />
         {updateLatest && (
           <div className={styles.updateBanner} role="status" aria-live="polite">
@@ -201,23 +204,6 @@ export function PowerGate({
               </button>
             </span>
           </div>
-        )}
-        {!isNative && (
-          <nav className={styles.footerLinks} aria-label="Downloads and source">
-            <a
-              href="https://pauloedspinho20.github.io/OpenAxe/#download"
-              target="_blank"
-              rel="noopener"
-            >
-              ⬇ Download desktop &amp; plugins
-            </a>
-            <span className={styles.footerDot} aria-hidden="true">
-              ·
-            </span>
-            <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener">
-              GitHub
-            </a>
-          </nav>
         )}
       </div>
     </div>

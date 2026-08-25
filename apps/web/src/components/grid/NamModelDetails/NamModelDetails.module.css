@@ -20,8 +20,9 @@
 }
 
 .image {
-  background-size: cover;
-  background-position: center;
+  background-size: contain;
+  background-position: top;
+  background-repeat: no-repeat;
   height: 100%;
   width: 100%;
 }
@@ -36,6 +37,7 @@
 }
 
 .info {
+  font-family: var(--font-display);
   position: relative;
   z-index: 1;
   min-height: 60px;
@@ -48,8 +50,8 @@
 
 .title {
   font-family: var(--font-display);
+  text-transform: uppercase;
   font-size: 12px;
-  font-weight: 600;
   color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;

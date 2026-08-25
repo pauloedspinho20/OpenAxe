@@ -6,10 +6,10 @@
   padding: var(--sp-3);
   justify-content: flex-end;
   z-index: 1;
-  background-color: var(--chassis);
+  background-color: var(--panel);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-recessed);
-  /*   border: 1px solid var(--panel-recessed); */
+  border: 2px solid var(--panel-recessed);
 }
 
 .inspectorLayout {
@@ -18,17 +18,13 @@
   gap: var(--sp-4);
   align-items: flex-end;
   height: 100%;
-  padding: var(--sp-3);
   width: 100%;
   justify-content: center;
 }
 
 .background {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  inset: var(--sp-4);
   border-radius: var(--r-md);
   overflow: hidden;
 }
@@ -45,27 +41,6 @@
   justify-content: center;
   /* The NamModelSquare inside is always 1:1 via its own aspect-ratio, so this
      column's height is fully determined by that square — no extra sizing needed. */
-}
-
-.artSquare {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: var(--r-md);
-  border: 1px solid var(--seam);
-  overflow: hidden;
-  background: var(--panel);
-}
-
-.artLabel {
-  position: absolute;
-  top: var(--sp-2);
-  left: var(--sp-2);
-  z-index: 2;
-  color: var(--ink-2);
-  background: var(--overlay-bg);
-  padding: 2px var(--sp-2);
-  border-radius: var(--r-sm);
 }
 
 .mainContent {
@@ -135,4 +110,22 @@
 
 .bypassBtnOn {
   background-color: var(--led-on);
+}
+
+.screenBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+}
+
+.screenRow {
+  display: flex;
+  align-items: stretch;
+  flex-direction: row;
+  gap: var(--sp-2);
+  height: 100%;
 }

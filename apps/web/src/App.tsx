@@ -133,7 +133,7 @@ function App() {
           <Wordmark version={pkg.version} />
         </div>
 
-        <div className={`${styles.headerGroup} ${styles.status}`}>
+        {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
@@ -154,7 +154,7 @@ function App() {
           {auth.status === 'connected' && (
             <span className={styles.connectionBadge}>TONE3000 ✓</span>
           )}
-        </div>
+        </div> */}
 
         <div className={styles.headerGroup}>
           <HeaderPerfWidget context={engine.context} />
@@ -169,21 +169,22 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
-          <IconButton
+          <HardwareButton
             label="Undo"
+            size="small"
             disabled={!canUndo}
             title={undoTitle}
+            icon={<UndoIcon size={12} />}
+            iconOnly
             onClick={() => void undo()}
-          >
-            <UndoIcon size={16} />
-          </IconButton>
+          ></HardwareButton>
           <IconButton
             label="Redo"
             disabled={!canRedo}
             title={redoTitle}
             onClick={() => void redo()}
           >
-            <RedoIcon size={16} />
+            <RedoIcon size={12} />
           </IconButton>
         </div>
 
