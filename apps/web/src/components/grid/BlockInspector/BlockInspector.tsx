@@ -205,7 +205,10 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
           </div>
         )}
         {block && schema.length === 0 && !isAssetKind && (
-          <p className={styles.empty}>This block has no editable parameters.</p>
+          <div className={styles.meterAndParams}>
+            <p className={styles.empty}>This block has no editable parameters.</p>
+            {analyser && <LiveMeter analyser={analyser} />}
+          </div>
         )}
       </div>
     </Panel>
