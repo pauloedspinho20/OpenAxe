@@ -43,7 +43,14 @@ Topology (`add_block`/`connect`/`move_block`, with validation), params by index
 plus metadata (`block_param_info`), NAM model load/unload, reverb algorithm
 choice **and** the user-facing reverb control mapping (`set_reverb_control`),
 delay models, per-block bypass and I/O trims, master level/mute, per-block
-meters, and CPU load.
+meters, CPU load, **and the session layer** — song player (TinySoundFont SF2
+own bus), scheduled MIDI event queue, transport clock (`song_start`/`seek`/
+`get_position`), clip players (streaming PCM take buses), session mixer
+(song/grid/take buses pre-master, `get_bus_meter`), and recorder capture
+taps + jam ring (post-master FIFO, `capture_start`/`read`, `jam_lift`).
+Songbook parsing (`@openaxe/songbook` + `songScheduler`) and SoundFont
+bundling (`soundfontLoader`) stay front-end (parsing + persistence), but the
+MIDI rendering and mixing are core.
 
 ### What a front end is still allowed to own
 
@@ -71,7 +78,14 @@ meters, and CPU load.
 | Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | —    | core ✅                              |
 | Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | —    | **generated from core** ⚠️           |
 | Presets / scenes             | TS model + IndexedDB                                | same TS code in the webview        | —    | **core model**, front-end storage ❌ |
-| MIDI mapping                 | TS Web MIDI                                         | —                                  | —    | **core** ❌                          |
+| MIDI mapping                 | core (`midi.cpp`) via worklet/bridge                | core (`midi.cpp`)                  | core | core ✅                              |
+| **Song player (SF2)**        | core `SongPlayer` (TinySoundFont) own bus → mixer   | core, in-process                   | —    | core ✅                              |
+| **Clip players (takes)**     | core `Clip` streaming PCM, N buses → mixer          | core, in-process                   | —    | core ✅                              |
+| **Session mixer**            | core `SessionBus` (song/grid/takes) pre-master      | core                               | —    | core ✅                              |
+| **Recorder capture + jam**   | core `Capture` FIFO + `Jam` ring post-master        | core                               | —    | core ✅                              |
+| **Transport clock**          | core `song_position` single sample clock            | core                               | —    | core ✅                              |
+| **Songbook + scheduler**     | `@openaxe/songbook` (`alphaTab`) + `songScheduler`  | same TS in webview                 | —    | front-end (parsing) + core (render) ✅ |
+| **SoundFont bundling**       | `soundfontLoader` lazy + IndexedDB `assets`         | same TS in webview                 | —    | front-end ✅                         |
 
 ✅ done · ⚠️ core owns it, a front end still duplicates part · ❌ not in core yet
 
@@ -110,6 +124,18 @@ Each step is useful on its own and unblocks the plugin target.
    instead of hand-maintaining them in `paramSchema.ts`
    (`paramSchema.coreDrift.test.ts` guards the gap until then).
 7. **MIDI mapping in core**, so a plugin and the mobile apps inherit it.
+8. **Session engine (this PR, #204).** Song player (TinySoundFont SF2 own bus),
+   scheduled MIDI event queue, transport clock (`song_start`/`seek`/
+   `get_position` single sample clock), clip players (streaming PCM take buses),
+   session mixer (song/grid/take buses pre-master, `get_bus_meter`), and
+   recorder capture taps + jam ring (post-master FIFO, `capture_start`/`read`,
+   `jam_lift`). Songbook parsing (`@openaxe/songbook` + `songScheduler`) and
+   SoundFont bundling (`soundfontLoader`) stay front-end (parsing + persistence),
+   but rendering/mixing are core. The song player is **independent of the grid
+   and recorder by construction** — no routing path between song audio and grid
+   blocks; they meet only at the session mixer sum, and the single transport
+   clock keeps song+grid recordings sample-synced without drift correction.
+   Unblocks songs (#205) and recorder (#207) UIs on all shells.
 
 ## Latency
 
@@ -201,9 +227,10 @@ flowchart LR
     end
 
     subgraph abi["extern 'C' boundary"]
-        SETP["nam_studio_set_param"]
+        SETP["nam_studio_set_param<br/>nam_studio_set_bus_*<br/>nam_studio_song_*"]
         ADD["nam_studio_add_block / connect"]
-        LOAD["nam_studio_load_nam_model_json<br/>nam_studio_load_ir_wav"]
+        LOAD["nam_studio_load_nam_model_json<br/>nam_studio_load_ir_wav<br/>nam_studio_song_load_soundfont"]
+        SCHED["nam_studio_song_schedule_event<br/>nam_studio_clip_*<br/>nam_studio_capture_*"]
         PROC["nam_studio_process"]
     end
 
@@ -211,6 +238,7 @@ flowchart LR
         TOPO["graph_rig: block placement,<br/>edge validation, semi-smart wiring"]
         PARAM["param tables<br/>(param_schema.json generated)"]
         ASSETS["NamAmp model load · wav decode +<br/>resample · convolver partitioning"]
+        SESSION["session: SongPlayer (TinySoundFont)<br/>Clip players · Session mixer · Capture/Jam"]
     end
 
     RT["real-time path: atomics in,<br/>float buffers out, no allocation"]
@@ -218,6 +246,7 @@ flowchart LR
     UI --> SETP --> PARAM --> RT
     UI --> ADD --> TOPO
     UI --> LOAD --> ASSETS
+    UI --> SCHED --> SESSION --> RT
     TOPO --> RT
     ASSETS --> RT
     PROC --> RT

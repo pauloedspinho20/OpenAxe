@@ -18,8 +18,10 @@ const DB_NAME = 'nam-web-studio'
  * would just fail the new validation, so the presets store is wiped on
  * upgrade rather than leaving unreadable rows sitting in it.
  * v5: adds the scenes and midi stores; presets are untouched.
+ * v6: adds the songs store (songbook library, #166).
+ * v7: adds the takes and sessions stores (recorder, #188 #194).
  */
-const DB_VERSION = 5
+const DB_VERSION = 7
 
 /** Blob store: downloaded .nam/IR files, keyed by an explicit id (see assetCache.ts). */
 export const STORE_ASSETS = 'assets'
@@ -31,6 +33,12 @@ export const STORE_LIBRARY = 'library'
 export const STORE_SCENES = 'scenes'
 /** MIDI mapping config: keyPath 'id', a single row keyed 'midi-config' (see midi/midiConfigStore.ts). */
 export const STORE_MIDI = 'midi'
+/** Song library: keyPath 'id', one row per imported song (see songs/songsStore.ts, #166). */
+export const STORE_SONGS = 'songs'
+/** Takes: keyPath 'id', one row per recorded take (see recorder/takesStore.ts, #188). */
+export const STORE_TAKES = 'takes'
+/** Sessions: keyPath 'id', mixer + song/take refs (see recorder/sessionStore.ts, #194). */
+export const STORE_SESSIONS = 'sessions'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -53,6 +61,15 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_MIDI)) {
         db.createObjectStore(STORE_MIDI, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_SONGS)) {
+        db.createObjectStore(STORE_SONGS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_TAKES)) {
+        db.createObjectStore(STORE_TAKES, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_SESSIONS)) {
+        db.createObjectStore(STORE_SESSIONS, { keyPath: 'id' })
       }
     }
     request.onsuccess = () => resolve(request.result)

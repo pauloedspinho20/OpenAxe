@@ -1,0 +1,96 @@
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  margin: var(--sp-3);
+  min-height: 300px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.trackList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.trackRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.trackMeta {
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-size: 10px;
+}
+
+.zoomRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.zoomBtn {
+  background: var(--panel-strong);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.zoomLabel {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--ink-2);
+  min-width: 36px;
+  text-align: center;
+}
+
+.layoutSelect {
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  color: var(--ink-2);
+}
+
+.cursorInfo {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.scoreContainer {
+  flex: 1;
+  overflow: auto;
+  background: white;
+  border-radius: var(--r-sm);
+  min-height: 200px;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: 12px;
+  text-align: center;
+  padding: var(--sp-4);
+}

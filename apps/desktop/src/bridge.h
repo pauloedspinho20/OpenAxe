@@ -115,6 +115,38 @@ class StudioBridge {
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);
 
+  // ── Session: song player, transport, mixer, clips, capture (#152-#157) ──
+  std::string HandleLoadSoundfont(const std::string& req);
+  std::string HandleUnloadSoundfont(const std::string& req);
+  std::string HandleSongScheduleEvent(const std::string& req);
+  std::string HandleSongClearEvents(const std::string& req);
+  std::string HandleSongStart(const std::string& req);
+  std::string HandleSongStop(const std::string& req);
+  std::string HandleSongSeek(const std::string& req);
+  std::string HandleSongPosition(const std::string& req);
+  std::string HandleSongIsPlaying(const std::string& req);
+  std::string HandleSetBusGain(const std::string& req);
+  std::string HandleSetBusPan(const std::string& req);
+  std::string HandleSetBusMute(const std::string& req);
+  std::string HandleSetBusSolo(const std::string& req);
+  std::string HandleGetBusMeter(const std::string& req);
+  std::string HandleClipCreate(const std::string& req);
+  std::string HandleClipDestroy(const std::string& req);
+  std::string HandleClipFeedPcm(const std::string& req);
+  std::string HandleClipPlay(const std::string& req);
+  std::string HandleClipStop(const std::string& req);
+  std::string HandleClipSeek(const std::string& req);
+  std::string HandleClipGetPosition(const std::string& req);
+  std::string HandleClipGetFrames(const std::string& req);
+  std::string HandleClipGetBus(const std::string& req);
+  std::string HandleCaptureStart(const std::string& req);
+  std::string HandleCaptureStop(const std::string& req);
+  std::string HandleCaptureRead(const std::string& req);
+  std::string HandleCaptureAvailable(const std::string& req);
+  std::string HandleJamConfigure(const std::string& req);
+  std::string HandleJamLift(const std::string& req);
+  std::string HandleJamAvailable(const std::string& req);
+
   // Small secret store (issue #146) backing the Tone3000 refresh token so it
   // survives an app restart - see secure_storage.h. Independent of the
   // graph/audio state above, so these run straight on the webview thread

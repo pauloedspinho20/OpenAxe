@@ -1,0 +1,140 @@
+.widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  margin: var(--sp-3);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--ink-1);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.transport {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.positionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  position: relative;
+}
+
+.time {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ink-3);
+  min-width: 36px;
+  text-align: center;
+}
+
+.positionBar {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.progress {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.3;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.control input[type='range'] {
+  accent-color: var(--accent);
+}
+
+.presets {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.presetBtn {
+  background: var(--panel-strong);
+  color: var(--ink-2);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  font-size: 10px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.presetBtn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.loopRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tracks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.trackToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  align-items: center;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: 11px;
+}

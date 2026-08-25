@@ -33,6 +33,17 @@ import { RedoIcon, UndoIcon } from './components/grid/blockIcons'
 import { setHistoryTarget, useHistoryStore } from './state/historyStore'
 import { useTone3000Target } from './hooks/useTone3000Target'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
+import { useSongEngine } from './songs/useSongEngine'
+import { SongsLibrary, openSongsLibrary } from './songs/SongsLibrary'
+import { PlayerWidget } from './songs/PlayerWidget'
+import { SheetViewer } from './songs/SheetViewer'
+import { PracticeToolkit } from './songs/PracticeToolkit'
+import { useSongsStore } from './songs/songsStore'
+import { useTakesStore } from './recorder/takesStore'
+import { MixerPanel } from './mixer/MixerPanel'
+import { RecordPanel } from './recorder/RecordPanel'
+import { TakesManager, openTakesManager } from './recorder/TakesManager'
+import { SessionManager, openSessionManager } from './recorder/SessionManager'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { installFactoryScenes } from './scenes/factoryScenes'
@@ -102,6 +113,15 @@ function App() {
   useSceneHotkeys()
   useUndoRedoHotkeys()
   useMidiEngine()
+  useSongEngine(engine)
+
+  useEffect(() => {
+    void useSongsStore.getState().load()
+  }, [])
+
+  useEffect(() => {
+    void useTakesStore.getState().load()
+  }, [])
 
   // Post-power-on update toast — PowerGate already shows the banner pre-power-on
   useEffect(() => {
@@ -169,6 +189,21 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
+          <HardwareButton
+            label="SONGS"
+            onClick={openSongsLibrary}
+            title="Browse songs — import, play, practice"
+          />
+          <HardwareButton
+            label="TAKES"
+            onClick={openTakesManager}
+            title="Browse takes — rename, download, import"
+          />
+          <HardwareButton
+            label="SESSIONS"
+            onClick={openSessionManager}
+            title="Save/load mixer + song/takes"
+          />
           <IconButton
             label="Undo"
             disabled={!canUndo}
@@ -247,6 +282,12 @@ function App() {
       )}
       <SceneBar rig={engine.rig} context={engine.context} />
 
+      <PlayerWidget />
+
+      <MixerPanel rig={engine.rig} status={engine.status} />
+
+      <RecordPanel rig={engine.rig} status={engine.status} />
+
       <main className={styles.main}>
         <GridEditor
           rig={engine.rig}
@@ -255,6 +296,8 @@ function App() {
           outputSelectionSupported={outputSelectionSupported}
           context={engine.context}
         />
+        <SheetViewer />
+        <PracticeToolkit />
       </main>
 
       <footer className={styles.footer}>
@@ -286,6 +329,9 @@ function App() {
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
+      <SongsLibrary />
+      <TakesManager rig={engine.rig} />
+      <SessionManager />
       <SceneManager />
       <MidiManager />
       <SettingsDialog

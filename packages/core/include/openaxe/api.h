@@ -320,6 +320,135 @@ int32_t nam_studio_is_master_muted(NamStudioGraph* graph);
 void nam_studio_set_tuner_muted(NamStudioGraph* graph, int32_t muted);
 int32_t nam_studio_is_tuner_muted(NamStudioGraph* graph);
 
+// ── Song player — TinySoundFont SF2 synth outside the grid (issue #152) ──
+// Engine-level source (not a BlockKind) — independent of the grid and the
+// recorder by construction (epic #204). Lives on its own session bus and meets
+// the grid only at the session mixer sum.
+//
+// Tier 2 (not real-time safe): allocates + parses the SoundFont, so suspend
+// audio around the load/unload like model/IR loads. No-ops for null args or
+// oversize payloads.
+
+typedef enum NamStudioSongLoadResult {
+  NAM_STUDIO_SONG_LOAD_OK = 0,
+  NAM_STUDIO_SONG_LOAD_INVALID_FORMAT = 1,
+  NAM_STUDIO_SONG_LOAD_TOO_LARGE = 2,
+} NamStudioSongLoadResult;
+
+// Load a SoundFont from its .sf2 file bytes (mirrors nam_studio_load_ir_wav's
+// byte-entry pattern). Returns NAM_STUDIO_SONG_LOAD_OK on success.
+NamStudioSongLoadResult nam_studio_song_load_soundfont(NamStudioGraph* graph,
+                                                       const uint8_t* bytes, int32_t size);
+void nam_studio_song_unload_soundfont(NamStudioGraph* graph);
+int32_t nam_studio_song_has_soundfont(NamStudioGraph* graph);
+
+// ── Scheduled MIDI event queue (issue #153) ───────────────────────────
+// Front ends own sequencing; core owns rendering. Control thread pushes events
+// with a delta in engine samples from the current transport position; the
+// audio thread consumes them against the transport clock inside
+// nam_studio_process. Lock-free SPSC queue (Tier 1): safe to call
+// concurrently with nam_studio_process.
+
+typedef enum NamStudioSongEventKind {
+  NAM_STUDIO_SONG_EVENT_NOTE_ON = 0,
+  NAM_STUDIO_SONG_EVENT_NOTE_OFF = 1,
+  NAM_STUDIO_SONG_EVENT_CC = 2,
+  NAM_STUDIO_SONG_EVENT_PROGRAM = 3,
+  NAM_STUDIO_SONG_EVENT_PITCH_BEND = 4,
+} NamStudioSongEventKind;
+
+// Schedules one event delta_frames samples after the current transport
+// position. Returns 1 on success, 0 for an invalid kind/channel/key/value or a
+// full queue (the event is dropped — the caller should retry next block).
+int32_t nam_studio_song_schedule_event(NamStudioGraph* graph,
+                                       NamStudioSongEventKind kind, int32_t channel,
+                                       int32_t key, int32_t value, int32_t delta_frames);
+// Drops every pending event and sends all-notes-off to the synth. Tier 1.
+void nam_studio_song_clear_events(NamStudioGraph* graph);
+int32_t nam_studio_song_pending_events(NamStudioGraph* graph);
+
+// ── Transport clock (issue #154) ──────────────────────────────────────
+// Single engine-sample clock shared by the song bus, clip players and capture
+// taps so recordings of song+grid are sample-synced by construction. Tempo
+// scaling stays front-end: events are pre-scaled before scheduling; core only
+// counts samples. Tier 1 (atomics): safe to call concurrently with
+// nam_studio_process.
+
+void nam_studio_song_start(NamStudioGraph* graph);
+void nam_studio_song_stop(NamStudioGraph* graph);
+// Seek to an absolute sample position. Flushes pending events + all-notes-off
+// so the synth never holds a stale note after a jump.
+void nam_studio_song_seek(NamStudioGraph* graph, int64_t position_samples);
+int64_t nam_studio_song_get_position(NamStudioGraph* graph);
+int32_t nam_studio_song_is_playing(NamStudioGraph* graph);
+
+// ── Session mixer (issue #156) ────────────────────────────────────────
+// Mixing rule belongs in core (one-engine rule). Grid output becomes one bus
+// among several; existing master level/mute stage stays unchanged AFTER the
+// sum. Bus ids are stable wire values: 0=song, 1=grid, 2..9=take0..7.
+// Per-bus gain/pan/mute/solo are Tier 1 (atomics). Solo overrides mute per
+// standard DAW semantics: when any bus is soloed, only soloed buses are
+// audible; otherwise every non-muted bus is audible. Pan is equal-power
+// (matching the mixer block), 0 = centre, -1 = hard left, +1 = hard right.
+
+#define NAM_STUDIO_BUS_SONG 0
+#define NAM_STUDIO_BUS_GRID 1
+#define NAM_STUDIO_BUS_TAKE0 2
+#define NAM_STUDIO_BUS_COUNT 10
+
+void nam_studio_bus_set_gain(NamStudioGraph* graph, int32_t bus, float gain);
+float nam_studio_bus_get_gain(NamStudioGraph* graph, int32_t bus);
+void nam_studio_bus_set_pan(NamStudioGraph* graph, int32_t bus, float pan);
+float nam_studio_bus_get_pan(NamStudioGraph* graph, int32_t bus);
+void nam_studio_bus_set_mute(NamStudioGraph* graph, int32_t bus, int32_t muted);
+int32_t nam_studio_bus_is_muted(NamStudioGraph* graph, int32_t bus);
+void nam_studio_bus_set_solo(NamStudioGraph* graph, int32_t bus, int32_t soloed);
+int32_t nam_studio_bus_is_soloed(NamStudioGraph* graph, int32_t bus);
+float nam_studio_get_bus_meter(NamStudioGraph* graph, int32_t bus);
+
+// ── Clip players (issue #155) ────────────────────────────────────────
+// Fixed max 8 take buses (see NAM_STUDIO_BUS_TAKE0). Storage is
+// pre-allocated per clip (kClipMaxFrames*2 interleaved) so control-thread
+// feed never reallocates on the RT path. End-of-clip stops at EOF.
+// Tier 2: create/destroy/feed (allocate / resize). Tier 1: play/stop/seek/position (atomics).
+
+#define NAM_STUDIO_MAX_CLIPS 8
+#define NAM_STUDIO_CLIP_MAX_FRAMES (48000 * 10)
+
+int32_t nam_studio_clip_create(NamStudioGraph* graph);
+void nam_studio_clip_destroy(NamStudioGraph* graph, int32_t clip_id);
+// Feed interleaved stereo PCM (2*frames floats). Returns frames accepted (0 = full/invalid).
+int32_t nam_studio_clip_feed_pcm(NamStudioGraph* graph, int32_t clip_id,
+                                 const float* interleaved, int32_t frames);
+void nam_studio_clip_play(NamStudioGraph* graph, int32_t clip_id);
+void nam_studio_clip_stop(NamStudioGraph* graph, int32_t clip_id);
+void nam_studio_clip_seek(NamStudioGraph* graph, int32_t clip_id, int64_t position_frames);
+int64_t nam_studio_clip_get_position(NamStudioGraph* graph, int32_t clip_id);
+int32_t nam_studio_clip_is_playing(NamStudioGraph* graph, int32_t clip_id);
+int32_t nam_studio_clip_get_frames(NamStudioGraph* graph, int32_t clip_id);
+int32_t nam_studio_clip_get_bus(NamStudioGraph* graph, int32_t clip_id);
+
+// ── Recorder capture taps + jam ring (issue #157) ────────────────────
+// Capture: lock-free stereo FIFO written in Process(), drained off-thread.
+// Source selects what is tapped. Jam: always-on circular ring holding last
+// N seconds of post-master mix, lift snapshots it without a prior start.
+// Tier 1: start/stop/read/lift (atomics + SPSC). JamConfigure is Tier 2 (realloc).
+
+typedef enum NamStudioCaptureSource {
+  NAM_STUDIO_CAPTURE_MASTER = 0,
+  NAM_STUDIO_CAPTURE_DRY_INPUT = 1,
+  NAM_STUDIO_CAPTURE_BUS = 2,
+} NamStudioCaptureSource;
+
+void nam_studio_capture_start(NamStudioGraph* graph, NamStudioCaptureSource source, int32_t bus);
+void nam_studio_capture_stop(NamStudioGraph* graph);
+int32_t nam_studio_capture_is_active(NamStudioGraph* graph);
+int32_t nam_studio_capture_available_frames(NamStudioGraph* graph);
+int32_t nam_studio_capture_read(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames);
+void nam_studio_jam_configure(NamStudioGraph* graph, int32_t seconds);
+int32_t nam_studio_jam_lift(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames);
+int64_t nam_studio_jam_available_frames(NamStudioGraph* graph);
+
 // ── Metering ────────────────────────────────────────────────────────────
 
 // Peak |sample| over the last nam_studio_process call, 0 for an unknown block.

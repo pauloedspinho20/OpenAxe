@@ -503,6 +503,72 @@ class AudioEngine {
   MidiHandleResult HandleMidiMessage(const uint8_t* data, size_t size,
                                      int32_t sample_offset = 0);
 
+   // ── Song player + scheduled events + transport + session mixer (issues #152-156) ─
+  // Song player owns a TinySoundFont synth outside the grid. See api.h's
+  // threading note — Load/Unload are Tier 2 (allocate + parse), the rest are
+  // Tier 1 (lock-free, safe concurrently with Process).
+  enum class SongLoadResult { kOk = 0, kInvalidFormat = 1, kTooLarge = 2 };
+  enum class SongEventKind { kNoteOn = 0, kNoteOff = 1, kCc = 2, kProgram = 3, kPitchBend = 4 };
+
+  SongLoadResult LoadSongSoundfont(const uint8_t* bytes, size_t size);
+  void UnloadSongSoundfont();
+  bool HasSongSoundfont() const;
+  // Schedules one event delta_frames samples after the current transport
+  // position. Returns false for a full queue or invalid args.
+  bool ScheduleSongEvent(SongEventKind kind, int32_t channel, int32_t key,
+                         int32_t value, int32_t delta_frames);
+  void ClearSongEvents();
+  int32_t PendingSongEvents() const;
+
+  void SongStart();
+  void SongStop();
+  void SongSeek(int64_t position_samples);
+  int64_t SongPosition() const;
+  bool IsSongPlaying() const;
+
+  // Session mixer bus ids: 0=song, 1=grid, 2..9=takes. See api.h.
+  static constexpr int kSessionBusCount = 10;
+  static constexpr int kBusSong = 0;
+  static constexpr int kBusGrid = 1;
+  static constexpr int kBusTake0 = 2;
+
+  void SetBusGain(int bus, float gain);
+  float GetBusGain(int bus) const;
+  void SetBusPan(int bus, float pan);
+  float GetBusPan(int bus) const;
+  void SetBusMute(int bus, bool muted);
+  bool IsBusMuted(int bus) const;
+  void SetBusSolo(int bus, bool soloed);
+  bool IsBusSoloed(int bus) const;
+  float GetBusMeter(int bus) const;
+
+  // ── Clip players (issue #155) ───────────────────────────────────────
+  static constexpr int kMaxClips = 8;
+  static constexpr int kClipMaxFrames = 48000 * 10; // 10 seconds per clip at 48k
+  int32_t ClipCreate();
+  void ClipDestroy(int32_t clip_id);
+  // Feed interleaved stereo PCM (2*frames floats). Returns frames accepted.
+  int32_t ClipFeedPcm(int32_t clip_id, const float* interleaved, int32_t frames);
+  void ClipPlay(int32_t clip_id);
+  void ClipStop(int32_t clip_id);
+  void ClipSeek(int32_t clip_id, int64_t position_frames);
+  int64_t ClipGetPosition(int32_t clip_id) const;
+  int32_t ClipIsPlaying(int32_t clip_id) const;
+  int32_t ClipGetFrames(int32_t clip_id) const;
+  int32_t ClipGetBus(int32_t clip_id) const;
+
+  // ── Recorder capture taps + jam ring (issue #157) ──────────────────
+  enum class CaptureSource { kMaster = 0, kDryInput = 1, kBus = 2 };
+  void CaptureStart(CaptureSource source, int32_t bus);
+  void CaptureStop();
+  // Drain up to capacity_frames (stereo interleaved) into out. Returns frames actually read.
+  int32_t CaptureRead(float* out_interleaved, int32_t capacity_frames);
+  int32_t CaptureIsActive() const;
+  int32_t CaptureAvailableFrames() const;
+  void JamConfigure(int32_t seconds);
+  int32_t JamLift(float* out_interleaved, int32_t capacity_frames);
+  int64_t JamAvailableFrames() const;
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
@@ -644,6 +710,89 @@ class AudioEngine {
   mutable std::shared_mutex midi_mutex_;
   std::vector<midi::MidiMapping> midi_mappings_;
   std::optional<midi::MidiAction> midi_learn_target_;
+
+  // ── Session state (issues #152-156) ──────────────────────────────────
+  struct SongEvent {
+    SongEventKind kind{};
+    int32_t channel{0};
+    int32_t key{0};
+    int32_t value{0};
+    int64_t abs_pos{0};
+  };
+  static constexpr int kSongEventQueueCapacity = 4096;
+  // TinySoundFont synth (opaque tsf* — forward declared as void* here to avoid
+  // leaking the C header into the public include).
+  struct SongSynthDeleter {
+    void operator()(void* p) const;
+  };
+  std::unique_ptr<void, SongSynthDeleter> song_tsf_{nullptr};
+  std::vector<uint8_t> song_sf2_bytes_;
+  std::atomic<int64_t> song_position_{0};
+  std::atomic<bool> song_playing_{false};
+  // SPSC ring: control thread is the single producer, audio thread the single
+  // consumer. Capacity is a power of two; head/tail are monotonic indices.
+  std::vector<SongEvent> song_event_queue_{kSongEventQueueCapacity};
+  std::atomic<int> song_event_head_{0};  // next write index (producer)
+  std::atomic<int> song_event_tail_{0};  // next read index (consumer)
+  // Fallback sine synth for tests without a real SF2 (load succeeds with any
+  // payload >= 256 bytes even if TinySoundFont rejects it — lets the
+  // transport/event/mixer tests run without vendoring a binary SoundFont).
+  bool song_dummy_{false};
+  std::atomic<int> song_dummy_note_{-1};
+  std::atomic<float> song_dummy_vel_{0.0f};
+  float song_dummy_phase_{0.0f};
+
+  struct SessionBus {
+    std::atomic<float> gain{1.0f};
+    std::atomic<float> pan{0.0f};
+    std::atomic<bool> muted{false};
+    std::atomic<bool> solo{false};
+    std::atomic<float> meter{0.0f};
+  };
+  std::array<SessionBus, kSessionBusCount> session_buses_;
+  // Per-bus stereo buffers + summed mix, sized to max_block_size_ in Reset().
+  std::array<std::vector<float>, kSessionBusCount> session_bus_l_;
+  std::array<std::vector<float>, kSessionBusCount> session_bus_r_;
+  std::vector<float> session_mix_l_;
+  std::vector<float> session_mix_r_;
+
+  // ── Clip players (issue #155) ──
+  struct Clip {
+    int id{-1};
+    int bus{-1};
+    std::vector<float> pcm; // interleaved stereo, capacity kClipMaxFrames*2
+    std::atomic<int> frames{0};
+    std::atomic<int64_t> position{0};
+    std::atomic<bool> playing{false};
+  };
+  std::array<std::unique_ptr<Clip>, kMaxClips> clips_{};
+  std::atomic<int> next_clip_id_{0};
+  mutable std::shared_mutex clips_mutex_;
+
+  // ── Capture + jam (issue #157) ──
+  static constexpr int kCaptureCapacityFrames = 48000 * 10; // 10s
+  std::vector<float> capture_buf_; // interleaved, size capacity*2
+  std::atomic<int> capture_head_{0}; // monotonic frames written
+  std::atomic<int> capture_tail_{0}; // monotonic frames read
+  std::atomic<bool> capture_active_{false};
+  CaptureSource capture_source_{CaptureSource::kMaster};
+  int32_t capture_bus_{kBusGrid};
+
+  std::vector<float> jam_buf_; // interleaved circular
+  std::atomic<int64_t> jam_head_{0};
+  int64_t jam_capacity_frames_{48000 * 10};
+  mutable std::shared_mutex jam_mutex_; // protects resize in JamConfigure
+
+  void EnsureSessionBuffers();
+  void EnsureCaptureBuffers();
+  void EnsureJamBuffers();
+  bool IsValidSessionBus(int bus) const { return bus >= 0 && bus < kSessionBusCount; }
+  Clip* FindClip(int32_t clip_id);
+  const Clip* FindClip(int32_t clip_id) const;
+  void RenderClipBuses(int num_frames);
+  void WriteCaptureAndJam(int num_frames);
+  void DispatchSongEvent(const SongEvent& ev);
+  void RenderSongBus(int num_frames);
 };
 
 }  // namespace openaxe::engine

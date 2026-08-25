@@ -646,6 +646,169 @@ int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
   return 1;
 }
 
+// ── Song player / events / transport / session mixer (issues #152-156) ──
+
+NamStudioSongLoadResult nam_studio_song_load_soundfont(NamStudioGraph* graph,
+                                                       const uint8_t* bytes, int32_t size) {
+  if (!graph || !bytes || size <= 0) return NAM_STUDIO_SONG_LOAD_INVALID_FORMAT;
+  const auto r = graph->engine.LoadSongSoundfont(bytes, static_cast<size_t>(size));
+  switch (r) {
+    case openaxe::engine::AudioEngine::SongLoadResult::kOk: return NAM_STUDIO_SONG_LOAD_OK;
+    case openaxe::engine::AudioEngine::SongLoadResult::kInvalidFormat:
+      return NAM_STUDIO_SONG_LOAD_INVALID_FORMAT;
+    case openaxe::engine::AudioEngine::SongLoadResult::kTooLarge:
+      return NAM_STUDIO_SONG_LOAD_TOO_LARGE;
+  }
+  return NAM_STUDIO_SONG_LOAD_INVALID_FORMAT;
+}
+
+void nam_studio_song_unload_soundfont(NamStudioGraph* graph) {
+  if (graph) graph->engine.UnloadSongSoundfont();
+}
+
+int32_t nam_studio_song_has_soundfont(NamStudioGraph* graph) {
+  return graph && graph->engine.HasSongSoundfont() ? 1 : 0;
+}
+
+int32_t nam_studio_song_schedule_event(NamStudioGraph* graph,
+                                       NamStudioSongEventKind kind, int32_t channel,
+                                       int32_t key, int32_t value, int32_t delta_frames) {
+  if (!graph) return 0;
+  using EK = openaxe::engine::AudioEngine::SongEventKind;
+  EK k{};
+  switch (kind) {
+    case NAM_STUDIO_SONG_EVENT_NOTE_ON: k = EK::kNoteOn; break;
+    case NAM_STUDIO_SONG_EVENT_NOTE_OFF: k = EK::kNoteOff; break;
+    case NAM_STUDIO_SONG_EVENT_CC: k = EK::kCc; break;
+    case NAM_STUDIO_SONG_EVENT_PROGRAM: k = EK::kProgram; break;
+    case NAM_STUDIO_SONG_EVENT_PITCH_BEND: k = EK::kPitchBend; break;
+    default: return 0;
+  }
+  return graph->engine.ScheduleSongEvent(k, channel, key, value, delta_frames) ? 1 : 0;
+}
+
+void nam_studio_song_clear_events(NamStudioGraph* graph) {
+  if (graph) graph->engine.ClearSongEvents();
+}
+
+int32_t nam_studio_song_pending_events(NamStudioGraph* graph) {
+  return graph ? graph->engine.PendingSongEvents() : 0;
+}
+
+void nam_studio_song_start(NamStudioGraph* graph) {
+  if (graph) graph->engine.SongStart();
+}
+void nam_studio_song_stop(NamStudioGraph* graph) {
+  if (graph) graph->engine.SongStop();
+}
+void nam_studio_song_seek(NamStudioGraph* graph, int64_t position_samples) {
+  if (graph) graph->engine.SongSeek(position_samples);
+}
+int64_t nam_studio_song_get_position(NamStudioGraph* graph) {
+  return graph ? graph->engine.SongPosition() : 0;
+}
+int32_t nam_studio_song_is_playing(NamStudioGraph* graph) {
+  return graph && graph->engine.IsSongPlaying() ? 1 : 0;
+}
+
+void nam_studio_bus_set_gain(NamStudioGraph* graph, int32_t bus, float gain) {
+  if (graph) graph->engine.SetBusGain(bus, gain);
+}
+float nam_studio_bus_get_gain(NamStudioGraph* graph, int32_t bus) {
+  return graph ? graph->engine.GetBusGain(bus) : 1.0f;
+}
+void nam_studio_bus_set_pan(NamStudioGraph* graph, int32_t bus, float pan) {
+  if (graph) graph->engine.SetBusPan(bus, pan);
+}
+float nam_studio_bus_get_pan(NamStudioGraph* graph, int32_t bus) {
+  return graph ? graph->engine.GetBusPan(bus) : 0.0f;
+}
+void nam_studio_bus_set_mute(NamStudioGraph* graph, int32_t bus, int32_t muted) {
+  if (graph) graph->engine.SetBusMute(bus, muted != 0);
+}
+int32_t nam_studio_bus_is_muted(NamStudioGraph* graph, int32_t bus) {
+  return graph && graph->engine.IsBusMuted(bus) ? 1 : 0;
+}
+void nam_studio_bus_set_solo(NamStudioGraph* graph, int32_t bus, int32_t soloed) {
+  if (graph) graph->engine.SetBusSolo(bus, soloed != 0);
+}
+int32_t nam_studio_bus_is_soloed(NamStudioGraph* graph, int32_t bus) {
+  return graph && graph->engine.IsBusSoloed(bus) ? 1 : 0;
+}
+float nam_studio_get_bus_meter(NamStudioGraph* graph, int32_t bus) {
+  return graph ? graph->engine.GetBusMeter(bus) : 0.0f;
+}
+
+// ── Clip players (issue #155) ─────────────────────────────────────────
+
+int32_t nam_studio_clip_create(NamStudioGraph* graph) {
+  return graph ? graph->engine.ClipCreate() : -1;
+}
+void nam_studio_clip_destroy(NamStudioGraph* graph, int32_t clip_id) {
+  if (graph) graph->engine.ClipDestroy(clip_id);
+}
+int32_t nam_studio_clip_feed_pcm(NamStudioGraph* graph, int32_t clip_id,
+                                 const float* interleaved, int32_t frames) {
+  return graph ? graph->engine.ClipFeedPcm(clip_id, interleaved, frames) : 0;
+}
+void nam_studio_clip_play(NamStudioGraph* graph, int32_t clip_id) {
+  if (graph) graph->engine.ClipPlay(clip_id);
+}
+void nam_studio_clip_stop(NamStudioGraph* graph, int32_t clip_id) {
+  if (graph) graph->engine.ClipStop(clip_id);
+}
+void nam_studio_clip_seek(NamStudioGraph* graph, int32_t clip_id, int64_t position_frames) {
+  if (graph) graph->engine.ClipSeek(clip_id, position_frames);
+}
+int64_t nam_studio_clip_get_position(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipGetPosition(clip_id) : 0;
+}
+int32_t nam_studio_clip_is_playing(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipIsPlaying(clip_id) : 0;
+}
+int32_t nam_studio_clip_get_frames(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipGetFrames(clip_id) : 0;
+}
+int32_t nam_studio_clip_get_bus(NamStudioGraph* graph, int32_t clip_id) {
+  return graph ? graph->engine.ClipGetBus(clip_id) : -1;
+}
+
+// ── Capture + jam (issue #157) ────────────────────────────────────────
+
+void nam_studio_capture_start(NamStudioGraph* graph, NamStudioCaptureSource source, int32_t bus) {
+  if (!graph) return;
+  using CS = openaxe::engine::AudioEngine::CaptureSource;
+  CS s = CS::kMaster;
+  switch (source) {
+    case NAM_STUDIO_CAPTURE_MASTER: s = CS::kMaster; break;
+    case NAM_STUDIO_CAPTURE_DRY_INPUT: s = CS::kDryInput; break;
+    case NAM_STUDIO_CAPTURE_BUS: s = CS::kBus; break;
+    default: s = CS::kMaster; break;
+  }
+  graph->engine.CaptureStart(s, bus);
+}
+void nam_studio_capture_stop(NamStudioGraph* graph) {
+  if (graph) graph->engine.CaptureStop();
+}
+int32_t nam_studio_capture_is_active(NamStudioGraph* graph) {
+  return graph ? graph->engine.CaptureIsActive() : 0;
+}
+int32_t nam_studio_capture_available_frames(NamStudioGraph* graph) {
+  return graph ? graph->engine.CaptureAvailableFrames() : 0;
+}
+int32_t nam_studio_capture_read(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames) {
+  return graph ? graph->engine.CaptureRead(out_interleaved, capacity_frames) : 0;
+}
+void nam_studio_jam_configure(NamStudioGraph* graph, int32_t seconds) {
+  if (graph) graph->engine.JamConfigure(seconds);
+}
+int32_t nam_studio_jam_lift(NamStudioGraph* graph, float* out_interleaved, int32_t capacity_frames) {
+  return graph ? graph->engine.JamLift(out_interleaved, capacity_frames) : 0;
+}
+int64_t nam_studio_jam_available_frames(NamStudioGraph* graph) {
+  return graph ? graph->engine.JamAvailableFrames() : 0;
+}
+
 // ── Missing-asset queries (issue #120) ──────────────────────────────────
 
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {

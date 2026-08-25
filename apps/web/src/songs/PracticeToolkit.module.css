@@ -1,0 +1,116 @@
+.toolkit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  margin: var(--sp-3);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+.label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 80px;
+}
+
+.presets {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.presetBtn {
+  background: var(--panel-strong);
+  color: var(--ink-2);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  font-size: 10px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.presetBtn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.sliderLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.sections {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.sectionBtn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.sectionBtn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.actionBtn {
+  background: var(--panel-strong);
+  color: var(--ink-2);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.control select,
+.control input[type='range'] {
+  accent-color: var(--accent);
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: 11px;
+}
