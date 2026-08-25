@@ -8,7 +8,6 @@ import styles from './PlayerWidget.module.css'
 
 function formatTime(ticks: number, ticksPerBeat = 960, bpm = 120): string {
   const beats = ticks / ticksPerBeat
-  const minutes = Math.floor(beats / 4 / (bpm / 60) / 60) // simplified
   const secs = Math.floor((beats * 60) / bpm) % 60
   const mins = Math.floor((beats * 60) / bpm / 60)
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`

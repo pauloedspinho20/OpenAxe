@@ -96,9 +96,9 @@ export function useSongEngine() {
       const scheduled = lookaheadSchedule(eventsRef.current, currentTick, lookaheadTicks, {
         sampleRate,
         tempoScale,
-        loopStartTick: loopStart ?? undefined,
-        loopEndTick: loopEnd ?? undefined,
-      })
+        ...(loopStart !== null ? { loopStartTick: loopStart } : {}),
+        ...(loopEnd !== null ? { loopEndTick: loopEnd } : {}),
+      } as import('../engine/songScheduler').LookaheadOptions)
       for (const ev of scheduled) {
         const kindMap: Record<string, number> = { noteOn: 0, noteOff: 1, cc: 2, program: 3, pitchBend: 4 }
         const kind = kindMap[ev.kind] ?? 0

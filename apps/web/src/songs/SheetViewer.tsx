@@ -24,6 +24,7 @@ export function SheetViewer() {
 
       // Try to use alphaTab if installed
       try {
+        // @ts-ignore - optional dep, may not be installed in this env
         const mod = await import('@coderline/alphatab').catch(() => null)
         if (!mod || cancelled) throw new Error('no alphaTab')
         const api = new (mod as unknown as { AlphaTabApi: new (el: HTMLElement, opts: unknown) => { render: () => void; load: (data: Uint8Array) => void; tex: (t: string) => void } }).AlphaTabApi(el, {

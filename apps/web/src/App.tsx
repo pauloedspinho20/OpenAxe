@@ -26,6 +26,11 @@ import { PlayerWidget } from './songs/PlayerWidget'
 import { SheetViewer } from './songs/SheetViewer'
 import { PracticeToolkit } from './songs/PracticeToolkit'
 import { useSongsStore } from './songs/songsStore'
+import { useTakesStore } from './recorder/takesStore'
+import { MixerPanel } from './mixer/MixerPanel'
+import { RecordPanel } from './recorder/RecordPanel'
+import { TakesManager, openTakesManager } from './recorder/TakesManager'
+import { SessionManager, openSessionManager } from './recorder/SessionManager'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { installFactoryScenes } from './scenes/factoryScenes'
@@ -96,6 +101,10 @@ function App() {
     void useSongsStore.getState().load()
   }, [])
 
+  useEffect(() => {
+    void useTakesStore.getState().load()
+  }, [])
+
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
   return (
@@ -142,6 +151,8 @@ function App() {
 
         <div className={styles.headerGroup}>
           <HardwareButton label="SONGS" onClick={openSongsLibrary} title="Browse songs — import, play, practice" />
+          <HardwareButton label="TAKES" onClick={openTakesManager} title="Browse takes — rename, download, import" />
+          <HardwareButton label="SESSIONS" onClick={openSessionManager} title="Save/load mixer + song/takes" />
           <HardwareButton label="SETTINGS" onClick={openSettings} title="Open app settings" />
           <HardwareButton
             label="MIDI"
@@ -166,6 +177,10 @@ function App() {
       <SceneBar rig={engine.rig} context={engine.context} />
 
       <PlayerWidget />
+
+      <MixerPanel />
+
+      <RecordPanel />
 
       <main className={styles.main}>
         <GridEditor
@@ -209,6 +224,8 @@ function App() {
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
       <SongsLibrary />
+      <TakesManager />
+      <SessionManager />
       <SceneManager />
       <MidiManager />
       <SettingsDialog

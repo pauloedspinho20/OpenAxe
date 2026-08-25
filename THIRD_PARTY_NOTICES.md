@@ -10,6 +10,7 @@ OpenAxe is licensed [GPLv3](./LICENSE). It wraps or vendors the following third-
 | TinySoundFont (SF2 synth)                     | `packages/core/third_party/tinysoundfont` (vendored `tsf.h`) | MIT                       | https://github.com/schellingb/TinySoundFont            |
 | alphaTab (notation import)                    | `packages/songbook` (`@coderline/alphatab` `1.8.x`)          | MPL-2.0                   | https://github.com/CoderLine/alphaTab                  |
 | FluidR3_GM (default GM SoundFont)             | `apps/web/public/soundfonts/FluidR3_GM.sf2` (subset, lazy)   | MIT                       | https://github.com/FluidSynth/fluid-soundfont          |
+| lamejs (MP3 export)                           | `apps/web` (`lamejs` `1.2.1`)                                 | LGPL-3.0                  | https://github.com/zhuker/lamejs                       |
 | DSPark (effects)                              | `packages/core/third_party/dspark` (or vendored)             | MIT                       | https://github.com/sdatkinson/DSPark (check submodule) |
 | Eigen (via NAMCore)                           | `packages/core/third_party/nam-core/Eigen`                   | MPL2                      | https://eigen.tuxfamily.org                            |
 | iPlug2                                        | `packages/vst3` FetchContent `d54f690`                       | MIT                       | https://github.com/iPlug2/iPlug2                       |
