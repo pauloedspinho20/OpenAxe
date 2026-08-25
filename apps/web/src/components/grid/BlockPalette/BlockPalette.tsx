@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
+import { BlockIcon, toast } from '@openaxe/ui'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { useGraphStore } from '../../../state/graphStore'
 import { BLOCK_OPTIONS, BLOCK_KIND_LABELS } from '../blockOptions'
 import { findGridElement, isPointOverGrid, resolveGridCell } from '../gridGeometry'
-import { BlockIcon } from '../blockIcons'
-import { toast } from '@openaxe/ui'
+import { blockColorVar } from '../blockColors'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import styles from './BlockPalette.module.css'
@@ -114,9 +114,10 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
                   }
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
+                  style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
                 >
-                  {/*   <BlockIcon kind={option.kind} size={20} /> */}
-                  {option.label}
+                  <BlockIcon kind={option.kind} size={20} />
+                  <span>{option.label}</span>
                 </div>
               ))}
             </div>
@@ -126,10 +127,16 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
         {drag && (
           <div
             className={`${styles.ghost} ${drag.overGrid ? styles.ghostOverGrid : ''}`}
-            style={{ left: drag.x, top: drag.y }}
+            style={
+              {
+                left: drag.x,
+                top: drag.y,
+                '--block-color': blockColorVar(drag.kind),
+              } as React.CSSProperties
+            }
           >
             <BlockIcon kind={drag.kind} size={12} />
-            {drag.label}
+            <span>{drag.label}</span>
           </div>
         )}
 

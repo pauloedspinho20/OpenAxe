@@ -14,7 +14,7 @@ import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
-import { HardwareButton, Knob, toast } from '@openaxe/ui'
+import { HardwareButton, InputIcon, Knob, OutputIcon, toast } from '@openaxe/ui'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
@@ -192,6 +192,7 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="IN"
+            icon={<InputIcon size={14} />}
             onClick={() => setInputDialogOpen(true)}
             title="Input device and channel"
           />
@@ -243,6 +244,7 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="OUT"
+            icon={<OutputIcon size={14} />}
             onClick={() => setOutputDialogOpen(true)}
             title="Output device and channel"
           />

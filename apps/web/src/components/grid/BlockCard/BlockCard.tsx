@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from 'react'
-import { toast } from '@openaxe/ui'
+import { BlockIcon, toast } from '@openaxe/ui'
 import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
 import { useEngineVersion } from '../../../state/engineVersion'
 import { useSelection } from '../../../state/selection'
@@ -14,6 +14,7 @@ import { SPLITTER_OUTPUT_COUNT } from '@/engine/blocks/SplitterBlock'
 import { useTone3000Library } from '@/tone3000/library'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
+import { blockColorVar } from '../blockColors'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { jackElementId } from '../jackId'
 import styles from './BlockCard.module.css'
@@ -220,12 +221,15 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
   return (
     <div
       className={`${styles.card} ${isSelected ? styles.cardSelected : ''} ${cardImageUrl ? styles.cardWithImage : ''}`}
-      style={{
-        ...(cardImageUrl ? { backgroundImage: `url(${cardImageUrl})` } : {}),
-        ...(dragOffset
-          ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`, zIndex: 10 }
-          : {}),
-      }}
+      style={
+        {
+          ...(cardImageUrl ? { backgroundImage: `url(${cardImageUrl})` } : {}),
+          ...(dragOffset
+            ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`, zIndex: 10 }
+            : {}),
+          '--block-color': blockColorVar(instance.kind),
+        } as React.CSSProperties
+      }
       tabIndex={0}
       role="button"
       aria-pressed={isSelected}
@@ -263,7 +267,7 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
       </div>
 
       <span className={`${styles.kindLabel} `}>
-        {/*   <BlockIcon kind={instance.kind} size={18} className={styles.kindIcon} /> */}
+        <BlockIcon kind={instance.kind} size={20} className={styles.kindIcon} />
         <span className={styles.blockLabel}>{label}</span>
         {status && <span className={styles.status}>{status}</span>}
       </span>
