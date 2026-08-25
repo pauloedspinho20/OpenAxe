@@ -66,6 +66,10 @@ constexpr KindEntry kKinds[] = {
     {"cab", NAM_STUDIO_BLOCK_CAB},
     {"mixer", NAM_STUDIO_BLOCK_MIXER},
     {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
+    {"send-1", NAM_STUDIO_BLOCK_SEND_1},
+    {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
+    {"send-2", NAM_STUDIO_BLOCK_SEND_2},
+    {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
 };
 
 std::optional<NamStudioBlockKind> WebToCoreKind(const std::string& web) {

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { useMixerStore, startMixerMeterPoll } from './mixerStore'
-import { useAudioEngine } from '../hooks/useAudioEngine'
+import { useMixerStore, startMixerMeterPoll, busOrDefault } from './mixerStore'
+import type { EngineStatus } from '../hooks/useAudioEngine'
+import type { GraphRig } from '../engine/GraphRig'
 import { Fader, Knob, Meter, HardwareButton } from '@openaxe/ui'
 import styles from './MixerPanel.module.css'
 
@@ -17,9 +18,8 @@ const BUS_LABELS: Record<number, string> = {
   9: 'Take 8',
 }
 
-function BusStrip({ bus }: { bus: number }) {
-  const { rig } = useAudioEngine()
-  const busState = useMixerStore((s) => s.buses[bus] ?? { gain: 1, pan: 0, muted: false, soloed: false, meter: 0 })
+function BusStrip({ bus, rig }: { bus: number; rig: GraphRig | null }) {
+  const busState = useMixerStore((s) => busOrDefault(s.buses, bus))
   const setGain = useMixerStore((s) => s.setGain)
   const setPan = useMixerStore((s) => s.setPan)
   const setMute = useMixerStore((s) => s.setMute)
@@ -48,18 +48,33 @@ function BusStrip({ bus }: { bus: number }) {
     <div className={styles.strip} data-bus={bus}>
       <div className={styles.label}>{BUS_LABELS[bus] ?? `Bus ${bus}`}</div>
       <Meter level={busState.meter} label="Peak" />
-      <Fader label="Gain" value={busState.gain} min={0} max={1.5} step={0.01} onChange={handleGain} formatValue={(v) => v.toFixed(2)} />
+      <Fader
+        label="Gain"
+        value={busState.gain}
+        min={0}
+        max={1.5}
+        step={0.01}
+        onChange={handleGain}
+        formatValue={(v) => v.toFixed(2)}
+      />
       <Knob label="Pan" value={busState.pan} min={-1} max={1} step={0.01} onChange={handlePan} />
       <div className={styles.buttons}>
-        <HardwareButton label={busState.muted ? 'Unmute' : 'Mute'} active={busState.muted} onClick={handleMute} />
-        <HardwareButton label={busState.soloed ? 'Unsolo' : 'Solo'} active={busState.soloed} onClick={handleSolo} />
+        <HardwareButton
+          label={busState.muted ? 'Unmute' : 'Mute'}
+          active={busState.muted}
+          onClick={handleMute}
+        />
+        <HardwareButton
+          label={busState.soloed ? 'Unsolo' : 'Solo'}
+          active={busState.soloed}
+          onClick={handleSolo}
+        />
       </div>
     </div>
   )
 }
 
-export function MixerPanel() {
-  const { rig, status } = useAudioEngine()
+export function MixerPanel({ rig, status }: { rig: GraphRig | null; status: EngineStatus }) {
   const isReady = status === 'ready'
 
   useEffect(() => {
@@ -75,7 +90,7 @@ export function MixerPanel() {
       <div className={styles.header}>MIXER — Song / Grid / Takes</div>
       <div className={styles.strips}>
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((bus) => (
-          <BusStrip key={bus} bus={bus} />
+          <BusStrip key={bus} bus={bus} rig={rig} />
         ))}
       </div>
     </div>

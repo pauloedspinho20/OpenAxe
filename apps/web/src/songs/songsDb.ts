@@ -6,7 +6,9 @@ export async function saveSong(song: Song): Promise<void> {
 }
 
 export async function getSong(id: string): Promise<Song | null> {
-  const result = await withStore<Song | undefined>(STORE_SONGS, 'readonly', (store) => store.get(id))
+  const result = await withStore<Song | undefined>(STORE_SONGS, 'readonly', (store) =>
+    store.get(id),
+  )
   return result ?? null
 }
 

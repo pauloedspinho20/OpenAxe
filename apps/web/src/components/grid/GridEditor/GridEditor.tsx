@@ -14,11 +14,12 @@ import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
-import { HardwareButton, Knob, toast } from '@openaxe/ui'
+import { HardwareButton, InputIcon, Knob, OutputIcon, toast } from '@openaxe/ui'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { Tuner } from '@/components/Tuner/Tuner'
+import { BLOCK_KIND_LABELS } from '../blockOptions'
 
 import styles from './GridEditor.module.css'
 export interface GridEditorProps {
@@ -191,6 +192,7 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="IN"
+            icon={<InputIcon size={14} />}
             onClick={() => setInputDialogOpen(true)}
             title="Input device and channel"
           />
@@ -242,6 +244,7 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="OUT"
+            icon={<OutputIcon size={14} />}
             onClick={() => setOutputDialogOpen(true)}
             title="Output device and channel"
           />
@@ -291,6 +294,13 @@ export function GridEditor({
           open={!!addMenuCell}
           onPick={(kind: BlockKind) => {
             const id = useGraphStore.getState().addBlock(kind, addMenuCell.row, addMenuCell.col)
+            if (id === null) {
+              toast.warning(`${BLOCK_KIND_LABELS[kind]} is already on the grid`, {
+                description: 'Send/Return blocks are strictly 1:1.',
+              })
+              setAddMenuCell(null)
+              return
+            }
             openCatalogForNewBlock(id, kind)
             setAddMenuCell(null)
           }}

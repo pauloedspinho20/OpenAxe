@@ -6,7 +6,9 @@ export async function saveTake(take: Take): Promise<void> {
 }
 
 export async function getTake(id: string): Promise<Take | null> {
-  const result = await withStore<Take | undefined>(STORE_TAKES, 'readonly', (store) => store.get(id))
+  const result = await withStore<Take | undefined>(STORE_TAKES, 'readonly', (store) =>
+    store.get(id),
+  )
   return result ?? null
 }
 

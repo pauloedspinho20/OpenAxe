@@ -133,7 +133,10 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
     if (!search.trim()) return songs
     const q = search.toLowerCase()
     return songs.filter(
-      (s) => s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q) || s.filename.toLowerCase().includes(q),
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        s.artist.toLowerCase().includes(q) ||
+        s.filename.toLowerCase().includes(q),
     )
   },
 }))

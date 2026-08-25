@@ -5,8 +5,19 @@ import { Dialog, HardwareButton } from '@openaxe/ui'
 import styles from './SongsLibrary.module.css'
 
 export function SongsLibrary() {
-  const { songs, selectedId, search, loading, load, addFromFile, remove, rename, select, setSearch, getFiltered } =
-    useSongsStore()
+  const {
+    songs,
+    selectedId,
+    search,
+    loading,
+    load,
+    addFromFile,
+    remove,
+    rename,
+    select,
+    setSearch,
+    getFiltered,
+  } = useSongsStore()
   const setCurrentSong = usePlayerStore((s) => s.setCurrentSong)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +67,13 @@ export function SongsLibrary() {
   if (!open) return null
 
   return (
-    <Dialog open={true} onClose={() => setOpen(false)} title="SONGS" width="min(640px, 90vw)" zIndex={300}>
+    <Dialog
+      open={true}
+      onClose={() => setOpen(false)}
+      title="SONGS"
+      width="min(640px, 90vw)"
+      zIndex={300}
+    >
       <div className={styles.toolbar}>
         <input
           type="text"
@@ -76,25 +93,45 @@ export function SongsLibrary() {
             e.target.value = ''
           }}
         />
-        <HardwareButton label="Import…" onClick={() => fileInputRef.current?.click()} disabled={busy} />
+        <HardwareButton
+          label="Import…"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+        />
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
       {loading && <p className={styles.hint}>Loading…</p>}
 
       <div className={styles.list}>
-        {filtered.length === 0 && !loading && <p className={styles.hint}>No songs yet — import a .gp, .musicxml, .mid or .atex file.</p>}
+        {filtered.length === 0 && !loading && (
+          <p className={styles.hint}>No songs yet — import a .gp, .musicxml, .mid or .atex file.</p>
+        )}
         {filtered.map((song) => (
-          <div key={song.id} className={`${styles.row} ${selectedId === song.id ? styles.selected : ''}`}>
-            <div className={styles.rowInfo} onClick={() => handleSelect(song.id)} role="button" tabIndex={0}>
+          <div
+            key={song.id}
+            className={`${styles.row} ${selectedId === song.id ? styles.selected : ''}`}
+          >
+            <div
+              className={styles.rowInfo}
+              onClick={() => handleSelect(song.id)}
+              role="button"
+              tabIndex={0}
+            >
               <span className={styles.rowName}>{song.title}</span>
               <span className={styles.rowMeta}>
                 {song.artist ? `${song.artist} · ` : ''}
-                {song.barCount} bars · {song.tracks.length} track{song.tracks.length === 1 ? '' : 's'} · {song.filename}
+                {song.barCount} bars · {song.tracks.length} track
+                {song.tracks.length === 1 ? '' : 's'} · {song.filename}
               </span>
             </div>
             <div className={styles.rowActions}>
-              <button type="button" className={styles.actionBtn} onClick={() => void handleRename(song.id, song.title)} aria-label={`Rename ${song.title}`}>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => void handleRename(song.id, song.title)}
+                aria-label={`Rename ${song.title}`}
+              >
                 Rename
               </button>
               <button
@@ -110,7 +147,9 @@ export function SongsLibrary() {
         ))}
       </div>
 
-      <p className={styles.hint}>Tip: Space = play/pause, L = set loop from selection. Works offline after import.</p>
+      <p className={styles.hint}>
+        Tip: Space = play/pause, L = set loop from selection. Works offline after import.
+      </p>
     </Dialog>
   )
 }

@@ -127,6 +127,41 @@ void TestIsEdgeOrderValidFalseAfterMove() {
   OPENAXE_EXPECT(!IsEdgeOrderValid(blocks, {J("a"), J("b")}));
 }
 
+// Send/Return (issue #274): a Send is input-only and a Return output-only -
+// the pairing is implicit in the engine, never a cable, so CanConnect must
+// refuse a cable out of a Send and a cable into a Return, while the valid
+// sides (cable into a Send, cable out of a Return) keep working like normal.
+void TestSendAcceptsInputButNoOutput() {
+  BlockMap blocks{{"s", {BlockKind::kSend1, 0, 0}}, {"b", {BlockKind::kEq, 0, 1}}};
+  OPENAXE_EXPECT(CanConnect(blocks, {}, J("IN"), J("s")).ok);
+  auto out = CanConnect(blocks, {}, J("s"), J("b"));
+  OPENAXE_EXPECT(!out.ok);
+  OPENAXE_EXPECT(out.reason == RejectReason::kInvalidOutputPort);
+  auto to_rail = CanConnect(blocks, {}, J("s"), J("OUT"));
+  OPENAXE_EXPECT(!to_rail.ok);
+  OPENAXE_EXPECT(to_rail.reason == RejectReason::kInvalidOutputPort);
+}
+
+void TestReturnAcceptsOutputButNoInput() {
+  BlockMap blocks{{"b", {BlockKind::kEq, 0, 0}}, {"r", {BlockKind::kReturn1, 0, 1}}};
+  OPENAXE_EXPECT(CanConnect(blocks, {}, J("r"), J("OUT")).ok);
+  auto in = CanConnect(blocks, {}, J("b"), J("r"));
+  OPENAXE_EXPECT(!in.ok);
+  OPENAXE_EXPECT(in.reason == RejectReason::kInvalidInputPort);
+  auto from_rail = CanConnect(blocks, {}, J("IN"), J("r"));
+  OPENAXE_EXPECT(!from_rail.ok);
+  OPENAXE_EXPECT(from_rail.reason == RejectReason::kInvalidInputPort);
+}
+
+// Send 2 / Return 2 behave identically to Send 1 / Return 1.
+void TestSendReturnSecondPairSameRules() {
+  BlockMap blocks{{"s", {BlockKind::kSend2, 0, 0}}, {"r", {BlockKind::kReturn2, 0, 1}}};
+  OPENAXE_EXPECT(CanConnect(blocks, {}, J("IN"), J("s")).ok);
+  OPENAXE_EXPECT(CanConnect(blocks, {}, J("r"), J("OUT")).ok);
+  OPENAXE_EXPECT(!CanConnect(blocks, {}, J("s"), J("r")).ok);
+  OPENAXE_EXPECT(!CanConnect(blocks, {}, J("IN"), J("r")).ok);
+}
+
 }  // namespace
 
 int main() {
@@ -146,6 +181,9 @@ int main() {
   TestNonZeroSourcePortOnNonSplitterRejected();
   TestIsEdgeOrderValidTrueWhenForward();
   TestIsEdgeOrderValidFalseAfterMove();
+  TestSendAcceptsInputButNoOutput();
+  TestReturnAcceptsOutputButNoInput();
+  TestSendReturnSecondPairSameRules();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

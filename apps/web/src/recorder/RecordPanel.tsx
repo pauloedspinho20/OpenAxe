@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAudioEngine } from '../hooks/useAudioEngine'
+import type { EngineStatus } from '../hooks/useAudioEngine'
+import type { GraphRig } from '../engine/GraphRig'
 import { HardwareButton } from '@openaxe/ui'
 import { useTakesStore } from './takesStore'
 import { usePlayerStore } from '../songs/playerStore'
@@ -14,8 +15,7 @@ const SOURCE_OPTIONS: { value: TakeSource; label: string; source: number; bus: n
   { value: 'grid', label: 'Grid Only', source: 2, bus: 1 },
 ]
 
-export function RecordPanel() {
-  const { rig, status } = useAudioEngine()
+export function RecordPanel({ rig, status }: { rig: GraphRig | null; status: EngineStatus }) {
   const isReady = status === 'ready'
   const addTake = useTakesStore((s) => s.addTake)
   const [armed, setArmed] = useState(false)
@@ -142,22 +142,45 @@ export function RecordPanel() {
       <div className={styles.header}>
         <span className={styles.title}>RECORDER</span>
         <span className={styles.timer}>{elapsed.toFixed(1)}s</span>
-        <span className={styles.level} style={{ width: `${Math.min(100, level * 100)}%` }} aria-hidden />
+        <span
+          className={styles.level}
+          style={{ width: `${Math.min(100, level * 100)}%` }}
+          aria-hidden
+        />
       </div>
 
       <div className={styles.controls}>
         <HardwareButton label={armed ? 'Armed' : 'Arm'} active={armed} onClick={handleArm} />
-        <HardwareButton label={recording ? 'Stop' : 'Record'} active={recording} onClick={() => void handleRecord()} disabled={!armed && !recording} />
-        <select value={source} onChange={(e) => setSource(e.target.value as TakeSource)} className={styles.select} aria-label="Source">
+        <HardwareButton
+          label={recording ? 'Stop' : 'Record'}
+          active={recording}
+          onClick={() => void handleRecord()}
+          disabled={!armed && !recording}
+        />
+        <select
+          value={source}
+          onChange={(e) => setSource(e.target.value as TakeSource)}
+          className={styles.select}
+          aria-label="Source"
+        >
           {SOURCE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
         </select>
-        <HardwareButton label="Save Jam" onClick={() => void handleJamSave()} title="One-click save last 10s" />
+        <HardwareButton
+          label="Save Jam"
+          onClick={() => void handleJamSave()}
+          title="One-click save last 10s"
+        />
         <label className={styles.checkLabel}>
-          <input type="checkbox" checked={recordWithSong} onChange={(e) => setRecordWithSong(e.target.checked)} disabled={!currentSong} />
+          <input
+            type="checkbox"
+            checked={recordWithSong}
+            onChange={(e) => setRecordWithSong(e.target.checked)}
+            disabled={!currentSong}
+          />
           With song
         </label>
         <label className={styles.checkLabel}>

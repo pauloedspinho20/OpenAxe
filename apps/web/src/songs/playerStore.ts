@@ -48,7 +48,8 @@ export const usePlayerStore = create<PlayerState>()((set) => ({
   metronome: false,
   transposeSemitones: 0,
 
-  setCurrentSong: (song) => set({ currentSong: song, positionTicks: 0, positionSamples: 0, isPlaying: false }),
+  setCurrentSong: (song) =>
+    set({ currentSong: song, positionTicks: 0, positionSamples: 0, isPlaying: false }),
   setPlaying: (playing) => set({ isPlaying: playing }),
   setPositionTicks: (ticks) => set({ positionTicks: ticks }),
   setTempoScale: (scale) => set({ tempoScale: Math.min(2, Math.max(0.25, scale)) }),

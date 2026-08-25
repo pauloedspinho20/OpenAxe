@@ -4,11 +4,10 @@ import { useSongsStore, getSongBytes } from './songsStore'
 import { parseScore, extractTrackEvents } from '@openaxe/songbook'
 import { lookaheadSchedule } from '../engine/songScheduler'
 import { ensureDefaultSoundfont } from '../soundfonts/soundfontLoader'
-import { useAudioEngine } from '../hooks/useAudioEngine'
+import type { AudioEngineState, AudioEngineActions } from '../hooks/useAudioEngine'
 import type { ScoreEvent } from '@openaxe/songbook'
 
-export function useSongEngine() {
-  const engine = useAudioEngine()
+export function useSongEngine(engine: AudioEngineState & AudioEngineActions) {
   const rig = engine.rig
   const context = engine.context
   const isReady = engine.status === 'ready'
@@ -38,14 +37,17 @@ export function useSongEngine() {
       const bytes = getSongBytes(currentSong)
       const isText = currentSong.fileType === 'musicxml' || currentSong.fileType === 'atex'
       const data: Uint8Array | string = isText ? new TextDecoder().decode(bytes) : bytes
-      const summary = await parseScore(data as string & Uint8Array, { filename: currentSong.filename })
+      const summary = await parseScore(data as string & Uint8Array, {
+        filename: currentSong.filename,
+      })
       if (cancelled) return
       const allTrackIds = summary.tracks.map((t) => t.id)
       const activeIds = allTrackIds.filter((id) => !trackMutes[id])
       const events = extractTrackEvents(summary, activeIds)
       if (transpose !== 0) {
         for (const ev of events) {
-          if (ev.type === 'noteOn' || ev.type === 'noteOff') ev.key = Math.min(127, Math.max(0, ev.key + transpose))
+          if (ev.type === 'noteOn' || ev.type === 'noteOff')
+            ev.key = Math.min(127, Math.max(0, ev.key + transpose))
         }
       }
       eventsRef.current = events
@@ -80,19 +82,19 @@ export function useSongEngine() {
       lastTime = now
       const deltaSamples = (deltaMs / 1000) * sampleRate * tempoScale
       positionRef.current += deltaSamples
-      const positionTicks = Math.floor((positionRef.current / sampleRate) * (120 * 960 / 60))
+      const positionTicks = Math.floor((positionRef.current / sampleRate) * ((120 * 960) / 60))
 
       try {
         const pos = await rig.songPosition()
         positionRef.current = pos
-        const ticks = Math.floor((pos / sampleRate) * (120 * 960 / 60))
+        const ticks = Math.floor((pos / sampleRate) * ((120 * 960) / 60))
         setPositionTicks(ticks)
       } catch {
         setPositionTicks(positionTicks)
       }
 
-      const currentTick = Math.floor((positionRef.current / sampleRate) * (120 * 960 / 60))
-      const lookaheadTicks = Math.floor((lookaheadSamples / sampleRate) * (120 * 960 / 60))
+      const currentTick = Math.floor((positionRef.current / sampleRate) * ((120 * 960) / 60))
+      const lookaheadTicks = Math.floor((lookaheadSamples / sampleRate) * ((120 * 960) / 60))
       const scheduled = lookaheadSchedule(eventsRef.current, currentTick, lookaheadTicks, {
         sampleRate,
         tempoScale,
@@ -100,12 +102,22 @@ export function useSongEngine() {
         ...(loopEnd !== null ? { loopEndTick: loopEnd } : {}),
       } as import('../engine/songScheduler').LookaheadOptions)
       for (const ev of scheduled) {
-        const kindMap: Record<string, number> = { noteOn: 0, noteOff: 1, cc: 2, program: 3, pitchBend: 4 }
+        const kindMap: Record<string, number> = {
+          noteOn: 0,
+          noteOff: 1,
+          cc: 2,
+          program: 3,
+          pitchBend: 4,
+        }
         const kind = kindMap[ev.kind] ?? 0
         rig.scheduleSongEvent(kind, ev.channel, ev.key, ev.value, ev.deltaFrames)
       }
 
-      if (loopStart !== null && loopEnd !== null && positionRef.current >= (loopEnd / 960) * (60 / 120) * sampleRate) {
+      if (
+        loopStart !== null &&
+        loopEnd !== null &&
+        positionRef.current >= (loopEnd / 960) * (60 / 120) * sampleRate
+      ) {
         const loopStartSamples = (loopStart / 960) * (60 / 120) * sampleRate
         positionRef.current = loopStartSamples
         rig.songSeek(Math.floor(loopStartSamples))
@@ -128,7 +140,18 @@ export function useSongEngine() {
       scheduleRef.current = null
       rig.songStop()
     }
-  }, [isPlaying, isReady, rig, context, currentSong, tempoScale, loopStart, loopEnd, setPositionTicks, setPlaying])
+  }, [
+    isPlaying,
+    isReady,
+    rig,
+    context,
+    currentSong,
+    tempoScale,
+    loopStart,
+    loopEnd,
+    setPositionTicks,
+    setPlaying,
+  ])
 
   const selectedId = useSongsStore((s) => s.selectedId)
   const songs = useSongsStore((s) => s.songs)

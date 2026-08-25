@@ -117,6 +117,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
         <option>reverb</option><option>amp</option>
         <option>amp-cab</option><option>pedal</option><option>outboard</option>
         <option>space</option><option>cab</option><option>mixer</option><option>splitter</option>
+        <option>send-1</option><option>return-1</option><option>send-2</option><option>return-2</option>
       </select>
       <button id="add">Add block</button>
       <button id="wire">Wire IN &rarr; blocks &rarr; OUT</button>

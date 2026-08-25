@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { BlockKind, EffectParams } from '../engine/blocks/Block'
+import { SEND_RETURN_KINDS } from '../engine/blocks/blockRegistry'
 import { GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey, type Jack } from '../engine/gridConfig'
 import {
   canConnect,
@@ -34,7 +35,7 @@ export interface GraphState {
   /** Programmatic output silence while the tuner dialog is open - separate from the user's saved mute. */
   tunerMuted: boolean
 
-  addBlock: (kind: BlockKind, row: number, col: number) => string
+  addBlock: (kind: BlockKind, row: number, col: number) => string | null
   removeBlock: (id: string) => void
   moveBlock: (id: string, row: number, col: number) => ConnectResult
   setBlockParams: (id: string, params: EffectParams) => void
@@ -185,10 +186,22 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
 
   addBlock: (kind, row, col) => {
     const state = get()
+    // Send/Return pairs are strictly 1:1 (issue #274) - at most one of each
+    // kind. A duplicate is refused rather than silently placing a second relay
+    // whose implicit link would be ambiguous.
+    if (SEND_RETURN_KINDS.has(kind) && state.blocks.some((b) => b.kind === kind)) {
+      return null
+    }
     const id = crypto.randomUUID()
     const block: BlockInstance = { id, kind, row, col, params: {} }
     const blocks = [...state.blocks, block]
-    const edges = autoWireEdges(state.blocks, blocks, state.edges, id, row, col)
+    // Send/Return relays skip semi-auto wiring: a Send has no output jack and
+    // a Return has no input jack, so the generic IN->block->OUT/anchor/splice
+    // rules would either fail the port checks or strand a half-splice. Wire
+    // their single jacks by hand.
+    const edges = SEND_RETURN_KINDS.has(kind)
+      ? state.edges
+      : autoWireEdges(state.blocks, blocks, state.edges, id, row, col)
     set({ blocks, edges })
     return id
   },

@@ -6,7 +6,9 @@ export async function saveSession(session: SessionState): Promise<void> {
 }
 
 export async function getSession(id: string): Promise<SessionState | null> {
-  const result = await withStore<SessionState | undefined>(STORE_SESSIONS, 'readonly', (store) => store.get(id))
+  const result = await withStore<SessionState | undefined>(STORE_SESSIONS, 'readonly', (store) =>
+    store.get(id),
+  )
   return result ?? null
 }
 

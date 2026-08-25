@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTakesStore } from './takesStore'
-import { useAudioEngine } from '../hooks/useAudioEngine'
+import type { GraphRig } from '../engine/GraphRig'
 import { Dialog, HardwareButton } from '@openaxe/ui'
 import { encodeMp3, downloadMp3 } from './mp3'
 import styles from './TakesManager.module.css'
 
-export function TakesManager() {
+export function TakesManager({ rig }: { rig: GraphRig | null }) {
   const { takes, loading, load, remove, rename, download, importWav } = useTakesStore()
   const [open, setOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -29,8 +29,6 @@ export function TakesManager() {
     if (!next || next.trim() === current) return
     await rename(id, next.trim())
   }
-
-  const { rig } = useAudioEngine()
 
   const handlePlay = async (id: string) => {
     const take = takes.find((t) => t.id === id)
@@ -79,7 +77,13 @@ export function TakesManager() {
   if (!open) return null
 
   return (
-    <Dialog open={true} onClose={() => setOpen(false)} title="TAKES" width="min(640px, 90vw)" zIndex={300}>
+    <Dialog
+      open={true}
+      onClose={() => setOpen(false)}
+      title="TAKES"
+      width="min(640px, 90vw)"
+      zIndex={300}
+    >
       <div className={styles.toolbar}>
         <input
           ref={fileInputRef}
@@ -97,26 +101,49 @@ export function TakesManager() {
 
       {loading && <p className={styles.hint}>Loading…</p>}
       <div className={styles.list}>
-        {takes.length === 0 && !loading && <p className={styles.hint}>No takes yet — record or import a WAV.</p>}
+        {takes.length === 0 && !loading && (
+          <p className={styles.hint}>No takes yet — record or import a WAV.</p>
+        )}
         {takes.map((take) => (
           <div key={take.id} className={styles.row}>
             <div className={styles.rowInfo}>
               <span className={styles.rowName}>{take.name}</span>
               <span className={styles.rowMeta}>
-                {(take.durationFrames / take.sampleRate).toFixed(1)}s · {take.source} · {new Date(take.createdAt).toLocaleString()}
+                {(take.durationFrames / take.sampleRate).toFixed(1)}s · {take.source} ·{' '}
+                {new Date(take.createdAt).toLocaleString()}
               </span>
             </div>
             <div className={styles.rowActions}>
-              <button type="button" className={styles.actionBtn} onClick={() => void handlePlay(take.id)} aria-label={`Play ${take.name}`}>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => void handlePlay(take.id)}
+                aria-label={`Play ${take.name}`}
+              >
                 Play
               </button>
-              <button type="button" className={styles.actionBtn} onClick={() => download(take.id)} aria-label={`Download ${take.name}`}>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => download(take.id)}
+                aria-label={`Download ${take.name}`}
+              >
                 WAV
               </button>
-              <button type="button" className={styles.actionBtn} onClick={() => void handleMp3(take.id)} aria-label={`MP3 ${take.name}`}>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => void handleMp3(take.id)}
+                aria-label={`MP3 ${take.name}`}
+              >
                 MP3
               </button>
-              <button type="button" className={styles.actionBtn} onClick={() => void handleRename(take.id, take.name)} aria-label={`Rename ${take.name}`}>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => void handleRename(take.id, take.name)}
+                aria-label={`Rename ${take.name}`}
+              >
                 Rename
               </button>
               <button

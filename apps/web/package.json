@@ -34,6 +34,7 @@
     "format:check": "prettier --ignore-path ../../.prettierignore --check ."
   },
   "dependencies": {
+    "@coderline/alphatab": "^1.8.0",
     "@openaxe/songbook": "workspace:*",
     "@openaxe/ui": "workspace:*",
     "lamejs": "^1.2.1",

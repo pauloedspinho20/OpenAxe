@@ -65,6 +65,14 @@ openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
       return BlockKind::kGranularDelay;
     case NAM_STUDIO_BLOCK_ROTARY:
       return BlockKind::kRotary;
+    case NAM_STUDIO_BLOCK_SEND_1:
+      return BlockKind::kSend1;
+    case NAM_STUDIO_BLOCK_RETURN_1:
+      return BlockKind::kReturn1;
+    case NAM_STUDIO_BLOCK_SEND_2:
+      return BlockKind::kSend2;
+    case NAM_STUDIO_BLOCK_RETURN_2:
+      return BlockKind::kReturn2;
   }
   return BlockKind::kCab;  // unreachable for a valid enum value
 }

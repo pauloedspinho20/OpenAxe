@@ -535,7 +535,12 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           const ptr = module._malloc(data.length * BYTES_PER_FLOAT)
           try {
             module.HEAPF32.set(data, ptr >> 2)
-            const accepted = module._nam_studio_clip_feed_pcm(this.graph, message.clipId, ptr, frames)
+            const accepted = module._nam_studio_clip_feed_pcm(
+              this.graph,
+              message.clipId,
+              ptr,
+              frames,
+            )
             reply.frames = accepted
             reply.ok = true
           } finally {

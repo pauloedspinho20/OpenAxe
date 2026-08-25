@@ -34,7 +34,12 @@ export function SessionManager() {
       id: crypto.randomUUID(),
       name: trimmed,
       createdAt: Date.now(),
-      mixer: Object.fromEntries(Object.entries(mixer).map(([k, v]) => [k, { gain: v.gain, pan: v.pan, muted: v.muted, soloed: v.soloed }])) as SessionState['mixer'],
+      mixer: Object.fromEntries(
+        Object.entries(mixer).map(([k, v]) => [
+          k,
+          { gain: v.gain, pan: v.pan, muted: v.muted, soloed: v.soloed },
+        ]),
+      ) as SessionState['mixer'],
       songId,
       takeIds,
     }
@@ -71,10 +76,26 @@ export function SessionManager() {
   if (!open) return null
 
   return (
-    <Dialog open={true} onClose={() => setOpen(false)} title="SESSIONS" width="min(560px, 90vw)" zIndex={300}>
+    <Dialog
+      open={true}
+      onClose={() => setOpen(false)}
+      title="SESSIONS"
+      width="min(560px, 90vw)"
+      zIndex={300}
+    >
       <div className={styles.saveRow}>
-        <input type="text" className={styles.nameInput} placeholder="Session name" value={name} onChange={(e) => setName(e.target.value)} />
-        <HardwareButton label="Save Current" onClick={() => void handleSave()} disabled={!name.trim()} />
+        <input
+          type="text"
+          className={styles.nameInput}
+          placeholder="Session name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <HardwareButton
+          label="Save Current"
+          onClick={() => void handleSave()}
+          disabled={!name.trim()}
+        />
       </div>
 
       <div className={styles.list}>
@@ -84,14 +105,19 @@ export function SessionManager() {
             <div className={styles.rowInfo}>
               <span className={styles.rowName}>{s.name}</span>
               <span className={styles.rowMeta}>
-                {new Date(s.createdAt).toLocaleString()} · {Object.keys(s.mixer).length} buses · {s.takeIds.length} takes
+                {new Date(s.createdAt).toLocaleString()} · {Object.keys(s.mixer).length} buses ·{' '}
+                {s.takeIds.length} takes
               </span>
             </div>
             <div className={styles.rowActions}>
               <button type="button" className={styles.actionBtn} onClick={() => void handleLoad(s)}>
                 Load
               </button>
-              <button type="button" className={`${styles.actionBtn} ${styles.actionBtnDanger}`} onClick={() => void handleDelete(s.id)}>
+              <button
+                type="button"
+                className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+                onClick={() => void handleDelete(s.id)}
+              >
                 Delete
               </button>
             </div>

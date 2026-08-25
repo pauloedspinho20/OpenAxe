@@ -8,12 +8,20 @@ export async function encodeMp3(
   sampleRate: number,
   channels: number,
   bitrate = 128,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   // Dynamic import so the main bundle doesn't pay for lamejs until export is used.
   const lamejs = await import('lamejs').catch(() => null)
   if (!lamejs) throw new Error('lamejs not available — run `pnpm add lamejs`')
 
-  const Mp3Encoder = (lamejs as unknown as { Mp3Encoder: new (c: number, sr: number, br: number) => { encodeBuffer: (l: Int16Array, r?: Int16Array) => Int8Array; flush: () => Int8Array } }).Mp3Encoder
+  const Mp3Encoder = (
+    lamejs as unknown as {
+      Mp3Encoder: new (
+        c: number,
+        sr: number,
+        br: number,
+      ) => { encodeBuffer: (l: Int16Array, r?: Int16Array) => Int8Array; flush: () => Int8Array }
+    }
+  ).Mp3Encoder
   const encoder = new Mp3Encoder(channels, sampleRate, bitrate)
 
   // lamejs expects Int16Array, so convert Float32 [-1,1] → Int16
@@ -67,7 +75,7 @@ export async function encodeMp3(
   return out
 }
 
-export function downloadMp3(filename: string, mp3Bytes: Uint8Array) {
+export function downloadMp3(filename: string, mp3Bytes: Uint8Array<ArrayBuffer>) {
   const blob = new Blob([mp3Bytes], { type: 'audio/mpeg' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

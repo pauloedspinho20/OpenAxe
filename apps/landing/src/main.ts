@@ -15,7 +15,7 @@ type Release = {
 }
 
 // Config — keep in one place so the SEO JSON-LD and the live CTA agree.
-const WEB_APP_URL = 'https://nam-web-studio-sae2-iota.vercel.app'
+const WEB_APP_URL = 'https://openaxe.pages.dev'
 const REPO_URL = 'https://github.com/pauloedspinho20/OpenAxe'
 const PAGES_CANONICAL = 'https://pauloedspinho20.github.io/OpenAxe/'
 

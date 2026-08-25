@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { GridEditor } from './components/grid/GridEditor/GridEditor'
 import { MidiManager } from './components/midi/MidiManager/MidiManager'
 import { PresetManager } from './components/presets/PresetManager/PresetManager'
@@ -9,7 +9,17 @@ import { OnboardingModal } from './components/global/OnboardingModal/OnboardingM
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
-import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
+import {
+  HardwareButton,
+  IconButton,
+  Led,
+  MidiIcon,
+  PowerIcon,
+  SettingsIcon,
+  Toggle,
+  Toaster,
+  Wordmark,
+} from '@openaxe/ui'
 import pkg from '../package.json'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
@@ -17,7 +27,10 @@ import { useMidiEngine } from './hooks/useMidiEngine'
 import { useOnboarding } from './hooks/useOnboarding'
 import { useSceneEngine } from './hooks/useSceneEngine'
 import { useSceneHotkeys } from './hooks/useSceneHotkeys'
+import { useUndoRedoHotkeys } from './hooks/useUndoRedoHotkeys'
 import { useTheme } from './hooks/useTheme'
+import { RedoIcon, UndoIcon } from './components/grid/blockIcons'
+import { setHistoryTarget, useHistoryStore } from './state/historyStore'
 import { useTone3000Target } from './hooks/useTone3000Target'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useSongEngine } from './songs/useSongEngine'
@@ -41,6 +54,7 @@ import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
 import { hydrateSceneStore } from './state/sceneStore'
 import { installFactoryPresets } from './presets/factoryPresets'
+import { useUpdateCheck } from './hooks/useUpdateCheck'
 
 import styles from './App.module.css'
 
@@ -82,6 +96,9 @@ function App() {
       ? 'MIDI not enabled'
       : `MIDI: ${midiInputCount} input${midiInputCount === 1 ? '' : 's'}, ${midiMappingCount} mapping${midiMappingCount === 1 ? '' : 's'}`
 
+  const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
+  const toastedTagRef = useRef<string | null>(null)
+
   // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
   // library metadata, and make sure the bundled starter presets/scenes exist.
   // Network-free when Tone3000 isn't configured.
@@ -94,8 +111,9 @@ function App() {
 
   useSceneEngine(engine.rig, engine.context, engine.status)
   useSceneHotkeys()
+  useUndoRedoHotkeys()
   useMidiEngine()
-  useSongEngine()
+  useSongEngine(engine)
 
   useEffect(() => {
     void useSongsStore.getState().load()
@@ -104,6 +122,27 @@ function App() {
   useEffect(() => {
     void useTakesStore.getState().load()
   }, [])
+
+  // Post-power-on update toast — PowerGate already shows the banner pre-power-on
+  useEffect(() => {
+    if (isReady && updateLatest && toastedTagRef.current !== updateLatest.tag) {
+      toastedTagRef.current = updateLatest.tag
+      // also surface via persistent in-app banner; toast is optional transient
+    }
+  }, [isReady, updateLatest])
+
+  const canUndo = useHistoryStore((s) => s.canUndo)
+  const canRedo = useHistoryStore((s) => s.canRedo)
+  const undo = useHistoryStore((s) => s.undo)
+  const redo = useHistoryStore((s) => s.redo)
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+  const undoTitle = `Undo (${isMac ? '⌘Z' : 'Ctrl+Z'})`
+  const redoTitle = `Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z / Ctrl+Y'})`
+
+  useEffect(() => {
+    if (engine.rig && engine.context) setHistoryTarget({ rig: engine.rig, context: engine.context })
+    else setHistoryTarget(null)
+  }, [engine.rig, engine.context])
 
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
@@ -150,23 +189,90 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
-          <HardwareButton label="SONGS" onClick={openSongsLibrary} title="Browse songs — import, play, practice" />
-          <HardwareButton label="TAKES" onClick={openTakesManager} title="Browse takes — rename, download, import" />
-          <HardwareButton label="SESSIONS" onClick={openSessionManager} title="Save/load mixer + song/takes" />
-          <HardwareButton label="SETTINGS" onClick={openSettings} title="Open app settings" />
+          <HardwareButton
+            label="SONGS"
+            onClick={openSongsLibrary}
+            title="Browse songs — import, play, practice"
+          />
+          <HardwareButton
+            label="TAKES"
+            onClick={openTakesManager}
+            title="Browse takes — rename, download, import"
+          />
+          <HardwareButton
+            label="SESSIONS"
+            onClick={openSessionManager}
+            title="Save/load mixer + song/takes"
+          />
+          <IconButton
+            label="Undo"
+            disabled={!canUndo}
+            title={undoTitle}
+            onClick={() => void undo()}
+          >
+            <UndoIcon size={16} />
+          </IconButton>
+          <IconButton
+            label="Redo"
+            disabled={!canRedo}
+            title={redoTitle}
+            onClick={() => void redo()}
+          >
+            <RedoIcon size={16} />
+          </IconButton>
+        </div>
+
+        <div className={styles.headerGroup}>
+          <HardwareButton
+            label="Settings"
+            icon={<SettingsIcon size={22} />}
+            iconOnly
+            onClick={openSettings}
+            title="Open app settings"
+          />
           <HardwareButton
             label="MIDI"
+            icon={<MidiIcon size={20} />}
+            iconOnly
             active={midiConnected}
             onClick={openMidiManager}
             title={midiStatusTitle}
           />
           {isReady && (
-            <HardwareButton label="POWER OFF" active onClick={() => void engine.powerOff()} />
+            <HardwareButton
+              label="Power off"
+              icon={<PowerIcon size={22} />}
+              iconOnly
+              active
+              onClick={() => void engine.powerOff()}
+            />
           )}
         </div>
       </header>
 
       {engine.error && <div className={styles.errorBanner}>{engine.error}</div>}
+      {updateLatest && isReady && (
+        <div className={styles.updateBanner} role="status" aria-live="polite">
+          <span>New version {updateLatest.tag} available</span>
+          <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <a
+              href="https://pauloedspinho20.github.io/OpenAxe/#download"
+              target="_blank"
+              rel="noopener"
+            >
+              Download
+            </a>
+            <button
+              type="button"
+              className={styles.updateDismiss}
+              onClick={dismissUpdate}
+              aria-label="Dismiss update"
+            >
+              Dismiss
+            </button>
+          </span>
+        </div>
+      )}
       {io.micError && engine.status === 'ready' && !engine.micGranted && (
         <div className={styles.errorBanner}>
           {io.micError.includes('NotAllowedError') || io.micError.includes('Permission')
@@ -178,9 +284,9 @@ function App() {
 
       <PlayerWidget />
 
-      <MixerPanel />
+      <MixerPanel rig={engine.rig} status={engine.status} />
 
-      <RecordPanel />
+      <RecordPanel rig={engine.rig} status={engine.status} />
 
       <main className={styles.main}>
         <GridEditor
@@ -224,7 +330,7 @@ function App() {
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
       <SongsLibrary />
-      <TakesManager />
+      <TakesManager rig={engine.rig} />
       <SessionManager />
       <SceneManager />
       <MidiManager />

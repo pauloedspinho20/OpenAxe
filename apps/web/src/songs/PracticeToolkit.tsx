@@ -40,7 +40,14 @@ export function PracticeToolkit() {
         </div>
         <label className={styles.sliderLabel}>
           Custom
-          <input type="range" min={0.25} max={2} step={0.05} value={tempoScale} onChange={(e) => setTempoScale(Number(e.target.value))} />
+          <input
+            type="range"
+            min={0.25}
+            max={2}
+            step={0.05}
+            value={tempoScale}
+            onChange={(e) => setTempoScale(Number(e.target.value))}
+          />
           <span>{Math.round(tempoScale * 100)}%</span>
         </label>
       </div>
@@ -77,17 +84,29 @@ export function PracticeToolkit() {
         >
           Set loop to bar
         </button>
-        {loopStart !== null && <span className={styles.hint}>Loop {Math.floor(loopStart / 3840) + 1}–{Math.floor((loopEnd ?? 0) / 3840)}</span>}
+        {loopStart !== null && (
+          <span className={styles.hint}>
+            Loop {Math.floor(loopStart / 3840) + 1}–{Math.floor((loopEnd ?? 0) / 3840)}
+          </span>
+        )}
       </div>
 
       <div className={styles.row}>
         <label className={styles.checkLabel}>
-          <input type="checkbox" checked={metronome} onChange={(e) => setMetronome(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={metronome}
+            onChange={(e) => setMetronome(e.target.checked)}
+          />
           Metronome
         </label>
         <label className={styles.control}>
           Count-in
-          <select value={countInBars} onChange={(e) => setCountIn(Number(e.target.value))} aria-label="Count-in bars">
+          <select
+            value={countInBars}
+            onChange={(e) => setCountIn(Number(e.target.value))}
+            aria-label="Count-in bars"
+          >
             <option value={0}>Off</option>
             <option value={1}>1 bar</option>
             <option value={2}>2 bars</option>
@@ -96,7 +115,14 @@ export function PracticeToolkit() {
         </label>
         <label className={styles.control}>
           Transpose
-          <input type="range" min={-12} max={12} step={1} value={transpose} onChange={(e) => setTranspose(Number(e.target.value))} />
+          <input
+            type="range"
+            min={-12}
+            max={12}
+            step={1}
+            value={transpose}
+            onChange={(e) => setTranspose(Number(e.target.value))}
+          />
           <span>{transpose > 0 ? `+${transpose}` : transpose} st</span>
         </label>
       </div>

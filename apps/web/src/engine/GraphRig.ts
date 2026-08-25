@@ -260,7 +260,13 @@ export class GraphRig implements GraphRigControls, PresetRig {
     return this.worklet.unloadSoundfont()
   }
 
-  scheduleSongEvent(kind: number, channel: number, key: number, value: number, deltaFrames: number): void {
+  scheduleSongEvent(
+    kind: number,
+    channel: number,
+    key: number,
+    value: number,
+    deltaFrames: number,
+  ): void {
     this.worklet.scheduleSongEvent(kind, channel, key, value, deltaFrames)
   }
 

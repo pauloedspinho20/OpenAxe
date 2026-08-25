@@ -19,7 +19,10 @@ interface MixerState {
 
 const DEFAULT_BUS: MixerBusState = { gain: 1, pan: 0, muted: false, soloed: false, meter: 0 }
 
-function busOrDefault(buses: Record<number, MixerBusState>, bus: number): MixerBusState {
+/** Stable default for a bus that hasn't been touched yet — must return the
+ * same object reference every call so Zustand's useSyncExternalStore snapshot
+ * stabilizes (an inline object literal here causes "Maximum update depth"). */
+export function busOrDefault(buses: Record<number, MixerBusState>, bus: number): MixerBusState {
   return buses[bus] ?? DEFAULT_BUS
 }
 

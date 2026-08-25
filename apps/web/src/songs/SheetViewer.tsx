@@ -27,7 +27,14 @@ export function SheetViewer() {
         // @ts-ignore - optional dep, may not be installed in this env
         const mod = await import('@coderline/alphatab').catch(() => null)
         if (!mod || cancelled) throw new Error('no alphaTab')
-        const api = new (mod as unknown as { AlphaTabApi: new (el: HTMLElement, opts: unknown) => { render: () => void; load: (data: Uint8Array) => void; tex: (t: string) => void } }).AlphaTabApi(el, {
+        const api = new (
+          mod as unknown as {
+            AlphaTabApi: new (
+              el: HTMLElement,
+              opts: unknown,
+            ) => { render: () => void; load: (data: Uint8Array) => void; tex: (t: string) => void }
+          }
+        ).AlphaTabApi(el, {
           core: { fontDirectory: '/font/' },
           display: { layoutMode: layout === 'page' ? 0 : 1, scale: zoom / 100 },
           player: { enablePlayer: false },
@@ -55,7 +62,9 @@ export function SheetViewer() {
   }, [currentSong, zoom, layout])
 
   // Cursor sync: highlight current bar based on positionTicks
-  const currentBar = currentSong ? Math.floor(positionTicks / (currentSong.ticksPerBeat * 4)) + 1 : 0
+  const currentBar = currentSong
+    ? Math.floor(positionTicks / (currentSong.ticksPerBeat * 4)) + 1
+    : 0
 
   if (!currentSong) {
     return (
@@ -71,7 +80,12 @@ export function SheetViewer() {
         <div className={styles.trackList}>
           {currentSong.tracks.map((track) => (
             <label key={track.id} className={styles.trackRow}>
-              <input type="checkbox" checked={!trackMutes[track.id]} onChange={() => toggleTrackMute(track.id)} aria-label={`Track ${track.name}`} />
+              <input
+                type="checkbox"
+                checked={!trackMutes[track.id]}
+                onChange={() => toggleTrackMute(track.id)}
+                aria-label={`Track ${track.name}`}
+              />
               <span>{track.name}</span>
               <span className={styles.trackMeta}>
                 {track.instrument} · ch {track.channel + 1}
@@ -80,14 +94,29 @@ export function SheetViewer() {
           ))}
         </div>
         <div className={styles.zoomRow}>
-          <button type="button" className={styles.zoomBtn} onClick={() => setZoom((z) => Math.max(50, z - 10))} aria-label="Zoom out">
+          <button
+            type="button"
+            className={styles.zoomBtn}
+            onClick={() => setZoom((z) => Math.max(50, z - 10))}
+            aria-label="Zoom out"
+          >
             −
           </button>
           <span className={styles.zoomLabel}>{zoom}%</span>
-          <button type="button" className={styles.zoomBtn} onClick={() => setZoom((z) => Math.min(200, z + 10))} aria-label="Zoom in">
+          <button
+            type="button"
+            className={styles.zoomBtn}
+            onClick={() => setZoom((z) => Math.min(200, z + 10))}
+            aria-label="Zoom in"
+          >
             +
           </button>
-          <select value={layout} onChange={(e) => setLayout(e.target.value as 'page' | 'horizontal')} className={styles.layoutSelect} aria-label="Layout">
+          <select
+            value={layout}
+            onChange={(e) => setLayout(e.target.value as 'page' | 'horizontal')}
+            className={styles.layoutSelect}
+            aria-label="Layout"
+          >
             <option value="page">Page</option>
             <option value="horizontal">Horizontal</option>
           </select>

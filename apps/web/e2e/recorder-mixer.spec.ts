@@ -3,8 +3,13 @@ import { test, expect, type Page } from '@playwright/test'
 const POWER_ON_TIMEOUT = 30000
 
 async function powerOn(page: Page) {
-  await page.getByRole('dialog', { name: 'Power on' }).getByRole('button', { name: 'Power on' }).click()
-  await expect(page.getByRole('button', { name: 'Power off' })).toBeVisible({ timeout: POWER_ON_TIMEOUT })
+  await page
+    .getByRole('dialog', { name: 'Power on' })
+    .getByRole('button', { name: 'Power on' })
+    .click()
+  await expect(page.getByRole('button', { name: 'Power off' })).toBeVisible({
+    timeout: POWER_ON_TIMEOUT,
+  })
 }
 
 test.beforeEach(async ({ page }) => {
@@ -42,7 +47,7 @@ test('mixer fader affects bus meter', async ({ page }) => {
   await page.waitForTimeout(300)
   const gridMeter = mixer.getByLabel('Grid').locator('..').getByRole('meter').first()
   // At least check that the mixer panel rendered and the gain fader is present
-  await expect(mixer.getByLabel('Gain')).toBeVisible()
+  await expect(mixer.getByLabel('Gain').first()).toBeVisible()
 })
 
 test('record, stop, take appears with valid RIFF', async ({ page }) => {
@@ -55,7 +60,7 @@ test('record, stop, take appears with valid RIFF', async ({ page }) => {
   // Arm and record for ~500ms
   await recorder.getByRole('button', { name: 'Arm' }).click()
   await recorder.getByRole('button', { name: 'Record' }).click()
-  await expect(recorder.getByText(/s/)).toBeVisible() // timer
+  await expect(recorder.getByText(/^\d+\.\ds$/)).toBeVisible() // timer
   await page.waitForTimeout(600)
   await recorder.getByRole('button', { name: 'Stop' }).click()
 
@@ -67,7 +72,9 @@ test('record, stop, take appears with valid RIFF', async ({ page }) => {
 
   // Check that the WAV bytes are valid RIFF (via the download blob's base64)
   const hasValidRiff = await page.evaluate(async () => {
-    const { listTakes } = await import('/src/recorder/takesDb.ts').catch(() => ({ listTakes: async () => [] }))
+    const { listTakes } = await import('/src/recorder/takesDb.ts').catch(() => ({
+      listTakes: async () => [],
+    }))
     void listTakes
     // Fallback: check IndexedDB directly
     const db = await new Promise<IDBDatabase>((resolve, reject) => {

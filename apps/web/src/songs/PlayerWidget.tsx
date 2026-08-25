@@ -56,7 +56,11 @@ export function PlayerWidget() {
         <div className={styles.empty}>
           <span>No song selected</span>
           <HardwareButton label="Browse Songs" onClick={openSongsLibrary} />
-          {songs.length === 0 && <span className={styles.hint}>Import a .gp, .musicxml, .mid or .atex file to start</span>}
+          {songs.length === 0 && (
+            <span className={styles.hint}>
+              Import a .gp, .musicxml, .mid or .atex file to start
+            </span>
+          )}
         </div>
       </div>
     )
@@ -69,7 +73,13 @@ export function PlayerWidget() {
   return (
     <div className={styles.widget} role="region" aria-label="Song player">
       <div className={styles.header}>
-        <div className={styles.title} onClick={openSongsLibrary} role="button" tabIndex={0} title="Open song library">
+        <div
+          className={styles.title}
+          onClick={openSongsLibrary}
+          role="button"
+          tabIndex={0}
+          title="Open song library"
+        >
           {currentSong.title} {currentSong.artist ? `— ${currentSong.artist}` : ''}
         </div>
         <div className={styles.transport}>
@@ -80,7 +90,13 @@ export function PlayerWidget() {
             aria-pressed={isPlaying}
             title="Space"
           />
-          <HardwareButton label="Stop" onClick={() => { setPlaying(false); setPositionTicks(0) }} />
+          <HardwareButton
+            label="Stop"
+            onClick={() => {
+              setPlaying(false)
+              setPositionTicks(0)
+            }}
+          />
         </div>
       </div>
 
@@ -131,7 +147,9 @@ export function PlayerWidget() {
         <div className={styles.loopRow}>
           <HardwareButton
             label={hasLoop ? 'Clear Loop' : 'Set Loop'}
-            onClick={() => (hasLoop ? clearLoop() : setLoop(positionTicks, positionTicks + ticksForBars(1)))}
+            onClick={() =>
+              hasLoop ? clearLoop() : setLoop(positionTicks, positionTicks + ticksForBars(1))
+            }
             title="L"
           />
           {hasLoop && (

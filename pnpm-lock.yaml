@@ -68,6 +68,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@coderline/alphatab':
+        specifier: ^1.8.0
+        version: 1.8.4
       '@openaxe/songbook':
         specifier: workspace:*
         version: link:../../packages/songbook
@@ -77,6 +80,9 @@ importers:
       '@types/p5':
         specifier: ^1.7.7
         version: 1.7.7
+      lamejs:
+        specifier: ^1.2.1
+        version: 1.2.1
       p5:
         specifier: ^2.3.2
         version: 2.3.2
@@ -148,7 +154,7 @@ importers:
   packages/songbook:
     dependencies:
       '@coderline/alphatab':
-        specifier: ^1.5.8
+        specifier: ^1.8.0
         version: 1.8.4
     devDependencies:
       typescript:
@@ -1846,6 +1852,9 @@ packages:
   jsonfile@6.2.1:
     resolution: {integrity: sha512-zwOTdL3rFQ/lRdBnntKVOX6k5cKJwEc1HdilT71BWEu7J41gXIB2MRp+vxduPSwZJPWBxEzv4yH1wYLJGUHX4Q==}
 
+  lamejs@1.2.1:
+    resolution: {integrity: sha512-s7bxvjvYthw6oPLCm5pFxvA84wUROODB8jEO2+CE1adhKgrIvVOlmMgY8zyugxGrvRaDHNJanOiS21/emty6dQ==}
+
   libtess@1.2.2:
     resolution: {integrity: sha512-Nps8HPeVVcsmJxUvFLKVJcCgcz+1ajPTXDVAVPs6+giOQP4AHV31uZFFkh+CKow/bkB7GbZWKmwmit7myaqDSw==}
 
@@ -2301,6 +2310,9 @@ packages:
 
   uri-template-matcher@1.1.2:
     resolution: {integrity: sha512-uZc1h12jdO3m/R77SfTEOuo6VbMhgWznaawKpBjRGSJb7i91x5PgI37NQJtG+Cerxkk0yr1pylBY2qG1kQ+aEQ==}
+
+  use-strict@1.0.1:
+    resolution: {integrity: sha512-IeiWvvEXfW5ltKVMkxq6FvNf2LojMKvB2OCeja6+ct24S1XOmQw2dGr2JyndwACWAGJva9B7yPHwAmeA9QCqAQ==}
 
   use-sync-external-store@1.6.0:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
@@ -3834,6 +3846,10 @@ snapshots:
     optionalDependencies:
       graceful-fs: 4.2.11
 
+  lamejs@1.2.1:
+    dependencies:
+      use-strict: 1.0.1
+
   libtess@1.2.2: {}
 
   lightningcss-android-arm64@1.33.0:
@@ -4336,6 +4352,8 @@ snapshots:
       picocolors: 1.1.1
 
   uri-template-matcher@1.1.2: {}
+
+  use-strict@1.0.1: {}
 
   use-sync-external-store@1.6.0(react@19.2.8):
     dependencies:
