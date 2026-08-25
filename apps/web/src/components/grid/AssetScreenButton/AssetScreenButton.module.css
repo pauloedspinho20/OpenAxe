@@ -1,15 +1,18 @@
 .screenBlock {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
-  width: 100%;
+  gap: var(--sp-2);
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
 }
 
 .screenRow {
   display: flex;
   align-items: stretch;
   flex-direction: row;
-  gap: var(--sp-1);
+  gap: var(--sp-2);
   height: 100%;
 }
 

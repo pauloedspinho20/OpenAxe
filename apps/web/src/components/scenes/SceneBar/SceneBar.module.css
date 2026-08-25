@@ -3,9 +3,12 @@
   align-items: center;
   gap: var(--sp-4);
   flex-wrap: wrap;
-  padding: var(--sp-3) var(--sp-6);
+  padding: var(--sp-3);
   border-bottom: 1px solid var(--seam);
   background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  border-radius: var(--r-lg);
+  margin: 0 var(--sp-4);
 }
 
 .sceneNav {
@@ -173,7 +176,7 @@
   flex-shrink: 0;
 }
 
-@media (max-width: 760px) {
+@media (max-width: var(--mw-lg)) {
   .bar {
     padding: var(--sp-3);
   }

@@ -117,12 +117,6 @@ function generateColorsCss(tokens) {
   const light = c.light
   const shared = c.shared
 
-  function blockVars(obj) {
-    return Object.entries(obj)
-      .map(([k, v]) => `  ${cssVarForColor(k)}: ${v};`)
-      .join('\n')
-  }
-
   // Keep the same grouping/comments as the hand-written file so drift is minimal.
   const darkBlock = `/* Carbon (dark) — default */\n:root,\n:root[data-theme='dark'] {\n  /* Surfaces */\n  --chassis: ${dark.chassis};\n  --panel: ${dark.panel};\n  --panel-raised: ${dark.panelRaised};\n  --panel-recessed: ${dark.panelRecessed};\n  --seam: ${dark.seam};\n  --seam-strong: ${dark.seamStrong};\n  --highlight: ${dark.highlight};\n\n  /* Text */\n  --ink-1: ${dark.ink1};\n  --ink-2: ${dark.ink2};\n  --ink-3: ${dark.ink3};\n\n  /* Text on dark backgrounds (overlays, image cards) */\n  --ink-reverse-1: ${dark.inkReverse1};\n  --ink-reverse-2: ${dark.inkReverse2};\n  --ink-reverse-3: ${dark.inkReverse3};\n\n  /* Shadows */\n  --shadow-ambient: ${dark.shadowAmbient};\n  --shadow-deep: ${dark.shadowDeep};\n  --shadow-soft: ${dark.shadowSoft};\n}\n`
   const lightBlock = `\n/* Aluminum (light) */\n:root[data-theme='light'] {\n  --chassis: ${light.chassis};\n  --panel: ${light.panel};\n  --panel-raised: ${light.panelRaised};\n  --panel-recessed: ${light.panelRecessed};\n  --seam: ${light.seam};\n  --seam-strong: ${light.seamStrong};\n  --highlight: ${light.highlight};\n\n  --ink-1: ${light.ink1};\n  --ink-2: ${light.ink2};\n  --ink-3: ${light.ink3};\n\n  --ink-reverse-1: ${light.inkReverse1};\n  --ink-reverse-2: ${light.inkReverse2};\n  --ink-reverse-3: ${light.inkReverse3};\n\n  --shadow-ambient: ${light.shadowAmbient};\n  --shadow-deep: ${light.shadowDeep};\n  --shadow-soft: ${light.shadowSoft};\n}\n`
@@ -148,6 +142,16 @@ function generateShadowsCss(tokens) {
   const sh = tokens.shadow
   const header = `/* ================================================================\n   Shadows / Elevation — built from theme shadow tones\n   ================================================================ */\n\n`
   const body = `:root {\n  --shadow-panel: ${sh.panel};\n  --shadow-recessed: ${sh.recessed};\n  --shadow-control: ${sh.control};\n}\n`
+  return header + body
+}
+
+function generateContainerCss(tokens) {
+  const c = tokens.container
+  if (!c) return null
+  const header = `/* ================================================================\n   Container — max-width per breakpoint\n   ================================================================ */\n\n`
+  const body = `:root {\n${Object.entries(c)
+    .map(([k, v]) => `  --${camelToKebab(k)}: ${v};`)
+    .join('\n')}\n}\n`
   return header + body
 }
 
@@ -198,6 +202,19 @@ function generateCpp(tokens) {
     else out += `  inline constexpr const char* ${cppName} = \"${v}\";\n`
   }
   out += `} // namespace spacing\n\n`
+
+  if (tokens.container) {
+    out += `// ── Container (max-width per breakpoint) ────────────────────────\n`
+    out += `namespace container {\n`
+    for (const [k, v] of Object.entries(tokens.container)) {
+      const cppName = k
+      const px = parseFloat(v)
+      if (!Number.isNaN(px))
+        out += `  inline constexpr float ${cppName} = ${px.toFixed(1).replace(/\\.0$/, '.0')}f; // ${v}\n`
+      else out += `  inline constexpr const char* ${cppName} = \"${v}\";\n`
+    }
+    out += `} // namespace container\n\n`
+  }
 
   out += `// ── Typography ─────────────────────────────────────────────────────\n`
   out += `namespace typography {\n`
@@ -250,6 +267,10 @@ if (selectedTargets.includes('css')) {
   ok = writeOrCheck(join(TOKENS_DIR, 'spacing.css'), generateSpacingCss(tokens)) && ok
   ok = writeOrCheck(join(TOKENS_DIR, 'typography.css'), generateTypographyCss(tokens)) && ok
   ok = writeOrCheck(join(TOKENS_DIR, 'shadows.css'), generateShadowsCss(tokens)) && ok
+  const containerCss = generateContainerCss(tokens)
+  if (containerCss) {
+    ok = writeOrCheck(join(TOKENS_DIR, 'containers.css'), containerCss) && ok
+  }
   if (!CHECK_ONLY) console.log('generate-tokens: CSS regenerated from design-tokens.json')
 }
 if (selectedTargets.includes('cpp')) {

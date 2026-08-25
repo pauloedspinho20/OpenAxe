@@ -15,7 +15,7 @@ export function Panel({ label, labelUrl, url, corner, children, className }: Pan
   return (
     <section className={`${styles.panel} ${className ?? ''}`}>
       {(label ?? corner) && (
-        <header className={styles.header}>
+        <div className={styles.header}>
           <div className={styles.labelContainer}>
             {label && <span className="label">{label}</span>}
             {url && labelUrl && (
@@ -28,7 +28,7 @@ export function Panel({ label, labelUrl, url, corner, children, className }: Pan
             )}
           </div>
           {corner}
-        </header>
+        </div>
       )}
       <div className={styles.body}>{children}</div>
       {/*  <span className={`${styles.screw} ${styles.tl}`} />

@@ -50,13 +50,11 @@ describe('PowerGate', () => {
     expect(screen.queryByLabelText('Power on')).toBeNull()
   })
 
-  it('powers on normally and without sound', () => {
+  it('powers on normally', () => {
     const onPowerOn = vi.fn()
     render(<PowerGate {...baseProps} onPowerOn={onPowerOn} />)
     fireEvent.click(screen.getByRole('button', { name: 'POWER ON' }))
     expect(onPowerOn).toHaveBeenCalledWith()
-    fireEvent.click(screen.getByRole('button', { name: 'Continue without sound' }))
-    expect(onPowerOn).toHaveBeenCalledWith({ noSound: true })
   })
 
   it('shows the error text when in the error state', () => {

@@ -190,14 +190,14 @@ function App() {
         <div className={styles.headerGroup}>
           <HardwareButton
             label="Settings"
-            icon={<SettingsIcon size={22} />}
+            icon={<SettingsIcon size={16} />}
             iconOnly
             onClick={openSettings}
             title="Open app settings"
           />
           <HardwareButton
             label="MIDI"
-            icon={<MidiIcon size={20} />}
+            icon={<MidiIcon size={16} />}
             iconOnly
             active={midiConnected}
             onClick={openMidiManager}
@@ -206,7 +206,7 @@ function App() {
           {isReady && (
             <HardwareButton
               label="Power off"
-              icon={<PowerIcon size={22} />}
+              icon={<PowerIcon size={16} />}
               iconOnly
               active
               onClick={() => void engine.powerOff()}

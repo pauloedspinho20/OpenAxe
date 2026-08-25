@@ -1,6 +1,11 @@
 import type { Tone3000LibraryEntry } from '../../../tone3000/library'
 import { Dialog } from '@openaxe/ui'
 import styles from './NamModelDetails.module.css'
+import type { BlockInstance } from '@/state/graphStore'
+import type { Block } from '@/engine/blocks/Block'
+import { AssetScreenButton, type AssetGearType } from '../AssetScreenButton/AssetScreenButton'
+import type { AmpBlock } from '@/engine/blocks/AmpBlock'
+import type { CabBlock } from '@/engine/blocks/CabBlock'
 
 export interface NamModelDetailsProps {
   open: boolean
@@ -29,6 +34,66 @@ function formatDate(iso: string | null): string | null {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+export interface NamModelProps {
+  instance: BlockInstance
+  block: Block | null
+  kindLabel: string
+  loadedName: string | null
+  entry: Tone3000LibraryEntry | null
+  onClick?: () => void
+  context: AudioContext | null
+}
+
+/**
+ * NAM-model preview — intended for the left side of the
+ * BlockInspector. Shows the Tone3000 hero image when available, otherwise a
+ * placeholder with the gear label. Clicking it is expected to open the full
+ * {@link NamModelDetails} dialog.
+ */
+export function NamModel({
+  instance,
+  block,
+  kindLabel,
+  loadedName,
+  entry,
+  context,
+}: NamModelProps) {
+  const heroImage = entry?.tone?.images?.[0] ?? entry?.imageUrl ?? null
+  const title = entry?.tone?.title ?? entry?.toneTitle ?? entry?.name ?? loadedName ?? kindLabel
+  const hasImage = Boolean(heroImage)
+  return (
+    <div className={`${hasImage ? styles.imageWrapper : ''}`}>
+      <div
+        className={`${hasImage ? styles.image : ''}`}
+        style={hasImage ? { backgroundImage: `url(${heroImage})` } : undefined}
+      >
+        {hasImage ? (
+          <div className={styles.infoContainer}>
+            <span className={styles.info}>
+              <span className={styles.title}>{title}</span>
+              {entry?.creator && <span className={styles.creator}>by {entry.creator}</span>}
+            </span>
+
+            {block && (
+              <AssetScreenButton
+                blockId={instance.id}
+                gearType={instance.kind as AssetGearType}
+                block={block as AmpBlock | CabBlock}
+                context={context}
+              />
+            )}
+          </div>
+        ) : (
+          <span className={styles.empty}>
+            <span className={styles.emptyName}>{title}</span>
+            <span className={`label ${styles.emptyHint}`}>No image</span>
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /**
  * The full Tone3000 detail view for a loaded NAM model, opened by clicking
  * BlockHighlight's NAM-core box. Entirely driven by data cached on the
@@ -51,138 +116,130 @@ export function NamModelDetails({
   const uploadedOn = formatDate(tone?.created_at ?? null)
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Model Details"
-      width="min(560px, 92vw)"
-      maxHeight="85vh"
-    >
-      <div className={styles.body}>
-        {heroImage && <img src={heroImage} alt="" className={styles.hero} loading="lazy" />}
+    <Dialog open={open} onClose={onClose} title="Model Details">
+      {heroImage && <img src={heroImage} alt="" className={styles.hero} loading="lazy" />}
 
-        <div>
-          <div className={styles.toneTitle}>{title}</div>
-          <div className={styles.badgeRow}>
+      <div>
+        <div className={styles.toneTitle}>{title}</div>
+        <div className={styles.badgeRow}>
+          <span className={styles.badge}>
+            {tone ? (GEAR_LABELS[tone.gear] ?? kindLabel) : kindLabel}
+          </span>
+          {tone?.format && <span className={styles.badge}>{tone.format.toUpperCase()}</span>}
+          {model && (
             <span className={styles.badge}>
-              {tone ? (GEAR_LABELS[tone.gear] ?? kindLabel) : kindLabel}
+              {model.size} · A{model.architecture_version}
             </span>
-            {tone?.format && <span className={styles.badge}>{tone.format.toUpperCase()}</span>}
-            {model && (
-              <span className={styles.badge}>
-                {model.size} · A{model.architecture_version}
-              </span>
-            )}
+          )}
+        </div>
+      </div>
+
+      {entry && (
+        <div className={styles.creatorRow}>
+          {tone?.user?.avatar_url && (
+            <img src={tone.user.avatar_url} alt="" className={styles.avatar} />
+          )}
+          <span className={styles.creatorName}>Captured by {entry.creator}</span>
+          {uploadedOn && <span className={`label ${styles.uploadDate}`}>· {uploadedOn}</span>}
+        </div>
+      )}
+
+      {tone && (
+        <div className={styles.metrics}>
+          <div className={styles.metric}>
+            <span className={styles.metricValue}>{tone.downloads_count ?? 0}</span>
+            <span className={`label ${styles.metricLabel}`}>Downloads</span>
+          </div>
+          <div className={styles.metric}>
+            <span className={styles.metricValue}>{tone.favorites_count ?? 0}</span>
+            <span className={`label ${styles.metricLabel}`}>Likes</span>
+          </div>
+          <div className={styles.metric}>
+            <span className={styles.metricValue}>{tone.models_count ?? 0}</span>
+            <span className={`label ${styles.metricLabel}`}>Models</span>
           </div>
         </div>
+      )}
 
-        {entry && (
-          <div className={styles.creatorRow}>
-            {tone?.user?.avatar_url && (
-              <img src={tone.user.avatar_url} alt="" className={styles.avatar} />
-            )}
-            <span className={styles.creatorName}>Captured by {entry.creator}</span>
-            {uploadedOn && <span className={`label ${styles.uploadDate}`}>· {uploadedOn}</span>}
+      {tone?.description && <p className={styles.description}>{tone.description}</p>}
+
+      {model && (
+        <div className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>This Block's Model</span>
+          <div className={styles.modelRow}>
+            <span className={styles.modelName}>{model.name}</span>
+            <span className={`label ${styles.modelMeta}`}>
+              {model.size} · Architecture {model.architecture_version}
+            </span>
           </div>
-        )}
+        </div>
+      )}
 
-        {tone && (
-          <div className={styles.metrics}>
-            <div className={styles.metric}>
-              <span className={styles.metricValue}>{tone.downloads_count ?? 0}</span>
-              <span className={`label ${styles.metricLabel}`}>Downloads</span>
-            </div>
-            <div className={styles.metric}>
-              <span className={styles.metricValue}>{tone.favorites_count ?? 0}</span>
-              <span className={`label ${styles.metricLabel}`}>Likes</span>
-            </div>
-            <div className={styles.metric}>
-              <span className={styles.metricValue}>{tone.models_count ?? 0}</span>
-              <span className={`label ${styles.metricLabel}`}>Models</span>
-            </div>
-          </div>
-        )}
-
-        {tone?.description && <p className={styles.description}>{tone.description}</p>}
-
-        {model && (
-          <div className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>This Block's Model</span>
-            <div className={styles.modelRow}>
-              <span className={styles.modelName}>{model.name}</span>
-              <span className={`label ${styles.modelMeta}`}>
-                {model.size} · Architecture {model.architecture_version}
+      {tone && (tone.sizes?.length ?? 0) > 0 && (
+        <div className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>Available Sizes</span>
+          <div className={styles.chips}>
+            {tone.sizes.map((size) => (
+              <span key={size} className={styles.chip}>
+                {size}
               </span>
-            </div>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {tone && (tone.sizes?.length ?? 0) > 0 && (
-          <div className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Available Sizes</span>
-            <div className={styles.chips}>
-              {tone.sizes.map((size) => (
-                <span key={size} className={styles.chip}>
-                  {size}
-                </span>
-              ))}
-            </div>
+      {tone && (tone.makes?.length ?? 0) > 0 && (
+        <div className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>Gear</span>
+          <div className={styles.chips}>
+            {tone.makes.map((make) => (
+              <span key={make} className={styles.chip}>
+                {make}
+              </span>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {tone && (tone.makes?.length ?? 0) > 0 && (
-          <div className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Gear</span>
-            <div className={styles.chips}>
-              {tone.makes.map((make) => (
-                <span key={make} className={styles.chip}>
-                  {make}
-                </span>
-              ))}
-            </div>
+      {tone && (tone.tags?.length ?? 0) > 0 && (
+        <div className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>Tags</span>
+          <div className={styles.chips}>
+            {tone.tags.map((tag) => (
+              <span key={tag} className={styles.chip}>
+                {tag}
+              </span>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {tone && (tone.tags?.length ?? 0) > 0 && (
-          <div className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>Tags</span>
-            <div className={styles.chips}>
-              {tone.tags.map((tag) => (
-                <span key={tag} className={styles.chip}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+      {tone?.license && (
+        <div className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>License</span>
+          <p className={styles.licenseText}>{tone.license}</p>
+        </div>
+      )}
 
-        {tone?.license && (
-          <div className={styles.section}>
-            <span className={`label ${styles.sectionLabel}`}>License</span>
-            <p className={styles.licenseText}>{tone.license}</p>
-          </div>
-        )}
+      {!entry && (
+        <p className={styles.note}>
+          Loaded from a local file - no Tone3000 data is available for it.
+        </p>
+      )}
+      {entry && !tone && (
+        <p className={styles.note}>
+          Full details weren't cached for this import - re-import the model from the Tone3000
+          catalog to see everything.
+        </p>
+      )}
 
-        {!entry && (
-          <p className={styles.note}>
-            Loaded from a local file - no Tone3000 data is available for it.
-          </p>
-        )}
-        {entry && !tone && (
-          <p className={styles.note}>
-            Full details weren't cached for this import - re-import the model from the Tone3000
-            catalog to see everything.
-          </p>
-        )}
-
-        {entry?.sourceUrl && (
-          <div className={styles.footer}>
-            <a href={entry.sourceUrl} target="_blank" rel="noreferrer" className={styles.link}>
-              View on Tone3000 →
-            </a>
-          </div>
-        )}
-      </div>
+      {entry?.sourceUrl && (
+        <div className={styles.footer}>
+          <a href={entry.sourceUrl} target="_blank" rel="noreferrer" className={styles.link}>
+            View on Tone3000 →
+          </a>
+        </div>
+      )}
     </Dialog>
   )
 }

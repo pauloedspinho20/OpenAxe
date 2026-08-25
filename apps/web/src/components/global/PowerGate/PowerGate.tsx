@@ -1,4 +1,4 @@
-import { HardwareButton, Wordmark } from '@openaxe/ui'
+import { HardwareButton, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
@@ -84,12 +84,14 @@ export function PowerGate({
 
         {isNative ? (
           <div className={styles.deviceRow}>
-            <select
-              className={styles.latencySelect}
+            <Select
+              label="Input"
+              id="powergate-input-device"
               value={io.inputDeviceId}
               onChange={(e) => io.setInputDevice(e.target.value)}
               disabled={starting}
               aria-label="Input device"
+              className={styles.deviceField}
             >
               <option value="">Default input</option>
               {io.inputDevices.map((d) => (
@@ -97,13 +99,15 @@ export function PowerGate({
                   {d.label}
                 </option>
               ))}
-            </select>
-            <select
-              className={styles.latencySelect}
+            </Select>
+            <Select
+              label="Output"
+              id="powergate-output-device"
               value={io.outputDeviceId}
               onChange={(e) => io.setOutputDevice(e.target.value)}
               disabled={starting}
               aria-label="Output device"
+              className={styles.deviceField}
             >
               <option value="">Default output</option>
               {io.outputDevices.map((d) => (
@@ -111,21 +115,21 @@ export function PowerGate({
                   {d.label}
                 </option>
               ))}
-            </select>
+            </Select>
             {io.inputDevices.length === 0 && io.outputDevices.length === 0 && (
-              <p className={styles.deviceHint}>
-                No audio interface found - plug one in, or continue without sound below.
-              </p>
+              <p className={styles.deviceHint}>No audio interface found - plug one in</p>
             )}
           </div>
         ) : (
           <div className={styles.deviceRow}>
-            <select
-              className={styles.latencySelect}
+            <Select
+              label="Input"
+              id="powergate-input-device"
               value={io.inputDeviceId}
               onChange={(e) => io.setInputDevice(e.target.value)}
               disabled={starting}
               aria-label="Input device"
+              className={styles.deviceField}
             >
               <option value="">Default input</option>
               {io.inputDevices.map((d) => (
@@ -133,14 +137,16 @@ export function PowerGate({
                   {d.label}
                 </option>
               ))}
-            </select>
+            </Select>
             {outputSelectionSupported && (
-              <select
-                className={styles.latencySelect}
+              <Select
+                label="Output"
+                id="powergate-output-device"
                 value={io.outputDeviceId}
                 onChange={(e) => io.setOutputDevice(e.target.value)}
                 disabled={starting}
                 aria-label="Output device"
+                className={styles.deviceField}
               >
                 <option value="">Default output</option>
                 {io.outputDevices.map((d) => (
@@ -148,13 +154,12 @@ export function PowerGate({
                     {d.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </div>
         )}
 
-        <select
-          className={styles.latencySelect}
+        <Select
           value={latencyHint}
           onChange={(e) => onLatencyChange(e.target.value as LatencyHint)}
           disabled={starting}
@@ -165,7 +170,7 @@ export function PowerGate({
               {opt.label}
             </option>
           ))}
-        </select>
+        </Select>
 
         <HardwareButton
           variant="accent"
@@ -174,17 +179,6 @@ export function PowerGate({
           disabled={starting}
           fullWidth
         />
-        <HardwareButton
-          label="Continue without sound"
-          onClick={() => onPowerOn({ noSound: true })}
-          disabled={starting}
-          fullWidth
-        />
-        <p className={styles.tone3000Hint}>
-          No sound mode skips the audio device entirely - the grid, presets, and editing all still
-          work. The app switches back to normal audio automatically the moment a usable device is
-          available.
-        </p>
         {updateLatest && (
           <div className={styles.updateBanner} role="status" aria-live="polite">
             <span className={styles.updateText}>New version {updateLatest.tag} available</span>

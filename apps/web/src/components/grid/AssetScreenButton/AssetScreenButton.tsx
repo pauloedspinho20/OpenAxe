@@ -99,11 +99,11 @@ export function AssetScreenButton({ blockId, gearType, block, context }: AssetSc
         <HardwareButton
           onClick={() => openBrowser({ blockId, slot: isIr ? 'ir' : 'model', gear: gearType })}
           title={`Browse Tone3000 ${label.toLowerCase()}s - or drop a ${isIr ? 'cabinet IR' : '.nam model'} file here`}
-          label={loaded?.name ?? emptyText}
+          label={loaded ? 'CATALOG' : emptyText}
         ></HardwareButton>
         <HardwareButton
           onClick={() => fileInputRef.current?.click()}
-          label={`Upload ${isIr ? 'IR' : '.nam'}`}
+          label={`UPLOAD ${isIr ? 'IR' : 'NAM'}`}
         ></HardwareButton>
       </div>
       {loadError && <p className={styles.screenError}>{loadError}</p>}

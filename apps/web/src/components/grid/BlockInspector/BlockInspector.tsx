@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
-import { HardwareButton, Knob, Panel } from '@openaxe/ui'
+import { HardwareButton, Knob, MixerIcon, Panel } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { useEngineVersion } from '../../../state/engineVersion'
+import { useTone3000Library } from '../../../tone3000/library'
 import type { GraphRig } from '../../../engine/GraphRig'
-import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
+import { NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
-import type { CabBlock } from '../../../engine/blocks/CabBlock'
-import { AssetScreenButton, type AssetGearType } from '../AssetScreenButton/AssetScreenButton'
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
+import { NamModelDetails, NamModel } from '../NamModelDetails/NamModelDetails'
+import { AudioReactiveArt } from '../audioArt/AudioReactiveArt'
+import { toArtVariant } from '../audioArt/sketches'
 import { getParamSchema, getReverbRawSchemas } from '../../../effects/paramSchema'
 import type { EffectParams } from '../../../effects/Effect'
-import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
+import { BLOCK_KIND_LABELS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
 
 function RawReverbPanel({
@@ -97,10 +99,13 @@ interface MaybeBypassable {
 export function BlockInspector({ rig, context }: BlockInspectorProps) {
   // Re-render once async block creation finishes - see BlockCard for why.
   useEngineVersion((s) => s.version)
+  useTone3000Library((s) => s.version)
+  const libraryEntries = useTone3000Library((s) => s.entries)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
   const blocks = useGraphStore((s) => s.blocks)
   const instance = blocks.find((b) => b.id === selectedBlockId) ?? null
   const [reverbExpert, setReverbExpert] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   // The selected block can disappear (removed, or a preset load replaced
   // the whole graph) without anything telling the selection store - drop a
@@ -114,9 +119,13 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     if (instance?.id) setReverbExpert(false)
   }, [instance?.id])
 
+  useEffect(() => {
+    if (instance?.id) setDetailsOpen(false)
+  }, [instance?.id])
+
   if (!instance) {
     return (
-      <Panel label="Block Inspector">
+      <Panel>
         <p className={styles.empty}>
           Select a block in the grid to see its parameters and options.
         </p>
@@ -127,90 +136,112 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const block = rig?.getBlock(instance.id) ?? null
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const vendor = BLOCK_KIND_VENDORS[instance.kind]
-  const vendorUrl = BLOCK_KIND_VENDOR_URLS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
-  const isEffect = EFFECT_KINDS.has(instance.kind)
-  const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
   const bypassed = instance.bypass ?? false
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   const isReverb = instance.kind === 'reverb'
   const reverbAlgorithm = (instance.params.reverbAlgorithm as string) ?? 'hall'
   const expertSchemas = isReverb && reverbExpert ? getReverbRawSchemas(reverbAlgorithm) : []
+  const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
+  const loaded = isNamCore ? ((block as AmpBlock | null)?.getLoadedModel?.() ?? null) : null
+  const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
+  const artVariant = toArtVariant(instance.kind)
+  const artAnalyser = analyser
   return (
-    <Panel
-      label={`Block Inspector · ${label}`}
-      url={vendorUrl ?? ''}
-      labelUrl={vendor ?? ''}
-      corner={
-        block && (
-          <HardwareButton
-            label="Bypass"
-            disabled={!hasBypass}
-            active={bypassed}
-            onClick={() => {
-              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-            }}
-            title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-          />
-        )
-      }
-    >
-      <div className={styles.content}>
-        {!block && <p className={styles.empty}>Power on to edit this block.</p>}
+    <Panel>
+      <div className={styles.inspectorLayout}>
+        <div className={styles.background}>
+          {isNamCore ? (
+            <NamModel
+              kindLabel={label}
+              loadedName={loaded?.name ?? null}
+              entry={libraryEntry}
+              instance={instance}
+              block={block}
+              context={context}
+            />
+          ) : (
+            <div className={styles.artSquare}>
+              <span className={`label ${styles.artLabel}`}>{label}</span>
+              <AudioReactiveArt analyser={artAnalyser} variant={artVariant} />
+            </div>
+          )}
+        </div>
+        <div className={styles.content}>
+          {!block && <p className={styles.empty}>Power on to edit this block.</p>}
 
-        {block && isAssetKind && (
-          <AssetScreenButton
-            blockId={instance.id}
-            gearType={instance.kind as AssetGearType}
-            block={block as AmpBlock | CabBlock}
-            context={context}
-          />
-        )}
-        {block && schema.length > 0 && (
-          <div className={styles.meterAndParams}>
-            <EffectParamsPanel
-              key={`${instance.id}-${reverbExpert ? 'expert' : 'simple'}`}
-              blockId={instance.id}
-              block={block}
-            />
-            {block && analyser && <LiveMeter analyser={analyser} />}
-          </div>
-        )}
-        {block && isReverb && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-            <HardwareButton
-              label={reverbExpert ? 'Simple' : 'Expert'}
-              active={reverbExpert}
-              onClick={() => setReverbExpert((v) => !v)}
-              title={reverbExpert ? 'Show simple controls' : 'Show raw Dragonfly params'}
-            />
-            {reverbExpert && expertSchemas.length > 0 && (
-              <span className="label" style={{ fontSize: 11 }}>
-                {reverbAlgorithm} — {expertSchemas.length} raw params
-              </span>
-            )}
-          </div>
-        )}
-        {block && reverbExpert && expertSchemas.length > 0 && (
-          <div className={styles.meterAndParams} style={{ marginTop: 8 }}>
-            {/* Raw params panel: reuse EffectParamsPanel with a synthetic block that reports the raw schema */}
-            <RawReverbPanel
-              key={`${instance.id}-raw-${reverbAlgorithm}`}
-              blockId={instance.id}
-              block={block}
-              schemas={expertSchemas}
-            />
-          </div>
-        )}
-        {block && schema.length === 0 && !isAssetKind && (
-          <div className={styles.meterAndParams}>
-            <p className={styles.empty}>This block has no editable parameters.</p>
-            {analyser && <LiveMeter analyser={analyser} />}
-          </div>
-        )}
+          {block && schema.length > 0 && (
+            <div className={styles.meterAndParams}>
+              <EffectParamsPanel
+                key={`${instance.id}-${reverbExpert ? 'expert' : 'simple'}`}
+                blockId={instance.id}
+                block={block}
+              />
+              <div className={styles.buttons}>
+                <button
+                  type="button"
+                  className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
+                  onClick={() => {
+                    useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+                    ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+                  }}
+                  title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+                  aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+                ></button>
+                {isNamCore && (
+                  <HardwareButton
+                    label="Load"
+                    icon={<MixerIcon size={16} />}
+                    onClick={() => setDetailsOpen(true)}
+                    iconOnly
+                  />
+                )}
+              </div>
+              {block && analyser && <LiveMeter variant="medium" analyser={analyser} />}
+            </div>
+          )}
+          {block && isReverb && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+              <HardwareButton
+                label={reverbExpert ? 'Simple' : 'Expert'}
+                active={reverbExpert}
+                onClick={() => setReverbExpert((v) => !v)}
+                title={reverbExpert ? 'Show simple controls' : 'Show raw Dragonfly params'}
+              />
+              {reverbExpert && expertSchemas.length > 0 && (
+                <span className="label" style={{ fontSize: 11 }}>
+                  {reverbAlgorithm} — {expertSchemas.length} raw params
+                </span>
+              )}
+            </div>
+          )}
+          {block && reverbExpert && expertSchemas.length > 0 && (
+            <div className={styles.meterAndParams} style={{ marginTop: 8 }}>
+              <RawReverbPanel
+                key={`${instance.id}-raw-${reverbAlgorithm}`}
+                blockId={instance.id}
+                block={block}
+                schemas={expertSchemas}
+              />
+            </div>
+          )}
+          {block && schema.length === 0 && !isAssetKind && (
+            <div className={styles.meterAndParams}>
+              <p className={styles.empty}>This block has no editable parameters.</p>
+              {analyser && <LiveMeter variant="mini" analyser={analyser} />}
+            </div>
+          )}
+        </div>
       </div>
+      {isNamCore && (
+        <NamModelDetails
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          kindLabel={label}
+          loadedName={loaded?.name ?? null}
+          entry={libraryEntry}
+        />
+      )}
     </Panel>
   )
 }

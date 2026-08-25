@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Knob } from '@openaxe/ui'
+import { Knob, Select } from '@openaxe/ui'
 import type { Block, EffectParams } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
 import { useGraphStore } from '@/state/graphStore'
@@ -69,20 +69,19 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
       const current =
         typeof values[field.key] === 'string' ? (values[field.key] as string) : field.defaultValue
       return (
-        <label key={field.key} className={styles.selectField}>
-          <span className="label">{field.label}</span>
-          <select
-            className={styles.select}
-            value={current}
-            onChange={(e) => setParam(field.key, e.target.value)}
-          >
-            {field.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          key={field.key}
+          label={field.label}
+          value={current}
+          onChange={(e) => setParam(field.key, e.target.value)}
+          className={styles.selectField}
+        >
+          {field.options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
       )
     }
 
@@ -98,7 +97,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         step={field.step}
         defaultValue={field.defaultValue}
         formatValue={field.formatValue}
-        size={40}
+        size={50}
         onChange={(value) => setParam(field.key, value)}
       />
     )
@@ -114,7 +113,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         const mainFields = fields.filter((f) => !(f.control === 'select' && f.primary))
         return (
           <div key={groupName || '_'} className={styles.group}>
-            {groupName && <span className={`label ${styles.groupLabel}`}>{groupName}</span>}
+            {/*     {groupName && <span className={`label ${styles.groupLabel}`}>{groupName}</span>} */}
             {selectors.length > 0 && (
               <div className={styles.selectRow}>{selectors.map(renderField)}</div>
             )}

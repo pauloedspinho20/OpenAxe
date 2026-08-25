@@ -3,20 +3,97 @@
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-4);
+  height: 100%;
 }
 
 .hero {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+  max-height: 400px;
+  object-fit: contain;
   border-radius: var(--r-md);
   background: var(--panel-recessed);
 }
 
-.toneTitle {
-  font-size: 18px;
+.imageWrapper {
+  height: 100%;
+  width: 100%;
+}
+
+.image {
+  background-size: cover;
+  background-position: center;
+  height: 100%;
+  width: 100%;
+}
+
+.infoContainer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.82) 88%);
+}
+
+.info {
+  position: relative;
+  z-index: 1;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3);
+  background: linear-gradient(0deg, transparent 0%, rgba(0, 0, 0, 0.82) 88%);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-3);
+  text-align: center;
+}
+
+.emptyName {
+  font-family: var(--font-display);
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.emptyHint {
+  color: var(--ink-3);
+}
+
+.toneTitle {
+  font-size: 18px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink-1);
+  margin-bottom: var(--sp-3);
 }
 
 .badgeRow {

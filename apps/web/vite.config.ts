@@ -4,7 +4,26 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'media-var-replace',
+      transform(code, id) {
+        if (id.endsWith('.css')) {
+          // Replace var(--mw-*) in @media conditions with actual px at build time
+          // so browsers (which don't support var() in media queries) and
+          // lightningcss (which errors on it) still work, while source keeps var().
+          return code
+            .replace(/var\(--mw-xs\)/g, '520px')
+            .replace(/var\(--mw-sm\)/g, '640px')
+            .replace(/var\(--mw-md\)/g, '720px')
+            .replace(/var\(--mw-lg\)/g, '920px')
+            .replace(/var\(--mw-xl\)/g, '1200px')
+            .replace(/var\(--mw-xxl\)/g, '1600px')
+        }
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
