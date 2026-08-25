@@ -9,7 +9,7 @@
   background-color: var(--panel);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-recessed);
-  border: 2px solid var(--panel-recessed);
+  border: none;
 }
 
 .inspectorLayout {

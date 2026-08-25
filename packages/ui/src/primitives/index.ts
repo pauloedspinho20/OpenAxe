@@ -1,6 +1,8 @@
 export * from '../icons'
 export { Panel } from './Panel/Panel'
 export type { PanelProps } from './Panel/Panel'
+export { Chip } from './Chip/Chip'
+export type { ChipProps } from './Chip/Chip'
 export { Led } from './Led/Led'
 export type { LedProps } from './Led/Led'
 export { Toggle } from './Toggle/Toggle'

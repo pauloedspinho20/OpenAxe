@@ -1,6 +1,5 @@
 import type { Gear } from '@/tone3000/types'
 import type { EffectKind, EffectParams } from '../../effects/Effect'
-import type { NamModelBlockKind } from './AmpBlock'
 
 export type { EffectParams } from '../../effects/Effect'
 

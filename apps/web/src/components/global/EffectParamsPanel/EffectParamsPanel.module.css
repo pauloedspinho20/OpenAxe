@@ -9,7 +9,7 @@
 .group {
   display: flex;
   flex-direction: row;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
 }
 
 .groupLabel {
@@ -19,33 +19,40 @@
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-4);
-  align-items: center;
+  gap: var(--sp-3);
+  align-items: flex-end;
 }
 
 /* Primary (model/character) selectors, rendered in their own row above the
    knob cluster. */
+
+.selectWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+.selectLabel {
+  text-align: center;
+  line-height: 1.2;
+  font-size: 9px !important;
+  color: var(--accent) !important;
+  /*  font-weight: 500 !important; */
+}
+
 .selectRow {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-4);
-  align-items: center;
+  align-items: flex-end;
 }
 
 .selectField {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  align-items: center;
-}
-
-.select {
-  font-family: var(--font-display);
-  font-size: 10px;
-  background: var(--panel-raised);
-  color: var(--ink-1);
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  height: 32px;
-  padding: 0 var(--sp-2);
+  background: var(--panel-raised) !important;
+  border: 1px solid var(--seam-strong) !important;
+  border-radius: var(--r-sm) !important;
+  padding: var(--sp-2) !important;
+  padding-right: var(--sp-2) !important;
+  text-align: center;
 }

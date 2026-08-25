@@ -69,19 +69,21 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
       const current =
         typeof values[field.key] === 'string' ? (values[field.key] as string) : field.defaultValue
       return (
-        <Select
-          key={field.key}
-          label={field.label}
-          value={current}
-          onChange={(e) => setParam(field.key, e.target.value)}
-          className={styles.selectField}
-        >
-          {field.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
+        <div className={styles.selectWrapper}>
+          <Select
+            key={field.key}
+            value={current}
+            onChange={(e) => setParam(field.key, e.target.value)}
+            className={styles.selectField}
+          >
+            {field.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+          <span className={`label ${styles.selectLabel}`}>{field.label}</span>
+        </div>
       )
     }
 
