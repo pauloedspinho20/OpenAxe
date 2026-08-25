@@ -43,7 +43,7 @@ describe('historyStore', () => {
   })
 
   it('coalesces rapid setBlockParams into one history entry (debounce 300ms)', async () => {
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)!
     // initial addBlock already pushed; reset to isolate param test
     resetHistoryForTests()
 
@@ -69,8 +69,8 @@ describe('historyStore', () => {
   it('undo restores previous graph and redo re-applies it', async () => {
     resetGraph()
     resetHistoryForTests()
-    const id1 = useGraphStore.getState().addBlock('compressor', 0, 0)
-    const id2 = useGraphStore.getState().addBlock('eq', 0, 2)
+    const id1 = useGraphStore.getState().addBlock('compressor', 0, 0)!
+    const id2 = useGraphStore.getState().addBlock('eq', 0, 2)!
 
     expect(useGraphStore.getState().blocks).toHaveLength(2)
 
@@ -84,7 +84,7 @@ describe('historyStore', () => {
   })
 
   it('preset load is a single undo entry and undo restores previous graph', async () => {
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)!
     resetHistoryForTests()
 
     // Simulate preset load via loadGraph (one entry)
@@ -132,7 +132,7 @@ describe('historyStore', () => {
   })
 
   it('flushes pending debounced params before undo so knob drag is not lost', async () => {
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = useGraphStore.getState().addBlock('compressor', 0, 0)!
     resetHistoryForTests()
     useGraphStore.getState().setBlockParams(id, { drive: 0.9 })
     // still pending
