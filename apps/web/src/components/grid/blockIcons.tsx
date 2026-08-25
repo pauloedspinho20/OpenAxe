@@ -261,6 +261,28 @@ export function BlockIcon({ kind, ...rest }: { kind: BlockKind } & IconProps) {
   return <Icon {...rest}>{GLYPHS[kind]}</Icon>
 }
 
+/** Curved undo arrow — 24x24 stroke 1.5, matches blockIcons tone. */
+export function UndoIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 8H5V4" />
+      <path d="M5 8A7 7 0 0 0 14.5 17.5" />
+      <path d="M12 14l-2.5 2.5L12 19" />
+    </Icon>
+  )
+}
+
+/** Curved redo arrow — mirrored undo. */
+export function RedoIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 8h4V4" />
+      <path d="M19 8A7 7 0 0 1 9.5 17.5" />
+      <path d="M12 14l2.5 2.5L12 19" />
+    </Icon>
+  )
+}
+
 /** Tuning-fork glyph used by the tuner block section. */
 export function TunerIcon(props: IconProps) {
   return (
