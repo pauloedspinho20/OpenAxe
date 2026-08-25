@@ -81,6 +81,16 @@ namespace shared {
   inline constexpr IColor btnActiveHighlight = IColor(15, 255, 255, 255);
   inline constexpr IColor dangerBgDim = IColor(36, 255, 59, 48);
   inline constexpr IColor dangerGlowDim = IColor(64, 255, 59, 48);
+  inline constexpr IColor blockTone = IColor(255, 255, 138, 61);
+  inline constexpr IColor blockDrive = IColor(255, 232, 184, 74);
+  inline constexpr IColor blockDynamics = IColor(255, 232, 197, 71);
+  inline constexpr IColor blockFilter = IColor(255, 78, 201, 166);
+  inline constexpr IColor blockMod = IColor(255, 122, 184, 255);
+  inline constexpr IColor blockTime = IColor(255, 167, 139, 250);
+  inline constexpr IColor blockSpace = IColor(255, 95, 220, 122);
+  inline constexpr IColor blockUtility = IColor(255, 154, 160, 166);
+  inline constexpr IColor blockCore = IColor(255, 255, 138, 61);
+  inline constexpr IColor blockEffects = IColor(255, 122, 184, 255);
 } // namespace shared
 } // namespace color
 

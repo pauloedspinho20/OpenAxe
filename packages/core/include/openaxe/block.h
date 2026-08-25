@@ -35,6 +35,15 @@ enum class BlockKind {
   kPitchShifter,
   kGranularDelay,
   kRotary,
+  // Send/Return pairs (issue #274): Send N is an input-only relay whose signal
+  // hops implicitly (no cable) to its Return N - an output-only relay - so a
+  // rig can jump across the grid without long cables. The pair is the one
+  // exception to the left-to-right column rule (AudioEngine's exec order
+  // schedules Send before its Return regardless of columns). No DSP, no params.
+  kSend1,
+  kReturn1,
+  kSend2,
+  kReturn2,
 };
 
 inline constexpr int kMixerInputCount = 4;

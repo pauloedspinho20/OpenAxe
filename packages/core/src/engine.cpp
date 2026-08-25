@@ -10,6 +10,7 @@
 #include <span>
 #include <system_error>
 #include <type_traits>
+#include <unordered_set>
 #include <variant>
 
 #include "openaxe/dsp/chorus.h"
@@ -156,6 +157,27 @@ bool IsAmpFamily(graph::BlockKind kind) {
 // it needs no extra buffers.
 int PortCountFor(graph::BlockKind kind) {
   return kind == graph::BlockKind::kMixer ? graph::kMixerInputCount : 1;
+}
+
+// Send/Return pairs (issue #274). A Send N relays its single input straight
+// through into the implicit link; a Return N relays that link's signal out to
+// cables. Neither has DSP, params or bypass - both are std::monostate
+// passthrough blocks whose only quirk is that the routing layer links the pair.
+bool IsSendKind(graph::BlockKind kind) {
+  return kind == graph::BlockKind::kSend1 || kind == graph::BlockKind::kSend2;
+}
+bool IsReturnKind(graph::BlockKind kind) {
+  return kind == graph::BlockKind::kReturn1 || kind == graph::BlockKind::kReturn2;
+}
+// The other half of a send/return pair, or nullopt for any other kind.
+std::optional<graph::BlockKind> SendReturnPairOf(graph::BlockKind kind) {
+  switch (kind) {
+    case graph::BlockKind::kSend1: return graph::BlockKind::kReturn1;
+    case graph::BlockKind::kReturn1: return graph::BlockKind::kSend1;
+    case graph::BlockKind::kSend2: return graph::BlockKind::kReturn2;
+    case graph::BlockKind::kReturn2: return graph::BlockKind::kSend2;
+    default: return std::nullopt;
+  }
 }
 
 // The closed set of DSP objects a block can hold. std::monostate is a block
@@ -695,16 +717,14 @@ int AudioEngine::ColumnOfBlock(BlockId id) const {
   return pos ? pos->col : graph::kGridCols;
 }
 
-// Rebuild the two things Process() walks: exec_order_ (blocks sorted by
-// column, so a block always runs after whatever feeds it) and routing_ (the
-// edge list flattened into int ids). Called after every topology change rather
-// than resolved per buffer - Process() must not touch the string-keyed rig or
-// allocate.
+// Rebuild the two things Process() walks: exec_order_ (the execution order -
+// normally blocks sorted by column, see RebuildExecOrder for the one
+// exception) and routing_ (the edge list flattened into int ids). Called after
+// every topology change rather than resolved per buffer - Process() must not
+// touch the string-keyed rig or allocate.
 void AudioEngine::RecomputeRouting() {
   exec_order_.clear();
   for (const auto& [id, state] : block_states_) exec_order_.push_back(id);
-  std::sort(exec_order_.begin(), exec_order_.end(),
-            [this](BlockId a, BlockId b) { return ColumnOfBlock(a) < ColumnOfBlock(b); });
 
   routing_.clear();
   for (const auto& edge_graph_id : rig_.ListEdgeIds()) {
@@ -714,10 +734,27 @@ void AudioEngine::RecomputeRouting() {
                                     ParseGraphId(edge->to.block_id), edge->to.port});
   }
 
+  // Synthesize the implicit Send -> Return links (issue #274): every Send N
+  // block routes into every Return N block, with no cable between them. The
+  // pair is column-order-exempt, so the execution order must be a topological
+  // sort (RebuildExecOrder), not a plain column sort. An unpaired block simply
+  // goes nowhere - a Send with no Return drops its signal at the Send, a
+  // Return with no Send stays silent, exactly like an unplugged bus.
+  for (const auto& [send_id, send] : block_states_) {
+    if (!IsSendKind(send->kind)) continue;
+    const auto pair = SendReturnPairOf(send->kind);
+    for (const auto& [ret_id, ret] : block_states_) {
+      if (ret->kind == pair) routing_.push_back(RoutingEdge{send_id, 0, ret_id, 0, true});
+    }
+  }
+
+  RebuildExecOrder();
+
   // Group edges by destination block so Process() only walks the edges that
   // actually feed each block (issue #66). OUT_RAIL is a sentinel not present
   // in exec_order_, so its edge falls out of incoming_ here - that's fine, it
-  // is consumed separately when summing into the output bus.
+  // is consumed separately when summing into the output bus. Implicit links
+  // target a real Return block, so they land in the Return's incoming_ bucket.
   std::unordered_map<BlockId, size_t> index_of;
   index_of.reserve(exec_order_.size());
   for (size_t i = 0; i < exec_order_.size(); ++i) index_of.emplace(exec_order_[i], i);
@@ -726,6 +763,93 @@ void AudioEngine::RecomputeRouting() {
   for (const RoutingEdge& edge : routing_) {
     const auto it = index_of.find(edge.to);
     if (it != index_of.end()) incoming_[it->second].push_back(edge);
+  }
+}
+
+// Topological sort of the blocks in exec_order_ honoring every routing_ edge
+// (cables + implicit Send->Return links). Cables are always left-to-right by
+// column, so the only edges that can fight the column order are the implicit
+// pair links - a Return placed left of its Send still runs after it. Ready
+// nodes are picked in ascending column (ties: Send before Return, then by id)
+// so the result stays deterministic and as close to the old column sort as the
+// links allow. The Send-before-Return tie-break covers a Send and its Return
+// sharing a column - the Return must not read a stale Send output.
+std::vector<BlockId> AudioEngine::TopologicalOrder() const {
+  const size_t n = exec_order_.size();
+  std::vector<std::vector<size_t>> adj(n);
+  std::vector<int> indeg(n, 0);
+  std::unordered_map<BlockId, size_t> index_of;
+  index_of.reserve(n);
+  for (size_t i = 0; i < n; ++i) index_of.emplace(exec_order_[i], i);
+  std::unordered_map<BlockId, bool> is_send;
+  is_send.reserve(n);
+  for (const auto& [id, state] : block_states_) is_send[id] = IsSendKind(state->kind);
+  for (const RoutingEdge& edge : routing_) {
+    const auto a = index_of.find(edge.from);
+    const auto b = index_of.find(edge.to);
+    if (a == index_of.end() || b == index_of.end()) continue;  // IN/OUT rails
+    adj[a->second].push_back(b->second);
+    ++indeg[b->second];
+  }
+  std::vector<char> placed(n, 0);
+  std::vector<BlockId> ordered;
+  ordered.reserve(n);
+  while (ordered.size() < n) {
+    int best = -1;
+    for (size_t i = 0; i < n; ++i) {
+      if (placed[i] || indeg[i] != 0) continue;
+      if (best == -1) {
+        best = static_cast<int>(i);
+      } else {
+        const int a_col = ColumnOfBlock(exec_order_[i]);
+        const int b_col = ColumnOfBlock(exec_order_[static_cast<size_t>(best)]);
+        bool prefer = false;
+        if (a_col != b_col) {
+          prefer = a_col < b_col;
+        } else if (is_send[exec_order_[i]] != is_send[exec_order_[best]]) {
+          prefer = is_send[exec_order_[i]];
+        } else if (exec_order_[i] != exec_order_[best]) {
+          prefer = exec_order_[i] < exec_order_[best];
+        }
+        if (prefer) best = static_cast<int>(i);
+      }
+    }
+    if (best == -1) break;  // cycle
+    placed[static_cast<size_t>(best)] = 1;
+    ordered.push_back(exec_order_[static_cast<size_t>(best)]);
+    for (size_t v : adj[static_cast<size_t>(best)]) --indeg[v];
+  }
+  return ordered;
+}
+
+// Set exec_order_ to the topological order of the current routing_. If a user
+// wired a cable from a Return back around into the same pair's Send, that
+// implicit link completes a cycle and no full order exists - cables alone are
+// always acyclic (column rule), so the cycle must contain an implicit link, and
+// breaking it (dropping the link and retrying) restores a valid order. The
+// affected pair then behaves as if unpaired - the Send's signal goes nowhere -
+// rather than deadlocking the whole grid.
+void AudioEngine::RebuildExecOrder() {
+  std::vector<BlockId> ordered = TopologicalOrder();
+  while (ordered.size() < exec_order_.size()) {
+    std::unordered_set<BlockId> placed(ordered.begin(), ordered.end());
+    const size_t before = routing_.size();
+    routing_.erase(
+        std::remove_if(routing_.begin(), routing_.end(),
+                       [&](const RoutingEdge& edge) {
+                         return edge.implicit && placed.count(edge.to) == 0;
+                       }),
+        routing_.end());
+    if (routing_.size() == before) break;  // nothing implicit to drop - safety net
+    ordered = TopologicalOrder();
+  }
+  if (ordered.size() == exec_order_.size()) {
+    exec_order_ = std::move(ordered);
+  } else {
+    // Unreachable for a well-formed graph; fall back to the plain column sort
+    // so Process() never sees a partially-ordered exec_order_.
+    std::sort(exec_order_.begin(), exec_order_.end(),
+              [this](BlockId a, BlockId b) { return ColumnOfBlock(a) < ColumnOfBlock(b); });
   }
 }
 

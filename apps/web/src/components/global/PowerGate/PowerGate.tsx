@@ -4,6 +4,7 @@ import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEn
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
 import { getOpenAxe } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
+import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 import styles from './PowerGate.module.css'
 
 export interface PowerGateProps {
@@ -45,6 +46,7 @@ export function PowerGate({
   const auth = useTone3000Auth()
   const io = useIOStore()
   const isNative = getOpenAxe() !== null
+  const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
 
   if (status === 'ready') return null
 
@@ -183,6 +185,46 @@ export function PowerGate({
           work. The app switches back to normal audio automatically the moment a usable device is
           available.
         </p>
+        {updateLatest && (
+          <div className={styles.updateBanner} role="status" aria-live="polite">
+            <span className={styles.updateText}>New version {updateLatest.tag} available</span>
+            <span className={styles.updateActions}>
+              <a
+                className={styles.updateLink}
+                href="https://pauloedspinho20.github.io/OpenAxe/#download"
+                target="_blank"
+                rel="noopener"
+              >
+                Download
+              </a>
+              <button
+                type="button"
+                className={styles.updateDismiss}
+                onClick={dismissUpdate}
+                aria-label="Dismiss update notification"
+              >
+                Dismiss
+              </button>
+            </span>
+          </div>
+        )}
+        {!isNative && (
+          <nav className={styles.footerLinks} aria-label="Downloads and source">
+            <a
+              href="https://pauloedspinho20.github.io/OpenAxe/#download"
+              target="_blank"
+              rel="noopener"
+            >
+              ⬇ Download desktop &amp; plugins
+            </a>
+            <span className={styles.footerDot} aria-hidden="true">
+              ·
+            </span>
+            <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener">
+              GitHub
+            </a>
+          </nav>
+        )}
       </div>
     </div>
   )

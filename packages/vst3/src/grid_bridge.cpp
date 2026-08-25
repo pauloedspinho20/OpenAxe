@@ -53,6 +53,10 @@ std::string KindToString(NamStudioBlockKind k) {
     case NAM_STUDIO_BLOCK_CAB: return "cab";
     case NAM_STUDIO_BLOCK_MIXER: return "mixer";
     case NAM_STUDIO_BLOCK_SPLITTER: return "splitter";
+    case NAM_STUDIO_BLOCK_SEND_1: return "send-1";
+    case NAM_STUDIO_BLOCK_RETURN_1: return "return-1";
+    case NAM_STUDIO_BLOCK_SEND_2: return "send-2";
+    case NAM_STUDIO_BLOCK_RETURN_2: return "return-2";
     default: return "unknown";
   }
 }
@@ -76,6 +80,10 @@ std::optional<NamStudioBlockKind> StringToKind(const std::string& s) {
       {"cab", NAM_STUDIO_BLOCK_CAB},
       {"mixer", NAM_STUDIO_BLOCK_MIXER},
       {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
+      {"send-1", NAM_STUDIO_BLOCK_SEND_1},
+      {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
+      {"send-2", NAM_STUDIO_BLOCK_SEND_2},
+      {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
   };
   auto it = m.find(s);
   if (it == m.end()) return std::nullopt;
