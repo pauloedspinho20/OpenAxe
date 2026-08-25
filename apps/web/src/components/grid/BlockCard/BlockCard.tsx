@@ -40,11 +40,14 @@ export interface BlockDragInfo {
 /** A click barely moves the pointer; anything past this is a drag, not a select. */
 const CLICK_VS_DRAG_THRESHOLD_PX = 4
 
+/** Input jacks to draw. Send/Return relays (issue #274) show a single side: Send has an input jack (its output is the implicit hop to its Return), Return has an output jack only. */
 function portCount(kind: BlockKind): number {
+  if (kind === 'return-1' || kind === 'return-2') return 0
   return kind === 'mixer' ? MIXER_INPUT_COUNT : 1
 }
 
 function outputPortCount(kind: BlockKind): number {
+  if (kind === 'send-1' || kind === 'send-2') return 0
   return kind === 'splitter' ? SPLITTER_OUTPUT_COUNT : 1
 }
 

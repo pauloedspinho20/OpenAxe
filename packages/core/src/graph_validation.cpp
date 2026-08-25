@@ -20,16 +20,37 @@ int ColumnOf(const BlockMap& blocks, const std::string& block_id) {
 // a single port 0, except a Mixer's several independent input jacks;
 // outputs default to a single port 0 too, except a Splitter's several
 // independent output jacks.
+//
+// Send/Return (issue #274) break the "every block has a single port-0 on
+// both sides" default: a Send is input-only (-1 output: its signal leaves via
+// the implicit link to its Return, never a cable) and a Return is
+// output-only (-1 input: its signal arrives via the implicit link). The
+// implicit links themselves are synthesized by the engine's RecomputeRouting,
+// never drawn as cables, so CanConnect simply refuses the missing side.
+bool IsSendKind(BlockKind kind) {
+  return kind == BlockKind::kSend1 || kind == BlockKind::kSend2;
+}
+bool IsReturnKind(BlockKind kind) {
+  return kind == BlockKind::kReturn1 || kind == BlockKind::kReturn2;
+}
+
 int MaxPortFor(const BlockMap& blocks, const std::string& block_id, Side side) {
   if (side == Side::kTo) {
     if (block_id == kOutRail) return 0;
     auto it = blocks.find(block_id);
-    return (it != blocks.end() && it->second.kind == BlockKind::kMixer) ? kMixerInputCount - 1 : 0;
+    if (it != blocks.end()) {
+      if (IsReturnKind(it->second.kind)) return -1;  // no input jack
+      return it->second.kind == BlockKind::kMixer ? kMixerInputCount - 1 : 0;
+    }
+    return 0;
   }
   if (block_id == kInRail) return 0;
   auto it = blocks.find(block_id);
-  return (it != blocks.end() && it->second.kind == BlockKind::kSplitter) ? kSplitterOutputCount - 1
-                                                                          : 0;
+  if (it != blocks.end()) {
+    if (IsSendKind(it->second.kind)) return -1;  // no output jack
+    return it->second.kind == BlockKind::kSplitter ? kSplitterOutputCount - 1 : 0;
+  }
+  return 0;
 }
 
 }  // namespace

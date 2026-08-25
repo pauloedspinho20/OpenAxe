@@ -28,6 +28,13 @@ function columnOf(blocks: ReadonlyMap<string, ValidatableBlock>, blockId: string
  * a single port 0, except a Mixer's several independent input jacks;
  * outputs default to a single port 0 too, except a Splitter's several
  * independent output jacks.
+ *
+ * Send/Return (issue #274) break the "every block has a single port-0 on
+ * both sides" default: a Send is input-only (no output jack - its signal
+ * leaves via the implicit link to its Return, never a cable) and a Return is
+ * output-only (no input jack - its signal arrives via the implicit link). The
+ * implicit links are never drawn or validated as cables, so a negative max
+ * simply makes every cable on that side fail the port check below.
  */
 function maxPortFor(
   blocks: ReadonlyMap<string, ValidatableBlock>,
@@ -36,10 +43,14 @@ function maxPortFor(
 ): number {
   if (side === 'to') {
     if (blockId === OUT_RAIL) return 0
-    return blocks.get(blockId)?.kind === 'mixer' ? MIXER_INPUT_COUNT - 1 : 0
+    const kind = blocks.get(blockId)?.kind
+    if (kind === 'return-1' || kind === 'return-2') return -1
+    return kind === 'mixer' ? MIXER_INPUT_COUNT - 1 : 0
   }
   if (blockId === IN_RAIL) return 0
-  return blocks.get(blockId)?.kind === 'splitter' ? SPLITTER_OUTPUT_COUNT - 1 : 0
+  const kind = blocks.get(blockId)?.kind
+  if (kind === 'send-1' || kind === 'send-2') return -1
+  return kind === 'splitter' ? SPLITTER_OUTPUT_COUNT - 1 : 0
 }
 
 /**

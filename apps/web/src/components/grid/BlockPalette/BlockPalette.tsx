@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
-import { BlockIcon } from '@openaxe/ui'
+import { BlockIcon, toast } from '@openaxe/ui'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { useGraphStore } from '../../../state/graphStore'
-import { BLOCK_OPTIONS } from '../blockOptions'
+import { BLOCK_OPTIONS, BLOCK_KIND_LABELS } from '../blockOptions'
 import { findGridElement, isPointOverGrid, resolveGridCell } from '../gridGeometry'
 import { blockColorVar } from '../blockColors'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
@@ -78,6 +78,12 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
     const store = useGraphStore.getState()
     if (store.blocks.some((b) => b.row === row && b.col === col)) return
     const id = store.addBlock(current.kind, row, col)
+    if (id === null) {
+      toast.warning(`${BLOCK_KIND_LABELS[current.kind]} is already on the grid`, {
+        description: 'Send/Return blocks are strictly 1:1.',
+      })
+      return
+    }
     openCatalogForNewBlock(id, current.kind)
   }
 

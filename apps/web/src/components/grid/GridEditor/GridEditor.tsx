@@ -19,6 +19,7 @@ import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { Tuner } from '@/components/Tuner/Tuner'
+import { BLOCK_KIND_LABELS } from '../blockOptions'
 
 import styles from './GridEditor.module.css'
 export interface GridEditorProps {
@@ -293,6 +294,13 @@ export function GridEditor({
           open={!!addMenuCell}
           onPick={(kind: BlockKind) => {
             const id = useGraphStore.getState().addBlock(kind, addMenuCell.row, addMenuCell.col)
+            if (id === null) {
+              toast.warning(`${BLOCK_KIND_LABELS[kind]} is already on the grid`, {
+                description: 'Send/Return blocks are strictly 1:1.',
+              })
+              setAddMenuCell(null)
+              return
+            }
             openCatalogForNewBlock(id, kind)
             setAddMenuCell(null)
           }}

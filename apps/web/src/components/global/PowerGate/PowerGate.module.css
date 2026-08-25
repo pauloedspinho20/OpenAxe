@@ -99,3 +99,79 @@
   line-height: 1.5;
   color: var(--ink-3);
 }
+
+.footerLinks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.footerLinks a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footerLinks a:hover {
+  color: var(--ink-1);
+}
+
+.footerDot {
+  color: var(--ink-3);
+}
+
+.updateBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--accent-dim, rgba(255, 200, 0, 0.12));
+  border: 1px solid var(--accent, #ffcc00);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-1);
+  text-align: left;
+}
+
+.updateText {
+  flex: 1;
+  min-width: 0;
+}
+
+.updateActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.updateLink {
+  color: var(--accent, #ffcc00);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+}
+
+.updateDismiss {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.updateDismiss:hover {
+  color: var(--ink-1);
+  border-color: var(--ink-3);
+}

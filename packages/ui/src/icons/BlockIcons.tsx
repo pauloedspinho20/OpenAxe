@@ -17,6 +17,10 @@ export type BlockKind =
   | 'space'
   | 'mixer'
   | 'splitter'
+  | 'send-1'
+  | 'return-1'
+  | 'send-2'
+  | 'return-2'
   | 'noise-gate'
   | 'compressor'
   | 'eq'
@@ -96,6 +100,36 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
       <path d="M9 12l5-5M9 12l5 5" />
       <Dot cx="16" cy="7" r={0.9} />
       <Dot cx="16" cy="17" r={0.9} />
+    </>
+  ),
+  'send-1': (
+    <>
+      <path d="M3 12h13" />
+      <path d="M16 7l5 5-5 5" />
+      <Dot cx="8" cy="17" />
+    </>
+  ),
+  'send-2': (
+    <>
+      <path d="M3 12h13" />
+      <path d="M16 7l5 5-5 5" />
+      <Dot cx="6.5" cy="17" />
+      <Dot cx="10.5" cy="17" />
+    </>
+  ),
+  'return-1': (
+    <>
+      <path d="M8 7l-5 5 5 5" />
+      <path d="M3 12h18" />
+      <Dot cx="8" cy="17" />
+    </>
+  ),
+  'return-2': (
+    <>
+      <path d="M8 7l-5 5 5 5" />
+      <path d="M3 12h18" />
+      <Dot cx="6.5" cy="17" />
+      <Dot cx="10.5" cy="17" />
     </>
   ),
   'noise-gate': (
@@ -205,6 +239,28 @@ export function TunerIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <path d="M9 3v7a3 3 0 0 0 6 0V3M9 18h6M12 10v8" />
+    </Icon>
+  )
+}
+
+/** Curved undo arrow — 24x24 stroke 1.5, matches blockIcons tone. */
+export function UndoIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 8H5V4" />
+      <path d="M5 8A7 7 0 0 0 14.5 17.5" />
+      <path d="M12 14l-2.5 2.5L12 19" />
+    </Icon>
+  )
+}
+
+/** Curved redo arrow — mirrored undo. */
+export function RedoIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 8h4V4" />
+      <path d="M19 8A7 7 0 0 1 9.5 17.5" />
+      <path d="M12 14l2.5 2.5L12 19" />
     </Icon>
   )
 }

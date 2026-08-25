@@ -17,6 +17,10 @@ const CORE_KINDS = new Set<BlockKind>([
   'space',
   'mixer',
   'splitter',
+  'send-1',
+  'send-2',
+  'return-1',
+  'return-2',
 ])
 
 function paletteGroupForKind(kind: BlockKind): PaletteGroup {
