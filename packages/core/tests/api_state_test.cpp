@@ -571,6 +571,47 @@ int main() {
     nam_studio_graph_destroy(g);
   }
 
+  // ── Send/Return (issue #274) serialize and restore ──────────────────────
+  // The routing kinds carry no params and no bypass, so their document is
+  // just their kind string + position. The implicit Send->Return link is not
+  // a cable, so it is not serialized - it re-derives from block presence on
+  // load, and the reloaded pair must route signal exactly like the original.
+  {
+    NamStudioGraph* g = nam_studio_graph_create();
+    const int32_t src = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 0);
+    const int32_t send = nam_studio_add_block(g, NAM_STUDIO_BLOCK_SEND_1, 0, 1);
+    const int32_t ret = nam_studio_add_block(g, NAM_STUDIO_BLOCK_RETURN_1, 0, 4);
+    const int32_t sink = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 5);
+    OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, src, 0) >= 0);
+    OPENAXE_EXPECT(nam_studio_connect(g, src, 0, send, 0) >= 0);
+    OPENAXE_EXPECT(nam_studio_connect(g, ret, 0, sink, 0) >= 0);
+    OPENAXE_EXPECT(nam_studio_connect(g, sink, 0, kOutRail, 0) >= 0);
+    // No params, no bypass on the routing kinds.
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, send) == 0);
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, ret) == 0);
+
+    const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    std::vector<char> buf(static_cast<size_t>(needed));
+    nam_studio_serialize_state(g, buf.data(), needed);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"send-1\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"return-1\"") != nullptr);
+
+    NamStudioGraph* r = nam_studio_graph_create();
+    OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
+    // Restored pair still routes: a send into the reloaded graph travels the
+    // implicit hop to the return. 0.5 in -> 0.5 out through the cab relays.
+    const int32_t frames = 64;
+    std::vector<float> input(static_cast<size_t>(frames), 0.5f);
+    std::vector<float> output(static_cast<size_t>(frames), 0.0f);
+    const float* in_ptrs[1] = {input.data()};
+    float* out_ptrs[1] = {output.data()};
+    nam_studio_reset(r, 48000.0, frames);
+    nam_studio_process(r, in_ptrs, 1, out_ptrs, 1, frames);
+    for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+    nam_studio_graph_destroy(r);
+    nam_studio_graph_destroy(g);
+  }
+
   nam_studio_graph_destroy(source);
   nam_studio_graph_destroy(restored);
   nam_studio_graph_destroy(clean);
