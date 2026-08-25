@@ -9,7 +9,7 @@ import { OnboardingModal } from './components/global/OnboardingModal/OnboardingM
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
-import { HardwareButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
+import { HardwareButton, IconButton, Led, Toggle, Toaster, Wordmark } from '@openaxe/ui'
 import pkg from '../package.json'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
@@ -17,7 +17,10 @@ import { useMidiEngine } from './hooks/useMidiEngine'
 import { useOnboarding } from './hooks/useOnboarding'
 import { useSceneEngine } from './hooks/useSceneEngine'
 import { useSceneHotkeys } from './hooks/useSceneHotkeys'
+import { useUndoRedoHotkeys } from './hooks/useUndoRedoHotkeys'
 import { useTheme } from './hooks/useTheme'
+import { RedoIcon, UndoIcon } from './components/grid/blockIcons'
+import { setHistoryTarget, useHistoryStore } from './state/historyStore'
 import { useTone3000Target } from './hooks/useTone3000Target'
 import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
@@ -83,7 +86,21 @@ function App() {
 
   useSceneEngine(engine.rig, engine.context, engine.status)
   useSceneHotkeys()
+  useUndoRedoHotkeys()
   useMidiEngine()
+
+  const canUndo = useHistoryStore((s) => s.canUndo)
+  const canRedo = useHistoryStore((s) => s.canRedo)
+  const undo = useHistoryStore((s) => s.undo)
+  const redo = useHistoryStore((s) => s.redo)
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+  const undoTitle = `Undo (${isMac ? '⌘Z' : 'Ctrl+Z'})`
+  const redoTitle = `Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z / Ctrl+Y'})`
+
+  useEffect(() => {
+    if (engine.rig && engine.context) setHistoryTarget({ rig: engine.rig, context: engine.context })
+    else setHistoryTarget(null)
+  }, [engine.rig, engine.context])
 
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
@@ -127,6 +144,25 @@ function App() {
             checked={theme === 'light'}
             onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
           />
+        </div>
+
+        <div className={styles.headerGroup}>
+          <IconButton
+            label="Undo"
+            disabled={!canUndo}
+            title={undoTitle}
+            onClick={() => void undo()}
+          >
+            <UndoIcon size={16} />
+          </IconButton>
+          <IconButton
+            label="Redo"
+            disabled={!canRedo}
+            title={redoTitle}
+            onClick={() => void redo()}
+          >
+            <RedoIcon size={16} />
+          </IconButton>
         </div>
 
         <div className={styles.headerGroup}>
