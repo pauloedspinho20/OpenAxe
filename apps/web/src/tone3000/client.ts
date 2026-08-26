@@ -65,11 +65,8 @@ const VERIFIER_KEY = 't3k_code_verifier'
 const STATE_KEY = 't3k_state'
 const ACCESS_TOKENS_KEY = 't3k_tokens'
 
-/** Marker used on the popup->opener postMessage channel and in the popup's
- * cloned sessionStorage, so the popup can recognize itself (and the opener
- * can ignore unrelated window messages). */
+/** Marker used on the popup->opener postMessage channel. */
 export const POPUP_AUTH_SOURCE = 'openaxe-t3k-auth'
-export const POPUP_PENDING_KEY = 't3k_popup_pending'
 
 export function storePkce(verifier: string, state: string): void {
   sessionStorage.setItem(VERIFIER_KEY, verifier)
@@ -315,6 +312,7 @@ export async function startStandardFlow(
 }
 
 const POPUP_WINDOW_NAME = 'openaxe-t3k-auth'
+export { POPUP_WINDOW_NAME }
 const POPUP_WINDOW_FEATURES = 'width=560,height=680,popup=yes'
 
 let activeAuthPopup: Window | null = null
@@ -343,21 +341,19 @@ export async function startPopupOAuthFlow(
   const pubkey = config.pubkey ?? PUBLISHABLE_KEY
   const redirectUri = config.redirectUri ?? resolveRedirectUri()
 
-  // PKCE + the popup marker must be in sessionStorage BEFORE the popup is
-  // opened: the popup receives a clone of our sessionStorage at open time,
-  // so anything written afterwards never reaches it. The crypto here
-  // resolves well within the user gesture's transient-activation window, so
-  // the window.open below is still allowed.
+  // The PKCE verifier/state live here in the OPENER's sessionStorage for the
+  // whole flow - the popup only relays the code back, and the exchange runs
+  // in this tab, so nothing needs to survive a cross-origin popup round trip.
   const verifier = await randomBase64url(32)
   const codeChallenge = await sha256Base64url(verifier)
   const state = await randomBase64url(16)
   storePkce(verifier, state)
-  sessionStorage.setItem(POPUP_PENDING_KEY, '1')
 
+  // The crypto above resolves well within the user gesture's transient
+  // activation, so the popup open is still allowed.
   const popup = window.open('', POPUP_WINDOW_NAME, POPUP_WINDOW_FEATURES)
   if (!popup) {
     clearPkce()
-    sessionStorage.removeItem(POPUP_PENDING_KEY)
     return false
   }
 
@@ -371,10 +367,23 @@ export function isAuthPopup(): boolean {
   return typeof window !== 'undefined' && Boolean(window.opener)
 }
 
-/** Tell the opener how the popup's callback went, then close. Only valid inside the popup. */
-export function notifyPopupResult(result: { ok: boolean; error?: string }): void {
+/** Reads the OAuth callback params off the current URL without consuming them. */
+export function readOAuthCallbackParams(): OAuthCallbackParams {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    code: params.get('code'),
+    error: params.get('error'),
+    state: params.get('state'),
+  }
+}
+
+/** Relays the popup's raw callback params to the opener, then closes. Only valid inside the popup. */
+export function notifyPopupResult(params: OAuthCallbackParams): void {
   try {
-    window.opener?.postMessage({ source: POPUP_AUTH_SOURCE, ...result }, window.location.origin)
+    window.opener?.postMessage(
+      { source: POPUP_AUTH_SOURCE, code: params.code, state: params.state, error: params.error },
+      window.location.origin,
+    )
   } catch {
     // The main tab was closed mid-flow - nothing left to tell.
   }

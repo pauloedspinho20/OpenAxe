@@ -260,7 +260,8 @@ describe('tone3000 authStore - popup OAuth', () => {
   }
 
   beforeEach(() => {
-    sessionStorage.removeItem(client.POPUP_PENDING_KEY)
+    clearPkce()
+    window.name = ''
     setOpener(undefined)
   })
 
@@ -284,31 +285,53 @@ describe('tone3000 authStore - popup OAuth', () => {
     expect(useTone3000Auth.getState().pendingFlow).toBe(false)
   })
 
-  it('the popup message listener marks connected and hydrates on a successful result', async () => {
-    const hydrate = vi
-      .spyOn(useTone3000Auth.getState(), 'hydrateFromPersistentStorage')
-      .mockResolvedValue()
+  it('the popup message listener exchanges the relayed code and connects', async () => {
+    storePkce('verifier-a', 'state-1')
+    // A stored refresh token lets the success path hydrate the profile.
+    localStorage.setItem('t3k_refresh_token', 'stored-refresh')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            access_token: 'access',
+            refresh_token: 'refresh',
+            expires_in: 3600,
+            username: 'shredder',
+          }),
+      }),
+    )
 
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { source: client.POPUP_AUTH_SOURCE, ok: true },
+        data: { source: client.POPUP_AUTH_SOURCE, code: 'the-code', state: 'state-1', error: null },
         origin: window.location.origin,
       }),
     )
 
-    expect(useTone3000Auth.getState().status).toBe('connected')
+    await vi.waitFor(() => expect(useTone3000Auth.getState().status).toBe('connected'))
     expect(useTone3000Auth.getState().pendingFlow).toBe(false)
-    expect(hydrate).toHaveBeenCalled()
+    // The listener hydrates the user profile on success.
+    await vi.waitFor(() => expect(useTone3000Auth.getState().user?.username).toBe('shredder'))
   })
 
-  it('the popup message listener marks anonymous on a canceled result', () => {
+  it('the popup message listener marks anonymous on a canceled result', async () => {
+    storePkce('verifier-a', 'state-1')
+
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { source: client.POPUP_AUTH_SOURCE, ok: false, error: 'canceled' },
+        data: {
+          source: client.POPUP_AUTH_SOURCE,
+          code: null,
+          state: 'state-1',
+          error: 'canceled',
+        },
         origin: window.location.origin,
       }),
     )
-    expect(useTone3000Auth.getState().status).toBe('anonymous')
+
+    await vi.waitFor(() => expect(useTone3000Auth.getState().status).toBe('anonymous'))
     expect(useTone3000Auth.getState().pendingFlow).toBe(false)
   })
 
@@ -323,31 +346,21 @@ describe('tone3000 authStore - popup OAuth', () => {
     expect(useTone3000Auth.getState().pendingFlow).toBe(false)
   })
 
-  it('handleTone3000CallbackOnLoad relays the result to the opener and closes the popup', async () => {
-    storePkce('verifier-a', 'state-1')
-    sessionStorage.setItem(client.POPUP_PENDING_KEY, '1')
+  it('handleTone3000CallbackOnLoad relays the raw callback params to the opener and closes', async () => {
     const postMessage = vi.fn()
     setOpener({ postMessage })
     const close = vi.fn()
     vi.spyOn(window, 'close').mockImplementation(close)
+    window.name = client.POPUP_WINDOW_NAME
     setUrl('/?code=the-code&state=state-1')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({ access_token: 'access', refresh_token: 'refresh', expires_in: 3600 }),
-      }),
-    )
 
     await handleTone3000CallbackOnLoad()
 
     expect(postMessage).toHaveBeenCalledWith(
-      { source: client.POPUP_AUTH_SOURCE, ok: true },
+      { source: client.POPUP_AUTH_SOURCE, code: 'the-code', state: 'state-1', error: null },
       window.location.origin,
     )
     expect(close).toHaveBeenCalled()
-    expect(useTone3000Auth.getState().status).toBe('connected')
   })
 
   it('handleTone3000CallbackOnLoad does not close a normal (non-popup) window', async () => {

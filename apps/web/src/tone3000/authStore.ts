@@ -11,7 +11,7 @@
 import { create } from 'zustand'
 import {
   POPUP_AUTH_SOURCE,
-  POPUP_PENDING_KEY,
+  POPUP_WINDOW_NAME,
   apiGetUser,
   clearTokens,
   consumeOAuthCallbackParams,
@@ -20,6 +20,7 @@ import {
   handleOAuthCallback,
   isAuthPopup,
   notifyPopupResult,
+  readOAuthCallbackParams,
   setTokens,
   startPopupOAuthFlow,
   startStandardFlow,
@@ -166,30 +167,41 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
 
 /**
  * Listens for the OAuth popup's postMessage and settles the opener's auth
- * state without a page navigation. The popup redeemed the code and persisted
- * the tokens; on success we hydrate from the persistent store so this window
- * mints its own access token (the popup's sessionStorage is a private clone)
- * and picks up the user profile.
+ * state without a page navigation. The popup only relays the raw callback
+ * params (it can't be trusted to carry the PKCE - sessionStorage cloning
+ * across the cross-origin round trip is unreliable); the token exchange runs
+ * here, in the tab that actually stored the verifier. On success we also
+ * hydrate the user profile from the persistent store.
  */
 let popupListenerAttached = false
 function attachPopupAuthListener(): void {
   if (popupListenerAttached) return
   popupListenerAttached = true
   window.addEventListener('message', (event) => {
-    const data = event.data as { source?: string; ok?: boolean; error?: string } | null
+    const data = event.data as {
+      source?: string
+      code?: string | null
+      state?: string | null
+      error?: string | null
+    } | null
     if (!data || data.source !== POPUP_AUTH_SOURCE) return
     if (event.origin !== window.location.origin) return
-    sessionStorage.removeItem(POPUP_PENDING_KEY)
-    if (data.ok) {
-      useTone3000Auth.setState({ status: 'connected', pendingFlow: false, error: null })
-      void useTone3000Auth.getState().hydrateFromPersistentStorage()
-    } else {
-      useTone3000Auth.setState({
-        status: data.error === 'canceled' ? 'anonymous' : 'error',
-        pendingFlow: false,
-        error: data.error ?? null,
-      })
-    }
+    void handleOAuthCallback({
+      code: data.code ?? null,
+      state: data.state ?? null,
+      error: data.error ?? null,
+    }).then((result) => {
+      if (result.ok) {
+        useTone3000Auth.setState({ status: 'connected', pendingFlow: false, error: null })
+        void useTone3000Auth.getState().hydrateFromPersistentStorage()
+      } else {
+        useTone3000Auth.setState({
+          status: result.error === 'canceled' ? 'anonymous' : 'error',
+          pendingFlow: false,
+          error: result.error,
+        })
+      }
+    })
   })
 }
 
@@ -223,20 +235,21 @@ if (typeof window !== 'undefined') {
  * above already connected, so a normal OAuth completion doesn't also
  * trigger a redundant refresh right behind it.
  *
- * When this window is the OAuth popup (opened via connect), the result is
- * relayed to the opener and the popup closes instead of continuing to run
- * the app.
+ * When this window is the OAuth popup (opened via connect - recognized by
+ * its window.name, not by the unreliable sessionStorage clone), the raw
+ * callback params are relayed to the opener (which holds the PKCE) and the
+ * popup closes instead of continuing to run the app.
  */
+let popupResultPosted = false
 export async function handleTone3000CallbackOnLoad(): Promise<void> {
-  const handledCallback = await useTone3000Auth.getState().handleCallback()
-  if (isAuthPopup() && sessionStorage.getItem(POPUP_PENDING_KEY) === '1') {
-    sessionStorage.removeItem(POPUP_PENDING_KEY)
-    const state = useTone3000Auth.getState()
-    notifyPopupResult(
-      handledCallback ? { ok: true } : { ok: false, error: state.error ?? 'not_pending' },
-    )
+  // The popup relays the raw callback params (read before handleCallback
+  // consumes/strips them) and closes - the exchange runs in the opener.
+  if (isAuthPopup() && window.name === POPUP_WINDOW_NAME && !popupResultPosted) {
+    popupResultPosted = true
+    notifyPopupResult(readOAuthCallbackParams())
     return
   }
+  const handledCallback = await useTone3000Auth.getState().handleCallback()
   if (!handledCallback && useTone3000Auth.getState().status !== 'connected') {
     await useTone3000Auth.getState().hydrateFromPersistentStorage()
   }

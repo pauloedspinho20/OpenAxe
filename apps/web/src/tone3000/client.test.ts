@@ -7,6 +7,7 @@ import {
   isAuthPopup,
   notifyPopupResult,
   randomBase64url,
+  readOAuthCallbackParams,
   setTokens,
   sha256Base64url,
   startPopupOAuthFlow,
@@ -262,17 +263,16 @@ describe('tone3000 client - popup OAuth flow', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')
     expect(url.searchParams.get('state')).toBeTruthy()
     expect(url.searchParams.get('code_challenge')).toBeTruthy()
-    expect(sessionStorage.getItem('t3k_popup_pending')).toBe('1')
+    // The PKCE stays in the opener's storage so the exchange can run here
+    // (the popup only relays the code back - see notifyPopupResult).
     expect(sessionStorage.getItem('t3k_state')).toBe(url.searchParams.get('state'))
   })
 
   it('returns false when the popup is blocked, so callers fall back to the redirect flow', async () => {
     vi.stubGlobal('window', fakeWindow({ open: vi.fn(() => null) }))
     await expect(startPopupOAuthFlow()).resolves.toBe(false)
-    // The PKCE + pending marker staged for the popup are cleaned up so the
-    // fallback redirect flow can start fresh.
+    // The staged PKCE is cleaned up so the fallback redirect flow starts fresh.
     expect(sessionStorage.getItem('t3k_code_verifier')).toBeNull()
-    expect(sessionStorage.getItem('t3k_popup_pending')).toBeNull()
   })
 
   it('returns false on the native (desktop) build, which keeps its bounce-listener flow', async () => {
@@ -280,7 +280,7 @@ describe('tone3000 client - popup OAuth flow', () => {
     await expect(startPopupOAuthFlow()).resolves.toBe(false)
   })
 
-  it('notifyPopupResult posts the result to the opener and closes the window', () => {
+  it('notifyPopupResult relays the raw callback params to the opener and closes', () => {
     const postMessage = vi.fn()
     const close = vi.fn()
     vi.stubGlobal('window', {
@@ -289,13 +289,19 @@ describe('tone3000 client - popup OAuth flow', () => {
       close,
     } as unknown as Window)
 
-    notifyPopupResult({ ok: true })
+    notifyPopupResult({ code: 'the-code', state: 'state-1', error: null })
 
     expect(postMessage).toHaveBeenCalledWith(
-      { source: 'openaxe-t3k-auth', ok: true },
+      { source: 'openaxe-t3k-auth', code: 'the-code', state: 'state-1', error: null },
       'http://localhost:5173',
     )
     expect(close).toHaveBeenCalled()
+  })
+
+  it('readOAuthCallbackParams reads the code/state/error without consuming them', () => {
+    vi.stubGlobal('window', { location: { search: '?code=c&state=s&error=e' } })
+    expect(readOAuthCallbackParams()).toEqual({ code: 'c', state: 's', error: 'e' })
+    expect(window.location.search).toBe('?code=c&state=s&error=e')
   })
 
   it('isAuthPopup is true only for a window with an opener', () => {
