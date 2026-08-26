@@ -3,14 +3,74 @@
   flex-direction: column;
   gap: var(--sp-3);
   min-height: 64px;
+  padding: var(--sp-3);
+  justify-content: flex-end;
+  z-index: 1;
+  background-color: var(--panel);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-recessed);
+  border: none;
+}
+
+.inspectorLayout {
+  display: flex;
+  position: relative;
+  gap: var(--sp-4);
+  align-items: flex-end;
+  height: 100%;
+  width: 100%;
+  justify-content: center;
+}
+
+.background {
+  position: absolute;
+  inset: var(--sp-4);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.squareColumn {
+  width: 100%;
+  height: 100%;
+  max-width: 300px;
+  max-height: 250px;
+  display: flex;
+  gap: var(--sp-2);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* The NamModelSquare inside is always 1:1 via its own aspect-ratio, so this
+     column's height is fully determined by that square — no extra sizing needed. */
+}
+
+.mainContent {
+  padding: var(--sp-2) 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  height: 100%;
+  z-index: 1;
+}
+
+@media (max-width: var(--mw-sm)) {
+  .inspectorLayout {
+    flex-direction: column;
+  }
+  .squareColumn {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 200px;
+  }
 }
 
 .meterAndParams {
   display: flex;
   width: 100%;
   flex-direction: row;
-  gap: var(--sp-2);
-  align-items: flex-end;
+  gap: var(--sp-4);
+  align-items: center;
 }
 
 .empty {
@@ -25,4 +85,47 @@
   font-family: var(--font-display);
   letter-spacing: 0.02em;
   margin: 0;
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.bypassBtn {
+  background: none;
+  border: 1px solid var(--ink-2);
+  border-radius: 999px;
+  background-color: var(--ink-3);
+  height: 15px;
+  width: 15px;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+}
+
+.bypassBtnOn {
+  background-color: var(--led-on);
+}
+
+.screenBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+}
+
+.screenRow {
+  display: flex;
+  align-items: stretch;
+  flex-direction: row;
+  gap: var(--sp-2);
+  height: 100%;
 }

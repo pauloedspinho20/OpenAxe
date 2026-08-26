@@ -26,14 +26,16 @@ describe('BlockCard', () => {
     expect(screen.getByRole('button', { name: 'Remove Reverb' })).toBeInTheDocument()
   })
 
-  it('shows NAM-model status text when no asset is loaded', () => {
+  it('renders the amp label without inline asset status text', () => {
     render(<BlockCard instance={inst({ kind: 'amp' })} rig={null} />)
-    expect(screen.getByText('No model')).toBeInTheDocument()
+    expect(screen.getByText('Amp')).toBeInTheDocument()
+    expect(screen.queryByText('No model')).not.toBeInTheDocument()
   })
 
-  it('shows "No IR" status for a cab', () => {
+  it('renders the cab label without inline asset status text', () => {
     render(<BlockCard instance={inst({ kind: 'cab' })} rig={null} />)
-    expect(screen.getByText('No IR')).toBeInTheDocument()
+    expect(screen.getByText('Cab')).toBeInTheDocument()
+    expect(screen.queryByText('No IR')).not.toBeInTheDocument()
   })
 
   it('renders one input/output jack for a single-io block', () => {

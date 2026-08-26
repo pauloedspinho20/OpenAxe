@@ -12,7 +12,6 @@ import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPer
 import {
   HardwareButton,
   IconButton,
-  Led,
   MidiIcon,
   PowerIcon,
   SettingsIcon,
@@ -32,7 +31,7 @@ import { useTheme } from './hooks/useTheme'
 import { RedoIcon, UndoIcon } from './components/grid/blockIcons'
 import { setHistoryTarget, useHistoryStore } from './state/historyStore'
 import { useTone3000Target } from './hooks/useTone3000Target'
-import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
+import { handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { installFactoryScenes } from './scenes/factoryScenes'
@@ -47,29 +46,17 @@ import { useUpdateCheck } from './hooks/useUpdateCheck'
 
 import styles from './App.module.css'
 
-const STATUS_LABEL: Record<string, string> = {
-  off: 'Power off',
-  starting: 'Starting…',
-  ready: 'Running',
-  error: 'Error',
-}
-
-/** Soft advisory only, not an enforced cap - see GraphRig.countActiveHeavyBlocks. */
-const HEAVY_BLOCK_SOFT_THRESHOLD = 6
-
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
   const onboarding = useOnboarding()
   const isReady = engine.status === 'ready'
   const browser = useTone3000Browser()
-  const auth = useTone3000Auth()
   const io = useIOStore()
   const { outputSelectionSupported } = useAudioIO()
   // Re-render when the engine's live block state changes (model/IR loads) -
   // graphStore doesn't track that, see engineVersion.ts.
   const engineVersion = useEngineVersion((s) => s.version)
-  const activeHeavyBlocks = engine.rig?.countActiveHeavyBlocks() ?? 0
   const openMidiManager = useMidiManager((s) => s.openManager)
   const settingsOpen = useSettingsStore((s) => s.open)
   const openSettings = useSettingsStore((s) => s.openSettings)
@@ -133,7 +120,7 @@ function App() {
           <Wordmark version={pkg.version} />
         </div>
 
-        <div className={`${styles.headerGroup} ${styles.status}`}>
+        {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
           <span className={styles.statusText}>
             {STATUS_LABEL[engine.status]}
@@ -154,7 +141,7 @@ function App() {
           {auth.status === 'connected' && (
             <span className={styles.connectionBadge}>TONE3000 ✓</span>
           )}
-        </div>
+        </div> */}
 
         <div className={styles.headerGroup}>
           <HeaderPerfWidget context={engine.context} />
@@ -169,35 +156,36 @@ function App() {
         </div>
 
         <div className={styles.headerGroup}>
-          <IconButton
+          <HardwareButton
             label="Undo"
+            size="small"
             disabled={!canUndo}
             title={undoTitle}
+            icon={<UndoIcon size={12} />}
+            iconOnly
             onClick={() => void undo()}
-          >
-            <UndoIcon size={16} />
-          </IconButton>
+          ></HardwareButton>
           <IconButton
             label="Redo"
             disabled={!canRedo}
             title={redoTitle}
             onClick={() => void redo()}
           >
-            <RedoIcon size={16} />
+            <RedoIcon size={12} />
           </IconButton>
         </div>
 
         <div className={styles.headerGroup}>
           <HardwareButton
             label="Settings"
-            icon={<SettingsIcon size={22} />}
+            icon={<SettingsIcon size={16} />}
             iconOnly
             onClick={openSettings}
             title="Open app settings"
           />
           <HardwareButton
             label="MIDI"
-            icon={<MidiIcon size={20} />}
+            icon={<MidiIcon size={16} />}
             iconOnly
             active={midiConnected}
             onClick={openMidiManager}
@@ -206,7 +194,7 @@ function App() {
           {isReady && (
             <HardwareButton
               label="Power off"
-              icon={<PowerIcon size={22} />}
+              icon={<PowerIcon size={16} />}
               iconOnly
               active
               onClick={() => void engine.powerOff()}

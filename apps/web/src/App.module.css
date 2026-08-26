@@ -9,8 +9,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  padding: var(--sp-2) var(--sp-6);
-  border-bottom: 1px solid var(--seam);
+  padding: var(--sp-3) var(--sp-4);
 }
 
 /*
@@ -67,7 +66,7 @@
   margin: 0 auto;
 }
 
-@media (max-width: 760px) {
+@media (max-width: var(--mw-lg)) {
   .header {
     row-gap: var(--sp-2);
   }

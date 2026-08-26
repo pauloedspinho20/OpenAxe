@@ -1,5 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import styles from './Dialog.module.css'
+
+let dialogLockCount = 0
+let savedBodyOverflow = ''
+let savedHtmlOverflow = ''
+let savedBodyPaddingRight = ''
 
 export interface DialogProps {
   open: boolean
@@ -24,6 +29,33 @@ export function Dialog({
   maxHeight,
   ariaLabel,
 }: DialogProps) {
+  useEffect(() => {
+    if (!open) return
+    if (typeof document === 'undefined') return
+
+    if (dialogLockCount === 0) {
+      savedBodyOverflow = document.body.style.overflow
+      savedHtmlOverflow = document.documentElement.style.overflow
+      savedBodyPaddingRight = document.body.style.paddingRight
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+      document.body.style.overflow = 'hidden'
+      document.documentElement.style.overflow = 'hidden'
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`
+      }
+    }
+    dialogLockCount += 1
+
+    return () => {
+      dialogLockCount = Math.max(0, dialogLockCount - 1)
+      if (dialogLockCount === 0) {
+        document.body.style.overflow = savedBodyOverflow
+        document.documentElement.style.overflow = savedHtmlOverflow
+        document.body.style.paddingRight = savedBodyPaddingRight
+      }
+    }
+  }, [open])
+
   if (!open) return null
 
   const style = {

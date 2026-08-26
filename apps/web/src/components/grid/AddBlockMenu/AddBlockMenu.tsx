@@ -1,6 +1,6 @@
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BLOCK_OPTIONS } from '../blockOptions'
-import { BlockIcon, Dialog } from '@openaxe/ui'
+import { Chip, Dialog } from '@openaxe/ui'
 import { blockColorVar } from '../blockColors'
 import styles from './AddBlockMenu.module.css'
 
@@ -20,24 +20,20 @@ export function AddBlockMenu({ open, onPick, onClose }: AddBlockMenuProps) {
           <span className={`label ${styles.groupLabel}`}>{group}</span>
           <div className={styles.options}>
             {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
-              <button
+              <Chip
                 key={option.kind}
-                type="button"
-                role="menuitem"
-                className={`${styles.option} ${option.disabled ? styles.optionDisabled : ''}`}
                 disabled={option.disabled}
+                kind={option.kind}
                 aria-label={
                   option.disabled
                     ? `${option.label} - not yet available (${option.vendor})`
                     : undefined
                 }
                 title={option.disabled ? option.vendor : undefined}
-                onClick={() => !option.disabled && onPick(option.kind)}
+                label={option.label}
                 style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
-              >
-                <BlockIcon kind={option.kind} size={18} />
-                <span>{option.label}</span>
-              </button>
+                onPick={() => onPick(option.kind)}
+              />
             ))}
           </div>
         </div>

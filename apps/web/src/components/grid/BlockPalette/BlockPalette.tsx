@@ -116,7 +116,7 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
                   onPointerUp={handlePointerUp}
                   style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
                 >
-                  <BlockIcon kind={option.kind} size={20} />
+                  <BlockIcon kind={option.kind} size={18} />
                   <span>{option.label}</span>
                 </div>
               ))}
