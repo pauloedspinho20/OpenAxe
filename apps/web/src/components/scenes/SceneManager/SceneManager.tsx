@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useSceneManager } from '../../../state/sceneManager'
 import { useSceneStore } from '../../../state/sceneStore'
 import { SceneNavigator } from '../../../scenes/sceneNavigator'
+import { SLOTS_PER_SCENE } from '../../../scenes/types'
 import { Dialog } from '@openaxe/ui'
 import styles from './SceneManager.module.css'
 
@@ -46,7 +47,9 @@ export function SceneManager() {
                 value={scene.name}
                 onChange={(e) => renameScene(scene.index, e.target.value)}
               />
-              <span className={styles.rowMeta}>{filled}/8 slots</span>
+              <span className={styles.rowMeta}>
+                {filled}/{SLOTS_PER_SCENE} slots
+              </span>
               <button
                 type="button"
                 className={styles.actionBtn}

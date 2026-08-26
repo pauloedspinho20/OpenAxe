@@ -4,6 +4,7 @@ import { SceneNavigator } from '../../../scenes/sceneNavigator'
 import { SLOTS_PER_SCENE } from '../../../scenes/types'
 import { useGraphStore } from '../../../state/graphStore'
 import { useCurrentPresetStore } from '../../../state/currentPresetStore'
+import { usePresetBankStore } from '../../../state/presetBankStore'
 import { useSceneStore } from '../../../state/sceneStore'
 import { useSceneManager } from '../../../state/sceneManager'
 import { usePresetManager } from '../../../state/presetManager'
@@ -45,6 +46,7 @@ export function SceneBar({ rig }: SceneBarProps) {
   const activeScene = useSceneStore((s) => s.activeScene)
   const activeSlot = useSceneStore((s) => s.activeSlot)
   const switching = useSceneStore((s) => s.switching)
+  const bankSlots = usePresetBankStore((s) => s.slots)
   const openSceneManager = useSceneManager((s) => s.openManager)
   const openPicker = usePresetManager((s) => s.openPicker)
   const openLibrary = usePresetManager((s) => s.openManager)
@@ -111,15 +113,18 @@ export function SceneBar({ rig }: SceneBarProps) {
   }
 
   const startRename = (slot: number) => {
-    const id = scene.slots[slot]
-    if (!id) return
+    const bankSlot = scene.slots[slot]
+    if (bankSlot == null) return
+    const id = bankSlots[bankSlot]
     setRenamingSlot(slot)
-    setRenameValue(names.get(id) ?? '')
+    setRenameValue(id ? (names.get(id) ?? '') : '')
   }
 
   const commitRename = async (slot: number) => {
-    const id = scene.slots[slot]
+    const bankSlot = scene.slots[slot]
     setRenamingSlot(null)
+    if (bankSlot == null) return
+    const id = bankSlots[bankSlot]
     if (!id) return
     const trimmed = renameValue.trim()
     if (!trimmed) return
@@ -178,7 +183,8 @@ export function SceneBar({ rig }: SceneBarProps) {
 
       <div className={styles.slots}>
         {Array.from({ length: SLOTS_PER_SCENE }, (_, i) => {
-          const presetId = scene.slots[i]
+          const bankSlot = scene.slots[i]
+          const presetId = bankSlot != null ? (bankSlots[bankSlot] ?? null) : null
           const name = presetId ? (names.get(presetId) ?? '…') : null
           const isActive = i === activeSlot
           return (

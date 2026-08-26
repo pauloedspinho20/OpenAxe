@@ -47,6 +47,32 @@
   border-radius: var(--r-md);
 }
 
+.slotIndex {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--accent);
+  flex-shrink: 0;
+  width: 26px;
+}
+
+.emptySlot {
+  color: var(--ink-3);
+}
+
+.emptyLabel {
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-size: 10px;
+}
+
+.sectionHeading {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
 .favoriteBtn {
   background: none;
   border: none;
