@@ -46,9 +46,10 @@ function withAlpha(p: p5, colorStr: string, alpha: number) {
 }
 
 /** Paints the "screen" backdrop with a thin translucent layer instead of a hard clear, so motion leaves a brief trail. */
-function paintBackdrop(p: p5, ctx: DrawCtx, trailAlpha: number) {
+function paintBackdrop(p: p5, ctx: DrawCtx) {
   p.noStroke()
-  p.fill(withAlpha(p, ctx.colors.screen, trailAlpha))
+  /*   p.fill(withAlpha(p, ctx.colors.screen, trailAlpha)) */
+  p.fill(ctx.colors.screen)
   p.rect(0, 0, ctx.width, ctx.height)
 }
 
@@ -56,7 +57,7 @@ function paintBackdrop(p: p5, ctx: DrawCtx, trailAlpha: number) {
 function createRingDrawer(): DrawFn {
   let rot = 0
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 50)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, waveform, colors, t } = ctx
     const cx = w / 2
     const cy = h / 2
@@ -104,7 +105,7 @@ function createParticlesDrawer(opts: {
 }): DrawFn {
   let particles: Particle[] | null = null
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 28)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, colors } = ctx
     particles ??= Array.from({ length: opts.count }, () => ({
       x: p.random(w),
@@ -132,7 +133,7 @@ function createParticlesDrawer(opts: {
 /** A rotating sweep of translucent arcs - phaser's swept-notch character. */
 function createSweepDrawer(): DrawFn {
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 45)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, colors, t } = ctx
     const sweep = (Math.sin(t * 0.5) + 1) / 2
     const cx = w / 2
@@ -162,7 +163,7 @@ function createPulseRingsDrawer(opts: { stereo: boolean }): DrawFn {
   let prevLevel = 0
   let toggle = false
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 35)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, colors } = ctx
     const rising = level - prevLevel
     prevLevel = level
@@ -192,7 +193,7 @@ function createOrbDrawer(opts: {
 }): DrawFn {
   let smoothed = 0
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 45)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, colors, t } = ctx
     smoothed = p.lerp(smoothed, level, 0.25)
     const cx = w / 2
@@ -214,7 +215,7 @@ function createOrbDrawer(opts: {
 /** Real frequency-band bars - EQ is the one effect that's literally about these bands. */
 function createBarsDrawer(): DrawFn {
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 60)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, freq, colors } = ctx
     const bars = 24
     const step = Math.max(1, Math.floor(freq.length / bars))
@@ -234,7 +235,7 @@ function createBarsDrawer(): DrawFn {
 function createConeDrawer(): DrawFn {
   let phase = 0
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 45)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, colors } = ctx
     phase += 0.05 + level * 0.1
     const cx = w / 2
@@ -258,7 +259,7 @@ function createConeDrawer(): DrawFn {
 function createFlowLinesDrawer(mode: 'merge' | 'split'): DrawFn {
   let phase = 0
   return (p, ctx) => {
-    paintBackdrop(p, ctx, 40)
+    paintBackdrop(p, ctx)
     const { width: w, height: h, level, colors } = ctx
     phase += 0.02 + level * 0.05
     const lines = 3

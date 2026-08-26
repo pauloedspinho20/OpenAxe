@@ -29,7 +29,6 @@ const GEAR_LABELS: Record<Gear, string> = {
   outboard: 'Outboard Model',
   space: 'Space Model',
   cab: 'Cab IR',
-  experimental: 'Experimental',
 }
 
 /**

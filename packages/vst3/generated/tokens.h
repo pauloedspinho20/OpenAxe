@@ -91,6 +91,7 @@ namespace shared {
   inline constexpr IColor blockUtility = IColor(255, 154, 160, 166);
   inline constexpr IColor blockCore = IColor(255, 255, 138, 61);
   inline constexpr IColor blockEffects = IColor(255, 122, 184, 255);
+  inline constexpr IColor blockNam = IColor(255, 255, 138, 61);
 } // namespace shared
 } // namespace color
 

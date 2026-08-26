@@ -45,7 +45,6 @@ const GEAR_LABELS: Record<Tone['gear'], string> = {
   outboard: 'OUTBOARD MODEL',
   space: 'SPACE MODEL',
   cab: 'CAB IR',
-  experimental: 'EXPERIMENTAL',
 }
 
 function matchesQuery(text: string, query: string): boolean {

@@ -6,7 +6,7 @@ export function MixerIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="none"
-      stroke-width="0"
+      strokeWidth={0}
       viewBox="0 0 15 15"
       height={size}
       width={size}

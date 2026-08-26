@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { PowerGate } from './PowerGate'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useIOStore } from '@/state/ioStore'
@@ -122,17 +122,10 @@ describe('PowerGate', () => {
     expect(screen.getByLabelText('Output device')).toBeInTheDocument()
   })
 
-  it('shows footer links on web and hides on desktop', () => {
+  it('shows the download and source links via the hero wordmark', () => {
     render(<PowerGate {...baseProps} />)
-    expect(screen.getByRole('link', { name: /Download desktop/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Download' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument()
-
-    vi.mocked(getOpenAxe).mockReturnValue({} as never)
-    render(<PowerGate {...baseProps} status="off" />)
-    // second render's footer should be hidden via isNative; query all
-    const links = screen.getAllByRole('link', { name: 'GitHub' })
-    // web instance still has GitHub link; desktop one should not add a second Download link
-    expect(links.length).toBe(1)
   })
 
   it('shows update banner when a newer version exists', () => {
@@ -147,8 +140,9 @@ describe('PowerGate', () => {
       refresh: vi.fn(),
     } as never)
     render(<PowerGate {...baseProps} />)
-    expect(screen.getByText('New version v0.3.0 available')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Download' })).toBeInTheDocument()
+    const banner = screen.getByRole('status')
+    expect(within(banner).getByText('New version v0.3.0 available')).toBeInTheDocument()
+    expect(within(banner).getByRole('link', { name: 'Download' })).toBeInTheDocument()
   })
 
   it('dismisses the update banner', () => {

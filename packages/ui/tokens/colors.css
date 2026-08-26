@@ -114,7 +114,7 @@
   --danger-glow-dim: rgb(255 59 48 / 25%);
 
   /* Blocks — semantic group colors (8 groups covering all 22 BlockKinds) */
-  /*   --block-tone: #ff8a3d;
+  --block-tone: #ff8a3d;
   --block-drive: #e8b84a;
   --block-dynamics: #e8c547;
   --block-filter: #4ec9a6;
@@ -123,5 +123,6 @@
   --block-space: #5fdc7a;
   --block-utility: #9aa0a6;
   --block-core: #ff8a3d;
-  --block-effects: #7ab8ff; */
+  --block-effects: #7ab8ff;
+  --block-nam: #ff8a3d;
 }

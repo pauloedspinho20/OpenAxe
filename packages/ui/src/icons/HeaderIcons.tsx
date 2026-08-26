@@ -6,7 +6,7 @@ export function SettingsIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="currentColor"
-      stroke-width="0"
+      strokeWidth={0}
       viewBox="0 0 512 512"
       height={size}
       width={size}
@@ -23,7 +23,7 @@ export function MidiIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="currentColor"
-      stroke-width="0"
+      strokeWidth={0}
       role="img"
       viewBox="0 0 24 24"
       height={size}
@@ -41,7 +41,7 @@ export function PowerIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="currentColor"
-      stroke-width="0"
+      strokeWidth={0}
       viewBox="0 0 512 512"
       height={size}
       width={size}

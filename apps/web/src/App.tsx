@@ -12,7 +12,6 @@ import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPer
 import {
   HardwareButton,
   IconButton,
-  Led,
   MidiIcon,
   PowerIcon,
   SettingsIcon,
@@ -32,7 +31,7 @@ import { useTheme } from './hooks/useTheme'
 import { RedoIcon, UndoIcon } from './components/grid/blockIcons'
 import { setHistoryTarget, useHistoryStore } from './state/historyStore'
 import { useTone3000Target } from './hooks/useTone3000Target'
-import { useTone3000Auth, handleTone3000CallbackOnLoad } from './tone3000/authStore'
+import { handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
 import { installFactoryScenes } from './scenes/factoryScenes'
@@ -47,29 +46,17 @@ import { useUpdateCheck } from './hooks/useUpdateCheck'
 
 import styles from './App.module.css'
 
-const STATUS_LABEL: Record<string, string> = {
-  off: 'Power off',
-  starting: 'Starting…',
-  ready: 'Running',
-  error: 'Error',
-}
-
-/** Soft advisory only, not an enforced cap - see GraphRig.countActiveHeavyBlocks. */
-const HEAVY_BLOCK_SOFT_THRESHOLD = 6
-
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
   const onboarding = useOnboarding()
   const isReady = engine.status === 'ready'
   const browser = useTone3000Browser()
-  const auth = useTone3000Auth()
   const io = useIOStore()
   const { outputSelectionSupported } = useAudioIO()
   // Re-render when the engine's live block state changes (model/IR loads) -
   // graphStore doesn't track that, see engineVersion.ts.
   const engineVersion = useEngineVersion((s) => s.version)
-  const activeHeavyBlocks = engine.rig?.countActiveHeavyBlocks() ?? 0
   const openMidiManager = useMidiManager((s) => s.openManager)
   const settingsOpen = useSettingsStore((s) => s.open)
   const openSettings = useSettingsStore((s) => s.openSettings)

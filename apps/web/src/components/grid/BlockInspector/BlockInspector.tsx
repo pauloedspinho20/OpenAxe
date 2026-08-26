@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { HardwareButton, IconButton, Knob, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
+import { HardwareButton, Knob, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { useEngineVersion } from '../../../state/engineVersion'
@@ -98,7 +98,7 @@ interface MaybeBypassable {
  * dot, a one-line status); this is where the detail actually lives, so
  * cards stay small and legible at grid scale.
  */
-export function BlockInspector({ rig, context }: BlockInspectorProps) {
+export function BlockInspector({ rig }: BlockInspectorProps) {
   // Re-render once async block creation finishes - see BlockCard for why.
   useEngineVersion((s) => s.version)
   useTone3000Library((s) => s.version)
@@ -164,9 +164,9 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
 
   return (
     <Panel
-      label={panelLabel}
-      labelUrl={panelLabelUrl}
-      url={panelUrl}
+      {...(panelLabel !== undefined && { label: panelLabel })}
+      {...(panelLabelUrl !== undefined && { labelUrl: panelLabelUrl })}
+      {...(panelUrl !== undefined && { url: panelUrl })}
       corner={
         isNamCore && (
           <div className={styles.screenRow}>
