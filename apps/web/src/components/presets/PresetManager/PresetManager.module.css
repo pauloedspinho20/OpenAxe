@@ -39,6 +39,7 @@
 
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
@@ -107,6 +108,7 @@
 
 .rowActions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-1);
   flex-shrink: 0;
 }

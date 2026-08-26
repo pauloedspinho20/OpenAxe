@@ -36,6 +36,10 @@ test.beforeEach(async ({ page }) => {
   // otherwise still be there on the next test's first load.
   await page.evaluate(async () => {
     localStorage.clear()
+    // Treat this as an established session so the first-run factory dialog
+    // never appears: the offline FX starters seed and hydrate (see
+    // src/factory/factorySetup.ts), which is exactly what these flows assume.
+    localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
     const dbs = await indexedDB.databases()
     await Promise.all(
       dbs
@@ -108,7 +112,7 @@ test('saves the current grid as a preset and reloads it', async ({ page }) => {
   const presetDialog = page.getByRole('dialog', { name: 'PRESETS' })
   await expect(presetDialog).toBeVisible()
   await presetDialog.getByPlaceholder('Preset name').fill(presetName)
-  await presetDialog.getByRole('button', { name: 'Save Current' }).click()
+  await presetDialog.getByRole('button', { name: 'Save Current', exact: true }).click()
   await expect(presetDialog.getByText(presetName)).toBeVisible()
   await presetDialog.getByRole('button', { name: 'Close' }).click()
 
