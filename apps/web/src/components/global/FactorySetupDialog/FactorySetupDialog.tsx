@@ -109,9 +109,11 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
             disabled={busy || packEmpty || auth.status !== 'connected'}
           />
           {!packEmpty && auth.status !== 'connected' && (
-            <OutlineButton onClick={() => void auth.connect()} disabled={busy}>
-              Connect Tone3000
-            </OutlineButton>
+            <HardwareButton
+              label="Connect Tone3000"
+              onClick={() => void auth.connect()}
+              disabled={busy}
+            />
           )}
           <input
             ref={fileInputRef}
@@ -125,7 +127,7 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
             }}
           />
           <HardwareButton
-            label="Import session…"
+            label="Import session"
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
           />

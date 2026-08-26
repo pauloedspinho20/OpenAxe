@@ -5,7 +5,7 @@ import { PresetManager } from './components/presets/PresetManager/PresetManager'
 import { SceneBar } from './components/scenes/SceneBar/SceneBar'
 import { SceneManager } from './components/scenes/SceneManager/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser/Tone3000Browser'
-import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal'
+/* import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal' */
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
@@ -295,7 +295,7 @@ function App() {
         outputSelectionSupported={outputSelectionSupported}
         onPowerOn={(opts) => void engine.powerOn(opts)}
       />
-      <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
+      {/*  <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} /> */}
       <FactorySetupDialog open={setupStatus === 'pending' && !onboarding.open && isReady} />
       <Toaster />
     </div>

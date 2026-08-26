@@ -53,9 +53,34 @@ export interface FactoryPack {
 }
 
 export const FACTORY_PACK: FactoryPack = {
-  models: [],
-  presets: [],
-  scene0Slots: [0, 1, 2, 3, 4, 5, 6, 7],
+  models: [
+    { toneId: 65578, slot: 'model', name: 'Marshall JMP-50 Lead 1969 Plexi A2' },
+    { toneId: 84862, slot: 'model', name: '5150 Stealth 100w Preamp - Blue, Red and Green' },
+  ],
+  presets: [
+    {
+      id: 'factory-lead',
+      name: 'Lead',
+      bankSlot: 0, // where it lands in the 512-slot bank
+      blocks: [{ modelRef: 0, kind: 'amp-cab' }], // modelRef 0 = models[0]
+      //  irRef: 2, // optional cab block → models[2]
+    },
+    {
+      id: 'factory-metal',
+      name: 'Metal',
+      bankSlot: 1, // where it lands in the 512-slot bank
+      blocks: [{ modelRef: 1, kind: 'amp-cab' }], // modelRef 0 = models[0]
+      // irRef: 2, // optional cab block → models[2]
+    },
+    /*  {
+      id: 'factory-5150-lead',
+      name: '5150 Lead',
+      bankSlot: 0, // where it lands in the 512-slot bank
+      blocks: [{ modelRef: 0, kind: 'amp-cab' }], // modelRef 0 = models[0]
+      irRef: 2, // optional cab block → models[2]
+    }, */
+  ],
+  scene0Slots: [0, 1],
 }
 
 /** A pack model that resolved to a downloadable/cached library asset. */
