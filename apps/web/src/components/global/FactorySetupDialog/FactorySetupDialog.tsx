@@ -106,7 +106,7 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
               progress ? `Downloading ${progress.done}/${progress.total}…` : 'Download factory pack'
             }
             onClick={() => void handleDownload()}
-            disabled={busy || packEmpty}
+            disabled={busy || packEmpty || auth.status !== 'connected'}
           />
           {!packEmpty && auth.status !== 'connected' && (
             <OutlineButton onClick={() => void auth.connect()} disabled={busy}>

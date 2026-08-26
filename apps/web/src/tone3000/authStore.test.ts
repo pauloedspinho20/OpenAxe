@@ -253,3 +253,120 @@ describe('tone3000 authStore - native hydration', () => {
     expect(secureLoad).not.toHaveBeenCalled()
   })
 })
+
+describe('tone3000 authStore - popup OAuth', () => {
+  const setOpener = (value: unknown) => {
+    Object.defineProperty(window, 'opener', { configurable: true, value })
+  }
+
+  beforeEach(() => {
+    sessionStorage.removeItem(client.POPUP_PENDING_KEY)
+    setOpener(undefined)
+  })
+
+  it('connect opens a popup on the web build and leaves the flow pending for the popup to settle', async () => {
+    vi.spyOn(client, 'startPopupOAuthFlow').mockResolvedValue(true)
+    const startStandard = vi.spyOn(client, 'startStandardFlow').mockResolvedValue(undefined)
+
+    await useTone3000Auth.getState().connect()
+
+    expect(startStandard).not.toHaveBeenCalled()
+    expect(useTone3000Auth.getState().pendingFlow).toBe(true)
+  })
+
+  it('connect falls back to the full-page redirect when the popup cannot open', async () => {
+    vi.spyOn(client, 'startPopupOAuthFlow').mockResolvedValue(false)
+    const startStandard = vi.spyOn(client, 'startStandardFlow').mockResolvedValue(undefined)
+
+    await useTone3000Auth.getState().connect()
+
+    expect(startStandard).toHaveBeenCalled()
+    expect(useTone3000Auth.getState().pendingFlow).toBe(false)
+  })
+
+  it('the popup message listener marks connected and hydrates on a successful result', async () => {
+    const hydrate = vi
+      .spyOn(useTone3000Auth.getState(), 'hydrateFromPersistentStorage')
+      .mockResolvedValue()
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { source: client.POPUP_AUTH_SOURCE, ok: true },
+        origin: window.location.origin,
+      }),
+    )
+
+    expect(useTone3000Auth.getState().status).toBe('connected')
+    expect(useTone3000Auth.getState().pendingFlow).toBe(false)
+    expect(hydrate).toHaveBeenCalled()
+  })
+
+  it('the popup message listener marks anonymous on a canceled result', () => {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { source: client.POPUP_AUTH_SOURCE, ok: false, error: 'canceled' },
+        origin: window.location.origin,
+      }),
+    )
+    expect(useTone3000Auth.getState().status).toBe('anonymous')
+    expect(useTone3000Auth.getState().pendingFlow).toBe(false)
+  })
+
+  it('the popup message listener ignores unrelated window messages', () => {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { source: 'something-else' },
+        origin: window.location.origin,
+      }),
+    )
+    expect(useTone3000Auth.getState().status).toBe('anonymous')
+    expect(useTone3000Auth.getState().pendingFlow).toBe(false)
+  })
+
+  it('handleTone3000CallbackOnLoad relays the result to the opener and closes the popup', async () => {
+    storePkce('verifier-a', 'state-1')
+    sessionStorage.setItem(client.POPUP_PENDING_KEY, '1')
+    const postMessage = vi.fn()
+    setOpener({ postMessage })
+    const close = vi.fn()
+    vi.spyOn(window, 'close').mockImplementation(close)
+    setUrl('/?code=the-code&state=state-1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ access_token: 'access', refresh_token: 'refresh', expires_in: 3600 }),
+      }),
+    )
+
+    await handleTone3000CallbackOnLoad()
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { source: client.POPUP_AUTH_SOURCE, ok: true },
+      window.location.origin,
+    )
+    expect(close).toHaveBeenCalled()
+    expect(useTone3000Auth.getState().status).toBe('connected')
+  })
+
+  it('handleTone3000CallbackOnLoad does not close a normal (non-popup) window', async () => {
+    storePkce('verifier-a', 'state-1')
+    setUrl('/?code=the-code&state=state-1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ access_token: 'access', refresh_token: 'refresh', expires_in: 3600 }),
+      }),
+    )
+    const close = vi.fn()
+    vi.spyOn(window, 'close').mockImplementation(close)
+
+    await handleTone3000CallbackOnLoad()
+
+    expect(useTone3000Auth.getState().status).toBe('connected')
+    expect(close).not.toHaveBeenCalled()
+  })
+})
