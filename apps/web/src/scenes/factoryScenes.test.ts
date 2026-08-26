@@ -41,16 +41,22 @@ describe('installOfflineFactorySetup', () => {
     expect(await loadSceneBank()).toEqual(firstScenes)
   })
 
-  it('never overwrites a scene bank the user has already modified', async () => {
+  it('fills only empty slots, preserving an existing session’s active scene and custom slots', async () => {
     const bank = createEmptyBank()
     bank.activeScene = 12
+    bank.scenes[5]!.slots[2] = 99
     await saveSceneBank(bank)
 
     await installOfflineFactorySetup()
 
     const loaded = await loadSceneBank()
+    // Existing session state is preserved…
     expect(loaded?.activeScene).toBe(12)
-    expect(loaded?.scenes[0]?.slots.every((s) => s === null)).toBe(true)
+    expect(loaded?.scenes[5]?.slots[2]).toBe(99)
+    // …while the untouched scene-0 slots get the starter references (this is
+    // what lets Skip seed a fresh, empty bank that was hydrated moments ago).
+    expect(loaded?.scenes[0]?.slots).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+    expect(loaded?.scenes[0]?.name).toBe(DEFAULT_SCENE_NAME)
   })
 
   it('seeds the preset bank when none exists yet', async () => {

@@ -24,7 +24,6 @@ import pkg from '../package.json'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useMidiEngine } from './hooks/useMidiEngine'
-import { useOnboarding } from './hooks/useOnboarding'
 import { useSceneEngine } from './hooks/useSceneEngine'
 import { useSceneHotkeys } from './hooks/useSceneHotkeys'
 import { useUndoRedoHotkeys } from './hooks/useUndoRedoHotkeys'
@@ -48,7 +47,6 @@ import styles from './App.module.css'
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
-  const onboarding = useOnboarding()
   const isReady = engine.status === 'ready'
   const [setupStatus, setSetupStatus] = useState<'boot' | 'pending' | 'done'>('boot')
   const browser = useTone3000Browser()
@@ -296,7 +294,7 @@ function App() {
         onPowerOn={(opts) => void engine.powerOn(opts)}
       />
       {/*  <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} /> */}
-      <FactorySetupDialog open={setupStatus === 'pending' && !onboarding.open && isReady} />
+      <FactorySetupDialog open={setupStatus === 'pending' && isReady} />
       <Toaster />
     </div>
   )

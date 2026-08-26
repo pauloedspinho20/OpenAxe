@@ -5,6 +5,8 @@ import { downloadFactoryPack } from '../../../factory/factoryDownload'
 import { FACTORY_PACK } from '../../../factory/factoryPack'
 import { installOfflineFactorySetup, setFactorySetupDone } from '../../../factory/factorySetup'
 import { importDataBundle, readDataBundleFromFile } from '../../../settings/dataBundle'
+import { flushPresetBank } from '../../../state/presetBankStore'
+import { flushSceneBank } from '../../../state/sceneStore'
 import styles from './FactorySetupDialog.module.css'
 
 export interface FactorySetupDialogProps {
@@ -14,11 +16,14 @@ export interface FactorySetupDialogProps {
 const NOT_AUTHENTICATED = 'Not authenticated'
 
 /**
- * First-run setup, shown once on a fresh browser after power-on (and after
- * the onboarding walkthrough is dismissed). Three paths:
+ * First-run setup, shown once on a fresh browser after power-on. It's a
+ * purely optional offer - scenes and presets are already hydrated (empty) by
+ * bootstrapFactorySetup, so the app is fully usable offline without logging
+ * in or downloading anything. Paths:
  *  - Download the curated factory pack through the user's Tone3000 account,
  *  - Import a whole-app backup (scenes + presets + assets),
- *  - Skip - seed the offline FX-only starters.
+ *  - Skip - seed the offline FX-only starters,
+ *  - Start empty - keep the fresh, empty banks.
  * Every path writes a flag and reloads so the next boot hydrates normally.
  */
 export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
@@ -91,13 +96,22 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
     }
   }
 
+  /** No Tone3000 needed: keep the freshly-hydrated empty banks and move on. */
+  const handleStartEmpty = () => {
+    // The empty banks were only hydrated in memory - persist them before the
+    // reload so the next boot sees a real (empty) session instead of re-seeding.
+    flushSceneBank()
+    flushPresetBank()
+    finish()
+  }
+
   return (
     <Dialog open title="GET STARTED" onClose={() => {}} width="min(480px, 92vw)" zIndex={120}>
       <div className={styles.body}>
         <p className={styles.copy}>
           {packEmpty
-            ? 'Download the curated factory pack of NAM models, restore a backup of your scenes and presets, or start with the built-in FX-only presets.'
-            : 'Download a curated pack of amp / cab / pedal models through your Tone3000 account, restore a backup of your scenes and presets, or start with the built-in FX-only presets.'}
+            ? 'Download a curated factory pack of NAM models, restore a backup, or just start from scratch - no Tone3000 login required.'
+            : 'Download a curated pack of amp / cab / pedal models through your Tone3000 account, restore a backup, or just start from scratch - no Tone3000 login required.'}
         </p>
 
         <div className={styles.actions}>
@@ -131,6 +145,9 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
           />
+          <OutlineButton onClick={() => void handleStartEmpty()} disabled={busy}>
+            Start empty
+          </OutlineButton>
           <OutlineButton onClick={() => void handleSkip()} disabled={busy}>
             Skip
           </OutlineButton>

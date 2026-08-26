@@ -36,8 +36,9 @@ export async function hasExistingSession(): Promise<boolean> {
  * Seeds the offline FX-only starter pack: the 8 scene-0 starters plus the 2
  * standalone factory presets; the 8 starters are placed into preset-bank
  * slots 0-7 and scene 0 references them (bank slots 0-7). Idempotent - never
- * overwrites a user-customized preset (by id) and never touches banks that
- * already exist.
+ * overwrites a user-customized preset (by id), and only fills bank slots that
+ * are still empty (so it can also seed over the fresh, empty banks that a
+ * brand-new browser hydrates before the first-run dialog is dismissed).
  */
 export async function installOfflineFactorySetup(): Promise<void> {
   for (const preset of [...STARTER_PRESETS, ...FACTORY_PRESETS]) {
@@ -45,26 +46,27 @@ export async function installOfflineFactorySetup(): Promise<void> {
     if (!existing) await savePreset(preset)
   }
 
-  let presetBank = await loadPresetBank()
-  if (!presetBank) {
-    presetBank = createEmptyPresetBank()
-    STARTER_PRESETS.forEach((preset, i) => {
-      presetBank!.slots[i] = preset.id
-    })
-    await savePresetBank(presetBank)
-  }
-
-  let sceneBank = await loadSceneBank()
-  if (!sceneBank) {
-    sceneBank = createEmptyBank()
-    sceneBank.scenes[0] = {
-      index: 0,
-      name: DEFAULT_SCENE_NAME,
-      slots: Array.from({ length: SLOTS_PER_SCENE }, (_, i) => i),
+  const presetBank = (await loadPresetBank()) ?? createEmptyPresetBank()
+  let wrotePresetBank = false
+  STARTER_PRESETS.forEach((preset, i) => {
+    if (presetBank.slots[i] == null) {
+      presetBank.slots[i] = preset.id
+      wrotePresetBank = true
     }
-    sceneBank.activeScene = 0
-    sceneBank.activeSlot = 0
-    sceneBank.updatedAt = 0
+  })
+  if (wrotePresetBank) await savePresetBank(presetBank)
+
+  const sceneBank = (await loadSceneBank()) ?? createEmptyBank()
+  const sceneZero = sceneBank.scenes[0]!
+  let wroteSceneBank = false
+  for (let i = 0; i < SLOTS_PER_SCENE; i++) {
+    if (sceneZero.slots[i] == null) {
+      sceneZero.slots[i] = i
+      wroteSceneBank = true
+    }
+  }
+  if (sceneZero.name === '') sceneZero.name = DEFAULT_SCENE_NAME
+  if (wroteSceneBank || sceneZero.name === DEFAULT_SCENE_NAME) {
     await saveSceneBank(sceneBank)
   }
 }
@@ -73,8 +75,11 @@ export async function installOfflineFactorySetup(): Promise<void> {
  * Boot decision for the scene/preset stores (call once on app boot):
  * - existing session -> hydrate the saved banks;
  * - no session but setup already handled -> seed the offline FX starters, hydrate;
- * - brand-new browser, nothing chosen yet -> leave unhydrated ('pending') so the
- *   first-run factory dialog can present its options.
+ * - brand-new browser, nothing chosen yet -> hydrate EMPTY banks so scenes and
+ *   presets are immediately usable (fully offline - the user can place blocks,
+ *   save presets, import local .nam files) while 'pending' tells the shell to
+ *   offer the first-run dialog on top. No Tone3000 login or pack download is
+ *   ever required.
  */
 export async function bootstrapFactorySetup(): Promise<'pending' | 'done'> {
   if (await hasExistingSession()) {
@@ -90,5 +95,7 @@ export async function bootstrapFactorySetup(): Promise<'pending' | 'done'> {
     await hydrateSceneStore()
     return 'done'
   }
+  await hydratePresetBankStore()
+  await hydrateSceneStore()
   return 'pending'
 }

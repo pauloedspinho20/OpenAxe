@@ -77,7 +77,7 @@ describe('PowerGate', () => {
   it('connects to Tone3000 when not connected', () => {
     const connect = vi.spyOn(useTone3000Auth.getState(), 'connect')
     render(<PowerGate {...baseProps} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Connect Tone3000' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     expect(connect).toHaveBeenCalled()
   })
 
@@ -85,7 +85,7 @@ describe('PowerGate', () => {
     vi.spyOn(useTone3000Auth.getState(), 'disconnect')
     useTone3000Auth.setState({ status: 'connected', user: { username: 'bob' } as never })
     render(<PowerGate {...baseProps} />)
-    expect(screen.getByText('Tone3000: connected as bob')).toBeInTheDocument()
+    expect(screen.getByText('TONE3000 - Connected as bob')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
     expect(useTone3000Auth.getState().disconnect).toHaveBeenCalled()
   })
