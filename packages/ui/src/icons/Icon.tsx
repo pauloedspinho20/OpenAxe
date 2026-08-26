@@ -17,7 +17,7 @@ const STROKE = {
 export function Icon({ size, className, title, children }: IconProps & { children: ReactNode }) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox={`0 0 24 24`}
       width={size ?? 14}
       height={size ?? 14}
       className={className}

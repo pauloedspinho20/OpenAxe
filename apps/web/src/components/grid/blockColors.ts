@@ -6,15 +6,11 @@ import type { BlockKind } from '../../engine/blocks/Block'
  * Keeps the 8 semantic tokens around for future use, but the live mapping
  * is intentionally just two.
  */
-type PaletteGroup = 'Core' | 'Effects'
+type PaletteGroup = 'NAM' | 'Core' | 'Effects'
+
+const NAM_KINDS = new Set<BlockKind>(['amp', 'amp-cab', 'cab', 'pedal', 'outboard', 'space'])
 
 const CORE_KINDS = new Set<BlockKind>([
-  'amp',
-  'amp-cab',
-  'cab',
-  'pedal',
-  'outboard',
-  'space',
   'mixer',
   'splitter',
   'send-1',
@@ -24,10 +20,13 @@ const CORE_KINDS = new Set<BlockKind>([
 ])
 
 function paletteGroupForKind(kind: BlockKind): PaletteGroup {
-  return CORE_KINDS.has(kind) ? 'Core' : 'Effects'
+  if (NAM_KINDS.has(kind)) return 'NAM'
+  if (CORE_KINDS.has(kind)) return 'Core'
+  return 'Effects'
 }
 
 const PALETTE_GROUP_TO_CSS_VAR: Record<PaletteGroup, string> = {
+  NAM: '--block-nam',
   Core: '--block-core',
   Effects: '--block-effects',
 }

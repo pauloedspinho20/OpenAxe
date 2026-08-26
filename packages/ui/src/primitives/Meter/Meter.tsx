@@ -28,6 +28,19 @@ export function MiniMeter({ level, title }: MiniMeterProps) {
   )
 }
 
+/** A single-bar medium meter for tight spaces (e.g. the Block Inspector) - same colour thresholds as Meter. */
+export function MediumMeter({ level, title }: MiniMeterProps) {
+  const clamped = Math.min(1, Math.max(0, level))
+  return (
+    <span className={styles.mediumWrap} title={title}>
+      <span
+        className={`${styles.mediumFill} ${styles[levelColor(clamped)]}`}
+        style={{ width: `${clamped * 100}%` }}
+      />
+    </span>
+  )
+}
+
 export interface MeterProps {
   label?: string
   /** Signal level in [0, 1], 1 = clipping. */

@@ -66,7 +66,7 @@ describe('AssetScreenButton', () => {
       )
       const input = document.querySelector('input[type="file"]') as HTMLInputElement
       vi.spyOn(input, 'click').mockImplementation(click)
-      fireEvent.click(screen.getByRole('button', { name: 'Upload .nam' }))
+      fireEvent.click(screen.getByRole('button', { name: 'UPLOAD NAM' }))
       expect(click).toHaveBeenCalled()
     })
 

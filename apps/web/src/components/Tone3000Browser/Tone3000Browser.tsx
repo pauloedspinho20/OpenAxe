@@ -14,7 +14,7 @@ import {
 import { importTone3000Asset } from '../../tone3000/importService'
 import type { BlockLoadTarget } from '../../tone3000/importService'
 import type { Tone, Tone3000Model } from '../../tone3000/types'
-import { Dialog, HardwareButton, OutlineButton } from '@openaxe/ui'
+import { Dialog, HardwareButton, OutlineButton, Select } from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
 
 /** Max results /tones/search and /tones/favorited return per page (per API docs). */
@@ -45,7 +45,6 @@ const GEAR_LABELS: Record<Tone['gear'], string> = {
   outboard: 'OUTBOARD MODEL',
   space: 'SPACE MODEL',
   cab: 'CAB IR',
-  experimental: 'EXPERIMENTAL',
 }
 
 function matchesQuery(text: string, query: string): boolean {
@@ -399,24 +398,22 @@ export function Tone3000Browser({ target, context }: Props) {
             />
             {scope === 'browse' && (
               <div className={styles.filterRow}>
-                <select
+                <Select
                   value={search.format}
                   onChange={(e) =>
                     setSearch((s) => ({ ...s, format: e.target.value as Tone['format'] }))
                   }
-                  className={styles.input}
                   aria-label="Format"
                 >
                   <option value="">All formats</option>
                   <option value="nam">NAM</option>
                   <option value="ir">IR</option>
-                </select>
-                <select
+                </Select>
+                <Select
                   value={search.sort}
                   onChange={(e) =>
                     setSearch((s) => ({ ...s, sort: e.target.value as SearchState['sort'] }))
                   }
-                  className={styles.input}
                   aria-label="Sort"
                 >
                   <option value="trending">Trending</option>
@@ -424,7 +421,7 @@ export function Tone3000Browser({ target, context }: Props) {
                   <option value="oldest">Oldest</option>
                   <option value="downloads-all-time">Most downloaded</option>
                   <option value="best-match">Best match</option>
-                </select>
+                </Select>
               </div>
             )}
 

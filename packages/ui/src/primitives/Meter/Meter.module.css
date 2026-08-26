@@ -36,21 +36,32 @@
   box-shadow: 0 0 4px var(--meter-glow-red);
 }
 
-.miniWrap {
+.miniWrap,
+.mediumWrap {
   display: inline-block;
-  width: 20px;
-  height: 4px;
-  border-radius: 2px;
   background: var(--panel-recessed);
   box-shadow: var(--shadow-recessed);
   overflow: hidden;
   flex-shrink: 0;
 }
 
-.miniFill {
+.miniFill,
+.mediumFill {
   display: block;
   height: 100%;
   transition: width 0.05s linear;
+}
+
+.miniWrap {
+  width: 25px;
+  height: 5px;
+  border-radius: 2px;
+}
+
+.mediumWrap {
+  height: 70px;
+  width: 10px;
+  border-radius: 2px;
 }
 
 .miniFill.statusGreen {

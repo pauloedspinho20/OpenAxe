@@ -10,6 +10,7 @@ export interface HardwareButtonProps {
   title?: string
   fullWidth?: boolean
   icon?: ReactNode
+  size?: 'small' | 'medium' | 'large'
   iconOnly?: boolean
 }
 
@@ -23,13 +24,14 @@ export function HardwareButton({
   title,
   fullWidth = false,
   icon,
+  size = 'medium',
   iconOnly = false,
 }: HardwareButtonProps) {
   const accessibleLabel = iconOnly ? label : undefined
   return (
     <button
       type="button"
-      className={`${styles.button} ${active ? styles.active : ''} ${styles[variant]} ${fullWidth ? styles.fullWidth : ''} ${icon ? styles.withIcon : ''} ${iconOnly ? styles.iconOnly : ''}`}
+      className={`${styles.button} ${active ? styles.active : ''} ${styles[variant]} ${fullWidth ? styles.fullWidth : ''} ${icon ? styles.withIcon : ''} ${styles[size]} ${iconOnly ? styles.iconOnly : ''}`}
       onClick={onClick}
       disabled={disabled}
       aria-pressed={active}

@@ -1,14 +1,28 @@
 import styles from './Wordmark.module.css'
-import markUrl from './assets/openaxe-256.png'
+import mainLogoUrl from './assets/icon-512-maskable.png'
+import appLogoUrl from './assets/openaxe-256.png'
 import pkg from '../../../package.json'
 import type { CSSProperties } from 'react'
 
 // PNG mark so the Wordmark needs no runtime SVG fetch (works in Storybook,
 // the web app and the desktop bundle alike). Uses the final 256 png.
-function AxeMark({ size = 24 }: { size?: number }) {
+function MainLogo({ size = 24 }: { size?: number }) {
   return (
     <img
-      src={markUrl}
+      src={mainLogoUrl}
+      alt=""
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{ display: 'block', objectFit: 'contain', borderRadius: 'var(--r-lg)' }}
+    />
+  )
+}
+
+function AppLogo({ size = 24 }: { size?: number }) {
+  return (
+    <img
+      src={appLogoUrl}
       alt=""
       width={size}
       height={size}
@@ -67,7 +81,7 @@ export function Wordmark({
   if (variant === 'hero') {
     return (
       <div className={styles.hero} style={style}>
-        <AxeMark size={200} />
+        <AppLogo size={200} />
         <p>
           OPEN<span>AXE</span>
         </p>
@@ -89,13 +103,28 @@ export function Wordmark({
             )}
           </div>
         )}
+
+        <nav className={styles.links} aria-label="Downloads and source">
+          <a
+            href="https://pauloedspinho20.github.io/OpenAxe/#download"
+            target="_blank"
+            rel="noopener"
+          >
+            Download
+          </a>
+
+          <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener">
+            GitHub
+          </a>
+        </nav>
       </div>
     )
   }
 
   return (
     <div className={styles.inline} style={style}>
-      <AxeMark size={40} />
+      <MainLogo size={40} />
+
       <p>
         OPEN<span>AXE</span>
       </p>

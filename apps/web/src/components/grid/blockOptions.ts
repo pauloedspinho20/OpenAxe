@@ -37,6 +37,13 @@ export interface BlockOption {
  */
 export const BLOCK_OPTIONS: BlockOption[] = [
   {
+    kind: 'pedal',
+    label: 'Pedal',
+    group: 'Neural Amp Modeler',
+    vendor: 'Neural Amp Modeler',
+    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
+  },
+  {
     kind: 'amp',
     label: 'Amp',
     group: 'Neural Amp Modeler',
@@ -45,7 +52,7 @@ export const BLOCK_OPTIONS: BlockOption[] = [
   },
   {
     kind: 'amp-cab',
-    label: 'Amp+Cab',
+    label: 'Amp/Cab',
     group: 'Neural Amp Modeler',
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
@@ -57,28 +64,21 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Web Audio ConvolverNode (native)',
   },
   {
-    kind: 'pedal',
-    label: 'Pedal',
-    group: 'Neural Amp Modeler',
-    vendor: 'Neural Amp Modeler',
-    vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
-  },
-  {
     kind: 'space',
     label: 'Space',
     group: 'Neural Amp Modeler',
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
-  {
+  /*  {
     kind: 'outboard',
     label: 'Outboard',
     group: 'Neural Amp Modeler',
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
-  },
+  }, */
   { kind: 'mixer', label: 'Mixer', group: 'Core', vendor: 'Native routing (no DSP)' },
-  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' },
+  /*  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' }, */
   {
     kind: 'send-1',
     label: 'Send 1',
@@ -105,7 +105,7 @@ export const BLOCK_OPTIONS: BlockOption[] = [
   },
   {
     kind: 'noise-gate',
-    label: 'Noise Gate',
+    label: 'Gate',
     group: 'Effects',
     vendor: 'DSPark',
     vendorUrl: 'https://github.com/CristianMoresi/DSPark',
@@ -159,13 +159,13 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  {
+  /*   {
     kind: 'ping-pong-delay',
     label: 'Ping-Pong Delay',
     group: 'Effects',
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
+  }, */
   {
     kind: 'reverb',
     label: 'Reverb',
@@ -173,13 +173,13 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Dragonfly Reverb',
     vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
   },
-  {
+  /*   {
     kind: 'ring-mod',
     label: 'Ring Mod',
     group: 'Effects',
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
+  }, */
   {
     kind: 'filter',
     label: 'Filter',
@@ -189,18 +189,18 @@ export const BLOCK_OPTIONS: BlockOption[] = [
   },
   {
     kind: 'pitch-shifter',
-    label: 'Pitch Shifter',
+    label: 'Pitch',
     group: 'Effects',
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  {
+  /*   {
     kind: 'granular-delay',
     label: 'Granular Delay',
     group: 'Effects',
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
+  }, */
   {
     kind: 'rotary',
     label: 'Rotary',

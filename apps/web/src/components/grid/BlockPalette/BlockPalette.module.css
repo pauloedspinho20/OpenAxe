@@ -5,20 +5,19 @@
 }
 
 .shelf {
+  height: 100%;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--panel);
+  padding: var(--sp-3);
   border-radius: var(--r-lg);
-  border: 1px solid var(--seam);
-  min-width: 0;
-  box-shadow: var(--shadow-panel);
-  height: 100%;
+  background: var(--panel-recessed);
+  box-shadow: var(--shadow-recessed);
 }
 
-@media (max-width: 680px) {
+@media (max-width: var(--mw-md)) {
   .paletteRow {
     flex-direction: column;
     align-items: stretch;
@@ -34,7 +33,7 @@
 }
 
 .groupLabel {
-  color: var(--ink-3);
+  color: var(--ink-2);
   flex-shrink: 0;
 }
 
@@ -46,15 +45,15 @@
 
 .chip {
   font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: bold;
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--block-color, var(--ink-1)) 72%, var(--ink-1));
-  background: color-mix(in srgb, var(--block-color, var(--panel-raised)) 8%, var(--panel-raised));
-  border: 1px solid
-    color-mix(in srgb, var(--block-color, var(--seam-strong)) 32%, var(--seam-strong));
-  border-radius: var(--r-lg);
-  padding: var(--sp-2) var(--sp-3);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam);
+  box-shadow: var(--shadow-control);
+  border-radius: var(--r-md);
+  padding: var(--sp-1) var(--sp-2);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -63,25 +62,22 @@
   align-items: center;
   justify-content: center;
   gap: var(--sp-1);
-  min-width: 64px;
   text-align: center;
-  transition:
-    border-radius 0.45s ease,
-    border-color 0.45s ease,
-    background-color 0.45s ease,
-    color 0.45s ease,
-    transform 0.45s ease;
 }
 
 .shelf .chip > svg {
-  color: var(--block-color, var(--ink-3));
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 
+.shelf .chip:hover > svg {
+  color: var(--ink-1);
+}
+
 .chip:hover {
-  color: var(--block-color, var(--ink-1));
-  background: color-mix(in srgb, var(--block-color) 14%, var(--panel-raised));
-  border-color: var(--block-color, var(--seam-strong));
+  color: var(--ink-1);
+  background: var(--panel-raised);
+  border-color: var(--seam-strong);
 }
 
 .chip:focus-visible {
