@@ -243,10 +243,15 @@ if (typeof window !== 'undefined') {
 let popupResultPosted = false
 export async function handleTone3000CallbackOnLoad(): Promise<void> {
   // The popup relays the raw callback params (read before handleCallback
-  // consumes/strips them) and closes - the exchange runs in the opener.
-  if (isAuthPopup() && window.name === POPUP_WINDOW_NAME && !popupResultPosted) {
-    popupResultPosted = true
-    notifyPopupResult(readOAuthCallbackParams())
+  // consumes/strips them) and closes. It must NEVER run handleCallback
+  // itself: that would redeem the single-use code, and the opener's exchange
+  // would then fail with 400. This branch always returns for the popup - even
+  // on React StrictMode's second effect invocation.
+  if (isAuthPopup() && window.name === POPUP_WINDOW_NAME) {
+    if (!popupResultPosted) {
+      popupResultPosted = true
+      notifyPopupResult(readOAuthCallbackParams())
+    }
     return
   }
   const handledCallback = await useTone3000Auth.getState().handleCallback()

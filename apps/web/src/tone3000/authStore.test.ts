@@ -346,21 +346,28 @@ describe('tone3000 authStore - popup OAuth', () => {
     expect(useTone3000Auth.getState().pendingFlow).toBe(false)
   })
 
-  it('handleTone3000CallbackOnLoad relays the raw callback params to the opener and closes', async () => {
+  it('handleTone3000CallbackOnLoad relays once, never exchanges, and closes the popup', async () => {
     const postMessage = vi.fn()
     setOpener({ postMessage })
     const close = vi.fn()
     vi.spyOn(window, 'close').mockImplementation(close)
     window.name = client.POPUP_WINDOW_NAME
     setUrl('/?code=the-code&state=state-1')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
 
     await handleTone3000CallbackOnLoad()
+    // StrictMode double-invocation: the second call must not re-post or,
+    // crucially, redeem the single-use code (the opener does that).
+    await handleTone3000CallbackOnLoad()
 
+    expect(postMessage).toHaveBeenCalledTimes(1)
     expect(postMessage).toHaveBeenCalledWith(
       { source: client.POPUP_AUTH_SOURCE, code: 'the-code', state: 'state-1', error: null },
       window.location.origin,
     )
-    expect(close).toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('handleTone3000CallbackOnLoad does not close a normal (non-popup) window', async () => {
