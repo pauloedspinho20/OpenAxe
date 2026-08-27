@@ -178,6 +178,8 @@ jobs:
         # generators: productbuild (macOS .pkg → /Library/Audio/Plug-Ins/*),
         # WIX (Windows .msi → Program Files\Common Files\VST3), DEB+TGZ (Linux)
         # Fail loudly — bundle completeness is required for a shippable Release (#292).
+        # NOTE: cpack config is packages/vst3/build/CPackConfig.cmake from repo root;
+        # do NOT use working-directory with a full path (see #292 fix — double-prefix broke CI).
         run: |
           set -e
           if [ "${{ matrix.cpack_generator }}" = "productbuild" ]; then
@@ -195,7 +197,6 @@ jobs:
             cpack --config packages/vst3/build/CPackConfig.cmake -G "${{ matrix.cpack_generator }};TGZ"
           fi
           ls -lh packages/vst3/build/*.pkg packages/vst3/build/*.msi packages/vst3/build/*.deb packages/vst3/build/*.zip packages/vst3/build/*.tar.gz 2>/dev/null || true
-        working-directory: packages/vst3/build
 
       - name: Create fallback artifacts (debug build-tree + bundles zip)
         if: always()
