@@ -62,7 +62,32 @@ if(POLICY CMP0169)
 endif()
 set(IPLUG2_AVAILABLE OFF)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/core/third_party/nam-core/NAM/dsp.cpp")
-  FetchContent_GetProperties(iplug2)
+  # ── Editor availability (decided early: it gates iPlug2's own cmake includes) ──
+# The webview editor is an IGraphics control (IWebViewControl), so it can only be
+# built where iPlug2's IGraphics has a backend. In the pinned iPlug2 revision that
+# means macOS/iOS, Windows and WEB only: IGraphicsPrivate.h defines
+# FONT_DESCRIPTOR_TYPE for OS_MAC/OS_IOS/OS_WIN/OS_WEB and leaves the #else branch
+# commented "NO_IGRAPHICS". Compiling any IGraphics translation unit elsewhere
+# fails outright.
+#
+# That includes iPlug2's own IGraphics object libraries (IGraphicsFlexBox,
+# NanoVG, ...) which Scripts/cmake/IGraphics.cmake defines. They are part of the
+# default `all` target, so the include itself has to be skipped — gating only our
+# sources still leaves `cmake --build` compiling them.
+#
+# Where the editor is off the plugin builds headless: DSP, host parameters, state
+# chunks, presets and MIDI all work and the host draws its own generic parameter
+# UI. Overridable so the headless path can be built and tested anywhere:
+#   cmake -S packages/vst3 -B build -DOPENAXE_VST3_EDITOR=OFF
+set(_openaxe_igraphics_default OFF)
+if(APPLE OR WIN32)
+  set(_openaxe_igraphics_default ON)
+endif()
+option(OPENAXE_VST3_EDITOR "Build the plugin's webview editor (needs iPlug2 IGraphics)"
+       ${_openaxe_igraphics_default})
+set(OPENAXE_HAS_IGRAPHICS ${OPENAXE_VST3_EDITOR})
+
+FetchContent_GetProperties(iplug2)
   if(NOT iplug2_POPULATED)
     FetchContent_Populate(iplug2)
   endif()
@@ -77,7 +102,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/core/third_party/nam-core/
   if(EXISTS "${iplug2_SOURCE_DIR}/IPlug/IPlug.cmake")
     include(${iplug2_SOURCE_DIR}/IPlug/IPlug.cmake)
   endif()
-  if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake")
+  if(OPENAXE_HAS_IGRAPHICS AND EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake")
     include(${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake)
   endif()
   # Fallback defines for standalone plugin CMake (not using IPlugPlugin.cmake's PROJECT_DIR)
@@ -137,29 +162,6 @@ FetchContent_GetProperties(webview)
 if(NOT webview_POPULATED)
   FetchContent_Populate(webview)
 endif()
-# ── Editor availability ────────────────────────────────────────────────────
-# The webview editor is an IGraphics control (IWebViewControl), so it can only
-# be built where iPlug2's IGraphics has a backend. In the pinned iPlug2 revision
-# that means macOS/iOS, Windows and WEB only: IGraphicsPrivate.h defines
-# FONT_DESCRIPTOR_TYPE for OS_MAC/OS_IOS/OS_WIN/OS_WEB and leaves the #else
-# branch commented "NO_IGRAPHICS". Compiling any IGraphics header on Linux
-# therefore fails outright ('FONT_DESCRIPTOR_TYPE' does not name a type).
-#
-# So on Linux the plugin builds headless: DSP, host parameters, state chunks,
-# presets and MIDI all work, and the host shows its generic parameter UI. That
-# is what this target did before the webview editor existed, and it keeps the
-# Linux CI job meaningful rather than skipped. Bringing the editor up there
-# needs WebKitGTK wiring in iPlug2's IGraphics first.
-set(_openaxe_igraphics_default OFF)
-if(APPLE OR WIN32)
-  set(_openaxe_igraphics_default ON)
-endif()
-# Overridable so the headless configuration can be built and tested on any
-# platform: -DOPENAXE_VST3_EDITOR=OFF
-option(OPENAXE_VST3_EDITOR "Build the plugin's webview editor (needs iPlug2 IGraphics)"
-       ${_openaxe_igraphics_default})
-set(OPENAXE_HAS_IGRAPHICS ${OPENAXE_VST3_EDITOR})
-
 set(OPENAXE_WEBVIEW_SOURCES OFF)
 if(EXISTS "${webview_SOURCE_DIR}/webview.h" OR EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
   set(OPENAXE_WEBVIEW_SOURCES ON)
