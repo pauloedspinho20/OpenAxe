@@ -1,3 +1,9 @@
+.panel {
+  background-image: url('../../../../public/textures/rough-cloth.png');
+  background-repeat: repeat;
+  background-size: auto;
+}
+
 .content {
   display: flex;
   flex-direction: column;
@@ -6,10 +12,10 @@
   padding: var(--sp-3);
   justify-content: flex-end;
   z-index: 1;
-  background-color: var(--panel);
+  background-color: var(--panel-raised);
   border-radius: var(--r-md);
+  border: 1px solid var(--panel-recessed);
   box-shadow: var(--shadow-recessed);
-  border: none;
 }
 
 .inspectorLayout {

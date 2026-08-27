@@ -161,6 +161,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
 
   return (
     <Panel
+      className={styles.panel}
       {...(panelLabel !== undefined && { label: panelLabel })}
       {...(panelLabelUrl !== undefined && { labelUrl: panelLabelUrl })}
       {...(panelUrl !== undefined && { url: panelUrl })}
