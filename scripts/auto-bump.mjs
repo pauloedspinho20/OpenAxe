@@ -181,7 +181,7 @@ console.log('Updated CHANGELOG.md')
 
 if (DO_TAG) {
   sh(
-    `git add VERSION CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json packages/ui/package.json`,
+    `git add VERSION CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json apps/landing/package.json packages/ui/package.json`,
   )
   sh(`git commit -m "chore(release): ${next}"`)
   sh(`git tag -a v${next} -m "v${next}"`)
