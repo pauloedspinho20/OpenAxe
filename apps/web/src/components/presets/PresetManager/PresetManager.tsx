@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePresetManager } from '../../../state/presetManager'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSceneStore } from '../../../state/sceneStore'
+import { useCurrentPresetStore } from '../../../state/currentPresetStore'
 import { usePresetBankStore } from '../../../state/presetBankStore'
 import { capturePreset } from '../../../presets/capture'
 import { applyPreset } from '../../../presets/apply'
@@ -197,6 +198,26 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
             result.missingAssets.map((a) => a.name).join(', '),
         )
       }
+      // Make the loaded preset part of the current scene slot: point the
+      // active scene slot at this preset's bank slot (placing it into the
+      // first free slot if it wasn't placed yet), and set it as the baseline
+      // the SceneBar's Save button diffs against.
+      const bankSlot = bankSlots.indexOf(preset.id)
+      const { activeScene, activeSlot } = useSceneStore.getState()
+      if (bankSlot >= 0) {
+        useSceneStore.getState().assignSlot(activeScene, activeSlot, bankSlot)
+      } else {
+        const firstEmpty = bankSlots.findIndex((s) => s == null)
+        if (firstEmpty >= 0) {
+          setBankSlot(firstEmpty, preset.id)
+          useSceneStore.getState().assignSlot(activeScene, activeSlot, firstEmpty)
+        } else {
+          toast.warning(
+            `Loaded "${preset.name}", but every preset slot is full - not added to the scene`,
+          )
+        }
+      }
+      useCurrentPresetStore.getState().setSaved(preset)
       closeManager()
       toast.success(`Loaded "${preset.name}"`)
     } catch (err) {
