@@ -12,7 +12,8 @@ import {
   apiSearchTones,
 } from '../../tone3000/client'
 import type { BlockLoadTarget } from '../../tone3000/importService'
-import type { Make, Tag, Tone } from '../../tone3000/types'
+import type { Tone } from '../../tone3000/types'
+import type { Tone3000ToneSnapshot } from '../../tone3000/library'
 import { bulkDownloadToneModels } from '../../tone3000/bulkDownload'
 import {
   importAccountTones,
@@ -77,7 +78,7 @@ export function Tone3000Browser({ target, context }: Props) {
   const [tags, setTags] = useState<string[]>([])
   const [makesValue, setMakesValue] = useState('')
   const [tagsValue, setTagsValue] = useState('')
-  const [detailTone, setDetailTone] = useState<Tone | null>(null)
+  const [detailTone, setDetailTone] = useState<Tone | Tone3000ToneSnapshot | null>(null)
   const [quickDownloadingToneId, setQuickDownloadingToneId] = useState<number | null>(null)
   const [accountScope, setAccountScope] = useState<AccountImportScope>('all')
   const [accountBusy, setAccountBusy] = useState(false)
@@ -571,6 +572,7 @@ export function Tone3000Browser({ target, context }: Props) {
                     )
                   })}
               </ul>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
           )}
         </div>
@@ -632,8 +634,11 @@ export function Tone3000Browser({ target, context }: Props) {
                 <button
                   type="button"
                   className={styles.cardHeader}
-                  onClick={() => setDetailTone(entry.tone)}
-                  aria-label={`View details for ${entry.tone.title}`}
+                  onClick={() => {
+                    if (entry.tone) setDetailTone(entry.tone)
+                  }}
+                  disabled={!entry.tone}
+                  aria-label={`View details for ${entry.tone?.title ?? entry.name}`}
                 >
                   {entry.imageUrl && (
                     <div className={styles.cardImageContainer}>
@@ -663,8 +668,11 @@ export function Tone3000Browser({ target, context }: Props) {
                 <div className={styles.cardActions}>
                   <OutlineButton
                     title="Model Details"
-                    onClick={() => setDetailTone(entry.tone)}
-                    aria-label={`View details for ${entry.tone.title}`}
+                    disabled={!entry.tone}
+                    onClick={() => {
+                      if (entry.tone) setDetailTone(entry.tone)
+                    }}
+                    aria-label={`View details for ${entry.tone?.title ?? entry.name}`}
                   >
                     <MixerIcon size={16} />
                   </OutlineButton>
@@ -740,17 +748,28 @@ export function Tone3000Browser({ target, context }: Props) {
                 license: detailTone.license,
                 images: detailTone.images ?? null,
                 sizes: detailTone.sizes ?? [],
-                makes: (detailTone.makes ?? []).map((m) => m.name) as unknown as Make[],
-                tags: (detailTone.tags ?? []).map((t) => t.name) as unknown as Tag[],
+                makes:
+                  Array.isArray(detailTone.makes) &&
+                  detailTone.makes.length > 0 &&
+                  typeof (detailTone.makes[0] as unknown) === 'string'
+                    ? (detailTone.makes as unknown as string[])
+                    : (((detailTone.makes as unknown as { name: string }[] | undefined) ?? []).map(
+                        (m) => m.name,
+                      ) as string[]),
+                tags:
+                  Array.isArray(detailTone.tags) &&
+                  detailTone.tags.length > 0 &&
+                  typeof (detailTone.tags[0] as unknown) === 'string'
+                    ? (detailTone.tags as unknown as string[])
+                    : (((detailTone.tags as unknown as { name: string }[] | undefined) ?? []).map(
+                        (t) => t.name,
+                      ) as string[]),
                 downloads_count: detailTone.downloads_count,
                 favorites_count: detailTone.favorites_count,
                 models_count: detailTone.models_count,
                 user: detailTone.user,
                 created_at: detailTone.created_at ?? null,
                 url: detailTone.url,
-                user_id: detailTone.user_id,
-                is_public: detailTone.is_public,
-                links: detailTone.links,
               },
               model: null,
             } as Tone3000LibraryEntry
