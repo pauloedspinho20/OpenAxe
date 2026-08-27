@@ -40,7 +40,7 @@ void Fft(std::vector<Complex>& data, bool inverse) {
     if (i < j) std::swap(data[i], data[j]);
   }
   for (int len = 2; len <= n; len <<= 1) {
-    double ang = 2 * M_PI / len * (inverse ? -1 : 1);
+    double ang = kTwoPi / len * (inverse ? -1 : 1);
     Complex wlen(std::cos(ang), std::sin(ang));
     for (int i = 0; i < n; i += len) {
       Complex w(1, 0);
