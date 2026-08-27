@@ -1,3 +1,10 @@
+.panel {
+  background-image: url('../../../../public/textures/grilled-noise.png');
+  background-repeat: repeat;
+  background-blend-mode: hard-light;
+  background-size: 20%;
+}
+
 .content {
   display: flex;
   flex-direction: column;
@@ -6,10 +13,10 @@
   padding: var(--sp-3);
   justify-content: flex-end;
   z-index: 1;
-  background-color: var(--panel);
+  background-color: var(--panel-raised);
   border-radius: var(--r-md);
+  border: 1px solid var(--panel-recessed);
   box-shadow: var(--shadow-recessed);
-  border: none;
 }
 
 .inspectorLayout {
@@ -20,13 +27,6 @@
   height: 100%;
   width: 100%;
   justify-content: center;
-}
-
-.background {
-  position: absolute;
-  inset: var(--sp-4);
-  border-radius: var(--r-md);
-  overflow: hidden;
 }
 
 .squareColumn {

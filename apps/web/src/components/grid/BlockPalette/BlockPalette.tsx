@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { BlockIcon, toast } from '@openaxe/ui'
+import { BlockIcon, Panel, toast } from '@openaxe/ui'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { useGraphStore } from '../../../state/graphStore'
 import { BLOCK_OPTIONS, BLOCK_KIND_LABELS } from '../blockOptions'
@@ -90,62 +90,56 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
   const groups = Array.from(new Set(BLOCK_OPTIONS.map((o) => o.group)))
 
   return (
-    <div className={styles.paletteRow}>
-      <div className={styles.shelf}>
-        {groups.map((group) => (
-          <div key={group} className={styles.group}>
-            <span className={`label ${styles.groupLabel}`}>{group}</span>
-            <div className={styles.chips}>
-              {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
-                <div
-                  key={option.kind}
-                  className={`${styles.chip} ${option.disabled ? styles.chipDisabled : ''}`}
-                  role="button"
-                  tabIndex={option.disabled ? -1 : 0}
-                  aria-disabled={option.disabled}
-                  aria-label={
-                    option.disabled
-                      ? `${option.label} - not yet available (${option.vendor})`
-                      : `Drag ${option.label} onto the grid`
-                  }
-                  title={option.disabled ? option.vendor : undefined}
-                  onPointerDown={(e) =>
-                    handlePointerDown(e, option.kind, option.label, option.disabled)
-                  }
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
-                >
-                  <BlockIcon kind={option.kind} size={18} />
-                  <span>{option.label}</span>
-                </div>
-              ))}
-            </div>
+    <Panel className={styles.panel}>
+      {groups.map((group) => (
+        <div key={group} className={styles.group}>
+          <span className={`label ${styles.groupLabel}`}>{group}</span>
+          <div className={styles.chips}>
+            {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
+              <div
+                key={option.kind}
+                className={`${styles.chip} ${option.disabled ? styles.chipDisabled : ''}`}
+                role="button"
+                tabIndex={option.disabled ? -1 : 0}
+                aria-disabled={option.disabled}
+                aria-label={
+                  option.disabled
+                    ? `${option.label} - not yet available (${option.vendor})`
+                    : `Drag ${option.label} onto the grid`
+                }
+                title={option.disabled ? option.vendor : undefined}
+                onPointerDown={(e) =>
+                  handlePointerDown(e, option.kind, option.label, option.disabled)
+                }
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
+              >
+                <BlockIcon kind={option.kind} size={18} />
+                <span>{option.label}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+      ))}
 
-        {drag && (
-          <div
-            className={`${styles.ghost} ${drag.overGrid ? styles.ghostOverGrid : ''}`}
-            style={
-              {
-                left: drag.x,
-                top: drag.y,
-                '--block-color': blockColorVar(drag.kind),
-              } as React.CSSProperties
-            }
-          >
-            <BlockIcon kind={drag.kind} size={12} />
-            <span>{drag.label}</span>
-          </div>
-        )}
+      {drag && (
+        <div
+          className={`${styles.ghost} ${drag.overGrid ? styles.ghostOverGrid : ''}`}
+          style={
+            {
+              left: drag.x,
+              top: drag.y,
+              '--block-color': blockColorVar(drag.kind),
+            } as React.CSSProperties
+          }
+        >
+          <BlockIcon kind={drag.kind} size={12} />
+          <span>{drag.label}</span>
+        </div>
+      )}
 
-        <TunerDialog
-          open={tunerOpen}
-          onClose={() => setTunerOpen(false)}
-          analyser={tunerAnalyser}
-        />
-      </div>
-    </div>
+      <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />
+    </Panel>
   )
 }

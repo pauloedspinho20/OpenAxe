@@ -8,8 +8,9 @@
   gap: var(--sp-3);
   padding: var(--sp-3);
   border-radius: var(--r-lg);
-  background: var(--panel-recessed);
-  box-shadow: var(--shadow-recessed);
+  border: 1px solid var(--seam);
+  background-color: var(--chassis);
+  box-shadow: var(--shadow-panel);
 }
 
 .header {

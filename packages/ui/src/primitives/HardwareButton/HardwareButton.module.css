@@ -3,8 +3,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   color: var(--ink-2);
-  background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
+
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-control);
   cursor: pointer;
@@ -18,9 +17,19 @@
     box-shadow 0.1s ease;
 }
 
+.default {
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+}
+
+.danger {
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
+}
+
 .button.small {
   min-width: 28px;
-  min-height: 28px;
+  height: 28px;
   font-size: 8px;
   padding: var(--sp-1);
 }
@@ -28,7 +37,7 @@
 .button.medium {
   font-size: 10px;
   min-width: 34px;
-  min-height: 34px;
+  height: 34px;
   padding: var(--sp-2) var(--sp-3);
 }
 

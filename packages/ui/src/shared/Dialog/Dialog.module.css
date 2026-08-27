@@ -79,4 +79,5 @@
   flex-direction: column;
   display: flex;
   gap: var(--sp-4);
+  height: 100%;
 }
