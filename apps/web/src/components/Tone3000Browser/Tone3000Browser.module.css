@@ -255,79 +255,33 @@
   font-style: italic;
 }
 
-.modelListWrap {
+.cardActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
   border-top: 1px solid var(--seam);
-  padding-top: var(--sp-2);
 }
 
-.modelList {
-  list-style: none;
-  margin: 0;
-  padding: 0 var(--sp-3) var(--sp-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-}
-
-.bulkRow {
-  display: flex;
+.iconBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-3) var(--sp-2);
-}
-
-.bulkSummary {
-  color: var(--ink-3);
-}
-
-.picker {
-  margin: var(--sp-2) var(--sp-3);
-  padding: var(--sp-3);
-  border: 1px solid var(--seam);
-  border-radius: var(--r-sm);
-  background: var(--panel);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
-.pickerTitle {
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
   color: var(--ink-2);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
 }
 
-.pickerList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-}
-
-.pickerRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-}
-
-.modelRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-}
-
-.modelName {
-  font-family: var(--font-display);
-  font-size: 11px;
+.iconBtn:hover {
   color: var(--ink-1);
-  display: flex;
-  flex-direction: column;
-}
-
-.modelSize {
-  color: var(--ink-3);
+  border-color: var(--accent);
 }
 
 .libraryRow {
