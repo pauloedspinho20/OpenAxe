@@ -10,13 +10,17 @@ import { downloadPresetAsFile, readPresetFromFile } from '../../../presets/prese
 import { PRESET_SLOT_COUNT } from '../../../presets/presetBank'
 import type { Preset } from '../../../presets/types'
 import type { GraphRig } from '../../../engine/GraphRig'
-import { Dialog, HardwareButton, toast } from '@openaxe/ui'
+import { Dialog, HardwareButton, OutlineButton, toast } from '@openaxe/ui'
 import styles from './PresetManager.module.css'
 
 export interface PresetManagerProps {
   rig: GraphRig | null
   context: AudioContext | null
 }
+
+type ConfirmState =
+  | { kind: 'delete'; slot: number | null; presetId: string; name: string }
+  | { kind: 'overwrite'; slot: number; name: string }
 
 /**
  * The preset bank surface: a fixed 512-slot grid (see presets/presetBank.ts)
@@ -37,6 +41,9 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
   const [newName, setNewName] = useState('')
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [savingSlot, setSavingSlot] = useState<number | null>(null)
+  const [saveName, setSaveName] = useState('')
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [missingAssetsNote, setMissingAssetsNote] = useState<string | null>(null)
@@ -90,40 +97,87 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     }
   }
 
-  /** Save the current rig into a bank slot: overwrite an existing preset there, else capture a new one. */
-  const saveIntoSlot = async (slot: number) => {
+  /** Save action for a bank slot: empty slots prompt for a name inline; occupied slots ask before overwriting. */
+  const startSave = (slot: number) => {
     if (!rig) {
       setError('Power on to save the current grid as a preset.')
       return
     }
+    const presetId = bankSlots[slot]
+    if (presetId != null) {
+      setConfirm({
+        kind: 'overwrite',
+        slot,
+        name: presetsById.get(presetId)?.name ?? presetId,
+      })
+      return
+    }
+    setSavingSlot(slot)
+    setSaveName('')
+  }
+
+  /** Capture the current rig into a brand-new preset placed in `slot`. */
+  const commitSave = async (slot: number) => {
+    const name = saveName.trim() || `Preset ${slot + 1}`
+    setSavingSlot(null)
+    if (!rig) return
     setBusy(true)
     setError(null)
     try {
-      const existingId = bankSlots[slot]
-      const existing = existingId ? await getPreset(existingId) : null
-      if (existing) {
-        const updated = captureCurrent(existing.id, existing.name, {
-          tags: existing.tags,
-          favorite: existing.favorite,
-          createdAt: existing.createdAt,
-        })
-        await savePreset(updated)
-        toast.info(`Updated preset in slot ${slot + 1}`, {
-          description: `"${existing.name}" now holds the current rig`,
-        })
+      const id = crypto.randomUUID()
+      const preset = captureCurrent(id, name, { tags: [] })
+      await savePreset(preset)
+      setBankSlot(slot, id)
+      await refresh()
+      toast.success(`Saved "${name}"`, { description: `Placed in preset slot ${slot + 1}` })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Replace the preset currently occupying `slot` with the live rig (after confirmation). */
+  const overwriteSlot = async (slot: number) => {
+    if (!rig) return
+    const existingId = bankSlots[slot]
+    const existing = existingId ? await getPreset(existingId) : null
+    if (!existing) return
+    const updated = captureCurrent(existing.id, existing.name, {
+      tags: existing.tags,
+      favorite: existing.favorite,
+      createdAt: existing.createdAt,
+    })
+    await savePreset(updated)
+    toast.info(`Updated preset in slot ${slot + 1}`, {
+      description: `"${existing.name}" now holds the current rig`,
+    })
+  }
+
+  /** Ask for confirmation before deleting a placed or unplaced preset. */
+  const requestDelete = (slot: number | null, presetId: string, name: string) => {
+    setConfirm({ kind: 'delete', slot, presetId, name })
+  }
+
+  /** Runs the confirmed delete/overwrite action. */
+  const handleConfirm = async () => {
+    if (!confirm) return
+    setBusy(true)
+    setError(null)
+    try {
+      if (confirm.kind === 'delete') {
+        await deletePreset(confirm.presetId)
+        if (confirm.slot != null) setBankSlot(confirm.slot, null)
+        toast.success(`Deleted "${confirm.name}"`)
       } else {
-        const name = newName.trim() || `Preset ${slot + 1}`
-        const id = crypto.randomUUID()
-        const preset = captureCurrent(id, name, { tags: [] })
-        await savePreset(preset)
-        setBankSlot(slot, id)
-        toast.success(`Saved "${name}"`, { description: `Placed in preset slot ${slot + 1}` })
+        await overwriteSlot(confirm.slot)
       }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
+      setConfirm(null)
     }
   }
 
@@ -188,25 +242,6 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     toast.info(`Placed "${preset.name}"`, { description: `Preset slot ${firstEmpty + 1}` })
   }
 
-  const handleClear = (bankSlot: number) => {
-    setBankSlot(bankSlot, null)
-    toast.info(`Cleared preset slot ${bankSlot + 1}`)
-  }
-
-  const handleDelete = async (bankSlot: number) => {
-    const id = bankSlots[bankSlot]
-    if (!id) return
-    setBusy(true)
-    try {
-      await deletePreset(id)
-      setBankSlot(bankSlot, null)
-      await refresh()
-      toast.success(`Deleted "${presetsById.get(id)?.name ?? id}"`)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const startRename = (bankSlot: number) => {
     const id = bankSlots[bankSlot]
     if (!id) return
@@ -262,7 +297,20 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     return (
       <div key={slot} className={styles.row}>
         <span className={styles.slotIndex}>{String(slot + 1).padStart(3, '0')}</span>
-        {renamingSlot === slot ? (
+        {savingSlot === slot ? (
+          <input
+            autoFocus
+            className={styles.nameInput}
+            placeholder="Preset name"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void commitSave(slot)
+              if (e.key === 'Escape') setSavingSlot(null)
+            }}
+            onBlur={() => void commitSave(slot)}
+          />
+        ) : renamingSlot === slot ? (
           <input
             autoFocus
             className={styles.nameInput}
@@ -315,12 +363,12 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
               <button
                 type="button"
                 className={styles.actionBtn}
-                onClick={() => void saveIntoSlot(slot)}
+                onClick={() => startSave(slot)}
                 disabled={busy || !rig}
                 aria-label={`Save current rig into slot ${slot + 1}`}
-                title="Overwrite this slot's preset with the current rig"
+                title="Replace this slot's preset with the current rig"
               >
-                Save here
+                Save
               </button>
               <button
                 type="button"
@@ -333,15 +381,6 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
               <button
                 type="button"
                 className={styles.actionBtn}
-                onClick={() => handleClear(slot)}
-                aria-label={`Clear slot ${slot + 1}`}
-                title="Unplace this preset from the bank (the preset itself is kept)"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                className={styles.actionBtn}
                 onClick={() => downloadPresetAsFile(preset)}
                 aria-label={`Export ${preset.name}`}
               >
@@ -350,7 +389,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
               <button
                 type="button"
                 className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-                onClick={() => void handleDelete(slot)}
+                onClick={() => requestDelete(slot, presetId!, preset.name)}
                 disabled={busy}
                 aria-label={`Delete ${preset.name}`}
               >
@@ -373,11 +412,12 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
               <button
                 type="button"
                 className={styles.actionBtn}
-                onClick={() => void saveIntoSlot(slot)}
+                onClick={() => startSave(slot)}
                 disabled={busy}
                 aria-label={`Save current rig into slot ${slot + 1}`}
+                title="Save the current rig into this slot"
               >
-                Save here
+                Save
               </button>
             )
           )}
@@ -452,10 +492,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
                   <button
                     type="button"
                     className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-                    onClick={async () => {
-                      await deletePreset(preset.id)
-                      await refresh()
-                    }}
+                    onClick={() => requestDelete(null, preset.id, preset.name)}
                     disabled={busy}
                     aria-label={`Delete ${preset.name}`}
                   >
@@ -470,62 +507,93 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     )
 
   return (
-    <Dialog
-      open={true}
-      onClose={closeManager}
-      title={
-        pickTarget
-          ? `ASSIGN TO SCENE ${pickTarget.scene + 1} · SLOT ${pickTarget.slot + 1}`
-          : 'PRESETS'
-      }
-      width="min(680px, 92vw)"
-      maxHeight="min(80svh, 720px)"
-      zIndex={300}
-    >
-      {!pickTarget && (
-        <div className={styles.saveRow}>
-          <input
-            type="text"
-            className={styles.nameInput}
-            placeholder="Preset name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            disabled={busy || !rig}
-          />
-          <HardwareButton
-            label="Save Current"
-            onClick={() => void handleSave()}
-            disabled={busy || !rig || newName.trim().length === 0}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            className="srOnly"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleImportFile(file)
-              e.target.value = ''
-            }}
-          />
-          <HardwareButton
-            label="Import…"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-          />
+    <>
+      <Dialog
+        open={true}
+        onClose={closeManager}
+        title={
+          pickTarget
+            ? `ASSIGN TO SCENE ${pickTarget.scene + 1} · SLOT ${pickTarget.slot + 1}`
+            : 'PRESETS'
+        }
+        width="min(680px, 92vw)"
+        maxHeight="min(80svh, 720px)"
+        zIndex={300}
+      >
+        {!pickTarget && (
+          <div className={styles.saveRow}>
+            <input
+              type="text"
+              className={styles.nameInput}
+              placeholder="Preset name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              disabled={busy || !rig}
+            />
+            <HardwareButton
+              label="Save Current"
+              onClick={() => void handleSave()}
+              disabled={busy || !rig || newName.trim().length === 0}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              className="srOnly"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void handleImportFile(file)
+                e.target.value = ''
+              }}
+            />
+            <HardwareButton
+              label="Import…"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+            />
+          </div>
+        )}
+
+        {!pickTarget && !rig && (
+          <p className={styles.hint}>Power on to save the current grid as a preset.</p>
+        )}
+        {error && <p className={styles.error}>{error}</p>}
+        {missingAssetsNote && <p className={styles.hint}>{missingAssetsNote}</p>}
+
+        <div className={styles.list}>
+          {Array.from({ length: PRESET_SLOT_COUNT }, (_, i) => renderBankSlotRow(i))}
+          {renderUnplaced()}
         </div>
-      )}
+      </Dialog>
 
-      {!pickTarget && !rig && (
-        <p className={styles.hint}>Power on to save the current grid as a preset.</p>
+      {confirm && (
+        <Dialog
+          open
+          title={confirm.kind === 'delete' ? 'DELETE PRESET' : 'OVERWRITE PRESET'}
+          onClose={() => setConfirm(null)}
+          width="min(380px, 90vw)"
+          zIndex={400}
+        >
+          <p className={styles.hint}>
+            {confirm.kind === 'delete'
+              ? `Delete "${confirm.name}"` +
+                (confirm.slot != null ? ` from preset slot ${confirm.slot + 1}` : '') +
+                '? This cannot be undone.'
+              : `Preset slot ${confirm.slot + 1} already holds "${confirm.name}". Replace it with the current rig?`}
+          </p>
+          <div className={styles.confirmRow}>
+            <OutlineButton onClick={() => setConfirm(null)} disabled={busy}>
+              Cancel
+            </OutlineButton>
+            <HardwareButton
+              label={confirm.kind === 'delete' ? 'Delete' : 'Overwrite'}
+              variant="danger"
+              onClick={() => void handleConfirm()}
+              disabled={busy}
+            />
+          </div>
+        </Dialog>
       )}
-      {error && <p className={styles.error}>{error}</p>}
-      {missingAssetsNote && <p className={styles.hint}>{missingAssetsNote}</p>}
-
-      <div className={styles.list}>
-        {Array.from({ length: PRESET_SLOT_COUNT }, (_, i) => renderBankSlotRow(i))}
-        {renderUnplaced()}
-      </div>
-    </Dialog>
+    </>
   )
 }

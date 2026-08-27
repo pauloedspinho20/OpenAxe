@@ -139,3 +139,10 @@
   color: var(--led-hot);
   border-color: var(--led-hot);
 }
+
+.confirmRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}

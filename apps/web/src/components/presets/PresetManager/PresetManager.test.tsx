@@ -94,16 +94,38 @@ describe('PresetManager', () => {
     expect(screen.getByText('004')).toBeInTheDocument()
   })
 
-  it('saving the current rig into an empty slot places a new preset there', async () => {
+  it('saving the current rig into an empty slot prompts for a name, then places the preset', async () => {
     act(() => usePresetManager.setState({ open: true }))
     render(<PresetManager rig={fakeRig} context={null} />)
     fireEvent.click(screen.getByRole('button', { name: 'Save current rig into slot 1' }))
+    // The inline preset-name input appears in the row (the top "Preset name"
+    // input is the first one in the DOM).
+    const inline = screen.getAllByPlaceholderText('Preset name')[1]!
+    fireEvent.change(inline, { target: { value: 'My Save' } })
+    fireEvent.keyDown(inline, { key: 'Enter' })
     await waitFor(async () => expect(await listPresets()).toHaveLength(1), { timeout: 5000 })
     const presets = await listPresets()
+    expect(presets[0]!.name).toBe('My Save')
     expect(usePresetBankStore.getState().slots[0]).toBe(presets[0]!.id)
   })
 
-  it('deletes an unplaced preset', async () => {
+  it('saving into an occupied slot asks for confirmation before overwriting', async () => {
+    await savePreset(makePreset('p1', 'Clean'))
+    usePresetBankStore.getState().setSlot(2, 'p1')
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={fakeRig} context={null} />)
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save current rig into slot 3' }))
+    expect(screen.getByText(/already holds "Clean"/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite' }))
+    await waitFor(() => expect(screen.queryByText(/already holds "Clean"/)).toBeNull(), {
+      timeout: 5000,
+    })
+  })
+
+  it('deletes an unplaced preset only after confirmation', async () => {
     await savePreset(makePreset('p1', 'Clean'))
     act(() => usePresetManager.setState({ open: true }))
     render(<PresetManager rig={null} context={null} />)
@@ -111,7 +133,12 @@ describe('PresetManager', () => {
       timeout: 5000,
     })
     fireEvent.click(screen.getByRole('button', { name: 'Delete Clean' }))
+    // The confirm dialog appears; the preset is not deleted until confirmed.
+    expect(screen.getByText(/Delete "Clean"/)).toBeInTheDocument()
+    expect(await listPresets()).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(screen.queryByText('Clean')).toBeNull(), { timeout: 5000 })
+    expect(await listPresets()).toHaveLength(0)
   })
 
   it('toggles a preset favorite', async () => {
