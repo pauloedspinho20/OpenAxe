@@ -458,9 +458,11 @@ set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}")
 # back to the "UI not found" IGraphics placeholder — it only worked in-tree
 # because plugin.cpp used to resolve the UI through __FILE__ (see F1).
 #
-# Not a hard build dependency on purpose: the plugin still builds and links
-# without the web bundle (you get the placeholder UI), which keeps C++-only
-# CI green. The "VST: Export (all-in-one)" task builds the web app first.
+# The existence check lives in cmake/copy_ui.cmake so it runs at BUILD time,
+# not configure time: configuring the plugin before building the web app is
+# the normal order, and a configure-time `if(EXISTS)` would silently skip the
+# copy forever after. A missing UI is a loud build warning, not a hard error,
+# so C++-only CI stays green.
 set(OPENAXE_WEB_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../../apps/web/dist")
 
 function(openaxe_bundle_ui target)
@@ -476,21 +478,18 @@ function(openaxe_bundle_ui target)
     set(_ui_dest "$<TARGET_FILE_DIR:${target}>/ui")
   endif()
   add_custom_command(TARGET ${target} POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_ui_dest}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${OPENAXE_WEB_DIST}" "${_ui_dest}"
-    COMMENT "${target}: copying apps/web/dist into the bundle (Resources/ui)"
+    COMMAND "${CMAKE_COMMAND}"
+            -DSRC=${OPENAXE_WEB_DIST}
+            -DDST=${_ui_dest}
+            -DTARGET=${target}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+    COMMENT "${target}: bundling apps/web/dist into Resources/ui"
     VERBATIM)
 endfunction()
 
-if(EXISTS "${OPENAXE_WEB_DIST}/index.html")
-  foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
-    openaxe_bundle_ui(${_t})
-  endforeach()
-else()
-  message(STATUS
-    "packages/vst3: apps/web/dist not built - plugin bundles will ship without a UI "
-    "and show the placeholder. Run `pnpm --filter @openaxe/web build` then re-run cmake.")
-endif()
+foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
+  openaxe_bundle_ui(${_t})
+endforeach()
 
 # Install the built bundles to standard locations (CPack + workflow's
 # productbuild/WIX/DEB generators handle the platform specifics).

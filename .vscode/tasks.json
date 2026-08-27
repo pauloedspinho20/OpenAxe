@@ -315,7 +315,8 @@
       "group": { "kind": "build", "isDefault": false },
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": ["$gcc"],
-      "dependsOn": ["VST: Configure (Release)"]
+      "dependsOn": ["Build", "VST: Configure (Release)"],
+      "dependsOrder": "sequence"
     },
     {
       "label": "VST: Build (Debug)",
@@ -325,7 +326,8 @@
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": ["$gcc"],
-      "dependsOn": ["VST: Configure (Debug)"]
+      "dependsOn": ["Build", "VST: Configure (Debug)"],
+      "dependsOrder": "sequence"
     },
     {
       "label": "VST: Test",
@@ -371,6 +373,53 @@
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
+    },
+    {
+      "label": "VST: Build CLAP",
+      "type": "shell",
+      "command": "cmake --build packages/vst3/build --target openaxe_clap --config Release",
+      "detail": "Builds the CLAP bundle (needs VST: Configure). Output: packages/vst3/build/OpenAxe.clap — Bitwig/REAPER. EXCLUDE_FROM_ALL so not built by default. Depends on the web build: the bundle copies apps/web/dist into Resources/ui at build time.",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["Build", "VST: Configure (Release)"],
+      "dependsOrder": "sequence"
+    },
+    {
+      "label": "VST: Build AU",
+      "type": "shell",
+      "command": "cmake --build packages/vst3/build --target openaxe_au --config Release",
+      "detail": "Builds the AUv2 bundle (macOS only, needs VST: Configure). Output: packages/vst3/build/OpenAxe.component — Logic/GarageBand, validated via auval -v aufx Nms1 NwSt. Depends on the web build: the bundle copies apps/web/dist into Resources/ui at build time.",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["Build", "VST: Configure (Release)"],
+      "dependsOrder": "sequence"
+    },
+    {
+      "label": "VST: Install CLAP (macOS) to ~/Library/Audio/Plug-Ins/CLAP/",
+      "type": "shell",
+      "command": "mkdir -p ~/Library/Audio/Plug-Ins/CLAP && cp -R packages/vst3/build/OpenAxe.clap ~/Library/Audio/Plug-Ins/CLAP/ && xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap 2>/dev/null; echo 'CLAP -> ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap'",
+      "detail": "Installs the CLAP bundle for Bitwig/REAPER. Run VST: Build CLAP first. (VST: Export does all three formats in one go.)",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Install AU (macOS) to ~/Library/Audio/Plug-Ins/Components/",
+      "type": "shell",
+      "command": "mkdir -p ~/Library/Audio/Plug-Ins/Components && rm -rf ~/Library/Audio/Plug-Ins/Components/OpenAxe.component && cp -R packages/vst3/build/OpenAxe.component ~/Library/Audio/Plug-Ins/Components/ && xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/OpenAxe.component 2>/dev/null; echo 'AU -> ~/Library/Audio/Plug-Ins/Components/OpenAxe.component (Logic rescans on launch)'",
+      "detail": "Installs the AUv2 bundle for Logic/GarageBand. Run VST: Build AU first, then validate with auval -v aufx Nms1 NwSt.",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "VST: Export (all-in-one) — web + VST3/CLAP/AU + install",
+      "type": "shell",
+      "command": "set -e; echo \"— 1/5 Building web UI (apps/web → dist, for the plugin webview) —\"; pnpm build; echo \"— 2/5 Configuring plugin (Release, fetches iPlug2) —\"; cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release; if [ ! -f packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug/VST3_SDK/pluginterfaces/vst/ivstaudioprocessor.h ]; then echo \"— Fetching VST3/CLAP SDKs (first run only) —\"; (cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash ./download-vst3-sdk.sh) || true; (cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash ./download-clap-sdks.sh) || true; echo \"— Reconfiguring with SDKs —\"; cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release; fi; echo \"— 3/5 Building VST3 + CLAP + AU —\"; cmake --build packages/vst3/build --config Release -j; cmake --build packages/vst3/build --target openaxe_clap --config Release; if [ \"$(uname)\" = \"Darwin\" ]; then cmake --build packages/vst3/build --target openaxe_au --config Release || true; fi; echo \"— 4/5 Running plugin tests —\"; ctest --test-dir packages/vst3/build --output-on-failure; echo \"— 5/5 Installing to user Plug-Ins dirs —\"; if [ \"$(uname)\" = \"Darwin\" ]; then mkdir -p ~/Library/Audio/Plug-Ins/VST3 ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/CLAP; rm -rf ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component; cp -R packages/vst3/build/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/VST3/ && echo \"  VST3 → ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3\"; cp packages/vst3/build/OpenAxe.clap ~/Library/Audio/Plug-Ins/CLAP/ 2>/dev/null && echo \"  CLAP → ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap\" || true; cp -R packages/vst3/build/OpenAxe.component ~/Library/Audio/Plug-Ins/Components/ 2>/dev/null && echo \"  AU   → ~/Library/Audio/Plug-Ins/Components/OpenAxe.component\" || true; xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component 2>/dev/null || true; elif [ \"$(uname)\" = \"Linux\" ]; then mkdir -p ~/.vst3 ~/.clap; cp -R packages/vst3/build/OpenAxe.vst3 ~/.vst3/ 2>/dev/null || true; cp packages/vst3/build/OpenAxe.clap ~/.clap/ 2>/dev/null || true; echo \"  VST3 → ~/.vst3/  CLAP → ~/.clap/\"; else echo \"  Windows: copy packages/vst3/build/OpenAxe.vst3 → %COMMONPROGRAMFILES%\\\\VST3\\\\ and OpenAxe.clap → %COMMONPROGRAMFILES%\\\\CLAP\\\\\"; fi; echo \"\"; echo \"✔ Export complete — bundles in packages/vst3/build/:\"; ls -lh packages/vst3/build/*.vst3 packages/vst3/build/*.clap 2>/dev/null; ls -ld packages/vst3/build/*.component 2>/dev/null; echo \"\"; echo \"Hosts will scan on next launch (REAPER: Options → Preferences → Plug-ins → VST → Clear cache/rescan)\"",
+      "detail": "One-click export like the desktop/VST tasks: builds the React UI, (re)fetches VST3/CLAP SDKs if missing, configures + builds VST3/CLAP/AU (Release), runs ctest, installs to ~/Library/Audio/Plug-Ins/* (macOS) so REAPER/Logic/Bitwig can scan, and reveals sizes. Mirrors .github/workflows/plugin.yml locally.",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$gcc"]
     },
     {
       "label": "VST: Generate design tokens (CSS)",
@@ -443,6 +492,15 @@
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Drift: all checks (matches ci.yml)",
+      "type": "shell",
+      "command": "set -e; node scripts/gen-param-schema.mjs --check; node scripts/gen-param-schema.mjs --check --target=automation-map; node scripts/check-grid-dims.mjs --check; node scripts/check-wasm-exports.mjs --check; node scripts/sync-version.mjs --check; node packages/ui/scripts/generate-tokens.mjs --check; echo 'All drift guards in sync.'",
+      "detail": "Runs every drift guard CI runs, in ci.yml's order: param schema, automation map, grid dims, WASM exports, version sync, design tokens. Fails on the first mismatch.",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
     },
     {
       "label": "Drift: gen-param-schema --check",
