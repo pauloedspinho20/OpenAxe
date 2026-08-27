@@ -37,6 +37,16 @@ enum class LoadResult {
 // Human-readable string for a LoadResult (for UI toast / test diagnostics).
 const char* ToString(LoadResult r);
 
+// Decodes standard base64 (no URL-safe alphabet, tolerates whitespace and
+// stops at padding). Returns {} on any invalid character rather than silently
+// truncating — a half-decoded WAV would reach the core as garbage.
+//
+// Lives here rather than in the bridge because the bridge pulls in plugin.h
+// (and therefore the iPlug SDK), which CTest cannot link; cab IRs arrive from
+// the UI as base64 (see openaxe.ts's loadIrWav), so this is asset-loading
+// concern anyway.
+std::vector<uint8_t> DecodeBase64(const std::string& in);
+
 // ── File-backed loads (preferred: read file, then call in-memory core entry) ──
 // All three are Tier 2 (not real-time safe) — caller must hold the suspend
 // handshake (Plugin::WithSuspend) around them. They return the mapped

@@ -1,11 +1,13 @@
 #include "vst_bridge.h"
 
+#include "asset_loading.h"
 #include "plugin.h"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -256,7 +258,47 @@ std::string VstBridge::HandleLoadModelJson(const std::string& req){ try{ json ar
 std::string VstBridge::HandleUnloadModel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_unload_nam_model(graph_, coreId); }); else nam_studio_unload_nam_model(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadModel failed"); } }
 std::string VstBridge::HandleSetReverbAlgorithm(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string alg=o.value("algorithm",""); NamStudioReverbAlgorithm a=NAM_STUDIO_REVERB_HALL; if(alg=="hall") a=NAM_STUDIO_REVERB_HALL; else if(alg=="room") a=NAM_STUDIO_REVERB_ROOM; else if(alg=="plate") a=NAM_STUDIO_REVERB_PLATE; else if(alg=="earlyReflections") a=NAM_STUDIO_REVERB_EARLY_REFLECTIONS; else return JsonError("unknown alg"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_set_reverb_algorithm(graph_, coreId, a); }); else nam_studio_set_reverb_algorithm(graph_, coreId, a); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setReverbAlgorithm failed"); } }
 std::string VstBridge::HandleSetDelayModel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string m=o.value("model",""); NamStudioDelayModel dm=NAM_STUDIO_DELAY_DIGITAL; if(m=="digital") dm=NAM_STUDIO_DELAY_DIGITAL; else if(m=="analog") dm=NAM_STUDIO_DELAY_ANALOG; else if(m=="tape") dm=NAM_STUDIO_DELAY_TAPE; else return JsonError("unknown model"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_set_delay_model(graph_, coreId, dm); }); else nam_studio_set_delay_model(graph_, coreId, dm); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setDelayModel failed"); } }
-std::string VstBridge::HandleLoadIrWav(const std::string&){ return JsonError("loadIrWav not implemented in plugin - use drag drop"); }
+std::string VstBridge::HandleLoadIrWav(const std::string& req) {
+  // Was a hard error string, so cab IRs could not be loaded from the plugin UI
+  // at all (issue #300 E4). Mirrors the desktop bridge: decode, sanity-check the
+  // container, then hand the bytes to the plugin's Tier-2 loader, which applies
+  // the size guard and suspends around the core call.
+  try {
+    json args = ParseArgs(req);
+    json o = args.empty() ? json::object() : args[0];
+    const std::string jsId = o.value("blockId", "");
+    const std::string encoded = o.value("wavBase64", "");
+    if (encoded.empty()) return JsonError("loadIrWav: no wav data");
+
+    const std::vector<uint8_t> bytes = assets::DecodeBase64(encoded);
+    if (bytes.empty()) return JsonError("loadIrWav: could not decode the base64 payload");
+    // Reject anything that isn't a RIFF/WAVE container before the core tries to
+    // decode it (issue #69).
+    if (bytes.size() < 12 || std::memcmp(bytes.data(), "RIFF", 4) != 0 ||
+        std::memcmp(bytes.data() + 8, "WAVE", 4) != 0) {
+      return JsonError("loadIrWav: not a WAV file");
+    }
+
+    int32_t coreId = -1;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      auto it = blockIds_.find(jsId);
+      if (it == blockIds_.end()) return JsonError("unknown block: " + jsId);
+      coreId = it->second;
+    }
+    if (!plugin_) return JsonError("loadIrWav: no plugin");
+    std::string error;
+    // LoadIrWavFromBytes already wraps the core call in WithSuspend.
+    const int result = plugin_->LoadIrWavFromBytes(coreId, bytes, &error);
+    if (result != 0) {
+      const char* why = assets::ToString(static_cast<assets::LoadResult>(result));
+      return JsonError(error.empty() ? std::string("loadIrWav: ") + (why ? why : "failed") : error);
+    }
+    return (json{{"ok", true}}).dump();
+  } catch (std::exception& e) {
+    return JsonError(std::string("loadIrWav: ") + e.what());
+  }
+}
 std::string VstBridge::HandleUnloadIr(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_unload_ir(graph_, coreId); }); else nam_studio_unload_ir(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadIr failed"); } }
 std::string VstBridge::HandleSecureStore(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string k=o.value("key",""), v=o.value("value",""); if(!IsValidSecretKey(k)) return JsonError("invalid key"); std::lock_guard<std::mutex> lock(mutex_); secureStore_[k]=v; return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("secureStore failed"); } }
 std::string VstBridge::HandleSecureLoad(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string k=o.value("key",""); if(!IsValidSecretKey(k)) return JsonError("invalid key"); std::lock_guard<std::mutex> lock(mutex_); auto it=secureStore_.find(k); if(it==secureStore_.end()) return (json{{"ok", true}, {"value", nullptr}}).dump(); return (json{{"ok", true}, {"value", it->second}}).dump(); }catch(...){ return JsonError("secureLoad failed"); } }

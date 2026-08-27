@@ -171,7 +171,47 @@ void TestLastDirMemory() {
 
 } // namespace
 
+
+// ── Base64 (issue #300 E4) ────────────────────────────────────────────
+// Cab IRs reach the plugin as base64 in the bridge payload, so a decoder that
+// silently truncates on bad input would hand the core a half-formed WAV.
+static void TestDecodeBase64() {
+  using openaxe_vst3::assets::DecodeBase64;
+
+  auto str = [](const std::vector<uint8_t>& v) {
+    return std::string(v.begin(), v.end());
+  };
+
+  // RFC 4648 vectors, including every padding case.
+  CHECK(str(DecodeBase64("")) == "");
+  CHECK(str(DecodeBase64("Zg==")) == "f");
+  CHECK(str(DecodeBase64("Zm8=")) == "fo");
+  CHECK(str(DecodeBase64("Zm9v")) == "foo");
+  CHECK(str(DecodeBase64("Zm9vYg==")) == "foob");
+  CHECK(str(DecodeBase64("Zm9vYmE=")) == "fooba");
+  CHECK(str(DecodeBase64("Zm9vYmFy")) == "foobar");
+
+  // Whitespace is tolerated (JSON payloads and hand-wrapped base64 both have it).
+  CHECK(str(DecodeBase64("Zm9v\nYmFy")) == "foobar");
+  CHECK(str(DecodeBase64("Zm9v YmFy")) == "foobar");
+
+  // Invalid input is rejected outright, not truncated to what parsed so far.
+  CHECK(DecodeBase64("Zm9v!!!!").empty());
+  CHECK(DecodeBase64("****").empty());
+  // URL-safe alphabet is deliberately NOT accepted — the UI sends standard.
+  CHECK(DecodeBase64("a-b_").empty());
+
+  // A real RIFF/WAVE header survives the round trip, which is what the bridge
+  // sanity-checks before handing bytes to the core.
+  const std::string riff_b64 = "UklGRiQAAABXQVZF";  // "RIFF$\0\0\0WAVE"
+  const auto riff = DecodeBase64(riff_b64);
+  CHECK(riff.size() >= 12);
+  CHECK(std::memcmp(riff.data(), "RIFF", 4) == 0);
+  CHECK(std::memcmp(riff.data() + 8, "WAVE", 4) == 0);
+}
+
 int main(){
+  TestDecodeBase64();
   TestSizeGuards();
   TestTypeGuards();
   TestInvalidModelFormat();
