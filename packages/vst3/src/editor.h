@@ -18,18 +18,32 @@
 #include <cstdint>
 #include <string>
 
+// Plain macros, no SDK dependency — keeps this header usable from the
+// SDK-free CTests while making config.h the single source of truth for the
+// editor's size (see the constants below).
+#include "config.h"
+
 struct NamStudioGraph;
 
 namespace openaxe_vst3::editor {
 
-// ── Constants (match config.h + desktop) ───────────────────────────────
-inline constexpr int kDefaultWidth = 800;
-inline constexpr int kDefaultHeight = 600;
-inline constexpr int kMinWidth = 640;
-inline constexpr int kMinHeight = 480;
-inline constexpr int kMaxWidth = 1920;
-inline constexpr int kMaxHeight = 1200;
-inline constexpr int kFps = 60;
+// ── Constants ──────────────────────────────────────────────────────────
+// Derived from config.h rather than restated, so the host and IGraphics can
+// never disagree about the editor's size. They did: config.h declared
+// PLUG_WIDTH x PLUG_HEIGHT to the host while these constants independently said
+// 800x600, and once mMakeGraphicsFunc started honouring the persisted size
+// (issue #300 B4) the context was created at a size the host had not been told
+// about. ClampSize's bounds have to match PLUG_MIN/MAX_* for the same reason —
+// otherwise a restored size is clamped to something outside the range the host
+// negotiated.
+//
+inline constexpr int kDefaultWidth = PLUG_WIDTH;
+inline constexpr int kDefaultHeight = PLUG_HEIGHT;
+inline constexpr int kMinWidth = PLUG_MIN_WIDTH;
+inline constexpr int kMinHeight = PLUG_MIN_HEIGHT;
+inline constexpr int kMaxWidth = PLUG_MAX_WIDTH;
+inline constexpr int kMaxHeight = PLUG_MAX_HEIGHT;
+inline constexpr int kFps = PLUG_FPS;
 
 // ── URL trust (issue #71, same as apps/desktop/src/bridge.cpp) ───────
 // Only loopback http(s) origins are allowed for OPENAXE_UI_URL. Anything

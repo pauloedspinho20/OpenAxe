@@ -70,6 +70,10 @@ add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 add_executable(openaxe_vst3_ui_serving_test ui_serving_test.cpp
   ../src/http_server.cpp ../src/ui_root.cpp ../src/bridge_polyfill.cpp)
 target_include_directories(openaxe_vst3_ui_serving_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# http_server.cpp calls into Winsock; MSVC needs the import library named.
+if(WIN32)
+  target_link_libraries(openaxe_vst3_ui_serving_test PRIVATE ws2_32)
+endif()
 add_test(NAME vst3_ui_serving COMMAND openaxe_vst3_ui_serving_test)
 
 add_executable(openaxe_vst3_midi_test midi_test.cpp)
@@ -119,7 +123,7 @@ endif()
 # pluginval strictness 10 for VST3 (and AU on macOS when bundle exists).
 # Bundle path depends on generator; try common locations under the build dir.
 add_test(NAME vst3_pluginval
-  COMMAND bash -c "if ! command -v pluginval >/dev/null 2>&1; then echo 'SKIP: pluginval not found (https://github.com/Tracktion/pluginval) — install and re-run ctest'; exit 0; fi; VST3=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Debug/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/openaxe_vst3.vst3\" \"${CMAKE_BINARY_DIR}/Release/openaxe_vst3.vst3\"; do if [ -e \"\$p\" ]; then VST3=\"\$p\"; break; fi; done; if [ -z \"\$VST3\" ]; then echo 'SKIP: VST3 bundle not built yet (cmake --build packages/vst3/build) — nothing to validate'; exit 0; fi; echo \"pluginval --strictness-level 10 --validate \$VST3\"; exec pluginval --strictness-level 10 --validate \"\$VST3\""
+  COMMAND bash -c "PV=\"${PLUGINVAL_BIN}\"; if [ -z \"\$PV\" ] || [ ! -x \"\$PV\" ]; then PV=\"\$(command -v pluginval 2>/dev/null)\"; fi; if [ -z \"\$PV\" ]; then echo 'SKIP: pluginval not found (https://github.com/Tracktion/pluginval) — install and re-run ctest'; exit 0; fi; VST3=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Debug/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/openaxe_vst3.vst3\" \"${CMAKE_BINARY_DIR}/Release/openaxe_vst3.vst3\"; do if [ -e \"\$p\" ]; then VST3=\"\$p\"; break; fi; done; if [ -z \"\$VST3\" ]; then echo 'SKIP: VST3 bundle not built yet (cmake --build packages/vst3/build) — nothing to validate'; exit 0; fi; echo \"\$PV --strictness-level 10 --validate \$VST3\"; exec \"\$PV\" --strictness-level 10 --validate \"\$VST3\""
 )
 
 add_test(NAME vst3_pluginval_au

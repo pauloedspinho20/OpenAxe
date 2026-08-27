@@ -230,6 +230,16 @@ endif()
 # bridge like desktop, no IGraphics fork. Primitives (issue #133) reuse the
 # same React primitives via the webview — no IControl fork. Grid/cables/
 # inspector (issue #134) reuses GridEditor/BlockInspector via the same webview.
+# src/http_server.cpp uses the Winsock API, which needs an explicit link on
+# Windows (apps/desktop already does this for its own copy). Applies to every
+# target that compiles it, tests included — the ui_serving test failed to link
+# with 11 unresolved __imp_* socket symbols before this.
+function(openaxe_link_sockets target)
+  if(WIN32 AND TARGET ${target})
+    target_link_libraries(${target} PRIVATE ws2_32)
+  endif()
+endfunction()
+
 set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp)
 
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
@@ -501,6 +511,10 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenAxe — guitar/bass amp + cab + effec
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "openaxe-plugin")
 set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}")
+
+foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
+  openaxe_link_sockets(${_t})
+endforeach()
 
 # ── Bundle the React UI into every plugin bundle (issue #300 F2) ─────────
 # The plugin serves apps/web's build over loopback HTTP (WKWebView sandboxes

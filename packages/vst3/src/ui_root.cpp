@@ -20,6 +20,32 @@ namespace fs = std::filesystem;
 // Anchor whose address we hand to the loader to identify our own module.
 void AddressAnchor() {}
 
+// Per-user first, then system-wide. Matches config.h's SHARED_RESOURCES_SUBPATH.
+std::vector<std::string> SharedSupportDirs() {
+  std::vector<std::string> dirs;
+#ifdef _WIN32
+  if (const char* appdata = std::getenv("APPDATA"); appdata && *appdata) {
+    dirs.push_back((fs::path(appdata) / "OpenAxe").string());
+  }
+  if (const char* pd = std::getenv("PROGRAMDATA"); pd && *pd) {
+    dirs.push_back((fs::path(pd) / "OpenAxe").string());
+  }
+#elif defined(__APPLE__)
+  if (const char* home = std::getenv("HOME"); home && *home) {
+    dirs.push_back((fs::path(home) / "Library" / "Application Support" / "OpenAxe").string());
+  }
+  dirs.push_back("/Library/Application Support/OpenAxe");
+#else
+  if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg && *xdg) {
+    dirs.push_back((fs::path(xdg) / "OpenAxe").string());
+  } else if (const char* home = std::getenv("HOME"); home && *home) {
+    dirs.push_back((fs::path(home) / ".local" / "share" / "OpenAxe").string());
+  }
+  dirs.push_back("/usr/share/OpenAxe");
+#endif
+  return dirs;
+}
+
 bool HasIndex(const fs::path& dir) {
   std::error_code ec;
   return fs::is_regular_file(dir / "index.html", ec);
@@ -71,6 +97,15 @@ std::vector<std::string> UiRootCandidates(const std::string& binary_path) {
   out.push_back((bin_dir / "ui").lexically_normal().string());
   out.push_back((bin_dir / ".." / "ui").lexically_normal().string());
   out.push_back((bin_dir / ".." / "Resources" / "ui").lexically_normal().string());
+
+  // Shared support directory. Needed because the CLAP target builds as a bare
+  // Mach-O/so file rather than a directory bundle, so there is no
+  // Contents/Resources to put the UI in and no sane place beside it inside the
+  // host's scan directory — an installed .clap otherwise found no index.html
+  // and showed an empty editor. Kept last so a real bundle always wins.
+  for (const auto& base : SharedSupportDirs()) {
+    if (!base.empty()) out.push_back((fs::path(base) / "ui").lexically_normal().string());
+  }
   return out;
 }
 

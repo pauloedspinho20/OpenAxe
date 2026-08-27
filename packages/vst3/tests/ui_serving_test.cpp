@@ -157,9 +157,30 @@ void TestUiRootCandidates() {
   Check(has_suffix(win, "OpenAxe.vst3/Contents/Resources/ui"),
         "Windows bundle layout resolves Contents/Resources/ui");
 
-  // Bare module (a .clap sitting in a plain directory): sibling ui/.
+  // Bare module (a .clap sitting in a plain directory): sibling ui/, plus the
+  // shared support directory. The CLAP target builds as a bare Mach-O/so file,
+  // not a directory bundle, so there is no Contents/Resources inside it — an
+  // installed .clap found no UI at all and opened an empty editor.
   const auto bare = openaxe_vst3::UiRootCandidates("/home/u/.clap/OpenAxe.clap");
   Check(has_suffix(bare, "/.clap/ui"), "bare module offers a sibling ui/ directory");
+  Check(has_suffix(bare, "OpenAxe/ui"), "bare module falls back to the shared support dir");
+
+  // Ordering matters: a real bundle's own Resources/ui must win over the
+  // shared directory, or a stale shared copy would shadow the shipped one.
+  const auto ordered = openaxe_vst3::UiRootCandidates(
+      "/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3/Contents/MacOS/OpenAxe");
+  int bundle_at = -1, shared_at = -1;
+  for (size_t i = 0; i < ordered.size(); ++i) {
+    if (std::string_view(ordered[i]).ends_with("OpenAxe.vst3/Contents/Resources/ui")) {
+      if (bundle_at < 0) bundle_at = static_cast<int>(i);
+    }
+    if (ordered[i].find("Application Support") != std::string::npos ||
+        ordered[i].find("/usr/share/OpenAxe") != std::string::npos) {
+      if (shared_at < 0) shared_at = static_cast<int>(i);
+    }
+  }
+  Check(bundle_at >= 0, "bundle candidate present");
+  Check(shared_at < 0 || bundle_at < shared_at, "bundle Resources/ui precedes the shared dir");
 
   Check(openaxe_vst3::UiRootCandidates("").empty(), "empty binary path yields no candidates");
 

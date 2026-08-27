@@ -138,13 +138,23 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
 
   // Track the whole editor area whenever the host resizes the window (issue
   // #300 B2). IGraphics::Resize calls OnResize on every control but does not
-  // move their rects, so without this the webview kept its original bounds
-  // and the React UI never saw a different viewport width — which is what
-  // made the UI look "not responsive" to the plugin window. Re-targeting the
-  // existing control also means we never recreate the WKWebView, so the React
-  // tree, dialog state and scroll position survive a resize.
+  // move their rects, so without this the webview kept its original bounds and
+  // the React UI never saw a different viewport width — which is what made the
+  // UI look "not responsive" to the plugin window. Re-targeting the existing
+  // control (rather than rebuilding it) also means the React tree, dialog state
+  // and scroll position survive a resize.
+  //
+  // The rects are assigned directly instead of through SetTargetAndDrawRECTs:
+  // that setter ends with its own OnResize() call (IControl.h), so calling it
+  // from inside OnResize is unbounded recursion — it overflowed the stack and
+  // took the host down with it the moment the editor opened.
   void OnResize() override {
-    if (auto* ui = GetUI()) SetTargetAndDrawRECTs(ui->GetBounds());
+    if (auto* ui = GetUI()) {
+      const iplug::igraphics::IRECT bounds = ui->GetBounds();
+      mRECT = bounds;
+      mTargetRECT = bounds;
+    }
+    // Pushes mRECT to the platform view; does not re-enter OnResize.
     IWebViewControl::OnResize();
   }
   void OnWebContentLoaded() override {
