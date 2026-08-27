@@ -29,3 +29,23 @@
   font-size: 12px;
   margin: 0;
 }
+
+.failures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-md);
+}
+
+.failureList {
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--ink-2);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}

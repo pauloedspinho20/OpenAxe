@@ -33,6 +33,17 @@ export async function hasExistingSession(): Promise<boolean> {
 }
 
 /**
+ * Re-read both banks from IndexedDB into the stores. Used to complete the
+ * first-run setup IN PLACE (no page reload, so the engine stays powered on) -
+ * each setup path writes the chosen banks to IndexedDB, then calls this to
+ * make the UI reflect them.
+ */
+export async function refreshBanks(): Promise<void> {
+  await hydratePresetBankStore()
+  await hydrateSceneStore()
+}
+
+/**
  * Seeds the offline FX-only starter pack: the 8 scene-0 starters plus the 2
  * standalone factory presets; the 8 starters are placed into preset-bank
  * slots 0-7 and scene 0 references them (bank slots 0-7). Idempotent - never

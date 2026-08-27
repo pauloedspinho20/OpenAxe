@@ -1,16 +1,24 @@
 import { useRef, useState } from 'react'
 import { Dialog, HardwareButton, OutlineButton } from '@openaxe/ui'
 import { useTone3000Auth } from '../../../tone3000/authStore'
-import { downloadFactoryPack } from '../../../factory/factoryDownload'
+import { Tone3000Library } from '../../../tone3000/library'
+import { downloadFactoryPack, type FactoryDownloadSummary } from '../../../factory/factoryDownload'
 import { FACTORY_PACK } from '../../../factory/factoryPack'
-import { installOfflineFactorySetup, setFactorySetupDone } from '../../../factory/factorySetup'
+import {
+  installOfflineFactorySetup,
+  refreshBanks,
+  setFactorySetupDone,
+} from '../../../factory/factorySetup'
 import { importDataBundle, readDataBundleFromFile } from '../../../settings/dataBundle'
 import { flushPresetBank } from '../../../state/presetBankStore'
 import { flushSceneBank } from '../../../state/sceneStore'
+import { useMidiStore } from '../../../state/midiStore'
 import styles from './FactorySetupDialog.module.css'
 
 export interface FactorySetupDialogProps {
   open: boolean
+  /** Called once the user picks a path so the shell stops showing the offer. */
+  onDone: () => void
 }
 
 const NOT_AUTHENTICATED = 'Not authenticated'
@@ -24,41 +32,49 @@ const NOT_AUTHENTICATED = 'Not authenticated'
  *  - Import a whole-app backup (scenes + presets + assets),
  *  - Skip - seed the offline FX-only starters,
  *  - Start empty - keep the fresh, empty banks.
- * Every path writes a flag and reloads so the next boot hydrates normally.
+ * Every path completes IN PLACE (no page reload, so the engine stays powered
+ * on): it writes the chosen banks to IndexedDB, re-hydrates the stores, and
+ * calls onDone. Download failures are surfaced in the dialog so the user can
+ * retry or continue with whatever downloaded, rather than being whisked back
+ * to the power gate.
  */
-export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
+export function FactorySetupDialog({ open, onDone }: FactorySetupDialogProps) {
   const auth = useTone3000Auth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [needsConnect, setNeedsConnect] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [summary, setSummary] = useState<FactoryDownloadSummary | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!open) return null
 
   const packEmpty = FACTORY_PACK.models.length === 0
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine
 
-  const finish = () => {
+  /** Persist the choice and close the dialog in place (no reload -> no PowerGate). */
+  const finish = async () => {
     setFactorySetupDone()
-    window.location.reload()
+    await refreshBanks()
+    onDone()
   }
 
   const handleDownload = async () => {
     setBusy(true)
     setError(null)
     setNeedsConnect(false)
+    setSummary(null)
     try {
-      const summary = await downloadFactoryPack((p) =>
-        setProgress({ done: p.done, total: p.total }),
-      )
-      if (summary.failed.length > 0) {
-        setError(
-          `${summary.failed.length} model(s) failed to download: ${summary.failed
-            .map((f) => f.name)
-            .join(', ')}`,
-        )
+      const result = await downloadFactoryPack((p) => setProgress({ done: p.done, total: p.total }))
+      setProgress(null)
+      setSummary(result)
+      // Auto-close when every model landed; otherwise keep the dialog open so
+      // the failures can be seen and retried.
+      if (result.failed.length === 0) {
+        await finish()
+      } else {
+        setBusy(false)
       }
-      finish()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message === NOT_AUTHENTICATED) {
@@ -77,7 +93,12 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
     try {
       const bundle = await readDataBundleFromFile(file)
       await importDataBundle(bundle)
-      finish()
+      // Restore the in-memory stores the backup just replaced, without reloading.
+      await refreshBanks()
+      await Tone3000Library.refresh()
+      useMidiStore.setState({ loaded: false })
+      void useMidiStore.getState().loadConfig()
+      await finish()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setBusy(false)
@@ -89,7 +110,7 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
     setError(null)
     try {
       await installOfflineFactorySetup()
-      finish()
+      await finish()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setBusy(false)
@@ -97,13 +118,15 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
   }
 
   /** No Tone3000 needed: keep the freshly-hydrated empty banks and move on. */
-  const handleStartEmpty = () => {
-    // The empty banks were only hydrated in memory - persist them before the
-    // reload so the next boot sees a real (empty) session instead of re-seeding.
+  const handleStartEmpty = async () => {
+    // The empty banks were only hydrated in memory - persist them before
+    // closing so the next boot sees a real (empty) session.
     flushSceneBank()
     flushPresetBank()
-    finish()
+    await finish()
   }
+
+  const failedCount = summary?.failed.length ?? 0
 
   return (
     <Dialog open title="GET STARTED" onClose={() => {}} width="min(480px, 92vw)" zIndex={120}>
@@ -152,6 +175,28 @@ export function FactorySetupDialog({ open }: FactorySetupDialogProps) {
             Skip
           </OutlineButton>
         </div>
+
+        {failedCount > 0 && (
+          <div className={styles.failures}>
+            <p className={styles.error}>
+              {summary!.downloaded + summary!.skipped} model(s) ready, but {failedCount} failed to
+              download{offline ? ' - you appear to be offline' : ''}:
+            </p>
+            <ul className={styles.failureList}>
+              {summary!.failed.map((f) => (
+                <li key={f.name}>
+                  <strong>{f.name}</strong> — {f.error}
+                </li>
+              ))}
+            </ul>
+            <div className={styles.actions}>
+              <HardwareButton label="Retry" onClick={() => void handleDownload()} disabled={busy} />
+              <OutlineButton onClick={() => void finish()} disabled={busy}>
+                Continue with what downloaded
+              </OutlineButton>
+            </div>
+          </div>
+        )}
 
         {packEmpty && (
           <p className={styles.hint}>

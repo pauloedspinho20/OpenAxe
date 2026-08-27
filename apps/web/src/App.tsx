@@ -294,7 +294,10 @@ function App() {
         onPowerOn={(opts) => void engine.powerOn(opts)}
       />
       {/*  <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} /> */}
-      <FactorySetupDialog open={setupStatus === 'pending' && isReady} />
+      <FactorySetupDialog
+        open={setupStatus === 'pending' && isReady}
+        onDone={() => setSetupStatus('done')}
+      />
       <Toaster />
     </div>
   )
