@@ -25,6 +25,7 @@ pnpm + Turborepo workspace (`apps/*`, `packages/*`):
 | `apps/desktop`             | Native shell (C++ + `webview.h` + JUCE `audio_devices`) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                                            |
 | `packages/ui`              | Shared React component/design-system library, consumed by `apps/web` and the desktop webview. Has its own Vitest config (`packages/ui/vite.config.ts`).                                               |
 | `packages/vst3`            | VST3 + standalone plugin (iPlug2 + `packages/core`, `WHOLE_ARCHIVE`) — scaffold builds and scans (issue #125); CLAP/AU later.                                                                         |
+| `apps/remotion`            | Remotion compositions for landing-page loops — 5 × 720p 10 s h264 (Carbon/Aluminum), 10 mp4s + posters committed to `apps/landing/public/videos/` (issue #298). Presentation-only, owns no DSP.       |
 | `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/17), [#16](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/16). |
 
 ## Verification commands
@@ -68,7 +69,9 @@ cmake --build packages/vst3/build && ctest --test-dir packages/vst3/build --outp
 cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_RTSAN=ON
 ```
 
-`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop** and **Full check** flows.
+`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens**, **Remotion: Studio / Render all / Still check** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop** and **Full check** flows.
+
+`apps/remotion` is a standalone Remotion project (`pnpm dev:remotion` → Studio, `pnpm build:remotion` → bundle; `pnpm --filter @openaxe/remotion render <id> --codec=h264` → `apps/landing/public/videos/`). Its outputs are committed (like `wasm-core/`); re-render after editing compositions or tokens and commit the new `*.mp4`/`*-poster.jpg`. See `apps/remotion/README.md`.
 
 `packages/core`'s WASM build is a separate, manual step
 (`bash scripts/build-core-wasm.sh`, needs the Emscripten SDK on `PATH`) that

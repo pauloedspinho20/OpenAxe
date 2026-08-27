@@ -497,6 +497,34 @@
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Studio",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/remotion studio",
+      "detail": "Starts Remotion Studio (apps/remotion) — preview 5 compositions (Hero/Amp/Effects/CabMixer/Platforms) at 720p, Carbon/Aluminum, issue #298. Needs pnpm install first",
+      "isBackground": true,
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Render all",
+      "type": "shell",
+      "command": "for id in Hero HeroAluminum Amp AmpAluminum Effects EffectsAluminum CabMixer CabMixerAluminum Platforms PlatformsAluminum; do echo \"→ Rendering $id\"; pnpm --filter @openaxe/remotion render $id --codec=h264 --output=../landing/public/videos/$id.mp4 || exit 1; done; echo \"Done — see apps/landing/public/videos/\"",
+      "detail": "Renders all 10 compositions (5 × Carbon/Aluminum, 720p 10s h264 silent) to apps/landing/public/videos/ — committed artifacts like wasm-core, issue #298",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Still check",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/remotion still Hero --frame=30 --scale=0.5",
+      "detail": "One-frame still sanity check at 1s mark (720p, frame 30) — verifies layout/colors before full render, see remotion-markup skill",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
     }
   ]
 }

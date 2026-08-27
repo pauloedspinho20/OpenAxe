@@ -19,6 +19,7 @@ const PACKAGE_JSON_PATHS = [
   'apps/web/package.json',
   'apps/desktop/package.json',
   'apps/landing/package.json',
+  'apps/remotion/package.json',
   'packages/ui/package.json',
 ].map((p) => join(ROOT, p))
 

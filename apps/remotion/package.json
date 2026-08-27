@@ -1,0 +1,30 @@
+{
+  "name": "@openaxe/remotion",
+  "private": true,
+  "version": "0.2.5",
+  "description": "OpenAxe landing videos — Remotion compositions (programmatic, 720p, silent loops)",
+  "type": "module",
+  "scripts": {
+    "dev": "remotion studio --no-open",
+    "studio": "remotion studio --no-open",
+    "build": "remotion bundle",
+    "render": "remotion render",
+    "still": "remotion still",
+    "lint": "oxlint --config ../../.oxlintrc.json .",
+    "format:check": "prettier --ignore-path ../../.prettierignore --check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.518",
+    "@remotion/media": "4.0.518",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "remotion": "4.0.518",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/web": "^0.0.166",
+    "typescript": "~7.0.2"
+  }
+}
