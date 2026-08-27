@@ -36,6 +36,9 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // otherwise still be there on this load.
   await page.evaluate(async () => {
     localStorage.clear()
+    // Established-session marker: keeps the first-run factory dialog from
+    // appearing and lets the offline FX starters seed + hydrate.
+    localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
     const dbs = await indexedDB.databases()
     await Promise.all(
       dbs

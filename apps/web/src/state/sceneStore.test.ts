@@ -39,17 +39,25 @@ describe('sceneStore', () => {
 
   it('assignSlot sets only the targeted scene/slot', () => {
     useSceneStore.getState().hydrate(createEmptyBank())
-    useSceneStore.getState().assignSlot(2, 5, 'preset-x')
+    useSceneStore.getState().assignSlot(2, 5, 7)
 
     const scenes = useSceneStore.getState().scenes
-    expect(scenes[2]?.slots[5]).toBe('preset-x')
+    expect(scenes[2]?.slots[5]).toBe(7)
     expect(scenes[2]?.slots[4]).toBeNull()
     expect(scenes[1]?.slots.every((s) => s === null)).toBe(true)
   })
 
+  it('assignSlot accepts null to empty a scene slot', () => {
+    useSceneStore.getState().hydrate(createEmptyBank())
+    useSceneStore.getState().assignSlot(0, 0, 3)
+    useSceneStore.getState().assignSlot(0, 0, null)
+    expect(useSceneStore.getState().scenes[0]?.slots[0]).toBeNull()
+  })
+
   it('out-of-range indices are no-ops rather than throwing', () => {
     useSceneStore.getState().hydrate(createEmptyBank())
-    expect(() => useSceneStore.getState().assignSlot(999, 0, 'x')).not.toThrow()
+    expect(() => useSceneStore.getState().assignSlot(999, 0, 3)).not.toThrow()
+    expect(() => useSceneStore.getState().assignSlot(0, 0, 512)).not.toThrow()
     expect(() => useSceneStore.getState().renameScene(-1, 'x')).not.toThrow()
     expect(() => useSceneStore.getState().setActive(64, 0)).not.toThrow()
     expect(useSceneStore.getState().activeScene).toBe(0)

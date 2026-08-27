@@ -1,4 +1,4 @@
-import { HardwareButton, PowerIcon, Select, Wordmark } from '@openaxe/ui'
+import { HardwareButton, Panel, PowerIcon, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
@@ -52,6 +52,10 @@ export function PowerGate({
 
   const starting = status === 'starting'
 
+  const tone3000Text =
+    auth.status === 'connected'
+      ? `TONE3000 - Connected${auth.user ? ` as ${auth.user.username}` : ''}`
+      : 'TONE3000 - Not connected'
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.panel}>
@@ -59,22 +63,17 @@ export function PowerGate({
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
 
-        <div className={styles.tone3000Row}>
-          <span className={styles.tone3000Text}>
-            {auth.status === 'connected'
-              ? `Tone3000: connected${auth.user ? ` as ${auth.user.username}` : ''}`
-              : 'Tone3000: not connected (optional - browsing works without it)'}
-          </span>
+        <Panel label={tone3000Text}>
           {auth.status === 'connected' ? (
             <HardwareButton label="Disconnect" onClick={() => auth.disconnect()} />
           ) : (
             <HardwareButton
-              label={auth.pendingFlow ? 'Connecting…' : 'Connect Tone3000'}
+              label={auth.pendingFlow ? 'Connecting…' : 'Connect'}
               disabled={auth.pendingFlow}
               onClick={() => void auth.connect()}
             />
           )}
-        </div>
+        </Panel>
         {auth.status === 'error' && auth.error && (
           <p className={styles.tone3000Hint}>
             Couldn't connect to Tone3000 ({auth.error}) - you can still power on and browse the

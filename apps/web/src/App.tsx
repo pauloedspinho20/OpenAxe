@@ -1,14 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GridEditor } from './components/grid/GridEditor/GridEditor'
 import { MidiManager } from './components/midi/MidiManager/MidiManager'
 import { PresetManager } from './components/presets/PresetManager/PresetManager'
 import { SceneBar } from './components/scenes/SceneBar/SceneBar'
 import { SceneManager } from './components/scenes/SceneManager/SceneManager'
 import { Tone3000Browser } from './components/Tone3000Browser/Tone3000Browser'
-import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal'
+/* import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal' */
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
+import { FactorySetupDialog } from './components/global/FactorySetupDialog/FactorySetupDialog'
 import {
   HardwareButton,
   IconButton,
@@ -23,7 +24,6 @@ import pkg from '../package.json'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useAudioIO } from './hooks/useAudioIO'
 import { useMidiEngine } from './hooks/useMidiEngine'
-import { useOnboarding } from './hooks/useOnboarding'
 import { useSceneEngine } from './hooks/useSceneEngine'
 import { useSceneHotkeys } from './hooks/useSceneHotkeys'
 import { useUndoRedoHotkeys } from './hooks/useUndoRedoHotkeys'
@@ -34,14 +34,12 @@ import { useTone3000Target } from './hooks/useTone3000Target'
 import { handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
 import { Tone3000Library } from './tone3000/library'
-import { installFactoryScenes } from './scenes/factoryScenes'
+import { bootstrapFactorySetup } from './factory/factorySetup'
 import { useIOStore } from './state/ioStore'
 import { useSettingsStore } from './state/settingsStore'
 import { useMidiManager } from './state/midiManager'
 import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
-import { hydrateSceneStore } from './state/sceneStore'
-import { installFactoryPresets } from './presets/factoryPresets'
 import { useUpdateCheck } from './hooks/useUpdateCheck'
 
 import styles from './App.module.css'
@@ -49,8 +47,8 @@ import styles from './App.module.css'
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
-  const onboarding = useOnboarding()
   const isReady = engine.status === 'ready'
+  const [setupStatus, setSetupStatus] = useState<'boot' | 'pending' | 'done'>('boot')
   const browser = useTone3000Browser()
   const io = useIOStore()
   const { outputSelectionSupported } = useAudioIO()
@@ -76,13 +74,14 @@ function App() {
   const toastedTagRef = useRef<string | null>(null)
 
   // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
-  // library metadata, and make sure the bundled starter presets/scenes exist.
-  // Network-free when Tone3000 isn't configured.
+  // library metadata, and run the scene/preset boot decision: hydrate an
+  // existing session, seed the offline starters if setup's already done, or
+  // leave everything unhydrated so the first-run factory dialog can present
+  // its options. Network-free when Tone3000 isn't configured.
   useEffect(() => {
     void handleTone3000CallbackOnLoad()
     void Tone3000Library.refresh()
-    void installFactoryPresets()
-    void installFactoryScenes().then(hydrateSceneStore)
+    void bootstrapFactorySetup().then(setSetupStatus)
   }, [])
 
   useSceneEngine(engine.rig, engine.context, engine.status)
@@ -294,7 +293,11 @@ function App() {
         outputSelectionSupported={outputSelectionSupported}
         onPowerOn={(opts) => void engine.powerOn(opts)}
       />
-      <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} />
+      {/*  <OnboardingModal open={onboarding.open} onDismiss={onboarding.dismiss} /> */}
+      <FactorySetupDialog
+        open={setupStatus === 'pending' && isReady}
+        onDone={() => setSetupStatus('done')}
+      />
       <Toaster />
     </div>
   )

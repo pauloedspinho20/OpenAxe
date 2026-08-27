@@ -65,6 +65,9 @@ const VERIFIER_KEY = 't3k_code_verifier'
 const STATE_KEY = 't3k_state'
 const ACCESS_TOKENS_KEY = 't3k_tokens'
 
+/** Marker used on the popup->opener postMessage channel. */
+export const POPUP_AUTH_SOURCE = 'openaxe-t3k-auth'
+
 export function storePkce(verifier: string, state: string): void {
   sessionStorage.setItem(VERIFIER_KEY, verifier)
   sessionStorage.setItem(STATE_KEY, state)
@@ -275,6 +278,21 @@ export async function tryHydrateFromPersistentStorage(): Promise<T3KTokens | nul
   }
 }
 
+function buildAuthorizeUrl(
+  pubkey: string,
+  redirectUri: string,
+  params: { state: string; codeChallenge: string },
+): string {
+  const url = new URL(`${T3K_API}/api/v1/oauth/authorize`)
+  url.searchParams.set('client_id', pubkey)
+  url.searchParams.set('redirect_uri', redirectUri)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('code_challenge', params.codeChallenge)
+  url.searchParams.set('code_challenge_method', 'S256')
+  url.searchParams.set('state', params.state)
+  return url.toString()
+}
+
 /**
  * Point of use for Kick: start the standard OAuth flow. Must be called from a
  * user gesture (popup blockers). Builds the authorize URL with PKCE and
@@ -290,15 +308,86 @@ export async function startStandardFlow(
   const state = await randomBase64url(16)
   storePkce(verifier, state)
 
-  const url = new URL(`${T3K_API}/api/v1/oauth/authorize`)
-  url.searchParams.set('client_id', pubkey!)
-  url.searchParams.set('redirect_uri', redirectUri)
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('code_challenge', codeChallenge)
-  url.searchParams.set('code_challenge_method', 'S256')
-  url.searchParams.set('state', state)
+  window.location.href = buildAuthorizeUrl(pubkey!, redirectUri, { state, codeChallenge })
+}
 
-  window.location.href = url.toString()
+const POPUP_WINDOW_NAME = 'openaxe-t3k-auth'
+export { POPUP_WINDOW_NAME }
+const POPUP_WINDOW_FEATURES = 'width=560,height=680,popup=yes'
+
+let activeAuthPopup: Window | null = null
+
+/** The popup the current web OAuth flow opened, or null. Lets callers detect
+ * the user closing it without completing (see authStore's closure watch). */
+export function getActiveAuthPopup(): Window | null {
+  return activeAuthPopup
+}
+
+/**
+ * Popup-based OAuth for the web build: keeps the main window (and its
+ * AudioContext/engine) alive across login so the user isn't dumped back on
+ * PowerGate after the round trip. Opens a blank popup synchronously inside
+ * the user gesture, then navigates it to the authorize URL; the popup
+ * completes the callback on its own and posts the result back to the opener
+ * (see isAuthPopup/notifyPopupResult). Returns false when a popup couldn't
+ * be opened (blocked, or the desktop webview which keeps its fixed-port
+ * bounce-listener redirect flow) - callers should fall back to
+ * startStandardFlow in that case.
+ */
+export async function startPopupOAuthFlow(
+  config = {} as { pubkey?: string; redirectUri?: string },
+): Promise<boolean> {
+  if (getOpenAxe()) return false
+  const pubkey = config.pubkey ?? PUBLISHABLE_KEY
+  const redirectUri = config.redirectUri ?? resolveRedirectUri()
+
+  // The PKCE verifier/state live here in the OPENER's sessionStorage for the
+  // whole flow - the popup only relays the code back, and the exchange runs
+  // in this tab, so nothing needs to survive a cross-origin popup round trip.
+  const verifier = await randomBase64url(32)
+  const codeChallenge = await sha256Base64url(verifier)
+  const state = await randomBase64url(16)
+  storePkce(verifier, state)
+
+  // The crypto above resolves well within the user gesture's transient
+  // activation, so the popup open is still allowed.
+  const popup = window.open('', POPUP_WINDOW_NAME, POPUP_WINDOW_FEATURES)
+  if (!popup) {
+    clearPkce()
+    return false
+  }
+
+  activeAuthPopup = popup
+  popup.location.href = buildAuthorizeUrl(pubkey!, redirectUri, { state, codeChallenge })
+  return true
+}
+
+/** True when this window is the OAuth popup (opened by the main window). */
+export function isAuthPopup(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.opener)
+}
+
+/** Reads the OAuth callback params off the current URL without consuming them. */
+export function readOAuthCallbackParams(): OAuthCallbackParams {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    code: params.get('code'),
+    error: params.get('error'),
+    state: params.get('state'),
+  }
+}
+
+/** Relays the popup's raw callback params to the opener, then closes. Only valid inside the popup. */
+export function notifyPopupResult(params: OAuthCallbackParams): void {
+  try {
+    window.opener?.postMessage(
+      { source: POPUP_AUTH_SOURCE, code: params.code, state: params.state, error: params.error },
+      window.location.origin,
+    )
+  } catch {
+    // The main tab was closed mid-flow - nothing left to tell.
+  }
+  window.close()
 }
 
 // ─── API client ───────────────────────────────────────────────────────────────

@@ -4,13 +4,14 @@ import { SceneNavigator } from '../../../scenes/sceneNavigator'
 import { SLOTS_PER_SCENE } from '../../../scenes/types'
 import { useGraphStore } from '../../../state/graphStore'
 import { useCurrentPresetStore } from '../../../state/currentPresetStore'
+import { usePresetBankStore } from '../../../state/presetBankStore'
 import { useSceneStore } from '../../../state/sceneStore'
 import { useSceneManager } from '../../../state/sceneManager'
 import { usePresetManager } from '../../../state/presetManager'
 import { capturePreset } from '../../../presets/capture'
 import { getPreset, listPresets, savePreset } from '../../../presets/presetStore'
 import type { Preset } from '../../../presets/types'
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, toast } from '@openaxe/ui'
 import styles from './SceneBar.module.css'
 
 export interface SceneBarProps {
@@ -45,6 +46,7 @@ export function SceneBar({ rig }: SceneBarProps) {
   const activeScene = useSceneStore((s) => s.activeScene)
   const activeSlot = useSceneStore((s) => s.activeSlot)
   const switching = useSceneStore((s) => s.switching)
+  const bankSlots = usePresetBankStore((s) => s.slots)
   const openSceneManager = useSceneManager((s) => s.openManager)
   const openPicker = usePresetManager((s) => s.openPicker)
   const openLibrary = usePresetManager((s) => s.openManager)
@@ -96,6 +98,7 @@ export function SceneBar({ rig }: SceneBarProps) {
       await savePreset(updated)
       useCurrentPresetStore.getState().setSaved(updated)
       await refreshNames()
+      toast.success(`Saved changes to "${updated.name}"`)
     } finally {
       setSaveBusy(false)
     }
@@ -108,18 +111,22 @@ export function SceneBar({ rig }: SceneBarProps) {
   const handleClear = (slot: number) => {
     useSceneStore.getState().assignSlot(activeScene, slot, null)
     if (slot === activeSlot) useCurrentPresetStore.getState().setSaved(null)
+    toast.info(`Cleared slot ${slot + 1} of scene ${activeScene + 1}`)
   }
 
   const startRename = (slot: number) => {
-    const id = scene.slots[slot]
-    if (!id) return
+    const bankSlot = scene.slots[slot]
+    if (bankSlot == null) return
+    const id = bankSlots[bankSlot]
     setRenamingSlot(slot)
-    setRenameValue(names.get(id) ?? '')
+    setRenameValue(id ? (names.get(id) ?? '') : '')
   }
 
   const commitRename = async (slot: number) => {
-    const id = scene.slots[slot]
+    const bankSlot = scene.slots[slot]
     setRenamingSlot(null)
+    if (bankSlot == null) return
+    const id = bankSlots[bankSlot]
     if (!id) return
     const trimmed = renameValue.trim()
     if (!trimmed) return
@@ -128,6 +135,7 @@ export function SceneBar({ rig }: SceneBarProps) {
       const renamed = { ...existing, name: trimmed, updatedAt: Date.now() }
       await savePreset(renamed)
       if (slot === activeSlot) useCurrentPresetStore.getState().setSaved(renamed)
+      toast.info(`Renamed to "${trimmed}"`)
     }
     await refreshNames()
   }
@@ -178,7 +186,8 @@ export function SceneBar({ rig }: SceneBarProps) {
 
       <div className={styles.slots}>
         {Array.from({ length: SLOTS_PER_SCENE }, (_, i) => {
-          const presetId = scene.slots[i]
+          const bankSlot = scene.slots[i]
+          const presetId = bankSlot != null ? (bankSlots[bankSlot] ?? null) : null
           const name = presetId ? (names.get(presetId) ?? '…') : null
           const isActive = i === activeSlot
           return (

@@ -4,9 +4,13 @@ import {
   buildSearchTonesQuery,
   clearTokens,
   getAccessToken,
+  isAuthPopup,
+  notifyPopupResult,
+  randomBase64url,
+  readOAuthCallbackParams,
   setTokens,
   sha256Base64url,
-  randomBase64url,
+  startPopupOAuthFlow,
   tryHydrateFromPersistentStorage,
 } from './client'
 
@@ -207,5 +211,103 @@ describe('tone3000 client - native secret store mirroring', () => {
 
     await expect(tryHydrateFromPersistentStorage()).resolves.toBeNull()
     expect(secureDelete).toHaveBeenCalledWith({ key: 'tone3000_refresh_token' })
+  })
+})
+
+describe('tone3000 client - popup OAuth flow', () => {
+  function fakeWindow(overrides: Record<string, unknown> = {}) {
+    const popup = { location: { href: '' }, close: vi.fn() }
+    return {
+      open: vi.fn(() => popup),
+      location: { origin: 'http://localhost:5173' },
+      close: vi.fn(),
+      ...overrides,
+    } as unknown as Window
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('sessionStorage', makeStorage())
+    vi.stubGlobal('localStorage', makeStorage())
+    clearTokens()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('opens a popup, seeds PKCE, and navigates it to the authorize URL', async () => {
+    const win = fakeWindow()
+    vi.stubGlobal('window', win)
+    const popup = win.open('', 'openaxe-t3k-auth', expect.any(String)) as unknown as {
+      location: { href: string }
+      close: () => void
+    }
+    const popupOpenCall = win.open as ReturnType<typeof vi.fn>
+
+    const started = await startPopupOAuthFlow({
+      pubkey: 'pub',
+      redirectUri: 'http://localhost:5173',
+    })
+
+    expect(started).toBe(true)
+    expect(popupOpenCall).toHaveBeenCalledWith(
+      '',
+      'openaxe-t3k-auth',
+      expect.stringContaining('width=560'),
+    )
+    const url = new URL(popup.location.href)
+    expect(url.origin).toBe('https://www.tone3000.com')
+    expect(url.searchParams.get('client_id')).toBe('pub')
+    expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:5173')
+    expect(url.searchParams.get('response_type')).toBe('code')
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256')
+    expect(url.searchParams.get('state')).toBeTruthy()
+    expect(url.searchParams.get('code_challenge')).toBeTruthy()
+    // The PKCE stays in the opener's storage so the exchange can run here
+    // (the popup only relays the code back - see notifyPopupResult).
+    expect(sessionStorage.getItem('t3k_state')).toBe(url.searchParams.get('state'))
+  })
+
+  it('returns false when the popup is blocked, so callers fall back to the redirect flow', async () => {
+    vi.stubGlobal('window', fakeWindow({ open: vi.fn(() => null) }))
+    await expect(startPopupOAuthFlow()).resolves.toBe(false)
+    // The staged PKCE is cleaned up so the fallback redirect flow starts fresh.
+    expect(sessionStorage.getItem('t3k_code_verifier')).toBeNull()
+  })
+
+  it('returns false on the native (desktop) build, which keeps its bounce-listener flow', async () => {
+    vi.stubGlobal('window', fakeWindow({ open: vi.fn(() => null), 'openAxe.version': vi.fn() }))
+    await expect(startPopupOAuthFlow()).resolves.toBe(false)
+  })
+
+  it('notifyPopupResult relays the raw callback params to the opener and closes', () => {
+    const postMessage = vi.fn()
+    const close = vi.fn()
+    vi.stubGlobal('window', {
+      opener: { postMessage },
+      location: { origin: 'http://localhost:5173' },
+      close,
+    } as unknown as Window)
+
+    notifyPopupResult({ code: 'the-code', state: 'state-1', error: null })
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { source: 'openaxe-t3k-auth', code: 'the-code', state: 'state-1', error: null },
+      'http://localhost:5173',
+    )
+    expect(close).toHaveBeenCalled()
+  })
+
+  it('readOAuthCallbackParams reads the code/state/error without consuming them', () => {
+    vi.stubGlobal('window', { location: { search: '?code=c&state=s&error=e' } })
+    expect(readOAuthCallbackParams()).toEqual({ code: 'c', state: 's', error: 'e' })
+    expect(window.location.search).toBe('?code=c&state=s&error=e')
+  })
+
+  it('isAuthPopup is true only for a window with an opener', () => {
+    vi.stubGlobal('window', { opener: {} as Window, location: { origin: 'x' } })
+    expect(isAuthPopup()).toBe(true)
+    vi.stubGlobal('window', { opener: null, location: { origin: 'x' } })
+    expect(isAuthPopup()).toBe(false)
   })
 })
