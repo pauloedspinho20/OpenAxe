@@ -3,6 +3,7 @@
 #include "bridge.h"
 #include "debug_log.h"
 #include "http_server.h"
+#include "mac_menu.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -291,6 +292,17 @@ int main(int argc, char** argv) {
     webview::webview w(openaxe_desktop::DebugEnabled(), nullptr);
     w.set_title("OpenAxe");
     w.set_size(1280, 800, WEBVIEW_HINT_NONE);
+    // Below this the grid UI can't lay out without clipping; webview.h's
+    // set_size with WEBVIEW_HINT_NONE imposes no floor of its own
+    // (issue #300 H4). Kept in step with the plugin editor's PLUG_MIN_* so
+    // both shells agree on the narrowest usable window.
+    w.set_size(720, 520, WEBVIEW_HINT_MIN);
+
+    // webview.h never creates an NSMenu, which costs more than the missing
+    // menus: no Cmd+Q, and — because AppKit routes clipboard actions through
+    // the Edit menu's key equivalents — no Cmd+C/V/X/A/Z in any text field
+    // either (issue #300 H1/H2). No-op off macOS.
+    openaxe_desktop::InstallMainMenu("OpenAxe");
 
     // window.openAxe.* bridge surface (issue #15 M2). Each bind exposes a
     // global JS function; webview marshals its JSON args here and resolves
