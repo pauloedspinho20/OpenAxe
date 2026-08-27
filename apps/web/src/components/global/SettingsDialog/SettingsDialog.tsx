@@ -523,17 +523,17 @@ export function SettingsDialog({
           {!deleteConfirming && (
             <>
               <HardwareButton
-                label="Export All Data"
+                label="Export"
                 disabled={busy === 'export'}
                 onClick={() => void handleExport()}
               />
               <HardwareButton
-                label="Import Data…"
+                label="Import"
                 disabled={busy === 'import'}
                 onClick={() => fileInputRef.current?.click()}
               />
               <HardwareButton
-                label="Delete All Data"
+                label="Delete"
                 variant="danger"
                 disabled={busy === 'delete'}
                 onClick={() => setDeleteConfirming(true)}

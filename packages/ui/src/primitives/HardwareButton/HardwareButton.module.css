@@ -3,8 +3,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   color: var(--ink-2);
-  background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
+
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-control);
   cursor: pointer;
@@ -16,6 +15,16 @@
     color 0.1s ease,
     border-color 0.1s ease,
     box-shadow 0.1s ease;
+}
+
+.default {
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+}
+
+.danger {
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
 }
 
 .button.small {
