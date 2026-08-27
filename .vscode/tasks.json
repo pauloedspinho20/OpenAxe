@@ -7,7 +7,11 @@
       "command": "node scripts/setup.mjs",
       "detail": "Start here. Fetches the DSP submodules, installs dependencies (repairing wrong-architecture native binaries), and configures both CMake projects. Idempotent - safe to re-run any time something looks broken",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -16,7 +20,11 @@
       "command": "node scripts/setup.mjs --web-only",
       "detail": "Same, minus the submodules and CMake - for working on the web app without a C++ toolchain",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -25,7 +33,10 @@
       "command": "pnpm install",
       "detail": "pnpm install across the workspace (apps/web, packages/ui). Prefer \"Setup: everything\" - it also repairs the wrong-architecture native binaries a pnpm running under emulation installs",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
       "problemMatcher": []
     },
     {
@@ -34,7 +45,10 @@
       "command": "pnpm --filter @openaxe/web exec playwright install",
       "detail": "One-time fetch of the chromium/firefox/webkit binaries used by the e2e suite",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
       "problemMatcher": []
     },
     {
@@ -44,9 +58,19 @@
       "detail": "Starts the Vite dev server (apps/web) - web app only, no C++ toolchain needed",
       "isBackground": true,
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
       "problemMatcher": {
-        "pattern": [{ "regexp": ".", "file": 1, "location": 2, "message": 3 }],
+        "pattern": [
+          {
+            "regexp": ".",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          }
+        ],
         "background": {
           "activeOnStart": true,
           "beginsPattern": "VITE v",
@@ -59,8 +83,15 @@
       "type": "shell",
       "command": "pnpm build",
       "detail": "Typecheck + production build of the web app and packages/ui (excludes the native desktop app), via Turborepo",
-      "group": { "kind": "build", "isDefault": true },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$tsc"]
     },
     {
@@ -69,7 +100,11 @@
       "command": "pnpm lint",
       "detail": "oxlint, via Turborepo",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -78,7 +113,11 @@
       "command": "pnpm format:check",
       "detail": "Prettier --check, via Turborepo",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -87,7 +126,11 @@
       "command": "pnpm format",
       "detail": "Prettier --write",
       "group": "none",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -97,7 +140,10 @@
       "detail": "Vitest in watch mode (apps/web)",
       "isBackground": true,
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
       "problemMatcher": []
     },
     {
@@ -105,8 +151,15 @@
       "type": "shell",
       "command": "pnpm test:run",
       "detail": "Vitest, single run - unit/component tests, via Turborepo",
-      "group": { "kind": "test", "isDefault": true },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -115,7 +168,11 @@
       "command": "pnpm --filter @openaxe/web test:coverage",
       "detail": "Vitest with the v8 coverage report (apps/web)",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -124,7 +181,11 @@
       "command": "pnpm test:e2e",
       "detail": "Playwright e2e suite, via Turborepo - needs \"Install Playwright browsers\" run once first",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": [],
       "dependsOn": ["Install Playwright browsers"]
     },
@@ -135,7 +196,10 @@
       "detail": "Starts the Storybook dev server (packages/ui)",
       "isBackground": true,
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
       "problemMatcher": []
     },
     {
@@ -152,7 +216,10 @@
       "command": "node scripts/setup.mjs --submodules-only",
       "detail": "One-time fetch of the vendored DSP library submodules (dspark's Effects, NAMCore's Eigen/AudioDSPTools, Dragonfly's dpf) - needed before configuring packages/core. Skips whatever is already present",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
       "problemMatcher": []
     },
     {
@@ -161,7 +228,11 @@
       "command": "cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
       "detail": "Configures the packages/core C++ DSP library with tests enabled - see packages/core/README.md if cmake isn't on your PATH",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": [],
       "dependsOn": ["C++: Init submodules"]
     },
@@ -170,8 +241,15 @@
       "type": "shell",
       "command": "cmake --build packages/core/build",
       "detail": "Builds packages/core (graph engine, NAM wrapper, Dragonfly Reverb algorithms)",
-      "group": { "kind": "build", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"],
       "dependsOn": ["C++: Configure"]
     },
@@ -180,8 +258,15 @@
       "type": "shell",
       "command": "ctest --test-dir packages/core/build --output-on-failure",
       "detail": "Runs the packages/core CTest suite (graph engine, NAM inference, all 4 Dragonfly Reverb algorithms)",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": [],
       "dependsOn": ["C++: Build"]
     },
@@ -206,7 +291,11 @@
       "command": "cmake -S apps/desktop -B apps/desktop/build -DOPENAXE_DESKTOP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug",
       "detail": "Configures the apps/desktop C++ shell (webview + RtAudio + core) with the CTest suite enabled",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -214,8 +303,15 @@
       "type": "shell",
       "command": "pnpm --filter @openaxe/desktop build",
       "detail": "Release build of the native desktop app + bundles the React UI into build/ui (scripts/build.mjs)",
-      "group": { "kind": "build", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"],
       "dependsOn": ["Desktop: Configure (with tests)"]
     },
@@ -225,7 +321,11 @@
       "command": "pnpm --filter @openaxe/desktop dev",
       "detail": "Debug-builds the desktop app and launches the window against the bundled web UI",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -234,7 +334,10 @@
       "command": "pnpm --filter @openaxe/desktop dev:fast",
       "detail": "Debug-builds and launches the desktop app reusing the UI already in build/ui - for C++-only changes",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
       "problemMatcher": []
     },
     {
@@ -243,7 +346,10 @@
       "command": "pnpm dev:desktop:attach",
       "detail": "Debug-builds and launches the desktop app pointed at http://localhost:5173 (OPENAXE_UI_URL) - needs \"Web: Dev server\" running, gives the native shell Vite HMR",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
       "problemMatcher": []
     },
     {
@@ -259,7 +365,11 @@
       "command": "pnpm build:all",
       "detail": "Production build of everything: web app, packages/ui, and the native desktop app (needs CMake + a C++20 compiler)",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$tsc"]
     },
     {
@@ -267,8 +377,15 @@
       "type": "shell",
       "command": "ctest --test-dir apps/desktop/build --output-on-failure",
       "detail": "Runs the desktop CTest suite (audio I/O, JS bridge, latency) - needs Configure (with tests) + Build first",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": [],
       "dependsOn": ["Desktop: Build"]
     },
@@ -278,7 +395,11 @@
       "command": "pnpm --filter @openaxe/desktop package",
       "detail": "Builds the app + UI and runs CPack -> build/openaxe-desktop-<v>.dmg|.zip|.deb",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -295,7 +416,11 @@
       "command": "cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release",
       "detail": "Configures the VST3 + standalone plugin (iPlug2 + core, WHOLE_ARCHIVE). Fetches iPlug2 via FetchContent (pinned d54f690) — offline smoke tests still configure. See packages/vst3/README.md",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -304,7 +429,11 @@
       "command": "cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Debug",
       "detail": "Debug configure for the VST3 plugin — enables sanitizers and richer diagnostics (use with TSan/RTSan tasks)",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -312,8 +441,15 @@
       "type": "shell",
       "command": "cmake --build packages/vst3/build --config Release",
       "detail": "Builds the VST3 bundle + standalone (needs Configure). Smoke/latency/suspend/realtime/editor tests build even without the VST3 SDK or a host",
-      "group": { "kind": "build", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"],
       "dependsOn": ["Build", "VST: Configure (Release)"],
       "dependsOrder": "sequence"
@@ -324,7 +460,11 @@
       "command": "cmake --build packages/vst3/build --config Debug",
       "detail": "Debug build — pairs with Configure (Debug), for TSan/RTSan instrumented builds",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"],
       "dependsOn": ["Build", "VST: Configure (Debug)"],
       "dependsOrder": "sequence"
@@ -332,10 +472,17 @@
     {
       "label": "VST: Test",
       "type": "shell",
-      "command": "ctest --test-dir packages/vst3/build --output-on-failure",
+      "command": "ctest --test-dir packages/vst3/build --output-on-failure -LE validator",
       "detail": "Runs the VST3 CTest suite (smoke, latency, suspend, param_surface, state, asset, realtime_safety, editor + validators that SKIP when tool/bundle absent) — the single AGENTS.md entry point",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": [],
       "dependsOn": ["VST: Build"]
     },
@@ -353,7 +500,11 @@
       "command": "cmake --build packages/vst3/build --target openaxe_standalone && ./packages/vst3/build/openaxe_standalone",
       "detail": "Builds and runs the standalone plugin (no DAW needed, same DSP as VST3 — debugger-friendly)",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -362,7 +513,11 @@
       "command": "mkdir -p ~/Library/Audio/Plug-Ins/VST3 && cp -R packages/vst3/build/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/VST3/ 2>/dev/null || cp -R packages/vst3/build/openaxe_vst3.vst3 ~/Library/Audio/Plug-Ins/VST3/ 2>/dev/null || echo 'Bundle not yet built — run VST: Build first (looks for OpenAxe.vst3 / openaxe_vst3.vst3)'",
       "detail": "Copies the built .vst3 bundle into the macOS user VST3 dir so a host can scan it (Linux: ~/.vst3/, Windows: %COMMONPROGRAMFILES%\\VST3\\)",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -371,7 +526,11 @@
       "command": "ls -lh packages/vst3/build/*.vst3 2>/dev/null || ls -lh packages/vst3/build/Release/*.vst3 2>/dev/null || ls -lh packages/vst3/build/openaxe*.vst3 2>/dev/null || echo 'No bundle yet — run VST: Build'",
       "detail": "Shows the built VST3 bundle(s) and their sizes",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -380,7 +539,11 @@
       "command": "cmake --build packages/vst3/build --target openaxe_clap --config Release",
       "detail": "Builds the CLAP bundle (needs VST: Configure). Output: packages/vst3/build/OpenAxe.clap — Bitwig/REAPER. EXCLUDE_FROM_ALL so not built by default. Depends on the web build: the bundle copies apps/web/dist into Resources/ui at build time.",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"],
       "dependsOn": ["Build", "VST: Configure (Release)"],
       "dependsOrder": "sequence"
@@ -389,9 +552,13 @@
       "label": "VST: Build AU",
       "type": "shell",
       "command": "cmake --build packages/vst3/build --target openaxe_au --config Release",
-      "detail": "Builds the AUv2 bundle (macOS only, needs VST: Configure). Output: packages/vst3/build/OpenAxe.component — Logic/GarageBand, validated via auval -v aufx Nms1 NwSt. Depends on the web build: the bundle copies apps/web/dist into Resources/ui at build time.",
+      "detail": "Builds the AUv2 bundle (macOS only, needs VST: Configure). Output: packages/vst3/build/OpenAxe.component — Logic/GarageBand, validated via auval -v aumf Nms1 NwSt. Depends on the web build: the bundle copies apps/web/dist into Resources/ui at build time.",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"],
       "dependsOn": ["Build", "VST: Configure (Release)"],
       "dependsOrder": "sequence"
@@ -401,24 +568,36 @@
       "type": "shell",
       "command": "mkdir -p ~/Library/Audio/Plug-Ins/CLAP \"$HOME/Library/Application Support/OpenAxe\" && cp -R packages/vst3/build/OpenAxe.clap ~/Library/Audio/Plug-Ins/CLAP/ && xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap 2>/dev/null; rm -rf \"$HOME/Library/Application Support/OpenAxe/ui\" && cp -R apps/web/dist \"$HOME/Library/Application Support/OpenAxe/ui\" && echo 'CLAP -> ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap'; echo 'UI   -> ~/Library/Application Support/OpenAxe/ui (CLAP is a bare file, so the UI cannot live inside it)'",
       "detail": "Installs the CLAP plugin for Bitwig/REAPER, plus the React UI into ~/Library/Application Support/OpenAxe/ui. The CLAP target builds as a bare Mach-O file rather than a directory bundle, so unlike the VST3/AU there is no Contents/Resources inside it to hold the UI. Run VST: Build CLAP and the web build first.",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
       "label": "VST: Install AU (macOS) to ~/Library/Audio/Plug-Ins/Components/",
       "type": "shell",
       "command": "mkdir -p ~/Library/Audio/Plug-Ins/Components && rm -rf ~/Library/Audio/Plug-Ins/Components/OpenAxe.component && cp -R packages/vst3/build/OpenAxe.component ~/Library/Audio/Plug-Ins/Components/ && xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/OpenAxe.component 2>/dev/null; echo 'AU -> ~/Library/Audio/Plug-Ins/Components/OpenAxe.component (Logic rescans on launch)'",
-      "detail": "Installs the AUv2 bundle for Logic/GarageBand. Run VST: Build AU first, then validate with auval -v aufx Nms1 NwSt.",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "detail": "Installs the AUv2 bundle for Logic/GarageBand. Run VST: Build AU first, then validate with auval -v aumf Nms1 NwSt.",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
       "label": "VST: Export (all-in-one) — web + VST3/CLAP/AU + install",
       "type": "shell",
-      "command": "set -e; echo \"— 1/5 Building web UI (apps/web → dist, for the plugin webview) —\"; pnpm build; echo \"— 2/5 Configuring plugin (Release, fetches iPlug2) —\"; cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release; if [ ! -f packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug/VST3_SDK/pluginterfaces/vst/ivstaudioprocessor.h ]; then echo \"— Fetching VST3/CLAP SDKs (first run only) —\"; (cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash ./download-vst3-sdk.sh) || true; (cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash ./download-clap-sdks.sh) || true; echo \"— Reconfiguring with SDKs —\"; cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release; fi; echo \"— 3/5 Building VST3 + CLAP + AU —\"; cmake --build packages/vst3/build --config Release -j; cmake --build packages/vst3/build --target openaxe_clap --config Release; if [ \"$(uname)\" = \"Darwin\" ]; then cmake --build packages/vst3/build --target openaxe_au --config Release || true; fi; echo \"— 4/5 Running plugin tests —\"; ctest --test-dir packages/vst3/build --output-on-failure; echo \"— 5/5 Installing to user Plug-Ins dirs —\"; if [ \"$(uname)\" = \"Darwin\" ]; then mkdir -p ~/Library/Audio/Plug-Ins/VST3 ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/CLAP; rm -rf ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component; cp -R packages/vst3/build/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/VST3/ && echo \"  VST3 → ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3\"; cp packages/vst3/build/OpenAxe.clap ~/Library/Audio/Plug-Ins/CLAP/ 2>/dev/null && echo \"  CLAP → ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap\" || true; mkdir -p \"$HOME/Library/Application Support/OpenAxe\" && rm -rf \"$HOME/Library/Application Support/OpenAxe/ui\" && cp -R apps/web/dist \"$HOME/Library/Application Support/OpenAxe/ui\" && echo \"  UI   → ~/Library/Application Support/OpenAxe/ui (for the bare .clap)\" || true; cp -R packages/vst3/build/OpenAxe.component ~/Library/Audio/Plug-Ins/Components/ 2>/dev/null && echo \"  AU   → ~/Library/Audio/Plug-Ins/Components/OpenAxe.component\" || true; xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component 2>/dev/null || true; elif [ \"$(uname)\" = \"Linux\" ]; then mkdir -p ~/.vst3 ~/.clap; cp -R packages/vst3/build/OpenAxe.vst3 ~/.vst3/ 2>/dev/null || true; cp packages/vst3/build/OpenAxe.clap ~/.clap/ 2>/dev/null || true; echo \"  VST3 → ~/.vst3/  CLAP → ~/.clap/\"; else echo \"  Windows: copy packages/vst3/build/OpenAxe.vst3 → %COMMONPROGRAMFILES%\\\\VST3\\\\ and OpenAxe.clap → %COMMONPROGRAMFILES%\\\\CLAP\\\\\"; fi; echo \"\"; echo \"✔ Export complete — bundles in packages/vst3/build/:\"; ls -lh packages/vst3/build/*.vst3 packages/vst3/build/*.clap 2>/dev/null; ls -ld packages/vst3/build/*.component 2>/dev/null; echo \"\"; echo \"Hosts will scan on next launch (REAPER: Options → Preferences → Plug-ins → VST → Clear cache/rescan)\"",
+      "command": "set -e; echo \"— 1/5 Building web UI (apps/web → dist, for the plugin webview) —\"; pnpm build; echo \"— 2/5 Configuring plugin (Release, fetches iPlug2) —\"; cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release; if [ ! -f packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug/VST3_SDK/pluginterfaces/vst/ivstaudioprocessor.h ]; then echo \"— Fetching VST3/CLAP SDKs (first run only) —\"; (cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash ./download-vst3-sdk.sh) || true; (cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash ./download-clap-sdks.sh) || true; echo \"— Reconfiguring with SDKs —\"; cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release; fi; echo \"— 3/5 Building VST3 + CLAP + AU —\"; cmake --build packages/vst3/build --config Release -j; cmake --build packages/vst3/build --target openaxe_clap --config Release; if [ \"$(uname)\" = \"Darwin\" ]; then cmake --build packages/vst3/build --target openaxe_au --config Release || true; fi; echo \"— 4/5 Running plugin tests (validators excluded — run 'VST: Validators' for those, pluginval alone takes ~13 min) —\"; ctest --test-dir packages/vst3/build --output-on-failure -LE validator; echo \"— 5/5 Installing to user Plug-Ins dirs —\"; if [ \"$(uname)\" = \"Darwin\" ]; then mkdir -p ~/Library/Audio/Plug-Ins/VST3 ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/CLAP; rm -rf ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component; cp -R packages/vst3/build/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/VST3/ && echo \"  VST3 → ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3\"; cp packages/vst3/build/OpenAxe.clap ~/Library/Audio/Plug-Ins/CLAP/ 2>/dev/null && echo \"  CLAP → ~/Library/Audio/Plug-Ins/CLAP/OpenAxe.clap\" || true; mkdir -p \"$HOME/Library/Application Support/OpenAxe\" && rm -rf \"$HOME/Library/Application Support/OpenAxe/ui\" && cp -R apps/web/dist \"$HOME/Library/Application Support/OpenAxe/ui\" && echo \"  UI   → ~/Library/Application Support/OpenAxe/ui (for the bare .clap)\" || true; cp -R packages/vst3/build/OpenAxe.component ~/Library/Audio/Plug-Ins/Components/ 2>/dev/null && echo \"  AU   → ~/Library/Audio/Plug-Ins/Components/OpenAxe.component\" || true; xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component 2>/dev/null || true; elif [ \"$(uname)\" = \"Linux\" ]; then mkdir -p ~/.vst3 ~/.clap; cp -R packages/vst3/build/OpenAxe.vst3 ~/.vst3/ 2>/dev/null || true; cp packages/vst3/build/OpenAxe.clap ~/.clap/ 2>/dev/null || true; echo \"  VST3 → ~/.vst3/  CLAP → ~/.clap/\"; else echo \"  Windows: copy packages/vst3/build/OpenAxe.vst3 → %COMMONPROGRAMFILES%\\\\VST3\\\\ and OpenAxe.clap → %COMMONPROGRAMFILES%\\\\CLAP\\\\\"; fi; echo \"\"; echo \"✔ Export complete — bundles in packages/vst3/build/:\"; ls -lh packages/vst3/build/*.vst3 packages/vst3/build/*.clap 2>/dev/null; ls -ld packages/vst3/build/*.component 2>/dev/null; echo \"\"; echo \"Hosts will scan on next launch (REAPER: Options → Preferences → Plug-ins → VST → Clear cache/rescan)\"",
       "detail": "One-click export like the desktop/VST tasks: builds the React UI, (re)fetches VST3/CLAP SDKs if missing, configures + builds VST3/CLAP/AU (Release), runs ctest, installs to ~/Library/Audio/Plug-Ins/* (macOS) so REAPER/Logic/Bitwig can scan, and reveals sizes. Mirrors .github/workflows/plugin.yml locally.",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"]
     },
     {
@@ -427,7 +606,11 @@
       "command": "node packages/ui/scripts/generate-tokens.mjs --target=css",
       "detail": "Regenerates packages/ui/tokens/{colors,spacing,typography,shadows}.css from design-tokens.json (light/dark palettes — primary target for web/desktop/plugin React, issue #131)",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -436,7 +619,11 @@
       "command": "node packages/ui/scripts/generate-tokens.mjs --target=cpp",
       "detail": "Generates packages/vst3/generated/tokens.h (IColor(a,r,g,b) with rgb(.../...%) resolved, constexpr float spacing) — optional for native controls, issue #131",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -445,7 +632,11 @@
       "command": "node packages/ui/scripts/generate-tokens.mjs",
       "detail": "Regenerates both CSS and the optional C++ header from design-tokens.json — run after editing the JSON",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -453,8 +644,15 @@
       "type": "shell",
       "command": "node packages/ui/scripts/generate-tokens.mjs --check",
       "detail": "Fails if the generated CSS/C++ drift from design-tokens.json — what CI runs (.github/workflows/ci.yml)",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -463,7 +661,11 @@
       "command": "cmake -S packages/vst3 -B packages/vst3/build-tsan -DOPENAXE_VST3_ENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo && cmake --build packages/vst3/build-tsan -j && ctest --test-dir packages/vst3/build-tsan --output-on-failure",
       "detail": "ThreadSanitizer over the concurrent suspend/editor stress (issue #130) — Linux GCC/Clang only (Apple Clang ships no libclang_rt.tsan for arm64)",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -472,16 +674,24 @@
       "command": "cmake -S packages/vst3 -B packages/vst3/build-rtsan -DOPENAXE_VST3_ENABLE_RTSAN=ON && cmake --build packages/vst3/build-rtsan -j && ctest --test-dir packages/vst3/build-rtsan --output-on-failure -R realtime",
       "detail": "RealtimeSanitizer over the realtime_safety test (issue #130) — traps allocations/locks/syscalls on the audio thread, Clang 18+ only",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
       "label": "VST: Validators (pluginval/auval/VST3 validator/clap-validator)",
       "type": "shell",
-      "command": "ctest --test-dir packages/vst3/build --output-on-failure -R 'pluginval|auval|validator|clap'",
-      "detail": "Runs the host validator CTests — SKIP with a message when the external tool or built bundle is absent, validate strictly when present (pluginval --strictness 10, auval -v aufx Nms1 NwSt)",
+      "command": "ctest --test-dir packages/vst3/build --output-on-failure -L validator",
+      "detail": "Runs the host validators only: pluginval (strictness 10), auval, VST3 validator, clap-validator. Slow on purpose - pluginval alone is ~13 min because it opens, resizes and automates the editor, which is what catches editor crashes before a DAW does. Each SKIPs cleanly if its tool is absent.",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -490,7 +700,11 @@
       "command": "bash scripts/build-core-wasm.sh",
       "detail": "Compiles packages/core to WASM via Emscripten — overwrites apps/web/public/wasm-core/{js,wasm}. Needs emsdk on PATH. Run after changing include/openaxe/api.h or EXPORTED_FUNCTIONS",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": ["$gcc"]
     },
     {
@@ -499,7 +713,11 @@
       "command": "set -e; node scripts/gen-param-schema.mjs --check; node scripts/gen-param-schema.mjs --check --target=automation-map; node scripts/check-grid-dims.mjs --check; node scripts/check-wasm-exports.mjs --check; node scripts/sync-version.mjs --check; node packages/ui/scripts/generate-tokens.mjs --check; echo 'All drift guards in sync.'",
       "detail": "Runs every drift guard CI runs, in ci.yml's order: param schema, automation map, grid dims, WASM exports, version sync, design tokens. Fails on the first mismatch.",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -507,8 +725,15 @@
       "type": "shell",
       "command": "node scripts/gen-param-schema.mjs --check",
       "detail": "Checks web paramSchema.ts ↔ packages/core param_schema.json agreement (issue #51). Run without --check to fix. For plugin automation map use next task",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -516,8 +741,15 @@
       "type": "shell",
       "command": "node scripts/gen-param-schema.mjs --check --target=automation-map",
       "detail": "Checks plugin automation slot layout packages/vst3/generated/automation_param_map.h (issue #121, --target=automation-map)",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -525,8 +757,15 @@
       "type": "shell",
       "command": "node scripts/check-grid-dims.mjs --check",
       "detail": "Checks grid row/col constants TS (gridConfig.ts) vs C++ (grid_config.h) — issue #61. Use --fix to repair",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -534,8 +773,15 @@
       "type": "shell",
       "command": "node scripts/check-wasm-exports.mjs --check",
       "detail": "Checks every _nam_studio_* symbol the web app calls is in packages/core CMake EXPORTED_FUNCTIONS — issue #70. Use --fix to rewrite CMakeLists.txt",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -543,8 +789,15 @@
       "type": "shell",
       "command": "node scripts/sync-version.mjs --check",
       "detail": "Checks every package.json version matches root VERSION file — issue #54. Run without --check to sync",
-      "group": { "kind": "test", "isDefault": false },
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     },
     {
@@ -553,7 +806,11 @@
       "command": "pnpm build-storybook",
       "detail": "Static Storybook build, scans packages/ui stories — mirrors ci.yml Build Storybook step",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
       "problemMatcher": []
     }
   ]

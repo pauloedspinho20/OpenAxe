@@ -13,6 +13,8 @@ project(openaxe_vst3 VERSION ${OPENAXE_VERSION} LANGUAGES CXX C)
 math(EXPR OPENAXE_VERSION_HEX
   "(${PROJECT_VERSION_MAJOR} << 16) + (${PROJECT_VERSION_MINOR} << 8) + ${PROJECT_VERSION_PATCH}"
   OUTPUT_FORMAT HEXADECIMAL)
+math(EXPR OPENAXE_VERSION_HEX_DEC
+  "(${PROJECT_VERSION_MAJOR} << 16) + (${PROJECT_VERSION_MINOR} << 8) + ${PROJECT_VERSION_PATCH}")
 add_compile_definitions(
   OPENAXE_VERSION_STR="${OPENAXE_VERSION}"
   OPENAXE_VERSION_HEX=${OPENAXE_VERSION_HEX})
@@ -225,6 +227,115 @@ if(IPLUG2_AVAILABLE AND EXISTS "${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK
   set(VST3_SDK_AVAILABLE ON)
 endif()
 
+
+# ── macOS bundle Info.plists (issue #300 F3) ──────────────────────────────
+# Generated from resources/Info.plist.in so the identifiers and version come
+# from config.h and the root VERSION file rather than being restated. CMake's
+# default plist declared CFBundlePackageType APPL (VST3 and AU require BNDL)
+# and left CFBundleIdentifier/Name/Version empty, which auval rejects outright
+# and which makes codesigning meaningless.
+if(APPLE)
+  # AU component type follows iPlug2's own rule
+  # (IPlugProcessor::GetAUPluginType, mirrored in Scripts/validate_audiounit.sh):
+  # an effect that accepts MIDI in is a music effect 'aumf', not 'aufx'. Getting
+  # this wrong is not cosmetic — auval reports "Class Data fields aumf, Nms1,
+  # NwSt do not match component description" and fails validation, because the
+  # plugin registers one type and the plist advertises another.
+  #
+  # Parsed out of config.h rather than restated, so flipping PLUG_DOES_MIDI_IN
+  # or PLUG_TYPE cannot silently desync the plist from the binary.
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config.h" _openaxe_config_h)
+  string(REGEX MATCH "#define[ \t]+PLUG_TYPE[ \t]+([0-9]+)" _m "${_openaxe_config_h}")
+  set(_plug_type "${CMAKE_MATCH_1}")
+  string(REGEX MATCH "#define[ \t]+PLUG_DOES_MIDI_IN[ \t]+([0-9]+)" _m "${_openaxe_config_h}")
+  set(_plug_midi_in "${CMAKE_MATCH_1}")
+  if(_plug_type STREQUAL "1")
+    set(OPENAXE_AU_TYPE "aumu")   # instrument
+  elseif(_plug_type STREQUAL "2")
+    set(OPENAXE_AU_TYPE "aumi")   # MIDI effect
+  elseif(_plug_midi_in STREQUAL "1")
+    set(OPENAXE_AU_TYPE "aumf")   # effect that takes MIDI in
+  else()
+    set(OPENAXE_AU_TYPE "aufx")   # plain effect
+  endif()
+  message(STATUS "packages/vst3: AU component type ${OPENAXE_AU_TYPE} "
+                 "(PLUG_TYPE=${_plug_type}, PLUG_DOES_MIDI_IN=${_plug_midi_in})")
+
+  set(OPENAXE_PLUG_NAME "OpenAxe")
+  set(OPENAXE_PLUG_UID "Nms1")   # PLUG_UNIQUE_ID in config.h
+  set(OPENAXE_PLUG_MFR_ID "NwSt")  # PLUG_MFR_ID
+  set(OPENAXE_COPYRIGHT "Copyright 2026 OpenAxe (GPLv3)")
+
+  # The identifier must match iPlug2's BUNDLE_ID exactly:
+  #   BUNDLE_DOMAIN "." BUNDLE_MFR "." API_EXT "." BUNDLE_NAME
+  # (IPlug_include_in_plug_hdr.h). IPlugAU::GetProperty looks the bundle up with
+  # CFBundleGetBundleWithIdentifier(BUNDLE_ID) when the host asks for the Cocoa
+  # UI and passes the result straight to CFBundleCopyBundleURL — so an
+  # identifier that does not match returns NULL and segfaults the host. Getting
+  # this subtly wrong (omitting BUNDLE_MFR) is what crashed auval at
+  # "VERIFYING CUSTOM UI".
+  set(OPENAXE_BUNDLE_DOMAIN "com.openaxe")  # BUNDLE_DOMAIN in config.h
+  set(OPENAXE_BUNDLE_MFR "OpenAxe")         # BUNDLE_MFR
+  function(openaxe_write_plist out_var kind api_ext extra)
+    set(OPENAXE_BUNDLE_ID
+        "${OPENAXE_BUNDLE_DOMAIN}.${OPENAXE_BUNDLE_MFR}.${api_ext}.${OPENAXE_PLUG_NAME}")
+    set(OPENAXE_PLIST_EXTRA "${extra}")
+    set(_out "${CMAKE_BINARY_DIR}/generated_plists/${OPENAXE_PLUG_NAME}-${kind}-Info.plist")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in" "${_out}" @ONLY)
+    set(${out_var} "${_out}" PARENT_SCOPE)
+  endfunction()
+
+  openaxe_write_plist(OPENAXE_VST3_PLIST "VST3" "vst3" "")   # API_EXT for VST3_API
+  openaxe_write_plist(OPENAXE_CLAP_PLIST "CLAP" "clap" "")   # API_EXT for CLAP_API
+
+  # The AU needs its AudioComponents registration, or the system never
+  # advertises the plugin and auval cannot find it. factoryFunction and
+  # NSPrincipalClass must match AUV2_FACTORY / AUV2_VIEW_CLASS_STR in config.h.
+  string(CONCAT OPENAXE_AU_EXTRA
+    "  <key>AudioComponents</key>\n"
+    "  <array>\n"
+    "    <dict>\n"
+    "      <key>description</key>\n"
+    "      <string>Guitar/bass amp + cab + effects powered by Neural Amp Modeler</string>\n"
+    "      <key>factoryFunction</key>\n"
+    "      <string>OpenAxePlugin_Factory</string>\n"
+    "      <key>manufacturer</key>\n"
+    "      <string>${OPENAXE_PLUG_MFR_ID}</string>\n"
+    "      <key>name</key>\n"
+    "      <string>OpenAxe: OpenAxe</string>\n"
+    "      <key>sandboxSafe</key>\n"
+    "      <true/>\n"
+    "      <key>subtype</key>\n"
+    "      <string>${OPENAXE_PLUG_UID}</string>\n"
+    "      <key>type</key>\n"
+    "      <string>${OPENAXE_AU_TYPE}</string>\n"
+    "      <key>version</key>\n"
+    "      <integer>${OPENAXE_VERSION_HEX_DEC}</integer>\n"
+    "    </dict>\n"
+    "  </array>\n"
+    "  <key>AudioUnit Version</key>\n"
+    "  <string>${OPENAXE_VERSION_HEX}</string>\n"
+    "  <key>NSPrincipalClass</key>\n"
+    "  <string>OpenAxePlugin_View</string>")
+  openaxe_write_plist(OPENAXE_AU_PLIST "AU" "audiounit" "${OPENAXE_AU_EXTRA}")  # API_EXT for AU_API
+endif()
+
+
+# A conformant macOS bundle carries Contents/PkgInfo; CMake does not create one
+# for a plain MODULE library bundle (issue #300 F3).
+function(openaxe_write_pkginfo target)
+  if(NOT APPLE OR NOT TARGET ${target})
+    return()
+  endif()
+  set(_pkginfo "${CMAKE_BINARY_DIR}/generated_plists/PkgInfo")
+  file(WRITE "${_pkginfo}" "BNDL????")
+  add_custom_command(TARGET ${target} POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy "${_pkginfo}"
+            "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/PkgInfo"
+    COMMENT "${target}: writing Contents/PkgInfo"
+    VERBATIM)
+endfunction()
+
 # ── Plugin sources (shared across all formats) ───────────────────────
 # Editor shell (issue #132) hosts the shared React app via webview — thin
 # bridge like desktop, no IGraphics fork. Primitives (issue #133) reuse the
@@ -305,10 +416,12 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
         OUTPUT_NAME "OpenAxe"
         PREFIX ""
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_VST3_PLIST}"
       )
-      if(NOT EXISTS "${PLUG_RESOURCES_DIR}/OpenAxe-VST3-Info.plist")
-        message(STATUS "packages/vst3: OpenAxe-VST3-Info.plist not found — VST3 bundle will use default plist")
-      endif()
+      openaxe_write_pkginfo(openaxe_vst3)
+      # (The Info.plist is generated above from resources/Info.plist.in and
+      # attached via MACOSX_BUNDLE_INFO_PLIST — no template file is expected
+      # in PLUG_RESOURCES_DIR.)
     else()
       set_target_properties(openaxe_vst3 PROPERTIES
         OUTPUT_NAME "OpenAxe"
@@ -409,16 +522,29 @@ if(IPLUG2_AVAILABLE AND CLAP_SDK_AVAILABLE)
     if(TARGET iPlug2::CLAP)
       target_link_libraries(openaxe_clap PRIVATE iPlug2::CLAP)
     endif()
-    if(COMMAND iplug_configure_clap)
-      if(EXISTS "${PLUG_RESOURCES_DIR}/OpenAxe-CLAP-Info.plist")
-        iplug_configure_clap(openaxe_clap OpenAxe)
-      else()
-        message(STATUS "packages/vst3: OpenAxe-CLAP-Info.plist not found at ${PLUG_RESOURCES_DIR} — CLAP bundle plist skipped (standalone CLAP still builds as .clap)")
-      endif()
-    endif()
+    # iplug_configure_clap is deliberately not used: it relocates output to
+    # ${CMAKE_BINARY_DIR}/out, which every path in the CI artifact globs, the
+    # VS Code tasks and the validator tests would have to follow. We configure
+    # the bundle ourselves and supply the same generated plist.
   endif()
   target_compile_definitions(openaxe_clap PRIVATE CLAP_API=1)
-  set_target_properties(openaxe_clap PROPERTIES OUTPUT_NAME "OpenAxe" PREFIX "" SUFFIX ".clap" EXCLUDE_FROM_ALL TRUE)
+  if(APPLE)
+    # A real directory bundle, not a bare Mach-O file. The CLAP shipped as a
+    # bare file had no Contents/Resources to hold the React UI, so an installed
+    # .clap found no index.html and opened an empty editor (issue #300 F3).
+    set_target_properties(openaxe_clap PROPERTIES
+      BUNDLE TRUE
+      BUNDLE_EXTENSION "clap"
+      OUTPUT_NAME "OpenAxe"
+      PREFIX ""
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+      MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_CLAP_PLIST}"
+      EXCLUDE_FROM_ALL TRUE
+    )
+    openaxe_write_pkginfo(openaxe_clap)
+  else()
+    set_target_properties(openaxe_clap PROPERTIES OUTPUT_NAME "OpenAxe" PREFIX "" SUFFIX ".clap" EXCLUDE_FROM_ALL TRUE)
+  endif()
   if(APPLE)
     set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -481,8 +607,12 @@ if(APPLE AND IPLUG2_AVAILABLE)
     BUNDLE_EXTENSION "component"
     OUTPUT_NAME "OpenAxe"
     PREFIX ""
+    MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_AU_PLIST}"
     EXCLUDE_FROM_ALL TRUE
   )
+  # Without the AudioComponents dict in this plist the system never advertises
+  # the component and auval reports "didn't find the component" (issue #300 F3).
+  openaxe_write_pkginfo(openaxe_au)
   # APPL needs Obj-C++ for the AU glue + webview.
   set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")

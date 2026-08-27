@@ -136,10 +136,20 @@ add_test(NAME vst3_vst3_validator
 )
 
 add_test(NAME vst3_auval
-  COMMAND bash -c "if [ \"$(uname)\" != \"Darwin\" ]; then echo 'SKIP: auval only on macOS'; exit 0; fi; if ! command -v auval >/dev/null 2>&1; then echo 'SKIP: auval not found (Xcode command line tools)'; exit 0; fi; echo 'auval -v aufx Nms1 NwSt (expects AU installed in ~/Library/Audio/Plug-Ins/Components/ or /Library/Audio/Plug-Ins/Components/)'; if ! auval -v aufx Nms1 NwSt 2>&1; then echo 'SKIP: AU not installed in system plug-in dir — copy OpenAxe.component there and re-run'; exit 0; fi"
+  COMMAND bash -c "if [ \"$(uname)\" != \"Darwin\" ]; then echo 'SKIP: auval only on macOS'; exit 0; fi; if ! command -v auval >/dev/null 2>&1; then echo 'SKIP: auval not found (Xcode command line tools)'; exit 0; fi; echo 'auval -v aumf Nms1 NwSt (expects AU installed in ~/Library/Audio/Plug-Ins/Components/ or /Library/Audio/Plug-Ins/Components/)'; if ! auval -v aumf Nms1 NwSt 2>&1; then echo 'SKIP: AU not installed in system plug-in dir — copy OpenAxe.component there and re-run'; exit 0; fi"
 )
 
 find_program(CLAP_VALIDATOR_BIN clap-validator)
 add_test(NAME vst3_clap_validator
   COMMAND bash -c "if ! command -v clap-validator >/dev/null 2>&1; then echo 'SKIP: clap-validator not found (https://github.com/free-audio/clap-validator)'; exit 0; fi; CLAP=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.clap\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.clap\" \"${CMAKE_BINARY_DIR}/openaxe.clap\"; do if [ -e \"\$p\" ]; then CLAP=\"\$p\"; break; fi; done; if [ -z \"\$CLAP\" ]; then echo 'SKIP: CLAP bundle not built yet (CLAP target planned) — nothing to validate'; exit 0; fi; echo \"clap-validator validate \$CLAP\"; exec clap-validator validate \"\$CLAP\""
 )
+
+# The validators shell out to real hosts/tools and are slow — pluginval at
+# strictness 10 takes ~13 minutes. They used to be free because they silently
+# skipped (the test probed PATH while CMake found the binary inside
+# /Applications/*.app), so nothing had to opt out of them. Now that they really
+# run, label them so routine runs can exclude them:
+#   ctest --test-dir packages/vst3/build -LE validator   # fast, ~1s
+#   ctest --test-dir packages/vst3/build -L validator    # just the validators
+set_tests_properties(vst3_pluginval vst3_pluginval_au vst3_vst3_validator vst3_auval vst3_clap_validator
+  PROPERTIES LABELS "validator" TIMEOUT 1800)
