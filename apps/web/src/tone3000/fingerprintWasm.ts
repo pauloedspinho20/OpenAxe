@@ -35,10 +35,13 @@ async function getWasmModule(): Promise<NamStudioWasmModule | null> {
     try {
       // Dynamically import the Emscripten glue; it may not yet export the
       // fingerprint symbol if the wasm hasn't been rebuilt — that's fine.
-      const modFactory = (await import(
-        /* @vite-ignore */ '/wasm-core/nam_studio_core.js'
-      )) as { default?: (opts?: unknown) => Promise<NamStudioWasmModule> }
-      const factory = modFactory.default ?? (modFactory as unknown as (opts?: unknown) => Promise<NamStudioWasmModule>)
+      // @ts-ignore - wasm-core is a generated Emscripten output, not a TS module
+      const modFactory = (await import(/* @vite-ignore */ '/wasm-core/nam_studio_core.js')) as {
+        default?: (opts?: unknown) => Promise<NamStudioWasmModule>
+      }
+      const factory =
+        modFactory.default ??
+        (modFactory as unknown as (opts?: unknown) => Promise<NamStudioWasmModule>)
       if (typeof factory !== 'function') return null
       const wasmBytes = await fetch('/wasm-core/nam_studio_core.wasm').then((r) => r.arrayBuffer())
       const mod = await factory({ wasmBinary: wasmBytes })

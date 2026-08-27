@@ -87,21 +87,27 @@ export function BlockHighlight({ rig, analyser }: BlockHighlightProps) {
             block
               ? {
                   loadModel: (json: string, info: { id: string; name: string }) =>
-                    (block as unknown as { loadModel: (j: string, s: unknown, i: { id: string; name: string }) => Promise<unknown> }).loadModel(
-                      json,
-                      useSettingsStore.getState().namQuality,
-                      info,
-                    ),
+                    (
+                      block as unknown as {
+                        loadModel: (
+                          j: string,
+                          s: unknown,
+                          i: { id: string; name: string },
+                        ) => Promise<unknown>
+                      }
+                    ).loadModel(json, useSettingsStore.getState().namQuality, info),
                   loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) =>
-                    (block as unknown as { loadIR: (b: AudioBuffer, m: number, i: { id: string; name: string }) => void }).loadIR(
-                      buffer,
-                      1,
-                      info,
-                    ),
+                    (
+                      block as unknown as {
+                        loadIR: (b: AudioBuffer, m: number, i: { id: string; name: string }) => void
+                      }
+                    ).loadIR(buffer, 1, info),
                 }
               : null
           }
-          audioContext={rig ? (rig as unknown as { audioContext: AudioContext }).audioContext ?? null : null}
+          audioContext={
+            rig ? ((rig as unknown as { audioContext: AudioContext }).audioContext ?? null) : null
+          }
         />
       </div>
     )

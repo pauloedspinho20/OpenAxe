@@ -148,8 +148,8 @@ export function NamModelDetails({
           license: tone.license,
           images: tone.images ?? null,
           sizes: tone.sizes ?? [],
-          makes: (tone.makes ?? []).map((x) => x.name),
-          tags: (tone.tags ?? []).map((x) => x.name),
+          makes: tone.makes ?? [],
+          tags: tone.tags ?? [],
           downloads_count: tone.downloads_count,
           favorites_count: tone.favorites_count,
           models_count: tone.models_count,
@@ -157,7 +157,12 @@ export function NamModelDetails({
           created_at: tone.created_at ?? null,
           url: tone.url,
         },
-        model: { id: m.id, name: m.name, size: m.size, architecture_version: m.architecture_version },
+        model: {
+          id: m.id,
+          name: m.name,
+          size: m.size,
+          architecture_version: m.architecture_version,
+        },
       })
     } catch (err) {
       setModelsError(err instanceof Error ? err.message : String(err))
@@ -208,15 +213,23 @@ export function NamModelDetails({
       <div>
         <div className={styles.toneTitle}>{title}</div>
         <div className={styles.badgeRow}>
-          <span className={styles.badge}>{tone ? (GEAR_LABELS[tone.gear] ?? kindLabel) : kindLabel}</span>
+          <span className={styles.badge}>
+            {tone ? (GEAR_LABELS[tone.gear] ?? kindLabel) : kindLabel}
+          </span>
           {tone?.format && <span className={styles.badge}>{tone.format.toUpperCase()}</span>}
-          {model && <span className={styles.badge}>{model.size} · A{model.architecture_version}</span>}
+          {model && (
+            <span className={styles.badge}>
+              {model.size} · A{model.architecture_version}
+            </span>
+          )}
         </div>
       </div>
 
       {entry && (
         <div className={styles.creatorRow}>
-          {tone?.user?.avatar_url && <img src={tone.user.avatar_url} alt="" className={styles.avatar} />}
+          {tone?.user?.avatar_url && (
+            <img src={tone.user.avatar_url} alt="" className={styles.avatar} />
+          )}
           <span className={styles.creatorName}>Captured by {entry.creator}</span>
           {uploadedOn && <span className={`label ${styles.uploadDate}`}>· {uploadedOn}</span>}
         </div>
@@ -244,9 +257,14 @@ export function NamModelDetails({
       {displayModels && displayModels.length > 0 && (
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
-            <span className={`label ${styles.sectionLabel}`}>Tone Variants ({displayModels.length})</span>
+            <span className={`label ${styles.sectionLabel}`}>
+              Tone Variants ({displayModels.length})
+            </span>
             {missingCount > 0 && (
-              <OutlineButton disabled={bulkDownloading} onClick={() => void handleDownloadMissing()}>
+              <OutlineButton
+                disabled={bulkDownloading}
+                onClick={() => void handleDownloadMissing()}
+              >
                 {bulkDownloading ? 'Downloading…' : `Download missing (${missingCount})`}
               </OutlineButton>
             )}
@@ -255,8 +273,9 @@ export function NamModelDetails({
           {modelsLoading && <p className={styles.note}>Loading variants…</p>}
           {modelsError && <p className={styles.error}>{modelsError}</p>}
           <p className={styles.note}>
-            Each variant is a separate capture of the same rig — pick the one you want to load into this
-            block. Downloaded files are cached for offline use; missing ones show “not downloaded”.
+            Each variant is a separate capture of the same rig — pick the one you want to load into
+            this block. Downloaded files are cached for offline use; missing ones show “not
+            downloaded”.
           </p>
           <ul className={styles.variantList}>
             {displayModels.map((m) => {
@@ -278,7 +297,10 @@ export function NamModelDetails({
                         {downloadingId === String(m.id) ? 'Downloading…' : 'Download'}
                       </OutlineButton>
                     ) : (
-                      <OutlineButton disabled={!blockId || !loadTarget} onClick={() => void handleLoad(m)}>
+                      <OutlineButton
+                        disabled={!blockId || !loadTarget}
+                        onClick={() => void handleLoad(m)}
+                      >
                         Load
                       </OutlineButton>
                     )}
@@ -348,11 +370,15 @@ export function NamModelDetails({
         </div>
       )}
 
-      {!entry && <p className={styles.note}>Loaded from a local file - no Tone3000 data is available for it.</p>}
+      {!entry && (
+        <p className={styles.note}>
+          Loaded from a local file - no Tone3000 data is available for it.
+        </p>
+      )}
       {entry && !tone && (
         <p className={styles.note}>
-          Full details weren't cached for this import - re-import the model from the Tone3000 catalog to see
-          everything.
+          Full details weren't cached for this import - re-import the model from the Tone3000
+          catalog to see everything.
         </p>
       )}
 

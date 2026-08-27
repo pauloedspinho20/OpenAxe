@@ -340,7 +340,8 @@ export function Tone3000Browser({ target, context }: Props) {
     }
   }
 
-  const loadPickedModel = async (model: Tone3000Model, tone: Tone) => {
+  const loadPickedModel = async (model: Tone3000Model, _tone: Tone) => {
+    void _tone
     if (!browser.target || !target || !context) {
       setImportError("Engine not running — download finished but can't load until powered on.")
       return

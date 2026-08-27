@@ -18,7 +18,7 @@ export interface BulkDownloadProgress {
 }
 
 export interface BulkDownloadOptions {
-  tone: Tone
+  tone: Tone | Tone3000ToneSnapshot
   models: Tone3000Model[]
   slot: Tone3000Slot
   onProgress?: (progress: BulkDownloadProgress) => void
@@ -30,24 +30,32 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function buildToneSnapshot(tone: Tone): Tone3000ToneSnapshot {
+function buildToneSnapshot(tone: Tone | Tone3000ToneSnapshot): Tone3000ToneSnapshot {
+  if (
+    (tone as Tone3000ToneSnapshot).makes !== undefined &&
+    Array.isArray((tone as Tone3000ToneSnapshot).makes) &&
+    typeof (tone as Tone3000ToneSnapshot).makes[0] === 'string'
+  ) {
+    return tone as Tone3000ToneSnapshot
+  }
+  const t = tone as Tone
   return {
-    id: tone.id,
-    title: tone.title,
-    description: tone.description,
-    gear: tone.gear,
-    format: tone.format,
-    license: tone.license,
-    images: tone.images ?? null,
-    sizes: tone.sizes ?? [],
-    makes: (tone.makes ?? []).map((m) => m.name),
-    tags: (tone.tags ?? []).map((t) => t.name),
-    downloads_count: tone.downloads_count,
-    favorites_count: tone.favorites_count,
-    models_count: tone.models_count,
-    user: tone.user,
-    created_at: tone.created_at ?? null,
-    url: tone.url,
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    gear: t.gear,
+    format: t.format,
+    license: t.license,
+    images: t.images ?? null,
+    sizes: t.sizes ?? [],
+    makes: (t.makes ?? []).map((m) => m.name),
+    tags: (t.tags ?? []).map((t2) => t2.name),
+    downloads_count: t.downloads_count,
+    favorites_count: t.favorites_count,
+    models_count: t.models_count,
+    user: t.user,
+    created_at: t.created_at ?? null,
+    url: t.url,
   }
 }
 
@@ -78,7 +86,12 @@ export async function bulkDownloadToneModels(
   for (let i = 0; i < models.length; i++) {
     const model = models[i]!
     const id = `tone3000:${slot}:${model.id}`
-    const progressBase = { current: i + 1, total: models.length, modelId: model.id, modelName: model.name }
+    const progressBase = {
+      current: i + 1,
+      total: models.length,
+      modelId: model.id,
+      modelName: model.name,
+    }
 
     const alreadyCached = await Tone3000Library.has(id)
     if (alreadyCached) {

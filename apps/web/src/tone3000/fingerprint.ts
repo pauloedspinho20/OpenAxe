@@ -59,7 +59,7 @@ export function fingerprintFromJson(
     brightness = 0.25 + (hash % 700) / 1000
   } else {
     const normGain = Math.max(-40, Math.min(0, gainDb))
-    brightness = 0.35 + (normGain + 40) / 80 * 0.35
+    brightness = 0.35 + ((normGain + 40) / 80) * 0.35
   }
   brightness = Math.max(0.05, Math.min(0.95, brightness))
 
