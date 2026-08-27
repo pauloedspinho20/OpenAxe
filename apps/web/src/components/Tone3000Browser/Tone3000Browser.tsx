@@ -14,6 +14,11 @@ import {
 import { importTone3000Asset } from '../../tone3000/importService'
 import type { BlockLoadTarget } from '../../tone3000/importService'
 import type { Tone, Tone3000Model } from '../../tone3000/types'
+import {
+  bulkDownloadToneModels,
+  type BulkDownloadProgress,
+  type BulkDownloadResult,
+} from '../../tone3000/bulkDownload'
 import { Dialog, HardwareButton, OutlineButton, Select } from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
 
@@ -75,6 +80,11 @@ export function Tone3000Browser({ target, context }: Props) {
   const [tags, setTags] = useState<string[]>([])
   const [makesValue, setMakesValue] = useState('')
   const [tagsValue, setTagsValue] = useState('')
+  const [bulkToneId, setBulkToneId] = useState<number | null>(null)
+  const [bulkProgress, setBulkProgress] = useState<BulkDownloadProgress | null>(null)
+  const [bulkResult, setBulkResult] = useState<BulkDownloadResult | null>(null)
+  const [pickerTone, setPickerTone] = useState<Tone | null>(null)
+  const [pickerModels, setPickerModels] = useState<Tone3000Model[]>([])
 
   useEffect(() => {
     void Tone3000Library.refresh()
@@ -296,6 +306,66 @@ export function Tone3000Browser({ target, context }: Props) {
     close()
   }
 
+  const runBulkDownload = async (tone: Tone) => {
+    if (!browser.target) return
+    const { slot } = browser.target
+    const list = models[tone.id]
+    if (!list || list.length === 0) return
+    setBulkToneId(tone.id)
+    setBulkResult(null)
+    setBulkProgress(null)
+    setImportError(null)
+    try {
+      const result = await bulkDownloadToneModels({
+        tone,
+        models: list,
+        slot,
+        onProgress: setBulkProgress,
+      })
+      setBulkResult(result)
+      if (result.failed > 0) {
+        setImportError(
+          `Bulk download: ${result.ok} ok, ${result.skipped} skipped, ${result.failed} failed. ${result.errors.join('; ')}`,
+        )
+      }
+      if (result.ok + result.skipped > 0) {
+        setPickerTone(tone)
+        setPickerModels(list)
+      }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBulkToneId(null)
+      setBulkProgress(null)
+    }
+  }
+
+  const loadPickedModel = async (model: Tone3000Model, tone: Tone) => {
+    if (!browser.target || !target || !context) {
+      setImportError("Engine not running — download finished but can't load until powered on.")
+      return
+    }
+    const { slot } = browser.target
+    const id = `tone3000:${slot}:${model.id}`
+    const blob = await Tone3000Library.getBlob(id)
+    if (!blob) {
+      setImportError(`Model "${model.name}" is not cached yet — download it first.`)
+      return
+    }
+    try {
+      if (slot === 'model') {
+        await target.loadModel(await blob.text(), { id, name: model.name })
+      } else {
+        const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer())
+        target.loadIR(audioBuffer, { id, name: model.name })
+      }
+      await Tone3000Library.notifyLoaded()
+      close()
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const close = () => {
     browser.closeBrowser()
     setScope('browse')
@@ -307,6 +377,11 @@ export function Tone3000Browser({ target, context }: Props) {
     setError(null)
     setNeedsConnect(false)
     setImportError(null)
+    setBulkToneId(null)
+    setBulkProgress(null)
+    setBulkResult(null)
+    setPickerTone(null)
+    setPickerModels([])
   }
 
   if (!browser.open || !browser.target) return null
@@ -527,34 +602,84 @@ export function Tone3000Browser({ target, context }: Props) {
                       <p className={styles.hint}>Loading models…</p>
                     )}
                     {expanded === tone.id && models[tone.id] && (
-                      <ul className={styles.modelList}>
-                        {models[tone.id]!.map((model) => {
-                          const assetId = `tone3000:${slot}:${model.id}`
-                          const cached = library.some((e) => e.id === assetId)
-                          return (
-                            <li key={model.id} className={styles.modelRow}>
-                              <span className={styles.modelName}>
-                                {model.name}
-                                <span className={`label ${styles.modelSize}`}>
-                                  {model.size} · A{model.architecture_version}
-                                </span>
+                      <div className={styles.modelListWrap}>
+                        {models[tone.id]!.length > 1 && (
+                          <div className={styles.bulkRow}>
+                            <OutlineButton
+                              disabled={bulkToneId === tone.id}
+                              onClick={() => void runBulkDownload(tone)}
+                            >
+                              {bulkToneId === tone.id && bulkProgress
+                                ? `${bulkProgress.status.toUpperCase()} ${bulkProgress.current}/${bulkProgress.total} — ${bulkProgress.modelName}`
+                                : `Download all (${models[tone.id]!.length})`}
+                            </OutlineButton>
+                            {bulkToneId !== tone.id && bulkResult && pickerTone?.id === tone.id && (
+                              <span className={`label ${styles.bulkSummary}`}>
+                                {bulkResult.ok} downloaded, {bulkResult.skipped} skipped,{' '}
+                                {bulkResult.failed} failed
                               </span>
-                              <OutlineButton
-                                disabled={importingId === model.id.toString()}
-                                onClick={() => void runImport(model, tone)}
-                              >
-                                {importingId === model.id.toString()
-                                  ? 'IMPORTING…'
-                                  : importDone === model.id.toString()
-                                    ? 'IMPORTED ✓'
-                                    : cached
-                                      ? 'RELOAD'
-                                      : 'IMPORT'}
-                              </OutlineButton>
-                            </li>
-                          )
-                        })}
-                      </ul>
+                            )}
+                          </div>
+                        )}
+                        <ul className={styles.modelList}>
+                          {models[tone.id]!.map((model) => {
+                            const assetId = `tone3000:${slot}:${model.id}`
+                            const cached = library.some((e) => e.id === assetId)
+                            return (
+                              <li key={model.id} className={styles.modelRow}>
+                                <span className={styles.modelName}>
+                                  {model.name}
+                                  <span className={`label ${styles.modelSize}`}>
+                                    {model.size} · A{model.architecture_version}
+                                  </span>
+                                </span>
+                                <OutlineButton
+                                  disabled={importingId === model.id.toString()}
+                                  onClick={() => void runImport(model, tone)}
+                                >
+                                  {importingId === model.id.toString()
+                                    ? 'IMPORTING…'
+                                    : importDone === model.id.toString()
+                                      ? 'IMPORTED ✓'
+                                      : cached
+                                        ? 'RELOAD'
+                                        : 'IMPORT'}
+                                </OutlineButton>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                        {pickerTone?.id === tone.id && pickerModels.length > 0 && (
+                          <div className={styles.picker}>
+                            <p className={`label ${styles.pickerTitle}`}>
+                              Pick a file to load into the active block:
+                            </p>
+                            <ul className={styles.pickerList}>
+                              {pickerModels.map((m) => {
+                                const id = `tone3000:${slot}:${m.id}`
+                                const cached = library.some((e) => e.id === id)
+                                return (
+                                  <li key={m.id} className={styles.pickerRow}>
+                                    <span className={styles.modelName}>
+                                      {m.name}
+                                      <span className={`label ${styles.modelSize}`}>
+                                        {m.size} · A{m.architecture_version}
+                                        {cached ? '' : ' — not cached'}
+                                      </span>
+                                    </span>
+                                    <OutlineButton
+                                      disabled={!cached || !target || !context}
+                                      onClick={() => void loadPickedModel(m, tone)}
+                                    >
+                                      LOAD
+                                    </OutlineButton>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </li>
                 )

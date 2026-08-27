@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "openaxe/dsp/fingerprint.h"
 #include "openaxe/dsp/note_utils.h"
 #include "openaxe/dsp/pitch_detect.h"
 #include "openaxe/engine.h"
@@ -643,6 +644,16 @@ int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
   *out_name = note.name;
   *out_octave = note.octave;
   *out_cents = note.cents;
+  return 1;
+}
+
+int32_t nam_studio_compute_fingerprint(const char* json, float* out_gain_db,
+                                       float* out_brightness) {
+  if (!json || !out_gain_db || !out_brightness) return 0;
+  auto fp = openaxe::dsp::ComputeFingerprint(json);
+  if (!fp) return 0;
+  *out_gain_db = fp->gain_db;
+  *out_brightness = fp->brightness;
   return 1;
 }
 
