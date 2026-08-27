@@ -4,9 +4,10 @@
   letter-spacing: 0.04em;
   color: var(--ink-2);
   background: none;
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-sm);
-  padding: var(--sp-1) var(--sp-2);
+  min-height: 34px;
   cursor: pointer;
   transition:
     color 0.1s ease,

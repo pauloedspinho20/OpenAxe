@@ -10,12 +10,19 @@
  */
 import { create } from 'zustand'
 import {
+  POPUP_AUTH_SOURCE,
+  POPUP_WINDOW_NAME,
   apiGetUser,
   clearTokens,
   consumeOAuthCallbackParams,
   getAccessToken,
+  getActiveAuthPopup,
   handleOAuthCallback,
+  isAuthPopup,
+  notifyPopupResult,
+  readOAuthCallbackParams,
   setTokens,
+  startPopupOAuthFlow,
   startStandardFlow,
   tryHydrateFromPersistentStorage,
   tryRefreshFromStorage,
@@ -89,6 +96,17 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
   connect: async () => {
     set({ pendingFlow: true, error: null })
     try {
+      // Web build: popup OAuth so the main window (and the powered-on
+      // engine) survives login. Falls back to the full-page redirect when a
+      // popup can't be opened, and desktop always keeps its fixed-port
+      // bounce-listener redirect flow.
+      if (await startPopupOAuthFlow()) {
+        // Flow completes asynchronously via the popup's postMessage - the
+        // listener below settles pendingFlow. Watch for the user just closing
+        // the popup so "Connecting…" doesn't stick.
+        watchPopupClosure()
+        return
+      }
       await startStandardFlow()
       // startStandardFlow navigates away; if it resolves (e.g. tests), reset.
       set({ pendingFlow: false })
@@ -148,6 +166,66 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
 }))
 
 /**
+ * Listens for the OAuth popup's postMessage and settles the opener's auth
+ * state without a page navigation. The popup only relays the raw callback
+ * params (it can't be trusted to carry the PKCE - sessionStorage cloning
+ * across the cross-origin round trip is unreliable); the token exchange runs
+ * here, in the tab that actually stored the verifier. On success we also
+ * hydrate the user profile from the persistent store.
+ */
+let popupListenerAttached = false
+function attachPopupAuthListener(): void {
+  if (popupListenerAttached) return
+  popupListenerAttached = true
+  window.addEventListener('message', (event) => {
+    const data = event.data as {
+      source?: string
+      code?: string | null
+      state?: string | null
+      error?: string | null
+    } | null
+    if (!data || data.source !== POPUP_AUTH_SOURCE) return
+    if (event.origin !== window.location.origin) return
+    void handleOAuthCallback({
+      code: data.code ?? null,
+      state: data.state ?? null,
+      error: data.error ?? null,
+    }).then((result) => {
+      if (result.ok) {
+        useTone3000Auth.setState({ status: 'connected', pendingFlow: false, error: null })
+        void useTone3000Auth.getState().hydrateFromPersistentStorage()
+      } else {
+        useTone3000Auth.setState({
+          status: result.error === 'canceled' ? 'anonymous' : 'error',
+          pendingFlow: false,
+          error: result.error,
+        })
+      }
+    })
+  })
+}
+
+/**
+ * If the user closes the OAuth popup without completing (no postMessage
+ * lands), drop the "Connecting…" state instead of leaving it stuck.
+ */
+function watchPopupClosure(): void {
+  const id = window.setInterval(() => {
+    const popup = getActiveAuthPopup()
+    if (useTone3000Auth.getState().pendingFlow && popup && popup.closed) {
+      window.clearInterval(id)
+      useTone3000Auth.setState({ pendingFlow: false })
+    } else if (!useTone3000Auth.getState().pendingFlow) {
+      window.clearInterval(id)
+    }
+  }, 500)
+}
+
+if (typeof window !== 'undefined') {
+  attachPopupAuthListener()
+}
+
+/**
  * Handle the OAuth callback once on app boot, if the URL carries one -
  * handleCallback() itself no-ops safely when there's nothing to consume,
  * which also makes this safe to call twice in a row (e.g. React StrictMode's
@@ -156,8 +234,26 @@ export const useTone3000Auth = create<Tone3000AuthState & Tone3000AuthActions>()
  * client.ts's tryHydrateFromPersistentStorage) - skipped if the callback
  * above already connected, so a normal OAuth completion doesn't also
  * trigger a redundant refresh right behind it.
+ *
+ * When this window is the OAuth popup (opened via connect - recognized by
+ * its window.name, not by the unreliable sessionStorage clone), the raw
+ * callback params are relayed to the opener (which holds the PKCE) and the
+ * popup closes instead of continuing to run the app.
  */
+let popupResultPosted = false
 export async function handleTone3000CallbackOnLoad(): Promise<void> {
+  // The popup relays the raw callback params (read before handleCallback
+  // consumes/strips them) and closes. It must NEVER run handleCallback
+  // itself: that would redeem the single-use code, and the opener's exchange
+  // would then fail with 400. This branch always returns for the popup - even
+  // on React StrictMode's second effect invocation.
+  if (isAuthPopup() && window.name === POPUP_WINDOW_NAME) {
+    if (!popupResultPosted) {
+      popupResultPosted = true
+      notifyPopupResult(readOAuthCallbackParams())
+    }
+    return
+  }
   const handledCallback = await useTone3000Auth.getState().handleCallback()
   if (!handledCallback && useTone3000Auth.getState().status !== 'connected') {
     await useTone3000Auth.getState().hydrateFromPersistentStorage()

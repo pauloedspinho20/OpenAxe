@@ -55,6 +55,24 @@ openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
       return BlockKind::kMixer;
     case NAM_STUDIO_BLOCK_SPLITTER:
       return BlockKind::kSplitter;
+    case NAM_STUDIO_BLOCK_RING_MOD:
+      return BlockKind::kRingMod;
+    case NAM_STUDIO_BLOCK_FILTER:
+      return BlockKind::kFilter;
+    case NAM_STUDIO_BLOCK_PITCH_SHIFTER:
+      return BlockKind::kPitchShifter;
+    case NAM_STUDIO_BLOCK_GRANULAR_DELAY:
+      return BlockKind::kGranularDelay;
+    case NAM_STUDIO_BLOCK_ROTARY:
+      return BlockKind::kRotary;
+    case NAM_STUDIO_BLOCK_SEND_1:
+      return BlockKind::kSend1;
+    case NAM_STUDIO_BLOCK_RETURN_1:
+      return BlockKind::kReturn1;
+    case NAM_STUDIO_BLOCK_SEND_2:
+      return BlockKind::kSend2;
+    case NAM_STUDIO_BLOCK_RETURN_2:
+      return BlockKind::kReturn2;
   }
   return BlockKind::kCab;  // unreachable for a valid enum value
 }

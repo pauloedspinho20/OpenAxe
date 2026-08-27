@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GraphRig } from '../../../engine/GraphRig'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSceneStore } from '../../../state/sceneStore'
+import { usePresetBankStore } from '../../../state/presetBankStore'
 import { useCurrentPresetStore } from '../../../state/currentPresetStore'
 import { usePresetManager } from '../../../state/presetManager'
 import { useSceneManager } from '../../../state/sceneManager'
 import { createEmptyBank } from '../../../scenes/sceneBankStore'
+import { createEmptyPresetBank } from '../../../presets/presetBankStore'
 import type { Preset } from '../../../presets/types'
 import { SceneBar } from './SceneBar'
 
@@ -29,8 +31,19 @@ vi.mock('../../../presets/presetStore', () => ({
 function bankWithOnePreset() {
   const bank = createEmptyBank()
   bank.scenes[0]!.name = 'Default'
-  bank.scenes[0]!.slots[4] = 'preset-x'
+  bank.scenes[0]!.slots[4] = 0
   return bank
+}
+
+function presetBankWith(presetId: string | null) {
+  const presetBank = createEmptyPresetBank()
+  presetBank.slots[0] = presetId
+  return presetBank
+}
+
+function hydrateStores(sceneBank = bankWithOnePreset(), presetBank = presetBankWith('preset-x')) {
+  useSceneStore.getState().hydrate(sceneBank)
+  usePresetBankStore.getState().hydrate(presetBank)
 }
 
 function emptyPreset(overrides: Partial<Preset> = {}): Preset {
@@ -57,6 +70,7 @@ describe('SceneBar', () => {
     listPresetsMock.mockReset()
     listPresetsMock.mockResolvedValue([{ id: 'preset-x', name: 'My Lead Tone' }])
     useSceneStore.getState().reset()
+    usePresetBankStore.getState().reset()
     usePresetManager.getState().closeManager()
     useCurrentPresetStore.getState().setSaved(null)
     useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
@@ -68,7 +82,7 @@ describe('SceneBar', () => {
   })
 
   it('renders 8 slot buttons and highlights the active one', async () => {
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     useSceneStore.getState().setActive(0, 4)
     render(<SceneBar rig={null} context={null} />)
 
@@ -80,7 +94,7 @@ describe('SceneBar', () => {
   })
 
   it('clicking a slot calls SceneNavigator.goToSlot with that index', () => {
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     render(<SceneBar rig={null} context={null} />)
 
     const slot1 = screen.getAllByTitle('Empty')[0]!
@@ -90,7 +104,7 @@ describe('SceneBar', () => {
 
   it('the readout opens the scene manager', () => {
     useSceneManager.getState().closeManager()
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     render(<SceneBar rig={null} context={null} />)
 
     const readout = screen.getByRole('button', { name: /Default — open scene list/ })
@@ -99,7 +113,7 @@ describe('SceneBar', () => {
   })
 
   it('the always-visible Save button is disabled when not powered on', () => {
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     render(<SceneBar rig={null} context={null} />)
 
     expect(screen.getByRole('button', { name: 'SAVE' })).toBeDisabled()
@@ -107,7 +121,7 @@ describe('SceneBar', () => {
 
   it('the Presets button opens the preset manager in normal (non-pick) mode', () => {
     usePresetManager.getState().closeManager()
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     render(<SceneBar rig={null} context={null} />)
 
     screen.getByRole('button', { name: 'PRESETS' }).click()
@@ -117,7 +131,7 @@ describe('SceneBar', () => {
 
   it('the Save button stays disabled when the live rig matches the saved preset', () => {
     const fakeRig = { getBlock: () => null } as unknown as GraphRig
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     useCurrentPresetStore.getState().setSaved(emptyPreset())
 
     render(<SceneBar rig={fakeRig} context={null} />)
@@ -126,7 +140,7 @@ describe('SceneBar', () => {
 
   it('the Save button enables once the live rig differs from the saved preset', () => {
     const fakeRig = { getBlock: () => null } as unknown as GraphRig
-    useSceneStore.getState().hydrate(bankWithOnePreset())
+    hydrateStores()
     useCurrentPresetStore.getState().setSaved(emptyPreset())
     useGraphStore.getState().addBlock('compressor', 0, 0)
 
@@ -134,11 +148,11 @@ describe('SceneBar', () => {
     expect(screen.getByRole('button', { name: 'SAVE' })).not.toBeDisabled()
   })
 
-  it('a slot pointing at a preset id renders a name (or placeholder), not blank', async () => {
+  it('a scene slot pointing at a bank slot whose preset is missing renders a placeholder, not blank', async () => {
     const bank = createEmptyBank()
-    bank.scenes[0]!.slots[0] = 'deleted-preset'
+    bank.scenes[0]!.slots[0] = 0
     listPresetsMock.mockResolvedValue([])
-    useSceneStore.getState().hydrate(bank)
+    hydrateStores(bank, presetBankWith('deleted-preset'))
     render(<SceneBar rig={null} context={null} />)
 
     await waitFor(() => expect(screen.getByTitle('…')).toBeInTheDocument())

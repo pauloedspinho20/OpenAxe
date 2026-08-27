@@ -1,6 +1,5 @@
 .button {
   font-family: var(--font-display);
-  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.08em;
   color: var(--ink-2);
@@ -8,7 +7,6 @@
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-control);
-  padding: var(--sp-2) var(--sp-3);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -18,6 +16,30 @@
     color 0.1s ease,
     border-color 0.1s ease,
     box-shadow 0.1s ease;
+}
+
+.button.small {
+  min-width: 28px;
+  min-height: 28px;
+  font-size: 8px;
+  padding: var(--sp-1);
+}
+
+.button.medium {
+  font-size: 10px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.button.large {
+  min-width: 56px;
+  min-height: 56px;
+  font-size: 14px;
+}
+
+.iconOnly {
+  padding: var(--sp-1) var(--sp-1) !important;
 }
 
 .button:hover:not(:disabled) {
@@ -75,4 +97,30 @@
 
 .button.fullWidth {
   width: 100%;
+}
+
+.withIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

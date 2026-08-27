@@ -41,6 +41,11 @@ add_library(openaxe_core STATIC
   src/dsp/equalizer.cpp
   src/dsp/noise_gate.cpp
   src/dsp/tremolo.cpp
+  src/dsp/ring_mod.cpp
+  src/dsp/filter.cpp
+  src/dsp/pitch_shifter.cpp
+  src/dsp/granular_delay.cpp
+  src/dsp/rotary.cpp
   src/dsp/tone_stack.cpp
   src/dsp/convolver.cpp
   src/dsp/wav.cpp

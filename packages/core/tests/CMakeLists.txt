@@ -16,6 +16,28 @@ add_executable(convolver_test convolver_test.cpp)
 target_link_libraries(convolver_test PRIVATE openaxe_core)
 add_test(NAME convolver_test COMMAND convolver_test)
 
+# Phase-2 DSP kinds (issue #268) are plain C++ with no vendored dependency, so
+# like wav_test/tone_stack_test they build unconditionally.
+add_executable(ring_mod_test ring_mod_test.cpp)
+target_link_libraries(ring_mod_test PRIVATE openaxe_core)
+add_test(NAME ring_mod_test COMMAND ring_mod_test)
+
+add_executable(filter_test filter_test.cpp)
+target_link_libraries(filter_test PRIVATE openaxe_core)
+add_test(NAME filter_test COMMAND filter_test)
+
+add_executable(pitch_shifter_test pitch_shifter_test.cpp)
+target_link_libraries(pitch_shifter_test PRIVATE openaxe_core)
+add_test(NAME pitch_shifter_test COMMAND pitch_shifter_test)
+
+add_executable(granular_delay_test granular_delay_test.cpp)
+target_link_libraries(granular_delay_test PRIVATE openaxe_core)
+add_test(NAME granular_delay_test COMMAND granular_delay_test)
+
+add_executable(rotary_test rotary_test.cpp)
+target_link_libraries(rotary_test PRIVATE openaxe_core)
+add_test(NAME rotary_test COMMAND rotary_test)
+
 add_executable(tone_stack_test tone_stack_test.cpp)
 target_link_libraries(tone_stack_test PRIVATE openaxe_core)
 add_test(NAME tone_stack_test COMMAND tone_stack_test)

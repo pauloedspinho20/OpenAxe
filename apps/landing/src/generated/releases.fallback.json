@@ -1,7 +1,59 @@
 {
-  "generated_at": "2026-08-24T17:09:28.662Z",
+  "generated_at": "2026-08-27T00:37:03.527Z",
   "repo": "pauloedspinho20/OpenAxe",
   "releases": [
+    {
+      "tag_name": "v0.2.4",
+      "name": "v0.2.4",
+      "published_at": "2026-08-24T20:53:06Z",
+      "prerelease": false,
+      "html_url": "https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.4",
+      "body": "## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/270\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.3...v0.2.4\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/270\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.3...v0.2.4\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/270\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.3...v0.2.4\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/270\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.3...v0.2.4\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/270\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.3...v0.2.4\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/270\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.3...v0.2.4",
+      "assets": [
+        {
+          "name": "openaxe-desktop-0.2.4.deb",
+          "size": 3153896,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.4/openaxe-desktop-0.2.4.deb",
+          "content_type": "application/x-debian-package"
+        },
+        {
+          "name": "openaxe-desktop-0.2.4.dmg",
+          "size": 2614458,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.4/openaxe-desktop-0.2.4.dmg",
+          "content_type": "application/x-apple-diskimage"
+        },
+        {
+          "name": "openaxe-desktop-0.2.4.zip",
+          "size": 1690852,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.4/openaxe-desktop-0.2.4.zip",
+          "content_type": "application/zip"
+        },
+        {
+          "name": "openaxe-plugin-macos-14-v0.2.4.tar.gz",
+          "size": 13238088,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.4/openaxe-plugin-macos-14-v0.2.4.tar.gz",
+          "content_type": "application/gzip"
+        },
+        {
+          "name": "openaxe-plugin-ubuntu-24.04-v0.2.4.tar.gz",
+          "size": 9777750,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.4/openaxe-plugin-ubuntu-24.04-v0.2.4.tar.gz",
+          "content_type": "application/gzip"
+        },
+        {
+          "name": "openaxe-plugin-windows-latest-v0.2.4.tar.gz",
+          "size": 12812057,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.4/openaxe-plugin-windows-latest-v0.2.4.tar.gz",
+          "content_type": "application/gzip"
+        }
+      ]
+    },
     {
       "tag_name": "v0.2.3",
       "name": "v0.2.3",
@@ -20,7 +72,7 @@
         {
           "name": "openaxe-desktop-0.2.3.dmg",
           "size": 2611475,
-          "download_count": 0,
+          "download_count": 1,
           "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.3/openaxe-desktop-0.2.3.dmg",
           "content_type": "application/x-apple-diskimage"
         },

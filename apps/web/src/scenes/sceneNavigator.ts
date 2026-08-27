@@ -42,6 +42,7 @@ import type { PresetRig } from '../presets/types'
 import { useCurrentPresetStore } from '../state/currentPresetStore'
 import { useGraphStore } from '../state/graphStore'
 import { toast } from '@openaxe/ui'
+import { usePresetBankStore } from '../state/presetBankStore'
 import { useSceneStore } from '../state/sceneStore'
 import { useEngineVersion } from '../state/engineVersion'
 import { SCENE_COUNT, SLOTS_PER_SCENE } from './types'
@@ -119,7 +120,9 @@ async function applySlot(scene: number, slot: number, mySeq: number): Promise<Sc
   }
 
   useSceneStore.getState().setActive(scene, slot)
-  const presetId = useSceneStore.getState().scenes[scene]?.slots[slot] ?? null
+  const bankSlot = useSceneStore.getState().scenes[scene]?.slots[slot] ?? null
+  // Resolve the scene slot's preset-bank reference to an actual preset id.
+  const presetId = bankSlot != null ? (usePresetBankStore.getState().slots[bankSlot] ?? null) : null
 
   if (!presetId) {
     useCurrentPresetStore.getState().setSaved(null)
@@ -189,7 +192,9 @@ export const SceneNavigator = {
 
   getActive(): { scene: number; slot: number; presetId: string | null } {
     const state = useSceneStore.getState()
-    const presetId = state.scenes[state.activeScene]?.slots[state.activeSlot] ?? null
+    const bankSlot = state.scenes[state.activeScene]?.slots[state.activeSlot] ?? null
+    const presetId =
+      bankSlot != null ? (usePresetBankStore.getState().slots[bankSlot] ?? null) : null
     return { scene: state.activeScene, slot: state.activeSlot, presetId }
   },
 

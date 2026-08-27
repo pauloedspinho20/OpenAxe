@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSceneStore } from '../state/sceneStore'
+import { usePresetBankStore } from '../state/presetBankStore'
 import { useCurrentPresetStore } from '../state/currentPresetStore'
 import { useGraphStore } from '../state/graphStore'
 import { createEmptyBank } from './sceneBankStore'
+import { createEmptyPresetBank } from '../presets/presetBankStore'
 import type { Preset, PresetRig } from '../presets/types'
 
 const { applyPresetMock, getPresetMock } = vi.hoisted(() => ({
@@ -53,12 +55,19 @@ describe('SceneNavigator', () => {
     getPresetMock.mockImplementation(async (id: string) => preset(id))
 
     const bank = createEmptyBank()
-    bank.scenes[0]!.slots[0] = 'preset-a'
-    bank.scenes[0]!.slots[1] = 'preset-b'
+    bank.scenes[0]!.slots[0] = 0
+    bank.scenes[0]!.slots[1] = 1
     // slot 2 stays empty
-    bank.scenes[1]!.slots[3] = 'preset-c'
-    bank.scenes[63]!.slots[0] = 'preset-d'
+    bank.scenes[1]!.slots[3] = 3
+    bank.scenes[63]!.slots[0] = 4
     useSceneStore.getState().hydrate(bank)
+
+    const presetBank = createEmptyPresetBank()
+    presetBank.slots[0] = 'preset-a'
+    presetBank.slots[1] = 'preset-b'
+    presetBank.slots[3] = 'preset-c'
+    presetBank.slots[4] = 'preset-d'
+    usePresetBankStore.getState().hydrate(presetBank)
 
     SceneNavigator.setTarget({ rig: fakeRig(), context: fakeContext() })
   })

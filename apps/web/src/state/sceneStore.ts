@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createAutosaveScheduler } from '../presets/autosave'
+import { PRESET_SLOT_COUNT } from '../presets/presetBank'
 import { createEmptyBank, loadSceneBank, saveSceneBank } from '../scenes/sceneBankStore'
 import { SCENE_COUNT, SLOTS_PER_SCENE, type Scene, type SceneBank } from '../scenes/types'
 
@@ -15,7 +16,8 @@ export interface SceneStoreState {
   hydrate: (bank: SceneBank) => void
   setActive: (scene: number, slot: number) => void
   renameScene: (index: number, name: string) => void
-  assignSlot: (scene: number, slot: number, presetId: string | null) => void
+  /** Points a scene slot at a preset-bank slot number (0-511), or null to empty it. */
+  assignSlot: (scene: number, slot: number, bankSlot: number | null) => void
   setSwitching: (switching: boolean) => void
   reset: () => void
 }
@@ -51,13 +53,14 @@ export const useSceneStore = create<SceneStoreState>()((set) => ({
     }))
   },
 
-  assignSlot: (scene, slot, presetId) => {
+  assignSlot: (scene, slot, bankSlot) => {
     if (!inRange(scene, SCENE_COUNT) || !inRange(slot, SLOTS_PER_SCENE)) return
+    if (bankSlot !== null && !inRange(bankSlot, PRESET_SLOT_COUNT)) return
     set((s) => ({
       scenes: s.scenes.map((sc) => {
         if (sc.index !== scene) return sc
         const slots = [...sc.slots]
-        slots[slot] = presetId
+        slots[slot] = bankSlot
         return { ...sc, slots }
       }),
     }))

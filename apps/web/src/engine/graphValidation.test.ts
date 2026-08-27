@@ -164,6 +164,35 @@ describe('canConnect', () => {
     const result = canConnect(map, [], jack('a', 1), jack('b'))
     expect(result.ok).toBe(false)
   })
+
+  // Send/Return (issue #274): a Send is input-only and a Return output-only -
+  // the pair hops implicitly in the engine, never as a cable, so a cable out
+  // of a Send or into a Return must be refused while the valid sides work.
+  it.each(['send-1', 'send-2'] as const)(
+    'accepts a cable into a %s but refuses one out of it',
+    (kind) => {
+      const map = blocks([
+        ['s', kind, 0],
+        ['b', 'eq', 1],
+      ])
+      expect(canConnect(map, [], jack('IN'), jack('s')).ok).toBe(true)
+      expect(canConnect(map, [], jack('s'), jack('b')).ok).toBe(false)
+      expect(canConnect(map, [], jack('s'), jack('OUT')).ok).toBe(false)
+    },
+  )
+
+  it.each(['return-1', 'return-2'] as const)(
+    'accepts a cable out of a %s but refuses one into it',
+    (kind) => {
+      const map = blocks([
+        ['a', 'eq', 0],
+        ['r', kind, 1],
+      ])
+      expect(canConnect(map, [], jack('r'), jack('OUT')).ok).toBe(true)
+      expect(canConnect(map, [], jack('a'), jack('r')).ok).toBe(false)
+      expect(canConnect(map, [], jack('IN'), jack('r')).ok).toBe(false)
+    },
+  )
 })
 
 describe('isEdgeOrderValid', () => {

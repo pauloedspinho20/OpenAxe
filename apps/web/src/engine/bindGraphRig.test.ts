@@ -28,6 +28,16 @@ function block(id: string, kind: string, row: number, col: number): BlockInstanc
   return { id, kind: kind as BlockInstance['kind'], row, col, params: {} }
 }
 
+/**
+ * addBlock returns null only for a duplicate Send/Return kind (strictly 1:1,
+ * issue #274) - these tests never add those, so the id is always present.
+ */
+function addBlock(kind: BlockInstance['kind'], row: number, col: number): string {
+  const id = useGraphStore.getState().addBlock(kind, row, col)
+  if (id === null) throw new Error(`addBlock('${kind}') refused`)
+  return id
+}
+
 function loadGraph(blocks: BlockInstance[], edges: EdgeInstance[]) {
   useGraphStore.getState().loadGraph(blocks, edges, 1, false)
 }
@@ -65,7 +75,7 @@ describe('bindGraphRig', () => {
     bindGraphRig(useGraphStore, rig)
     await flush()
 
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = addBlock('compressor', 0, 0)
     await flush()
 
     expect(rig.addBlock).toHaveBeenCalledWith('compressor', 0, 0, id)
@@ -73,7 +83,7 @@ describe('bindGraphRig', () => {
 
   it('removes a block dropped from the store', async () => {
     const rig = createMockRig()
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = addBlock('compressor', 0, 0)
     rig.listBlockIds.mockReturnValue([id])
     bindGraphRig(useGraphStore, rig)
     await flush()
@@ -86,7 +96,7 @@ describe('bindGraphRig', () => {
 
   it('pushes params for every block on each reconcile', async () => {
     const rig = createMockRig()
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = addBlock('compressor', 0, 0)
     bindGraphRig(useGraphStore, rig)
     await flush()
     rig.setBlockParams.mockClear()
@@ -129,7 +139,7 @@ describe('bindGraphRig', () => {
 
   it('skips moveBlock when only params change (issue #62)', async () => {
     const rig = createMockRig()
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = addBlock('compressor', 0, 0)
     rig.listBlockIds.mockReturnValue([id])
     bindGraphRig(useGraphStore, rig)
     await flush()
@@ -144,7 +154,7 @@ describe('bindGraphRig', () => {
 
   it('still calls moveBlock when a block is relocated (issue #62)', async () => {
     const rig = createMockRig()
-    const id = useGraphStore.getState().addBlock('compressor', 0, 0)
+    const id = addBlock('compressor', 0, 0)
     rig.listBlockIds.mockReturnValue([id])
     bindGraphRig(useGraphStore, rig)
     await flush()
@@ -174,7 +184,7 @@ describe('bindGraphRig', () => {
     unbind()
     rig.addBlock.mockClear()
 
-    useGraphStore.getState().addBlock('compressor', 0, 0)
+    addBlock('compressor', 0, 0)
     await flush()
 
     expect(rig.addBlock).not.toHaveBeenCalled()

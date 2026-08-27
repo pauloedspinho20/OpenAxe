@@ -5,7 +5,7 @@ import { armLearn, requestMidiAccess } from '../../../midi/midiAccess'
 import { actionKey, actionLabel, type MidiAction } from '../../../midi/actions'
 import { formatMidiMatch, messageMatches } from '../../../midi/message'
 import { SCENE_COUNT, SLOTS_PER_SCENE } from '../../../scenes/types'
-import { Dialog, HardwareButton } from '@openaxe/ui'
+import { Dialog, HardwareButton, Select } from '@openaxe/ui'
 import styles from './MidiManager.module.css'
 
 export function MidiManager() {
@@ -101,8 +101,7 @@ function MidiManagerBody() {
         )}
         {connected && (
           <>
-            <select
-              className={styles.select}
+            <Select
               value={selectedInputId ?? ''}
               onChange={(e) => selectInput(e.target.value || null)}
               aria-label="MIDI input"
@@ -113,7 +112,7 @@ function MidiManagerBody() {
                   {input.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <p className={styles.hint}>
               {inputs.length} device{inputs.length === 1 ? '' : 's'} connected
             </p>

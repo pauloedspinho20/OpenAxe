@@ -52,6 +52,15 @@ const char* BlockKindToString(graph::BlockKind kind) {
     case graph::BlockKind::kCab: return "cab";
     case graph::BlockKind::kMixer: return "mixer";
     case graph::BlockKind::kSplitter: return "splitter";
+    case graph::BlockKind::kRingMod: return "ring-mod";
+    case graph::BlockKind::kFilter: return "filter";
+    case graph::BlockKind::kPitchShifter: return "pitch-shifter";
+    case graph::BlockKind::kGranularDelay: return "granular-delay";
+    case graph::BlockKind::kRotary: return "rotary";
+    case graph::BlockKind::kSend1: return "send-1";
+    case graph::BlockKind::kReturn1: return "return-1";
+    case graph::BlockKind::kSend2: return "send-2";
+    case graph::BlockKind::kReturn2: return "return-2";
   }
   return nullptr;  // unreachable for a valid enum value
 }
@@ -76,6 +85,15 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
       {"cab", graph::BlockKind::kCab},
       {"mixer", graph::BlockKind::kMixer},
       {"splitter", graph::BlockKind::kSplitter},
+      {"ring-mod", graph::BlockKind::kRingMod},
+      {"filter", graph::BlockKind::kFilter},
+      {"pitch-shifter", graph::BlockKind::kPitchShifter},
+      {"granular-delay", graph::BlockKind::kGranularDelay},
+      {"rotary", graph::BlockKind::kRotary},
+      {"send-1", graph::BlockKind::kSend1},
+      {"return-1", graph::BlockKind::kReturn1},
+      {"send-2", graph::BlockKind::kSend2},
+      {"return-2", graph::BlockKind::kReturn2},
   };
   const auto it = kMap.find(text);
   if (it == kMap.end()) return false;
@@ -131,11 +149,14 @@ bool StringToDelayModel(const std::string& text, dsp::Delay::Model& out) {
 }
 
 // Bypass is a concept for the effect kinds + the NAM gear kinds - cab/mixer/
-// splitter have none (types.ts's PresetBlockData doc comment). Mirroring that,
-// those three serialize without a bypass field.
+// splitter and the Send/Return routing kinds have none (types.ts's
+// PresetBlockData doc comment). Mirroring that, those serialize without a
+// bypass field.
 bool KindHasBypass(graph::BlockKind kind) {
   return kind != graph::BlockKind::kCab && kind != graph::BlockKind::kMixer &&
-         kind != graph::BlockKind::kSplitter;
+         kind != graph::BlockKind::kSplitter && kind != graph::BlockKind::kSend1 &&
+         kind != graph::BlockKind::kReturn1 && kind != graph::BlockKind::kSend2 &&
+         kind != graph::BlockKind::kReturn2;
 }
 
 // Filename without directory or extension - the display name a path-loaded

@@ -357,7 +357,7 @@ int main() {
     OPENAXE_EXPECT(nam_studio_block_param_count(g, 0) == 5);   // chorus + mix
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "rate") == 1.5f);
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "depth") == 0.7f);
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, 1) == 4);   // tremolo + mix
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, 1) == 6);   // tremolo + mix (stereo+mode)
     OPENAXE_EXPECT(nam_studio_is_bypassed(g, 1) == 1);
     {
       // The untouched rate stands - compared against a fresh tremolo rather
@@ -504,6 +504,111 @@ int main() {
     OPENAXE_EXPECT(GetParamBySymbol(g, 1, "band0_gain") == 3.5f);
     // The edge resolved through the id map: z's input jack is taken.
     OPENAXE_EXPECT(nam_studio_connect(g, 1, 0, 0, 0) == -1);
+    nam_studio_graph_destroy(g);
+  }
+
+  // ── Phase-2 kinds (issue #268) serialize and restore ────────────────────
+  {
+    NamStudioGraph* g = nam_studio_graph_create();
+    struct KindWrite {
+      int32_t block; // index into blocks[]
+      const char* symbol;
+      float value;
+    };
+    const KindWrite writes[] = {
+        {0, "frequency", 700.0f},
+        {0, "drive", 0.8f},
+        {1, "type", 2.0f},
+        {1, "frequency", 900.0f},
+        {1, "mode", 1.0f},
+        {2, "pitch", -5.0f},
+        {2, "detune_cents", 12.0f},
+        {3, "time", 500.0f},
+        {3, "freeze", 1.0f},
+        {3, "character", 0.7f},
+        {4, "speed", 2.0f},
+        {4, "crossover", 950.0f},
+    };
+    int32_t blocks[5] = {0};
+    int next = 0;
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_RING_MOD, 0, 0);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_FILTER, 0, 1);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_PITCH_SHIFTER, 0, 2);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_GRANULAR_DELAY, 0, 3);
+    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_ROTARY, 0, 4);
+    for (const KindWrite& w : writes) {
+      bool found = false;
+      for (int32_t i = 0; i < nam_studio_block_param_count(g, blocks[w.block]); ++i) {
+        const char* symbol = nullptr;
+        if (!nam_studio_block_param_info(g, blocks[w.block], i, nullptr, &symbol, nullptr,
+                                         nullptr, nullptr)) {
+          continue;
+        }
+        if (std::strcmp(symbol, w.symbol) == 0) {
+          nam_studio_set_param(g, blocks[w.block], i, w.value);
+          found = true;
+          break;
+        }
+      }
+      OPENAXE_EXPECT(found);
+    }
+    // Phase-2 kinds serialize under their kind string names.
+    const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    std::vector<char> buf(static_cast<size_t>(needed));
+    nam_studio_serialize_state(g, buf.data(), needed);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"ring-mod\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"granular-delay\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"rotary\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
+
+    NamStudioGraph* r = nam_studio_graph_create();
+    OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
+    for (const KindWrite& w : writes) {
+      OPENAXE_EXPECT(GetParamBySymbol(r, blocks[w.block], w.symbol) == w.value);
+    }
+    nam_studio_graph_destroy(r);
+    nam_studio_graph_destroy(g);
+  }
+
+  // ── Send/Return (issue #274) serialize and restore ──────────────────────
+  // The routing kinds carry no params and no bypass, so their document is
+  // just their kind string + position. The implicit Send->Return link is not
+  // a cable, so it is not serialized - it re-derives from block presence on
+  // load, and the reloaded pair must route signal exactly like the original.
+  {
+    NamStudioGraph* g = nam_studio_graph_create();
+    const int32_t src = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 0);
+    const int32_t send = nam_studio_add_block(g, NAM_STUDIO_BLOCK_SEND_1, 0, 1);
+    const int32_t ret = nam_studio_add_block(g, NAM_STUDIO_BLOCK_RETURN_1, 0, 4);
+    const int32_t sink = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 5);
+    OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, src, 0) >= 0);
+    OPENAXE_EXPECT(nam_studio_connect(g, src, 0, send, 0) >= 0);
+    OPENAXE_EXPECT(nam_studio_connect(g, ret, 0, sink, 0) >= 0);
+    OPENAXE_EXPECT(nam_studio_connect(g, sink, 0, kOutRail, 0) >= 0);
+    // No params, no bypass on the routing kinds.
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, send) == 0);
+    OPENAXE_EXPECT(nam_studio_block_param_count(g, ret) == 0);
+
+    const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    std::vector<char> buf(static_cast<size_t>(needed));
+    nam_studio_serialize_state(g, buf.data(), needed);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"send-1\"") != nullptr);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"return-1\"") != nullptr);
+
+    NamStudioGraph* r = nam_studio_graph_create();
+    OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
+    // Restored pair still routes: a send into the reloaded graph travels the
+    // implicit hop to the return. 0.5 in -> 0.5 out through the cab relays.
+    const int32_t frames = 64;
+    std::vector<float> input(static_cast<size_t>(frames), 0.5f);
+    std::vector<float> output(static_cast<size_t>(frames), 0.0f);
+    const float* in_ptrs[1] = {input.data()};
+    float* out_ptrs[1] = {output.data()};
+    nam_studio_reset(r, 48000.0, frames);
+    nam_studio_process(r, in_ptrs, 1, out_ptrs, 1, frames);
+    for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+    nam_studio_graph_destroy(r);
     nam_studio_graph_destroy(g);
   }
 

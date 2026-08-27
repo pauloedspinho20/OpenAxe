@@ -80,6 +80,18 @@ typedef enum NamStudioBlockKind {
   NAM_STUDIO_BLOCK_CAB,
   NAM_STUDIO_BLOCK_MIXER,
   NAM_STUDIO_BLOCK_SPLITTER,
+  NAM_STUDIO_BLOCK_RING_MOD,
+  NAM_STUDIO_BLOCK_FILTER,
+  NAM_STUDIO_BLOCK_PITCH_SHIFTER,
+  NAM_STUDIO_BLOCK_GRANULAR_DELAY,
+  NAM_STUDIO_BLOCK_ROTARY,
+  // Send/Return pairs (issue #274) - appended (never re-ordered) so the web
+  // worklet's ordinal KIND_TO_CORE map and any persisted kind ordinals keep
+  // their meaning. Send N routes implicitly into Return N.
+  NAM_STUDIO_BLOCK_SEND_1,
+  NAM_STUDIO_BLOCK_RETURN_1,
+  NAM_STUDIO_BLOCK_SEND_2,
+  NAM_STUDIO_BLOCK_RETURN_2,
 } NamStudioBlockKind;
 
 // Only meaningful for NAM_STUDIO_BLOCK_REVERB blocks - selects which of the

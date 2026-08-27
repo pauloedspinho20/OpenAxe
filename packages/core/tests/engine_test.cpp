@@ -23,9 +23,14 @@
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 #include "openaxe/dsp/equalizer.h"
+#include "openaxe/dsp/filter.h"
 #include "openaxe/dsp/flanger.h"
+#include "openaxe/dsp/granular_delay.h"
 #include "openaxe/dsp/noise_gate.h"
 #include "openaxe/dsp/phaser.h"
+#include "openaxe/dsp/pitch_shifter.h"
+#include "openaxe/dsp/ring_mod.h"
+#include "openaxe/dsp/rotary.h"
 #include "openaxe/dsp/tremolo.h"
 #include "test_harness.h"
 
@@ -102,18 +107,35 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   const BlockId eq = engine.AddBlock(BlockKind::kEq, 0, 1);
   const BlockId noise_gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 2);
   const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
+  // Phase-2 kinds (issue #268): every one is a wet-only DSP kind that also
+  // gets the engine-level mix, so param_count must be dsp + 1.
+  const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
+  const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
+  const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
+  const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
+  const BlockId rotary = engine.AddBlock(BlockKind::kRotary, 0, 8);
 
   OPENAXE_EXPECT(engine.ParamCount(compressor) == openaxe::dsp::Compressor::ParamCount());
   // eq / noise_gate / tremolo now expose an additional engine-level mix (hybrid dry/wet, #263)
   OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
+  OPENAXE_EXPECT(engine.ParamCount(rotary) == openaxe::dsp::Rotary::ParamCount() + 1);
 
   OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
   OPENAXE_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);
   OPENAXE_EXPECT(engine.Connect(eq, 0, noise_gate, 0).ok);
   OPENAXE_EXPECT(engine.Connect(noise_gate, 0, tremolo, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(tremolo, 0, kOutRailId, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(tremolo, 0, ring_mod, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ring_mod, 0, filter, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(filter, 0, pitch, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(pitch, 0, granular, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(granular, 0, rotary, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(rotary, 0, kOutRailId, 0).ok);
   engine.Reset(48000.0, kFrames);
 
   // A loud sine through the full chain: every stage engaged, output must stay
@@ -661,6 +683,136 @@ void TestModulationEffects() {
   }
 }
 
+// Send/Return pairs (issue #274): a Send N relays its single input into the
+// Return N with no cable between them, even across distant columns. Both are
+// no-param passthrough relays and their meters still report the signal, so a
+// user can watch the hop across the grid.
+void TestSendReturnRoutesImplicitlyAcrossColumns() {
+  AudioEngine engine;
+  const BlockId src = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId send = engine.AddBlock(BlockKind::kSend1, 0, 1);
+  const BlockId ret = engine.AddBlock(BlockKind::kReturn1, 0, 4);
+  const BlockId sink = engine.AddBlock(BlockKind::kCab, 0, 5);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, src, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(src, 0, send, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ret, 0, sink, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(sink, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto output = RunMono(engine, 0.5f);
+  for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+  // The relays expose no params...
+  OPENAXE_EXPECT(engine.ParamCount(send) == 0);
+  OPENAXE_EXPECT(engine.ParamCount(ret) == 0);
+  // ...and their meters show the passed-through peak.
+  OPENAXE_EXPECT(engine.GetMeter(send) > 0.49f);
+  OPENAXE_EXPECT(engine.GetMeter(ret) > 0.49f);
+}
+
+// The implicit link is the one exception to the left-to-right column rule: a
+// Return sitting to the LEFT of its Send still receives the Send's signal
+// (the exec order is a topological sort, not a plain column sort).
+void TestSendReturnWorksWithReturnLeftOfSend() {
+  AudioEngine engine;
+  const BlockId src = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId ret = engine.AddBlock(BlockKind::kReturn1, 0, 1);  // left of the send
+  const BlockId send = engine.AddBlock(BlockKind::kSend1, 0, 3);
+  const BlockId sink = engine.AddBlock(BlockKind::kCab, 0, 5);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, src, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(src, 0, send, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ret, 0, sink, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(sink, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto output = RunMono(engine, 0.5f);
+  for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+}
+
+// Send 2 / Return 2 are an independent pair from Send 1 / Return 1 - both hops
+// can be chained in series through ordinary cables.
+void TestSendReturnSecondPairRoutesIndependently() {
+  AudioEngine engine;
+  const BlockId src = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId send1 = engine.AddBlock(BlockKind::kSend1, 0, 1);
+  const BlockId ret1 = engine.AddBlock(BlockKind::kReturn1, 0, 2);
+  const BlockId send2 = engine.AddBlock(BlockKind::kSend2, 0, 3);
+  const BlockId ret2 = engine.AddBlock(BlockKind::kReturn2, 0, 4);
+  const BlockId sink = engine.AddBlock(BlockKind::kCab, 0, 5);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, src, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(src, 0, send1, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ret1, 0, send2, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ret2, 0, sink, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(sink, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto output = RunMono(engine, 0.5f);
+  for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+}
+
+// An unpaired Send drops its signal at the Send; an unpaired Return stays
+// silent - exactly like an unplugged bus.
+void TestUnpairedSendAndReturnSilent() {
+  AudioEngine engine;
+  const BlockId src = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId send = engine.AddBlock(BlockKind::kSend1, 0, 1);       // no Return 1
+  const BlockId orphan_ret = engine.AddBlock(BlockKind::kReturn2, 0, 3);  // no Send 2
+  const BlockId sink = engine.AddBlock(BlockKind::kCab, 0, 5);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, src, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(src, 0, send, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(orphan_ret, 0, sink, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(sink, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto output = RunMono(engine, 0.5f);
+  for (float sample : output) OPENAXE_EXPECT(sample == 0.0f);
+  OPENAXE_EXPECT(engine.GetMeter(orphan_ret) == 0.0f);
+}
+
+// A cable from a Return back around into the same pair's Send completes a
+// cycle through the implicit link (Return left of Send, so the cable is valid
+// left-to-right). The engine must break the implicit link - the pair behaves
+// as unpaired - rather than deadlock the grid, and an unrelated healthy pair
+// must keep routing.
+void TestSendReturnCycleIsBrokenNotDeadlocked() {
+  AudioEngine engine;
+  const BlockId src = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId ret1 = engine.AddBlock(BlockKind::kReturn1, 0, 1);
+  const BlockId send2 = engine.AddBlock(BlockKind::kSend2, 0, 2);
+  const BlockId send1 = engine.AddBlock(BlockKind::kSend1, 0, 4);
+  const BlockId ret2 = engine.AddBlock(BlockKind::kReturn2, 0, 5);
+  const BlockId sink = engine.AddBlock(BlockKind::kCab, 0, 6);
+  // Pair 1 forms a cycle: send1 -> ret1 (implicit) plus ret1 -> send1 (cable).
+  OPENAXE_EXPECT(engine.Connect(ret1, 0, send1, 0).ok);
+  // Pair 2 is healthy and independent: src -> send2 -> [implicit] ret2 -> sink.
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, src, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(src, 0, send2, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ret2, 0, sink, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(sink, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto output = RunMono(engine, 0.5f);
+  for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+}
+
+// A Send and its Return may share a grid column (different rows). The exec
+// order tie-break still runs the Send first, so the Return reads a fresh
+// output rather than a stale one.
+void TestSendReturnInSameColumnStillRoutes() {
+  AudioEngine engine;
+  const BlockId src = engine.AddBlock(BlockKind::kCab, 0, 0);
+  const BlockId send = engine.AddBlock(BlockKind::kSend1, 0, 2);
+  const BlockId ret = engine.AddBlock(BlockKind::kReturn1, 1, 2);  // same column as the send
+  const BlockId sink = engine.AddBlock(BlockKind::kCab, 0, 3);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, src, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(src, 0, send, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(ret, 0, sink, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(sink, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  const auto output = RunMono(engine, 0.5f);
+  for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
+}
+
 }  // namespace
 
 int main() {
@@ -680,6 +832,12 @@ int main() {
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
   TestModulationEffects();
+  TestSendReturnRoutesImplicitlyAcrossColumns();
+  TestSendReturnWorksWithReturnLeftOfSend();
+  TestSendReturnSecondPairRoutesIndependently();
+  TestUnpairedSendAndReturnSilent();
+  TestSendReturnCycleIsBrokenNotDeadlocked();
+  TestSendReturnInSameColumnStillRoutes();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

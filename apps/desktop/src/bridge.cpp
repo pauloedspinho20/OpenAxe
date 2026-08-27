@@ -50,6 +50,11 @@ constexpr KindEntry kKinds[] = {
     {"flanger", NAM_STUDIO_BLOCK_FLANGER},
     {"phaser", NAM_STUDIO_BLOCK_PHASER},
     {"tremolo", NAM_STUDIO_BLOCK_TREMOLO},
+    {"ring-mod", NAM_STUDIO_BLOCK_RING_MOD},
+    {"filter", NAM_STUDIO_BLOCK_FILTER},
+    {"pitch-shifter", NAM_STUDIO_BLOCK_PITCH_SHIFTER},
+    {"granular-delay", NAM_STUDIO_BLOCK_GRANULAR_DELAY},
+    {"rotary", NAM_STUDIO_BLOCK_ROTARY},
     {"delay", NAM_STUDIO_BLOCK_DELAY},
     {"ping-pong-delay", NAM_STUDIO_BLOCK_PING_PONG_DELAY},
     {"reverb", NAM_STUDIO_BLOCK_REVERB},
@@ -61,6 +66,10 @@ constexpr KindEntry kKinds[] = {
     {"cab", NAM_STUDIO_BLOCK_CAB},
     {"mixer", NAM_STUDIO_BLOCK_MIXER},
     {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
+    {"send-1", NAM_STUDIO_BLOCK_SEND_1},
+    {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
+    {"send-2", NAM_STUDIO_BLOCK_SEND_2},
+    {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
 };
 
 std::optional<NamStudioBlockKind> WebToCoreKind(const std::string& web) {

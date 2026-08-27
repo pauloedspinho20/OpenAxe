@@ -4,9 +4,17 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { PresetManager } from './PresetManager'
 import { usePresetManager } from '../../../state/presetManager'
 import { useSceneStore } from '../../../state/sceneStore'
-import { savePreset } from '../../../presets/presetStore'
+import { usePresetBankStore } from '../../../state/presetBankStore'
+import { useCurrentPresetStore } from '../../../state/currentPresetStore'
+import { savePreset, listPresets } from '../../../presets/presetStore'
+import { createEmptyPresetBank } from '../../../presets/presetBankStore'
+import { createEmptyBank } from '../../../scenes/sceneBankStore'
 import { clearStore, STORE_PRESETS } from '../../../storage/db'
+import type { GraphRig } from '../../../engine/GraphRig'
 import type { Preset } from '../../../presets/types'
+
+const { applyPresetMock } = vi.hoisted(() => ({ applyPresetMock: vi.fn() }))
+vi.mock('../../../presets/apply', () => ({ applyPreset: applyPresetMock }))
 
 function makePreset(id: string, name: string, favorite = false): Preset {
   return {
@@ -23,11 +31,18 @@ function makePreset(id: string, name: string, favorite = false): Preset {
   }
 }
 
+const fakeRig = { getBlock: () => null } as unknown as GraphRig
+
 describe('PresetManager', () => {
   beforeEach(async () => {
     await clearStore(STORE_PRESETS)
+    applyPresetMock.mockReset()
+    applyPresetMock.mockResolvedValue({ missingAssets: [] })
     usePresetManager.setState({ open: false, pickTarget: null })
     useSceneStore.setState({ scenes: [], activeScene: 0, activeSlot: 0 })
+    usePresetBankStore.getState().reset()
+    usePresetBankStore.getState().hydrate(createEmptyPresetBank())
+    useCurrentPresetStore.getState().setSaved(null)
     vi.stubGlobal('URL', {
       createObjectURL: vi.fn().mockReturnValue('blob:x'),
       revokeObjectURL: vi.fn(),
@@ -39,6 +54,7 @@ describe('PresetManager', () => {
     vi.restoreAllMocks()
     await clearStore(STORE_PRESETS)
     usePresetManager.setState({ open: false, pickTarget: null })
+    usePresetBankStore.getState().reset()
   })
 
   it('renders nothing when closed', () => {
@@ -54,23 +70,83 @@ describe('PresetManager', () => {
     expect(screen.getByRole('button', { name: 'Import…' })).toBeInTheDocument()
   })
 
-  it('lists saved presets with their block counts', async () => {
+  it('renders the 512-slot bank grid with empty slots', async () => {
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={null} context={null} />)
+    expect(screen.getAllByText('Empty').length).toBe(512)
+    expect(screen.getByText('001')).toBeInTheDocument()
+    expect(screen.getByText('512')).toBeInTheDocument()
+  })
+
+  it('lists unplaced presets under an Unplaced section', async () => {
     await savePreset(makePreset('p1', 'Clean'))
     await savePreset(makePreset('p2', 'Dirty', true))
     act(() => usePresetManager.setState({ open: true }))
     render(<PresetManager rig={null} context={null} />)
-    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
     expect(screen.getByText('Dirty')).toBeInTheDocument()
-    expect(screen.getAllByText(/1 block/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Unplaced')).toBeInTheDocument()
   })
 
-  it('deletes a preset', async () => {
+  it('shows a placed preset in its bank slot row', async () => {
+    await savePreset(makePreset('p1', 'Clean'))
+    usePresetBankStore.getState().setSlot(3, 'p1')
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={null} context={null} />)
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
+    // Slot 004 (index 3) shows the preset; slot 001 stays Empty.
+    expect(screen.getByText('004')).toBeInTheDocument()
+  })
+
+  it('saving the current rig into an empty slot prompts for a name, then places the preset', async () => {
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={fakeRig} context={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save current rig into slot 1' }))
+    // The inline preset-name input appears in the row (the top "Preset name"
+    // input is the first one in the DOM).
+    const inline = screen.getAllByPlaceholderText('Preset name')[1]!
+    fireEvent.change(inline, { target: { value: 'My Save' } })
+    fireEvent.keyDown(inline, { key: 'Enter' })
+    await waitFor(async () => expect(await listPresets()).toHaveLength(1), { timeout: 5000 })
+    const presets = await listPresets()
+    expect(presets[0]!.name).toBe('My Save')
+    expect(usePresetBankStore.getState().slots[0]).toBe(presets[0]!.id)
+  })
+
+  it('saving into an occupied slot asks for confirmation before overwriting', async () => {
+    await savePreset(makePreset('p1', 'Clean'))
+    usePresetBankStore.getState().setSlot(2, 'p1')
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={fakeRig} context={null} />)
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save current rig into slot 3' }))
+    expect(screen.getByText(/already holds "Clean"/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite' }))
+    await waitFor(() => expect(screen.queryByText(/already holds "Clean"/)).toBeNull(), {
+      timeout: 5000,
+    })
+  })
+
+  it('deletes an unplaced preset only after confirmation', async () => {
     await savePreset(makePreset('p1', 'Clean'))
     act(() => usePresetManager.setState({ open: true }))
     render(<PresetManager rig={null} context={null} />)
-    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Delete Clean' }))
-    await waitFor(() => expect(screen.queryByText('Clean')).toBeNull())
+    // The confirm dialog appears; the preset is not deleted until confirmed.
+    expect(screen.getByText(/Delete "Clean"/)).toBeInTheDocument()
+    expect(await listPresets()).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(screen.queryByText('Clean')).toBeNull(), { timeout: 5000 })
+    expect(await listPresets()).toHaveLength(0)
   })
 
   it('toggles a preset favorite', async () => {
@@ -80,8 +156,9 @@ describe('PresetManager', () => {
     await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Favorite Clean' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Favorite Clean' }))
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Unfavorite Clean' })).toBeInTheDocument(),
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Unfavorite Clean' })).toBeInTheDocument(),
+      { timeout: 5000 },
     )
   })
 
@@ -94,6 +171,45 @@ describe('PresetManager', () => {
     expect(await screen.findByText('Power on before loading a preset.')).toBeInTheDocument()
   })
 
+  it('loading a placed preset assigns it to the current scene slot and sets the save baseline', async () => {
+    await savePreset(makePreset('p1', 'Clean'))
+    usePresetBankStore.getState().setSlot(4, 'p1')
+    useSceneStore.getState().hydrate(createEmptyBank())
+    useSceneStore.getState().setActive(2, 3)
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={fakeRig} context={{} as AudioContext} />)
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Clean' }))
+
+    await waitFor(() => expect(useSceneStore.getState().scenes[2]?.slots[3]).toBe(4), {
+      timeout: 5000,
+    })
+    expect(useCurrentPresetStore.getState().saved?.id).toBe('p1')
+    expect(applyPresetMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('loading an unplaced preset places it into the bank and assigns it to the current scene slot', async () => {
+    await savePreset(makePreset('p1', 'Clean'))
+    useSceneStore.getState().hydrate(createEmptyBank())
+    useSceneStore.getState().setActive(1, 2)
+    act(() => usePresetManager.setState({ open: true }))
+    render(<PresetManager rig={fakeRig} context={{} as AudioContext} />)
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Clean' }))
+
+    await waitFor(() => expect(usePresetBankStore.getState().slots[0]).toBe('p1'), {
+      timeout: 5000,
+    })
+    expect(useSceneStore.getState().scenes[1]?.slots[2]).toBe(0)
+    expect(useCurrentPresetStore.getState().saved?.id).toBe('p1')
+  })
+
   it('exports a preset without throwing', async () => {
     await savePreset(makePreset('p1', 'Clean'))
     act(() => usePresetManager.setState({ open: true }))
@@ -104,14 +220,30 @@ describe('PresetManager', () => {
     ).not.toThrow()
   })
 
-  it('assigns a preset to a scene slot when opened as a picker', async () => {
+  it('assigns an unplaced preset to a scene slot via the first free bank slot', async () => {
     const assignSpy = vi.spyOn(useSceneStore.getState(), 'assignSlot')
     await savePreset(makePreset('p1', 'Clean'))
     act(() => usePresetManager.setState({ open: true, pickTarget: { scene: 2, slot: 3 } }))
     render(<PresetManager rig={null} context={null} />)
-    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
     expect(screen.getByText('ASSIGN TO SCENE 3 · SLOT 4')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Assign Clean' }))
-    expect(assignSpy).toHaveBeenCalledWith(2, 3, 'p1')
+    expect(usePresetBankStore.getState().slots[0]).toBe('p1')
+    expect(assignSpy).toHaveBeenCalledWith(2, 3, 0)
+  })
+
+  it('assigns a placed preset by pointing the scene slot at its bank slot', async () => {
+    const assignSpy = vi.spyOn(useSceneStore.getState(), 'assignSlot')
+    await savePreset(makePreset('p1', 'Clean'))
+    usePresetBankStore.getState().setSlot(7, 'p1')
+    act(() => usePresetManager.setState({ open: true, pickTarget: { scene: 1, slot: 0 } }))
+    render(<PresetManager rig={null} context={null} />)
+    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+      timeout: 5000,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Assign Clean' }))
+    expect(assignSpy).toHaveBeenCalledWith(1, 0, 7)
   })
 })

@@ -484,6 +484,350 @@
             "mode": "none",
             "timeConstant": 0
           }
+        },
+        {
+          "symbol": "stereo",
+          "label": "Stereo",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "mode",
+          "label": "Mode",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        }
+      ]
+    },
+    "ring-mod": {
+      "cppFile": "ring_mod.cpp",
+      "params": [
+        {
+          "symbol": "frequency",
+          "label": "Frequency",
+          "min": 20,
+          "max": 2000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "drive",
+          "label": "Drive",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        }
+      ]
+    },
+    "filter": {
+      "cppFile": "filter.cpp",
+      "params": [
+        {
+          "symbol": "type",
+          "label": "Type",
+          "min": 0,
+          "max": 2,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "frequency",
+          "label": "Frequency",
+          "min": 350,
+          "max": 2200,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "q",
+          "label": "Q",
+          "min": 0.5,
+          "max": 10,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "drive",
+          "label": "Drive",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "sensitivity",
+          "label": "Sensitivity",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "mode",
+          "label": "Drive Mode",
+          "min": 0,
+          "max": 2,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "lfo_rate",
+          "label": "LFO Rate",
+          "min": 0.1,
+          "max": 10,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        }
+      ]
+    },
+    "pitch-shifter": {
+      "cppFile": "pitch_shifter.cpp",
+      "params": [
+        {
+          "symbol": "mode",
+          "label": "Mode",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "pitch",
+          "label": "Pitch",
+          "min": -12,
+          "max": 12,
+          "unit": "st",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "detune_cents",
+          "label": "Detune",
+          "min": -15,
+          "max": 15,
+          "unit": "¢",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        }
+      ]
+    },
+    "granular-delay": {
+      "cppFile": "granular_delay.cpp",
+      "params": [
+        {
+          "symbol": "time",
+          "label": "Time",
+          "min": 10,
+          "max": 2000,
+          "unit": "ms",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "grain_size",
+          "label": "Grain Size",
+          "min": 10,
+          "max": 500,
+          "unit": "ms",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "density",
+          "label": "Density",
+          "min": 1,
+          "max": 50,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "pitch",
+          "label": "Pitch",
+          "min": -12,
+          "max": 12,
+          "unit": "st",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "jitter",
+          "label": "Jitter",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "feedback",
+          "label": "Feedback",
+          "min": 0,
+          "max": 0.9,
+          "unit": "%",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "spread",
+          "label": "Spread",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "character",
+          "label": "Character",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "freeze",
+          "label": "Freeze",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        }
+      ]
+    },
+    "rotary": {
+      "cppFile": "rotary.cpp",
+      "params": [
+        {
+          "symbol": "speed",
+          "label": "Speed",
+          "min": 0,
+          "max": 2,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "drive",
+          "label": "Drive",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "horn_level",
+          "label": "Horn Level",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "drum_level",
+          "label": "Drum Level",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "mic_distance",
+          "label": "Mic Distance",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
+        },
+        {
+          "symbol": "crossover",
+          "label": "Crossover",
+          "min": 400,
+          "max": 1200,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.02
+          }
         }
       ]
     },

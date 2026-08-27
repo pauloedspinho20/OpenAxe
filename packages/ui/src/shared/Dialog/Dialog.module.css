@@ -7,13 +7,16 @@
   justify-content: center;
   padding: var(--sp-5);
   background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+  overscroll-behavior: contain;
+  overflow-y: auto;
 }
 
 .dialog {
   display: flex;
   flex-direction: column;
-  width: var(--dialog-w, min(560px, 90vw));
   max-height: var(--dialog-max-h, calc(100svh - var(--sp-7)));
+  width: var(--dialog-w, min(760px, 100%));
   background: var(--panel);
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-lg);
@@ -26,7 +29,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
-  padding: var(--sp-4) var(--sp-4);
+  padding: var(--sp-4);
   flex-shrink: 0;
 }
 
@@ -40,9 +43,10 @@
 
 .title {
   composes: label from global;
+  font-size: 16px !important;
+  color: var(--ink-1) !important;
   margin: 0;
   font-weight: 600;
-  color: var(--ink-1);
 }
 
 .close {
@@ -69,6 +73,7 @@
 
 .body {
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--sp-4);
   flex: 1;
   flex-direction: column;

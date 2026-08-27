@@ -18,6 +18,7 @@ import {
   STORE_LIBRARY,
   STORE_MIDI,
   STORE_PRESETS,
+  STORE_PRESET_BANK,
   STORE_SCENES,
   clearStore,
   withStore,
@@ -25,12 +26,15 @@ import {
 import { getCachedAsset, putCachedAsset } from '../engine/assetCache'
 import { listPresets, savePreset } from '../presets/presetStore'
 import type { Preset } from '../presets/types'
+import { loadPresetBank, savePresetBank } from '../presets/presetBankStore'
+import type { PresetBank } from '../presets/presetBank'
 import { loadSceneBank, saveSceneBank } from '../scenes/sceneBankStore'
 import type { SceneBank } from '../scenes/types'
 import { DEFAULT_MIDI_CONFIG, loadMidiConfig, saveMidiConfig } from '../midi/midiConfigStore'
 import type { MidiConfig } from '../midi/midiConfigStore'
 import { Tone3000Library } from '../tone3000/library'
 import type { Tone3000LibraryEntry } from '../tone3000/library'
+import { FACTORY_SETUP_KEY } from '../factory/factorySetup'
 import { useIOStore, type InputChannelMode, type LatencyHint } from '../state/ioStore'
 import { useSettingsStore } from '../state/settingsStore'
 
@@ -49,6 +53,8 @@ export interface DataBundle {
   exportedAt: number
   presets: Preset[]
   sceneBank: SceneBank | null
+  /** Scene slots reference preset-bank slots, so the bank must ride along or a restore breaks scenes. */
+  presetBank: PresetBank | null
   midiConfig: MidiConfig
   library: Tone3000LibraryEntry[]
   assets: DataBundleAsset[]
@@ -77,9 +83,10 @@ function base64ToBlob(base64: string, type: string): Blob {
 
 /** Gathers every store into one in-memory bundle, ready to serialize. */
 export async function buildDataBundle(): Promise<DataBundle> {
-  const [presets, sceneBank, midiConfig, library, assetIds] = await Promise.all([
+  const [presets, sceneBank, presetBank, midiConfig, library, assetIds] = await Promise.all([
     listPresets(),
     loadSceneBank(),
+    loadPresetBank(),
     loadMidiConfig(),
     Tone3000Library.list(),
     withStore<IDBValidKey[]>(STORE_ASSETS, 'readonly', (store) => store.getAllKeys()),
@@ -103,6 +110,7 @@ export async function buildDataBundle(): Promise<DataBundle> {
     exportedAt: Date.now(),
     presets,
     sceneBank,
+    presetBank,
     midiConfig,
     library,
     assets,
@@ -144,6 +152,7 @@ function validateBundle(value: unknown): DataBundle {
     exportedAt: typeof v.exportedAt === 'number' ? v.exportedAt : Date.now(),
     presets: Array.isArray(v.presets) ? (v.presets as Preset[]) : [],
     sceneBank: (v.sceneBank as SceneBank | null | undefined) ?? null,
+    presetBank: (v.presetBank as PresetBank | null | undefined) ?? null,
     midiConfig: (v.midiConfig as MidiConfig | undefined) ?? DEFAULT_MIDI_CONFIG,
     library: Array.isArray(v.library) ? (v.library as Tone3000LibraryEntry[]) : [],
     assets: Array.isArray(v.assets) ? (v.assets as DataBundleAsset[]) : [],
@@ -177,12 +186,14 @@ export async function importDataBundle(bundle: DataBundle): Promise<void> {
   await clearStore(STORE_LIBRARY)
   await clearStore(STORE_SCENES)
   await clearStore(STORE_MIDI)
+  await clearStore(STORE_PRESET_BANK)
 
   for (const asset of bundle.assets) {
     await putCachedAsset(asset.id, base64ToBlob(asset.base64, asset.type))
   }
   for (const preset of bundle.presets) await savePreset(preset)
   if (bundle.sceneBank) await saveSceneBank(bundle.sceneBank)
+  if (bundle.presetBank) await savePresetBank(bundle.presetBank)
   await saveMidiConfig(bundle.midiConfig)
   for (const entry of bundle.library) {
     await withStore<IDBValidKey>(STORE_LIBRARY, 'readwrite', (store) => store.put(entry))
@@ -226,9 +237,11 @@ export async function deleteAllData(options: { signOutTone3000: boolean }): Prom
   await clearStore(STORE_LIBRARY)
   await clearStore(STORE_SCENES)
   await clearStore(STORE_MIDI)
+  await clearStore(STORE_PRESET_BANK)
 
   localStorage.removeItem(THEME_KEY)
   localStorage.removeItem(ONBOARDING_KEY)
+  localStorage.removeItem(FACTORY_SETUP_KEY)
   localStorage.removeItem(IO_STORAGE_KEY)
   localStorage.removeItem(SETTINGS_STORAGE_KEY)
   if (options.signOutTone3000) {

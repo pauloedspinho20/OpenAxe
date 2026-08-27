@@ -66,7 +66,7 @@ namespace shared {
   inline constexpr IColor meterGlowGreen = IColor(128, 95, 220, 122);
   inline constexpr IColor meterGlowAmber = IColor(128, 255, 176, 32);
   inline constexpr IColor meterGlowRed = IColor(153, 255, 59, 48);
-  inline constexpr IColor overlayBg = IColor(140, 0, 0, 0);
+  inline constexpr IColor overlayBg = IColor(166, 0, 0, 0);
   inline constexpr IColor overlayBgStrong = IColor(184, 0, 0, 0);
   inline constexpr IColor screwLight = IColor(255, 74, 74, 72);
   inline constexpr IColor screwDark = IColor(255, 10, 10, 10);
@@ -81,6 +81,17 @@ namespace shared {
   inline constexpr IColor btnActiveHighlight = IColor(15, 255, 255, 255);
   inline constexpr IColor dangerBgDim = IColor(36, 255, 59, 48);
   inline constexpr IColor dangerGlowDim = IColor(64, 255, 59, 48);
+  inline constexpr IColor blockTone = IColor(255, 255, 138, 61);
+  inline constexpr IColor blockDrive = IColor(255, 232, 184, 74);
+  inline constexpr IColor blockDynamics = IColor(255, 232, 197, 71);
+  inline constexpr IColor blockFilter = IColor(255, 78, 201, 166);
+  inline constexpr IColor blockMod = IColor(255, 122, 184, 255);
+  inline constexpr IColor blockTime = IColor(255, 167, 139, 250);
+  inline constexpr IColor blockSpace = IColor(255, 95, 220, 122);
+  inline constexpr IColor blockUtility = IColor(255, 154, 160, 166);
+  inline constexpr IColor blockCore = IColor(255, 255, 138, 61);
+  inline constexpr IColor blockEffects = IColor(255, 122, 184, 255);
+  inline constexpr IColor blockNam = IColor(255, 255, 138, 61);
 } // namespace shared
 } // namespace color
 
@@ -118,6 +129,16 @@ namespace spacing {
   inline constexpr float gridMinRow = 96.0f; // 96px
   inline constexpr float gridMinCol = 100.0f; // 100px
 } // namespace spacing
+
+// ── Container (max-width per breakpoint) ────────────────────────
+namespace container {
+  inline constexpr float mwXs = 520.0f; // 520px
+  inline constexpr float mwSm = 640.0f; // 640px
+  inline constexpr float mwMd = 720.0f; // 720px
+  inline constexpr float mwLg = 920.0f; // 920px
+  inline constexpr float mwXl = 1200.0f; // 1200px
+  inline constexpr float mwXxl = 1600.0f; // 1600px
+} // namespace container
 
 // ── Typography ─────────────────────────────────────────────────────
 namespace typography {

@@ -6,7 +6,6 @@ import { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey } from '../../..
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BlockCard, type BlockDragInfo } from '../BlockCard/BlockCard'
 import { BlockPalette } from '../BlockPalette/BlockPalette'
-import { BlockHighlight } from '../BlockHighlight/BlockHighlight'
 import { CableLayer, type DragPreview } from '../CableLayer/CableLayer'
 import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
 import { InputDeviceDialog } from '../InputDeviceDialog/InputDeviceDialog'
@@ -19,6 +18,7 @@ import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { Tuner } from '@/components/Tuner/Tuner'
+import { BLOCK_KIND_LABELS } from '../blockOptions'
 
 import styles from './GridEditor.module.css'
 export interface GridEditorProps {
@@ -168,9 +168,6 @@ export function GridEditor({
           <BlockPalette tunerAnalyser={tunerAnalyser} />
         </div>
         <div className={styles.paletteAndInspectorItem}>
-          <BlockHighlight rig={rig} analyser={analyser} />
-        </div>
-        <div className={styles.paletteAndInspectorItem}>
           <BlockInspector rig={rig} context={context} />
         </div>
       </div>
@@ -195,13 +192,6 @@ export function GridEditor({
             title="Input device and channel"
           />
 
-          {/*   <HardwareButton
-            fullWidth
-            label="TUNER"
-            onClick={() => setTunerOpen(true)}
-            title="Open the full-size tuner (mutes output)"
-          /> */}
-
           <button
             type="button"
             className={styles.tunerSection}
@@ -213,6 +203,7 @@ export function GridEditor({
               <Tuner analyser={tunerAnalyser} />
             </div>
           </button>
+
           <Knob
             label="Trim"
             value={inputGain}
@@ -291,6 +282,13 @@ export function GridEditor({
           open={!!addMenuCell}
           onPick={(kind: BlockKind) => {
             const id = useGraphStore.getState().addBlock(kind, addMenuCell.row, addMenuCell.col)
+            if (id === null) {
+              toast.warning(`${BLOCK_KIND_LABELS[kind]} is already on the grid`, {
+                description: 'Send/Return blocks are strictly 1:1.',
+              })
+              setAddMenuCell(null)
+              return
+            }
             openCatalogForNewBlock(id, kind)
             setAddMenuCell(null)
           }}

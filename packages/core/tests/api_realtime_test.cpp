@@ -105,7 +105,7 @@ void TestEndToEndDsparkRig() {
   // eq / gate / tremolo now have an extra engine mix (hybrid dry/wet, #263)
   OPENAXE_EXPECT(nam_studio_block_param_count(graph, eq) == 13);
   OPENAXE_EXPECT(nam_studio_block_param_count(graph, gate) == 7);
-  OPENAXE_EXPECT(nam_studio_block_param_count(graph, tremolo) == 4);
+  OPENAXE_EXPECT(nam_studio_block_param_count(graph, tremolo) == 6);
 
   const char* name = nullptr;
   OPENAXE_EXPECT(nam_studio_block_param_info(graph, compressor, 0, &name, nullptr, nullptr, nullptr,

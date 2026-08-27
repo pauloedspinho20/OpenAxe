@@ -4,6 +4,7 @@
  * style. Shares the app's one database via storage/db.ts.
  */
 import { STORE_SCENES, withStore } from '../storage/db'
+import { PRESET_SLOT_COUNT } from '../presets/presetBank'
 import { SCENE_COUNT, SLOTS_PER_SCENE, type Scene, type SceneBank } from './types'
 
 const SCENE_BANK_ID = 'default'
@@ -46,9 +47,12 @@ function normalizeScene(raw: unknown, index: number): Scene {
   return {
     index,
     name: typeof r.name === 'string' ? r.name : '',
-    slots: Array.from({ length: SLOTS_PER_SCENE }, (_, i) =>
-      typeof slots[i] === 'string' ? (slots[i] as string) : null,
-    ),
+    slots: Array.from({ length: SLOTS_PER_SCENE }, (_, i) => {
+      const v = slots[i]
+      return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < PRESET_SLOT_COUNT
+        ? v
+        : null
+    }),
   }
 }
 

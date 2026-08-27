@@ -56,8 +56,8 @@
 .label {
   text-align: center;
   line-height: 1.2;
-  color: var(--accent);
-  font-weight: bold;
+  font-size: 9px !important;
+  color: var(--accent) !important;
 }
 
 .value {

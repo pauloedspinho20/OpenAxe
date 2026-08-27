@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Meter, MiniMeter } from '@openaxe/ui'
+import { Meter, MiniMeter, MediumMeter } from '@openaxe/ui'
 
 export interface LiveMeterProps {
   label?: string
   analyser: AnalyserNode | null
   /** 'segments' (default) is the full VU-style meter; 'mini' is a single bar for tight spaces. */
-  variant?: 'segments' | 'mini'
+  variant?: 'segments' | 'medium' | 'mini'
 }
 
 /**
@@ -40,5 +40,6 @@ export function LiveMeter({ label, analyser, variant = 'segments' }: LiveMeterPr
   }, [analyser])
 
   if (variant === 'mini') return <MiniMeter level={level} title={label} />
+  if (variant === 'medium') return <MediumMeter level={level} title={label} />
   return label === undefined ? <Meter level={level} /> : <Meter label={label} level={level} />
 }
