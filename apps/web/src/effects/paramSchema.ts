@@ -1146,29 +1146,20 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
   },
 ]
 
-const SLIM_SIZE_FIELD: KnobField = {
-  key: 'slim_size',
-  label: 'Slim',
-  control: 'knob',
-  ...range('amp', 'slim_size'),
-  step: 0.01,
-  defaultValue: 1,
-  formatValue: percent,
-  group: 'Quality',
-}
-
 /**
  * Schema entries for grid block kinds beyond the 10 effects. The 5 NAM
  * model kinds (amp/amp-cab/pedal/outboard/space) each get the same 4-band
  * tone stack - model loading itself isn't a continuous "param" and stays a
  * dedicated action in the inspector, but the tone controls go through the
  * same generic knob panel as everything else.
+ *
+ * Slim size is intentionally not exposed per-block in the inspector
+ * (see BlockInspector): slimmable models always run at full quality
+ * (max slim size = 1) and are not per-block adjustable here. The
+ * global quality in SettingsDialog remains the single place to trade
+ * fidelity for CPU if needed, but per-block Slim knobs are hidden.
  */
-const AMP_CONTROLS: ParamFieldSchema[] = [
-  ...AMP_TONE_STACK,
-  SLIM_SIZE_FIELD,
-  ...IN_OUT_LEVEL_FIELDS,
-]
+const AMP_CONTROLS: ParamFieldSchema[] = [...AMP_TONE_STACK, ...IN_OUT_LEVEL_FIELDS]
 
 export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
   amp: AMP_CONTROLS,

@@ -208,6 +208,17 @@ export function NamModelDetails({
   }
 
   const missingCount = displayModels ? displayModels.filter((m) => !isCached(m.id)).length : 0
+  const VARIANT_LIMIT = 6
+  const [showAllVariants, setShowAllVariants] = useState(false)
+
+  useEffect(() => {
+    setShowAllVariants(false)
+  }, [toneId])
+
+  const visibleModels = useMemo(() => {
+    if (!displayModels) return null
+    return showAllVariants ? displayModels : displayModels.slice(0, VARIANT_LIMIT)
+  }, [displayModels, showAllVariants])
 
   return (
     <Dialog open={open} onClose={onClose} title="Model Details">
@@ -225,7 +236,7 @@ export function NamModelDetails({
                   disabled={bulkDownloading}
                   onClick={() => void handleDownloadMissing()}
                 >
-                  {bulkDownloading ? 'Downloading…' : `Download missing (${missingCount})`}
+                  {bulkDownloading ? 'Downloading…' : `Download all (${missingCount})`}
                 </OutlineButton>
               )}
             </div>
@@ -233,7 +244,7 @@ export function NamModelDetails({
             {modelsLoading && <p className={styles.note}>Loading variants…</p>}
             {modelsError && <p className={styles.error}>{modelsError}</p>}
             <ul className={styles.variantList}>
-              {displayModels.map((m) => {
+              {visibleModels!.map((m) => {
                 const cached = isCached(m.id)
                 return (
                   <li key={m.id} className={styles.variantRow}>
@@ -262,6 +273,14 @@ export function NamModelDetails({
                 )
               })}
             </ul>
+            {displayModels.length > VARIANT_LIMIT && (
+              <OutlineButton
+                onClick={() => setShowAllVariants((v) => !v)}
+                aria-expanded={showAllVariants}
+              >
+                {showAllVariants ? 'Show less' : `Show all (${displayModels.length})`}
+              </OutlineButton>
+            )}
           </div>
         )}
       </div>

@@ -17,6 +17,13 @@ import {
 } from '../../../settings/dataBundle'
 import { Dialog, HardwareButton, Knob, Select, Toggle } from '@openaxe/ui'
 import styles from './SettingsDialog.module.css'
+import {
+  importAccountTones,
+  type AccountImportProgress,
+  type AccountImportResult,
+  type AccountImportScope,
+} from '../../../tone3000/accountImport'
+import { Tone3000Library } from '../../../tone3000/library'
 
 export interface SettingsDialogProps {
   open: boolean
@@ -85,6 +92,12 @@ export function SettingsDialog({
     latencyMs: number
     latencyFrames: number
   } | null>(null)
+
+  // Account tones bulk import — independent of other settings busy states
+  const [accountScope, setAccountScope] = useState<AccountImportScope>('all')
+  const [accountBusy, setAccountBusy] = useState(false)
+  const [accountProgress, setAccountProgress] = useState<AccountImportProgress | null>(null)
+  const [accountSummary, setAccountSummary] = useState<AccountImportResult | null>(null)
 
   const refreshCacheStats = () => {
     void getAssetCacheStats().then(setCacheStats)
@@ -224,6 +237,46 @@ export function SettingsDialog({
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err))
       setBusy(null)
+    }
+  }
+
+  const handleAccountImport = async () => {
+    setAccountBusy(true)
+    setErrorMessage(null)
+    setStatusMessage(null)
+    setAccountSummary(null)
+    try {
+      const result = await importAccountTones({
+        scope: accountScope,
+        onProgress: (p) => setAccountProgress(p),
+      })
+      setAccountProgress(null)
+      setAccountSummary(result)
+      await Tone3000Library.refresh()
+      void getAssetCacheStats().then(setCacheStats)
+      if (result.tones === 0) {
+        setStatusMessage('No tones found for that scope in your Tone3000 account.')
+      } else if (result.failed > 0) {
+        setErrorMessage(
+          `Import: ${result.ok} downloaded, ${result.skipped} already cached, ${result.failed} failed. ${result.errors.slice(0, 3).join('; ')}${result.errors.length > 3 ? '…' : ''}`,
+        )
+      } else {
+        setStatusMessage(
+          `Imported ${result.tones} tone(s): ${result.ok} downloaded, ${result.skipped} already cached.`,
+        )
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message === 'Not authenticated') {
+        setErrorMessage(
+          'Importing your account tones needs a Tone3000 account connection — connect above, then retry.',
+        )
+      } else {
+        setErrorMessage(`Account import failed: ${message}`)
+      }
+      setAccountProgress(null)
+    } finally {
+      setAccountBusy(false)
     }
   }
 
@@ -491,6 +544,68 @@ export function SettingsDialog({
             <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
           )}
         </div>
+      </section>
+
+      {/* Tone3000 Library — bulk import from account history */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>
+          Tone3000 Library — Import Account Tones
+        </span>
+        <p className={styles.sectionHint}>
+          Bulk-download every model file from your Tone3000 account into the local library. Choose
+          the scope, then import — skips anything already cached, throttled to Tone3000’s 100
+          req/min.
+        </p>
+        <div className={styles.row}>
+          <Select
+            label="Scope"
+            value={accountScope}
+            onChange={(e) => setAccountScope(e.target.value as AccountImportScope)}
+            aria-label="Account tones scope"
+            className={styles.field}
+            disabled={accountBusy}
+          >
+            <option value="all">All</option>
+            <option value="downloaded">Downloaded</option>
+            <option value="favorited">Favorited</option>
+            <option value="created">My models</option>
+          </Select>
+          <HardwareButton
+            label={
+              accountProgress
+                ? `Importing ${accountProgress.currentTone}/${accountProgress.totalTones}…`
+                : 'Import from Tone3000 account'
+            }
+            disabled={accountBusy || auth.status !== 'connected'}
+            onClick={() => void handleAccountImport()}
+          />
+        </div>
+        {auth.status !== 'connected' && (
+          <p className={styles.sectionHint}>Connect your Tone3000 account above to import.</p>
+        )}
+        {accountProgress && (
+          <p className={styles.sectionHint}>
+            {accountProgress.status === 'fetching_models'
+              ? `Fetching models for ${accountProgress.toneTitle}…`
+              : accountProgress.status === 'downloading'
+                ? `Downloading ${accountProgress.toneTitle}…`
+                : `${accountProgress.toneTitle} — ${accountProgress.status}`}{' '}
+            {accountProgress.currentTone}/{accountProgress.totalTones} tones
+          </p>
+        )}
+        {accountSummary && !accountProgress && (
+          <p className={styles.sectionHint}>
+            {accountSummary.tones} tone(s): {accountSummary.ok} downloaded, {accountSummary.skipped}{' '}
+            already cached
+            {accountSummary.failed > 0 ? `, ${accountSummary.failed} failed` : ''}.
+          </p>
+        )}
+        {accountSummary && accountSummary.errors.length > 0 && (
+          <p className={styles.errorText}>
+            {accountSummary.errors.slice(0, 3).join('; ')}
+            {accountSummary.errors.length > 3 ? '…' : ''}
+          </p>
+        )}
       </section>
 
       {/* Cache */}

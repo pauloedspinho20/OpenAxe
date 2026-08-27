@@ -37,7 +37,15 @@ export class RigBlock implements PresetBlock {
   }
 
   setParams(params: EffectParams): void {
-    this.params = { ...params }
+    // Slim is hidden per-block; drop any persisted slim keys so presets stay at max.
+    const {
+      slim_size: _slimSnake,
+      slimSize: _slimCamel,
+      ...rest
+    } = params as Record<string, unknown>
+    void _slimSnake
+    void _slimCamel
+    this.params = { ...(rest as EffectParams) }
 
     // The Input/Output knobs are block I/O trims, not DSP params. They must not
     // go through setParam: the core's input_level/output_level params exist only
@@ -52,6 +60,11 @@ export class RigBlock implements PresetBlock {
 
     for (const [key, value] of Object.entries(params)) {
       if (key === 'input_level' || key === 'output_level') continue
+      // Slim size is intentionally not per-block adjustable in the inspector
+      // (paramSchema hides the knob); slimmable models always run at max
+      // quality (1). Any persisted slim_size/ slimSize from older presets is
+      // ignored here so the block stays at max via its loadModel default.
+      if (key === 'slim_size' || key === 'slimSize') continue
       // The reverb algorithm is a select (hall/room/plate/early-reflections),
       // not a numeric param - it has no core symbol and must go through
       // nam_studio_set_reverb_algorithm. Reverb control knobs (roomSize/

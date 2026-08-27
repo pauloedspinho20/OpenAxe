@@ -1,4 +1,6 @@
 .btn {
+  display: flex;
+  justify-content: center;
   font-family: var(--font-display);
   font-size: 10px;
   letter-spacing: 0.04em;

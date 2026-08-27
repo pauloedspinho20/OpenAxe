@@ -16,7 +16,6 @@ import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '.
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
 import type { Gear } from '@/tone3000/types'
-import { useSettingsStore } from '../../../state/settingsStore'
 
 function RawReverbPanel({
   blockId,
@@ -272,7 +271,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                           i: { id: string; name: string },
                         ) => Promise<unknown>
                       }
-                    ).loadModel(json, useSettingsStore.getState().namQuality, info),
+                    ).loadModel(json, 1, info),
                   loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) =>
                     (
                       block as unknown as {

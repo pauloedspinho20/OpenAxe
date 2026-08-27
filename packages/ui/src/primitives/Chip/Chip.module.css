@@ -4,7 +4,7 @@
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--ink-2);
-  background: var(--panel-raised);
+  background-color: var(--panel-raised);
   border: 1px solid var(--seam);
   box-shadow: var(--shadow-control);
   border-radius: var(--r-md);

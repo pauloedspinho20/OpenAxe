@@ -57,11 +57,41 @@
   background: var(--accent-dim);
 }
 
-.body {
+.content {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   padding-bottom: var(--sp-3);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.loadingWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 560px;
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-5) 0;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--seam-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .filters {
@@ -142,14 +172,18 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--sp-3);
-  align-items: start;
+  height: 100%;
 }
 
 .card {
-  background: var(--panel-recessed);
+  background: var(--panel-raised);
   border: 1px solid var(--seam);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   overflow: hidden;
+  box-shadow: var(--shadow-control);
   /* No height here on purpose: .cardsGrid uses align-items: start (no
      stretch), so a percentage height against its auto-sized row is an
      ambiguous case the spec leaves engines free to resolve differently -
@@ -258,10 +292,9 @@
 .cardActions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
-  border-top: 1px solid var(--seam);
 }
 
 .iconBtn {
@@ -306,18 +339,6 @@
   gap: var(--sp-3);
 }
 
-.pageBtn {
-  width: 28px;
-  height: 28px;
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--ink-1);
-  background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
 .pageBtn:disabled {
   opacity: 0.35;
   cursor: default;
@@ -328,9 +349,14 @@
   text-align: center;
 }
 
-.footer {
-  padding: var(--sp-2) var(--sp-4);
+.footerWrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3);
   border-top: 1px solid var(--seam);
+  padding: var(--sp-3) 0 0;
+  width: 100%;
 }
 
 .footerText {

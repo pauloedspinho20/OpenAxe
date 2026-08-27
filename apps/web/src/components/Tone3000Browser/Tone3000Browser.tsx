@@ -12,11 +12,17 @@ import {
   apiSearchTones,
 } from '../../tone3000/client'
 import type { BlockLoadTarget } from '../../tone3000/importService'
-import type { Tone } from '../../tone3000/types'
+import type { Make, Tag, Tone } from '../../tone3000/types'
 import { bulkDownloadToneModels } from '../../tone3000/bulkDownload'
-import { ToneCatalogDetailsDialog } from './ToneCatalogDetailsDialog'
-import { Dialog, HardwareButton, OutlineButton, Select } from '@openaxe/ui'
+import {
+  importAccountTones,
+  type AccountImportProgress,
+  type AccountImportScope,
+} from '../../tone3000/accountImport'
+import { NamModelDetails } from '../grid/NamModelDetails/NamModelDetails'
+import { Dialog, HardwareButton, MixerIcon, OutlineButton, Pagination, Select } from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
+import { CloseIcon } from '../../../../../packages/ui/src/icons/GeneraIcons'
 
 /** Max results /tones/search and /tones/favorited return per page (per API docs). */
 const SEARCH_PAGE_SIZE = 25
@@ -73,6 +79,9 @@ export function Tone3000Browser({ target, context }: Props) {
   const [tagsValue, setTagsValue] = useState('')
   const [detailTone, setDetailTone] = useState<Tone | null>(null)
   const [quickDownloadingToneId, setQuickDownloadingToneId] = useState<number | null>(null)
+  const [accountScope, setAccountScope] = useState<AccountImportScope>('all')
+  const [accountBusy, setAccountBusy] = useState(false)
+  const [accountProgress, setAccountProgress] = useState<AccountImportProgress | null>(null)
 
   useEffect(() => {
     void Tone3000Library.refresh()
@@ -247,6 +256,44 @@ export function Tone3000Browser({ target, context }: Props) {
     await reloadFromLibrary(entry)
   }
 
+  const handleAccountImport = async () => {
+    setAccountBusy(true)
+    setImportError(null)
+    setAccountProgress(null)
+    try {
+      const result = await importAccountTones({
+        scope: accountScope,
+        onProgress: (p) => setAccountProgress(p),
+      })
+      setAccountProgress(null)
+      await Tone3000Library.refresh()
+      if (result.tones === 0) {
+        setImportError('No tones found for that scope in your Tone3000 account.')
+      } else if (result.failed > 0) {
+        setImportError(
+          `Import: ${result.ok} downloaded, ${result.skipped} already cached, ${result.failed} failed. ${result.errors.slice(0, 3).join('; ')}${result.errors.length > 3 ? '…' : ''}`,
+        )
+      } else {
+        setImportError(
+          `Imported ${result.tones} tone(s): ${result.ok} downloaded, ${result.skipped} already cached.`,
+        )
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message === NOT_AUTHENTICATED) {
+        setNeedsConnect(true)
+        setImportError(
+          'Importing your account tones needs a Tone3000 connection — connect above, then retry.',
+        )
+      } else {
+        setImportError(`Account import failed: ${message}`)
+      }
+      setAccountProgress(null)
+    } finally {
+      setAccountBusy(false)
+    }
+  }
+
   const close = () => {
     browser.closeBrowser()
     setScope('browse')
@@ -260,6 +307,7 @@ export function Tone3000Browser({ target, context }: Props) {
     setImportError(null)
     setDetailTone(null)
     setQuickDownloadingToneId(null)
+    setAccountProgress(null)
   }
 
   if (!browser.open || !browser.target) return null
@@ -270,11 +318,18 @@ export function Tone3000Browser({ target, context }: Props) {
   const cardClass = `${styles.card} ${viewMode === 'cards' ? styles.cardVertical : ''}`
   const filteredLibrary = library.filter(
     (e) =>
-      matchesQuery(e.name, search.query) ||
-      matchesQuery(e.creator, search.query) ||
-      matchesQuery(e.toneTitle ?? '', search.query),
+      e.kind === 'model' &&
+      (matchesQuery(e.name, search.query) ||
+        matchesQuery(e.creator, search.query) ||
+        matchesQuery(e.toneTitle ?? '', search.query)),
   )
-
+  const LIBRARY_PAGE_SIZE = SEARCH_PAGE_SIZE
+  const libraryTotalPages = Math.ceil(filteredLibrary.length / LIBRARY_PAGE_SIZE)
+  const pagedLibrary = filteredLibrary.slice(
+    (page - 1) * LIBRARY_PAGE_SIZE,
+    page * LIBRARY_PAGE_SIZE,
+  )
+  console.log('library', library)
   return (
     <Dialog
       open={true}
@@ -296,7 +351,7 @@ export function Tone3000Browser({ target, context }: Props) {
             className={`${styles.tab} ${scope === 'library' ? styles.tabActive : ''}`}
             onClick={() => setScope('library')}
           >
-            LIBRARY ({library.length})
+            LIBRARY ({library.filter((e) => e.kind === 'model').length})
           </button>
           <button
             type="button"
@@ -340,7 +395,7 @@ export function Tone3000Browser({ target, context }: Props) {
       {error && <p className={styles.error}>{error}</p>}
 
       {scope !== 'library' && (
-        <div className={styles.body}>
+        <div className={styles.content}>
           <div className={styles.filters}>
             <input
               type="text"
@@ -432,111 +487,132 @@ export function Tone3000Browser({ target, context }: Props) {
             </div>
           )}
 
-          {loading && <p className={styles.hint}>Loading…</p>}
-          {!loading && !needsConnect && tones.length === 0 && !error && (
-            <p className={styles.hint}>No tones match.</p>
-          )}
+          {loading ? (
+            <div className={styles.loadingWrapper} aria-busy="true" aria-live="polite">
+              <div className={styles.spinner} role="status" aria-label="Loading" />
+            </div>
+          ) : (
+            <>
+              {!needsConnect && tones.length === 0 && !error && (
+                <p className={styles.hint}>No tones match.</p>
+              )}
 
-          <ul className={listClass}>
-            {tones
-              .filter(
-                (tone) =>
-                  (scope !== 'favorites' && scope !== 'created') ||
-                  matchesQuery(tone.title, search.query),
-              )
-              .map((tone) => {
-                const inLibrary = library.some((e) => e.sourceUrl === tone.url)
-                const hasCached = hasCachedForTone(tone)
-                const isDownloading = quickDownloadingToneId === tone.id
-                return (
-                  <li key={tone.id} className={cardClass}>
-                    <button
-                      type="button"
-                      className={styles.cardHeader}
-                      onClick={() => setDetailTone(tone)}
-                      aria-label={`View details for ${tone.title}`}
-                    >
-                      {tone.images?.[0] && (
-                        <div className={styles.cardImageContainer}>
-                          <img
-                            src={tone.images[0]}
-                            alt=""
-                            className={styles.cardImage}
-                            loading="lazy"
-                            draggable={false}
-                          />
-                          {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
+              <ul className={listClass}>
+                {tones
+                  .filter(
+                    (tone) =>
+                      (scope !== 'favorites' && scope !== 'created') ||
+                      matchesQuery(tone.title, search.query),
+                  )
+                  .map((tone) => {
+                    const inLibrary = library.some((e) => e.sourceUrl === tone.url)
+                    const hasCached = hasCachedForTone(tone)
+                    const isDownloading = quickDownloadingToneId === tone.id
+                    return (
+                      <li key={tone.id} className={cardClass}>
+                        <button
+                          type="button"
+                          className={styles.cardHeader}
+                          onClick={() => setDetailTone(tone)}
+                          aria-label={`View details for ${tone.title}`}
+                        >
+                          {tone.images?.[0] ? (
+                            <div className={styles.cardImageContainer}>
+                              <img
+                                src={tone.images[0]}
+                                alt=""
+                                className={styles.cardImage}
+                                loading="lazy"
+                                draggable={false}
+                              />
+                              {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
+                            </div>
+                          ) : (
+                            <div className={styles.cardImageContainer}>
+                              <div className={styles.cardImage}></div>
+                              <span className={styles.inLibraryBadge}>LIBRARY</span>
+                            </div>
+                          )}
+                          <span className={styles.cardInfo}>
+                            <span className={styles.cardTitle}>{tone.title}</span>
+                            <span className={`label ${styles.cardMeta}`}>
+                              {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
+                            </span>
+                            <span className={`label ${styles.cardCredit}`}>
+                              Captured by {tone.user.username}
+                            </span>
+                          </span>
+                        </button>
+                        <div className={styles.cardActions}>
+                          <OutlineButton
+                            title="Model Details"
+                            onClick={() => setDetailTone(tone)}
+                            aria-label={`View details for ${tone.title}`}
+                          >
+                            <MixerIcon size={16} />
+                          </OutlineButton>
+                          <OutlineButton
+                            disabled={isDownloading}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (hasCached) void handleQuickLoadFirst(tone)
+                              else void handleQuickDownloadAll(tone)
+                            }}
+                            title={
+                              hasCached
+                                ? 'Load first cached file into active block'
+                                : 'Download all files'
+                            }
+                          >
+                            {isDownloading ? '…' : hasCached ? 'LOAD' : '⬇ Download'}
+                          </OutlineButton>
                         </div>
-                      )}
-                      <span className={styles.cardInfo}>
-                        <span className={styles.cardTitle}>{tone.title}</span>
-                        <span className={`label ${styles.cardMeta}`}>
-                          {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
-                        </span>
-                        <span className={`label ${styles.cardCredit}`}>
-                          Captured by {tone.user.username}
-                        </span>
-                      </span>
-                    </button>
-                    <div className={styles.cardActions}>
-                      <button
-                        type="button"
-                        className={styles.iconBtn}
-                        onClick={() => setDetailTone(tone)}
-                        aria-label={`View details for ${tone.title}`}
-                        title="View details"
-                      >
-                        ⓘ
-                      </button>
-                      <OutlineButton
-                        disabled={isDownloading}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (hasCached) void handleQuickLoadFirst(tone)
-                          else void handleQuickDownloadAll(tone)
-                        }}
-                        title={
-                          hasCached
-                            ? 'Load first cached file into active block'
-                            : 'Download all files'
-                        }
-                      >
-                        {isDownloading ? '…' : hasCached ? 'LOAD' : '⬇ Download'}
-                      </OutlineButton>
-                    </div>
-                  </li>
-                )
-              })}
-          </ul>
-
-          {totalPages > 1 && (
-            <nav className={styles.pagination}>
-              <button
-                type="button"
-                className={styles.pageBtn}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                ‹
-              </button>
-              <span className={`label ${styles.pageInfo}`}>
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className={styles.pageBtn}
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                ›
-              </button>
-            </nav>
+                      </li>
+                    )
+                  })}
+              </ul>
+            </>
           )}
         </div>
       )}
 
       {scope === 'library' && (
-        <div className={styles.body}>
+        <div className={styles.content}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Select
+              value={accountScope}
+              onChange={(e) => setAccountScope(e.target.value as AccountImportScope)}
+              aria-label="Account tones scope"
+              disabled={accountBusy}
+            >
+              <option value="all">All</option>
+              <option value="downloaded">Downloaded</option>
+              <option value="favorited">Favorited</option>
+              <option value="created">My models</option>
+            </Select>
+            <HardwareButton
+              label={
+                accountProgress
+                  ? `Importing ${accountProgress.currentTone}/${accountProgress.totalTones}…`
+                  : 'Import from Tone3000 account'
+              }
+              disabled={accountBusy || auth.status !== 'connected'}
+              onClick={() => void handleAccountImport()}
+            />
+            {auth.status !== 'connected' && !accountBusy && (
+              <OutlineButton onClick={() => void auth.connect()}>Connect Tone3000</OutlineButton>
+            )}
+          </div>
+          {accountProgress && (
+            <p className={styles.hint}>
+              {accountProgress.status === 'fetching_models'
+                ? `Fetching models for ${accountProgress.toneTitle}…`
+                : accountProgress.status === 'downloading'
+                  ? `Downloading ${accountProgress.toneTitle}…`
+                  : `${accountProgress.toneTitle} — ${accountProgress.status}`}{' '}
+              {accountProgress.currentTone}/{accountProgress.totalTones} tones
+            </p>
+          )}
           <div className={styles.filters}>
             <input
               type="text"
@@ -551,19 +627,47 @@ export function Tone3000Browser({ target, context }: Props) {
             <p className={styles.hint}>No library items match.</p>
           )}
           <ul className={listClass}>
-            {filteredLibrary.map((entry) => (
+            {pagedLibrary.map((entry) => (
               <li key={entry.id} className={cardClass}>
-                <div className={styles.libraryRow}>
+                <button
+                  type="button"
+                  className={styles.cardHeader}
+                  onClick={() => setDetailTone(entry.tone)}
+                  aria-label={`View details for ${entry.tone.title}`}
+                >
                   {entry.imageUrl && (
-                    <img src={entry.imageUrl} alt="" className={styles.cardImage} loading="lazy" />
+                    <div className={styles.cardImageContainer}>
+                      <img
+                        src={entry.imageUrl}
+                        alt=""
+                        className={styles.cardImage}
+                        loading="lazy"
+                        draggable={false}
+                      />
+                    </div>
                   )}
-                  <div className={styles.libraryInfo}>
+                  <span className={styles.cardInfo}>
                     <span className={styles.cardTitle}>{entry.name}</span>
                     <span className={`label ${styles.cardMeta}`}>
-                      {entry.creator} · {entry.kind}
+                      {entry.creator} · {entry.kind.toUpperCase()}
                       {entry.toneTitle ? ` · ${entry.toneTitle}` : ''}
                     </span>
-                  </div>
+                    {entry.tone?.gear && (
+                      <span className={`label ${styles.cardCredit}`}>
+                        {entry.tone.gear} · {entry.tone.format.toUpperCase()}
+                      </span>
+                    )}
+                  </span>
+                </button>
+
+                <div className={styles.cardActions}>
+                  <OutlineButton
+                    title="Model Details"
+                    onClick={() => setDetailTone(entry.tone)}
+                    aria-label={`View details for ${entry.tone.title}`}
+                  >
+                    <MixerIcon size={16} />
+                  </OutlineButton>
                   <OutlineButton disabled={!target} onClick={() => void reloadFromLibrary(entry)}>
                     LOAD
                   </OutlineButton>
@@ -572,33 +676,73 @@ export function Tone3000Browser({ target, context }: Props) {
                     onClick={() => void Tone3000Library.remove(entry.id)}
                     aria-label={`Remove ${entry.name} from library`}
                   >
-                    ×
+                    <CloseIcon size={16} />
                   </OutlineButton>
                 </div>
               </li>
             ))}
           </ul>
+          <Pagination page={page} totalPages={libraryTotalPages} onPageChange={setPage} />
         </div>
       )}
 
       {detailTone && (
-        <ToneCatalogDetailsDialog
+        <NamModelDetails
           open={!!detailTone}
           onClose={() => setDetailTone(null)}
-          tone={detailTone}
+          kindLabel={GEAR_LABELS[gear] ?? gear}
+          loadedName={null}
+          entry={
+            {
+              id: `tone3000:${slot}:${detailTone.id}`,
+              kind: slot,
+              name: detailTone.title,
+              creator: detailTone.user.username,
+              sourceUrl: detailTone.url,
+              toneTitle: detailTone.title,
+              imageUrl: detailTone.images?.[0] ?? null,
+              importedAt: Date.now(),
+              tone: {
+                id: detailTone.id,
+                title: detailTone.title,
+                description: detailTone.description,
+                gear: detailTone.gear,
+                format: detailTone.format,
+                license: detailTone.license,
+                images: detailTone.images ?? null,
+                sizes: detailTone.sizes ?? [],
+                makes: (detailTone.makes ?? []).map((m) => m.name) as unknown as Make[],
+                tags: (detailTone.tags ?? []).map((t) => t.name) as unknown as Tag[],
+                downloads_count: detailTone.downloads_count,
+                favorites_count: detailTone.favorites_count,
+                models_count: detailTone.models_count,
+                user: detailTone.user,
+                created_at: detailTone.created_at ?? null,
+                url: detailTone.url,
+                user_id: detailTone.user_id,
+                is_public: detailTone.is_public,
+                links: detailTone.links,
+              },
+              model: null,
+            } as Tone3000LibraryEntry
+          }
           slot={slot}
-          target={target}
-          context={context}
+          blockId={browser.target?.blockId ?? null}
+          loadTarget={target}
+          audioContext={context}
         />
       )}
 
-      <footer className={styles.footer}>
-        <span className={`label ${styles.footerText}`}>
-          Models &amp; IRs via TONE3000 ·{' '}
-          <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
-            tone3000.com
-          </a>
-        </span>
+      <footer className={styles.footerWrapper}>
+        <div className={styles.footer}>
+          <span className={`label ${styles.footerText}`}>
+            Neural Amp Modeler Models &amp; IRs via{' '}
+            <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
+              TONE3000
+            </a>
+          </span>
+        </div>
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </footer>
     </Dialog>
   )

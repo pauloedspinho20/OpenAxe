@@ -8,7 +8,14 @@ import { create } from 'zustand'
 import { getCachedAsset, putCachedAsset } from '../engine/assetCache'
 import { STORE_LIBRARY, withStore } from '../storage/db'
 import { apiDownloadModel } from './client'
-import type { ArchitectureVersion, EmbeddedUser, Gear, ToneFormat, Tone3000Slot } from './types'
+import type {
+  ArchitectureVersion,
+  EmbeddedUser,
+  Gear,
+  ToneFormat,
+  Tone3000Slot,
+  Tone,
+} from './types'
 
 /**
  * A snapshot of the parent Tone's public fields at import time - the detail
@@ -58,7 +65,7 @@ export interface Tone3000LibraryEntry {
   imageUrl: string | null
   importedAt: number
   /** Full parent-tone snapshot, for the model details dialog. Null on pre-existing entries. */
-  tone: Tone3000ToneSnapshot | null
+  tone: Tone | null
   /** The specific model snapshot, for the model details dialog. Null on pre-existing entries. */
   model: Tone3000ModelSnapshot | null
 }
@@ -80,7 +87,7 @@ interface LibraryQuery {
     toneTitle?: string | null
     imageUrl?: string | null
     modelUrl: string
-    tone?: Tone3000ToneSnapshot | null
+    tone?: Tone | null
     model?: Tone3000ModelSnapshot | null
   }): Promise<Tone3000LibraryEntry>
   remove: (id: string) => Promise<void>

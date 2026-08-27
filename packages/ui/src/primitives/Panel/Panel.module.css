@@ -9,7 +9,7 @@
   padding: var(--sp-3);
   border-radius: var(--r-lg);
   border: 1px solid var(--seam);
-  background-color: var(--panel-recessed);
+  background-color: var(--chassis);
   box-shadow: var(--shadow-panel);
 }
 
