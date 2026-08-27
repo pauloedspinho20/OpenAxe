@@ -93,7 +93,13 @@ jobs:
           fi
 
       - name: Configure plugin (Release, universal on macOS)
-        run: cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=${{ matrix.cmake_preset }} -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DOPENAXE_BUILD_TESTS=OFF
+        shell: bash
+        run: |
+          extra_args=""
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            extra_args='-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
+          fi
+          cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=${{ matrix.cmake_preset }} $extra_args -DOPENAXE_BUILD_TESTS=OFF
 
       - name: Build plugin
         run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
@@ -102,7 +108,9 @@ jobs:
         shell: bash
         run: |
           cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} --target openaxe_clap 2>/dev/null || echo "::notice::CLAP target not available (SDK missing)"
-          cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} --target openaxe_au 2>/dev/null || echo "::notice::AU target not available (macOS only / SDK missing)"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} --target openaxe_au 2>/dev/null || echo "::notice::AU target not available (SDK missing)"
+          fi
 
       - name: Smoke test (no host)
         run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
@@ -199,9 +207,18 @@ jobs:
           # Debug: full build tree (CI triage only — NOT an installable plugin, see issue #292)
           tar -czf "openaxe-plugin-build-tree-${{ matrix.os }}-${safe_ref}.tar.gz" -C packages/vst3/build --exclude="_deps" --exclude="CMakeFiles" . 2>/dev/null || true
           # User-facing: bundles only (what hosts actually scan) — always produced even if CPack failed
-          zip -r "openaxe-plugin-bundles-${{ matrix.os }}-${safe_ref}.zip" packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || \
-            zip -r "openaxe-plugin-bundles-${{ matrix.os }}-${safe_ref}.zip" packages/vst3/build/OpenAxe.vst3 packages/vst3/build/OpenAxe.component packages/vst3/build/OpenAxe.clap 2>/dev/null || true
-          ls -lh openaxe-plugin-build-tree-* openaxe-plugin-bundles-* 2>/dev/null || ls -lh packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap packages/vst3/build/openaxe-* 2>/dev/null || true
+          # Windows multi-config puts bundles under build/Release or build/**/*.vst3, so handle both flat and nested layouts.
+          shopt -s globstar nullglob 2>/dev/null || true
+          bundles=(packages/vst3/build/*.vst3 packages/vst3/build/**/*.vst3 packages/vst3/build/*.component packages/vst3/build/**/*.component packages/vst3/build/*.clap packages/vst3/build/**/*.clap)
+          existing=()
+          for b in "${bundles[@]}"; do [ -e "$b" ] && existing+=("$b"); done
+          if [ ${#existing[@]} -gt 0 ]; then
+            zip -r "openaxe-plugin-bundles-${{ matrix.os }}-${safe_ref}.zip" "${existing[@]}" 2>/dev/null || \
+              cmake -E tar cf "openaxe-plugin-bundles-${{ matrix.os }}-${safe_ref}.zip" --format=zip -- "${existing[@]}" 2>/dev/null || true
+          else
+            echo "::notice::No bundles found for ${{ matrix.os }} — VST3/CLAP/AU targets may have been skipped (SDK missing?)"
+          fi
+          ls -lh openaxe-plugin-build-tree-* openaxe-plugin-bundles-* 2>/dev/null || ls -lh packages/vst3/build/*.vst3 packages/vst3/build/**/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
 
       - name: Upload VST3 artifact
         uses: actions/upload-artifact@v7
