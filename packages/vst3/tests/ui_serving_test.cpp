@@ -192,6 +192,33 @@ void TestUiRootCandidates() {
   }
 }
 
+// ── G3: Host header validation (DNS rebinding) ───────────────────────
+void TestHostValidation() {
+  using openaxe_vst3::IsAllowedHost;
+  const unsigned short kPort = 51234;
+  auto req = [](const char* host) {
+    return std::string("GET /index.html HTTP/1.1\r\nHost: ") + host + "\r\n\r\n";
+  };
+
+  Check(IsAllowedHost(req("127.0.0.1:51234"), kPort), "our own loopback host is allowed");
+  Check(IsAllowedHost(req("localhost:51234"), kPort), "localhost with our port is allowed");
+  Check(IsAllowedHost(req("[::1]:51234"), kPort), "ipv6 loopback with our port is allowed");
+  Check(IsAllowedHost("GET / HTTP/1.1\r\nhOsT: 127.0.0.1:51234\r\n\r\n", kPort),
+        "header name match is case-insensitive");
+
+  // The attack this exists for: a page on some site resolves its own hostname
+  // to 127.0.0.1 and fetches our port. The browser sends that site's Host.
+  Check(!IsAllowedHost(req("evil.example.com"), kPort), "foreign host is refused");
+  Check(!IsAllowedHost(req("evil.example.com:51234"), kPort),
+        "foreign host with our port is refused");
+  // A different port means it is not our listener.
+  Check(!IsAllowedHost(req("127.0.0.1:9999"), kPort), "wrong port is refused");
+  Check(!IsAllowedHost(req("127.0.0.1"), kPort), "portless host is refused");
+
+  // HTTP/1.0 clients may omit Host entirely; browsers never do.
+  Check(IsAllowedHost("GET / HTTP/1.0\r\n\r\n", kPort), "absent Host is tolerated");
+}
+
 // ── G1: Stop() must not hang while the serve thread sits in accept() ──
 void TestServerShutdown() {
   const fs::path tmp = fs::temp_directory_path() / "openaxe_http_stop_test";
@@ -267,6 +294,7 @@ int main() {
   TestPathContainment();
   TestUiRootCandidates();
   TestUiRootOverride();
+  TestHostValidation();
   TestServerShutdown();
   if (failures == 0) std::printf("ui_serving_test: all checks passed\n");
   return failures == 0 ? 0 : 1;

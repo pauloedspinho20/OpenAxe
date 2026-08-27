@@ -170,7 +170,10 @@ std::string VstBridge::HandleAddBlock(const std::string& req) {
   try {
     json args = ParseArgs(req); json o = args.empty()? json::object(): args[0];
     std::string kind = o.value("kind", ""); int row = o.value("row", 0); int col = o.value("col", 0); std::string jsId = o.value("id", "");
-    if (jsId.empty()) { static int n=0; jsId = "block-" + std::to_string(++n); }
+    if (jsId.empty()) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      jsId = "block-" + std::to_string(++nextBlockId_);
+    }
     if (!graph_) return JsonError("no graph");
     // Map kind string to core
     NamStudioBlockKind k;
@@ -224,7 +227,9 @@ std::string VstBridge::HandleMoveBlock(const std::string& req){
   try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int row=o.value("row",0); int col=o.value("col",0); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_move_block(graph_, coreId, row, col); }); else nam_studio_move_block(graph_, coreId, row, col); { std::lock_guard<std::mutex> lock(mutex_); blockPos_[jsId]={row,col}; } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("moveBlock failed"); }
 }
 std::string VstBridge::HandleConnect(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("id",""); int fromPort=o.value("fromPort",0); int toPort=o.value("toPort",0); auto resolve=[&](const json& j)->int32_t{ if(j.is_number()) return j.get<int32_t>(); if(j.is_string()){ std::string s=j.get<std::string>(); if(s=="IN"||s=="-1") return NAM_STUDIO_IN_RAIL; if(s=="OUT"||s=="-2") return NAM_STUDIO_OUT_RAIL; std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(s); if(it!=blockIds_.end()) return it->second; } return -999; }; int32_t from=resolve(o.at("fromId")); int32_t to=resolve(o.at("toId")); if(from==-999||to==-999) return JsonError("unknown block in edge"); if(jsEdge.empty()){ static int n=0; jsEdge="edge-"+std::to_string(++n);} int32_t coreEdge=-1; if(plugin_) plugin_->WithSuspend([&]{ coreEdge=nam_studio_connect(graph_, from, fromPort, to, toPort); }); else coreEdge=nam_studio_connect(graph_, from, fromPort, to, toPort); if(coreEdge<0) return JsonError("connection rejected"); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_[jsEdge]=coreEdge; edgeEndpoints_[jsEdge]={o.at("fromId").dump(), o.at("toId").dump()}; } return (json{{"ok", true}, {"id", jsEdge}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("id",""); int fromPort=o.value("fromPort",0); int toPort=o.value("toPort",0); auto resolve=[&](const json& j)->int32_t{ if(j.is_number()) return j.get<int32_t>(); if(j.is_string()){ std::string s=j.get<std::string>(); if(s=="IN"||s=="-1") return NAM_STUDIO_IN_RAIL; if(s=="OUT"||s=="-2") return NAM_STUDIO_OUT_RAIL; std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(s); if(it!=blockIds_.end()) return it->second; } return -999; }; int32_t from=resolve(o.at("fromId")); int32_t to=resolve(o.at("toId")); if(from==-999||to==-999) return JsonError("unknown block in edge"); if(jsEdge.empty()){ std::lock_guard<std::mutex> lock(mutex_); jsEdge="edge-"+std::to_string(++nextEdgeId_); } int32_t coreEdge=-1; if(plugin_) plugin_->WithSuspend([&]{ coreEdge=nam_studio_connect(graph_, from, fromPort, to, toPort); }); else coreEdge=nam_studio_connect(graph_, from, fromPort, to, toPort); if(coreEdge<0) return JsonError("connection rejected"); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_[jsEdge]=coreEdge;
+      auto asId=[](const json& j){ return j.is_string()? j.get<std::string>() : j.dump(); };
+      edgeEndpoints_[jsEdge]=EdgeEndpoints{asId(o.at("fromId")), asId(o.at("toId")), fromPort, toPort}; } return (json{{"ok", true}, {"id", jsEdge}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleDisconnect(const std::string& req){
   try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("edgeId",""); int32_t coreEdge=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=edgeIds_.find(jsEdge); if(it==edgeIds_.end()) return (json{{"ok", true}}).dump(); coreEdge=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_disconnect(graph_, coreEdge); }); else nam_studio_disconnect(graph_, coreEdge); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_.erase(jsEdge); edgeEndpoints_.erase(jsEdge); } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("disconnect failed"); }
@@ -241,12 +246,21 @@ std::string VstBridge::HandleBlockInfo(const std::string& req){
 std::string VstBridge::HandleListBlocks(const std::string&){
   std::lock_guard<std::mutex> lock(mutex_); json out=json::array(); for(auto& [jsId, coreId]: blockIds_){ auto kIt=blockKinds_.find(coreId); std::string kind=kIt!=blockKinds_.end()?kIt->second:"unknown"; auto pIt=blockPos_.find(jsId); int row=0,col=0; if(pIt!=blockPos_.end()){ row=pIt->second.first; col=pIt->second.second; } out.push_back({{"id", jsId}, {"kind", kind}, {"row", row}, {"col", col}}); } return out.dump();
 }
-std::string VstBridge::HandleListEdges(const std::string&){
-  std::lock_guard<std::mutex> lock(mutex_); json out=json::array(); for(auto& [jsEdge, coreEdge]: edgeIds_){ auto ep=edgeEndpoints_.find(jsEdge); std::string from="?",to="?"; if(ep!=edgeEndpoints_.end()){ from=ep->second.first; to=ep->second.second; } // from/to are JSON dumps, need to parse back
-    json fj=json::parse(from,nullptr,false); json tj=json::parse(to,nullptr,false); if(fj.is_discarded()) fj=from; if(tj.is_discarded()) tj=to;
-    out.push_back({{"id", jsEdge}, {"from", {{"id", fj}, {"port", 0}}}, {"to", {{"id", tj}, {"port", 0}}}});
-  } return out.dump();
+std::string VstBridge::HandleListEdges(const std::string&) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  json out = json::array();
+  for (const auto& [jsEdge, coreEdge] : edgeIds_) {
+    (void)coreEdge;
+    const auto it = edgeEndpoints_.find(jsEdge);
+    if (it == edgeEndpoints_.end()) continue;
+    const EdgeEndpoints& ep = it->second;
+    out.push_back({{"id", jsEdge},
+                   {"from", {{"id", ep.fromId}, {"port", ep.fromPort}}},
+                   {"to", {{"id", ep.toId}, {"port", ep.toPort}}}});
+  }
+  return out.dump();
 }
+
 std::string VstBridge::HandleSetMasterLevel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; float v=o.value("level",1.0f); nam_studio_set_master_level(graph_, v); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setMasterLevel failed"); } }
 std::string VstBridge::HandleSetMasterMuted(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; bool m=o.value("muted",false); nam_studio_set_master_muted(graph_, m?1:0); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setMasterMuted failed"); } }
 std::string VstBridge::HandleSetBypass(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); bool b=o.value("bypassed",false); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } nam_studio_set_bypass(graph_, coreId, b?1:0); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setBypass failed"); } }

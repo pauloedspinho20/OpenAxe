@@ -73,8 +73,26 @@ class VstBridge {
   // reverse for list
   std::map<int32_t, std::string> blockKinds_;
   std::map<std::string, std::pair<int,int>> blockPos_; // row,col
-  std::map<std::string, std::pair<std::string,std::string>> edgeEndpoints_; // fromId/toId as strings
+  // Edge endpoints kept as structured data. They used to be stored as JSON
+  // dumps of the id and re-parsed by listEdges, which also hard-coded
+  // "port": 0 and threw away the real fromPort/toPort that connect() was
+  // given (issue #300 J5).
+  struct EdgeEndpoints {
+    std::string fromId;   // js id, "IN" or "OUT"
+    std::string toId;
+    int fromPort = 0;
+    int toPort = 0;
+  };
+  std::map<std::string, EdgeEndpoints> edgeEndpoints_;
   std::map<std::string, std::string> secureStore_;
+
+  // Id counters for blocks/edges the UI did not name. Members, not
+  // function-local statics: a static is shared by every VstBridge in the
+  // process, so two plugin instances in one project interleaved their id
+  // sequences, and the bare ++ was a data race besides. Guarded by mutex_
+  // (issue #300 D3).
+  int nextBlockId_ = 0;
+  int nextEdgeId_ = 0;
 };
 
 }  // namespace openaxe_vst3

@@ -46,6 +46,31 @@ std::string InjectHeadScript(const std::string& html, const std::string& script)
   return tag + html;
 }
 
+bool IsAllowedHost(const std::string& request_head, unsigned short port) {
+  // Case-insensitive scan of the header block for "Host:".
+  std::string lower;
+  lower.reserve(request_head.size());
+  for (char c : request_head) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  size_t pos = lower.find("\r\nhost:");
+  size_t skip = 7;  // strlen("\r\nhost:")
+  if (pos == std::string::npos) {
+    pos = lower.find("\nhost:");
+    skip = 6;
+    if (pos == std::string::npos) return true;  // no Host header at all (HTTP/1.0)
+  }
+  size_t start = pos + skip;
+  while (start < lower.size() && (lower[start] == ' ' || lower[start] == '\t')) ++start;
+  size_t end = lower.find_first_of("\r\n", start);
+  if (end == std::string::npos) end = lower.size();
+  const std::string host = lower.substr(start, end - start);
+
+  const std::string p = ":" + std::to_string(port);
+  for (const char* h : {"127.0.0.1", "localhost", "[::1]"}) {
+    if (host == std::string(h) + p) return true;
+  }
+  return false;
+}
+
 bool IsPathUnderRoot(const std::string& full, const std::string& root) {
   const auto rel = std::filesystem::path(full).lexically_relative(std::filesystem::path(root));
   if (rel.empty()) return false;
@@ -124,9 +149,16 @@ bool RecvRequestHead(int fd, std::string& out) {
   return true;
 }
 
-void HandleClient(int fd, const std::string& root, const std::string& inject_head_script) {
+void HandleClient(int fd, const std::string& root, const std::string& inject_head_script,
+                  unsigned short port) {
   std::string req;
   if (!RecvRequestHead(fd, req)) return;
+  // Reject cross-origin requests aimed at our loopback port before doing any
+  // filesystem work (issue #300 G3).
+  if (!IsAllowedHost(req, port)) {
+    SendHeader(fd, 403, "Forbidden", 0, "text/plain");
+    return;
+  }
   const size_t sp1 = req.find(' ');
   if (req.compare(0, 4, "GET ") != 0 || sp1 == std::string::npos) {
     SendHeader(fd, 405, "Method Not Allowed", 0, "text/plain");
@@ -139,9 +171,22 @@ void HandleClient(int fd, const std::string& root, const std::string& inject_hea
   std::error_code ec;
   const std::filesystem::path root_norm = std::filesystem::path(root).lexically_normal();
   std::filesystem::path full = (root_norm / path.substr(1)).lexically_normal();
-  if (!IsPathUnderRoot(full.string(), root_norm.string()) || !std::filesystem::is_regular_file(full, ec)) {
+  const bool inside = IsPathUnderRoot(full.string(), root_norm.string());
+  if (!inside) {
     SendHeader(fd, 404, "Not Found", 0, "text/plain");
     return;
+  }
+  if (!std::filesystem::is_regular_file(full, ec)) {
+    // SPA fallback: a client-side route ("/presets", "/tuner") is not a file on
+    // disk, and 404ing it meant a deep link or a reload on any route but "/"
+    // showed nothing (issue #300 G6). Only for extensionless paths, so a
+    // genuinely missing asset still 404s instead of being served HTML.
+    if (full.extension().empty() && std::filesystem::is_regular_file(root_norm / "index.html", ec)) {
+      full = root_norm / "index.html";
+    } else {
+      SendHeader(fd, 404, "Not Found", 0, "text/plain");
+      return;
+    }
   }
   std::ifstream ifs(full, std::ios::binary);
   if (!ifs) { SendHeader(fd, 404, "Not Found", 0, "text/plain"); return; }
@@ -173,6 +218,7 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port,
   sockaddr_in bound{}; socklen_t len = sizeof(bound);
   getsockname(listen_fd_, reinterpret_cast<sockaddr*>(&bound), &len);
   out_port = ntohs(bound.sin_port);
+  port_ = out_port;
 #ifndef _WIN32
   if (pipe(wake_fds_) != 0) {
     wake_fds_[0] = wake_fds_[1] = -1;  // degrade to the old behaviour, don't fail
@@ -212,7 +258,7 @@ void HttpServer::ServeLoop(const std::string& root) {
       break;
     }
 #endif
-    HandleClient(fd, root, inject_head_script_);
+    HandleClient(fd, root, inject_head_script_, port_);
     CloseSocket(fd);
   }
 }

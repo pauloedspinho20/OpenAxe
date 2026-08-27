@@ -21,6 +21,14 @@ std::string InjectHeadScript(const std::string& html, const std::string& script)
 // (issue #300 G2).
 bool IsPathUnderRoot(const std::string& full, const std::string& root);
 
+// True when a request's Host header names our own loopback listener. Anything
+// else is refused: without this check any web page the user visits can have
+// their browser fetch http://127.0.0.1:<port>/… and read whatever we serve
+// (DNS rebinding). Accepts 127.0.0.1/localhost/[::1] with our exact port, and
+// tolerates a missing Host only for HTTP/1.0-style clients, which browsers are
+// not (issue #300 G3).
+bool IsAllowedHost(const std::string& request_head, unsigned short port);
+
 // Minimal loopback HTTP server for the VST webview — mirrors
 // apps/desktop/src/http_server.h but in the plugin's namespace so the VST
 // can serve its bundled React UI without pulling in the desktop target.
@@ -58,6 +66,8 @@ class HttpServer {
   // because Stop() runs from ~OpenAxePlugin, on the host's main thread: a hang
   // there freezes the DAW on plugin delete or project close.
   int wake_fds_[2] = {-1, -1};
+  // Our bound port, so each request's Host header can be checked against it.
+  unsigned short port_ = 0;
   std::thread thread_;
   std::atomic<bool> running_{false};
   std::string inject_head_script_;
