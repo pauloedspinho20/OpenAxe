@@ -36,6 +36,9 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // otherwise still be there on this load.
   await page.evaluate(async () => {
     localStorage.clear()
+    // Established-session marker: keeps the first-run factory dialog from
+    // appearing and lets the offline FX starters seed + hydrate.
+    localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
     const dbs = await indexedDB.databases()
     await Promise.all(
       dbs
@@ -71,10 +74,10 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
 
   // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
-  // migration - Noise Gate, Compressor, EQ, Tremolo) plus the six that
-  // already ran on packages/core.
+  // migration - Gate, Compressor, EQ, Tremolo) plus six that already run on
+  // packages/core.
   const FX_KINDS = [
-    'Noise Gate',
+    'Gate',
     'Compressor',
     'EQ',
     'Tremolo',
@@ -83,7 +86,7 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     'Flanger',
     'Phaser',
     'Delay',
-    'Ping-Pong Delay',
+    'Filter',
   ]
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x

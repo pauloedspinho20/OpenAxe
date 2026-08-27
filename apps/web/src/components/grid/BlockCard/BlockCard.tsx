@@ -11,7 +11,6 @@ import type { BlockKind } from '../../../engine/blocks/Block'
 import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '@/engine/blocks/MixerBlock'
 import { SPLITTER_OUTPUT_COUNT } from '@/engine/blocks/SplitterBlock'
-import { useTone3000Library } from '@/tone3000/library'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import { blockColorVar } from '../blockColors'
@@ -56,27 +55,6 @@ interface MaybeBypassable {
   setBypass?(bypassed: boolean): void
 }
 
-/** Anything with optional loaded-asset getters - only NAM-model/Cab blocks have these. */
-interface MaybeAsset {
-  getLoadedModel?(): { id: string; name: string } | null
-  getLoadedIr?(): { id: string; name: string } | null
-}
-
-function loadedAsset(
-  instance: BlockInstance,
-  block: MaybeAsset | null,
-): { id: string; name: string } | null {
-  if (NAM_MODEL_KINDS.has(instance.kind)) return block?.getLoadedModel?.() ?? null
-  if (instance.kind === 'cab') return block?.getLoadedIr?.() ?? null
-  return null
-}
-
-function statusText(instance: BlockInstance, loaded: { name: string } | null): string | null {
-  if (NAM_MODEL_KINDS.has(instance.kind)) return loaded?.name ?? 'No model'
-  if (instance.kind === 'cab') return loaded?.name ?? 'No IR'
-  return null
-}
-
 /**
  * A grid cell's basic identity card: kind, quick bypass/remove, jacks, and a
  * one-line status for Amp/Cab (loaded asset name). Full parameters and the
@@ -93,16 +71,10 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
   // finishes - graphStore's own state doesn't change when that happens, so
   // nothing else would trigger this component to look again.
   useEngineVersion((s) => s.version)
-  const libraryEntries = useTone3000Library((s) => s.entries)
   const block = rig?.getBlock(instance.id) ?? null
   const isEffect = EFFECT_KINDS.has(instance.kind)
   const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const loaded = loadedAsset(instance, block as MaybeAsset | null)
-  const status = statusText(instance, loaded)
-  const cardImageUrl = loaded
-    ? (libraryEntries.find((e) => e.id === loaded.id)?.imageUrl ?? null)
-    : null
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   const isSelected = selectedBlockId === instance.id
 
@@ -220,13 +192,15 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
 
   return (
     <div
-      className={`${styles.card} ${isSelected ? styles.cardSelected : ''} ${cardImageUrl ? styles.cardWithImage : ''}`}
+      className={`${styles.card} ${isSelected ? styles.cardSelected : ''}`}
       style={
         {
-          ...(cardImageUrl ? { backgroundImage: `url(${cardImageUrl})` } : {}),
           ...(dragOffset
             ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`, zIndex: 10 }
             : {}),
+          ...(dragState.current === null
+            ? {}
+            : { boxShadow: 'var(--shadow-panel)', transition: 'box-shadow 0.3s ease-in-out' }),
           '--block-color': blockColorVar(instance.kind),
         } as React.CSSProperties
       }
@@ -255,6 +229,9 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
               ●
             </button>
           )}
+
+          {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
+
           <button
             type="button"
             className={styles.removeBtn}
@@ -266,15 +243,11 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
         </div>
       </div>
 
-      <span className={`${styles.kindLabel} `}>
-        <BlockIcon kind={instance.kind} size={20} className={styles.kindIcon} />
-        <span className={styles.blockLabel}>{label}</span>
-        {status && <span className={styles.status}>{status}</span>}
-      </span>
+      <BlockIcon kind={instance.kind} size={24} className={styles.blockIcon} />
 
-      <div className={styles.meterWrap}>
-        {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
-      </div>
+      <span className={styles.blockLabel}>{label}</span>
+
+      <div className={styles.meterWrap}></div>
 
       <div className={styles.jacks}>
         <div className={styles.jacksIn}>

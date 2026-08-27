@@ -4,62 +4,40 @@
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  padding: var(--sp-1);
-  background: color-mix(in srgb, var(--block-color, var(--panel-raised)) 7%, var(--panel-raised));
-  border: 1px solid color-mix(in srgb, var(--block-color, transparent) 34%, transparent);
+  padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--shadow-control);
   cursor: grab;
   touch-action: none;
   overflow: visible;
   align-items: center;
   justify-content: space-between;
-  transition:
-    background-color 0.45s ease,
-    border-color 0.45s ease,
-    box-shadow 0.45s ease;
+  outline: 2px solid transparent;
 }
 
 .card:hover {
-  background: color-mix(in srgb, var(--block-color) 11%, var(--panel-raised));
-  border-color: color-mix(in srgb, var(--block-color) 45%, var(--seam-strong));
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--block-color) 26%, transparent),
-    var(--shadow-panel);
-}
-
-/* Shows the loaded model/IR's Tone3000 image as the card's background, for
-   an at-a-glance read of what's plugged into each block - dimmed by the
-   ::before overlay below so text and jacks stay legible over any image. */
-.cardWithImage {
-  background-size: cover;
-  background-position: center;
-  isolation: isolate;
-}
-
-.cardWithImage::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background: var(--panel-raised);
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-.card:focus-visible {
-  outline: 1px solid var(--block-color, var(--accent));
-  outline-offset: 2px;
+  border: 1px solid var(--ink-3);
 }
 
 .cardSelected,
 .cardSelected:hover {
-  background: color-mix(in srgb, var(--block-color) 14%, var(--panel-raised));
-  border-color: var(--block-color, var(--accent));
-  box-shadow:
-    0 0 0 2px var(--block-color, var(--accent)),
-    var(--shadow-panel);
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+  box-shadow: none;
+}
+
+.card:hover .blockIcon,
+.card:hover .blockLabel {
+  color: var(--ink-1);
+}
+
+.cardSelected .blockIcon,
+.cardSelected:hover .blockIcon,
+.cardSelected .blockLabel,
+.cardSelected:hover .blockLabel {
+  color: var(--accent);
 }
 
 .header {
@@ -72,47 +50,20 @@
   width: 100%;
 }
 
-.kindLabel {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  font-family: var(--font-display);
-  transform: translate(-50%, -50%);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  min-width: 0;
+.blockIcon,
+.blockLabel {
+  color: var(--ink-2);
   text-align: center;
-  width: 100%;
-  padding: 0 6px;
 }
 
 .blockLabel {
   font-family: var(--font-display);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  font-weight: bold;
-  color: color-mix(in srgb, var(--block-color, var(--ink-1)) 78%, var(--ink-1));
-}
-
-.status {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-display);
-  font-size: 8px;
-  color: color-mix(in srgb, var(--block-color, var(--ink-2)) 46%, var(--ink-2));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* white-space: nowrap; */
-  width: 100%;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .kindIcon {
-  color: var(--block-color, var(--ink-2));
   flex-shrink: 0;
 }
 
@@ -153,7 +104,6 @@
   line-height: 1;
   cursor: pointer;
   padding: 0 2px;
-  margin-left: auto;
 }
 
 .removeBtn:hover {
@@ -188,8 +138,8 @@
 }
 
 .jack {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--panel);
   border: 2px solid var(--accent);

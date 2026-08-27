@@ -5,5 +5,6 @@
 
 @import './colors.css';
 @import './spacing.css';
+@import './containers.css';
 @import './typography.css';
 @import './shadows.css';

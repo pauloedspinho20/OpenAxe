@@ -22,12 +22,11 @@ describe('components/GridEditor', () => {
     context: null,
   }
 
-  it('renders the block palette and the master output rail', () => {
+  it('renders the block palette, the inspector placeholder, and the master output rail', () => {
     const { container } = render(<GridEditor {...baseProps} />)
-    expect(container.textContent).toContain('Master Output')
     expect(container.textContent).toContain('Amp')
     expect(container.textContent).toContain('Cab')
-    expect(container.textContent).toContain('Block Inspector')
+    expect(container.textContent).toContain('Select a block in the grid')
     expect(screen.getByRole('button', { name: 'MUTE' })).toBeInTheDocument()
   })
 

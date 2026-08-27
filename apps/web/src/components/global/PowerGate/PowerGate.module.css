@@ -10,11 +10,11 @@
 }
 
 .panel {
-  width: min(420px, 100%);
+  width: min(440px, 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-5);
+  gap: var(--sp-6);
   text-align: center;
 }
 
@@ -33,23 +33,6 @@
   border-radius: var(--r-md);
   color: var(--led-hot);
   font-size: 12px;
-}
-
-.tone3000Row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  width: 100%;
-  padding: var(--sp-2) var(--sp-3);
-  background: var(--panel-recessed);
-  border-radius: var(--r-md);
-}
-
-.tone3000Text {
-  font-size: 12px;
-  color: var(--ink-2);
-  text-align: left;
 }
 
 .tone3000Hint {
@@ -80,16 +63,43 @@
 
 .deviceRow {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  flex-direction: row;
   gap: var(--sp-2);
   width: 100%;
 }
 
-.deviceRow .latencySelect {
+@media (max-width: var(--mw-sm)) {
+  .deviceRow {
+    flex-direction: column;
+  }
+
+  .deviceRow .field {
+    width: 100%;
+  }
+}
+
+.deviceField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
   flex: 1;
   min-width: 140px;
+  text-align: left;
+}
+
+.deviceLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  line-height: 1;
+}
+
+.deviceField .latencySelect {
+  width: 100%;
 }
 
 .deviceHint {

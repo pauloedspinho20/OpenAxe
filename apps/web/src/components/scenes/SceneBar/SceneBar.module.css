@@ -1,11 +1,39 @@
 .bar {
-  display: flex;
+  display: grid;
   align-items: center;
+  grid-template-columns: auto auto auto;
+  grid-template-rows: auto;
   gap: var(--sp-4);
-  flex-wrap: wrap;
-  padding: var(--sp-3) var(--sp-6);
+  padding: var(--sp-3);
   border-bottom: 1px solid var(--seam);
   background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  border-radius: var(--r-lg);
+  margin: 0 var(--sp-4);
+}
+
+@media (max-width: var(--mw-xl)) {
+  .bar {
+    grid-template-rows: auto auto;
+    grid-template-columns: auto auto;
+    padding: var(--sp-3);
+  }
+
+  .bar :nth-child(2) {
+    grid-area: 2 / 1 / span 1 / span 2;
+  }
+}
+
+@media (max-width: var(--mw-sm)) {
+  .bar {
+    grid-template-rows: auto auto auto;
+    grid-template-columns: auto;
+    padding: var(--sp-3);
+  }
+
+  .bar :nth-child(3) {
+    grid-area: 3 / 1 / span 1 / span 1;
+  }
 }
 
 .sceneNav {
@@ -155,6 +183,7 @@
   gap: var(--sp-4);
   flex-shrink: 0;
   padding-left: var(--sp-3);
+  margin-left: auto;
 }
 
 .currentPresetName {
@@ -171,10 +200,4 @@
   color: var(--ink-3);
   font-size: 11px;
   flex-shrink: 0;
-}
-
-@media (max-width: 760px) {
-  .bar {
-    padding: var(--sp-3);
-  }
 }

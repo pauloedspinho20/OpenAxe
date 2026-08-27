@@ -53,7 +53,7 @@ export interface Tag {
   name: string
 }
 
-export type Gear = 'amp' | 'amp-cab' | 'pedal' | 'cab' | 'outboard' | 'space' | 'experimental'
+export type Gear = 'amp' | 'amp-cab' | 'pedal' | 'cab' | 'outboard' | 'space'
 
 export type ToneFormat = 'nam' | 'ir' | 'aida-x' | 'aa-snapshot' | 'proteus'
 

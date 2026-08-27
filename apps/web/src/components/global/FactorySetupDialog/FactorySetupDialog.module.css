@@ -1,0 +1,51 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.copy {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: 12px;
+  margin: 0;
+}
+
+.error {
+  color: var(--led-hot);
+  font-size: 12px;
+  margin: 0;
+}
+
+.failures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-md);
+}
+
+.failureList {
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--ink-2);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}

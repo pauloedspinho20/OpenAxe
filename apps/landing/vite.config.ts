@@ -19,4 +19,20 @@ export default defineConfig({
       },
     },
   },
+  plugins: [
+    {
+      name: 'media-var-replace',
+      transform(code, id) {
+        if (id.endsWith('.css')) {
+          return code
+            .replace(/var\(--mw-xs\)/g, '520px')
+            .replace(/var\(--mw-sm\)/g, '640px')
+            .replace(/var\(--mw-md\)/g, '720px')
+            .replace(/var\(--mw-lg\)/g, '920px')
+            .replace(/var\(--mw-xl\)/g, '1200px')
+            .replace(/var\(--mw-xxl\)/g, '1600px')
+        }
+      },
+    },
+  ],
 })

@@ -6,7 +6,6 @@ import { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey } from '../../..
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BlockCard, type BlockDragInfo } from '../BlockCard/BlockCard'
 import { BlockPalette } from '../BlockPalette/BlockPalette'
-import { BlockHighlight } from '../BlockHighlight/BlockHighlight'
 import { CableLayer, type DragPreview } from '../CableLayer/CableLayer'
 import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
 import { InputDeviceDialog } from '../InputDeviceDialog/InputDeviceDialog'
@@ -14,7 +13,7 @@ import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
-import { HardwareButton, InputIcon, Knob, OutputIcon, toast } from '@openaxe/ui'
+import { HardwareButton, Knob, toast } from '@openaxe/ui'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
@@ -169,9 +168,6 @@ export function GridEditor({
           <BlockPalette tunerAnalyser={tunerAnalyser} />
         </div>
         <div className={styles.paletteAndInspectorItem}>
-          <BlockHighlight rig={rig} analyser={analyser} />
-        </div>
-        <div className={styles.paletteAndInspectorItem}>
           <BlockInspector rig={rig} context={context} />
         </div>
       </div>
@@ -192,17 +188,9 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="IN"
-            icon={<InputIcon size={14} />}
             onClick={() => setInputDialogOpen(true)}
             title="Input device and channel"
           />
-
-          {/*   <HardwareButton
-            fullWidth
-            label="TUNER"
-            onClick={() => setTunerOpen(true)}
-            title="Open the full-size tuner (mutes output)"
-          /> */}
 
           <button
             type="button"
@@ -215,6 +203,7 @@ export function GridEditor({
               <Tuner analyser={tunerAnalyser} />
             </div>
           </button>
+
           <Knob
             label="Trim"
             value={inputGain}
@@ -244,7 +233,6 @@ export function GridEditor({
           <HardwareButton
             fullWidth
             label="OUT"
-            icon={<OutputIcon size={14} />}
             onClick={() => setOutputDialogOpen(true)}
             title="Output device and channel"
           />

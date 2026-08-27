@@ -91,7 +91,6 @@ export function BlockHighlight({ rig, analyser }: BlockHighlightProps) {
   return (
     <div className={styles.box}>
       <div className={styles.artWrap}>
-        <span className={`label ${styles.artLabel}`}>{kindLabel}</span>
         <AudioReactiveArt analyser={artAnalyser} variant={artVariant} />
       </div>
     </div>

@@ -15,7 +15,7 @@ import {
   readDataBundleFromFile,
   type DataBundle,
 } from '../../../settings/dataBundle'
-import { Dialog, HardwareButton, Knob, Toggle } from '@openaxe/ui'
+import { Dialog, HardwareButton, Knob, Select, Toggle } from '@openaxe/ui'
 import styles from './SettingsDialog.module.css'
 
 export interface SettingsDialogProps {
@@ -228,7 +228,7 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Settings" width="min(520px, 90vw)">
+    <Dialog open={open} onClose={onClose} title="Settings">
       {isNative ? (
         /* Native (desktop): input and output are independent devices - the
          * C++ core opens them as separate createDevice(output, input) names
@@ -237,22 +237,20 @@ export function SettingsDialog({
           <section className={styles.section}>
             <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
             <div className={styles.row}>
-              <label className={styles.field}>
-                <span className="label">Device</span>
-                <select
-                  className={styles.select}
-                  value={io.inputDeviceId}
-                  onChange={(e) => io.setInputDevice(e.target.value)}
-                  aria-label="Input device"
-                >
-                  <option value="">Default input</option>
-                  {io.inputDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                label="Device"
+                value={io.inputDeviceId}
+                onChange={(e) => io.setInputDevice(e.target.value)}
+                aria-label="Input device"
+                className={styles.field}
+              >
+                <option value="">Default input</option>
+                {io.inputDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </Select>
             </div>
             {io.micError && <p className={styles.errorText}>{io.micError}</p>}
           </section>
@@ -260,22 +258,20 @@ export function SettingsDialog({
           <section className={styles.section}>
             <span className={`label ${styles.sectionLabel}`}>Audio Output</span>
             <div className={styles.row}>
-              <label className={styles.field}>
-                <span className="label">Device</span>
-                <select
-                  className={styles.select}
-                  value={io.outputDeviceId}
-                  onChange={(e) => io.setOutputDevice(e.target.value)}
-                  aria-label="Output device"
-                >
-                  <option value="">Default output</option>
-                  {io.outputDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                label="Device"
+                value={io.outputDeviceId}
+                onChange={(e) => io.setOutputDevice(e.target.value)}
+                aria-label="Output device"
+                className={styles.field}
+              >
+                <option value="">Default output</option>
+                {io.outputDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </Select>
             </div>
           </section>
         </>
@@ -285,36 +281,32 @@ export function SettingsDialog({
           <section className={styles.section}>
             <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
             <div className={styles.row}>
-              <label className={styles.field}>
-                <span className="label">Device</span>
-                <select
-                  className={styles.select}
-                  value={io.inputDeviceId}
-                  onChange={(e) => io.setInputDevice(e.target.value)}
-                  aria-label="Input device"
-                >
-                  <option value="">Default input</option>
-                  {io.inputDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className="label">Channel</span>
-                <select
-                  className={styles.select}
-                  value={io.inputChannel}
-                  onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
-                  aria-label="Input channel"
-                >
-                  <option value="l">Ch 1</option>
-                  <option value="r">Ch 2</option>
-                  <option value="stereo">Stereo</option>
-                  <option value="sum">Ch 1+2</option>
-                </select>
-              </label>
+              <Select
+                label="Device"
+                value={io.inputDeviceId}
+                onChange={(e) => io.setInputDevice(e.target.value)}
+                aria-label="Input device"
+                className={styles.field}
+              >
+                <option value="">Default input</option>
+                {io.inputDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Channel"
+                value={io.inputChannel}
+                onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
+                aria-label="Input channel"
+                className={styles.field}
+              >
+                <option value="l">Ch 1</option>
+                <option value="r">Ch 2</option>
+                <option value="stereo">Stereo</option>
+                <option value="sum">Ch 1+2</option>
+              </Select>
             </div>
             {io.micError && <p className={styles.errorText}>{io.micError}</p>}
           </section>
@@ -324,22 +316,20 @@ export function SettingsDialog({
             <span className={`label ${styles.sectionLabel}`}>Audio Output</span>
             {outputSelectionSupported ? (
               <div className={styles.row}>
-                <label className={styles.field}>
-                  <span className="label">Device</span>
-                  <select
-                    className={styles.select}
-                    value={io.outputDeviceId}
-                    onChange={(e) => io.setOutputDevice(e.target.value)}
-                    aria-label="Output device"
-                  >
-                    <option value="">Default output</option>
-                    {io.outputDevices.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId}>
-                        {d.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <Select
+                  label="Device"
+                  value={io.outputDeviceId}
+                  onChange={(e) => io.setOutputDevice(e.target.value)}
+                  aria-label="Output device"
+                  className={styles.field}
+                >
+                  <option value="">Default output</option>
+                  {io.outputDevices.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
             ) : (
               <p className={styles.sectionHint}>
@@ -358,21 +348,19 @@ export function SettingsDialog({
           Changes only take effect after restarting the audio engine.
         </p>
         <div className={styles.row}>
-          <label className={styles.field}>
-            <span className="label">Buffer</span>
-            <select
-              className={styles.select}
-              value={io.latencyHint}
-              onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
-              aria-label="Buffer size / latency"
-            >
-              {LATENCY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label="Buffer"
+            value={io.latencyHint}
+            onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
+            aria-label="Buffer size / latency"
+            className={styles.field}
+          >
+            {LATENCY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
           {status === 'ready' && (
             <HardwareButton
               label="Restart Audio Engine"

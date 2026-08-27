@@ -8,12 +8,14 @@ import {
   STORE_ASSETS,
   STORE_LIBRARY,
   STORE_PRESETS,
+  STORE_PRESET_BANK,
   STORE_SCENES,
   STORE_MIDI,
 } from '../storage/db'
 import { putCachedAsset, getCachedAsset } from '../engine/assetCache'
 import { listPresets, savePreset } from '../presets/presetStore'
 import type { Preset } from '../presets/types'
+import { createEmptyPresetBank, loadPresetBank, savePresetBank } from '../presets/presetBankStore'
 import { loadSceneBank, saveSceneBank } from '../scenes/sceneBankStore'
 import type { SceneBank } from '../scenes/types'
 import { DEFAULT_MIDI_CONFIG, loadMidiConfig, saveMidiConfig } from '../midi/midiConfigStore'
@@ -67,6 +69,9 @@ function makeMidiConfig(): MidiConfig {
 async function seed() {
   await savePreset(makePreset())
   await saveSceneBank(makeSceneBank())
+  const presetBank = createEmptyPresetBank()
+  presetBank.slots[0] = 'p1'
+  await savePresetBank(presetBank)
   await saveMidiConfig(makeMidiConfig())
   setTokens({ access_token: 'a', refresh_token: 'r', expires_at: Date.now() + 120_000 })
   await Tone3000Library.importAsset({
@@ -102,6 +107,7 @@ describe('dataBundle', () => {
     await clearStore(STORE_PRESETS)
     await clearStore(STORE_SCENES)
     await clearStore(STORE_MIDI)
+    await clearStore(STORE_PRESET_BANK)
   })
 
   afterEach(async () => {
@@ -120,6 +126,7 @@ describe('dataBundle', () => {
       expect(bundle.presets).toHaveLength(1)
       expect(bundle.presets[0]!.name).toBe('Clean')
       expect(bundle.sceneBank?.id).toBe('default')
+      expect(bundle.presetBank?.slots[0]).toBe('p1')
       expect(bundle.midiConfig.selectedInputId).toBe('input-1')
       expect(bundle.library).toHaveLength(1)
       // seed() caches 'asset-a' plus the library model blob imported via importAsset.
@@ -170,6 +177,7 @@ describe('dataBundle', () => {
       const parsed = await readDataBundleFromFile(file)
       expect(parsed.presets).toEqual([])
       expect(parsed.sceneBank).toBeNull()
+      expect(parsed.presetBank).toBeNull()
       expect(parsed.midiConfig).toEqual(DEFAULT_MIDI_CONFIG)
       expect(parsed.library).toEqual([])
       expect(parsed.assets).toEqual([])
@@ -196,6 +204,7 @@ describe('dataBundle', () => {
       exportedAt: Date.now(),
       presets: [],
       sceneBank: null,
+      presetBank: null,
       midiConfig: { ...DEFAULT_MIDI_CONFIG },
       library: [],
       assets: [],
@@ -226,6 +235,9 @@ describe('dataBundle', () => {
 
       const bank = await loadSceneBank()
       expect(bank?.id).toBe('default')
+
+      const presetBank = await loadPresetBank()
+      expect(presetBank?.slots[0]).toBe('p1')
 
       const midi = await loadMidiConfig()
       expect(midi.selectedInputId).toBe('input-1')
@@ -286,11 +298,14 @@ describe('dataBundle', () => {
     it('wipes stores and app localStorage keys', async () => {
       await seed()
       localStorage.setItem('t3k_refresh_token', 'secret')
+      localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
       await deleteAllData({ signOutTone3000: false })
 
       expect(await listPresets()).toEqual([])
       expect(await getAssetCacheStats()).toEqual({ count: 0, bytes: 0 })
+      expect(await loadPresetBank()).toBeNull()
       expect(localStorage.getItem(THEME_KEY)).toBeNull()
+      expect(localStorage.getItem('nam-web-studio:factory-setup-dismissed')).toBeNull()
       expect(localStorage.getItem('t3k_refresh_token')).toBe('secret') // not signed out
     })
 

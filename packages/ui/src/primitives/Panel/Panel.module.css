@@ -1,20 +1,23 @@
 .panel {
-  position: relative;
-  background: linear-gradient(180deg, var(--panel-raised) 0%, var(--panel) 100%);
-  border: 1px solid var(--seam);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-panel);
-  padding: var(--sp-3);
+  height: 100%;
   display: flex;
+  position: relative;
   flex-direction: column;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--panel-recessed);
+  box-shadow: var(--shadow-recessed);
 }
 
 .header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--sp-3);
+  width: 100%;
+  z-index: 1;
 }
 
 .labelContainer {
@@ -23,34 +26,19 @@
   gap: var(--sp-1);
 }
 
+.label {
+  font-size: 14px;
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
 .body {
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
-}
-
-.screw {
-  position: absolute;
-  width: var(--screw-size);
-  height: var(--screw-size);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--screw-light) 0%, var(--screw-dark) 100%);
-  box-shadow: 0 0.5px 0 var(--screw-highlight);
-}
-
-.tl {
-  top: var(--screw-offset);
-  left: 8px;
-}
-.tr {
-  top: var(--screw-offset);
-  right: 8px;
-}
-.bl {
-  bottom: 8px;
-  left: 8px;
-}
-.br {
-  bottom: 8px;
-  right: 8px;
+  height: 100%;
+  width: 100%;
 }
