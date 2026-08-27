@@ -115,6 +115,8 @@ OpenAxe/
 │   │   │   └── tuner/            # Pitch detection
 │   │   └── e2e/                  # Playwright E2E tests
 │   ├── desktop/               # Native desktop shell — C++ + webview.h + JUCE audio_devices + React UI (#15), see apps/desktop/README.md
+│   ├── landing/               # Marketing landing (Vite) → GitHub Pages, with Remotion loops in public/videos/ (#298)
+│   ├── remotion/              # Remotion compositions — 5 × 720p 10 s loops (Carbon/Aluminum → 10 mp4s), see apps/remotion/README.md (#298)
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/

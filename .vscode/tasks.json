@@ -497,6 +497,52 @@
       "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Studio",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/remotion exec remotion studio src/index.ts --no-open",
+      "detail": "Starts Remotion Studio (apps/remotion) — preview 5 compositions (Hero/Amp/Effects/CabMixer/Platforms) at 720p, Carbon/Aluminum, issue #298. Needs pnpm install first. Then open http://localhost:3000",
+      "isBackground": true,
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Render all",
+      "type": "shell",
+      "command": "for id in Hero HeroAluminum Amp AmpAluminum Effects EffectsAluminum CabMixer CabMixerAluminum Platforms PlatformsAluminum; do echo \"→ Rendering $id\"; pnpm --filter @openaxe/remotion exec remotion render src/index.ts \"$id\" \"../landing/public/videos/$id.mp4\" --codec=h264 --image-format=jpeg || exit 1; pnpm --filter @openaxe/remotion exec remotion still src/index.ts \"$id\" \"../landing/public/videos/$id-poster.jpg\" --frame=0 || exit 1; done; echo \"Done — see apps/landing/public/videos/ (6.7 MB)\"",
+      "detail": "Renders all 10 compositions (5 × Carbon/Aluminum, 720p 10s h264 silent) + posters to apps/landing/public/videos/ — committed artifacts like wasm-core, issue #298",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Still check",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/remotion exec remotion still src/index.ts Hero ../landing/public/videos/Hero-poster-check.jpg --frame=30 --scale=0.5",
+      "detail": "One-frame still sanity check at 1s mark (720p, frame 30) — verifies layout/colors before full render, see remotion-markup skill",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Remotion: Typecheck",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/remotion exec tsc --noEmit",
+      "detail": "Typechecks apps/remotion compositions (theme, shared, Root) — must be clean before render",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Remotion: Bundle",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/remotion exec remotion bundle src/index.ts",
+      "detail": "Bundles apps/remotion for Studio/render — verifies all 10 compositions bundle without Chrome",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
     }
   ]
 }

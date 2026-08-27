@@ -152,7 +152,7 @@ function renderDownloads(): void {
   if (pagesLink) pagesLink.href = PAGES_CANONICAL
 }
 
-// Theme: respect prefers-color-scheme, persist choice
+// Theme: respect prefers-color-scheme, persist choice — fires 'openaxe:themechange' so videos can swap Carbon/Aluminum src
 function initTheme(): void {
   const key = 'openaxe-theme'
   const saved = localStorage.getItem(key) as 'dark' | 'light' | null
@@ -160,6 +160,8 @@ function initTheme(): void {
   const theme = saved ?? (prefersDark ? 'dark' : 'dark') // default Carbon
   document.documentElement.setAttribute('data-theme', theme)
   const btn = document.getElementById('theme-toggle')
+  const notify = (t: string) =>
+    window.dispatchEvent(new CustomEvent('openaxe:themechange', { detail: t }))
   if (btn) {
     btn.textContent = theme === 'dark' ? '☾ Carbon' : '☀ Aluminum'
     btn.addEventListener('click', () => {
@@ -168,12 +170,117 @@ function initTheme(): void {
       document.documentElement.setAttribute('data-theme', next)
       localStorage.setItem(key, next)
       btn.textContent = next === 'dark' ? '☾ Carbon' : '☀ Aluminum'
+      notify(next)
     })
   }
+  // notify initial so videos can pick correct variant on first paint
+  queueMicrotask(() => notify(theme))
+}
+
+function initLandingVideos(): void {
+  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video.landing-video__el'))
+  if (!videos.length) return
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  // Vite base is '/' locally and '/OpenAxe/' on Pages — import.meta.env.BASE_URL is replaced at build time
+  const getBase = (): string => {
+    try {
+      // @ts-expect-error Vite injects this
+      const b = import.meta.env.BASE_URL as string | undefined
+      if (b) return b
+    } catch {
+      // ignore
+    }
+    return location.hostname === 'pauloedspinho20.github.io' ? '/OpenAxe/' : '/'
+  }
+  const base = getBase()
+  const resolve = (p: string) => {
+    const clean = p.replace(/^\//, '')
+    return base + clean
+  }
+  const themeOf = (): 'carbon' | 'aluminum' =>
+    document.documentElement.getAttribute('data-theme') === 'light' ? 'aluminum' : 'carbon'
+
+  const applyTheme = (v: HTMLVideoElement, target: 'carbon' | 'aluminum') => {
+    const src = target === 'aluminum' ? v.dataset.srcAluminum : v.dataset.srcCarbon
+    const poster = target === 'aluminum' ? v.dataset.posterAluminum : v.dataset.posterCarbon
+    if (poster) v.poster = resolve(poster)
+    if (!src) return
+    const next = resolve(src)
+    // Don't reload if already correct
+    if (v.currentSrc.endsWith(src) || v.src.endsWith(src) || v.getAttribute('src') === next) return
+    const wasPlaying = !v.paused && !v.ended
+    v.src = next
+    v.load()
+    if (wasPlaying) void v.play().catch(() => {})
+  }
+
+  for (const v of videos) {
+    // Poster already set inline; ensure base-correct
+    if (v.poster) {
+      const raw = v.getAttribute('poster') ?? v.poster
+      // poster attribute holds the raw path before base rewrite — re-resolve from dataset if present
+      const dsPoster = themeOf() === 'aluminum' ? v.dataset.posterAluminum : v.dataset.posterCarbon
+      v.poster = resolve(dsPoster ?? raw)
+    }
+    v.addEventListener('error', () => {
+      const wrap = v.closest('.landing-video')
+      if (wrap) wrap.classList.add('landing-video--missing')
+      // hide broken video, poster remains visible via CSS fallback
+      v.style.display = 'none'
+    })
+  }
+
+  if (prefersReduced) {
+    // Respect reduced motion — don't load/play videos, poster stays
+    for (const v of videos) {
+      v.removeAttribute('autoplay')
+      v.pause()
+    }
+    return
+  }
+
+  const loadOne = (v: HTMLVideoElement) => {
+    if (v.src) return
+    applyTheme(v, themeOf())
+  }
+
+  // Lazy-load: hero video loads immediately, offscreen videos on intersection
+  const eager = videos.filter((v) => v.closest('.landing-video--hero'))
+  const lazy = videos.filter((v) => !v.closest('.landing-video--hero'))
+  for (const v of eager) loadOne(v)
+
+  if ('IntersectionObserver' in window && lazy.length) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            loadOne(e.target as HTMLVideoElement)
+            io.unobserve(e.target)
+          }
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    for (const v of lazy) io.observe(v)
+  } else {
+    for (const v of lazy) loadOne(v)
+  }
+
+  window.addEventListener('openaxe:themechange', (e: Event) => {
+    const detail = (e as CustomEvent).detail as 'dark' | 'light'
+    const target = detail === 'light' ? 'aluminum' : 'carbon'
+    for (const v of videos) {
+      // Only swap if video already has a src (i.e. has been lazy-loaded)
+      if (!v.src) continue
+      applyTheme(v, target)
+    }
+  })
 }
 
 initTheme()
 renderDownloads()
+initLandingVideos()
 
 // Stamp version + footer year without needing JS for SEO content
 const verEl = document.getElementById('landing-version')

@@ -515,6 +515,54 @@ img {
   flex-wrap: wrap;
 }
 
+/* Landing videos — Remotion loops (issue #298) */
+.landing-video {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--seam);
+  background: var(--panelRecessed, var(--panel));
+  aspect-ratio: 16 / 9;
+}
+.landing-video__el {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Hero card embeds its video between screen and bar */
+.landing-video--hero {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+.landing-video--platforms {
+  margin-bottom: var(--sp-4);
+}
+/* Feature cards: video sits above the h3 */
+.card .landing-video {
+  margin: calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5)) var(--sp-4);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+}
+/* Reduced motion — hide video, show poster via CSS if JS disabled the video */
+@media (prefers-reduced-motion: reduce) {
+  .landing-video__el {
+    display: none;
+  }
+}
+.landing-video--missing {
+  background: var(--panel);
+  min-height: 120px;
+}
+.landing-video--missing .landing-video__el {
+  display: none;
+}
+
 /* Utility */
 .muted {
   color: var(--ink-3);
