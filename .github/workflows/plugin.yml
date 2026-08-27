@@ -180,6 +180,7 @@ jobs:
         # Fail loudly — bundle completeness is required for a shippable Release (#292).
         # NOTE: cpack config is packages/vst3/build/CPackConfig.cmake from repo root;
         # do NOT use working-directory with a full path (see #292 fix — double-prefix broke CI).
+        shell: bash
         run: |
           set -e
           if [ "${{ matrix.cpack_generator }}" = "productbuild" ]; then
