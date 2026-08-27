@@ -55,18 +55,21 @@ export function ToneCatalogDetailsDialog({ open, onClose, tone, slot, target, co
     let cancelled = false
     setLoading(true)
     setError(null)
-    void apiListModels(toneId, { pageSize: 50 })
-      .then((res) => {
+    void (async () => {
+      try {
+        let res = await apiListModels(toneId, { pageSize: 50, architecture: 2 })
+        if (res.data.length === 0) {
+          res = await apiListModels(toneId, { pageSize: 50 })
+        }
         if (cancelled) return
         setLiveModels(res.data)
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) return
         setError(err instanceof Error ? err.message : String(err))
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false)
-      })
+      }
+    })()
     return () => {
       cancelled = true
     }

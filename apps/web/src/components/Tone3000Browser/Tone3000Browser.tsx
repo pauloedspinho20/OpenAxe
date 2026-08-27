@@ -209,7 +209,10 @@ export function Tone3000Browser({ target, context }: Props) {
     setQuickDownloadingToneId(tone.id)
     setImportError(null)
     try {
-      const res = await apiListModels(tone.id, { pageSize: 50 })
+      let res = await apiListModels(tone.id, { pageSize: 50, architecture: 2 })
+      if (res.data.length === 0) {
+        res = await apiListModels(tone.id, { pageSize: 50 })
+      }
       const result = await bulkDownloadToneModels({ tone, models: res.data, slot })
       if (result.failed > 0) {
         setImportError(

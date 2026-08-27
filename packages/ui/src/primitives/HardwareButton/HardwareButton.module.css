@@ -29,7 +29,7 @@
 
 .button.small {
   min-width: 28px;
-  min-height: 28px;
+  height: 28px;
   font-size: 8px;
   padding: var(--sp-1);
 }
@@ -37,7 +37,7 @@
 .button.medium {
   font-size: 10px;
   min-width: 34px;
-  min-height: 34px;
+  height: 34px;
   padding: var(--sp-2) var(--sp-3);
 }
 
