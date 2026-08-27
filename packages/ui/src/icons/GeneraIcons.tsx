@@ -26,7 +26,7 @@ export function ChevronLeftIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="currentColor"
-      stroke-width="0"
+      strokeWidth={0}
       viewBox="0 0 320 512"
       height={size}
       width={size}
@@ -43,7 +43,7 @@ export function ChevronRightIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="currentColor"
-      stroke-width="0"
+      strokeWidth={0}
       viewBox="0 0 320 512"
       height={size}
       width={size}
@@ -60,7 +60,7 @@ export function CloseIcon(props: IconProps) {
     <svg
       stroke="currentColor"
       fill="currentColor"
-      stroke-width="0"
+      strokeWidth={0}
       viewBox="0 0 512 512"
       height={size}
       width={size}
