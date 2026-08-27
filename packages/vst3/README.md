@@ -75,6 +75,29 @@ cmake --build packages/vst3/build --target nam_studio_standalone
 
 The same task palette also exists for **C++** (`C++: Configure/Build/Test`) and **Desktop** (`Desktop: Configure/Build/Test/Package`).
 
+### Which file do I download? (Release artifacts)
+
+| What you want                                | File on the Release                                  | What it is                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **macOS installer (recommended)**            | `openaxe-plugin-<ver>-Darwin.pkg`                    | `productbuild` installer — drops `OpenAxe.vst3` + `OpenAxe.component` (AUv2 `aufx Nms1 NwSt`) + `OpenAxe.clap` into `/Library/Audio/Plug-Ins/*` (double-click to install; signed + notarized when secrets are present)                                                                             |
+| **Windows installer (recommended)**          | `openaxe-plugin-<ver>-win64.msi` (`WIX`) / `.zip`    | `WIX` installer — drops `OpenAxe.vst3` + `OpenAxe.clap` into `%COMMONPROGRAMFILES%\VST3\` and `…\CLAP\` (or `C:\Program Files\Common Files\…`); signed via Authenticode when `WINDOWS_CERTIFICATE_P12` is present — `plugin.yml:155-164`                                                           |
+| **Linux installer (recommended)**            | `openaxe-plugin-<ver>-Linux.deb` / `.tar.gz` (`DEB`) | `DEB` + `TGZ` via `apt`/`dpkg` — drops `OpenAxe.vst3` → `~/.vst3/` / `/usr/lib/vst3/` and `OpenAxe.clap` → `~/.clap/`, same payload as bundles zip — `plugin.yml:34-43,168-189`                                                                                                                    |
+| **Manual install — macOS**                   | `openaxe-plugin-bundles-macos-14-<tag>.zip`          | Bare bundles — unzip and copy `OpenAxe.vst3` → `~/Library/Audio/Plug-Ins/VST3/`, `OpenAxe.component` → `~/Library/Audio/Plug-Ins/Components/`, `OpenAxe.clap` → `~/Library/Audio/Plug-Ins/CLAP/` — `plugin.yml:206-211` (handles flat layout `build/*.vst3`)                                       |
+| **Manual install — Windows**                 | `openaxe-plugin-bundles-windows-latest-<tag>.zip`    | Bare bundles — unzip and copy `OpenAxe.vst3` → `%COMMONPROGRAMFILES%\VST3\` and `OpenAxe.clap` → `…\CLAP\` (multi-config `build/**/*.vst3` handled via `globstar` — `plugin.yml:192-204`); no `.component` (AU is macOS-only)                                                                      |
+| **Manual install — Linux**                   | `openaxe-plugin-bundles-ubuntu-24.04-<tag>.zip`      | Bare bundles — unzip and copy `OpenAxe.vst3` → `~/.vst3/` and `OpenAxe.clap` → `~/.clap/` (flat `build/*.vst3` layout)                                                                                                                                                                             |
+| **CI debug only — not installable (any OS)** | `openaxe-plugin-build-tree-<os>-<tag>.tar.gz`        | Full `packages/vst3/build/` dump (`CMakeCache.txt`, `cmake_install.cmake`, `core/`, `Testing/`, `*.vst3` + CMake detritus — the file from the original `openaxe-plugin-macos-14-v0.2.5.tar.gz` / `windows-latest` / `ubuntu-24.04` reports) for CI triage — **do not** copy to Plug-Ins. See #292. |
+
+> **No `.vst` (VST2) on any OS.** VST2 is EOL since 2013 and Steinberg no longer licenses the SDK for new products. This repo ships **VST3** (`OpenAxe.vst3`), **AUv2** (`OpenAxe.component` — macOS only), and **CLAP** (`OpenAxe.clap`) only — every host that still loads VST2 also loads VST3. If you must use a VST2-only host, use a wrapper (e.g. `vst3 → vst2` shim) outside this project. The former fallback tars (`openaxe-plugin-<os>-<tag>.tar.gz` on all three runners) were never valid plugins.
+
+Unsigned manual bundles are quarantined by Gatekeeper — clear once:
+
+```bash
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component
+auval -v aufx Nms1 NwSt   # AU validation (macOS only)
+# Windows: Defender SmartScreen may warn on unsigned .msi/.vst3 — sign via Authenticode or allow once
+# Linux: no quarantine; ensure ~/.vst3 and ~/.clap are in your host's scan paths
+```
+
 ## What the scaffold does
 
 - `CMakeLists.txt` reads the root `VERSION` file (`#54` — one source of truth, like `packages/core` and `apps/desktop`), `add_subdirectory(../../packages/core core)` and links `nam_studio_core` **with `WHOLE_ARCHIVE`** (NAM parsers self-register via static initializers — plain archive link drops them; see `packages/core/CMakeLists.txt`).

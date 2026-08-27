@@ -1,7 +1,7 @@
 {
   "name": "@openaxe/landing",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "OpenAxe marketing landing — Vite + design tokens, GitHub Pages",
   "type": "module",
   "scripts": {
