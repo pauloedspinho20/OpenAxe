@@ -49,6 +49,15 @@ class HttpServer {
  private:
   void ServeLoop(const std::string& root);
   int listen_fd_ = -1;
+  // Self-pipe write/read ends used to wake a blocked accept() on Stop()
+  // (issue #300 G1). POSIX does not guarantee that closing a listening socket
+  // returns from an accept() already in progress on another thread. In
+  // practice macOS 14 does interrupt it — measured, see
+  // tests/ui_serving_test.cpp — so this is hardening against a platform we
+  // have not tested rather than a fix for an observed hang. It is worth having
+  // because Stop() runs from ~OpenAxePlugin, on the host's main thread: a hang
+  // there freezes the DAW on plugin delete or project close.
+  int wake_fds_[2] = {-1, -1};
   std::thread thread_;
   std::atomic<bool> running_{false};
   std::string inject_head_script_;

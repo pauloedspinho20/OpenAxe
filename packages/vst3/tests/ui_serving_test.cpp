@@ -153,6 +153,54 @@ void TestUiRootCandidates() {
   }
 }
 
+// ── G1: Stop() must not hang while the serve thread sits in accept() ──
+void TestServerShutdown() {
+  const fs::path tmp = fs::temp_directory_path() / "openaxe_http_stop_test";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  std::ofstream(tmp / "index.html") << "<html><head></head><body>x</body></html>";
+
+  // Start and stop repeatedly with no client ever connecting, so the serve
+  // thread is parked waiting for a connection every time. This is the state in
+  // which POSIX does not guarantee that closing the listening socket from
+  // another thread returns from accept(); the self-pipe in Stop() removes the
+  // dependency on that being true.
+  //
+  // Measured on macOS 14 (Darwin 23), close() DOES interrupt the blocked
+  // accept(), so this test also passes with the self-pipe disabled — it is a
+  // guard against regressions in shutdown, not a reproduction of a hang we
+  // observed. Keep it: the ordering it pins (wake, join, then close) is what
+  // makes the behaviour portable, and Stop() runs on the host's main thread
+  // from ~OpenAxePlugin, where a hang would freeze the DAW.
+  for (int i = 0; i < 20; ++i) {
+    openaxe_vst3::HttpServer server;
+    unsigned short port = 0;
+    if (!server.Start(tmp.string(), port, "window.__t=1;")) {
+      Check(false, "server starts on an ephemeral loopback port");
+      break;
+    }
+    Check(port != 0, "server reports the bound port");
+    server.Stop();
+  }
+
+  // Stop() must also be safe to call twice, and safe on a never-started
+  // server: ~OpenAxePlugin calls it after an explicit Stop().
+  {
+    openaxe_vst3::HttpServer server;
+    unsigned short port = 0;
+    Check(server.Start(tmp.string(), port), "start without an injected script");
+    server.Stop();
+    server.Stop();
+  }
+  {
+    openaxe_vst3::HttpServer never_started;
+    never_started.Stop();
+  }
+  Check(true, "repeated Stop() and Stop() on an unstarted server both return");
+
+  fs::remove_all(tmp);
+}
+
 // FindBundledUiRoot honours the dev override, and only when index.html is
 // really there.
 void TestUiRootOverride() {
@@ -180,6 +228,7 @@ int main() {
   TestPathContainment();
   TestUiRootCandidates();
   TestUiRootOverride();
+  TestServerShutdown();
   if (failures == 0) std::printf("ui_serving_test: all checks passed\n");
   return failures == 0 ? 0 : 1;
 }

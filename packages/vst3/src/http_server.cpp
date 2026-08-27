@@ -18,7 +18,9 @@
 typedef int socklen_t;
 #else
 #include <arpa/inet.h>
+#include <cerrno>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -171,6 +173,11 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port,
   sockaddr_in bound{}; socklen_t len = sizeof(bound);
   getsockname(listen_fd_, reinterpret_cast<sockaddr*>(&bound), &len);
   out_port = ntohs(bound.sin_port);
+#ifndef _WIN32
+  if (pipe(wake_fds_) != 0) {
+    wake_fds_[0] = wake_fds_[1] = -1;  // degrade to the old behaviour, don't fail
+  }
+#endif
   running_.store(true, std::memory_order_release);
   thread_ = std::thread(&HttpServer::ServeLoop, this, root);
   return true;
@@ -178,10 +185,32 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port,
 
 void HttpServer::ServeLoop(const std::string& root) {
   while (running_.load(std::memory_order_acquire)) {
+#ifndef _WIN32
+    // Wait for either a connection or the self-pipe going readable, rather
+    // than blocking in accept() where Stop() cannot reach us (issue #300 G1).
+    if (wake_fds_[0] >= 0) {
+      struct pollfd fds[2];
+      fds[0] = {listen_fd_, POLLIN, 0};
+      fds[1] = {wake_fds_[0], POLLIN, 0};
+      const int ready = poll(fds, 2, -1);
+      if (ready < 0) {
+        if (errno == EINTR) continue;
+        break;
+      }
+      // Stop() wrote to the pipe: leave before touching listen_fd_, which it
+      // is about to close.
+      if (fds[1].revents & POLLIN) break;
+      if (!(fds[0].revents & POLLIN)) continue;
+    }
+#endif
 #ifdef _WIN32
     SOCKET client = accept(listen_fd_, nullptr, nullptr); if (client == INVALID_SOCKET) break; const int fd = static_cast<int>(client);
 #else
-    const int fd = accept(listen_fd_, nullptr, nullptr); if (fd < 0) break;
+    const int fd = accept(listen_fd_, nullptr, nullptr);
+    if (fd < 0) {
+      if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+      break;
+    }
 #endif
     HandleClient(fd, root, inject_head_script_);
     CloseSocket(fd);
@@ -190,8 +219,26 @@ void HttpServer::ServeLoop(const std::string& root) {
 
 void HttpServer::Stop() {
   running_.store(false, std::memory_order_release);
+  // Wake the serve thread first, then join, then close. Closing before the
+  // join is what could deadlock: a thread already inside accept() is not
+  // guaranteed to return when its descriptor is closed from underneath it.
+#ifndef _WIN32
+  if (wake_fds_[1] >= 0) {
+    const char byte = 1;
+    (void)!write(wake_fds_[1], &byte, 1);
+  }
+#else
+  // No self-pipe on Windows: closesocket() does interrupt a blocked accept()
+  // there, so the original ordering is correct.
   if (listen_fd_ >= 0) { CloseSocket(listen_fd_); listen_fd_ = -1; }
+#endif
   if (thread_.joinable()) thread_.join();
+  if (listen_fd_ >= 0) { CloseSocket(listen_fd_); listen_fd_ = -1; }
+#ifndef _WIN32
+  for (int& fd : wake_fds_) {
+    if (fd >= 0) { close(fd); fd = -1; }
+  }
+#endif
 }
 
 HttpServer::~HttpServer() { Stop(); }

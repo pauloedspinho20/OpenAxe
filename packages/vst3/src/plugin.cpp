@@ -32,7 +32,20 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+// Diagnostic log, opt-in via OPENAXE_DESKTOP_DEBUG=1 (issue #300 J4).
+// This used to run unconditionally on every bridge message: an open/append/
+// close of /tmp/openaxe_vst.log per call, from the UI thread, unbounded, and
+// logging environment variables and filesystem paths. Same env var the desktop
+// shell uses so one switch turns on diagnostics for both.
+static bool VstLogEnabled() {
+  static const bool enabled = [] {
+    const char* v = std::getenv("OPENAXE_DESKTOP_DEBUG");
+    return v && *v == '1';
+  }();
+  return enabled;
+}
 static void VstLog(const std::string& msg) {
+  if (!VstLogEnabled()) return;
   std::ofstream f("/tmp/openaxe_vst.log", std::ios::app);
   if (f) f << msg << std::endl;
 }
@@ -141,7 +154,7 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
     IWebViewControl::OnWebContentLoaded();
   }
   void OnMessageFromWebView(const char* json) override {
-    VstLog(std::string("OnMessage: ") + (json ? json : "null"));
+    if (VstLogEnabled()) VstLog(std::string("OnMessage: ") + (json ? json : "null"));
     if (!json || !bridge_) return;
     std::string req(json);
     std::string resp;
