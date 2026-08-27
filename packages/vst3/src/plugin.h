@@ -169,8 +169,16 @@ class OpenAxePlugin final : public iplug::Plugin {
    // HttpServer). Serves apps/web/dist over 127.0.0.1 so WKWebView can load
    // it with subresources (file:// is sandboxed). The bridge exposes the same
    // window.openAxe.* surface the desktop does.
+   //
+   // Guarded, not just left unused, in the headless configuration: VstBridge
+   // and HttpServer are only forward-declared here, and std::unique_ptr needs
+   // the complete type to instantiate its deleter at destruction. Leaving the
+   // members in place without the webview fails to compile with
+   // "invalid application of 'sizeof' to an incomplete type".
+#ifdef OPENAXE_HAS_WEBVIEW
    std::unique_ptr<openaxe_vst3::VstBridge> bridge_;
    std::unique_ptr<openaxe_vst3::HttpServer> uiServer_;
    unsigned short uiPort_ = 0;
    std::string uiRoot_;
+#endif
 };

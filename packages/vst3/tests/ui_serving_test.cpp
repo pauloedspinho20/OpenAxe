@@ -10,6 +10,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -23,6 +24,23 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+// setenv/unsetenv are POSIX; MSVC has _putenv_s instead (an empty value
+// removes the variable there).
+void SetEnv(const char* name, const char* value) {
+#ifdef _WIN32
+  _putenv_s(name, value);
+#else
+  setenv(name, value, 1);
+#endif
+}
+void UnsetEnv(const char* name) {
+#ifdef _WIN32
+  _putenv_s(name, "");
+#else
+  unsetenv(name);
+#endif
+}
 
 // Thin adapter so the containment assertions below read as paths.
 bool Under(const fs::path& full, const fs::path& root) {
@@ -208,7 +226,7 @@ void TestUiRootOverride() {
   fs::remove_all(tmp);
   fs::create_directories(tmp);
 
-  setenv("OPENAXE_UI_DIR", tmp.string().c_str(), 1);
+  SetEnv("OPENAXE_UI_DIR", tmp.string().c_str());
   Check(openaxe_vst3::FindBundledUiRoot() != tmp.string(),
         "override without index.html is not accepted");
 
@@ -216,7 +234,7 @@ void TestUiRootOverride() {
   Check(openaxe_vst3::FindBundledUiRoot() == tmp.lexically_normal().string(),
         "override with index.html wins");
 
-  unsetenv("OPENAXE_UI_DIR");
+  UnsetEnv("OPENAXE_UI_DIR");
   fs::remove_all(tmp);
 }
 

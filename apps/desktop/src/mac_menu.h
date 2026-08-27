@@ -14,13 +14,20 @@
 // window used to leave a running process with no window, no menu and no way to
 // quit short of Force Quit. A real Quit item is the fix.
 //
-// No-op on non-Apple platforms so callers don't need their own #ifdef.
+// No-op on non-Apple platforms so callers don't need their own #ifdef. The
+// implementation lives in mac_menu.mm, which CMake only compiles on Apple
+// (OBJCXX is not enabled elsewhere) — hence the inline no-op below rather than
+// a second translation unit.
 
 namespace openaxe_desktop {
 
+#ifdef __APPLE__
 // Installs the standard main menu (App / Edit / Window / Help) on the shared
 // NSApplication. Call once from the main thread before the webview's run loop
 // starts. Safe to call more than once — a second call replaces the menu.
 void InstallMainMenu(const char* app_name);
+#else
+inline void InstallMainMenu(const char*) {}
+#endif
 
 }  // namespace openaxe_desktop

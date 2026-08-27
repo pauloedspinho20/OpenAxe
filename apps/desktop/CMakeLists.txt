@@ -122,7 +122,7 @@ add_library(openaxe_desktop_lib STATIC
   src/secure_storage.cpp
 )
 
-add_executable(openaxe_desktop WIN32 src/main.cpp src/http_server.cpp src/mac_menu.mm)
+add_executable(openaxe_desktop WIN32 src/main.cpp src/http_server.cpp)
 
 # Windows Explorer icon: compiled into the exe via a resource file (no-op on
 # other platforms - .rc sources are MSVC-only).
@@ -151,8 +151,11 @@ if(APPLE)
   # webview.h must compile as OBJCXX on macOS.
   enable_language(OBJCXX)
   set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE OBJCXX)
-  # mac_menu.mm is already Objective-C++; it needs Cocoa for NSMenu/NSApplication
-  # (issue #300 H1). The framework is linked below alongside webview's own.
+  # mac_menu.mm is Objective-C++ and only added on Apple: adding it
+  # unconditionally breaks the Linux/Windows builds, where OBJCXX is not enabled
+  # (issue #300 H1). main.cpp calls InstallMainMenu unconditionally; the header
+  # provides a no-op definition off Apple, so no #ifdef at the call site.
+  target_sources(openaxe_desktop PRIVATE src/mac_menu.mm)
   target_link_libraries(openaxe_desktop PRIVATE "-framework Cocoa")
   # secure_storage.cpp's macOS branch persists the Tone3000 refresh token in
   # the Keychain (issue #146) - Security.framework is the Keychain Services

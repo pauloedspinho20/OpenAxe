@@ -137,19 +137,68 @@ FetchContent_GetProperties(webview)
 if(NOT webview_POPULATED)
   FetchContent_Populate(webview)
 endif()
+# ── Editor availability ────────────────────────────────────────────────────
+# The webview editor is an IGraphics control (IWebViewControl), so it can only
+# be built where iPlug2's IGraphics has a backend. In the pinned iPlug2 revision
+# that means macOS/iOS, Windows and WEB only: IGraphicsPrivate.h defines
+# FONT_DESCRIPTOR_TYPE for OS_MAC/OS_IOS/OS_WIN/OS_WEB and leaves the #else
+# branch commented "NO_IGRAPHICS". Compiling any IGraphics header on Linux
+# therefore fails outright ('FONT_DESCRIPTOR_TYPE' does not name a type).
+#
+# So on Linux the plugin builds headless: DSP, host parameters, state chunks,
+# presets and MIDI all work, and the host shows its generic parameter UI. That
+# is what this target did before the webview editor existed, and it keeps the
+# Linux CI job meaningful rather than skipped. Bringing the editor up there
+# needs WebKitGTK wiring in iPlug2's IGraphics first.
+set(_openaxe_igraphics_default OFF)
+if(APPLE OR WIN32)
+  set(_openaxe_igraphics_default ON)
+endif()
+# Overridable so the headless configuration can be built and tested on any
+# platform: -DOPENAXE_VST3_EDITOR=OFF
+option(OPENAXE_VST3_EDITOR "Build the plugin's webview editor (needs iPlug2 IGraphics)"
+       ${_openaxe_igraphics_default})
+set(OPENAXE_HAS_IGRAPHICS ${OPENAXE_VST3_EDITOR})
+
+set(OPENAXE_WEBVIEW_SOURCES OFF)
 if(EXISTS "${webview_SOURCE_DIR}/webview.h" OR EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
-  add_compile_definitions(OPENAXE_HAS_WEBVIEW)
+  set(OPENAXE_WEBVIEW_SOURCES ON)
   if(EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
     include_directories("${webview_SOURCE_DIR}/core/include")
   else()
     include_directories("${webview_SOURCE_DIR}")
   endif()
+endif()
+
+if(OPENAXE_HAS_IGRAPHICS)
+  add_compile_definitions(OPENAXE_HAS_IGRAPHICS)
+else()
+  # Gating our own includes is not enough: iPlug2's IPlugDelegate_select.h
+  # includes IGraphicsEditorDelegate.h unless one of COCOA_EDITOR_DELEGATE /
+  # WEBVIEW_EDITOR_DELEGATE / NO_IGRAPHICS is defined. NO_IGRAPHICS selects the
+  # plain iplug::IEditorDelegate, which is what a headless plugin wants.
+  add_compile_definitions(NO_IGRAPHICS)
+endif()
+
+set(OPENAXE_ENABLE_WEBVIEW OFF)
+if(OPENAXE_WEBVIEW_SOURCES AND OPENAXE_HAS_IGRAPHICS)
+  set(OPENAXE_ENABLE_WEBVIEW ON)
+  # NOTE: the compile definition and the CMake variable are two different
+  # things. add_compile_definitions() only reaches the compiler — guards below
+  # must test OPENAXE_ENABLE_WEBVIEW, not OPENAXE_HAS_WEBVIEW, or they evaluate
+  # an undefined variable and silently disable the editor's link libraries.
+  add_compile_definitions(OPENAXE_HAS_WEBVIEW)
   if(APPLE)
     enable_language(OBJCXX)
   endif()
   message(STATUS "packages/vst3: webview available — editor will use webview shell")
-else()
+elseif(NOT OPENAXE_WEBVIEW_SOURCES)
   message(STATUS "packages/vst3: webview not available — editor builds as stub (offline)")
+else()
+  message(STATUS
+    "packages/vst3: iPlug2 IGraphics has no backend on this platform — building "
+    "the plugin headless (DSP/params/state/MIDI, host-generic UI). The webview "
+    "editor needs IGraphics, see the comment above this message.")
 endif()
 FetchContent_GetProperties(nlohmann_json)
 if(NOT nlohmann_json_POPULATED)
@@ -194,7 +243,7 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
     target_include_directories(openaxe_vst3 PRIVATE ${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK ${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK/pluginterfaces ${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK/base)
   endif()
   target_link_libraries(openaxe_vst3 PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET iPlug2::IGraphics)
+  if(OPENAXE_HAS_IGRAPHICS AND TARGET iPlug2::IGraphics)
     target_link_libraries(openaxe_vst3 PRIVATE iPlug2::IGraphics)
   endif()
   if(APPLE)
@@ -213,13 +262,13 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   elseif(TARGET iPlug2)
     target_link_libraries(openaxe_vst3 PRIVATE iPlug2)
   endif()
-  if(TARGET iPlug2::Extras::IWebViewControl)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
     target_link_libraries(openaxe_vst3 PRIVATE iPlug2::Extras::IWebViewControl)
   endif()
-  if(TARGET iPlug2_Extras_IWebViewControl_obj)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_vst3 PRIVATE iPlug2_Extras_IWebViewControl_obj)
   endif()
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_vst3 PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -265,10 +314,10 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   if(TARGET iPlug2::IGraphics::NanoVG)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2::IGraphics::NanoVG)
   endif()
-  if(TARGET iPlug2::Extras::IWebViewControl)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2::Extras::IWebViewControl)
   endif()
-  if(TARGET iPlug2_Extras_IWebViewControl_obj)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2_Extras_IWebViewControl_obj)
   endif()
   if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/APP.cmake")
@@ -278,7 +327,7 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2::APP)
   endif()
   target_link_libraries(openaxe_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_standalone PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -327,14 +376,14 @@ if(IPLUG2_AVAILABLE AND CLAP_SDK_AVAILABLE)
   if(TARGET iPlug2::IGraphics::NanoVG)
     target_link_libraries(openaxe_clap PRIVATE iPlug2::IGraphics::NanoVG)
   endif()
-  if(TARGET iPlug2::Extras::IWebViewControl)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
     target_link_libraries(openaxe_clap PRIVATE iPlug2::Extras::IWebViewControl)
   endif()
-  if(TARGET iPlug2_Extras_IWebViewControl_obj)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_clap PRIVATE iPlug2_Extras_IWebViewControl_obj)
   endif()
   target_link_libraries(openaxe_clap PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_clap PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -387,14 +436,14 @@ if(APPLE AND IPLUG2_AVAILABLE)
   if(TARGET iPlug2::IGraphics::NanoVG)
     target_link_libraries(openaxe_au PRIVATE iPlug2::IGraphics::NanoVG)
   endif()
-  if(TARGET iPlug2::Extras::IWebViewControl)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
     target_link_libraries(openaxe_au PRIVATE iPlug2::Extras::IWebViewControl)
   endif()
-  if(TARGET iPlug2_Extras_IWebViewControl_obj)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_au PRIVATE iPlug2_Extras_IWebViewControl_obj)
   endif()
   target_link_libraries(openaxe_au PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_au PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -487,9 +536,13 @@ function(openaxe_bundle_ui target)
     VERBATIM)
 endfunction()
 
-foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
-  openaxe_bundle_ui(${_t})
-endforeach()
+if(OPENAXE_ENABLE_WEBVIEW)
+  foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
+    openaxe_bundle_ui(${_t})
+  endforeach()
+else()
+  message(STATUS "packages/vst3: headless build — skipping the bundled UI copy")
+endif()
 
 # Install the built bundles to standard locations (CPack + workflow's
 # productbuild/WIX/DEB generators handle the platform specifics).

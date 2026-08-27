@@ -103,10 +103,4 @@ void InstallMainMenu(const char* app_name) {
 
 }  // namespace openaxe_desktop
 
-#else
-
-namespace openaxe_desktop {
-void InstallMainMenu(const char*) {}
-}  // namespace openaxe_desktop
-
 #endif

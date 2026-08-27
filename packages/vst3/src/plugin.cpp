@@ -15,8 +15,16 @@
 #include "plugin_state.h"
 #include "presets.h"
 
-// IGraphics controls for the scaffold UI + webview
-#if IPLUG_EDITOR
+// IGraphics controls for the scaffold UI + webview.
+//
+// Gated on OPENAXE_HAS_IGRAPHICS, not just IPLUG_EDITOR: iPlug2's IGraphics has
+// no Linux backend in the pinned revision (IGraphicsPrivate.h defines
+// FONT_DESCRIPTOR_TYPE for OS_MAC/OS_IOS/OS_WIN/OS_WEB and leaves the #else
+// commented "NO_IGRAPHICS"), so merely *including* these headers there fails to
+// compile. See the OPENAXE_HAS_IGRAPHICS block in CMakeLists.txt. On such a
+// platform the plugin is headless: DSP, params, state and MIDI work, and the
+// host draws its own generic parameter UI.
+#if IPLUG_EDITOR && defined(OPENAXE_HAS_IGRAPHICS)
 #include "IControl.h"
 #include "IControls.h"
 #ifdef OPENAXE_HAS_WEBVIEW
@@ -242,7 +250,7 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
   }
 #endif
 
-#if IPLUG_EDITOR
+#if IPLUG_EDITOR && defined(OPENAXE_HAS_IGRAPHICS)
   mMakeGraphicsFunc = [&]() {
     // Use the size restored from the host chunk, not the compile-time default
     // (issue #300 B4): SerializeState/UnserializeState were already
