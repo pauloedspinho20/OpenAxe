@@ -98,6 +98,12 @@ jobs:
       - name: Build plugin
         run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
 
+      - name: Build AU/CLAP bundles (explicit targets, when SDK present)
+        shell: bash
+        run: |
+          cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} --target openaxe_clap 2>/dev/null || echo "::notice::CLAP target not available (SDK missing)"
+          cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} --target openaxe_au 2>/dev/null || echo "::notice::AU target not available (macOS only / SDK missing)"
+
       - name: Smoke test (no host)
         run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
 
@@ -163,27 +169,39 @@ jobs:
         # CPack for plugin is defined in packages/vst3/CMakeLists.txt
         # generators: productbuild (macOS .pkg → /Library/Audio/Plug-Ins/*),
         # WIX (Windows .msi → Program Files\Common Files\VST3), DEB+TGZ (Linux)
+        # Fail loudly — bundle completeness is required for a shippable Release (#292).
         run: |
+          set -e
           if [ "${{ matrix.cpack_generator }}" = "productbuild" ]; then
             # macOS .pkg — installs to standard Audio Plug-Ins locations
-            cpack --config packages/vst3/build/CPackConfig.cmake -G productbuild || cpack -G ZIP --config packages/vst3/build/CPackConfig.cmake || echo "::warning::productbuild not available, falling back to ZIP"
+            if ! cpack --config packages/vst3/build/CPackConfig.cmake -G productbuild; then
+              echo "::warning::productbuild failed, falling back to ZIP (still requires bundles present)"
+              cpack --config packages/vst3/build/CPackConfig.cmake -G ZIP
+            fi
           elif [ "${{ matrix.cpack_generator }}" = "WIX" ]; then
-            cpack --config packages/vst3/build/CPackConfig.cmake -G WIX || cpack -G ZIP --config packages/vst3/build/CPackConfig.cmake || echo "::warning::WIX not available, falling back to ZIP"
+            if ! cpack --config packages/vst3/build/CPackConfig.cmake -G WIX; then
+              echo "::warning::WIX failed, falling back to ZIP"
+              cpack --config packages/vst3/build/CPackConfig.cmake -G ZIP
+            fi
           else
-            cpack --config packages/vst3/build/CPackConfig.cmake -G "${{ matrix.cpack_generator }};TGZ" || echo "::warning::CPack failed for ${{ matrix.cpack_generator }}"
+            cpack --config packages/vst3/build/CPackConfig.cmake -G "${{ matrix.cpack_generator }};TGZ"
           fi
+          ls -lh packages/vst3/build/*.pkg packages/vst3/build/*.msi packages/vst3/build/*.deb packages/vst3/build/*.zip packages/vst3/build/*.tar.gz 2>/dev/null || true
         working-directory: packages/vst3/build
-        continue-on-error: true
 
-      - name: Create tarball (fallback)
+      - name: Create fallback artifacts (debug build-tree + bundles zip)
         if: always()
         shell: bash
         continue-on-error: true
         run: |
           ref="${{ github.ref_name }}"
           safe_ref="${ref//\//-}"
-          tar -czf "openaxe-plugin-${{ matrix.os }}-${safe_ref}.tar.gz" -C packages/vst3/build --exclude="_deps" --exclude="CMakeFiles" . 2>/dev/null || zip -r "openaxe-plugin-${{ matrix.os }}-${safe_ref}.zip" packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
-          ls -lh openaxe-plugin-* 2>/dev/null || ls -lh packages/vst3/build/openaxe-* 2>/dev/null || true
+          # Debug: full build tree (CI triage only — NOT an installable plugin, see issue #292)
+          tar -czf "openaxe-plugin-build-tree-${{ matrix.os }}-${safe_ref}.tar.gz" -C packages/vst3/build --exclude="_deps" --exclude="CMakeFiles" . 2>/dev/null || true
+          # User-facing: bundles only (what hosts actually scan) — always produced even if CPack failed
+          zip -r "openaxe-plugin-bundles-${{ matrix.os }}-${safe_ref}.zip" packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || \
+            zip -r "openaxe-plugin-bundles-${{ matrix.os }}-${safe_ref}.zip" packages/vst3/build/OpenAxe.vst3 packages/vst3/build/OpenAxe.component packages/vst3/build/OpenAxe.clap 2>/dev/null || true
+          ls -lh openaxe-plugin-build-tree-* openaxe-plugin-bundles-* 2>/dev/null || ls -lh packages/vst3/build/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap packages/vst3/build/openaxe-* 2>/dev/null || true
 
       - name: Upload VST3 artifact
         uses: actions/upload-artifact@v7
@@ -212,8 +230,15 @@ jobs:
             packages/vst3/build/*.msi
             packages/vst3/build/*.tar.gz
             packages/vst3/build/*.zip
-            openaxe-plugin-*.tar.gz
-            openaxe-plugin-*.zip
+            openaxe-plugin-bundles-*.zip
+          if-no-files-found: warn
+
+      - name: Upload debug build-tree (CI triage only — not installable, see #292)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: openaxe-plugin-${{ matrix.os }}-debug-build-tree
+          path: openaxe-plugin-build-tree-*.tar.gz
           if-no-files-found: warn
 
       - name: Publish to GitHub Release (on tag)
@@ -230,7 +255,6 @@ jobs:
             packages/vst3/build/*.vst3
             packages/vst3/build/*.component
             packages/vst3/build/*.clap
-            openaxe-plugin-*.tar.gz
-            openaxe-plugin-*.zip
+            openaxe-plugin-bundles-*.zip
           fail_on_unmatched_files: false
           generate_release_notes: true
