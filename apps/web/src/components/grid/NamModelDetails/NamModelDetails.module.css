@@ -7,11 +7,19 @@
 }
 
 .hero {
+  background: var(--panel-recessed);
+  border-radius: var(--r-lg);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+.heroImage {
   width: 100%;
   max-height: 400px;
   object-fit: contain;
   border-radius: var(--r-md);
-  background: var(--panel-recessed);
 }
 
 .imageWrapper {
@@ -176,7 +184,7 @@
 }
 
 .sectionLabel {
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 .sectionHeader {
@@ -214,7 +222,7 @@
   justify-content: space-between;
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--panel-recessed);
+  background: var(--panel);
   border: 1px solid transparent;
   border-radius: var(--r-sm);
 }
@@ -255,7 +263,8 @@
 }
 
 .modelMeta {
-  color: var(--ink-3);
+  color: var(--ink-2);
+  display: inline-flex;
 }
 
 .chips {
@@ -276,12 +285,6 @@
 
 .licenseText {
   color: var(--ink-2);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.note {
-  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.5;
 }

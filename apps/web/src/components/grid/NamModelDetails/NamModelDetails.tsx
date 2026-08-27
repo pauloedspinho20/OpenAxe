@@ -4,7 +4,7 @@ import { Tone3000Library, useTone3000Library } from '../../../tone3000/library'
 import { apiListModels } from '../../../tone3000/client'
 import { bulkDownloadToneModels } from '../../../tone3000/bulkDownload'
 import type { Tone3000Model, Tone3000Slot } from '../../../tone3000/types'
-import { Dialog, OutlineButton } from '@openaxe/ui'
+import { Dialog, HardwareButton, OutlineButton } from '@openaxe/ui'
 import styles from './NamModelDetails.module.css'
 
 export interface NamModelDetailsProps {
@@ -211,7 +211,60 @@ export function NamModelDetails({
 
   return (
     <Dialog open={open} onClose={onClose} title="Model Details">
-      {heroImage && <img src={heroImage} alt="" className={styles.hero} loading="lazy" />}
+      <div className={styles.hero}>
+        {heroImage && <img src={heroImage} alt="" className={styles.heroImage} loading="lazy" />}
+
+        {displayModels && displayModels.length > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <span className={`label ${styles.sectionLabel}`}>
+                Tone Variants ({displayModels.length})
+              </span>
+              {missingCount > 0 && (
+                <OutlineButton
+                  disabled={bulkDownloading}
+                  onClick={() => void handleDownloadMissing()}
+                >
+                  {bulkDownloading ? 'Downloading…' : `Download missing (${missingCount})`}
+                </OutlineButton>
+              )}
+            </div>
+            {bulkSummary && <p className={`label ${styles.bulkSummary}`}>{bulkSummary}</p>}
+            {modelsLoading && <p className={styles.note}>Loading variants…</p>}
+            {modelsError && <p className={styles.error}>{modelsError}</p>}
+            <ul className={styles.variantList}>
+              {displayModels.map((m) => {
+                const cached = isCached(m.id)
+                return (
+                  <li key={m.id} className={styles.variantRow}>
+                    <span className={styles.modelName}>
+                      {m.name}
+                      <span className={`label ${styles.modelMeta}`}>
+                        {m.size} · A{m.architecture_version} ·{' '}
+                      </span>
+                    </span>
+                    <span className={styles.variantActions}>
+                      {!cached ? (
+                        <HardwareButton
+                          label={downloadingId === String(m.id) ? 'Downloading…' : 'Download'}
+                          disabled={downloadingId === String(m.id) || !m.model_url}
+                          onClick={() => void handleDownloadOne(m)}
+                        ></HardwareButton>
+                      ) : (
+                        <HardwareButton
+                          label="Load"
+                          disabled={!blockId || !loadTarget}
+                          onClick={() => void handleLoad(m)}
+                        ></HardwareButton>
+                      )}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
 
       <div>
         <div className={styles.toneTitle}>{title}</div>
@@ -256,64 +309,6 @@ export function NamModelDetails({
       )}
 
       {tone?.description && <p className={styles.description}>{tone.description}</p>}
-
-      {displayModels && displayModels.length > 0 && (
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <span className={`label ${styles.sectionLabel}`}>
-              Tone Variants ({displayModels.length})
-            </span>
-            {missingCount > 0 && (
-              <OutlineButton
-                disabled={bulkDownloading}
-                onClick={() => void handleDownloadMissing()}
-              >
-                {bulkDownloading ? 'Downloading…' : `Download missing (${missingCount})`}
-              </OutlineButton>
-            )}
-          </div>
-          {bulkSummary && <p className={`label ${styles.bulkSummary}`}>{bulkSummary}</p>}
-          {modelsLoading && <p className={styles.note}>Loading variants…</p>}
-          {modelsError && <p className={styles.error}>{modelsError}</p>}
-          <p className={styles.note}>
-            Each variant is a separate capture of the same rig — pick the one you want to load into
-            this block. Downloaded files are cached for offline use; missing ones show “not
-            downloaded”.
-          </p>
-          <ul className={styles.variantList}>
-            {displayModels.map((m) => {
-              const cached = isCached(m.id)
-              return (
-                <li key={m.id} className={styles.variantRow}>
-                  <span className={styles.modelName}>
-                    {m.name}
-                    <span className={`label ${styles.modelMeta}`}>
-                      {m.size} · A{m.architecture_version} · {cached ? 'cached' : 'not downloaded'}
-                    </span>
-                  </span>
-                  <span className={styles.variantActions}>
-                    {!cached ? (
-                      <OutlineButton
-                        disabled={downloadingId === String(m.id) || !m.model_url}
-                        onClick={() => void handleDownloadOne(m)}
-                      >
-                        {downloadingId === String(m.id) ? 'Downloading…' : 'Download'}
-                      </OutlineButton>
-                    ) : (
-                      <OutlineButton
-                        disabled={!blockId || !loadTarget}
-                        onClick={() => void handleLoad(m)}
-                      >
-                        Load
-                      </OutlineButton>
-                    )}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      )}
 
       {!displayModels && model && (
         <div className={styles.section}>
