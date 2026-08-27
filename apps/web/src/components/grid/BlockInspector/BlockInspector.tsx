@@ -10,8 +10,6 @@ import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
-import { AudioReactiveArt } from '../audioArt/AudioReactiveArt'
-import { toArtVariant } from '../audioArt/sketches'
 import { getParamSchema, getReverbRawSchemas } from '../../../effects/paramSchema'
 import type { EffectParams } from '../../../effects/Effect'
 import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
@@ -155,8 +153,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
   const loaded = isNamCore ? ((block as AmpBlock | null)?.getLoadedModel?.() ?? null) : null
   const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
-  const artVariant = toArtVariant(instance.kind)
-  const artAnalyser = analyser
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
 
   const panelLabel = isNamCore ? loaded?.name : label
@@ -186,9 +182,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
         )
       }
     >
-      <div className={styles.background}>
-        <AudioReactiveArt analyser={artAnalyser} variant={artVariant} />
-      </div>
       <div className={styles.inspectorLayout}>
         <div className={styles.content}>
           {!block && <p className={styles.empty}>Power on to edit this block.</p>}

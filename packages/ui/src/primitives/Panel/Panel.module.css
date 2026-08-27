@@ -8,8 +8,15 @@
   gap: var(--sp-3);
   padding: var(--sp-3);
   border-radius: var(--r-lg);
-  background: var(--panel-recessed);
+  background-color: var(--panel-recessed);
+  background-image: url('./assets/carbon-fibre.png');
+  background-repeat: repeat;
+  background-size: auto;
   box-shadow: var(--shadow-recessed);
+}
+
+:global(:root[data-theme='light']) .panel {
+  background-image: url('./assets/light-aluminum.png');
 }
 
 .header {

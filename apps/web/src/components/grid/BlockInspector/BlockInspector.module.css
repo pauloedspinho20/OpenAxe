@@ -22,13 +22,6 @@
   justify-content: center;
 }
 
-.background {
-  position: absolute;
-  inset: var(--sp-4);
-  border-radius: var(--r-md);
-  overflow: hidden;
-}
-
 .squareColumn {
   width: 100%;
   height: 100%;
