@@ -427,6 +427,14 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph);
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index);
 
+// ── Tone fingerprint (issue #288) ──────────────────────────────────────
+// Probe a NAM model JSON and return its gain (dB) + brightness (0..1).
+// Returns 1 on success, 0 if the JSON is not a valid NAM model or any
+// required out-pointer is null. Probe runs off the audio thread and is not
+// real-time safe.
+int32_t nam_studio_compute_fingerprint(const char* json, float* out_gain_db,
+                                       float* out_brightness);
+
 // ── Tuner — pitch detection + note mapping (issue #123) ────────────────
 // Pure functions over a buffer — no graph, no state. Safe from any thread.
 // These are the one detector every front end shares: web, desktop, plugin,

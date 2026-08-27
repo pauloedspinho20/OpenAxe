@@ -10,8 +10,6 @@ import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
-import { AudioReactiveArt } from '../audioArt/AudioReactiveArt'
-import { toArtVariant } from '../audioArt/sketches'
 import { getParamSchema, getReverbRawSchemas } from '../../../effects/paramSchema'
 import type { EffectParams } from '../../../effects/Effect'
 import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
@@ -98,7 +96,7 @@ interface MaybeBypassable {
  * dot, a one-line status); this is where the detail actually lives, so
  * cards stay small and legible at grid scale.
  */
-export function BlockInspector({ rig }: BlockInspectorProps) {
+export function BlockInspector({ rig, context }: BlockInspectorProps) {
   // Re-render once async block creation finishes - see BlockCard for why.
   useEngineVersion((s) => s.version)
   useTone3000Library((s) => s.version)
@@ -154,8 +152,6 @@ export function BlockInspector({ rig }: BlockInspectorProps) {
   const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
   const loaded = isNamCore ? ((block as AmpBlock | null)?.getLoadedModel?.() ?? null) : null
   const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
-  const artVariant = toArtVariant(instance.kind)
-  const artAnalyser = analyser
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
 
   const panelLabel = isNamCore ? loaded?.name : label
@@ -164,6 +160,7 @@ export function BlockInspector({ rig }: BlockInspectorProps) {
 
   return (
     <Panel
+      className={styles.panel}
       {...(panelLabel !== undefined && { label: panelLabel })}
       {...(panelLabelUrl !== undefined && { labelUrl: panelLabelUrl })}
       {...(panelUrl !== undefined && { url: panelUrl })}
@@ -185,9 +182,6 @@ export function BlockInspector({ rig }: BlockInspectorProps) {
         )
       }
     >
-      <div className={styles.background}>
-        <AudioReactiveArt analyser={artAnalyser} variant={artVariant} />
-      </div>
       <div className={styles.inspectorLayout}>
         <div className={styles.content}>
           {!block && <p className={styles.empty}>Power on to edit this block.</p>}
@@ -263,6 +257,31 @@ export function BlockInspector({ rig }: BlockInspectorProps) {
           kindLabel={label}
           loadedName={loaded?.name ?? null}
           entry={libraryEntry}
+          slot="model"
+          blockId={blockId}
+          loadTarget={
+            block
+              ? {
+                  loadModel: (json: string, info: { id: string; name: string }) =>
+                    (
+                      block as unknown as {
+                        loadModel: (
+                          j: string,
+                          s: unknown,
+                          i: { id: string; name: string },
+                        ) => Promise<unknown>
+                      }
+                    ).loadModel(json, 1, info),
+                  loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) =>
+                    (
+                      block as unknown as {
+                        loadIR: (b: AudioBuffer, m: number, i: { id: string; name: string }) => void
+                      }
+                    ).loadIR(buffer, 1, info),
+                }
+              : null
+          }
+          audioContext={context}
         />
       )}
     </Panel>

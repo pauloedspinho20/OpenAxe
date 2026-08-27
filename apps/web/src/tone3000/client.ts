@@ -499,6 +499,16 @@ export function apiListFavoritedTones(
   return getJson<PaginatedResponse<Tone>>(`/api/v1/tones/favorited?${qs}`)
 }
 
+export function apiListDownloadedTones(
+  params: ListUserTonesParams = {},
+): Promise<PaginatedResponse<Tone>> {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set('page', String(params.page))
+  if (params.pageSize) qs.set('page_size', String(params.pageSize))
+  if (params.gear) qs.set('gear', params.gear)
+  return getJson<PaginatedResponse<Tone>>(`/api/v1/tones/downloaded?${qs}`)
+}
+
 export function apiGetUser(): Promise<User> {
   return getJson<User>('/api/v1/user')
 }

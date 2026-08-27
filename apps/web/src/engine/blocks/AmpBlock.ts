@@ -257,7 +257,8 @@ export class AmpBlock implements Block {
   }
 
   setParams(params: EffectParams): void {
-    if (typeof params.slimSize === 'number') void this.setModelSlimSize(params.slimSize)
+    // Slim is hidden in the inspector and always at max (1); ignore any
+    // persisted per-block value so older presets don't pull quality down.
     if (typeof params.bass === 'number') this.setBass(params.bass)
     if (typeof params.mid === 'number') this.setMid(params.mid)
     if (typeof params.treble === 'number') this.setTreble(params.treble)

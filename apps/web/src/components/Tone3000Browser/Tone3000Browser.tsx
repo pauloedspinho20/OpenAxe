@@ -11,11 +11,19 @@ import {
   apiListTags,
   apiSearchTones,
 } from '../../tone3000/client'
-import { importTone3000Asset } from '../../tone3000/importService'
 import type { BlockLoadTarget } from '../../tone3000/importService'
-import type { Tone, Tone3000Model } from '../../tone3000/types'
-import { Dialog, HardwareButton, OutlineButton, Select } from '@openaxe/ui'
+import type { Tone } from '../../tone3000/types'
+import type { Tone3000ToneSnapshot } from '../../tone3000/library'
+import { bulkDownloadToneModels } from '../../tone3000/bulkDownload'
+import {
+  importAccountTones,
+  type AccountImportProgress,
+  type AccountImportScope,
+} from '../../tone3000/accountImport'
+import { NamModelDetails } from '../grid/NamModelDetails/NamModelDetails'
+import { Dialog, HardwareButton, MixerIcon, OutlineButton, Pagination, Select } from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
+import { CloseIcon } from '../../../../../packages/ui/src/icons/GeneraIcons'
 
 /** Max results /tones/search and /tones/favorited return per page (per API docs). */
 const SEARCH_PAGE_SIZE = 25
@@ -65,16 +73,17 @@ export function Tone3000Browser({ target, context }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [needsConnect, setNeedsConnect] = useState(false)
-  const [expanded, setExpanded] = useState<number | null>(null)
-  const [models, setModels] = useState<Record<number, Tone3000Model[]>>({})
-  const [modelsLoading, setModelsLoading] = useState(false)
-  const [importingId, setImportingId] = useState<string | null>(null)
-  const [importDone, setImportDone] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [makes, setMakes] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [makesValue, setMakesValue] = useState('')
   const [tagsValue, setTagsValue] = useState('')
+  const [detailTone, setDetailTone] = useState<Tone | Tone3000ToneSnapshot | null>(null)
+  const [quickDownloadingToneId, setQuickDownloadingToneId] = useState<number | null>(null)
+  const [accountScope, setAccountScope] = useState<AccountImportScope>('all')
+  const [accountBusy, setAccountBusy] = useState(false)
+  const [accountProgress, setAccountProgress] = useState<AccountImportProgress | null>(null)
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<Tone3000LibraryEntry | null>(null)
 
   useEffect(() => {
     void Tone3000Library.refresh()
@@ -189,99 +198,6 @@ export function Tone3000Browser({ target, context }: Props) {
     auth.status,
   ])
 
-  const toggleTone = async (tone: Tone) => {
-    if (expanded === tone.id) {
-      setExpanded(null)
-      return
-    }
-    setExpanded(tone.id)
-    if (!models[tone.id]) {
-      setModelsLoading(true)
-      try {
-        const res = await apiListModels(tone.id, { pageSize: 50, architecture: 2 })
-        setModels((m) => ({ ...m, [tone.id]: res.data }))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setModelsLoading(false)
-      }
-    }
-  }
-
-  const runImport = async (model: Tone3000Model, tone: Tone) => {
-    if (!browser.target) return
-    const { blockId, slot } = browser.target
-    setImportingId(model.id.toString())
-    setImportDone(null)
-    setImportError(null)
-    try {
-      const id = `tone3000:${slot}:${model.id}`
-      await importTone3000Asset(
-        {
-          id,
-          blockId,
-          slot,
-          name: model.name,
-          modelUrl: model.model_url,
-          creator: tone.user.username,
-          sourceUrl: tone.url,
-          toneTitle: tone.title,
-          imageUrl: tone.images?.[0] ?? null,
-          tone: {
-            id: tone.id,
-            title: tone.title,
-            description: tone.description,
-            gear: tone.gear,
-            format: tone.format,
-            license: tone.license,
-            images: tone.images ?? null,
-            sizes: tone.sizes ?? [],
-            makes: (tone.makes ?? []).map((m) => m.name),
-            tags: (tone.tags ?? []).map((t) => t.name),
-            downloads_count: tone.downloads_count,
-            favorites_count: tone.favorites_count,
-            models_count: tone.models_count,
-            user: tone.user,
-            created_at: tone.created_at ?? null,
-            url: tone.url,
-          },
-          model: {
-            id: model.id,
-            name: model.name,
-            size: model.size,
-            architecture_version: model.architecture_version,
-          },
-        },
-        target,
-        context,
-      )
-      // `target`/`context` are null whenever the engine isn't powered on yet
-      // (or, briefly, right after adding a block - see useTone3000Target) -
-      // importTone3000Asset still downloads and caches in that case, but
-      // there's no live block for it to actually load into. Closing here as
-      // if it succeeded would silently strand the download - surface it
-      // instead and leave the dialog open so the user can see what happened.
-      if (target && context) {
-        close()
-      } else {
-        setImportDone(model.id.toString())
-        setImportError(
-          "Downloaded and cached, but the engine isn't running yet - power on, then click Reload here (or find it under Library).",
-        )
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (message === NOT_AUTHENTICATED) {
-        setImportError('Importing needs a Tone3000 account connection — connect above, then retry.')
-        setNeedsConnect(true)
-      } else {
-        setImportError(`Import failed: ${message}`)
-      }
-    } finally {
-      setImportingId(null)
-    }
-  }
-
   const reloadFromLibrary = async (entry: Tone3000LibraryEntry) => {
     if (!target || !context) return
     const blob = await Tone3000Library.getBlob(entry.id)
@@ -296,6 +212,90 @@ export function Tone3000Browser({ target, context }: Props) {
     close()
   }
 
+  const hasCachedForTone = (tone: Tone) => library.some((e) => e.sourceUrl === tone.url)
+
+  const handleQuickDownloadAll = async (tone: Tone) => {
+    if (!browser.target) return
+    const { slot } = browser.target
+    setQuickDownloadingToneId(tone.id)
+    setImportError(null)
+    try {
+      let res = await apiListModels(tone.id, { pageSize: 50, architecture: 2 })
+      if (res.data.length === 0) {
+        res = await apiListModels(tone.id, { pageSize: 50 })
+      }
+      const result = await bulkDownloadToneModels({ tone, models: res.data, slot })
+      if (result.failed > 0) {
+        setImportError(
+          `Download: ${result.ok} ok, ${result.skipped} skipped, ${result.failed} failed. ${result.errors.join('; ')}`,
+        )
+      } else if (result.ok > 0 || result.skipped > 0) {
+        setImportError(
+          `${result.ok} downloaded, ${result.skipped} already cached. Open details to pick a file.`,
+        )
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message === NOT_AUTHENTICATED) {
+        setNeedsConnect(true)
+        setImportError(
+          'Downloading needs a Tone3000 account connection — connect above, then retry.',
+        )
+      } else {
+        setImportError(`Download failed: ${message}`)
+      }
+    } finally {
+      setQuickDownloadingToneId(null)
+    }
+  }
+
+  const handleQuickLoadFirst = async (tone: Tone) => {
+    const cached = library
+      .filter((e) => e.sourceUrl === tone.url)
+      .sort((a, b) => b.importedAt - a.importedAt)
+    const entry = cached[0]
+    if (!entry) return
+    await reloadFromLibrary(entry)
+  }
+
+  const handleAccountImport = async () => {
+    setAccountBusy(true)
+    setImportError(null)
+    setAccountProgress(null)
+    try {
+      const result = await importAccountTones({
+        scope: accountScope,
+        onProgress: (p) => setAccountProgress(p),
+      })
+      setAccountProgress(null)
+      await Tone3000Library.refresh()
+      if (result.tones === 0) {
+        setImportError('No tones found for that scope in your Tone3000 account.')
+      } else if (result.failed > 0) {
+        setImportError(
+          `Import: ${result.ok} downloaded, ${result.skipped} already cached, ${result.failed} failed. ${result.errors.slice(0, 3).join('; ')}${result.errors.length > 3 ? '…' : ''}`,
+        )
+      } else {
+        setImportError(
+          `Imported ${result.tones} tone(s): ${result.ok} downloaded, ${result.skipped} already cached.`,
+        )
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message === NOT_AUTHENTICATED) {
+        setNeedsConnect(true)
+        setImportError(
+          'Importing your account tones needs a Tone3000 connection — connect above, then retry.',
+        )
+      } else {
+        setImportError(`Account import failed: ${message}`)
+      }
+      setAccountProgress(null)
+    } finally {
+      setAccountBusy(false)
+    }
+  }
+
   const close = () => {
     browser.closeBrowser()
     setScope('browse')
@@ -307,6 +307,9 @@ export function Tone3000Browser({ target, context }: Props) {
     setError(null)
     setNeedsConnect(false)
     setImportError(null)
+    setDetailTone(null)
+    setQuickDownloadingToneId(null)
+    setAccountProgress(null)
   }
 
   if (!browser.open || !browser.target) return null
@@ -317,11 +320,17 @@ export function Tone3000Browser({ target, context }: Props) {
   const cardClass = `${styles.card} ${viewMode === 'cards' ? styles.cardVertical : ''}`
   const filteredLibrary = library.filter(
     (e) =>
-      matchesQuery(e.name, search.query) ||
-      matchesQuery(e.creator, search.query) ||
-      matchesQuery(e.toneTitle ?? '', search.query),
+      e.kind === 'model' &&
+      (matchesQuery(e.name, search.query) ||
+        matchesQuery(e.creator, search.query) ||
+        matchesQuery(e.toneTitle ?? '', search.query)),
   )
-
+  const LIBRARY_PAGE_SIZE = SEARCH_PAGE_SIZE
+  const libraryTotalPages = Math.ceil(filteredLibrary.length / LIBRARY_PAGE_SIZE)
+  const pagedLibrary = filteredLibrary.slice(
+    (page - 1) * LIBRARY_PAGE_SIZE,
+    page * LIBRARY_PAGE_SIZE,
+  )
   return (
     <Dialog
       open={true}
@@ -343,7 +352,7 @@ export function Tone3000Browser({ target, context }: Props) {
             className={`${styles.tab} ${scope === 'library' ? styles.tabActive : ''}`}
             onClick={() => setScope('library')}
           >
-            LIBRARY ({library.length})
+            LIBRARY ({library.filter((e) => e.kind === 'model').length})
           </button>
           <button
             type="button"
@@ -387,7 +396,7 @@ export function Tone3000Browser({ target, context }: Props) {
       {error && <p className={styles.error}>{error}</p>}
 
       {scope !== 'library' && (
-        <div className={styles.body}>
+        <div className={styles.content}>
           <div className={styles.filters}>
             <input
               type="text"
@@ -479,116 +488,133 @@ export function Tone3000Browser({ target, context }: Props) {
             </div>
           )}
 
-          {loading && <p className={styles.hint}>Loading…</p>}
-          {!loading && !needsConnect && tones.length === 0 && !error && (
-            <p className={styles.hint}>No tones match.</p>
-          )}
+          {loading ? (
+            <div className={styles.loadingWrapper} aria-busy="true" aria-live="polite">
+              <div className={styles.spinner} role="status" aria-label="Loading" />
+            </div>
+          ) : (
+            <>
+              {!needsConnect && tones.length === 0 && !error && (
+                <p className={styles.hint}>No tones match.</p>
+              )}
 
-          <ul className={listClass}>
-            {tones
-              .filter(
-                (tone) =>
-                  (scope !== 'favorites' && scope !== 'created') ||
-                  matchesQuery(tone.title, search.query),
-              )
-              .map((tone) => {
-                const inLibrary = library.some((e) => e.sourceUrl === tone.url)
-                return (
-                  <li key={tone.id} className={cardClass}>
-                    <button
-                      type="button"
-                      className={styles.cardHeader}
-                      onClick={() => void toggleTone(tone)}
-                    >
-                      {tone.images?.[0] && (
-                        <div className={styles.cardImageContainer}>
-                          <img
-                            src={tone.images[0]}
-                            alt=""
-                            className={styles.cardImage}
-                            loading="lazy"
-                            draggable={false}
-                          />
-                          {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
+              <ul className={listClass}>
+                {tones
+                  .filter(
+                    (tone) =>
+                      (scope !== 'favorites' && scope !== 'created') ||
+                      matchesQuery(tone.title, search.query),
+                  )
+                  .map((tone) => {
+                    const inLibrary = library.some((e) => e.sourceUrl === tone.url)
+                    const hasCached = hasCachedForTone(tone)
+                    const isDownloading = quickDownloadingToneId === tone.id
+                    return (
+                      <li key={tone.id} className={cardClass}>
+                        <button
+                          type="button"
+                          className={styles.cardHeader}
+                          onClick={() => setDetailTone(tone)}
+                          aria-label={`View details for ${tone.title}`}
+                        >
+                          {tone.images?.[0] ? (
+                            <div className={styles.cardImageContainer}>
+                              <img
+                                src={tone.images[0]}
+                                alt=""
+                                className={styles.cardImage}
+                                loading="lazy"
+                                draggable={false}
+                              />
+                              {inLibrary && <span className={styles.inLibraryBadge}>LIBRARY</span>}
+                            </div>
+                          ) : (
+                            <div className={styles.cardImageContainer}>
+                              <div className={styles.cardImage}></div>
+                              <span className={styles.inLibraryBadge}>LIBRARY</span>
+                            </div>
+                          )}
+                          <span className={styles.cardInfo}>
+                            <span className={styles.cardTitle}>{tone.title}</span>
+                            <span className={`label ${styles.cardMeta}`}>
+                              {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
+                            </span>
+                            <span className={`label ${styles.cardCredit}`}>
+                              Captured by {tone.user.username}
+                            </span>
+                          </span>
+                        </button>
+                        <div className={styles.cardActions}>
+                          <OutlineButton
+                            title="Model Details"
+                            onClick={() => setDetailTone(tone)}
+                            aria-label={`View details for ${tone.title}`}
+                          >
+                            <MixerIcon size={16} />
+                          </OutlineButton>
+                          <OutlineButton
+                            disabled={isDownloading}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (hasCached) void handleQuickLoadFirst(tone)
+                              else void handleQuickDownloadAll(tone)
+                            }}
+                            title={
+                              hasCached
+                                ? 'Load first cached file into active block'
+                                : 'Download all files'
+                            }
+                          >
+                            {isDownloading ? '…' : hasCached ? 'LOAD' : '⬇ Download'}
+                          </OutlineButton>
                         </div>
-                      )}
-                      <span className={styles.cardInfo}>
-                        <span className={styles.cardTitle}>{tone.title}</span>
-                        <span className={`label ${styles.cardMeta}`}>
-                          {tone.gear} · {tone.format.toUpperCase()} · {tone.downloads_count} DL
-                        </span>
-                        <span className={`label ${styles.cardCredit}`}>
-                          Captured by {tone.user.username}
-                        </span>
-                      </span>
-                    </button>
-
-                    {expanded === tone.id && modelsLoading && (
-                      <p className={styles.hint}>Loading models…</p>
-                    )}
-                    {expanded === tone.id && models[tone.id] && (
-                      <ul className={styles.modelList}>
-                        {models[tone.id]!.map((model) => {
-                          const assetId = `tone3000:${slot}:${model.id}`
-                          const cached = library.some((e) => e.id === assetId)
-                          return (
-                            <li key={model.id} className={styles.modelRow}>
-                              <span className={styles.modelName}>
-                                {model.name}
-                                <span className={`label ${styles.modelSize}`}>
-                                  {model.size} · A{model.architecture_version}
-                                </span>
-                              </span>
-                              <OutlineButton
-                                disabled={importingId === model.id.toString()}
-                                onClick={() => void runImport(model, tone)}
-                              >
-                                {importingId === model.id.toString()
-                                  ? 'IMPORTING…'
-                                  : importDone === model.id.toString()
-                                    ? 'IMPORTED ✓'
-                                    : cached
-                                      ? 'RELOAD'
-                                      : 'IMPORT'}
-                              </OutlineButton>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    )}
-                  </li>
-                )
-              })}
-          </ul>
-
-          {totalPages > 1 && (
-            <nav className={styles.pagination}>
-              <button
-                type="button"
-                className={styles.pageBtn}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                ‹
-              </button>
-              <span className={`label ${styles.pageInfo}`}>
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className={styles.pageBtn}
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                ›
-              </button>
-            </nav>
+                      </li>
+                    )
+                  })}
+              </ul>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </>
           )}
         </div>
       )}
 
       {scope === 'library' && (
-        <div className={styles.body}>
+        <div className={styles.content}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Select
+              value={accountScope}
+              onChange={(e) => setAccountScope(e.target.value as AccountImportScope)}
+              aria-label="Account tones scope"
+              disabled={accountBusy}
+            >
+              <option value="all">All</option>
+              <option value="downloaded">Downloaded</option>
+              <option value="favorited">Favorited</option>
+              <option value="created">My models</option>
+            </Select>
+            <HardwareButton
+              label={
+                accountProgress
+                  ? `Importing ${accountProgress.currentTone}/${accountProgress.totalTones}…`
+                  : 'Import from Tone3000 account'
+              }
+              disabled={accountBusy || auth.status !== 'connected'}
+              onClick={() => void handleAccountImport()}
+            />
+            {auth.status !== 'connected' && !accountBusy && (
+              <OutlineButton onClick={() => void auth.connect()}>Connect Tone3000</OutlineButton>
+            )}
+          </div>
+          {accountProgress && (
+            <p className={styles.hint}>
+              {accountProgress.status === 'fetching_models'
+                ? `Fetching models for ${accountProgress.toneTitle}…`
+                : accountProgress.status === 'downloading'
+                  ? `Downloading ${accountProgress.toneTitle}…`
+                  : `${accountProgress.toneTitle} — ${accountProgress.status}`}{' '}
+              {accountProgress.currentTone}/{accountProgress.totalTones} tones
+            </p>
+          )}
           <div className={styles.filters}>
             <input
               type="text"
@@ -603,43 +629,167 @@ export function Tone3000Browser({ target, context }: Props) {
             <p className={styles.hint}>No library items match.</p>
           )}
           <ul className={listClass}>
-            {filteredLibrary.map((entry) => (
+            {pagedLibrary.map((entry) => (
               <li key={entry.id} className={cardClass}>
-                <div className={styles.libraryRow}>
+                <button
+                  type="button"
+                  className={styles.cardHeader}
+                  onClick={() => {
+                    if (entry.tone) setDetailTone(entry.tone)
+                  }}
+                  disabled={!entry.tone}
+                  aria-label={`View details for ${entry.tone?.title ?? entry.name}`}
+                >
                   {entry.imageUrl && (
-                    <img src={entry.imageUrl} alt="" className={styles.cardImage} loading="lazy" />
+                    <div className={styles.cardImageContainer}>
+                      <img
+                        src={entry.imageUrl}
+                        alt=""
+                        className={styles.cardImage}
+                        loading="lazy"
+                        draggable={false}
+                      />
+                    </div>
                   )}
-                  <div className={styles.libraryInfo}>
+                  <span className={styles.cardInfo}>
                     <span className={styles.cardTitle}>{entry.name}</span>
                     <span className={`label ${styles.cardMeta}`}>
-                      {entry.creator} · {entry.kind}
+                      {entry.creator} · {entry.kind.toUpperCase()}
                       {entry.toneTitle ? ` · ${entry.toneTitle}` : ''}
                     </span>
-                  </div>
+                    {entry.tone?.gear && (
+                      <span className={`label ${styles.cardCredit}`}>
+                        {entry.tone.gear} · {entry.tone.format.toUpperCase()}
+                      </span>
+                    )}
+                  </span>
+                </button>
+
+                <div className={styles.cardActions}>
+                  <OutlineButton
+                    title="Model Details"
+                    disabled={!entry.tone}
+                    onClick={() => {
+                      if (entry.tone) setDetailTone(entry.tone)
+                    }}
+                    aria-label={`View details for ${entry.tone?.title ?? entry.name}`}
+                  >
+                    <MixerIcon size={16} />
+                  </OutlineButton>
                   <OutlineButton disabled={!target} onClick={() => void reloadFromLibrary(entry)}>
                     LOAD
                   </OutlineButton>
                   <OutlineButton
                     variant="danger"
-                    onClick={() => void Tone3000Library.remove(entry.id)}
+                    onClick={() => setConfirmDeleteEntry(entry)}
                     aria-label={`Remove ${entry.name} from library`}
                   >
-                    ×
+                    <CloseIcon size={16} />
                   </OutlineButton>
                 </div>
               </li>
             ))}
           </ul>
+          <Pagination page={page} totalPages={libraryTotalPages} onPageChange={setPage} />
         </div>
       )}
 
-      <footer className={styles.footer}>
-        <span className={`label ${styles.footerText}`}>
-          Models &amp; IRs via TONE3000 ·{' '}
-          <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
-            tone3000.com
-          </a>
-        </span>
+      {confirmDeleteEntry && (
+        <Dialog
+          open={true}
+          onClose={() => setConfirmDeleteEntry(null)}
+          title="Remove from library"
+          width="min(420px, 90vw)"
+          zIndex={60}
+        >
+          <p className={styles.hint}>
+            Are you sure you want to remove <strong>{confirmDeleteEntry.name}</strong> from your
+            library? This will delete the cached file and cannot be undone.
+          </p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <HardwareButton
+              label="Cancel"
+              onClick={() => setConfirmDeleteEntry(null)}
+            ></HardwareButton>
+            <HardwareButton
+              label="Remove"
+              variant="danger"
+              onClick={() => {
+                void Tone3000Library.remove(confirmDeleteEntry.id)
+                setConfirmDeleteEntry(null)
+              }}
+            ></HardwareButton>
+          </div>
+        </Dialog>
+      )}
+
+      {detailTone && (
+        <NamModelDetails
+          open={!!detailTone}
+          onClose={() => setDetailTone(null)}
+          kindLabel={GEAR_LABELS[gear] ?? gear}
+          loadedName={null}
+          entry={
+            {
+              id: `tone3000:${slot}:${detailTone.id}`,
+              kind: slot,
+              name: detailTone.title,
+              creator: detailTone.user.username,
+              sourceUrl: detailTone.url,
+              toneTitle: detailTone.title,
+              imageUrl: detailTone.images?.[0] ?? null,
+              importedAt: Date.now(),
+              tone: {
+                id: detailTone.id,
+                title: detailTone.title,
+                description: detailTone.description,
+                gear: detailTone.gear,
+                format: detailTone.format,
+                license: detailTone.license,
+                images: detailTone.images ?? null,
+                sizes: detailTone.sizes ?? [],
+                makes:
+                  Array.isArray(detailTone.makes) &&
+                  detailTone.makes.length > 0 &&
+                  typeof (detailTone.makes[0] as unknown) === 'string'
+                    ? (detailTone.makes as unknown as string[])
+                    : (((detailTone.makes as unknown as { name: string }[] | undefined) ?? []).map(
+                        (m) => m.name,
+                      ) as string[]),
+                tags:
+                  Array.isArray(detailTone.tags) &&
+                  detailTone.tags.length > 0 &&
+                  typeof (detailTone.tags[0] as unknown) === 'string'
+                    ? (detailTone.tags as unknown as string[])
+                    : (((detailTone.tags as unknown as { name: string }[] | undefined) ?? []).map(
+                        (t) => t.name,
+                      ) as string[]),
+                downloads_count: detailTone.downloads_count,
+                favorites_count: detailTone.favorites_count,
+                models_count: detailTone.models_count,
+                user: detailTone.user,
+                created_at: detailTone.created_at ?? null,
+                url: detailTone.url,
+              },
+              model: null,
+            } as Tone3000LibraryEntry
+          }
+          slot={slot}
+          blockId={browser.target?.blockId ?? null}
+          loadTarget={target}
+          audioContext={context}
+        />
+      )}
+
+      <footer className={styles.footerWrapper}>
+        <div className={styles.footer}>
+          <span className={`label ${styles.footerText}`}>
+            Neural Amp Modeler Models &amp; IRs via{' '}
+            <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
+              TONE3000
+            </a>
+          </span>
+        </div>
       </footer>
     </Dialog>
   )

@@ -1,5 +1,7 @@
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import styles from './Dialog.module.css'
+import { HardwareButton } from '../../primitives'
+import { CloseIcon } from '../../icons/GeneraIcons'
 
 let dialogLockCount = 0
 let savedBodyOverflow = ''
@@ -7,6 +9,7 @@ let savedHtmlOverflow = ''
 let savedBodyPaddingRight = ''
 
 export interface DialogProps {
+  className?: string
   open: boolean
   onClose: () => void
   title: string
@@ -19,6 +22,7 @@ export interface DialogProps {
 }
 
 export function Dialog({
+  className,
   open,
   onClose,
   title,
@@ -72,13 +76,18 @@ export function Dialog({
       role="dialog"
       aria-label={ariaLabel ?? title}
     >
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+      <div className={[styles.dialog, className].join(' ')} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>{title}</span>
           {headerContent && <div className={styles.headerExtra}>{headerContent}</div>}
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <HardwareButton
+            size="small"
+            icon={<CloseIcon size={12} />}
+            onClick={onClose}
+            aria-label="Close"
+            label="Close"
+            iconOnly
+          ></HardwareButton>
         </div>
         <div className={styles.body}>{children}</div>
       </div>
