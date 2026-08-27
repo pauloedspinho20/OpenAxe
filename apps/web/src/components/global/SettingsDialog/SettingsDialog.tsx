@@ -518,34 +518,39 @@ export function SettingsDialog({
           Presets, scenes, MIDI mappings, your Tone3000 library, and cached model/IR files -
           everything this app stores on this device.
         </p>
+
         <div className={styles.actions}>
-          <HardwareButton
-            label="Export All Data"
-            disabled={busy === 'export'}
-            onClick={() => void handleExport()}
-          />
-          <HardwareButton
-            label="Import Data…"
-            disabled={busy === 'import'}
-            onClick={() => fileInputRef.current?.click()}
-          />
-          <HardwareButton
-            label="Delete All Data"
-            variant="danger"
-            disabled={busy === 'delete'}
-            onClick={() => setDeleteConfirming(true)}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            className="srOnly"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handlePickImportFile(file)
-              e.target.value = ''
-            }}
-          />
+          {!deleteConfirming && (
+            <>
+              <HardwareButton
+                label="Export All Data"
+                disabled={busy === 'export'}
+                onClick={() => void handleExport()}
+              />
+              <HardwareButton
+                label="Import Data…"
+                disabled={busy === 'import'}
+                onClick={() => fileInputRef.current?.click()}
+              />
+              <HardwareButton
+                label="Delete All Data"
+                variant="danger"
+                disabled={busy === 'delete'}
+                onClick={() => setDeleteConfirming(true)}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json"
+                className="srOnly"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) void handlePickImportFile(file)
+                  e.target.value = ''
+                }}
+              />
+            </>
+          )}
         </div>
 
         {importPreview && (
