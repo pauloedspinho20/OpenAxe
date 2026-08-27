@@ -119,8 +119,15 @@ add_library(openaxe_desktop_lib STATIC
   src/bridge.cpp
   src/latency.cpp
   src/debug_log.cpp
-  src/secure_storage.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/secure_storage.cpp
 )
+
+# Shared with packages/vst3 so both shells hit the same keychain item and one
+# Tone3000 login covers desktop and plugin (issue #300 D4). PUBLIC so the
+# executable that links this library inherits it too — secure_storage.cpp is
+# compiled here, not in the executable.
+target_include_directories(openaxe_desktop_lib PUBLIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/include")
 
 add_executable(openaxe_desktop WIN32 src/main.cpp src/http_server.cpp)
 

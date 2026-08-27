@@ -17,7 +17,7 @@
 #include "debug_log.h"
 #include "openaxe/api.h"
 #include "openaxe/core.h"
-#include "secure_storage.h"
+#include "openaxe/secure_storage.h"
 
 namespace openaxe_desktop {
 
@@ -1097,7 +1097,7 @@ std::string StudioBridge::HandleSecureStore(const std::string& req) {
     const std::string value = o.value("value", "");
     if (!IsValidSecretKey(key)) return JsonError("secureStore: invalid key");
     std::string error;
-    if (!secure_storage::Store(key, value, &error)) return JsonError("secureStore: " + error);
+    if (!openaxe::secure_storage::Store(key, value, &error)) return JsonError("secureStore: " + error);
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("secureStore: ") + e.what());
@@ -1111,7 +1111,7 @@ std::string StudioBridge::HandleSecureLoad(const std::string& req) {
     const std::string key = o.value("key", "");
     if (!IsValidSecretKey(key)) return JsonError("secureLoad: invalid key");
     std::string error;
-    const auto value = secure_storage::Load(key, &error);
+    const auto value = openaxe::secure_storage::Load(key, &error);
     if (!value && !error.empty()) return JsonError("secureLoad: " + error);
     return (json{{"ok", true}, {"value", value ? json(*value) : json()}}).dump();
   } catch (const std::exception& e) {
@@ -1126,7 +1126,7 @@ std::string StudioBridge::HandleSecureDelete(const std::string& req) {
     const std::string key = o.value("key", "");
     if (!IsValidSecretKey(key)) return JsonError("secureDelete: invalid key");
     std::string error;
-    if (!secure_storage::Delete(key, &error)) return JsonError("secureDelete: " + error);
+    if (!openaxe::secure_storage::Delete(key, &error)) return JsonError("secureDelete: " + error);
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("secureDelete: ") + e.what());

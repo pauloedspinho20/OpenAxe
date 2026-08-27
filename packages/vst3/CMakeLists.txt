@@ -351,7 +351,7 @@ function(openaxe_link_sockets target)
   endif()
 endfunction()
 
-set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp)
+set(PLUGIN_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp)
 
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   # VST3 target (issue #125) — the first format, always built when SDK present.
@@ -431,7 +431,7 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
     endif()
   endif()
 
-  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp src/main_standalone.cpp)
+  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp src/main_standalone.cpp)
   target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/APP ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src)
   if(TARGET iPlug2::IGraphics)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2::IGraphics)
@@ -642,8 +642,20 @@ set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CM
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "openaxe-plugin")
 set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}")
 
+# Shared secret store (issue #300 D4). Same module and same keychain service
+# name as apps/desktop, so one Tone3000 login covers the desktop app and the
+# plugin instead of each keeping its own copy — the plugin previously held the
+# token in a std::map that died with the instance.
 foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
   openaxe_link_sockets(${_t})
+  if(TARGET ${_t})
+    target_include_directories(${_t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../shared/include")
+    if(APPLE)
+      target_link_libraries(${_t} PRIVATE "-framework Security" "-framework CoreFoundation")
+    elseif(WIN32)
+      target_link_libraries(${_t} PRIVATE credui advapi32)
+    endif()
+  endif()
 endforeach()
 
 # ── Bundle the React UI into every plugin bundle (issue #300 F2) ─────────

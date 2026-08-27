@@ -61,6 +61,47 @@ std::string BridgePolyfillJs(const std::string& shell) {
   }
   var methods = ["version","listDevices","getConfig","open","close","start","stop","addBlock","removeBlock","moveBlock","connect","disconnect","setParam","getParam","blockInfo","listBlocks","listEdges","loadModel","loadModelJson","unloadModel","setReverbAlgorithm","setDelayModel","setBypass","setBlockTrim","loadIrWav","unloadIr","setInputGain","setMasterLevel","setMasterMuted","setTunerMuted","meters","cpuLoad","getTap","takeStreamError","secureStore","secureLoad","secureDelete"];
   methods.forEach(bind);
+
+  // ── Let people type (issue #300 B5) ────────────────────────────────
+  // iPlug2 injects its own document-start keydown/keyup listeners that forward
+  // every key to the host and then call preventDefault(), unless
+  // document.activeElement.type is exactly "text". An <input type="email">,
+  // "password", "search" or "number", a <textarea>, and anything
+  // contenteditable all fail that check — so keystrokes were swallowed and the
+  // Tone3000 email field (and preset names, and the token box) could not be
+  // typed into at all.
+  //
+  // Their listeners are on `document` in the bubble phase and were registered
+  // before this script runs, so they cannot be removed or preempted in the same
+  // phase. A capture-phase listener on `document` does fire first: stopping
+  // propagation there means their handler never runs, so preventDefault() is
+  // never called and the browser performs the key's default action normally.
+  //
+  // Propagation is only stopped when the key is genuinely going into an
+  // editable field. Everywhere else the event is left alone, so the host still
+  // receives transport keys — spacebar in a DAW should start playback, not type
+  // a space into the grid.
+  //
+  // Note this stops keydown/keyup from reaching React's root listener while a
+  // field has focus, which is what you want: app shortcuts should not fire
+  // mid-word. `input`/`change` are separate events and are untouched, so
+  // controlled inputs still update.
+  function isEditableTarget(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.isContentEditable) return true;
+    var tag = el.tagName;
+    if (tag === 'TEXTAREA') return true;
+    if (tag !== 'INPUT') return false;
+    var t = (el.getAttribute('type') || 'text').toLowerCase();
+    // Types that carry no text entry; everything else accepts keystrokes.
+    return ['button', 'checkbox', 'radio', 'range', 'color', 'file', 'image',
+            'reset', 'submit'].indexOf(t) === -1;
+  }
+  ['keydown', 'keyup', 'keypress'].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      if (isEditableTarget(e.target)) e.stopPropagation();
+    }, true);
+  });
 })();
 )JS";
   // Declared after the wrappers so the shell tag is only ever visible on a

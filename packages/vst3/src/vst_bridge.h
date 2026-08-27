@@ -84,7 +84,6 @@ class VstBridge {
     int toPort = 0;
   };
   std::map<std::string, EdgeEndpoints> edgeEndpoints_;
-  std::map<std::string, std::string> secureStore_;
 
   // Id counters for blocks/edges the UI did not name. Members, not
   // function-local statics: a static is shared by every VstBridge in the

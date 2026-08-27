@@ -1,6 +1,7 @@
 #include "vst_bridge.h"
 
 #include "asset_loading.h"
+#include "openaxe/secure_storage.h"
 #include "plugin.h"
 
 #include <nlohmann/json.hpp>
@@ -314,9 +315,48 @@ std::string VstBridge::HandleLoadIrWav(const std::string& req) {
   }
 }
 std::string VstBridge::HandleUnloadIr(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_unload_ir(graph_, coreId); }); else nam_studio_unload_ir(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadIr failed"); } }
-std::string VstBridge::HandleSecureStore(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string k=o.value("key",""), v=o.value("value",""); if(!IsValidSecretKey(k)) return JsonError("invalid key"); std::lock_guard<std::mutex> lock(mutex_); secureStore_[k]=v; return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("secureStore failed"); } }
-std::string VstBridge::HandleSecureLoad(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string k=o.value("key",""); if(!IsValidSecretKey(k)) return JsonError("invalid key"); std::lock_guard<std::mutex> lock(mutex_); auto it=secureStore_.find(k); if(it==secureStore_.end()) return (json{{"ok", true}, {"value", nullptr}}).dump(); return (json{{"ok", true}, {"value", it->second}}).dump(); }catch(...){ return JsonError("secureLoad failed"); } }
-std::string VstBridge::HandleSecureDelete(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string k=o.value("key",""); if(!IsValidSecretKey(k)) return JsonError("invalid key"); std::lock_guard<std::mutex> lock(mutex_); secureStore_.erase(k); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("secureDelete failed"); } }
+// The Tone3000 refresh token goes to the platform keychain, the same module and
+// service name the desktop shell uses — so signing in once covers both, and the
+// token survives closing the plugin. It used to live in a std::map that died
+// with the instance, so every project reload meant signing in again, and two
+// instances each had their own copy (issue #300 D4).
+std::string VstBridge::HandleSecureStore(const std::string& req) {
+  try {
+    json args = ParseArgs(req);
+    json o = args.empty() ? json::object() : args[0];
+    const std::string k = o.value("key", ""), v = o.value("value", "");
+    if (!IsValidSecretKey(k)) return JsonError("invalid key");
+    std::string error;
+    if (!openaxe::secure_storage::Store(k, v, &error)) return JsonError("secureStore: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (...) { return JsonError("secureStore failed"); }
+}
+std::string VstBridge::HandleSecureLoad(const std::string& req) {
+  try {
+    json args = ParseArgs(req);
+    json o = args.empty() ? json::object() : args[0];
+    const std::string k = o.value("key", "");
+    if (!IsValidSecretKey(k)) return JsonError("invalid key");
+    std::string error;
+    const auto value = openaxe::secure_storage::Load(k, &error);
+    if (!value) {
+      // Absent is not an error — the UI treats a null value as "not signed in".
+      return (json{{"ok", true}, {"value", nullptr}}).dump();
+    }
+    return (json{{"ok", true}, {"value", *value}}).dump();
+  } catch (...) { return JsonError("secureLoad failed"); }
+}
+std::string VstBridge::HandleSecureDelete(const std::string& req) {
+  try {
+    json args = ParseArgs(req);
+    json o = args.empty() ? json::object() : args[0];
+    const std::string k = o.value("key", "");
+    if (!IsValidSecretKey(k)) return JsonError("invalid key");
+    std::string error;
+    if (!openaxe::secure_storage::Delete(k, &error)) return JsonError("secureDelete: " + error);
+    return (json{{"ok", true}}).dump();
+  } catch (...) { return JsonError("secureDelete failed"); }
+}
 std::string VstBridge::HandleTakeStreamError(const std::string&){ return (json{{"error", nullptr}}).dump(); }
 
 }  // namespace openaxe_vst3
