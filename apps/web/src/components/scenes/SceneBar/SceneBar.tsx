@@ -11,7 +11,7 @@ import { usePresetManager } from '../../../state/presetManager'
 import { capturePreset } from '../../../presets/capture'
 import { getPreset, listPresets, savePreset } from '../../../presets/presetStore'
 import type { Preset } from '../../../presets/types'
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, toast } from '@openaxe/ui'
 import styles from './SceneBar.module.css'
 
 export interface SceneBarProps {
@@ -98,6 +98,7 @@ export function SceneBar({ rig }: SceneBarProps) {
       await savePreset(updated)
       useCurrentPresetStore.getState().setSaved(updated)
       await refreshNames()
+      toast.success(`Saved changes to "${updated.name}"`)
     } finally {
       setSaveBusy(false)
     }
@@ -110,6 +111,7 @@ export function SceneBar({ rig }: SceneBarProps) {
   const handleClear = (slot: number) => {
     useSceneStore.getState().assignSlot(activeScene, slot, null)
     if (slot === activeSlot) useCurrentPresetStore.getState().setSaved(null)
+    toast.info(`Cleared slot ${slot + 1} of scene ${activeScene + 1}`)
   }
 
   const startRename = (slot: number) => {
@@ -133,6 +135,7 @@ export function SceneBar({ rig }: SceneBarProps) {
       const renamed = { ...existing, name: trimmed, updatedAt: Date.now() }
       await savePreset(renamed)
       if (slot === activeSlot) useCurrentPresetStore.getState().setSaved(renamed)
+      toast.info(`Renamed to "${trimmed}"`)
     }
     await refreshNames()
   }

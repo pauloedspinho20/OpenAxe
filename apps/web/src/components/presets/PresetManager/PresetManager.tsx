@@ -10,7 +10,7 @@ import { downloadPresetAsFile, readPresetFromFile } from '../../../presets/prese
 import { PRESET_SLOT_COUNT } from '../../../presets/presetBank'
 import type { Preset } from '../../../presets/types'
 import type { GraphRig } from '../../../engine/GraphRig'
-import { Dialog, HardwareButton } from '@openaxe/ui'
+import { Dialog, HardwareButton, toast } from '@openaxe/ui'
 import styles from './PresetManager.module.css'
 
 export interface PresetManagerProps {
@@ -77,6 +77,12 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
       if (firstEmpty >= 0) setBankSlot(firstEmpty, id)
       setNewName('')
       await refresh()
+      toast.success(`Saved "${name}"`, {
+        description:
+          firstEmpty >= 0
+            ? `Placed in preset slot ${firstEmpty + 1}`
+            : 'No free bank slot - kept unplaced',
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -102,12 +108,16 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
           createdAt: existing.createdAt,
         })
         await savePreset(updated)
+        toast.info(`Updated preset in slot ${slot + 1}`, {
+          description: `"${existing.name}" now holds the current rig`,
+        })
       } else {
         const name = newName.trim() || `Preset ${slot + 1}`
         const id = crypto.randomUUID()
         const preset = captureCurrent(id, name, { tags: [] })
         await savePreset(preset)
         setBankSlot(slot, id)
+        toast.success(`Saved "${name}"`, { description: `Placed in preset slot ${slot + 1}` })
       }
       await refresh()
     } catch (err) {
@@ -134,6 +144,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
         )
       }
       closeManager()
+      toast.success(`Loaded "${preset.name}"`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -146,6 +157,9 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     if (!pickTarget || bankSlots[bankSlot] == null) return
     useSceneStore.getState().assignSlot(pickTarget.scene, pickTarget.slot, bankSlot)
     closeManager()
+    toast.info(
+      `Assigned preset slot ${bankSlot + 1} to scene ${pickTarget.scene + 1} · slot ${pickTarget.slot + 1}`,
+    )
   }
 
   /** Pick mode: place an unplaced preset into the first free bank slot, then point the scene slot at it. */
@@ -159,6 +173,9 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
     setBankSlot(firstEmpty, preset.id)
     useSceneStore.getState().assignSlot(pickTarget.scene, pickTarget.slot, firstEmpty)
     closeManager()
+    toast.info(
+      `Assigned "${preset.name}" to scene ${pickTarget.scene + 1} · slot ${pickTarget.slot + 1}`,
+    )
   }
 
   const handlePlace = (preset: Preset) => {
@@ -168,10 +185,12 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
       return
     }
     setBankSlot(firstEmpty, preset.id)
+    toast.info(`Placed "${preset.name}"`, { description: `Preset slot ${firstEmpty + 1}` })
   }
 
   const handleClear = (bankSlot: number) => {
     setBankSlot(bankSlot, null)
+    toast.info(`Cleared preset slot ${bankSlot + 1}`)
   }
 
   const handleDelete = async (bankSlot: number) => {
@@ -182,6 +201,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
       await deletePreset(id)
       setBankSlot(bankSlot, null)
       await refresh()
+      toast.success(`Deleted "${presetsById.get(id)?.name ?? id}"`)
     } finally {
       setBusy(false)
     }
@@ -205,6 +225,7 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
       const renamed = { ...existing, name: trimmed, updatedAt: Date.now() }
       await savePreset(renamed)
       await refresh()
+      toast.info(`Renamed to "${trimmed}"`)
     }
   }
 
@@ -222,6 +243,12 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
       const firstEmpty = bankSlots.findIndex((s) => s == null)
       if (firstEmpty >= 0) setBankSlot(firstEmpty, preset.id)
       await refresh()
+      toast.success(`Imported "${preset.name}"`, {
+        description:
+          firstEmpty >= 0
+            ? `Placed in preset slot ${firstEmpty + 1}`
+            : 'No free bank slot - kept unplaced',
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {

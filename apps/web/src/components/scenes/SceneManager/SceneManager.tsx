@@ -3,7 +3,7 @@ import { useSceneManager } from '../../../state/sceneManager'
 import { useSceneStore } from '../../../state/sceneStore'
 import { SceneNavigator } from '../../../scenes/sceneNavigator'
 import { SLOTS_PER_SCENE } from '../../../scenes/types'
-import { Dialog } from '@openaxe/ui'
+import { Dialog, toast } from '@openaxe/ui'
 import styles from './SceneManager.module.css'
 
 export function SceneManager() {
@@ -13,19 +13,31 @@ export function SceneManager() {
   const activeScene = useSceneStore((s) => s.activeScene)
   const renameScene = useSceneStore((s) => s.renameScene)
   const activeRowRef = useRef<HTMLDivElement>(null)
+  // Names as they were when the dialog opened - rename is applied on every
+  // keystroke, so the toast fires once on blur/commit instead of per key.
+  const originalNamesRef = useRef<Map<number, string>>(new Map())
 
   useEffect(() => {
     if (!open) return
+    originalNamesRef.current = new Map(scenes.map((s) => [s.index, s.name]))
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeManager()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, closeManager])
 
   useEffect(() => {
     if (open) activeRowRef.current?.scrollIntoView?.({ block: 'center' })
   }, [open])
+
+  const handleRenameBlur = (index: number, value: string) => {
+    const original = originalNamesRef.current.get(index)
+    if (original !== undefined && original !== value) {
+      toast.info(`Renamed scene ${index + 1}${value ? ` to "${value}"` : ''}`)
+    }
+  }
 
   return (
     <Dialog open={open} onClose={closeManager} title="SCENES" width="min(560px, 90vw)" zIndex={300}>
@@ -46,6 +58,7 @@ export function SceneManager() {
                 placeholder={`Scene ${scene.index + 1}`}
                 value={scene.name}
                 onChange={(e) => renameScene(scene.index, e.target.value)}
+                onBlur={(e) => handleRenameBlur(scene.index, e.target.value)}
               />
               <span className={styles.rowMeta}>
                 {filled}/{SLOTS_PER_SCENE} slots
@@ -56,6 +69,7 @@ export function SceneManager() {
                 onClick={() => {
                   void SceneNavigator.goToScene(scene.index, { source: 'ui' })
                   closeManager()
+                  toast.info(`Jumped to scene ${scene.index + 1}`)
                 }}
                 aria-label={`Jump to scene ${scene.index + 1}`}
               >
