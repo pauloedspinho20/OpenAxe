@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { EngineStatus } from '../../../hooks/useAudioEngine'
 import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../state/ioStore'
-import { getOpenAxe } from '../../../native/openaxe'
+import { getOpenAxe, shellOwnsAudioDevice } from '../../../native/openaxe'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Auth } from '../../../tone3000/authStore'
 import {
@@ -74,6 +74,11 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const io = useIOStore()
   const isNative = getOpenAxe() !== null
+  // Device selection is only ours when this shell actually opens the device.
+  // In a plugin the DAW owns input, output, sample rate and buffer size, so
+  // offering pickers for them is offering controls that do nothing
+  // (issue #300 E1).
+  const ownsAudioDevice = shellOwnsAudioDevice()
   const namQuality = useSettingsStore((s) => s.namQuality)
   const setNamQuality = useSettingsStore((s) => s.setNamQuality)
   const auth = useTone3000Auth()
@@ -282,7 +287,7 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="Settings">
-      {isNative ? (
+      {ownsAudioDevice ? (
         /* Native (desktop): input and output are independent devices - the
          * C++ core opens them as separate createDevice(output, input) names
          * (apps/desktop/src/audio.cpp), so two selectors drive them. */

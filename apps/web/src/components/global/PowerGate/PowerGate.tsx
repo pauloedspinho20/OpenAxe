@@ -2,7 +2,7 @@ import { HardwareButton, Panel, PowerIcon, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
-import { getOpenAxe } from '@/native/openaxe'
+import { getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 import styles from './PowerGate.module.css'
@@ -45,7 +45,15 @@ export function PowerGate({
 }: PowerGateProps) {
   const auth = useTone3000Auth()
   const io = useIOStore()
-  const isNative = getOpenAxe() !== null
+  // Three shells, not two (issue #300 E1). The desktop shell picks devices
+  // through the native bridge; the browser picks them through MediaDevices;
+  // a plugin picks nothing at all, because the DAW already chose the device,
+  // sample rate and buffer size. Branching on "is there a bridge?" collapsed
+  // plugin into desktop, and branching on ownsAudioDevice alone would have
+  // collapsed it into web - either way the user got pickers that do nothing.
+  const ownsAudioDevice = shellOwnsAudioDevice()
+  const isPlugin = getShellKind() === 'plugin'
+  const hostOwnsTransport = isPlugin
   const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
 
   if (status === 'ready') return null
@@ -81,7 +89,11 @@ export function PowerGate({
           </p>
         )}
 
-        {isNative ? (
+        {hostOwnsTransport ? (
+          <p className={styles.deviceHint}>
+            Audio input, output and buffer size are set by your DAW.
+          </p>
+        ) : ownsAudioDevice ? (
           <div className={styles.deviceRow}>
             <Select
               label="Input"

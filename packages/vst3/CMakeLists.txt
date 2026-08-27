@@ -6,6 +6,18 @@ string(STRIP "${OPENAXE_VERSION}" OPENAXE_VERSION)
 
 project(openaxe_vst3 VERSION ${OPENAXE_VERSION} LANGUAGES CXX C)
 
+# Version, generated from the root VERSION file so the host's plugin manager,
+# the bridge's openAxe.version and the update check can never disagree
+# (issue #300 E6 — they were reporting 0.1.0 while VERSION said 0.2.5).
+# PLUG_VERSION_HEX is iPlug2's packed 0x00MMmmpp form.
+math(EXPR OPENAXE_VERSION_HEX
+  "(${PROJECT_VERSION_MAJOR} << 16) + (${PROJECT_VERSION_MINOR} << 8) + ${PROJECT_VERSION_PATCH}"
+  OUTPUT_FORMAT HEXADECIMAL)
+add_compile_definitions(
+  OPENAXE_VERSION_STR="${OPENAXE_VERSION}"
+  OPENAXE_VERSION_HEX=${OPENAXE_VERSION_HEX})
+message(STATUS "packages/vst3: version ${OPENAXE_VERSION} (hex ${OPENAXE_VERSION_HEX})")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

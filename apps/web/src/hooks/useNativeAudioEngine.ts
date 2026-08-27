@@ -7,7 +7,7 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import { getOpenAxe, type OpenAxeBridge } from '../native/openaxe'
+import { getOpenAxe, shellOwnsAudioDevice, type OpenAxeBridge } from '../native/openaxe'
 
 export interface NativeAudioEngineState {
   status: EngineStatus
@@ -200,17 +200,35 @@ export function useNativeAudioEngine() {
     (bridge: OpenAxeBridge, inputDeviceId: number, outputDeviceId: number) =>
       runExclusive(async () => {
         const io = useIOStore.getState()
-        const opened = await bridge.open({
-          inputDeviceId,
-          outputDeviceId,
-          sampleRate: SAMPLE_RATE,
-          bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
-        })
-        if (!opened.ok) throw new Error(opened.error ?? 'failed to open audio device')
-        const started = await bridge.start()
-        if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
+        // In a plugin the DAW already has the device open at its own sample
+        // rate and buffer size; there is nothing for us to open or start, and
+        // the device ids are meaningless. We still need the real rate for the
+        // analyser/tuner shims, so read it from the host's config
+        // (issue #300 E1/E2).
+        const hostOwnsDevice = !shellOwnsAudioDevice()
+        const opened = hostOwnsDevice
+          ? await bridge.getConfig()
+          : await bridge.open({
+              inputDeviceId,
+              outputDeviceId,
+              sampleRate: SAMPLE_RATE,
+              bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
+            })
+        if (!opened.ok) {
+          const reason = 'error' in opened ? opened.error : undefined
+          throw new Error(reason ?? 'failed to open audio device')
+        }
+        if (!hostOwnsDevice) {
+          const started = await bridge.start()
+          if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
+        }
 
-        const actualRate = typeof opened.sampleRate === 'number' ? opened.sampleRate : SAMPLE_RATE
+        // SAMPLE_RATE is only a last-resort fallback: the host's real rate
+        // wins wherever the bridge reports one.
+        const actualRate =
+          typeof opened.sampleRate === 'number' && opened.sampleRate > 0
+            ? opened.sampleRate
+            : SAMPLE_RATE
         const context = new NativeAudioContext(actualRate)
         const analyser = new NativeAnalyser({
           fftSize: 256,

@@ -39,6 +39,11 @@ export interface OpenAxeConfig {
   latencyMs: number
   lastError: string
   cpuLoad: number
+  /** Which native shell answered. Absent on older desktop builds. */
+  shell?: ShellKind
+  /** False in a plugin, where the DAW owns the device. Absent on older builds;
+   * prefer shellOwnsAudioDevice() for the synchronous check. */
+  ownsAudioDevice?: boolean
 }
 
 export interface OpenAxeBlockParam {
@@ -333,6 +338,40 @@ class NativeBridge implements OpenAxeBridge {
   secureDelete(args: { key: string }) {
     return this.call<OpenAxeOk>('secureDelete', args)
   }
+}
+
+/**
+ * Which native shell (if any) is hosting the React app.
+ *
+ * `getOpenAxe() !== null` only answers "is there a bridge?", which was enough
+ * while the only bridge was the desktop shell. The VST3/CLAP/AU plugin also
+ * has a bridge but does NOT own the audio device - the DAW does - so treating
+ * it as "desktop" put device pickers, buffer-size controls and a power gate in
+ * front of a user whose host already decided all three (issue #300 E1).
+ *
+ * The plugin publishes `window.openAxe.shell` from its injected bridge
+ * polyfill, so this resolves synchronously at module scope, the same way
+ * `isNativeShell` does - no awaiting getConfig() before the first render. The
+ * desktop shell binds its handlers natively and injects no polyfill, so an
+ * absent tag means desktop.
+ */
+export type ShellKind = 'web' | 'desktop' | 'plugin'
+
+export function getShellKind(): ShellKind {
+  if (getOpenAxe() === null) return 'web'
+  const w = window as unknown as { openAxe?: { shell?: unknown } }
+  return w.openAxe?.shell === 'plugin' ? 'plugin' : 'desktop'
+}
+
+/**
+ * True when this shell is responsible for opening and configuring the audio
+ * device. False in a plugin, where the host owns sample rate, buffer size and
+ * device selection, and false on the web, where the browser does.
+ *
+ * This - not "is there a bridge?" - is what audio-device UI should branch on.
+ */
+export function shellOwnsAudioDevice(): boolean {
+  return getShellKind() === 'desktop'
 }
 
 export function getOpenAxe(): OpenAxeBridge | null {

@@ -5,8 +5,18 @@
 
 #define PLUG_NAME "OpenAxe"
 #define PLUG_MFR "OpenAxe"
-#define PLUG_VERSION_HEX 0x00010000
-#define PLUG_VERSION_STR "0.1.0"
+// Generated from the root VERSION file by CMake (issue #300 E6). The fallbacks
+// only apply to builds that compile this header without the project's CMake.
+#ifdef OPENAXE_VERSION_HEX
+#define PLUG_VERSION_HEX OPENAXE_VERSION_HEX
+#else
+#define PLUG_VERSION_HEX 0x00000000
+#endif
+#ifdef OPENAXE_VERSION_STR
+#define PLUG_VERSION_STR OPENAXE_VERSION_STR
+#else
+#define PLUG_VERSION_STR "0.0.0-dev"
+#endif
 #define PLUG_UNIQUE_ID 'Nms1'  // Registered to this project; must stay stable
 #define PLUG_MFR_ID 'NwSt'
 #define PLUG_URL_STR "https://github.com/pauloedspinho20/NAM-Web-Studio"

@@ -79,9 +79,13 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   if (method == "openAxe.version") result = HandleVersion(args.dump());
   else if (method == "openAxe.listDevices") result = HandleListDevices(args.dump());
   else if (method == "openAxe.getConfig") result = HandleGetConfig(args.dump());
-  else if (method == "openAxe.open") result = (json{{"ok", true}}).dump();
+  // The DAW owns the audio device, so these are no-ops — but they must answer
+  // with the same shape the desktop shell does, because
+  // useNativeAudioEngine reads `sampleRate` off open()'s result and silently
+  // fell back to a hard-coded 48000 (issue #300 E3).
+  else if (method == "openAxe.open") result = HandleGetConfig(args.dump());
   else if (method == "openAxe.close") result = (json{{"ok", true}}).dump();
-  else if (method == "openAxe.start") result = (json{{"ok", true}}).dump();
+  else if (method == "openAxe.start") result = HandleGetConfig(args.dump());
   else if (method == "openAxe.stop") result = (json{{"ok", true}}).dump();
   else if (method == "openAxe.addBlock") result = HandleAddBlock(args.dump());
   else if (method == "openAxe.removeBlock") result = HandleRemoveBlock(args.dump());
@@ -125,12 +129,39 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   return result;
 }
 
-std::string VstBridge::HandleVersion(const std::string&) { return json("0.1.0").dump(); }
+std::string VstBridge::HandleVersion(const std::string&) {
+  // Generated from the root VERSION file (issue #300 E6) — this used to be a
+  // hard-coded "0.1.0" that disagreed with both VERSION and the update check.
+  return json(OPENAXE_VERSION_STR).dump();
+}
 std::string VstBridge::HandleListDevices(const std::string&) { return json::array().dump(); }
 std::string VstBridge::HandleGetConfig(const std::string&) {
-  double sr = 48000; int bs = 512;
-  if (plugin_) { /* plugin_->GetSampleRate not public, use graph_? */ }
-  return (json{{"ok", true}, {"open", true}, {"running", true}, {"sampleRate", sr}, {"bufferFrames", bs}, {"latencyFrames", -1}, {"latencyMs", -1.0}, {"lastError", ""}, {"cpuLoad", graph_ ? nam_studio_get_cpu_load(graph_) : 0.0}}).dump();
+  // Report the HOST's real sample rate and block size (issue #300 E2). These
+  // used to be hard-coded 48000/512 behind a comment claiming
+  // Plugin::GetSampleRate wasn't public — it is, on IPlugProcessor. At 44.1 or
+  // 96 kHz the UI showed the wrong rate and everything the app derives from it
+  // (tempo-synced delay times, the tuner, latency readouts) was wrong by that
+  // ratio.
+  //
+  // `shell` tells the React app which native shell it is talking to (issue
+  // #300 E1). The app's own check is only "is there a bridge?", which in the
+  // plugin resolved to "desktop" and put audio-device pickers, a power gate
+  // and buffer-size controls in front of a user whose DAW owns all three.
+  // ownsAudioDevice is the property the UI should actually branch on.
+  const double sr = plugin_ ? plugin_->GetSampleRate() : 0.0;
+  const int bs = plugin_ ? plugin_->GetBlockSize() : 0;
+  return (json{{"ok", true},
+               {"shell", "plugin"},
+               {"ownsAudioDevice", false},
+               {"open", true},
+               {"running", true},
+               {"sampleRate", sr},
+               {"bufferFrames", bs},
+               {"latencyFrames", 0},
+               {"latencyMs", 0.0},
+               {"lastError", ""},
+               {"cpuLoad", graph_ ? nam_studio_get_cpu_load(graph_) : 0.0}})
+      .dump();
 }
 
 std::string VstBridge::HandleAddBlock(const std::string& req) {

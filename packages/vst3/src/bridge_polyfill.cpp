@@ -2,7 +2,7 @@
 
 namespace openaxe_vst3 {
 
-std::string BridgePolyfillJs() {
+std::string BridgePolyfillJs(const std::string& shell) {
   // Defines window['openAxe.*'] as Promise wrappers over iPlug2's webview
   // message channel, plus the resolver native calls via EvaluateJavaScript.
   //
@@ -25,7 +25,7 @@ std::string BridgePolyfillJs() {
   // This script is injected by HttpServer before the SPA's module scripts, so
   // window['openAxe.version'] exists by the time useAudioEngine.ts decides
   // whether this is a native shell.
-  return R"JS(
+  const std::string prelude = R"JS(
 (function(){
   if (window.__openAxePolyfilled) return;
   window.__openAxePolyfilled = true;
@@ -63,6 +63,17 @@ std::string BridgePolyfillJs() {
   methods.forEach(bind);
 })();
 )JS";
+  // Declared after the wrappers so the shell tag is only ever visible on a
+  // fully-initialised bridge.
+  return prelude + "\nwindow.openAxe.shell = " + [&] {
+    std::string quoted = "\"";
+    for (char c : shell) {
+      if (c == '"' || c == '\\') continue;  // shell names are internal identifiers
+      quoted.push_back(c);
+    }
+    quoted.push_back('"');
+    return quoted;
+  }() + ";\n";
 }
 
 }  // namespace openaxe_vst3

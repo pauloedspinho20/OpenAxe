@@ -4,11 +4,13 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import { PowerGate } from './PowerGate'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useIOStore } from '@/state/ioStore'
-import { getOpenAxe } from '@/native/openaxe'
+import { getOpenAxe, getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 
 vi.mock('@/native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
+  getShellKind: vi.fn(() => 'web'),
+  shellOwnsAudioDevice: vi.fn(() => false),
 }))
 
 vi.mock('@/hooks/useUpdateCheck', () => ({
@@ -114,12 +116,32 @@ describe('PowerGate', () => {
 
   it('always shows the output selector in the native (desktop) shell', () => {
     vi.mocked(getOpenAxe).mockReturnValue({} as never)
+    vi.mocked(getShellKind).mockReturnValue('desktop')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
     useIOStore.setState({
       inputDevices: [{ deviceId: 'i', label: 'In', groupId: 'grp' }],
       outputDevices: [{ deviceId: 'o', label: 'Out', groupId: 'grp' }],
     })
     render(<PowerGate {...baseProps} outputSelectionSupported={false} />)
     expect(screen.getByLabelText('Output device')).toBeInTheDocument()
+  })
+
+  it('hides the device pickers in the plugin shell', () => {
+    // A plugin has a bridge, so the old `getOpenAxe() !== null` check treated
+    // it as the desktop shell and offered input/output pickers the DAW owns
+    // (issue #300 E1).
+    vi.mocked(getOpenAxe).mockReturnValue({} as never)
+    vi.mocked(getShellKind).mockReturnValue('plugin')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(false)
+    useIOStore.setState({
+      inputDevices: [{ deviceId: 'i', label: 'In', groupId: 'grp' }],
+      outputDevices: [{ deviceId: 'o', label: 'Out', groupId: 'grp' }],
+    })
+    render(<PowerGate {...baseProps} outputSelectionSupported={false} />)
+    expect(screen.queryByLabelText('Input device')).toBeNull()
+    expect(screen.queryByLabelText('Output device')).toBeNull()
+    expect(screen.queryByLabelText('Latency mode')).toBeNull()
+    expect(screen.getByText(/set by your DAW/i)).toBeInTheDocument()
   })
 
   it('shows the download and source links via the hero wordmark', () => {

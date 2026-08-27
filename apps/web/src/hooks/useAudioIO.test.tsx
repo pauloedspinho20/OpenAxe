@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAudioIO } from './useAudioIO'
 import { useIOStore } from '../state/ioStore'
-import { getOpenAxe } from '../native/openaxe'
+import { getOpenAxe, shellOwnsAudioDevice } from '../native/openaxe'
 
 vi.mock('@/native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
+  getShellKind: vi.fn(() => 'web'),
+  shellOwnsAudioDevice: vi.fn(() => false),
 }))
 
 function stubMediaDevices() {
@@ -49,6 +51,7 @@ describe('useAudioIO', () => {
   })
 
   it('uses the native bridge when present', async () => {
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
     vi.mocked(getOpenAxe).mockReturnValue({
       listDevices: vi.fn().mockResolvedValue([
         { id: 1, isInput: true, name: 'In', api: 'wasapi' },
@@ -95,6 +98,7 @@ describe('useAudioIO', () => {
   })
 
   it('does not attach a devicechange listener in native mode', async () => {
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
     vi.mocked(getOpenAxe).mockReturnValue({ listDevices: vi.fn().mockResolvedValue([]) } as never)
     const md = navigator.mediaDevices as unknown as { addEventListener: ReturnType<typeof vi.fn> }
     renderHook(() => useAudioIO())
