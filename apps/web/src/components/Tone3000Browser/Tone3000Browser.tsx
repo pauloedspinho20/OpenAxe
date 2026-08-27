@@ -82,6 +82,7 @@ export function Tone3000Browser({ target, context }: Props) {
   const [accountScope, setAccountScope] = useState<AccountImportScope>('all')
   const [accountBusy, setAccountBusy] = useState(false)
   const [accountProgress, setAccountProgress] = useState<AccountImportProgress | null>(null)
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<Tone3000LibraryEntry | null>(null)
 
   useEffect(() => {
     void Tone3000Library.refresh()
@@ -329,7 +330,6 @@ export function Tone3000Browser({ target, context }: Props) {
     (page - 1) * LIBRARY_PAGE_SIZE,
     page * LIBRARY_PAGE_SIZE,
   )
-  console.log('library', library)
   return (
     <Dialog
       open={true}
@@ -673,7 +673,7 @@ export function Tone3000Browser({ target, context }: Props) {
                   </OutlineButton>
                   <OutlineButton
                     variant="danger"
-                    onClick={() => void Tone3000Library.remove(entry.id)}
+                    onClick={() => setConfirmDeleteEntry(entry)}
                     aria-label={`Remove ${entry.name} from library`}
                   >
                     <CloseIcon size={16} />
@@ -684,6 +684,35 @@ export function Tone3000Browser({ target, context }: Props) {
           </ul>
           <Pagination page={page} totalPages={libraryTotalPages} onPageChange={setPage} />
         </div>
+      )}
+
+      {confirmDeleteEntry && (
+        <Dialog
+          open={true}
+          onClose={() => setConfirmDeleteEntry(null)}
+          title="Remove from library"
+          width="min(420px, 90vw)"
+          zIndex={60}
+        >
+          <p className={styles.hint}>
+            Are you sure you want to remove <strong>{confirmDeleteEntry.name}</strong> from your
+            library? This will delete the cached file and cannot be undone.
+          </p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <HardwareButton
+              label="Cancel"
+              onClick={() => setConfirmDeleteEntry(null)}
+            ></HardwareButton>
+            <HardwareButton
+              label="Remove"
+              variant="danger"
+              onClick={() => {
+                void Tone3000Library.remove(confirmDeleteEntry.id)
+                setConfirmDeleteEntry(null)
+              }}
+            ></HardwareButton>
+          </div>
+        </Dialog>
       )}
 
       {detailTone && (
@@ -742,7 +771,6 @@ export function Tone3000Browser({ target, context }: Props) {
             </a>
           </span>
         </div>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </footer>
     </Dialog>
   )
