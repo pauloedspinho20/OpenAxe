@@ -16,6 +16,7 @@
 //   - Zero reported latency (PLUG_LATENCY 0; latency_test proves the DSP path
 //     adds none) and bus arrangements 1-1 2-2 (core folds mono/stereo itself).
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -29,6 +30,11 @@
 
 #include "editor.h"
 
+namespace openaxe_vst3 {
+class VstBridge;
+class HttpServer;
+}
+
 const int kNumPresets = 2;  // Clean Boost, Ambient Swell — generated from same rows as web
 
 class OpenAxePlugin final : public iplug::Plugin {
@@ -41,9 +47,12 @@ class OpenAxePlugin final : public iplug::Plugin {
   void OnReset() override;
   void OnActivate(bool enable) override;
   void OnParamChange(int paramIdx) override;
-  bool SerializeState(IByteChunk& chunk) const override;
-  int UnserializeState(const IByteChunk& chunk, int startPos) override;
-  void ProcessMidiMsg(const IMidiMsg& msg) override;
+  bool SerializeState(iplug::IByteChunk& chunk) const override;
+  int UnserializeState(const iplug::IByteChunk& chunk, int startPos) override;
+  void ProcessMidiMsg(const iplug::IMidiMsg& msg) override;
+  // Main-thread pump. Applies Tier-2 parameter writes the audio thread parked
+  // in deferred_writes_ (issue #300 C1).
+  void OnIdle() override;
 #endif
 
   // Portable JSON round-trip (same document as the host chunk, just on disk)
@@ -107,20 +116,61 @@ class OpenAxePlugin final : public iplug::Plugin {
     EndSuspend();
   }
 
- private:
-  mutable NamStudioGraph* graph_ = nullptr;
-  mutable double sample_rate_ = 48000.0;
-  mutable int max_block_size_ = 0;
+  private:
+   // Tier-2 parameter writes deferred off the audio thread (issue #300 C1).
+   // Producer: OnParamChange (audio thread) — lock-free, wait-free, no alloc.
+   // Consumer: OnIdle (main thread) — suspends and mutates the graph.
+   static constexpr int kNoHostParam = -1;
+   // One slot per Tier-2 host param. The schema has a handful (the Amp
+   // family's slim_size), so 32 is generous headroom; see
+   // QueueDeferredParamWrite for the drop-on-overflow rationale.
+   static constexpr size_t kDeferredWriteSlots = 32;
+   struct DeferredWrite {
+     std::atomic<int> host_id{kNoHostParam};
+     std::atomic<float> normalized{0.0f};
+     std::atomic<bool> pending{false};
+   };
+   std::array<DeferredWrite, kDeferredWriteSlots> deferred_writes_{};
+   void QueueDeferredParamWrite(int host_id, float normalized);
+   void DrainDeferredParamWrites();
 
-  // Suspend handshake state — same shape as RtCallbackState::suspend +
-  // suspended_callbacks in apps/desktop/src/audio.h. Audio thread only reads
-  // suspend_requested_ and bumps suspend_ack_; control thread only writes
-  // suspend_requested_ and waits on suspend_ack_.
-  mutable std::atomic<bool> suspend_requested_{false};
-  mutable std::atomic<unsigned> suspend_ack_{0};
+   mutable NamStudioGraph* graph_ = nullptr;
+   // Read by ProcessBlock on the audio thread, written by OnReset/OnActivate,
+   // read by UnserializeState/LoadPortableJson on the main thread — so they
+   // must be atomic rather than plain scalars (issue #300 C4).
+   mutable std::atomic<double> sample_rate_{48000.0};
+   mutable std::atomic<int> max_block_size_{0};
 
-  // Editor shell — owned here, borrowed graph pointer (no audio thread touch
-  // on open/close). Mutable so SerializeState (const) can read editor size
-  // for chunk inclusion.
-  mutable std::unique_ptr<openaxe_vst3::editor::Editor> editor_;
+   // Channel-conversion scratch, sized in OnReset. Previously these were
+   // 2 x 8192 float arrays declared on the audio-thread stack in two separate
+   // branches of ProcessBlock — up to ~256 KB of frame that compilers reserve
+   // in the prologue, on a thread with a modest stack (issue #300 C2).
+   // The core's ABI accepts 1 or 2 channels regardless of graph topology
+   // (openaxe/api.h), and PLUG_CHANNEL_IO is "1-1 2-2".
+   static constexpr int kMaxChans = 2;
+   mutable std::vector<float> scratch_in_;
+   mutable std::vector<float> scratch_out_;
+   mutable int scratch_frames_ = 0;
+   void EnsureScratch(int frames) const;
+
+   // Suspend handshake state — same shape as RtCallbackState::suspend +
+   // suspended_callbacks in apps/desktop/src/audio.h. Audio thread only reads
+   // suspend_requested_ and bumps suspend_ack_; control thread only writes
+   // suspend_requested_ and waits on suspend_ack_.
+   mutable std::atomic<bool> suspend_requested_{false};
+   mutable std::atomic<unsigned> suspend_ack_{0};
+
+   // Editor shell — owned here, borrowed graph pointer (no audio thread touch
+   // on open/close). Mutable so SerializeState (const) can read editor size
+   // for chunk inclusion.
+   mutable std::unique_ptr<openaxe_vst3::editor::Editor> editor_;
+
+   // Webview bridge + loopback HTTP server for the React UI (like desktop's
+   // HttpServer). Serves apps/web/dist over 127.0.0.1 so WKWebView can load
+   // it with subresources (file:// is sandboxed). The bridge exposes the same
+   // window.openAxe.* surface the desktop does.
+   std::unique_ptr<openaxe_vst3::VstBridge> bridge_;
+   std::unique_ptr<openaxe_vst3::HttpServer> uiServer_;
+   unsigned short uiPort_ = 0;
+   std::string uiRoot_;
 };

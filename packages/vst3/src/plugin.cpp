@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <vector>
 
 #include "config.h"
 
@@ -13,11 +15,39 @@
 #include "plugin_state.h"
 #include "presets.h"
 
+// IGraphics controls for the scaffold UI + webview
+#if IPLUG_EDITOR
+#include "IControl.h"
+#include "IControls.h"
+#ifdef OPENAXE_HAS_WEBVIEW
+#include "IWebViewControl.h"
+#endif
+#endif
+#ifdef OPENAXE_HAS_WEBVIEW
+#include "bridge_polyfill.h"
+#include "http_server.h"
+#include "ui_root.h"
+#include "vst_bridge.h"
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
+static void VstLog(const std::string& msg) {
+  std::ofstream f("/tmp/openaxe_vst.log", std::ios::app);
+  if (f) f << msg << std::endl;
+}
+#endif
+
 #if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <xmmintrin.h>
-#define OPENAXE_HAS_SSE 1
+#define OPENAXE_DENORMAL_SSE 1
+#define OPENAXE_DENORMAL_ARM 0
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#define OPENAXE_DENORMAL_SSE 0
+#define OPENAXE_DENORMAL_ARM 1
 #else
-#define OPENAXE_HAS_SSE 0
+#define OPENAXE_DENORMAL_SSE 0
+#define OPENAXE_DENORMAL_ARM 0
 #endif
 
 namespace {
@@ -28,15 +58,32 @@ namespace {
 // and desktop fallback rely on — scoped so exception masks are preserved.
 class ScopedDenormalDisable {
  public:
-#if OPENAXE_HAS_SSE
-  ScopedDenormalDisable() : csr_(_mm_getcsr()) {
+#if OPENAXE_DENORMAL_SSE
+  ScopedDenormalDisable() : saved_(_mm_getcsr()) {
     // Bits 15 (FTZ) and 6 (DAZ) — leave exception masks untouched.
-    _mm_setcsr(csr_ | 0x8040u);
+    _mm_setcsr(saved_ | 0x8040u);
   }
-  ~ScopedDenormalDisable() { _mm_setcsr(csr_); }
+  ~ScopedDenormalDisable() { _mm_setcsr(saved_); }
 
  private:
-  unsigned csr_;
+  unsigned saved_;
+#elif OPENAXE_DENORMAL_ARM
+  // aarch64 has no MXCSR; flush-to-zero lives in FPCR bit 24 (FZ), and it is
+  // OFF by default. The SSE-only guard therefore compiled to nothing on Apple
+  // Silicon — which is the architecture we actually ship (issue #300 C3) — so
+  // reverb tails ran denormal and burned CPU exactly where the guard was
+  // supposed to help.
+  ScopedDenormalDisable() : saved_(ReadFpcr()) { WriteFpcr(saved_ | (1ull << 24)); }
+  ~ScopedDenormalDisable() { WriteFpcr(saved_); }
+
+ private:
+  static uint64_t ReadFpcr() {
+    uint64_t v;
+    __asm__ __volatile__("mrs %0, fpcr" : "=r"(v));
+    return v;
+  }
+  static void WriteFpcr(uint64_t v) { __asm__ __volatile__("msr fpcr, %0" : : "r"(v)); }
+  uint64_t saved_;
 #else
   ScopedDenormalDisable() = default;
   ~ScopedDenormalDisable() = default;
@@ -48,13 +95,121 @@ void ZeroOutputs(float** outputs, int nChansOut, int nFrames) {
     if (outputs[c]) std::memset(outputs[c], 0, static_cast<size_t>(nFrames) * sizeof(float));
   }
 }
+void ZeroOutputs(iplug::sample** outputs, int nChansOut, int nFrames) {
+  for (int c = 0; c < nChansOut; ++c) {
+    if (outputs[c]) std::memset(outputs[c], 0, static_cast<size_t>(nFrames) * sizeof(iplug::sample));
+  }
+}
 
 }  // namespace
 
+#ifdef OPENAXE_HAS_WEBVIEW
+namespace {
+class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
+ public:
+  OpenAxeWebViewControl(const iplug::igraphics::IRECT& bounds, openaxe_vst3::VstBridge* bridge,
+                        const std::string& url)
+      : IWebViewControl(bounds, true, nullptr, nullptr, true, true), bridge_(bridge), url_(url) {}
+  void OnWebViewReady() override {
+    VstLog("WebViewReady: loading url=" + url_);
+    if (!url_.empty()) LoadURL(url_.c_str());
+  }
+
+  // Track the whole editor area whenever the host resizes the window (issue
+  // #300 B2). IGraphics::Resize calls OnResize on every control but does not
+  // move their rects, so without this the webview kept its original bounds
+  // and the React UI never saw a different viewport width — which is what
+  // made the UI look "not responsive" to the plugin window. Re-targeting the
+  // existing control also means we never recreate the WKWebView, so the React
+  // tree, dialog state and scroll position survive a resize.
+  void OnResize() override {
+    if (auto* ui = GetUI()) SetTargetAndDrawRECTs(ui->GetBounds());
+    IWebViewControl::OnResize();
+  }
+  void OnWebContentLoaded() override {
+    VstLog("WebContentLoaded: url=" + url_);
+    // The polyfill normally arrives inside index.html, injected by HttpServer
+    // so it runs before the SPA's module scripts (issue #300 A1). This late
+    // injection is only a fallback for the OPENAXE_UI_URL dev-server case,
+    // where the HTML comes from Vite and we can't rewrite it. It is
+    // idempotent (the script guards on __openAxePolyfilled), but note that in
+    // dev-server mode it is still too late for useAudioEngine.ts's
+    // module-scope shell check — running the plugin against `pnpm dev:web`
+    // needs a Vite plugin to inject the same script. Tracked in #300 A1.
+    std::string poly = openaxe_vst3::BridgePolyfillJs();
+    EvaluateJavaScript(poly.c_str(), nullptr);
+    IWebViewControl::OnWebContentLoaded();
+  }
+  void OnMessageFromWebView(const char* json) override {
+    VstLog(std::string("OnMessage: ") + (json ? json : "null"));
+    if (!json || !bridge_) return;
+    std::string req(json);
+    std::string resp;
+    int msgId = -1;
+    try {
+      auto j = nlohmann::json::parse(req, nullptr, false);
+      if (j.is_discarded() || !j.is_object()) return;
+      // iPlug2's own document-start scripts post key events through this same
+      // channel as {"msg":"SKPFUI",...}. They are not bridge calls: without
+      // this guard every keystroke produced a "missing method" error and a
+      // spurious IPlugWebViewResolve(-1, ...).
+      if (!j.contains("method")) return;
+      if (j.contains("id")) msgId = j.value("id", -1);
+      resp = bridge_->HandleMessage(req);
+    } catch (...) {
+      resp = "{\"ok\":false,\"error\":\"handler exception\"}";
+    }
+    if (msgId < 0) return;  // fire-and-forget call; nothing to resolve
+    // Build the JS string literal with the JSON serializer rather than by
+    // hand (issue #300 A4): the previous loop escaped only \ ' \n \r, so any
+    // U+2028 / U+2029 in the payload — legal inside a JSON string, illegal
+    // raw inside a JS string literal — produced a syntax error and silently
+    // dropped the reply. nlohmann's dump() gives us a correctly quoted and
+    // escaped literal; the two line separators still need doing by hand
+    // because they are valid JSON but not valid JS source.
+    std::string literal = nlohmann::json(resp).dump();
+    for (size_t i = 0; (i = literal.find("\xE2\x80\xA8", i)) != std::string::npos;) {
+      literal.replace(i, 3, "\\u2028");
+      i += 6;
+    }
+    for (size_t i = 0; (i = literal.find("\xE2\x80\xA9", i)) != std::string::npos;) {
+      literal.replace(i, 3, "\\u2029");
+      i += 6;
+    }
+    const std::string js =
+        "window.IPlugWebViewResolve(" + std::to_string(msgId) + "," + literal + ")";
+    EvaluateJavaScript(js.c_str(), nullptr);
+  }
+
+ private:
+  openaxe_vst3::VstBridge* bridge_ = nullptr;
+  std::string url_;
+};
+}  // namespace
+#endif
+
 OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
-    : Plugin(info, MakeConfig(openaxe_vst3::params::HostParamCount(), kNumPresets)) {
+    : iplug::Plugin(info, iplug::MakeConfig(openaxe_vst3::params::HostParamCount(), kNumPresets)) {
   graph_ = nam_studio_graph_create();
   editor_ = std::make_unique<openaxe_vst3::editor::Editor>(graph_);
+#ifdef OPENAXE_HAS_WEBVIEW
+  bridge_ = std::make_unique<openaxe_vst3::VstBridge>(this, graph_);
+  uiRoot_ = openaxe_vst3::FindBundledUiRoot();
+  if (!uiRoot_.empty()) {
+    uiServer_ = std::make_unique<openaxe_vst3::HttpServer>();
+    // The bridge polyfill is served *inside* index.html so it runs before the
+    // SPA's module scripts — see HttpServer::Start (issue #300 A1). Injecting
+    // it from OnWebContentLoaded instead was too late: the app had already
+    // decided it was a browser and opened the microphone.
+    if (!uiServer_->Start(uiRoot_, uiPort_, openaxe_vst3::BridgePolyfillJs())) {
+      uiServer_.reset();
+      uiPort_ = 0;
+    }
+  }
+  VstLog("OpenAxe VST ctor: uiRoot=" + uiRoot_ + " port=" + std::to_string(uiPort_) + " hasWebView=1");
+  if (const char* e = std::getenv("OPENAXE_UI_URL")) VstLog(std::string("OPENAXE_UI_URL=") + e);
+  else VstLog("OPENAXE_UI_URL not set");
+#endif
 #if IPLUG_DSP
   // Declare the full stable 302-param list (issue #127 / #121). When the SDK
   // isn't present this is a no-op; when it is, hosts see Master + Slot 1..15
@@ -67,7 +222,7 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
   {
     auto presets = openaxe_vst3::presets::BuildFactoryPresets();
     for (auto& p : presets) {
-      IByteChunk chunk;
+      iplug::IByteChunk chunk;
       chunk.PutStr(p.json.c_str());
       MakePresetFromChunk(p.name.c_str(), chunk);
     }
@@ -76,18 +231,79 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
 
 #if IPLUG_EDITOR
   mMakeGraphicsFunc = [&]() {
-    return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, GetScaleForScreen(PLUG_WIDTH, PLUG_HEIGHT));
+    // Use the size restored from the host chunk, not the compile-time default
+    // (issue #300 B4): SerializeState/UnserializeState were already
+    // round-tripping editorWidth/editorHeight through editor_, but this
+    // lambda ignored it, so a reopened project always came back at
+    // PLUG_WIDTH x PLUG_HEIGHT.
+    const auto sz = editor_ ? editor_->GetSize() : openaxe_vst3::editor::DefaultSize();
+    return MakeGraphics(*this, sz.width, sz.height, PLUG_FPS,
+                        GetScaleForScreen(sz.width, sz.height));
   };
+#ifdef OPENAXE_HAS_WEBVIEW
+  mLayoutFunc = [&](iplug::igraphics::IGraphics* pGraphics) {
+    // Size, not Scale (issue #300 B2). Scale mode changes the IGraphics draw
+    // scale, which merely transforms the child WKWebView — CSS pixel
+    // dimensions stay put, so the React app's media queries never fire. Size
+    // mode changes the real bounds, and OpenAxeWebViewControl::OnResize
+    // forwards them to the webview.
+    pGraphics->AttachCornerResizer(iplug::igraphics::EUIResizerMode::Size, false);
+    const iplug::igraphics::IRECT b = pGraphics->GetBounds();
+    // Prefer webview when we have a UI to serve or a dev server to attach to
+    auto isTrustedUiUrl = [](const std::string& url) -> bool {
+      std::string lower = url;
+      std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+      auto schemeEnd = lower.find("://");
+      if (schemeEnd == std::string::npos) return false;
+      std::string scheme = lower.substr(0, schemeEnd);
+      if (scheme != "http" && scheme != "https") return false;
+      std::string host = lower.substr(schemeEnd + 3);
+      auto slash = host.find('/');
+      if (slash != std::string::npos) host = host.substr(0, slash);
+      auto at = host.find('@');
+      if (at != std::string::npos) return false;
+      auto colon = host.rfind(':');
+      if (colon != std::string::npos) host = host.substr(0, colon);
+      return host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+    };
+    const char* envUrl = std::getenv("OPENAXE_UI_URL");
+    bool useDevServer = envUrl && *envUrl && isTrustedUiUrl(envUrl);
+    VstLog("mLayout: uiPort=" + std::to_string(uiPort_) + " uiRoot=" + uiRoot_ + " useDev=" + (useDevServer ? "1" : "0") + (envUrl ? std::string(" env=") + envUrl : ""));
+    if ((uiPort_ != 0 && !uiRoot_.empty()) || useDevServer) {
+      std::string url;
+      if (useDevServer) url = envUrl;
+      else if (uiPort_ != 0) url = "http://127.0.0.1:" + std::to_string(uiPort_) + "/index.html";
+      VstLog("mLayout: creating webview url=" + url);
+      auto* webView = new OpenAxeWebViewControl(b, bridge_.get(), url);
+      const char* dbg = std::getenv("OPENAXE_DESKTOP_DEBUG");
+      if (dbg && std::string(dbg) == "1") webView->SetEnableDevTools(true);
+      pGraphics->AttachControl(webView);
+    } else {
+      // Fallback: scaffold IGraphics UI when no web UI is available (offline)
+      pGraphics->AttachPanelBackground(iplug::igraphics::COLOR_DARK_GRAY);
+      pGraphics->AttachControl(new iplug::igraphics::ITextControl(b.GetMidVPadded(40), "OpenAxe — UI not found", iplug::igraphics::IText(16, iplug::igraphics::COLOR_WHITE)));
+      pGraphics->AttachControl(new iplug::igraphics::ITextControl(b.GetFromTop(30), "Run pnpm --filter @openaxe/web build or set OPENAXE_UI_URL=http://127.0.0.1:5173", iplug::igraphics::IText(12, iplug::igraphics::COLOR_WHITE)));
+    }
+  };
+#else
   mLayoutFunc = [&](iplug::igraphics::IGraphics* pGraphics) {
     pGraphics->AttachCornerResizer(iplug::igraphics::EUIResizerMode::Scale, false);
-    pGraphics->AttachPanelBackground(iplug::COLOR_GRAY);
+    pGraphics->AttachPanelBackground(iplug::igraphics::COLOR_DARK_GRAY);
     const iplug::igraphics::IRECT b = pGraphics->GetBounds();
-    pGraphics->AttachControl(new iplug::igraphics::ITextControl(b.GetMidVPadded(40), "OpenAxe (scaffold)", iplug::igraphics::IText(24)));
+    pGraphics->AttachControl(new iplug::igraphics::ITextControl(b.GetMidVPadded(40), "OpenAxe (scaffold) — IGraphics OK", iplug::igraphics::IText(20, iplug::igraphics::COLOR_WHITE)));
   };
+#endif
 #endif
 }
 
-OpenAxePlugin::~OpenAxePlugin() { nam_studio_graph_destroy(graph_); }
+OpenAxePlugin::~OpenAxePlugin() {
+#ifdef OPENAXE_HAS_WEBVIEW
+  if (uiServer_) uiServer_->Stop();
+  uiServer_.reset();
+  bridge_.reset();
+#endif
+  nam_studio_graph_destroy(graph_);
+}
 
 #if IPLUG_DSP
 void OpenAxePlugin::OnReset() {
@@ -96,28 +312,44 @@ void OpenAxePlugin::OnReset() {
   // This is Tier 2 (allocates) so it must not race ProcessBlock. iPlug2
   // guarantees OnReset is not concurrent with ProcessBlock, but future
   // control-thread callers (UI-driven reconfigure) should use WithSuspend.
-  sample_rate_ = GetSampleRate();
-  max_block_size_ = GetBlockSize();
+  const double sr = GetSampleRate();
+  int bs = GetBlockSize();
   // Guard against hosts reporting 0 before a stream is fully configured.
-  if (max_block_size_ <= 0) max_block_size_ = 512;
-  nam_studio_reset(graph_, sample_rate_, max_block_size_);
+  if (bs <= 0) bs = 512;
+  sample_rate_.store(sr, std::memory_order_release);
+  max_block_size_.store(bs, std::memory_order_release);
+  // Size the channel-conversion scratch here, once, so ProcessBlock never
+  // touches the heap or a large stack frame (issue #300 C2).
+  EnsureScratch(bs);
+  nam_studio_reset(graph_, sr, bs);
+}
+
+void OpenAxePlugin::EnsureScratch(int frames) const {
+  // Main/reset-thread only — allocates.
+  if (frames <= scratch_frames_) return;
+  scratch_frames_ = frames;
+  scratch_in_.assign(static_cast<size_t>(kMaxChans) * static_cast<size_t>(frames), 0.0f);
+  scratch_out_.assign(static_cast<size_t>(kMaxChans) * static_cast<size_t>(frames), 0.0f);
 }
 
 void OpenAxePlugin::OnActivate(bool enable) {
   // Some hosts resume by re-activating rather than re-resetting; ensure the
   // graph is re-armed with the current host SR/BS so stale buffers are not
   // reused. No-op when deactivating.
-  if (enable) {
-    const double sr = GetSampleRate();
-    const int bs = GetBlockSize();
-    // Only poke the graph if something actually changed (host sample-rate
-    // queries can spuriously round-trip through OnActivate with no change).
-    if (sr != sample_rate_ || bs != max_block_size_) {
-      sample_rate_ = sr;
-      max_block_size_ = bs > 0 ? bs : max_block_size_;
-      nam_studio_reset(graph_, sample_rate_, max_block_size_);
-    }
+  if (!enable) return;
+  const double sr = GetSampleRate();
+  const int bs = GetBlockSize();
+  // Only poke the graph if something actually changed (host sample-rate
+  // queries can spuriously round-trip through OnActivate with no change).
+  if (sr == sample_rate_.load(std::memory_order_acquire) &&
+      bs == max_block_size_.load(std::memory_order_acquire)) {
+    return;
   }
+  const int effective_bs = bs > 0 ? bs : max_block_size_.load(std::memory_order_acquire);
+  sample_rate_.store(sr, std::memory_order_release);
+  max_block_size_.store(effective_bs, std::memory_order_release);
+  EnsureScratch(effective_bs);
+  nam_studio_reset(graph_, sr, effective_bs);
 }
 
 void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) {
@@ -131,40 +363,64 @@ void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs
     return;
   }
 
-  // Host may hand a block larger than the max_block_size the last
-  // nam_studio_reset was given (hosts aren't bound to what we reported).
-  // We MUST NOT re-reset on the audio thread — that allocates and is Tier 2
-  // (issue #126). Instead chunk the host buffer into pieces <= max_block_size_
-  // and call the core once per piece. This is the same choice the desktop
-  // shell's in_scratch workaround gestures at, but done as proper chunking
-  // rather than silently skipping work.
-  const int nChansIn = NInChansConnected();
-  const int nChansOut = NOutChansConnected();
-
-  // Guard: graph not yet reset (host called ProcessBlock before OnReset).
-  // Treat max_block_size_ == 0 as "chunk size = nFrames" so we still run
-  // once rather than zeroing.
-  const int chunkLimit = max_block_size_ > 0 ? max_block_size_ : nFrames;
-
-  ScopedDenormalDisable denormalGuard;
-
-  if (nFrames <= chunkLimit) {
-    nam_studio_process(graph_, const_cast<const float**>(inputs), nChansIn, outputs, nChansOut, nFrames);
+  const int chunkLimit = max_block_size_.load(std::memory_order_acquire);
+  // No OnReset yet (or a host that reported nothing usable): the core has not
+  // been sized, and openaxe/api.h requires num_frames <= the max_block_size
+  // passed to nam_studio_reset. A silent first block beats undefined
+  // behaviour inside the core (issue #300 C5).
+  if (chunkLimit <= 0 || scratch_frames_ <= 0) {
+    ZeroOutputs(outputs, NOutChansConnected(), nFrames);
     return;
   }
 
+  // Clamp to the scratch width. PLUG_CHANNEL_IO is "1-1 2-2" so a host should
+  // never exceed kMaxChans, but inPtrs/outPtrs below are kMaxChans-wide arrays
+  // and the core reads exactly as many as we declare — an unclamped count
+  // would hand it pointers past the end of those arrays.
+  const int nChansIn = std::min(NInChansConnected(), kMaxChans);
+  const int nChansOut = std::min(NOutChansConnected(), kMaxChans);
+  // Anything the host connected beyond what we process would otherwise be left
+  // holding whatever was in the buffer.
+  for (int c = kMaxChans; c < NOutChansConnected(); ++c) {
+    if (outputs[c]) std::memset(outputs[c], 0, static_cast<size_t>(nFrames) * sizeof(iplug::sample));
+  }
+  ScopedDenormalDisable denormalGuard;
+
+  // iplug::sample is double on macOS, core expects float. Convert through the
+  // preallocated scratch — the per-chunk ceiling is min(host block size,
+  // scratch capacity), so a host handing us more than it declared is still
+  // processed, just in more pieces.
+  const int maxChunk = std::min(chunkLimit, scratch_frames_);
+  float* const inBase = scratch_in_.data();
+  float* const outBase = scratch_out_.data();
+
   int offset = 0;
   while (offset < nFrames) {
-    const int chunk = std::min(chunkLimit, nFrames - offset);
-    const float* inPtrs[2] = {nullptr, nullptr};
-    float* outPtrs[2] = {nullptr, nullptr};
-    if (nChansIn >= 1 && inputs[0]) inPtrs[0] = inputs[0] + offset;
-    if (nChansIn >= 2 && inputs[1]) inPtrs[1] = inputs[1] + offset;
-    if (nChansOut >= 1 && outputs[0]) outPtrs[0] = outputs[0] + offset;
-    if (nChansOut >= 2 && outputs[1]) outPtrs[1] = outputs[1] + offset;
+    const int frames = std::min(maxChunk, nFrames - offset);
+    const float* inPtrs[kMaxChans] = {nullptr, nullptr};
+    float* outPtrs[kMaxChans] = {nullptr, nullptr};
 
-    nam_studio_process(graph_, const_cast<const float**>(inPtrs), nChansIn, outPtrs, nChansOut, chunk);
-    offset += chunk;
+    for (int c = 0; c < nChansIn; ++c) {
+      if (!inputs[c]) continue;
+      float* dst = inBase + static_cast<size_t>(c) * static_cast<size_t>(scratch_frames_);
+      const iplug::sample* src = inputs[c] + offset;
+      for (int i = 0; i < frames; ++i) dst[i] = static_cast<float>(src[i]);
+      inPtrs[c] = dst;
+    }
+    for (int c = 0; c < nChansOut; ++c) {
+      if (!outputs[c]) continue;
+      outPtrs[c] = outBase + static_cast<size_t>(c) * static_cast<size_t>(scratch_frames_);
+    }
+
+    nam_studio_process(graph_, inPtrs, nChansIn, outPtrs, nChansOut, frames);
+
+    for (int c = 0; c < nChansOut; ++c) {
+      if (!outputs[c] || !outPtrs[c]) continue;
+      iplug::sample* dst = outputs[c] + offset;
+      const float* src = outPtrs[c];
+      for (int i = 0; i < frames; ++i) dst[i] = static_cast<iplug::sample>(src[i]);
+    }
+    offset += frames;
   }
 }
 
@@ -192,7 +448,7 @@ bool OpenAxePlugin::BeginSuspend() const {
 
 void OpenAxePlugin::EndSuspend() const { suspend_requested_.store(false, std::memory_order_release); }
 
-bool OpenAxePlugin::SerializeState(IByteChunk& chunk) const {
+bool OpenAxePlugin::SerializeState(iplug::IByteChunk& chunk) const {
   // Host is saving the project / .vstpreset — produce a self-contained JSON
   // document with embedded assets (issue #128). Suspend to get a consistent
   // snapshot; serialize allocates and reads topology.
@@ -209,7 +465,7 @@ bool OpenAxePlugin::SerializeState(IByteChunk& chunk) const {
   return true;
 }
 
-int OpenAxePlugin::UnserializeState(const IByteChunk& chunk, int startPos) {
+int OpenAxePlugin::UnserializeState(const iplug::IByteChunk& chunk, int startPos) {
   WDL_String json;
   int endPos = chunk.GetStr(json, startPos);
   if (endPos <= startPos || json.GetLength() == 0) {
@@ -226,7 +482,9 @@ int OpenAxePlugin::UnserializeState(const IByteChunk& chunk, int startPos) {
   // leave the graph untouched on parse / version errors (#64 graceful).
   // Must be suspended (Tier 2).
   WithSuspend([&] {
-    (void)openaxe_vst3::state::Restore(graph_, json.Get(), sample_rate_, max_block_size_);
+    (void)openaxe_vst3::state::Restore(graph_, json.Get(),
+                                      sample_rate_.load(std::memory_order_acquire),
+                                      max_block_size_.load(std::memory_order_acquire));
   });
   // Hosts that also serialized params after the JSON (some iPlug callers do
   // PutChunk of params) will have trailing bytes — try to apply them for
@@ -251,7 +509,9 @@ bool OpenAxePlugin::SavePortableJson(const std::string& path) const {
 int OpenAxePlugin::LoadPortableJson(const std::string& path) {
   int result = NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
   WithSuspend([&] {
-    result = openaxe_vst3::state::LoadPortableJson(graph_, path, sample_rate_, max_block_size_);
+    result = openaxe_vst3::state::LoadPortableJson(graph_, path,
+                                                  sample_rate_.load(std::memory_order_acquire),
+                                                  max_block_size_.load(std::memory_order_acquire));
   });
   return result;
 }
@@ -328,40 +588,81 @@ void OpenAxePlugin::OnParamChange(int paramIdx) {
   // and must be routed through the suspend handshake instead.
   const double norm = GetParam(paramIdx)->GetNormalized();
   bool needs_suspend = false;
-  const bool ok = openaxe_vst3::params::HostParamWrite(graph_, paramIdx, static_cast<float>(norm), needs_suspend);
-  if (!ok && needs_suspend) {
-    // Tier-2 slim_size write: do NOT call BeginSuspend from the audio thread
-    // (that would deadlock waiting for ourselves). Host automation for this
-    // param is rare; defer to the control thread. For now, perform the set
-    // under handshake assuming we're on the control thread (hosts that
-    // automate this param from the audio thread will need a queued deferral
-    // — tracked as follow-up under #127/#122 smoothing work).
-    // Best-effort: if ProcessBlock is currently running, the handshake will
-    // ensure we don't race it; if we're on the audio thread, this briefly
-    // violates real-time safety but preserves correctness over glitchy audio.
+  const bool ok = openaxe_vst3::params::HostParamWrite(graph_, paramIdx, static_cast<float>(norm),
+                                                      needs_suspend);
+  if (ok || !needs_suspend) return;
+
+  // Tier-2 write (slim_size). VST3 and AU deliver parameter changes at block
+  // start ON THE AUDIO THREAD, so calling WithSuspend here used to spin
+  // BeginSuspend for up to ~2 s waiting for an ack that only ProcessBlock can
+  // post — i.e. waiting for the thread we are already on. That is a
+  // self-deadlock and a guaranteed dropout (issue #300 C1).
+  //
+  // Instead the request is parked in a lock-free slot and applied from
+  // OnIdle() on the main thread. Coalescing to one pending value per host
+  // param is deliberate: automation writes arrive far faster than a Tier-2
+  // reset can be performed, and only the newest value matters.
+  QueueDeferredParamWrite(paramIdx, static_cast<float>(norm));
+}
+
+void OpenAxePlugin::QueueDeferredParamWrite(int host_id, float normalized) {
+  // Audio-thread side: no allocation, no lock, no wait.
+  // Pass 1: coalesce onto the slot already owned by this param.
+  for (auto& slot : deferred_writes_) {
+    if (slot.host_id.load(std::memory_order_acquire) == host_id) {
+      slot.normalized.store(normalized, std::memory_order_release);
+      slot.pending.store(true, std::memory_order_release);
+      return;
+    }
+  }
+  // Pass 2: claim a free slot. A slot's host_id is claimed once and never
+  // released, so the set of Tier-2 params seen this session is stable.
+  for (auto& slot : deferred_writes_) {
+    int empty = kNoHostParam;
+    if (slot.host_id.compare_exchange_strong(empty, host_id, std::memory_order_acq_rel)) {
+      slot.normalized.store(normalized, std::memory_order_release);
+      slot.pending.store(true, std::memory_order_release);
+      return;
+    }
+  }
+  // Every slot taken by a different param. Dropping is the right failure mode
+  // here: kDeferredWriteSlots covers every Tier-2 param the schema has, so
+  // this is unreachable in practice, and stalling the audio thread to make
+  // room would reintroduce exactly the bug this queue exists to fix.
+}
+
+void OpenAxePlugin::DrainDeferredParamWrites() {
+  // Main-thread side: safe to suspend and allocate.
+  for (auto& slot : deferred_writes_) {
+    if (!slot.pending.exchange(false, std::memory_order_acq_rel)) continue;
+    const int host_id = slot.host_id.load(std::memory_order_acquire);
+    const float norm = slot.normalized.load(std::memory_order_acquire);
+    if (host_id == kNoHostParam) continue;
+    int slot_idx = -1, entry = -1;
+    if (!openaxe_vst3::params::HostIdToSlotEntry(host_id, slot_idx, entry)) continue;
     WithSuspend([&] {
-      // Resolve the underlying block/index for this host id and write directly.
-      int slot = -1, entry = -1;
-      if (openaxe_vst3::params::HostIdToSlotEntry(paramIdx, slot, entry)) {
-        const char* sym = nullptr;
-        int32_t block = nam_studio_automation_slot_block(graph_, slot);
-        if (block >= 0) {
-          // Find the param index that this slot entry maps to (entry == index).
-          // Read its real value for the normalized position and set it.
-          const char* name = nullptr;
-          float mn = 0.0f, mx = 1.0f;
-          const char* unit = nullptr;
-          if (nam_studio_automation_slot_param_info(graph_, slot, entry, &name, &sym, &mn, &mx, &unit) != 0) {
-            const float real = openaxe_vst3::params::NormalizedToReal(static_cast<float>(norm), mn, mx);
-            nam_studio_set_param(graph_, block, entry, real);
-          }
-        }
+      const int32_t block = nam_studio_automation_slot_block(graph_, slot_idx);
+      if (block < 0) return;
+      const char* name = nullptr;
+      const char* sym = nullptr;
+      const char* unit = nullptr;
+      float mn = 0.0f, mx = 1.0f;
+      if (nam_studio_automation_slot_param_info(graph_, slot_idx, entry, &name, &sym, &mn, &mx,
+                                                &unit) != 0) {
+        const float real = openaxe_vst3::params::NormalizedToReal(norm, mn, mx);
+        nam_studio_set_param(graph_, block, entry, real);
       }
     });
   }
 }
 
-void OpenAxePlugin::ProcessMidiMsg(const IMidiMsg& msg) {
+void OpenAxePlugin::OnIdle() {
+  // Called by iPlug2 on the main thread. This is where Tier-2 work parked by
+  // the audio thread actually happens (issue #300 C1).
+  DrainDeferredParamWrites();
+}
+
+void OpenAxePlugin::ProcessMidiMsg(const iplug::IMidiMsg& msg) {
   // Plugin MIDI bus — issue #124. The host forwards its event list
   // sample-accurately; the transport is CoreMIDI/ALSA/JACK on desktop
   // and the host's own event queue in a DAW. Core owns the mapping

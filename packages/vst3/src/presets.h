@@ -15,16 +15,14 @@
 // file's header note. Adding Tone3000-backed capture references is a future
 // step once the plugin has asset loading (#129).
 
-namespace iplug {
-class Plugin;
-}
+class OpenAxePlugin;
 
 namespace openaxe_vst3::presets {
 
 // Registers the factory bank into `plugin` via `MakePresetFromChunk`. Must be
 // called at construction time after params are declared, before the host
 // queries the preset list (VST3/AU preset menu). No-op without iPlug SDK.
-void RegisterFactoryPresets(iplug::Plugin& plugin);
+void RegisterFactoryPresets(OpenAxePlugin& plugin);
 
 // Helpers exposed for tests / portable-JSON round-trip verification without iPlug.
 struct FactoryPresetJson {

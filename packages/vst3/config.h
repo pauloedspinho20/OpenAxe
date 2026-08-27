@@ -30,11 +30,20 @@
 #define PLUG_DOES_MPE 0
 #define PLUG_DOES_STATE_CHUNKS 1
 #define PLUG_HAS_UI 1
-#define PLUG_WIDTH 800
-#define PLUG_HEIGHT 600
+#define PLUG_WIDTH 1100
+#define PLUG_HEIGHT 720
 #define PLUG_FPS 60
 #define PLUG_SHARED_RESOURCES 0
-#define PLUG_HOST_RESIZE 0
+// Host-driven resizing (issue #300 B1). With this at 0 the host never offered
+// a resize grip and never called back with a new size, so the React UI was
+// pinned at PLUG_WIDTH x PLUG_HEIGHT forever. The minimums below are the
+// narrowest the grid UI lays out at without horizontal scrolling; they are
+// also what editor.h's ClampSize enforces, so keep the two in step.
+#define PLUG_HOST_RESIZE 1
+#define PLUG_MIN_WIDTH 720
+#define PLUG_MIN_HEIGHT 520
+#define PLUG_MAX_WIDTH 3840
+#define PLUG_MAX_HEIGHT 2400
 
 #define AUV2_ENTRY OpenAxePlugin_Entry
 #define AUV2_ENTRY_STR "OpenAxePlugin_Entry"

@@ -123,7 +123,7 @@ std::vector<FactoryPresetJson> BuildFactoryPresets() {
   return out;
 }
 
-void RegisterFactoryPresets(iplug::Plugin& plugin) {
+void RegisterFactoryPresets(OpenAxePlugin& plugin) {
 #if defined(VST3_API) || defined(AU_API) || defined(STANDALONE_APP)
   // Build JSON documents via the same row layout as the web, then hand the
   // resulting chunk to iPlug's factory bank. This avoids ever transcribing

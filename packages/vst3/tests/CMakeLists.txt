@@ -64,6 +64,14 @@ target_include_directories(openaxe_vst3_grid_test PRIVATE ../src ${CMAKE_CURRENT
 add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 
 # MIDI mapping — host event bus forwarding to core (issue #124)
+# UI serving: bridge polyfill contract, HTML head injection, path containment,
+# bundle UI-root resolution (issue #300 A/F/G). SDK-free by design — none of
+# these TUs pull in iPlug or the webview.
+add_executable(openaxe_vst3_ui_serving_test ui_serving_test.cpp
+  ../src/http_server.cpp ../src/ui_root.cpp ../src/bridge_polyfill.cpp)
+target_include_directories(openaxe_vst3_ui_serving_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME vst3_ui_serving COMMAND openaxe_vst3_ui_serving_test)
+
 add_executable(openaxe_vst3_midi_test midi_test.cpp)
 target_link_libraries(openaxe_vst3_midi_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
 target_include_directories(openaxe_vst3_midi_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
