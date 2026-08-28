@@ -80,6 +80,16 @@ if(WIN32)
 endif()
 add_test(NAME vst3_ui_serving COMMAND openaxe_vst3_ui_serving_test)
 
+# Monitor tap ring + seqlock (issue #300 E4c). No SDK, no graph — just the
+# concurrency contract between the audio thread and the UI thread.
+add_executable(openaxe_vst3_monitor_tap_test monitor_tap_test.cpp
+  ../../shared/src/monitor_tap.cpp)
+target_include_directories(openaxe_vst3_monitor_tap_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+find_package(Threads REQUIRED)
+target_link_libraries(openaxe_vst3_monitor_tap_test PRIVATE Threads::Threads)
+add_test(NAME vst3_monitor_tap COMMAND openaxe_vst3_monitor_tap_test)
+
 add_executable(openaxe_vst3_midi_test midi_test.cpp)
 target_link_libraries(openaxe_vst3_midi_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
 target_include_directories(openaxe_vst3_midi_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)

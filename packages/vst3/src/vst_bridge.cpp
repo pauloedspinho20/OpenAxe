@@ -119,7 +119,7 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   else if (method == "openAxe.secureDelete") result = HandleSecureDelete(args.dump());
   else if (method == "openAxe.takeStreamError") result = HandleTakeStreamError(args.dump());
   else if (method == "openAxe.getState") result = HandleGetState(args.dump());
-  else if (method == "openAxe.getTap") result = (json{{"l", json::array()}, {"r", json::array()}, {"frames", 0}}).dump();
+  else if (method == "openAxe.getTap") result = HandleGetTap(args.dump());
   else if (method == "openAxe.setInputGain") result = (json{{"ok", true}}).dump();
   else if (method == "openAxe.setTunerMuted") result = (json{{"ok", true}}).dump();
   else result = JsonError("unknown method: " + method);
@@ -134,6 +134,25 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   return result;
 }
 
+
+
+std::string VstBridge::HandleGetTap(const std::string& req) {
+  // Waveform window for the meters, scope and tuner (issue #300 E4c). This
+  // returned empty arrays before, so everything driven by it read flat inside a
+  // DAW. Reading is lock-free (seqlock in MonitorTap) — it never blocks the
+  // audio thread, only retries its own copy if it caught a write in progress.
+  try {
+    json args = ParseArgs(req);
+    json o = args.empty() ? json::object() : args[0];
+    const std::string side = o.value("side", "out");
+    const unsigned int frames = o.value("frames", 2048u);
+    if (!plugin_) return (json{{"l", json::array()}, {"r", json::array()}, {"frames", 0}}).dump();
+    const openaxe::TapFrame tap = plugin_->ReadTap(side == "in", frames);
+    return (json{{"l", tap.l}, {"r", tap.r}, {"frames", tap.frames}}).dump();
+  } catch (std::exception& e) {
+    return JsonError(std::string("getTap: ") + e.what());
+  }
+}
 
 std::string VstBridge::GetStateJson() const {
   if (!graph_) return {};

@@ -339,6 +339,7 @@ void OpenAxePlugin::OnReset() {
   // Size the channel-conversion scratch here, once, so ProcessBlock never
   // touches the heap or a large stack frame (issue #300 C2).
   EnsureScratch(bs);
+  tap_.Clear();  // the retained window is from the previous configuration
   nam_studio_reset(graph_, sr, bs);
 }
 
@@ -431,6 +432,11 @@ void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs
     }
 
     nam_studio_process(graph_, inPtrs, nChansIn, outPtrs, nChansOut, frames);
+
+    // Capture the window the UI's meters/scope/tuner read (issue #300 E4c).
+    // Both sides come from the float scratch, so this is a straight copy into a
+    // preallocated ring — no allocation and no locking on the audio thread.
+    tap_.Write(inPtrs, outPtrs, static_cast<unsigned int>(frames));
 
     for (int c = 0; c < nChansOut; ++c) {
       if (!outputs[c] || !outPtrs[c]) continue;

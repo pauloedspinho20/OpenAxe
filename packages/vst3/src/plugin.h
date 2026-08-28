@@ -27,6 +27,7 @@
 #include "IPlug_include_in_plug_hdr.h"
 
 #include "openaxe/api.h"
+#include "openaxe/monitor_tap.h"
 
 #include "editor.h"
 
@@ -81,6 +82,14 @@ class OpenAxePlugin final : public iplug::Plugin {
   // Returns false when block has no model.
   bool GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
                     double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const;
+
+  // Monitor tap for the UI's meters, scope and tuner (issue #300 E4c). The
+  // plugin's getTap used to return empty arrays, so anything fed by waveform
+  // data read flat inside a DAW. Written by ProcessBlock, read by the bridge on
+  // the UI thread; the seqlock inside means the audio thread never waits.
+  openaxe::TapFrame ReadTap(bool input, unsigned int max_frames) const {
+    return tap_.Read(input, max_frames);
+  }
 
   // Editor shell (issue #132) — webview hosting the shared React app.
   // Exposed for state persistence and host window embedding; the audio path
@@ -148,6 +157,8 @@ class OpenAxePlugin final : public iplug::Plugin {
    // The core's ABI accepts 1 or 2 channels regardless of graph topology
    // (openaxe/api.h), and PLUG_CHANNEL_IO is "1-1 2-2".
    static constexpr int kMaxChans = 2;
+   mutable openaxe::MonitorTap tap_;
+
    mutable std::vector<float> scratch_in_;
    mutable std::vector<float> scratch_out_;
    mutable int scratch_frames_ = 0;

@@ -81,6 +81,7 @@ class VstBridge {
   std::string HandleSecureDelete(const std::string& argsJson);
   std::string HandleTakeStreamError(const std::string& argsJson);
   std::string HandleGetState(const std::string& argsJson);
+  std::string HandleGetTap(const std::string& argsJson);
 
   OpenAxePlugin* plugin_ = nullptr;
   NamStudioGraph* graph_ = nullptr;
