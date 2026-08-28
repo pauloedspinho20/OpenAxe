@@ -24,6 +24,24 @@ class VstBridge {
   explicit VstBridge(OpenAxePlugin* plugin, NamStudioGraph* graph);
   ~VstBridge() = default;
 
+  // Rebuild the jsId <-> core id maps from the graph itself.
+  //
+  // The core is the source of truth for the rig (issue #300 D1/D2). Restoring a
+  // host chunk calls nam_studio_load_state, which rebuilds the topology and
+  // assigns fresh core ids — the bridge's maps still held the previous
+  // session's pairs, so every setParam/blockInfo/removeBlock from the UI then
+  // addressed the wrong block or returned "unknown block". Anything that
+  // replaces the graph must call this.
+  //
+  // Ids become the core's own ids as strings, so the map is an identity and
+  // cannot drift again; the UI adopts them when it hydrates from GetStateJson.
+  void SyncFromCore();
+
+  // The core's serialized rig, which is what the UI hydrates from in plugin
+  // mode instead of its own browser storage. Assets are not embedded — this is
+  // read on editor open, not a save.
+  std::string GetStateJson() const;
+
   // Dispatch a message from the webview: expects JSON like
   // {"method":"openAxe.addBlock","args":{...},"id":123}
   // Returns JSON string for the response which the caller should deliver back
@@ -62,6 +80,7 @@ class VstBridge {
   std::string HandleSecureLoad(const std::string& argsJson);
   std::string HandleSecureDelete(const std::string& argsJson);
   std::string HandleTakeStreamError(const std::string& argsJson);
+  std::string HandleGetState(const std::string& argsJson);
 
   OpenAxePlugin* plugin_ = nullptr;
   NamStudioGraph* graph_ = nullptr;

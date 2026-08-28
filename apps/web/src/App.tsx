@@ -58,10 +58,12 @@ function App() {
   // did. powerOn is idempotent (it returns early when already starting or
   // ready), so the effect is safe to re-run.
   const isPluginShell = getShellKind() === 'plugin'
+  const engineStatus = engine.status
+  const enginePowerOn = engine.powerOn
   useEffect(() => {
     if (!isPluginShell) return
-    if (engine.status === 'off') void engine.powerOn()
-  }, [isPluginShell, engine.status, engine.powerOn])
+    if (engineStatus === 'off') void enginePowerOn()
+  }, [isPluginShell, engineStatus, enginePowerOn])
   const [setupStatus, setSetupStatus] = useState<'boot' | 'pending' | 'done'>('boot')
   const browser = useTone3000Browser()
   const io = useIOStore()

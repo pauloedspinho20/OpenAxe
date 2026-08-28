@@ -59,7 +59,7 @@ std::string BridgePolyfillJs(const std::string& shell) {
       });
     };
   }
-  var methods = ["version","listDevices","getConfig","open","close","start","stop","addBlock","removeBlock","moveBlock","connect","disconnect","setParam","getParam","blockInfo","listBlocks","listEdges","loadModel","loadModelJson","unloadModel","setReverbAlgorithm","setDelayModel","setBypass","setBlockTrim","loadIrWav","unloadIr","setInputGain","setMasterLevel","setMasterMuted","setTunerMuted","meters","cpuLoad","getTap","takeStreamError","secureStore","secureLoad","secureDelete"];
+  var methods = ["version","listDevices","getConfig","open","close","start","stop","addBlock","removeBlock","moveBlock","connect","disconnect","setParam","getParam","blockInfo","listBlocks","listEdges","loadModel","loadModelJson","unloadModel","setReverbAlgorithm","setDelayModel","setBypass","setBlockTrim","loadIrWav","unloadIr","setInputGain","setMasterLevel","setMasterMuted","setTunerMuted","meters","cpuLoad","getTap","takeStreamError","secureStore","secureLoad","secureDelete","getState"];
   methods.forEach(bind);
 
   // ── Let people type (issue #300 B5) ────────────────────────────────

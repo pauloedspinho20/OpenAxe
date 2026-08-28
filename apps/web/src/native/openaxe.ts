@@ -46,6 +46,30 @@ export interface OpenAxeConfig {
   ownsAudioDevice?: boolean
 }
 
+/** The core's serialized rig, as returned by `openAxe.getState`. This is the
+ * same document the DAW stores in its chunk, so it is the authoritative
+ * description of what the C++ graph currently holds (issue #300 D1/D2). */
+export interface OpenAxeCoreState {
+  schemaVersion: number
+  blocks: {
+    id: string
+    kind: string
+    row: number
+    col: number
+    bypass?: boolean
+    inputTrim?: number
+    outputTrim?: number
+    params?: Record<string, number>
+  }[]
+  edges: {
+    id: string
+    from: { blockId: string; port: number }
+    to: { blockId: string; port: number }
+  }[]
+  masterLevel?: number
+  masterMuted?: boolean
+}
+
 export interface OpenAxeBlockParam {
   index: number
   name: string
@@ -183,6 +207,7 @@ export interface OpenAxeBridge {
    * second process forcing a mid-stream reconfiguration on a shared device.
    * `error` is null when nothing is pending. */
   takeStreamError(): Promise<{ error: string | null }>
+  getState(): Promise<OpenAxeOk & { state?: OpenAxeCoreState }>
 
   /** Small secret store (issue #146) backed by the OS keychain (macOS/
    * Windows) or a permission-restricted file (Linux, until Secret Service
@@ -328,6 +353,12 @@ class NativeBridge implements OpenAxeBridge {
   }
   takeStreamError() {
     return this.call<{ error: string | null }>('takeStreamError')
+  }
+  /** The core's current rig. Only the plugin implements this today — the
+   * desktop shell's own state lives in the same graph but the app there
+   * restores from its stores as before. */
+  getState() {
+    return this.call<OpenAxeOk & { state?: OpenAxeCoreState }>('getState')
   }
   secureStore(args: { key: string; value: string }) {
     return this.call<OpenAxeOk>('secureStore', args)

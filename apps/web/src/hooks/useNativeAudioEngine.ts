@@ -262,6 +262,22 @@ export function useNativeAudioEngine() {
         const rig = new NativeGraphRig(bridge)
         rigRef.current = rig
         bridgeRef.current = bridge
+
+        // In a plugin the C++ graph is the source of truth and already holds a
+        // rig: the DAW restored its chunk before the editor opened, and closing
+        // the editor destroys this hook while the graph keeps processing. Adopt
+        // what is there and push it into the store, rather than letting
+        // bindGraphRig reconcile the store's (browser-storage) idea of the rig
+        // onto the core and duplicate or clobber it (issue #300 D1/D2).
+        if (!shellOwnsAudioDevice()) {
+          const adopted = await rig.adoptFromCore()
+          if (adopted && adopted.blocks.length > 0) {
+            useGraphStore
+              .getState()
+              .loadGraph(adopted.blocks, adopted.edges, adopted.masterLevel, adopted.masterMuted)
+          }
+        }
+
         unbindRef.current = bindGraphRig(useGraphStore, rig)
 
         if (opts?.noSound) {

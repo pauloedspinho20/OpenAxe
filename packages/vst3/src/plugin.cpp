@@ -504,6 +504,13 @@ int OpenAxePlugin::UnserializeState(const iplug::IByteChunk& chunk, int startPos
                                       sample_rate_.load(std::memory_order_acquire),
                                       max_block_size_.load(std::memory_order_acquire));
   });
+#ifdef OPENAXE_HAS_WEBVIEW
+  // The graph was just replaced and the core reassigned block ids, so the
+  // bridge's maps describe the previous session. Rebuilding them here is what
+  // makes host save/restore work at all: without it every subsequent
+  // setParam/blockInfo from the UI addressed the wrong block (issue #300 D1).
+  if (bridge_) bridge_->SyncFromCore();
+#endif
   // Hosts that also serialized params after the JSON (some iPlug callers do
   // PutChunk of params) will have trailing bytes — try to apply them for
   // forward-compat, but don't fail if absent.
@@ -531,6 +538,9 @@ int OpenAxePlugin::LoadPortableJson(const std::string& path) {
                                                   sample_rate_.load(std::memory_order_acquire),
                                                   max_block_size_.load(std::memory_order_acquire));
   });
+#ifdef OPENAXE_HAS_WEBVIEW
+  if (bridge_) bridge_->SyncFromCore();  // same reason as UnserializeState
+#endif
   return result;
 }
 

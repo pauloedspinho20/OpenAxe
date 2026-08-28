@@ -1,6 +1,7 @@
 #include "vst_bridge.h"
 
 #include "asset_loading.h"
+#include "plugin_state.h"
 #include "openaxe/secure_storage.h"
 #include "plugin.h"
 
@@ -117,6 +118,7 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   else if (method == "openAxe.secureLoad") result = HandleSecureLoad(args.dump());
   else if (method == "openAxe.secureDelete") result = HandleSecureDelete(args.dump());
   else if (method == "openAxe.takeStreamError") result = HandleTakeStreamError(args.dump());
+  else if (method == "openAxe.getState") result = HandleGetState(args.dump());
   else if (method == "openAxe.getTap") result = (json{{"l", json::array()}, {"r", json::array()}, {"frames", 0}}).dump();
   else if (method == "openAxe.setInputGain") result = (json{{"ok", true}}).dump();
   else if (method == "openAxe.setTunerMuted") result = (json{{"ok", true}}).dump();
@@ -130,6 +132,71 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
     return result;
   }
   return result;
+}
+
+
+std::string VstBridge::GetStateJson() const {
+  if (!graph_) return {};
+  // embed_assets=0: this is read on editor open to hydrate the UI, not a save,
+  // and embedding NAM models would make it megabytes.
+  return openaxe_vst3::state::Serialize(graph_, /*embed_assets=*/false);
+}
+
+void VstBridge::SyncFromCore() {
+  const std::string doc = GetStateJson();
+  json j = json::parse(doc, nullptr, false);
+  std::lock_guard<std::mutex> lock(mutex_);
+  blockIds_.clear();
+  blockKinds_.clear();
+  blockPos_.clear();
+  edgeIds_.clear();
+  edgeEndpoints_.clear();
+  if (j.is_discarded() || !j.is_object()) return;
+
+  // Ids are the core's own, as strings, so these maps are an identity mapping
+  // from here on and cannot drift from the graph.
+  if (j.contains("blocks") && j["blocks"].is_array()) {
+    for (const auto& b : j["blocks"]) {
+      const std::string id = b.value("id", "");
+      if (id.empty()) continue;
+      int32_t coreId = -1;
+      try { coreId = static_cast<int32_t>(std::stol(id)); } catch (...) { continue; }
+      blockIds_[id] = coreId;
+      blockKinds_[coreId] = b.value("kind", "");
+      blockPos_[id] = {b.value("row", 0), b.value("col", 0)};
+    }
+  }
+  if (j.contains("edges") && j["edges"].is_array()) {
+    for (const auto& e : j["edges"]) {
+      const std::string id = e.value("id", "");
+      if (id.empty()) continue;
+      int32_t coreEdge = -1;
+      try { coreEdge = static_cast<int32_t>(std::stol(id)); } catch (...) { continue; }
+      edgeIds_[id] = coreEdge;
+      // The core writes the rails as "-1"/"-2"; the UI speaks "IN"/"OUT".
+      auto endpoint = [](const json& side) {
+        const std::string b = side.value("blockId", "");
+        if (b == "-1") return std::string("IN");
+        if (b == "-2") return std::string("OUT");
+        return b;
+      };
+      EdgeEndpoints ep;
+      if (e.contains("from")) { ep.fromId = endpoint(e["from"]); ep.fromPort = e["from"].value("port", 0); }
+      if (e.contains("to"))   { ep.toId   = endpoint(e["to"]);   ep.toPort   = e["to"].value("port", 0); }
+      edgeEndpoints_[id] = ep;
+    }
+  }
+  // Generated ids must not collide with the core's.
+  nextBlockId_ = 0;
+  nextEdgeId_ = 0;
+}
+
+std::string VstBridge::HandleGetState(const std::string&) {
+  const std::string doc = GetStateJson();
+  if (doc.empty()) return JsonError("no graph");
+  json parsed = json::parse(doc, nullptr, false);
+  if (parsed.is_discarded()) return JsonError("bad state document");
+  return (json{{"ok", true}, {"state", parsed}}).dump();
 }
 
 std::string VstBridge::HandleVersion(const std::string&) {

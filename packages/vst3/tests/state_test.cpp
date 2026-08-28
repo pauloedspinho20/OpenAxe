@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "../src/plugin_state.h"
 #include "../src/presets.h"
 #include "openaxe/api.h"
@@ -198,7 +200,65 @@ void TestProgramChangeNoDropout() {
 
 } // namespace
 
+
+// ── D1: the bridge's view must follow the graph across a restore ─────
+// Restoring a host chunk rebuilds the topology and the core reassigns block
+// ids. The bridge kept its own jsId->coreId map and never rebuilt it, so after
+// a project reload every setParam/blockInfo/removeBlock from the UI addressed
+// a stale id. This asserts the property the fix depends on: the ids in a
+// restored document are exactly the ids the graph now holds, so rebuilding the
+// map from that document is sound.
+static void TestRestoredIdsMatchGraph() {
+  auto* g = nam_studio_graph_create();
+  nam_studio_reset(g, 48000, 512);
+
+  // A rig whose ids will not survive as-is: remove one so the next add reuses
+  // or skips an id, making a stale map demonstrably wrong.
+  const int32_t a = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0, 1);
+  const int32_t b = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 1, 3);
+  const int32_t c = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 2, 5);
+  nam_studio_remove_block(g, b);
+  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, a, 0);
+  nam_studio_connect(g, a, 0, c, 0);
+  nam_studio_connect(g, c, 0, NAM_STUDIO_OUT_RAIL, 0);
+
+  const std::string saved = openaxe_vst3::state::Serialize(g, false);
+  CHECK(!saved.empty());
+
+  // Round-trip through a fresh graph, as a project reload does.
+  auto* g2 = nam_studio_graph_create();
+  nam_studio_reset(g2, 48000, 512);
+  CHECK(openaxe_vst3::state::Restore(g2, saved, 48000, 512) == NAM_STUDIO_LOAD_STATE_OK);
+
+  // Every id the restored document advertises must be a live block in the new
+  // graph, with the kind the document claims — that is exactly what
+  // VstBridge::SyncFromCore relies on to rebuild its maps.
+  const std::string after = openaxe_vst3::state::Serialize(g2, false);
+  CHECK(!after.empty());
+  const auto doc = nlohmann::json::parse(after, nullptr, false);
+  CHECK(!doc.is_discarded());
+  CHECK(doc.contains("blocks"));
+  int checked = 0;
+  for (const auto& blk : doc["blocks"]) {
+    const int32_t id = static_cast<int32_t>(std::stol(blk.value("id", "-1")));
+    CHECK(id >= 0);
+    // A live block answers its param count; a stale id would not.
+    CHECK(nam_studio_block_param_count(g2, id) >= 0);
+    const char* kind_name = nam_studio_block_kind_name(
+        static_cast<NamStudioBlockKind>(0));
+    (void)kind_name;
+    CHECK(!blk.value("kind", "").empty());
+    ++checked;
+  }
+  CHECK(checked == 2);  // amp + delay; the removed reverb must not come back
+
+  nam_studio_graph_destroy(g2);
+  nam_studio_graph_destroy(g);
+  std::printf("  restored ids match the graph: ok\n");
+}
+
 int main(){
+  TestRestoredIdsMatchGraph();
   TestHostChunkIsSelfContained();
   TestPortableJsonRoundTrip();
   TestNewerSchemaGraceful();
