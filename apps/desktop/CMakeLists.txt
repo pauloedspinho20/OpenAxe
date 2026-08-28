@@ -120,6 +120,7 @@ add_library(openaxe_desktop_lib STATIC
   src/latency.cpp
   src/debug_log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/secure_storage.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/ui_url.cpp
 )
 
 # Shared with packages/vst3 so both shells hit the same keychain item and one

@@ -18,6 +18,7 @@
 #include "openaxe/api.h"
 #include "openaxe/core.h"
 #include "openaxe/secure_storage.h"
+#include "openaxe/ui_url.h"
 
 namespace openaxe_desktop {
 
@@ -38,50 +39,21 @@ std::string JsonError(const std::string& message) {
   return (json{{"ok", false}, {"error", message}}).dump();
 }
 
-struct KindEntry {
-  const char* web;
-  NamStudioBlockKind core;
-};
-constexpr KindEntry kKinds[] = {
-    {"noise-gate", NAM_STUDIO_BLOCK_NOISE_GATE},
-    {"compressor", NAM_STUDIO_BLOCK_COMPRESSOR},
-    {"eq", NAM_STUDIO_BLOCK_EQ},
-    {"chorus", NAM_STUDIO_BLOCK_CHORUS},
-    {"flanger", NAM_STUDIO_BLOCK_FLANGER},
-    {"phaser", NAM_STUDIO_BLOCK_PHASER},
-    {"tremolo", NAM_STUDIO_BLOCK_TREMOLO},
-    {"ring-mod", NAM_STUDIO_BLOCK_RING_MOD},
-    {"filter", NAM_STUDIO_BLOCK_FILTER},
-    {"pitch-shifter", NAM_STUDIO_BLOCK_PITCH_SHIFTER},
-    {"granular-delay", NAM_STUDIO_BLOCK_GRANULAR_DELAY},
-    {"rotary", NAM_STUDIO_BLOCK_ROTARY},
-    {"delay", NAM_STUDIO_BLOCK_DELAY},
-    {"ping-pong-delay", NAM_STUDIO_BLOCK_PING_PONG_DELAY},
-    {"reverb", NAM_STUDIO_BLOCK_REVERB},
-    {"amp", NAM_STUDIO_BLOCK_AMP},
-    {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},
-    {"pedal", NAM_STUDIO_BLOCK_PEDAL},
-    {"outboard", NAM_STUDIO_BLOCK_OUTBOARD},
-    {"space", NAM_STUDIO_BLOCK_SPACE},
-    {"cab", NAM_STUDIO_BLOCK_CAB},
-    {"mixer", NAM_STUDIO_BLOCK_MIXER},
-    {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
-    {"send-1", NAM_STUDIO_BLOCK_SEND_1},
-    {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
-    {"send-2", NAM_STUDIO_BLOCK_SEND_2},
-    {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
-};
-
+// The name<->kind mapping lives in the core ABI now
+// (nam_studio_block_kind_from_name / nam_studio_block_kind_name), so adding a
+// block kind is one edit there rather than one per front end — this file and
+// the plugin bridge each carried their own copy of the same 27 rows
+// (issue #300 J3). These two stay as thin adapters because the call sites want
+// std::optional and a never-null string.
 std::optional<NamStudioBlockKind> WebToCoreKind(const std::string& web) {
-  for (const auto& e : kKinds)
-    if (web == e.web) return e.core;
-  return std::nullopt;
+  NamStudioBlockKind kind;
+  if (nam_studio_block_kind_from_name(web.c_str(), &kind) != 0) return std::nullopt;
+  return kind;
 }
 
 const char* CoreToWebKind(NamStudioBlockKind core) {
-  for (const auto& e : kKinds)
-    if (core == e.core) return e.web;
-  return "unknown";
+  const char* name = nam_studio_block_kind_name(core);
+  return name ? name : "unknown";
 }
 
 template <typename E>
@@ -104,27 +76,9 @@ constexpr size_t kMaxIrWavBytes = 8 * 1024 * 1024;          // 8 MB
 }  // namespace
 
 bool IsTrustedUiUrl(const std::string& url) {
-  // Accept only loopback http(s). The bundled UI is served from our own
-  // loopback HTTP server and the dev server is also loopback; nothing else
-  // should ever receive the privileged bridge (issue #71).
-  std::string lower;
-  lower.reserve(url.size());
-  for (char c : url) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-
-  const size_t scheme_end = lower.find("://");
-  if (scheme_end == std::string::npos) return false;
-  const std::string scheme = lower.substr(0, scheme_end);
-  if (scheme != "http" && scheme != "https") return false;
-
-  std::string host = lower.substr(scheme_end + 3);
-  const size_t slash = host.find('/');
-  if (slash != std::string::npos) host = host.substr(0, slash);
-  const size_t at = host.find('@');  // drop userinfo
-  if (at != std::string::npos) host = host.substr(at + 1);
-  const size_t colon = host.rfind(':');  // drop port
-  if (colon != std::string::npos) host = host.substr(0, colon);
-
-  return host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+  // Single implementation in packages/shared (issue #300 J1). Kept as a thin
+  // forwarder so existing callers and bridge_test keep working.
+  return openaxe::IsTrustedUiUrl(url);
 }
 
 // ── Control executor ────────────────────────────────────────────────────

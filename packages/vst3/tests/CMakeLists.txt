@@ -46,21 +46,24 @@ target_include_directories(openaxe_vst3_realtime_safety_test PRIVATE ../src ${CM
 add_test(NAME vst3_realtime_safety COMMAND openaxe_vst3_realtime_safety_test)
 
 # Editor shell — webview hosting the shared React app (#132)
-add_executable(openaxe_vst3_editor_test editor_test.cpp ../src/editor.cpp)
+add_executable(openaxe_vst3_editor_test editor_test.cpp ../src/editor.cpp
+  ../../shared/src/ui_url.cpp)
 target_link_libraries(openaxe_vst3_editor_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_editor COMMAND openaxe_vst3_editor_test)
 
 # Shared React primitives — no IControl fork (#133)
-add_executable(openaxe_vst3_primitives_test primitives_test.cpp ../src/primitives.cpp ../src/automation_params.cpp ../src/editor.cpp)
+add_executable(openaxe_vst3_primitives_test primitives_test.cpp ../src/primitives.cpp ../src/automation_params.cpp ../src/editor.cpp
+  ../../shared/src/ui_url.cpp)
 target_link_libraries(openaxe_vst3_primitives_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_primitives_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(openaxe_vst3_primitives_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_primitives COMMAND openaxe_vst3_primitives_test)
 
 # Block grid, cables, and block inspector — shared React via webview (#134)
-add_executable(openaxe_vst3_grid_test grid_test.cpp ../src/grid_bridge.cpp ../src/editor.cpp)
+add_executable(openaxe_vst3_grid_test grid_test.cpp ../src/grid_bridge.cpp ../src/editor.cpp
+  ../../shared/src/ui_url.cpp)
 target_link_libraries(openaxe_vst3_grid_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_grid_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(openaxe_vst3_grid_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 
 # MIDI mapping — host event bus forwarding to core (issue #124)
@@ -68,8 +71,9 @@ add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 # bundle UI-root resolution (issue #300 A/F/G). SDK-free by design — none of
 # these TUs pull in iPlug or the webview.
 add_executable(openaxe_vst3_ui_serving_test ui_serving_test.cpp
-  ../src/http_server.cpp ../src/ui_root.cpp ../src/bridge_polyfill.cpp)
-target_include_directories(openaxe_vst3_ui_serving_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+  ../src/http_server.cpp ../src/ui_root.cpp ../src/bridge_polyfill.cpp
+  ../../shared/src/ui_url.cpp)
+target_include_directories(openaxe_vst3_ui_serving_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 # http_server.cpp calls into Winsock; MSVC needs the import library named.
 if(WIN32)
   target_link_libraries(openaxe_vst3_ui_serving_test PRIVATE ws2_32)

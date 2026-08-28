@@ -181,7 +181,52 @@ void TestRenderingCostNotWholeGrid() {
 
 } // namespace
 
+
+// ── J3: the block-kind name mapping is the cross-shell contract ──────
+// These strings are what the web app, the desktop bridge and the plugin bridge
+// all speak. They used to be a hand-maintained table in each bridge; now the
+// core owns them, so this pins the round trip and the exact spellings.
+static void TestBlockKindNames() {
+  // Every kind the graph can hold must have a name, and it must round-trip.
+  const NamStudioBlockKind kinds[] = {
+      NAM_STUDIO_BLOCK_NOISE_GATE, NAM_STUDIO_BLOCK_COMPRESSOR, NAM_STUDIO_BLOCK_EQ,
+      NAM_STUDIO_BLOCK_CHORUS, NAM_STUDIO_BLOCK_FLANGER, NAM_STUDIO_BLOCK_PHASER,
+      NAM_STUDIO_BLOCK_TREMOLO, NAM_STUDIO_BLOCK_RING_MOD, NAM_STUDIO_BLOCK_FILTER,
+      NAM_STUDIO_BLOCK_PITCH_SHIFTER, NAM_STUDIO_BLOCK_GRANULAR_DELAY, NAM_STUDIO_BLOCK_ROTARY,
+      NAM_STUDIO_BLOCK_DELAY, NAM_STUDIO_BLOCK_PING_PONG_DELAY, NAM_STUDIO_BLOCK_REVERB,
+      NAM_STUDIO_BLOCK_AMP, NAM_STUDIO_BLOCK_AMP_CAB, NAM_STUDIO_BLOCK_PEDAL,
+      NAM_STUDIO_BLOCK_OUTBOARD, NAM_STUDIO_BLOCK_SPACE, NAM_STUDIO_BLOCK_CAB,
+      NAM_STUDIO_BLOCK_MIXER, NAM_STUDIO_BLOCK_SPLITTER, NAM_STUDIO_BLOCK_SEND_1,
+      NAM_STUDIO_BLOCK_RETURN_1, NAM_STUDIO_BLOCK_SEND_2, NAM_STUDIO_BLOCK_RETURN_2,
+  };
+  for (NamStudioBlockKind k : kinds) {
+    const char* name = nam_studio_block_kind_name(k);
+    CHECK(name != nullptr);
+    if (!name) continue;
+    NamStudioBlockKind back;
+    CHECK(nam_studio_block_kind_from_name(name, &back) == 0);
+    CHECK(back == k);
+  }
+
+  // Exact spellings the front ends send — a rename here silently breaks them.
+  NamStudioBlockKind k;
+  CHECK(nam_studio_block_kind_from_name("noise-gate", &k) == 0 && k == NAM_STUDIO_BLOCK_NOISE_GATE);
+  CHECK(nam_studio_block_kind_from_name("ping-pong-delay", &k) == 0 && k == NAM_STUDIO_BLOCK_PING_PONG_DELAY);
+  CHECK(nam_studio_block_kind_from_name("pitch-shifter", &k) == 0 && k == NAM_STUDIO_BLOCK_PITCH_SHIFTER);
+  CHECK(nam_studio_block_kind_from_name("send-1", &k) == 0 && k == NAM_STUDIO_BLOCK_SEND_1);
+  CHECK(nam_studio_block_kind_from_name("amp-cab", &k) == 0 && k == NAM_STUDIO_BLOCK_AMP_CAB);
+
+  // Unknown input must fail cleanly and leave the out param untouched.
+  NamStudioBlockKind sentinel = NAM_STUDIO_BLOCK_REVERB;
+  CHECK(nam_studio_block_kind_from_name("no-such-kind", &sentinel) != 0);
+  CHECK(sentinel == NAM_STUDIO_BLOCK_REVERB);
+  CHECK(nam_studio_block_kind_from_name(nullptr, &sentinel) != 0);
+  CHECK(nam_studio_block_kind_from_name("amp", nullptr) != 0);
+  std::printf("  block kind names: ok\n");
+}
+
 int main() {
+  TestBlockKindNames();
   TestGridDims();
   TestBlockCards();
   TestCableValidation();

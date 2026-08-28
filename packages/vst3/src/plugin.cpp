@@ -34,6 +34,7 @@
 #ifdef OPENAXE_HAS_WEBVIEW
 #include "bridge_polyfill.h"
 #include "http_server.h"
+#include "openaxe/ui_url.h"
 #include "ui_root.h"
 #include "vst_bridge.h"
 #include <cstdlib>
@@ -281,24 +282,10 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
     pGraphics->AttachCornerResizer(iplug::igraphics::EUIResizerMode::Size, false);
     const iplug::igraphics::IRECT b = pGraphics->GetBounds();
     // Prefer webview when we have a UI to serve or a dev server to attach to
-    auto isTrustedUiUrl = [](const std::string& url) -> bool {
-      std::string lower = url;
-      std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-      auto schemeEnd = lower.find("://");
-      if (schemeEnd == std::string::npos) return false;
-      std::string scheme = lower.substr(0, schemeEnd);
-      if (scheme != "http" && scheme != "https") return false;
-      std::string host = lower.substr(schemeEnd + 3);
-      auto slash = host.find('/');
-      if (slash != std::string::npos) host = host.substr(0, slash);
-      auto at = host.find('@');
-      if (at != std::string::npos) return false;
-      auto colon = host.rfind(':');
-      if (colon != std::string::npos) host = host.substr(0, colon);
-      return host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
-    };
     const char* envUrl = std::getenv("OPENAXE_UI_URL");
-    bool useDevServer = envUrl && *envUrl && isTrustedUiUrl(envUrl);
+    // Same shared check the editor and desktop use (issue #300 J1); this used
+    // to be a fourth, untested copy pasted into this lambda.
+    bool useDevServer = envUrl && *envUrl && openaxe::IsTrustedUiUrl(envUrl);
     VstLog("mLayout: uiPort=" + std::to_string(uiPort_) + " uiRoot=" + uiRoot_ + " useDev=" + (useDevServer ? "1" : "0") + (envUrl ? std::string(" env=") + envUrl : ""));
     if ((uiPort_ != 0 && !uiRoot_.empty()) || useDevServer) {
       std::string url;

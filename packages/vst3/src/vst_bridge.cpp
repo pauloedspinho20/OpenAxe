@@ -177,35 +177,12 @@ std::string VstBridge::HandleAddBlock(const std::string& req) {
     }
     if (!graph_) return JsonError("no graph");
     // Map kind string to core
+    // Single mapping in the core (issue #300 J3) — this was a 27-branch
+    // if/else chain duplicating the desktop bridge's table.
     NamStudioBlockKind k;
-    if (kind=="noise-gate") k=NAM_STUDIO_BLOCK_NOISE_GATE;
-    else if(kind=="compressor") k=NAM_STUDIO_BLOCK_COMPRESSOR;
-    else if(kind=="eq") k=NAM_STUDIO_BLOCK_EQ;
-    else if(kind=="chorus") k=NAM_STUDIO_BLOCK_CHORUS;
-    else if(kind=="flanger") k=NAM_STUDIO_BLOCK_FLANGER;
-    else if(kind=="phaser") k=NAM_STUDIO_BLOCK_PHASER;
-    else if(kind=="tremolo") k=NAM_STUDIO_BLOCK_TREMOLO;
-    else if(kind=="ring-mod") k=NAM_STUDIO_BLOCK_RING_MOD;
-    else if(kind=="filter") k=NAM_STUDIO_BLOCK_FILTER;
-    else if(kind=="pitch-shifter") k=NAM_STUDIO_BLOCK_PITCH_SHIFTER;
-    else if(kind=="granular-delay") k=NAM_STUDIO_BLOCK_GRANULAR_DELAY;
-    else if(kind=="rotary") k=NAM_STUDIO_BLOCK_ROTARY;
-    else if(kind=="delay") k=NAM_STUDIO_BLOCK_DELAY;
-    else if(kind=="ping-pong-delay") k=NAM_STUDIO_BLOCK_PING_PONG_DELAY;
-    else if(kind=="reverb") k=NAM_STUDIO_BLOCK_REVERB;
-    else if(kind=="amp") k=NAM_STUDIO_BLOCK_AMP;
-    else if(kind=="amp-cab") k=NAM_STUDIO_BLOCK_AMP_CAB;
-    else if(kind=="pedal") k=NAM_STUDIO_BLOCK_PEDAL;
-    else if(kind=="outboard") k=NAM_STUDIO_BLOCK_OUTBOARD;
-    else if(kind=="space") k=NAM_STUDIO_BLOCK_SPACE;
-    else if(kind=="cab") k=NAM_STUDIO_BLOCK_CAB;
-    else if(kind=="mixer") k=NAM_STUDIO_BLOCK_MIXER;
-    else if(kind=="splitter") k=NAM_STUDIO_BLOCK_SPLITTER;
-    else if(kind=="send-1") k=NAM_STUDIO_BLOCK_SEND_1;
-    else if(kind=="return-1") k=NAM_STUDIO_BLOCK_RETURN_1;
-    else if(kind=="send-2") k=NAM_STUDIO_BLOCK_SEND_2;
-    else if(kind=="return-2") k=NAM_STUDIO_BLOCK_RETURN_2;
-    else return JsonError("unknown kind: "+kind);
+    if (nam_studio_block_kind_from_name(kind.c_str(), &k) != 0) {
+      return JsonError("unknown kind: " + kind);
+    }
     int32_t coreId = -1;
     {
       std::lock_guard<std::mutex> lock(mutex_);

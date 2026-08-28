@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "http_server.h"
+#include "openaxe/ui_url.h"
 #include "ui_root.h"
 #include "bridge_polyfill.h"
 
@@ -192,6 +193,36 @@ void TestUiRootCandidates() {
   }
 }
 
+// ── J1: the one UI-URL trust check ───────────────────────────────────
+// This existed in four places (desktop bridge, vst3 editor, an inline lambda in
+// plugin.cpp, and a header decl) and the copies had already drifted: desktop
+// stripped userinfo and would have trusted "http://evil.example@127.0.0.1/",
+// while the vst3 copy rejected any '@'. Now one implementation, pinned here.
+void TestTrustedUiUrl() {
+  using openaxe::IsTrustedUiUrl;
+
+  // The origins we actually serve the bridge from.
+  Check(IsTrustedUiUrl("http://127.0.0.1:5173"), "loopback ipv4 with port");
+  Check(IsTrustedUiUrl("http://127.0.0.1/"), "loopback ipv4 without port");
+  Check(IsTrustedUiUrl("https://localhost:3000"), "localhost over https");
+  Check(IsTrustedUiUrl("http://[::1]:5173"), "ipv6 literal with port");
+  Check(IsTrustedUiUrl("HTTP://LocalHost:5173"), "scheme and host are case-insensitive");
+
+  // Anything that is not our own loopback origin.
+  Check(!IsTrustedUiUrl("https://evil.example"), "remote host refused");
+  Check(!IsTrustedUiUrl("http://192.168.1.10:5173"), "LAN address refused");
+  Check(!IsTrustedUiUrl("file:///etc/passwd"), "file scheme refused");
+  Check(!IsTrustedUiUrl("javascript:alert(1)"), "javascript scheme refused");
+  Check(!IsTrustedUiUrl(""), "empty string refused");
+  Check(!IsTrustedUiUrl("127.0.0.1:5173"), "scheme is required");
+
+  // The case the two copies disagreed on. Userinfo is refused outright: a URL
+  // shaped to make a reader misjudge the host has no business reaching a
+  // bridge that can touch the filesystem and the keychain.
+  Check(!IsTrustedUiUrl("http://evil.example@127.0.0.1/"), "userinfo before a loopback host refused");
+  Check(!IsTrustedUiUrl("http://127.0.0.1@evil.example/"), "loopback as userinfo refused");
+}
+
 // ── G3: Host header validation (DNS rebinding) ───────────────────────
 void TestHostValidation() {
   using openaxe_vst3::IsAllowedHost;
@@ -294,6 +325,7 @@ int main() {
   TestPathContainment();
   TestUiRootCandidates();
   TestUiRootOverride();
+  TestTrustedUiUrl();
   TestHostValidation();
   TestServerShutdown();
   if (failures == 0) std::printf("ui_serving_test: all checks passed\n");

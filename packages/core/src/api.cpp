@@ -668,4 +668,61 @@ const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index)
   return graph->missing_assets[static_cast<size_t>(index)].c_str();
 }
 
+
+namespace {
+// The canonical wire names. Kept adjacent to NamStudioBlockKind so a new kind
+// is one edit, not one per front end (issue #300 J3).
+struct BlockKindName {
+  const char* name;
+  NamStudioBlockKind kind;
+};
+constexpr BlockKindName kBlockKindNames[] = {
+    {"noise-gate", NAM_STUDIO_BLOCK_NOISE_GATE},
+    {"compressor", NAM_STUDIO_BLOCK_COMPRESSOR},
+    {"eq", NAM_STUDIO_BLOCK_EQ},
+    {"chorus", NAM_STUDIO_BLOCK_CHORUS},
+    {"flanger", NAM_STUDIO_BLOCK_FLANGER},
+    {"phaser", NAM_STUDIO_BLOCK_PHASER},
+    {"tremolo", NAM_STUDIO_BLOCK_TREMOLO},
+    {"ring-mod", NAM_STUDIO_BLOCK_RING_MOD},
+    {"filter", NAM_STUDIO_BLOCK_FILTER},
+    {"pitch-shifter", NAM_STUDIO_BLOCK_PITCH_SHIFTER},
+    {"granular-delay", NAM_STUDIO_BLOCK_GRANULAR_DELAY},
+    {"rotary", NAM_STUDIO_BLOCK_ROTARY},
+    {"delay", NAM_STUDIO_BLOCK_DELAY},
+    {"ping-pong-delay", NAM_STUDIO_BLOCK_PING_PONG_DELAY},
+    {"reverb", NAM_STUDIO_BLOCK_REVERB},
+    {"amp", NAM_STUDIO_BLOCK_AMP},
+    {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},
+    {"pedal", NAM_STUDIO_BLOCK_PEDAL},
+    {"outboard", NAM_STUDIO_BLOCK_OUTBOARD},
+    {"space", NAM_STUDIO_BLOCK_SPACE},
+    {"cab", NAM_STUDIO_BLOCK_CAB},
+    {"mixer", NAM_STUDIO_BLOCK_MIXER},
+    {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
+    {"send-1", NAM_STUDIO_BLOCK_SEND_1},
+    {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
+    {"send-2", NAM_STUDIO_BLOCK_SEND_2},
+    {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
+};
+}  // namespace
+
+const char* nam_studio_block_kind_name(NamStudioBlockKind kind) {
+  for (const auto& e : kBlockKindNames) {
+    if (e.kind == kind) return e.name;
+  }
+  return nullptr;
+}
+
+int32_t nam_studio_block_kind_from_name(const char* name, NamStudioBlockKind* out_kind) {
+  if (!name || !out_kind) return 1;
+  for (const auto& e : kBlockKindNames) {
+    if (std::strcmp(e.name, name) == 0) {
+      *out_kind = e.kind;
+      return 0;
+    }
+  }
+  return 1;
+}
+
 }  // extern "C"
