@@ -250,6 +250,37 @@ void TestHostValidation() {
   Check(IsAllowedHost("GET / HTTP/1.0\r\n\r\n", kPort), "absent Host is tolerated");
 }
 
+// ── G5: caching and keep-alive ───────────────────────────────────────
+void TestCachingAndKeepAlive() {
+  using openaxe_vst3::CacheControlFor;
+  using openaxe_vst3::WantsKeepAlive;
+
+  // Vite fingerprints assets, so those can be cached forever under that name.
+  Check(CacheControlFor("/assets/index-B6MdcQhV.js").find("immutable") != std::string::npos,
+        "hashed asset is immutable");
+  Check(CacheControlFor("/assets/index-D5w7GfKV.css").find("immutable") != std::string::npos,
+        "hashed css is immutable");
+  // index.html names the current hashes, so caching it would pin the browser
+  // to a stale build after every rebuild — the one file that must not be.
+  Check(CacheControlFor("/index.html") == "no-cache", "index.html is never cached");
+  Check(CacheControlFor("/presets") == "no-cache", "SPA route is never cached");
+  // Unfingerprinted assets get a short TTL rather than immutable, since their
+  // contents can change under the same name.
+  Check(CacheControlFor("/textures/carbon-fibre.png").find("immutable") == std::string::npos,
+        "unhashed asset is not immutable");
+  Check(CacheControlFor("/logo.png").find("max-age") != std::string::npos,
+        "unhashed asset still gets a TTL");
+
+  // HTTP/1.1 keeps alive by default; 1.0 does not; explicit headers win.
+  Check(WantsKeepAlive("GET / HTTP/1.1\r\nHost: x\r\n\r\n"), "HTTP/1.1 defaults to keep-alive");
+  Check(!WantsKeepAlive("GET / HTTP/1.0\r\nHost: x\r\n\r\n"), "HTTP/1.0 defaults to close");
+  Check(!WantsKeepAlive("GET / HTTP/1.1\r\nConnection: close\r\n\r\n"), "explicit close wins");
+  Check(WantsKeepAlive("GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n"),
+        "explicit keep-alive on 1.0");
+  Check(!WantsKeepAlive("GET / HTTP/1.1\r\nCONNECTION: CLOSE\r\n\r\n"),
+        "header matching is case-insensitive");
+}
+
 // ── G1: Stop() must not hang while the serve thread sits in accept() ──
 void TestServerShutdown() {
   const fs::path tmp = fs::temp_directory_path() / "openaxe_http_stop_test";
@@ -327,6 +358,7 @@ int main() {
   TestUiRootOverride();
   TestTrustedUiUrl();
   TestHostValidation();
+  TestCachingAndKeepAlive();
   TestServerShutdown();
   if (failures == 0) std::printf("ui_serving_test: all checks passed\n");
   return failures == 0 ? 0 : 1;

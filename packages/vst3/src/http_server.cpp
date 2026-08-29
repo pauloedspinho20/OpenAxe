@@ -6,6 +6,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <utility>
 
@@ -71,6 +72,38 @@ bool IsAllowedHost(const std::string& request_head, unsigned short port) {
   return false;
 }
 
+std::string CacheControlFor(const std::string& path) {
+  // Vite fingerprints assets (index-B6MdcQhV.js), so their contents can never
+  // change under a given name — cache them hard. index.html is the opposite:
+  // it names the current hashes, so caching it would pin the browser to a
+  // stale build after every rebuild.
+  const std::string ext = std::filesystem::path(path).extension().string();
+  if (ext == ".html" || ext.empty()) return "no-cache";
+  const std::string stem = std::filesystem::path(path).stem().string();
+  // "name-<hash>" where the hash is Vite's 8+ char base64url. Anything without
+  // that shape gets a short TTL rather than immutable.
+  const size_t dash = stem.rfind('-');
+  if (dash != std::string::npos && stem.size() - dash - 1 >= 8) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=300";
+}
+
+bool WantsKeepAlive(const std::string& request_head) {
+  std::string lower;
+  lower.reserve(request_head.size());
+  for (char c : request_head) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  const bool http11 = lower.find("http/1.1") != std::string::npos;
+  const size_t conn = lower.find("connection:");
+  if (conn != std::string::npos) {
+    const size_t eol = lower.find_first_of("\r\n", conn);
+    const std::string value = lower.substr(conn, eol == std::string::npos ? std::string::npos : eol - conn);
+    if (value.find("close") != std::string::npos) return false;
+    if (value.find("keep-alive") != std::string::npos) return true;
+  }
+  return http11;  // HTTP/1.1 keeps alive by default, 1.0 does not
+}
+
 bool IsPathUnderRoot(const std::string& full, const std::string& root) {
   const auto rel = std::filesystem::path(full).lexically_relative(std::filesystem::path(root));
   if (rel.empty()) return false;
@@ -119,11 +152,14 @@ bool SendAll(int fd, const char* data, size_t len) {
 }
 
 bool SendHeader(int fd, int status, const char* reason, size_t content_length,
-                const std::string& content_type) {
-  const std::string head = "HTTP/1.1 " + std::to_string(status) + " " + reason +
-                           "\r\nContent-Type: " + content_type +
-                           "\r\nContent-Length: " + std::to_string(content_length) +
-                           "\r\nConnection: close\r\n\r\n";
+                const std::string& content_type, const std::string& cache_control = {},
+                bool keep_alive = false) {
+  std::string head = "HTTP/1.1 " + std::to_string(status) + " " + reason +
+                     "\r\nContent-Type: " + content_type +
+                     "\r\nContent-Length: " + std::to_string(content_length);
+  if (!cache_control.empty()) head += "\r\nCache-Control: " + cache_control;
+  head += keep_alive ? "\r\nConnection: keep-alive" : "\r\nConnection: close";
+  head += "\r\n\r\n";
   return SendAll(fd, head.data(), head.size());
 }
 
@@ -149,20 +185,23 @@ bool RecvRequestHead(int fd, std::string& out) {
   return true;
 }
 
-void HandleClient(int fd, const std::string& root, const std::string& inject_head_script,
-                  unsigned short port) {
+// Serves one request. Returns true when the connection should stay open for
+// another (issue #300 G5).
+bool HandleOneRequest(int fd, const std::string& root, const std::string& inject_head_script,
+                      unsigned short port) {
   std::string req;
-  if (!RecvRequestHead(fd, req)) return;
+  if (!RecvRequestHead(fd, req)) return false;
+  const bool keep_alive = WantsKeepAlive(req);
   // Reject cross-origin requests aimed at our loopback port before doing any
   // filesystem work (issue #300 G3).
   if (!IsAllowedHost(req, port)) {
     SendHeader(fd, 403, "Forbidden", 0, "text/plain");
-    return;
+    return false;
   }
   const size_t sp1 = req.find(' ');
   if (req.compare(0, 4, "GET ") != 0 || sp1 == std::string::npos) {
     SendHeader(fd, 405, "Method Not Allowed", 0, "text/plain");
-    return;
+    return false;
   }
   const size_t sp2 = req.find(' ', sp1 + 1);
   const std::string target = req.substr(sp1 + 1, sp2 == std::string::npos ? std::string::npos : sp2 - sp1 - 1);
@@ -173,8 +212,8 @@ void HandleClient(int fd, const std::string& root, const std::string& inject_hea
   std::filesystem::path full = (root_norm / path.substr(1)).lexically_normal();
   const bool inside = IsPathUnderRoot(full.string(), root_norm.string());
   if (!inside) {
-    SendHeader(fd, 404, "Not Found", 0, "text/plain");
-    return;
+    SendHeader(fd, 404, "Not Found", 0, "text/plain", {}, keep_alive);
+    return keep_alive;
   }
   if (!std::filesystem::is_regular_file(full, ec)) {
     // SPA fallback: a client-side route ("/presets", "/tuner") is not a file on
@@ -184,12 +223,12 @@ void HandleClient(int fd, const std::string& root, const std::string& inject_hea
     if (full.extension().empty() && std::filesystem::is_regular_file(root_norm / "index.html", ec)) {
       full = root_norm / "index.html";
     } else {
-      SendHeader(fd, 404, "Not Found", 0, "text/plain");
-      return;
+      SendHeader(fd, 404, "Not Found", 0, "text/plain", {}, keep_alive);
+      return keep_alive;
     }
   }
   std::ifstream ifs(full, std::ios::binary);
-  if (!ifs) { SendHeader(fd, 404, "Not Found", 0, "text/plain"); return; }
+  if (!ifs) { SendHeader(fd, 404, "Not Found", 0, "text/plain", {}, keep_alive); return keep_alive; }
   std::string body((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
   std::string content_type; SetContentType(full.string(), content_type);
   // Bridge polyfill goes into the HTML document itself, ahead of the SPA's
@@ -197,8 +236,35 @@ void HandleClient(int fd, const std::string& root, const std::string& inject_hea
   if (!inject_head_script.empty() && content_type.starts_with("text/html")) {
     body = InjectHeadScript(body, inject_head_script);
   }
-  if (!SendHeader(fd, 200, "OK", body.size(), content_type)) return;
-  SendAll(fd, body.data(), body.size());
+  if (!SendHeader(fd, 200, "OK", body.size(), content_type, CacheControlFor(path), keep_alive)) {
+    return false;
+  }
+  if (!SendAll(fd, body.data(), body.size())) return false;
+  return keep_alive;
+}
+
+// Drives one connection to completion. Bounded by an idle timeout so a client
+// that opens a keep-alive connection and goes quiet cannot hold a worker
+// forever, and by a request cap so one connection cannot monopolise one.
+void HandleConnection(int fd, const std::string& root, const std::string& inject_head_script,
+                      unsigned short port, const std::function<bool()>& others_waiting) {
+  constexpr int kMaxRequestsPerConnection = 100;
+  constexpr int kIdleTimeoutMs = 2000;
+  for (int i = 0; i < kMaxRequestsPerConnection; ++i) {
+#ifndef _WIN32
+    if (i > 0) {  // the first request is already waiting; later ones may not come
+      // Do not idle here while someone else is queued for a worker. Without
+      // this, a browser holding its per-origin connections open would park
+      // every worker on an idle poll and the next connection would wait out
+      // the timeout before being served.
+      if (others_waiting && others_waiting()) break;
+      struct pollfd pfd { fd, POLLIN, 0 };
+      const int ready = poll(&pfd, 1, kIdleTimeoutMs);
+      if (ready <= 0) break;  // idle or error: close
+    }
+#endif
+    if (!HandleOneRequest(fd, root, inject_head_script, port)) break;
+  }
 }
 
 }  // namespace
@@ -225,6 +291,10 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port,
   }
 #endif
   running_.store(true, std::memory_order_release);
+  workers_.reserve(kWorkerCount);
+  for (int i = 0; i < kWorkerCount; ++i) {
+    workers_.emplace_back(&HttpServer::WorkerLoop, this, root);
+  }
   thread_ = std::thread(&HttpServer::ServeLoop, this, root);
   return true;
 }
@@ -258,9 +328,34 @@ void HttpServer::ServeLoop(const std::string& root) {
       break;
     }
 #endif
-    HandleClient(fd, root, inject_head_script_, port_);
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex_);
+      pending_.push_back(fd);
+    }
+    queue_cv_.notify_one();
+  }
+}
+
+void HttpServer::WorkerLoop(const std::string& root) {
+  for (;;) {
+    int fd = -1;
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      queue_cv_.wait(lock, [&] {
+        return !pending_.empty() || !running_.load(std::memory_order_acquire);
+      });
+      if (pending_.empty()) return;  // shutting down and nothing left to serve
+      fd = pending_.front();
+      pending_.pop_front();
+    }
+    HandleConnection(fd, root, inject_head_script_, port_, [this] { return HasQueuedConnections(); });
     CloseSocket(fd);
   }
+}
+
+bool HttpServer::HasQueuedConnections() {
+  std::lock_guard<std::mutex> lock(queue_mutex_);
+  return !pending_.empty();
 }
 
 void HttpServer::Stop() {
@@ -279,6 +374,20 @@ void HttpServer::Stop() {
   if (listen_fd_ >= 0) { CloseSocket(listen_fd_); listen_fd_ = -1; }
 #endif
   if (thread_.joinable()) thread_.join();
+
+  // The acceptor has stopped, so nothing new is queued. Wake every worker and
+  // let them finish; then close whatever is still queued but unserved.
+  queue_cv_.notify_all();
+  for (auto& w : workers_) {
+    if (w.joinable()) w.join();
+  }
+  workers_.clear();
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    for (int fd : pending_) CloseSocket(fd);
+    pending_.clear();
+  }
+
   if (listen_fd_ >= 0) { CloseSocket(listen_fd_); listen_fd_ = -1; }
 #ifndef _WIN32
   for (int& fd : wake_fds_) {

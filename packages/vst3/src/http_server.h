@@ -1,8 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace openaxe_vst3 {
 
@@ -28,6 +32,15 @@ bool IsPathUnderRoot(const std::string& full, const std::string& root);
 // tolerates a missing Host only for HTTP/1.0-style clients, which browsers are
 // not (issue #300 G3).
 bool IsAllowedHost(const std::string& request_head, unsigned short port);
+
+// Cache-Control value for a served path (issue #300 G5). Vite emits hashed
+// asset names (index-<hash>.js), so those are immutable and can be cached hard;
+// index.html must not be, or a rebuilt UI would never be picked up.
+std::string CacheControlFor(const std::string& path);
+
+// True when the request asks to keep the connection open. HTTP/1.1 defaults to
+// keep-alive unless "Connection: close"; HTTP/1.0 is the reverse.
+bool WantsKeepAlive(const std::string& request_head);
 
 // Minimal loopback HTTP server for the VST webview — mirrors
 // apps/desktop/src/http_server.h but in the plugin's namespace so the VST
@@ -56,6 +69,26 @@ class HttpServer {
 
  private:
   void ServeLoop(const std::string& root);
+  // Connections are handled on worker threads, not inline in the accept loop.
+  // Serial handling was tolerable only because every response closed the
+  // connection; with keep-alive a single held connection would starve every
+  // other one, and a browser opens several at once for a JS bundle
+  // (issue #300 G5).
+  void WorkerLoop(const std::string& root);
+  // True when a connection is waiting for a worker. A keep-alive connection
+  // gives up its worker rather than idling while someone else queues.
+  bool HasQueuedConnections();
+
+  // Comfortably above a browser's per-origin connection limit (6 in Chrome and
+  // Safari). A keep-alive connection occupies a worker while it waits for the
+  // next request, so with 4 workers a single browser could park all of them and
+  // the next connection would wait out an idle timeout before being served.
+  static constexpr int kWorkerCount = 8;
+  std::vector<std::thread> workers_;
+  std::deque<int> pending_;
+  std::mutex queue_mutex_;
+  std::condition_variable queue_cv_;
+
   int listen_fd_ = -1;
   // Self-pipe write/read ends used to wake a blocked accept() on Stop()
   // (issue #300 G1). POSIX does not guarantee that closing a listening socket
