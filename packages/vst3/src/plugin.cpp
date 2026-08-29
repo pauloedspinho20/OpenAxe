@@ -606,6 +606,45 @@ bool OpenAxePlugin::GetModelInfo(int32_t block_id, double* out_sample_rate, int*
   return true;
 }
 
+
+bool OpenAxePlugin::NotifyHostParamChangedFromUI(int32_t block, int32_t param_index,
+                                                 float real_value) {
+#if IPLUG_DSP
+  if (!graph_ || block < 0 || param_index < 0) return false;
+
+  // No reverse block->slot lookup in the core ABI, and with only 16 slots a
+  // linear scan is cheaper than maintaining a second map that could drift.
+  for (int slot = openaxe::automation::kFirstBlockSlot;
+       slot < openaxe::automation::kSlotCount; ++slot) {
+    if (nam_studio_automation_slot_block(graph_, slot) != block) continue;
+    if (param_index >= openaxe::automation::kParamsPerSlot) return false;
+
+    const char* name = nullptr;
+    const char* sym = nullptr;
+    const char* unit = nullptr;
+    float mn = 0.0f, mx = 1.0f;
+    if (nam_studio_automation_slot_param_info(graph_, slot, param_index, &name, &sym, &mn, &mx,
+                                              &unit) == 0) {
+      return false;  // slot has no descriptor at this entry
+    }
+    const int host_id = openaxe_vst3::params::SlotEntryToHostId(slot, param_index);
+    if (host_id < 0 || host_id >= openaxe_vst3::params::HostParamCount()) return false;
+
+    const double norm = openaxe_vst3::params::RealToNormalized(real_value, mn, mx);
+    // Begin/end bracket the change as a gesture, which is what a host records
+    // as an automation move rather than a one-off value poke.
+    BeginInformHostOfParamChangeFromUI(host_id);
+    SendParameterValueFromUI(host_id, norm);
+    EndInformHostOfParamChangeFromUI(host_id);
+    return true;
+  }
+  return false;
+#else
+  (void)block; (void)param_index; (void)real_value;
+  return false;
+#endif
+}
+
 openaxe_vst3::editor::Editor& OpenAxePlugin::GetEditor() {
   if (!editor_) editor_ = std::make_unique<openaxe_vst3::editor::Editor>(graph_);
   return *editor_;

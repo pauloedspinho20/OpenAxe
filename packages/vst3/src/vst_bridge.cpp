@@ -299,7 +299,14 @@ std::string VstBridge::HandleDisconnect(const std::string& req){
   try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("edgeId",""); int32_t coreEdge=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=edgeIds_.find(jsEdge); if(it==edgeIds_.end()) return (json{{"ok", true}}).dump(); coreEdge=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_disconnect(graph_, coreEdge); }); else nam_studio_disconnect(graph_, coreEdge); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_.erase(jsEdge); edgeEndpoints_.erase(jsEdge); } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("disconnect failed"); }
 }
 std::string VstBridge::HandleSetParam(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); float value=o.value("value",0.0f); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param"); nam_studio_set_param(graph_, coreId, idx, value); return (json{{"ok", true}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); float value=o.value("value",0.0f); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param");
+    nam_studio_set_param(graph_, coreId, idx, value);
+    // Tell the host the editor moved this, so a DAW can record automation from
+    // our own UI and its parameter list tracks the knob (issue #300 E5).
+    // Returns false when the block is not bound to one of the 15 automation
+    // slots, which is normal for a large rig and not an error.
+    if (plugin_) plugin_->NotifyHostParamChangedFromUI(coreId, idx, value);
+    return (json{{"ok", true}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleGetParam(const std::string& req){
   try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param"); float v=nam_studio_get_param(graph_, coreId, idx); return (json{{"ok", true}, {"value", v}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }

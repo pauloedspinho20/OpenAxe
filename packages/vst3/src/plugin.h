@@ -83,6 +83,23 @@ class OpenAxePlugin final : public iplug::Plugin {
   bool GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
                     double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const;
 
+  // Report a parameter the *editor* changed to the host (issue #300 E5).
+  //
+  // HandleSetParam wrote straight to the core, so the host never learned that
+  // anything moved: turning a knob in the plugin's own UI recorded no
+  // automation, showed no movement in the DAW's parameter list, and could be
+  // overwritten by the host's stale value on the next block. Automation you can
+  // read but not write is only half a parameter surface.
+  //
+  // `block` and `param_index` are the core's own; this resolves them to a host
+  // parameter id through the automation slot map and returns false when the
+  // block is not currently bound to a slot (only 15 slots exist, so most blocks
+  // in a large rig are not automatable — that is expected, not an error).
+  //
+  // UI thread only: it drives iPlug2's begin/set/end gesture, which is what
+  // hosts latch onto when recording automation.
+  bool NotifyHostParamChangedFromUI(int32_t block, int32_t param_index, float real_value);
+
   // Monitor tap for the UI's meters, scope and tuner (issue #300 E4c). The
   // plugin's getTap used to return empty arrays, so anything fed by waveform
   // data read flat inside a DAW. Written by ProcessBlock, read by the bridge on

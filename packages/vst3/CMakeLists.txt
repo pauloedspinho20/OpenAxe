@@ -93,6 +93,14 @@ FetchContent_GetProperties(iplug2)
   if(NOT iplug2_POPULATED)
     FetchContent_Populate(iplug2)
   endif()
+  # Fix an upstream webview teardown crash before anything compiles it — see
+  # patches/apply_iplug2_patches.cmake for the analysis. Idempotent, so a
+  # reconfigure over an already-patched tree is a no-op.
+  set(IPLUG2_SRC "${iplug2_SOURCE_DIR}")
+  if(APPLE AND EXISTS "${iplug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebView_mac.mm")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/patches/apply_iplug2_patches.cmake")
+  endif()
+
   if(EXISTS "${iplug2_SOURCE_DIR}/IPlug/IPlug_include_in_plug_hdr.h")
     set(IPLUG2_AVAILABLE ON)
     set(IPLUG2_DIR "${iplug2_SOURCE_DIR}" CACHE PATH "iPlug2 root" FORCE)
