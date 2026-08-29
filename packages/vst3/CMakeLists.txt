@@ -473,6 +473,16 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   set_target_properties(openaxe_standalone PROPERTIES EXCLUDE_FROM_ALL TRUE)
   if(APPLE)
     set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
+    # NOTE (issue #300 F5): this target does not currently build on macOS.
+    # iPlug2's IPlugAPP_dialog.cpp is Objective-C++ despite its .cpp extension
+    # (it pulls in Foundation) and fails when compiled as plain C++. It arrives
+    # through iPlug2::APP's INTERFACE_SOURCES, and neither
+    # set_source_files_properties here nor set_property(... TARGET_DIRECTORY)
+    # makes the LANGUAGE OBJCXX stick — the property is not reaching the source
+    # as consumed. Left EXCLUDE_FROM_ALL and unfixed rather than papered over:
+    # it needs either an iPlug2-side fix or building the APP sources into our
+    # own object library where we control the language. Not wired into CI until
+    # it builds, since a job that is red from day one gets ignored.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       target_compile_options(openaxe_standalone PRIVATE -Wno-auto-var-id)
     endif()

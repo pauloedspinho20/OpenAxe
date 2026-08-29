@@ -168,7 +168,9 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
     // dev-server mode it is still too late for useAudioEngine.ts's
     // module-scope shell check — running the plugin against `pnpm dev:web`
     // needs a Vite plugin to inject the same script. Tracked in #300 A1.
-    std::string poly = openaxe_vst3::BridgePolyfillJs();
+    const char* dbgEnv = std::getenv("OPENAXE_DESKTOP_DEBUG");
+    std::string poly =
+        openaxe_vst3::BridgePolyfillJs("plugin", dbgEnv && std::string(dbgEnv) == "1");
     EvaluateJavaScript(poly.c_str(), nullptr);
     IWebViewControl::OnWebContentLoaded();
   }
@@ -233,7 +235,10 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
     // SPA's module scripts — see HttpServer::Start (issue #300 A1). Injecting
     // it from OnWebContentLoaded instead was too late: the app had already
     // decided it was a browser and opened the microphone.
-    if (!uiServer_->Start(uiRoot_, uiPort_, openaxe_vst3::BridgePolyfillJs())) {
+    const char* dbgEnv = std::getenv("OPENAXE_DESKTOP_DEBUG");
+    const bool devtools = dbgEnv && std::string(dbgEnv) == "1";
+    if (!uiServer_->Start(uiRoot_, uiPort_,
+                          openaxe_vst3::BridgePolyfillJs("plugin", devtools))) {
       uiServer_.reset();
       uiPort_ = 0;
     }

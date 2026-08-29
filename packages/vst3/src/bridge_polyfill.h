@@ -21,6 +21,8 @@ namespace openaxe_vst3 {
 // plugin from the desktop shell synchronously, at module scope, without
 // awaiting getConfig() (issue #300 E1). The desktop shell binds its bridge
 // natively and injects no polyfill, so an absent value means "desktop".
-std::string BridgePolyfillJs(const std::string& shell = "plugin");
+// `devtools` mirrors OPENAXE_DESKTOP_DEBUG: when true the page leaves the
+// native context menu alone, because Inspect Element is the reason it is on.
+std::string BridgePolyfillJs(const std::string& shell = "plugin", bool devtools = false);
 
 }  // namespace openaxe_vst3

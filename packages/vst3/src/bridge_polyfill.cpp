@@ -2,7 +2,7 @@
 
 namespace openaxe_vst3 {
 
-std::string BridgePolyfillJs(const std::string& shell) {
+std::string BridgePolyfillJs(const std::string& shell, bool devtools) {
   // Defines window['openAxe.*'] as Promise wrappers over iPlug2's webview
   // message channel, plus the resolver native calls via EvaluateJavaScript.
   //
@@ -97,6 +97,22 @@ std::string BridgePolyfillJs(const std::string& shell) {
     return ['button', 'checkbox', 'radio', 'range', 'color', 'file', 'image',
             'reset', 'submit'].indexOf(t) === -1;
   }
+  // ── Suppress the webview's own context menu (issue #300 H3) ────────
+  // Right-clicking anywhere gave the native WKWebView menu — Reload, Back,
+  // and Inspect Element when devtools are on — which is a large part of what
+  // makes the shell read as a browser rather than an app. Suppressed unless
+  // OPENAXE_DESKTOP_DEBUG put the webview in devtools mode, where Inspect
+  // Element is the whole point; the native side flips that flag before this
+  // script runs.
+  //
+  // Elements that opt in with data-native-menu (a future text field wanting
+  // the system spelling/substitution menu) are left alone.
+  document.addEventListener('contextmenu', function (e) {
+    if (window.__openAxeDevTools) return;
+    if (e.target && e.target.closest && e.target.closest('[data-native-menu]')) return;
+    e.preventDefault();
+  });
+
   ['keydown', 'keyup', 'keypress'].forEach(function (type) {
     document.addEventListener(type, function (e) {
       if (isEditableTarget(e.target)) e.stopPropagation();
@@ -106,7 +122,9 @@ std::string BridgePolyfillJs(const std::string& shell) {
 )JS";
   // Declared after the wrappers so the shell tag is only ever visible on a
   // fully-initialised bridge.
-  return prelude + "\nwindow.openAxe.shell = " + [&] {
+  const std::string devtools_line =
+      std::string("\nwindow.__openAxeDevTools = ") + (devtools ? "true" : "false") + ";";
+  return devtools_line + prelude + "\nwindow.openAxe.shell = " + [&] {
     std::string quoted = "\"";
     for (char c : shell) {
       if (c == '"' || c == '\\') continue;  // shell names are internal identifiers

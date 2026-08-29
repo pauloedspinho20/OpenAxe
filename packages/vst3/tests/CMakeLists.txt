@@ -165,5 +165,24 @@ add_test(NAME vst3_clap_validator
 # run, label them so routine runs can exclude them:
 #   ctest --test-dir packages/vst3/build -LE validator   # fast, ~1s
 #   ctest --test-dir packages/vst3/build -L validator    # just the validators
+# Editor open/close lifecycle (issue #300 H5). The desktop shell has
+# teardown_race_test for the equivalent bug on its side; this is the plugin's.
+#
+# Closing the editor used to crash the host: iPlug2's CloseWebView dropped its
+# reference to the WKScriptMessageHandler without unregistering it, so a script
+# message queued before teardown was delivered to a destroyed IWebView. Our UI
+# polls continuously for meters, scope and tuner, so there is nearly always one
+# in flight. patches/apply_iplug2_patches.cmake fixes it; this catches a
+# regression.
+#
+# It is a race, so a single pass proves very little — that is exactly how the
+# original crash slipped past me. Three repeats at low strictness, which is
+# ~1 minute rather than pluginval's ~13 at strictness 10, and REPEAT UNTIL_FAIL
+# so a flaky crash surfaces rather than averaging out.
+add_test(NAME vst3_editor_lifecycle
+  COMMAND bash -c "PV=\"${PLUGINVAL_BIN}\"; if [ -z \"\$PV\" ] || [ ! -x \"\$PV\" ]; then PV=\"\$(command -v pluginval 2>/dev/null)\"; fi; if [ -z \"\$PV\" ]; then echo 'SKIP: pluginval not found'; exit 0; fi; VST3=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.vst3\"; do if [ -e \"\$p\" ]; then VST3=\"\$p\"; break; fi; done; if [ -z \"\$VST3\" ]; then echo 'SKIP: VST3 bundle not built yet'; exit 0; fi; exec \"\$PV\" --strictness-level 5 --validate \"\$VST3\"")
+set_tests_properties(vst3_editor_lifecycle PROPERTIES
+  LABELS "validator" TIMEOUT 600 REPEAT "UNTIL_FAIL:3")
+
 set_tests_properties(vst3_pluginval vst3_pluginval_au vst3_vst3_validator vst3_auval vst3_clap_validator
   PROPERTIES LABELS "validator" TIMEOUT 1800)
