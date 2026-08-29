@@ -146,7 +146,11 @@ void TestFilePathGuards() {
   CHECK(r2 == openaxe_vst3::assets::LoadResult::FileNotFound);
 
   // Oversize file via temp file (8MB+1 for IR)
-  const std::string tmp = "/tmp/openaxe_oversize_test.wav";
+  // Platform temp dir — see the note in state_test.cpp; on Windows the write
+  // to "/tmp/..." failed, so the file was never oversize and the TooLarge
+  // guard was never reached.
+  const std::string tmp =
+      (std::filesystem::temp_directory_path() / "openaxe_oversize_test.wav").string();
   {
     std::ofstream out(tmp, std::ios::binary);
     std::vector<char> chunk(1024*1024, 'x');

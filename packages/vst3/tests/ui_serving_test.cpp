@@ -8,6 +8,7 @@
 //   - HTTP path containment (G2),
 //   - bundle-relative UI root resolution (F1).
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -132,9 +133,15 @@ void TestPathContainment() {
 // rewrites /home to /System/Volumes/Data/home via a firmlink. The property
 // that matters is the layout *relative* to the binary.
 void TestUiRootCandidates() {
+  // Compare with separators normalised: UiRootCandidates returns native paths,
+  // so on Windows these come back with backslashes and a forward-slash suffix
+  // would never match. The property under test is the layout, not the
+  // platform's separator.
   auto has_suffix = [](const std::vector<std::string>& v, std::string_view suffix) {
     for (const auto& c : v) {
-      if (std::string_view(c).ends_with(suffix)) return true;
+      std::string norm = c;
+      std::replace(norm.begin(), norm.end(), '\\', '/');
+      if (std::string_view(norm).ends_with(suffix)) return true;
     }
     return false;
   };
@@ -172,11 +179,14 @@ void TestUiRootCandidates() {
       "/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3/Contents/MacOS/OpenAxe");
   int bundle_at = -1, shared_at = -1;
   for (size_t i = 0; i < ordered.size(); ++i) {
-    if (std::string_view(ordered[i]).ends_with("OpenAxe.vst3/Contents/Resources/ui")) {
+    std::string norm = ordered[i];
+    std::replace(norm.begin(), norm.end(), '\\', '/');
+    if (std::string_view(norm).ends_with("OpenAxe.vst3/Contents/Resources/ui")) {
       if (bundle_at < 0) bundle_at = static_cast<int>(i);
     }
-    if (ordered[i].find("Application Support") != std::string::npos ||
-        ordered[i].find("/usr/share/OpenAxe") != std::string::npos) {
+    if (norm.find("Application Support") != std::string::npos ||
+        norm.find("/usr/share/OpenAxe") != std::string::npos ||
+        norm.find("/OpenAxe/ui") != std::string::npos) {  // %APPDATA%\OpenAxe\ui
       if (shared_at < 0) shared_at = static_cast<int>(i);
     }
   }

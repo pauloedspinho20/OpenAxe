@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -75,7 +76,12 @@ void TestPortableJsonRoundTrip() {
   nam_studio_connect(g, NAM_STUDIO_IN_RAIL,0, gate,0);
   nam_studio_connect(g, gate,0, NAM_STUDIO_OUT_RAIL,0);
   // Use plugin_state file helper
-  const std::string path = "/tmp/openaxe_portable_test.json";
+  // Platform temp dir, not "/tmp": that path does not exist on Windows, so the
+  // save silently failed there and the next two assertions cascaded from it.
+  // Never caught because CI selected tests by name regex and this one was not
+  // in the pattern (issue #300).
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "openaxe_portable_test.json").string();
   bool saved = openaxe_vst3::state::SavePortableJson(g, path);
   CHECK(saved);
   NamStudioGraph* h = nam_studio_graph_create();
