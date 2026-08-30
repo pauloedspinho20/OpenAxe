@@ -709,14 +709,34 @@ function(openaxe_bundle_ui target)
   # custom target that the plugin depends on means a fresh apps/web/dist is
   # always picked up; copy_ui.cmake compares timestamps so the usual case is a
   # no-op rather than a directory copy on every build.
-  add_custom_target(${target}_ui ALL
-    COMMAND "${CMAKE_COMMAND}"
-            -DSRC=${OPENAXE_WEB_DIST}
-            -DDST=${_ui_dest}
-            -DTARGET=${target}
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
-    COMMENT "${target}: syncing apps/web/dist into the bundle"
-    VERBATIM)
+  #
+  # The sync target must inherit the plugin's own EXCLUDE_FROM_ALL. Marking it
+  # ALL unconditionally quietly undid that exclusion: the sync depends on the
+  # target, so an ALL sync for openaxe_standalone pulled the deliberately
+  # excluded (and known-broken on macOS, issue #300 F5) standalone build back
+  # into the default build, and `cmake --build` — the VST: Export task's step 3
+  # — started failing on it before it ever reached the tests or the install.
+  get_target_property(_excluded_from_all ${target} EXCLUDE_FROM_ALL)
+  if(_excluded_from_all)
+    add_custom_target(${target}_ui
+      COMMAND "${CMAKE_COMMAND}"
+              -DSRC=${OPENAXE_WEB_DIST}
+              -DDST=${_ui_dest}
+              -DTARGET=${target}
+              -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+      COMMENT "${target}: syncing apps/web/dist into the bundle"
+      VERBATIM)
+    set_target_properties(${target}_ui PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  else()
+    add_custom_target(${target}_ui ALL
+      COMMAND "${CMAKE_COMMAND}"
+              -DSRC=${OPENAXE_WEB_DIST}
+              -DDST=${_ui_dest}
+              -DTARGET=${target}
+              -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+      COMMENT "${target}: syncing apps/web/dist into the bundle"
+      VERBATIM)
+  endif()
   add_dependencies(${target}_ui ${target})
 
   add_custom_command(TARGET ${target} POST_BUILD
