@@ -665,9 +665,11 @@ else()
 endif()
 
 # ── AUv2 target (issue #135, macOS only) ──────────────────────────────
-# Logic/GarageBand gate: auval -v aufx Nms1 NwSt must be clean. Same Plugin
-# class, same 302 IDs, same chunk — parameter IDs stay stable and don't
-# collide across VST3/AU/CLAP. AUv3 (app extension) is out of scope (#17).
+# Logic/GarageBand gate: auval -v aumf Nms1 NwSt must be clean — aumf, not
+# aufx, because config.h sets PLUG_DOES_MIDI_IN 1, which OPENAXE_AU_TYPE above
+# resolves to the music-effect type. Same Plugin class, same 302 IDs, same
+# chunk — parameter IDs stay stable and don't collide across VST3/AU/CLAP.
+# AUv3 (app extension) is out of scope (#17).
 if(APPLE AND IPLUG2_AVAILABLE)
   # AU wrapper sources are header-only except the iPlug AU glue; we build
   # the same PLUGIN_SOURCES with AU_API defined and produce a .component
