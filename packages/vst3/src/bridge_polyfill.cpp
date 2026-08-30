@@ -59,7 +59,13 @@ std::string BridgePolyfillJs(const std::string& shell, bool devtools) {
       });
     };
   }
-  var methods = ["version","listDevices","getConfig","open","close","start","stop","addBlock","removeBlock","moveBlock","connect","disconnect","setParam","getParam","blockInfo","listBlocks","listEdges","loadModel","loadModelJson","unloadModel","setReverbAlgorithm","setDelayModel","setBypass","setBlockTrim","loadIrWav","unloadIr","setInputGain","setMasterLevel","setMasterMuted","setTunerMuted","meters","cpuLoad","getTap","takeStreamError","secureStore","secureLoad","secureDelete","getState"];
+  var methods = ["version","listDevices","getConfig","open","close","start","stop","addBlock","removeBlock","moveBlock","connect","disconnect","setParam","getParam","blockInfo","listBlocks","listEdges","loadModel","loadModelJson","unloadModel","setReverbAlgorithm","setDelayModel","setBypass","setBlockTrim","loadIrWav","unloadIr","setInputGain","setMasterLevel","setMasterMuted","setTunerMuted","meters","cpuLoad","getTap","takeStreamError","secureStore","secureLoad","secureDelete","getState",
+    // Shared on-disk library. This list is the whole bridge surface the
+    // plugin's webview gets — a handler added to VstBridge but not named here
+    // simply does not exist as far as the UI is concerned, and the app
+    // silently falls back to browser storage.
+    "storageGet","storagePut","storageDelete","storageKeys","storageValues","storageClear",
+    "assetPut","assetGet","assetDelete","assetHas","assetKeys","assetStats","assetClear"];
   methods.forEach(bind);
 
   // ── Let people type (issue #300 B5) ────────────────────────────────

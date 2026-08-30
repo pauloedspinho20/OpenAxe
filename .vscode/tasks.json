@@ -710,7 +710,7 @@
     {
       "label": "Drift: all checks (matches ci.yml)",
       "type": "shell",
-      "command": "set -e; node scripts/gen-param-schema.mjs --check; node scripts/gen-param-schema.mjs --check --target=automation-map; node scripts/check-grid-dims.mjs --check; node scripts/check-wasm-exports.mjs --check; node scripts/sync-version.mjs --check; node packages/ui/scripts/generate-tokens.mjs --check; echo 'All drift guards in sync.'",
+      "command": "set -e; node scripts/gen-param-schema.mjs --check; node scripts/gen-param-schema.mjs --check --target=automation-map; node scripts/check-grid-dims.mjs --check; node scripts/check-bridge-methods.mjs; node scripts/check-wasm-exports.mjs --check; node scripts/sync-version.mjs --check; node packages/ui/scripts/generate-tokens.mjs --check; echo 'All drift guards in sync.'",
       "detail": "Runs every drift guard CI runs, in ci.yml's order: param schema, automation map, grid dims, WASM exports, version sync, design tokens. Fails on the first mismatch.",
       "group": "test",
       "presentation": {
