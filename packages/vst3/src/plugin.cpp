@@ -230,18 +230,18 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
   bridge_ = std::make_unique<openaxe_vst3::VstBridge>(this, graph_);
   uiRoot_ = openaxe_vst3::FindBundledUiRoot();
   if (!uiRoot_.empty()) {
-    uiServer_ = std::make_unique<openaxe_vst3::HttpServer>();
     // The bridge polyfill is served *inside* index.html so it runs before the
     // SPA's module scripts — see HttpServer::Start (issue #300 A1). Injecting
     // it from OnWebContentLoaded instead was too late: the app had already
     // decided it was a browser and opened the microphone.
     const char* dbgEnv = std::getenv("OPENAXE_DESKTOP_DEBUG");
     const bool devtools = dbgEnv && std::string(dbgEnv) == "1";
-    if (!uiServer_->Start(uiRoot_, uiPort_,
-                          openaxe_vst3::BridgePolyfillJs("plugin", devtools))) {
-      uiServer_.reset();
-      uiPort_ = 0;
-    }
+    // One server for the whole process, not one per instance: every instance
+    // serves the same bundle, and eight instances in a project used to mean
+    // eight listeners and eight worker pools.
+    uiPort_ = openaxe_vst3::SharedUiServer::Acquire(
+        uiRoot_, openaxe_vst3::BridgePolyfillJs("plugin", devtools));
+    uiServerAcquired_ = uiPort_ != 0;
   }
   VstLog("OpenAxe VST ctor: uiRoot=" + uiRoot_ + " port=" + std::to_string(uiPort_) + " hasWebView=1");
   if (const char* e = std::getenv("OPENAXE_UI_URL")) VstLog(std::string("OPENAXE_UI_URL=") + e);
@@ -321,8 +321,10 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
 
 OpenAxePlugin::~OpenAxePlugin() {
 #ifdef OPENAXE_HAS_WEBVIEW
-  if (uiServer_) uiServer_->Stop();
-  uiServer_.reset();
+  if (uiServerAcquired_) {
+    openaxe_vst3::SharedUiServer::Release();
+    uiServerAcquired_ = false;
+  }
   bridge_.reset();
 #endif
   nam_studio_graph_destroy(graph_);

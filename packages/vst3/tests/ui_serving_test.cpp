@@ -358,6 +358,79 @@ void TestUiRootOverride() {
   fs::remove_all(tmp);
 }
 
+// A stable port and one server per process (issue #300 follow-up). Both exist
+// so that N plugin instances in a project stop meaning N listeners, N worker
+// pools and N webview origins — this machine had accumulated 20 per-origin
+// WebKit data directories under com.cockos.reaper.
+void TestSharedServerAndStablePort() {
+  const fs::path tmp = fs::temp_directory_path() / "openaxe_shared_server_test";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  std::ofstream(tmp / "index.html") << "<html><head></head><body>x</body></html>";
+
+  // A lone server takes one of the preferred ports rather than a random one,
+  // which is what keeps the origin stable from launch to launch.
+  const auto is_preferred = [](unsigned short port) {
+    for (unsigned short candidate : openaxe_vst3::HttpServer::kPreferredPorts) {
+      if (candidate == port) return true;
+    }
+    return false;
+  };
+  {
+    openaxe_vst3::HttpServer server;
+    unsigned short port = 0;
+    Check(server.Start(tmp.string(), port, ""), "server starts");
+    Check(is_preferred(port), "a lone server takes a preferred, stable port");
+    server.Stop();
+  }
+
+  // And the same one next time — the whole point, since the origin is
+  // scheme+host+port and browser storage is scoped to it.
+  unsigned short first_port = 0;
+  {
+    openaxe_vst3::HttpServer server;
+    Check(server.Start(tmp.string(), first_port, ""), "server restarts");
+    server.Stop();
+  }
+  {
+    openaxe_vst3::HttpServer server;
+    unsigned short port = 0;
+    Check(server.Start(tmp.string(), port, ""), "server restarts again");
+    Check(port == first_port, "the port is the same across restarts");
+    server.Stop();
+  }
+
+  // Several instances share one server and therefore one port.
+  const unsigned short a = openaxe_vst3::SharedUiServer::Acquire(tmp.string(), "");
+  Check(a != 0, "first instance starts the shared server");
+  const unsigned short b = openaxe_vst3::SharedUiServer::Acquire(tmp.string(), "");
+  const unsigned short c = openaxe_vst3::SharedUiServer::Acquire(tmp.string(), "");
+  Check(b == a && c == a, "every instance gets the same port");
+
+  // It survives until the last one lets go: a DAW closing one instance of a
+  // plugin must not take the UI out from under the others.
+  openaxe_vst3::SharedUiServer::Release();
+  openaxe_vst3::SharedUiServer::Release();
+  const unsigned short still = openaxe_vst3::SharedUiServer::Acquire(tmp.string(), "");
+  Check(still == a, "server still up while an instance holds it");
+  openaxe_vst3::SharedUiServer::Release();
+  openaxe_vst3::SharedUiServer::Release();
+
+  // After the last release it restarts cleanly rather than being wedged.
+  const unsigned short again = openaxe_vst3::SharedUiServer::Acquire(tmp.string(), "");
+  Check(again != 0, "shared server restarts after the last release");
+  openaxe_vst3::SharedUiServer::Release();
+
+  // An unbalanced Release must not underflow the refcount into a state where
+  // the next Acquire hands back a port nothing is listening on.
+  openaxe_vst3::SharedUiServer::Release();
+  const unsigned short after_extra = openaxe_vst3::SharedUiServer::Acquire(tmp.string(), "");
+  Check(after_extra != 0, "an extra Release does not wedge the shared server");
+  openaxe_vst3::SharedUiServer::Release();
+
+  fs::remove_all(tmp);
+}
+
 }  // namespace
 
 int main() {
@@ -370,6 +443,7 @@ int main() {
   TestHostValidation();
   TestCachingAndKeepAlive();
   TestServerShutdown();
+  TestSharedServerAndStablePort();
   if (failures == 0) std::printf("ui_serving_test: all checks passed\n");
   return failures == 0 ? 0 : 1;
 }

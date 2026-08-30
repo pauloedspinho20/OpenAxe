@@ -67,6 +67,16 @@ class HttpServer {
              std::string inject_head_script = {});
   void Stop();
 
+  // Ports tried, in order, before falling back to an ephemeral one. A stable
+  // port means a stable webview origin, which stops every launch creating a
+  // fresh per-origin WebKit data directory — this machine had accumulated 15
+  // of them under com.openaxe.desktop and 20 under com.cockos.reaper before
+  // the shared on-disk store made the contents irrelevant (issue #300).
+  // Deliberately outside the ephemeral range so the OS does not hand one of
+  // these to some other process as a client port.
+  static constexpr unsigned short kPreferredPorts[] = {47821, 47822, 47823, 47824, 47825,
+                                                       47826, 47827, 47828, 47829, 47830};
+
  private:
   void ServeLoop(const std::string& root);
   // Connections are handled on worker threads, not inline in the accept loop.
@@ -104,6 +114,27 @@ class HttpServer {
   std::thread thread_;
   std::atomic<bool> running_{false};
   std::string inject_head_script_;
+};
+
+// One UI server per process, shared by every plugin instance in it.
+//
+// Each instance used to start its own: a project with eight instances of the
+// plugin meant eight listening sockets and, since the worker pool landed,
+// eight times kWorkerCount threads — all serving byte-identical files out of
+// the same bundle. They also each took a different port, so each got its own
+// webview origin.
+//
+// Acquire() starts the server on first use and hands back the port; every
+// later caller gets the same one. Release() shuts it down when the last
+// instance goes away. Root and polyfill come from the first caller — every
+// instance in a process is the same build serving the same directory, so
+// there is nothing to disagree about.
+class SharedUiServer {
+ public:
+  // Returns the bound port, or 0 if the server could not start. Pair every
+  // non-zero return with exactly one Release().
+  static unsigned short Acquire(const std::string& root, const std::string& inject_head_script);
+  static void Release();
 };
 
 }  // namespace openaxe_vst3

@@ -1,5 +1,8 @@
 #include "http_server.h"
 
+#include <memory>
+#include <mutex>
+
 #include "openaxe/app_storage.h"
 #include "openaxe/storage_bridge.h"
 
@@ -345,8 +348,32 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port,
 #endif
   listen_fd_ = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
   if (listen_fd_ < 0) return false;
-  sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); addr.sin_port = 0;
-  if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 || listen(listen_fd_, 8) != 0) {
+#ifndef _WIN32
+  // Needed once the port is fixed rather than ephemeral: without it, closing
+  // and reopening the app inside the TIME_WAIT window fails to bind and the
+  // UI silently falls back to a different port. (Not on Windows, where
+  // SO_REUSEADDR lets an unrelated process steal a live listener instead.)
+  const int reuse = 1;
+  setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#endif
+
+  // Try the stable ports first, then let the OS pick. A stable port keeps the
+  // webview's origin stable across launches; the fallback means a squatted
+  // port degrades to the old behaviour rather than leaving the UI dead.
+  bool bound_preferred = false;
+  for (unsigned short candidate : kPreferredPorts) {
+    sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(candidate);
+    if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) { bound_preferred = true; break; }
+  }
+  if (!bound_preferred) {
+    sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+      CloseSocket(listen_fd_); listen_fd_ = -1; return false;
+    }
+  }
+  if (listen(listen_fd_, 8) != 0) {
     CloseSocket(listen_fd_); listen_fd_ = -1; return false;
   }
   sockaddr_in bound{}; socklen_t len = sizeof(bound);
@@ -465,5 +492,55 @@ void HttpServer::Stop() {
 }
 
 HttpServer::~HttpServer() { Stop(); }
+
+namespace {
+// Guards the shared server and its refcount. A DAW can construct and destroy
+// plugin instances from more than one thread.
+std::mutex& SharedMutex() {
+  static std::mutex m;
+  return m;
+}
+std::unique_ptr<HttpServer>& SharedServer() {
+  static std::unique_ptr<HttpServer> server;
+  return server;
+}
+int& SharedRefCount() {
+  static int count = 0;
+  return count;
+}
+unsigned short& SharedPort() {
+  static unsigned short port = 0;
+  return port;
+}
+}  // namespace
+
+unsigned short SharedUiServer::Acquire(const std::string& root,
+                                       const std::string& inject_head_script) {
+  std::lock_guard<std::mutex> lock(SharedMutex());
+  if (!SharedServer()) {
+    auto server = std::make_unique<HttpServer>();
+    unsigned short port = 0;
+    if (!server->Start(root, port, inject_head_script)) return 0;
+    SharedServer() = std::move(server);
+    SharedPort() = port;
+  }
+  ++SharedRefCount();
+  return SharedPort();
+}
+
+void SharedUiServer::Release() {
+  std::unique_ptr<HttpServer> doomed;
+  {
+    std::lock_guard<std::mutex> lock(SharedMutex());
+    if (SharedRefCount() == 0) return;
+    if (--SharedRefCount() > 0) return;
+    doomed = std::move(SharedServer());
+    SharedPort() = 0;
+  }
+  // Stop() joins the accept and worker threads, so it runs with the lock
+  // released — a plugin instance being destroyed on another thread must not
+  // block behind a teardown that is waiting on sockets.
+  if (doomed) doomed->Stop();
+}
 
 }  // namespace openaxe_vst3

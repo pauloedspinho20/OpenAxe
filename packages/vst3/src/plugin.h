@@ -205,7 +205,10 @@ class OpenAxePlugin final : public iplug::Plugin {
    // "invalid application of 'sizeof' to an incomplete type".
 #ifdef OPENAXE_HAS_WEBVIEW
    std::unique_ptr<openaxe_vst3::VstBridge> bridge_;
-   std::unique_ptr<openaxe_vst3::HttpServer> uiServer_;
+   // The UI server is process-wide (openaxe_vst3::SharedUiServer), not owned
+   // per instance — this only records whether this instance holds a reference
+   // to release.
+   bool uiServerAcquired_ = false;
    unsigned short uiPort_ = 0;
    std::string uiRoot_;
 #endif

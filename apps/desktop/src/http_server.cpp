@@ -269,12 +269,39 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port) {
   listen_fd_ = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
   if (listen_fd_ < 0) return false;
 
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  addr.sin_port = 0;  // ephemeral
-  if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
-      listen(listen_fd_, 8) != 0) {
+#ifndef _WIN32
+  // Required now the port is fixed: reopening the app inside the TIME_WAIT
+  // window would otherwise fail to bind and fall back to a random port.
+  const int reuse = 1;
+  setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#endif
+
+  // Prefer a stable port so the webview origin stops changing every launch;
+  // fall back to ephemeral if they are all taken, so a squatted port costs
+  // the stability rather than the UI.
+  bool bound_preferred = false;
+  for (unsigned short candidate : kPreferredPorts) {
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(candidate);
+    if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
+      bound_preferred = true;
+      break;
+    }
+  }
+  if (!bound_preferred) {
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;  // ephemeral
+    if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+      CloseSocket(listen_fd_);
+      listen_fd_ = -1;
+      return false;
+    }
+  }
+  if (listen(listen_fd_, 8) != 0) {
     CloseSocket(listen_fd_);
     listen_fd_ = -1;
     return false;

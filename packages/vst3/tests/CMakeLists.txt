@@ -77,9 +77,12 @@ add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 # UI serving: bridge polyfill contract, HTML head injection, path containment,
 # bundle UI-root resolution (issue #300 A/F/G). SDK-free by design — none of
 # these TUs pull in iPlug or the webview.
+# http_server.cpp serves /__asset/<key> out of the shared on-disk store, so
+# the test binary needs app_storage and the store name storage_bridge owns.
 add_executable(openaxe_vst3_ui_serving_test ui_serving_test.cpp
   ../src/http_server.cpp ../src/ui_root.cpp ../src/bridge_polyfill.cpp
-  ../../shared/src/ui_url.cpp)
+  ../../shared/src/ui_url.cpp ../../shared/src/app_storage.cpp
+  ../../shared/src/storage_bridge.cpp)
 target_include_directories(openaxe_vst3_ui_serving_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 # http_server.cpp calls into Winsock; MSVC needs the import library named.
 if(WIN32)
