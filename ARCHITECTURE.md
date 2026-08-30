@@ -49,29 +49,35 @@ meters, and CPU load.
 
 - Device and host integration: Web Audio graph plumbing, JUCE audio_devices streams, the
   plugin's process callback.
-- Persistence _mechanism_: IndexedDB in the browser, files on desktop, host
-  state chunks in a plugin. The preset _model_ belongs in core (see below).
+- Persistence _mechanism_: IndexedDB in the browser, a shared on-disk store
+  for the desktop app and the plugins, host state chunks for a plugin's rig.
+  See [Persistence](#persistence) — which mechanism is available is not a
+  free choice, it follows from what a webview can actually keep. The preset
+  _model_ belongs in core (see below).
 - Rendering, layout, interaction, theming — `packages/ui` and the design
   tokens.
 - Network services with no audio meaning (the Tone3000 model library client).
 
 ## Per-target status
 
-| Concern                      | Web                                                 | Desktop                            | VST3 | Owner it should have                 |
-| ---------------------------- | --------------------------------------------------- | ---------------------------------- | ---- | ------------------------------------ |
-| DSP effects                  | core via the rig worklet                            | core, in-process                   | —    | core ✅                              |
-| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                 | core's `NamAmp`                    | —    | core ✅                              |
-| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet         | core                               | —    | core ✅                              |
-| Signal graph + routing rules | core `graph_rig` (single rig worklet)               | core `graph_rig`                   | —    | core ✅                              |
-| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | —    | core ✅                              |
-| Block I/O trims              | core trims via the rig worklet                      | core trims                         | —    | core ✅                              |
-| Bypass / master bus          | core via the rig worklet                            | core                               | —    | core ✅                              |
-| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | —    | core ✅                              |
-| Tuner pitch detection        | TS autocorrelation, main thread                     | same TS code                       | —    | **core** ❌                          |
-| Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | —    | core ✅                              |
-| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | —    | **generated from core** ⚠️           |
-| Presets / scenes             | TS model + IndexedDB                                | same TS code in the webview        | —    | **core model**, front-end storage ❌ |
-| MIDI mapping                 | TS Web MIDI                                         | —                                  | —    | **core** ❌                          |
+| Concern                      | Web                                                 | Desktop                            | VST3/CLAP/AU                                     | Owner it should have                 |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | ------------------------------------ |
+| DSP effects                  | core via the rig worklet                            | core, in-process                   | core, in-process                                 | core ✅                              |
+| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                 | core's `NamAmp`                    | core's `NamAmp`                                  | core ✅                              |
+| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet         | core                               | core                                             | core ✅                              |
+| Signal graph + routing rules | core `graph_rig` (single rig worklet)               | core `graph_rig`                   | core `graph_rig`                                 | core ✅                              |
+| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | core                                             | core ✅                              |
+| Block I/O trims              | core trims via the rig worklet                      | core trims                         | core trims                                       | core ✅                              |
+| Bypass / master bus          | core via the rig worklet                            | core                               | core                                             | core ✅                              |
+| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | core, via `loadIrWav`                            | core ✅                              |
+| Tuner pitch detection        | core via WASM, TS fallback kept for tests           | core (`nam_studio_detect_pitch`)   | core, fed by the monitor tap                     | core ✅                              |
+| Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | core peak + `MonitorTap` (seqlock ring)          | core ✅                              |
+| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | core table + generated automation map            | **generated from core** ⚠️           |
+| Host automation              | n/a                                                 | n/a                                | generated slot map, params reported to host      | core ✅                              |
+| MIDI mapping                 | TS Web MIDI → core mapping model                    | core mapping model                 | host MIDI bus → core, sample-accurate            | core ✅                              |
+| Rig state (save/restore)     | browser store                                       | browser store                      | core state doc in the host chunk (authoritative) | core ✅                              |
+| Presets / scenes / bank      | TS model + IndexedDB                                | TS model + shared on-disk store    | TS model + the same shared store                 | **core model**, front-end storage ❌ |
+| Library, prefs, asset cache  | IndexedDB + localStorage                            | shared on-disk store               | the same shared store                            | front end ✅                         |
 
 ✅ done · ⚠️ core owns it, a front end still duplicates part · ❌ not in core yet
 
@@ -100,16 +106,26 @@ Each step is useful on its own and unblocks the plugin target.
    loads IRs by handing the core the file's bytes
    (`nam_studio_load_ir_wav`), exactly as it loads NAM models. The audio path now
    has no web-only DSP left.
-4. **Tuner in core.** Pitch detection as a pure function over a buffer, called
-   from the UI thread (web) or the control thread (desktop/plugin). It is not
-   in the audio path, so it costs no latency either way.
-5. **Preset/scene model in core**, with front ends supplying only storage. This
-   is what lets a plugin save state into a host session and a desktop app write
-   a file, from one definition.
+4. ~~**Tuner in core.**~~ Done (issue #123): `dsp/pitch_detect.cpp` is the one
+   detector, compiled to WASM for the web and called natively on
+   desktop/plugin. `pitchDetect.ts` is now a thin forwarder that keeps the
+   original TS algorithm only as a deterministic fallback for tests and for
+   the window before the WASM module is ready. It is not in the audio path,
+   so it costs no latency either way.
+5. **Preset/scene model in core**, with front ends supplying only storage.
+   Half done: the _rig_ state document is core's
+   (`nam_studio_load_state`/`save`), which is what the plugin writes into the
+   host chunk and what makes the core graph authoritative in a DAW. The
+   preset bank, scene bank and their slot semantics are still the TS model in
+   `apps/web/src/presets` and `apps/web/src/scenes`.
 6. **Generate the UI's param ranges** from `packages/core/param_schema.json`
    instead of hand-maintaining them in `paramSchema.ts`
    (`paramSchema.coreDrift.test.ts` guards the gap until then).
-7. **MIDI mapping in core**, so a plugin and the mobile apps inherit it.
+7. ~~**MIDI mapping in core.**~~ Done (issue #124): the mapping model, learn
+   and dedupe live in core, bindings ride the rig state document (so they
+   survive a DAW session), and the plugin declares a MIDI input bus and
+   forwards the host's event list sample-accurately. The web path feeds the
+   same core model from Web MIDI.
 
 ## Latency
 
@@ -135,6 +151,68 @@ Rules that keep it that way:
 - **Ask for real-time scheduling.** The desktop stream sets
   `RTAUDIO_SCHEDULE_REALTIME` with an explicit high priority for the backends
   that schedule their own callback thread.
+
+## Persistence
+
+Which storage a shell uses is not a free choice — it follows from what a
+webview can actually keep.
+
+**The web** uses IndexedDB and localStorage, and always has. Nothing below
+changes that: `getOpenAxe()` is null in a browser, so every store takes the
+same path it always took.
+
+**The desktop app and the plugins cannot.** Two independent reasons, and both
+have to be dealt with:
+
+1. The UI server binds a port, and the webview's origin is
+   `http://127.0.0.1:<port>`. When that port was ephemeral the origin was
+   different on every launch, and IndexedDB and localStorage are scoped to an
+   origin — so every launch got an empty partition. Nothing was lost, exactly;
+   it was stranded under an origin nothing would visit again. This is why the
+   factory pack appeared to need reinstalling every time the app started. The
+   server now prefers a fixed port (`kPreferredPorts`) so the origin is
+   stable.
+2. WKWebView and WebView2 scope website data to the **host application**. The
+   desktop app's lives under `com.openaxe.desktop`; a plugin's lives under
+   whatever the DAW is, a different container per DAW. So a stable port fixes
+   (1) but can never let the desktop app and a plugin see one library.
+
+Hence a filesystem store both shells reach —
+`packages/shared/src/app_storage.cpp`, under the platform's per-user
+application data directory. The UI talks to it through the `openAxe.storage*`
+and `openAxe.asset*` bridge calls, which `storage_bridge.cpp` implements once
+for both shells. This is the same conclusion `secure_storage` reached earlier
+for the Tone3000 refresh token, whose header already documented the
+ephemeral-port problem.
+
+What lives where:
+
+| Data                                       | Web          | Desktop + plugins                     |
+| ------------------------------------------ | ------------ | ------------------------------------- |
+| Presets, scene bank, preset bank, MIDI map | IndexedDB    | shared store, one record per key      |
+| Tone3000 library metadata                  | IndexedDB    | shared store                          |
+| Cached `.nam` / IR blobs                   | IndexedDB    | shared store, fetched via `/__asset/` |
+| Theme, onboarding, factory-setup flag, I/O | localStorage | localStorage, mirrored to the store   |
+| Tone3000 refresh token                     | localStorage | OS keychain (never the shared store)  |
+| The rig itself, in a plugin                | n/a          | core state doc in the host chunk      |
+
+Three details that are easy to get wrong:
+
+- **Asset blobs do not ride the bridge on read.** The loopback server serves
+  `GET /__asset/<key>` so the webview streams bytes straight into a Blob;
+  base64 through the bridge would inflate every capture by a third. The
+  bridge remains the fallback for when there is no such server (running a
+  shell against a Vite dev server via `OPENAXE_UI_URL`).
+- **Preferences stay synchronous.** Theme, onboarding and the factory-setup
+  flag are read during the first render, so `prefsMirror.ts` copies the
+  shared store into localStorage _before_ React mounts and mirrors writes
+  back out, rather than making a dozen hooks async for a few bytes.
+- **The plugin's bridge surface is a hand-written list.** The plugin has no
+  `webview::bind`; `bridge_polyfill.cpp` defines one stub per name in a
+  literal array. A handler added to `VstBridge` but not named there does not
+  exist as far as the UI is concerned — and since the app reads "no bridge
+  method" as "we must be on the web", it silently falls back to browser
+  storage. `scripts/check-bridge-methods.mjs` guards that gap.
 
 ## Adding to the core
 
@@ -186,11 +264,58 @@ flowchart TB
 
     WEB -- "rig worklet calls _nam_studio_*" --> ABI
     DESK -- "in-process calls" --> ABI
-    VST --> ABI
+    VST -- "in-process calls" --> ABI
     MOBILE --> ABI
     ABI --> GR --> ENG --> DSP
     GR --> VAL
 ```
+
+The desktop shell and the plugin editor are the _same_ React SPA: each serves
+`apps/web/dist` over a loopback HTTP server and points a webview at it, with a
+`window.openAxe.*` bridge standing in for Web Audio. That is why they share a
+storage problem, and now a store.
+
+### Where persisted data actually goes
+
+```mermaid
+flowchart TB
+    subgraph ui["The one React app, in three shells"]
+        KV["storage/kv.ts<br/>get · put · delete · getAll · clear"]
+        AC["engine/assetCache.ts<br/>.nam + IR blobs"]
+        PM["storage/prefsMirror.ts<br/>keeps localStorage synchronous"]
+    end
+
+    BROWSER["IndexedDB + localStorage<br/>scoped to the page origin"]
+
+    subgraph shells["Native shells"]
+        BRIDGE["window.openAxe.storage* / asset*<br/>storage_bridge.cpp, shared by both"]
+        HTTP["loopback server<br/>GET /__asset/:key"]
+    end
+
+    STORE[("app_storage<br/>~/Library/Application Support/OpenAxe/data<br/>%APPDATA% · $XDG_DATA_HOME")]
+    KEYCHAIN[["OS keychain<br/>Tone3000 refresh token"]]
+    CHUNK[["DAW session chunk<br/>the rig, from core"]]
+
+    KV -- "web" --> BROWSER
+    AC -- "web" --> BROWSER
+    KV -- "desktop · plugin" --> BRIDGE
+    AC -- "writes" --> BRIDGE
+    AC -- "reads, streamed" --> HTTP
+    PM -- "hydrate at boot,<br/>mirror on write" --> BRIDGE
+    BRIDGE --> STORE
+    HTTP --> STORE
+    BRIDGE -. "never mirrored" .-> KEYCHAIN
+    CHUNK -. "plugin only:<br/>core graph is authoritative" .-> STORE
+
+    DESKTOP_APP["desktop app"] --> STORE
+    PLUGIN_A["plugin in DAW A"] --> STORE
+    PLUGIN_B["plugin in DAW B"] --> STORE
+```
+
+One store, reached by every native shell — which is the point: the desktop app
+and a plugin instance in any DAW see the same presets, the same library and the
+same factory pack. The browser keeps its own, because a web page has no
+filesystem to share.
 
 ### Core engine: signal, params, and assets
 
