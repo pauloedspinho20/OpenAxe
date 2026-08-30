@@ -442,6 +442,24 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph);
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index);
 
+// Block kinds the most recent nam_studio_load_state could not place (#313),
+// de-duped: either this build was compiled without the kind
+// (packages/core/effects.config.json marked it compiled:false), or the
+// document names a kind from a newer OpenAxe. Either way the block is dropped
+// and the rest of the rig still restores, so a UI should tell the user which
+// pedals went missing rather than silently losing them. Entries are the wire
+// kind strings ("ring-mod", ...). Same lifetime rule as the missing-asset
+// list: valid until the next load on this graph.
+int32_t nam_studio_state_unsupported_block_count(NamStudioGraph* graph);
+const char* nam_studio_state_unsupported_block(NamStudioGraph* graph, int32_t index);
+
+// Whether this build contains the DSP for `kind` - the runtime view of
+// effects.config.json. A front end asserts its own generated block list
+// against this at startup, which is what stops a stale prebuilt WASM from
+// silently disagreeing with the checked-in config. Returns 1 or 0; an
+// out-of-range kind is 0.
+int32_t nam_studio_block_kind_compiled(NamStudioBlockKind kind);
+
 // ── Tone fingerprint (issue #288) ──────────────────────────────────────
 // Probe a NAM model JSON and return its gain (dB) + brightness (0..1).
 // Returns 1 on success, 0 if the JSON is not a valid NAM model or any

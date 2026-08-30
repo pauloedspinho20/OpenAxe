@@ -31,6 +31,12 @@ jobs:
       - name: Plugin automation map drift check
         run: node scripts/gen-param-schema.mjs --check --target=automation-map
 
+      - name: Effects config drift check
+        # Covered by the plain --check above too; explicit so a stale
+        # enabled_blocks.h / block_sources.cmake / generatedBlockConfig.ts
+        # names packages/core/effects.config.json in the failure (issue #313).
+        run: node scripts/gen-param-schema.mjs --check --target=effects
+
       - name: Grid dimensions drift check
         run: node scripts/check-grid-dims.mjs
 

@@ -10,6 +10,7 @@
 #include "openaxe/dsp/note_utils.h"
 #include "openaxe/dsp/pitch_detect.h"
 #include "openaxe/engine.h"
+#include "openaxe/generated/enabled_blocks.h"
 #include "openaxe/midi.h"
 #include "serialization/rig_state.h"
 
@@ -116,6 +117,9 @@ struct NamStudioGraph {
   // The missing-asset list (#120) from the most recent load_state, kept for
   // the query ABI below. Control-thread data like everything else here.
   std::vector<std::string> missing_assets;
+  // Likewise the unsupported-kind list (#313) - kinds the document named that
+  // this build cannot place.
+  std::vector<std::string> unsupported_blocks;
 };
 
 extern "C" {
@@ -131,7 +135,9 @@ void nam_studio_graph_destroy(NamStudioGraph* graph) { delete graph; }
 // audio around them - which is precisely why they are grouped and labelled
 // here rather than mixed in with the lock-free calls further down.
 //
-// Returns the new block's id, which is never reused.
+// Returns the new block's id, which is never reused - or -1 if this build has
+// no DSP for `kind` (effects.config.json's compiled:false; ask
+// nam_studio_block_kind_compiled first, or just don't offer the kind).
 int32_t nam_studio_add_block(NamStudioGraph* graph, NamStudioBlockKind kind, int32_t row, int32_t col) {
   return graph->engine.AddBlock(ToBlockKind(kind), row, col);
 }
@@ -616,6 +622,7 @@ NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char
   // Publish the missing-asset list (#120) for the query ABI below - replaced
   // wholesale on every load, hard failures included (they restore nothing).
   graph->missing_assets = std::move(outcome.missing_assets);
+  graph->unsupported_blocks = std::move(outcome.unsupported_blocks);
   switch (outcome.error) {
     case openaxe::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
     case openaxe::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
@@ -666,6 +673,22 @@ int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index) {
   if (index < 0 || static_cast<size_t>(index) >= graph->missing_assets.size()) return nullptr;
   return graph->missing_assets[static_cast<size_t>(index)].c_str();
+}
+
+int32_t nam_studio_state_unsupported_block_count(NamStudioGraph* graph) {
+  return static_cast<int32_t>(graph->unsupported_blocks.size());
+}
+
+const char* nam_studio_state_unsupported_block(NamStudioGraph* graph, int32_t index) {
+  if (index < 0 || static_cast<size_t>(index) >= graph->unsupported_blocks.size()) return nullptr;
+  return graph->unsupported_blocks[static_cast<size_t>(index)].c_str();
+}
+
+// Graph-free: it answers a property of the build, not of a rig, so a front end
+// can ask before it has created one.
+int32_t nam_studio_block_kind_compiled(NamStudioBlockKind kind) {
+  if (kind < 0 || kind > NAM_STUDIO_BLOCK_RETURN_2) return 0;
+  return openaxe::blocks::IsCompiled(ToBlockKind(kind)) ? 1 : 0;
 }
 
 

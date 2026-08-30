@@ -39,6 +39,12 @@ namespace openaxe::engine {
 // ownership questions crossing the extern "C" boundary. Translated to
 // GraphRig's string ids internally via std::to_string.
 using BlockId = int32_t;
+
+// What AddBlock returns when it refuses: today only for a kind this build has
+// no DSP for (effects.config.json's compiled:false - see generated/
+// enabled_blocks.h). Negative, so it can never collide with a real id, and it
+// matches Connect's existing -1-on-failure convention.
+inline constexpr BlockId kInvalidBlockId = -1;
 using EdgeId = int32_t;
 
 // Reserved sentinels for the two rail endpoints (never real block ids -

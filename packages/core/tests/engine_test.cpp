@@ -32,6 +32,7 @@
 #include "openaxe/dsp/ring_mod.h"
 #include "openaxe/dsp/rotary.h"
 #include "openaxe/dsp/tremolo.h"
+#include "openaxe/generated/enabled_blocks.h"
 #include "test_harness.h"
 
 using openaxe::engine::AudioEngine;
@@ -108,11 +109,17 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   const BlockId noise_gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 2);
   const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
   // Phase-2 kinds (issue #268): every one is a wet-only DSP kind that also
-  // gets the engine-level mix, so param_count must be dsp + 1.
+  // gets the engine-level mix, so param_count must be dsp + 1. Each is
+  // guarded because effects.config.json can compile its DSP out (#313), and
+  // the assertion below names a type that would not exist in that build.
+#if OPENAXE_BLOCK_RING_MOD
   const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
+#endif
   const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
   const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
+#if OPENAXE_BLOCK_GRANULAR_DELAY
   const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
+#endif
   const BlockId rotary = engine.AddBlock(BlockKind::kRotary, 0, 8);
 
   OPENAXE_EXPECT(engine.ParamCount(compressor) == openaxe::dsp::Compressor::ParamCount());
@@ -120,22 +127,35 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
+#if OPENAXE_BLOCK_RING_MOD
   OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
+#endif
   OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
+#if OPENAXE_BLOCK_GRANULAR_DELAY
   OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
+#endif
   OPENAXE_EXPECT(engine.ParamCount(rotary) == openaxe::dsp::Rotary::ParamCount() + 1);
 
-  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(eq, 0, noise_gate, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(noise_gate, 0, tremolo, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(tremolo, 0, ring_mod, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(ring_mod, 0, filter, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(filter, 0, pitch, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(pitch, 0, granular, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(granular, 0, rotary, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(rotary, 0, kOutRailId, 0).ok);
+  // Assembled from whatever kinds this build actually has, in placement
+  // order, so a config that compiles one out (#313) still exercises the rest
+  // of the chain end to end instead of failing to compile.
+  std::vector<BlockId> chain{compressor, eq, noise_gate, tremolo};
+#if OPENAXE_BLOCK_RING_MOD
+  chain.push_back(ring_mod);
+#endif
+  chain.push_back(filter);
+  chain.push_back(pitch);
+#if OPENAXE_BLOCK_GRANULAR_DELAY
+  chain.push_back(granular);
+#endif
+  chain.push_back(rotary);
+
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, chain.front(), 0).ok);
+  for (size_t i = 1; i < chain.size(); ++i) {
+    OPENAXE_EXPECT(engine.Connect(chain[i - 1], 0, chain[i], 0).ok);
+  }
+  OPENAXE_EXPECT(engine.Connect(chain.back(), 0, kOutRailId, 0).ok);
   engine.Reset(48000.0, kFrames);
 
   // A loud sine through the full chain: every stage engaged, output must stay

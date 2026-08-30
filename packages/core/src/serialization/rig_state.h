@@ -73,6 +73,15 @@ struct LoadOutcome {
   // Empty unless error == kNone. Unnamed assets report as "(unnamed model)" /
   // "(unnamed IR)". Valid until the next LoadState call.
   std::vector<std::string> missing_assets;
+  // Kind strings the document asked for that this build cannot place (#313):
+  // either effects.config.json marked the kind compiled:false, or the string
+  // is from a newer OpenAxe that has a kind this one does not know. Both are
+  // the same thing from the user's point of view - a pedal that could not be
+  // restored - and both are dropped rather than failing the document, so a
+  // rig built elsewhere still opens minus the blocks this build lacks. Each
+  // name appears once however many blocks used it. Counted in
+  // stats.blocks_skipped too. Valid until the next LoadState call.
+  std::vector<std::string> unsupported_blocks;
 };
 
 // Rebuilds the engine's rig from a serialized document. The existing topology
