@@ -6,6 +6,11 @@
 #
 # Flow:
 #   PR → dev → PR dev→main → merge to main → this workflow → vX.Y.Z tag → release.yml
+#                                                          └→ back-merge main → dev
+#
+# The release commit is created here, on main, and nowhere else. Without the
+# back-merge dev keeps the previous VERSION, every branch cut from dev carries
+# it, and the next dev→main PR reads as a version downgrade (issue #304).
 #
 # Requires a PAT that can bypass branch protection on main:
 #   1. Create a classic PAT (https://github.com/settings/tokens) with `repo` scope
@@ -109,10 +114,44 @@ jobs:
           git push origin main
           git push origin "v$NEXT"
 
+      # Put the release commit back on dev straight away (issue #304). Doing it
+      # here rather than by hand matters twice over:
+      #
+      #   * dev keeps the released VERSION, so branches cut from it are not born
+      #     stale and the next dev→main PR is not a version downgrade;
+      #   * the merge is trivial *now*, while the two trees are identical apart
+      #     from the bump. Left until dev has moved on, the same files conflict
+      #     against their own already-promoted copy — which is exactly what
+      #     blocked #305 after 0.2.6 (the manual sync was skipped that round).
+      #
+      # A conflict here means dev and main genuinely diverged, so fail loudly
+      # rather than leave the drift in place silently.
+      - name: Back-merge the release into dev
+        if: steps.bump.outputs.created == 'true'
+        run: |
+          NEXT="${{ steps.bump.outputs.next }}"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/dev:refs/remotes/origin/dev
+          git checkout -B dev origin/dev
+          if ! git merge --no-ff origin/main -m "chore(sync): merge main v$NEXT back into dev"; then
+            git merge --abort || true
+            echo "::error::Back-merge of main v$NEXT into dev conflicts. Resolve by hand: git checkout dev && git merge --no-ff origin/main && git push origin dev"
+            exit 1
+          fi
+          git push origin dev
+          # Acceptance check for #304: the two branches must agree on the
+          # version, not merely be mergeable.
+          DEV_VERSION="$(git show dev:VERSION | tr -d '[:space:]')"
+          if [ "$DEV_VERSION" != "$NEXT" ]; then
+            echo "::error::dev is on VERSION $DEV_VERSION after the back-merge, expected $NEXT"
+            exit 1
+          fi
+          echo "dev is back in sync at v$NEXT"
+
       - name: Summary
         run: |
           if [ "${{ steps.bump.outputs.created }}" = "true" ]; then
             echo "✅ Released v${{ steps.bump.outputs.next }} — tag pushed, Desktop Release will now build installers." >> $GITHUB_STEP_SUMMARY
+            echo "✅ dev back-merged to v${{ steps.bump.outputs.next }} — branches cut from dev carry the released VERSION." >> $GITHUB_STEP_SUMMARY
           else
             echo "No version bump needed — no new commits since last tag or no relevant changes." >> $GITHUB_STEP_SUMMARY
           fi
