@@ -37,6 +37,31 @@ export const PREFS_STORE = 'prefs'
  */
 const NEVER_MIRROR = new Set(['t3k_refresh_token'])
 
+/**
+ * Nothing may block the app from mounting on a bridge call, because a bridge
+ * call is not guaranteed to be answered. iPlug2's EvaluateJavaScript is a
+ * silent no-op while the webview is still loading, so a response sent in that
+ * window is dropped and its promise never settles — which is exactly what
+ * happened here, and left the editor a blank window in every plugin format
+ * until the plugin learned to queue those responses instead.
+ *
+ * The plugin side is fixed, but the shape of the risk stays: this module runs
+ * before the first render specifically so preferences are readable
+ * synchronously, and that makes it the one place where a hung bridge costs
+ * the whole UI. So it gives up rather than hanging, and the app starts with
+ * default preferences instead of not starting.
+ */
+const HYDRATE_TIMEOUT_MS = 3000
+
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error('prefs hydration timed out')), HYDRATE_TIMEOUT_MS),
+    ),
+  ])
+}
+
 let installed = false
 
 /**
@@ -73,10 +98,12 @@ export async function installPrefsMirror(): Promise<void> {
 
   // 1. Hydrate. Keys and values come back in matching order.
   try {
-    const [keysResult, valuesResult] = await Promise.all([
-      native.storageKeys({ store: PREFS_STORE }),
-      native.storageValues({ store: PREFS_STORE }),
-    ])
+    const [keysResult, valuesResult] = await withTimeout(
+      Promise.all([
+        native.storageKeys({ store: PREFS_STORE }),
+        native.storageValues({ store: PREFS_STORE }),
+      ]),
+    )
     // Keys() and Values() walk the same directory but are two separate
     // listings, so pair them by key and re-read anything that does not line
     // up rather than trusting the order.

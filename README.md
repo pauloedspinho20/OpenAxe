@@ -311,13 +311,13 @@ cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build --config Release -j      # VST3 (default)
 cmake --build packages/vst3/build --target openaxe_clap --config Release  # CLAP
 cmake --build packages/vst3/build --target openaxe_au --config Release     # AU (macOS)
-ctest --test-dir packages/vst3/build --output-on-failure   # 17 tests: smoke, latency, suspend, param_surface, state, asset, realtime_safety, editor, primitives, grid, ui_serving, midi + validators (SKIP if the tool is absent)
+ctest --test-dir packages/vst3/build --output-on-failure   # 15 non-validator tests: smoke, latency, suspend, param_surface, state, asset, realtime_safety, editor, primitives, grid, ui_serving, midi, app_storage, input_routing + validators (SKIP if the tool is absent)
 # Sanitizers:
 cmake -S packages/vst3 -B packages/vst3/build-tsan -DOPENAXE_VST3_ENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo && cmake --build packages/vst3/build-tsan && ctest --test-dir packages/vst3/build-tsan --output-on-failure # issue #130, Linux only
 cmake -S packages/vst3 -B packages/vst3/build-rtsan -DOPENAXE_VST3_ENABLE_RTSAN=ON && cmake --build packages/vst3/build-rtsan && ctest --test-dir packages/vst3/build-rtsan --output-on-failure -R realtime # Clang 18+
 
-# No DAW:
-cmake --build packages/vst3/build --target openaxe_standalone && ./packages/vst3/build/openaxe_standalone
+# No DAW — builds OpenAxe.app on macOS, a bare binary elsewhere:
+cmake --build packages/vst3/build --target openaxe_standalone && open packages/vst3/build/OpenAxe.app
 # Dev HMR — point plugin webview at Vite:
 # terminal 1: pnpm dev:web
 # terminal 2: OPENAXE_UI_URL=http://127.0.0.1:5173 open /Applications/REAPER.app

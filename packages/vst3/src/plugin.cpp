@@ -143,6 +143,8 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
       : IWebViewControl(bounds, true, nullptr, nullptr, true, true), bridge_(bridge), url_(url) {}
   void OnWebViewReady() override {
     VstLog("WebViewReady: loading url=" + url_);
+    contentLoaded_ = false;
+    pendingJs_.clear();
     if (!url_.empty()) LoadURL(url_.c_str());
   }
 
@@ -181,6 +183,11 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
     std::string poly =
         openaxe_vst3::BridgePolyfillJs("plugin", dbgEnv && std::string(dbgEnv) == "1");
     EvaluateJavaScript(poly.c_str(), nullptr);
+    // Anything the page asked for while it was still loading has been waiting
+    // for this moment — see EvalOrQueue.
+    contentLoaded_ = true;
+    for (const auto& js : pendingJs_) EvaluateJavaScript(js.c_str(), nullptr);
+    pendingJs_.clear();
     IWebViewControl::OnWebContentLoaded();
   }
   void OnMessageFromWebView(const char* json) override {
@@ -221,12 +228,37 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
     }
     const std::string js =
         "window.IPlugWebViewResolve(" + std::to_string(msgId) + "," + literal + ")";
-    EvaluateJavaScript(js.c_str(), nullptr);
+    EvalOrQueue(js);
   }
 
  private:
+  // iPlug2's EvaluateJavaScript is a silent no-op while the page is still
+  // loading — `if (mWKWebView && ![mWKWebView isLoading])` in
+  // IPlugWebView_mac.mm, with no queue and no error. So a bridge call made
+  // from the page's own module scope, before the load finishes, gets its
+  // answer dropped on the floor and its promise never settles.
+  //
+  // That is not hypothetical: the shared-storage work made the app read its
+  // preferences at module scope, before mounting React, and the two calls it
+  // makes landed in exactly that window. The editor came up as a blank
+  // window in every plugin format, because the await before
+  // createRoot().render() never resolved. Queue instead of dropping, and
+  // flush once the content is loaded.
+  void EvalOrQueue(const std::string& js) {
+    if (contentLoaded_) {
+      EvaluateJavaScript(js.c_str(), nullptr);
+      return;
+    }
+    // A page that somehow never finishes loading must not grow this without
+    // bound. Far more than the handful of calls a boot actually makes.
+    constexpr size_t kMaxPending = 256;
+    if (pendingJs_.size() < kMaxPending) pendingJs_.push_back(js);
+  }
+
   openaxe_vst3::VstBridge* bridge_ = nullptr;
   std::string url_;
+  bool contentLoaded_ = false;
+  std::vector<std::string> pendingJs_;
 };
 }  // namespace
 #endif

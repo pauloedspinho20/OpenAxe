@@ -497,7 +497,7 @@
     {
       "label": "VST: Standalone",
       "type": "shell",
-      "command": "cmake --build packages/vst3/build --target openaxe_standalone && ./packages/vst3/build/openaxe_standalone",
+      "command": "cmake --build packages/vst3/build --target openaxe_standalone && if [ \"$(uname)\" = \"Darwin\" ]; then open packages/vst3/build/OpenAxe.app; else ./packages/vst3/build/openaxe_standalone; fi",
       "detail": "Builds and runs the standalone plugin (no DAW needed, same DSP as VST3 — debugger-friendly)",
       "group": "build",
       "presentation": {

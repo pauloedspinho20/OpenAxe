@@ -288,6 +288,15 @@ if(APPLE)
     set(OPENAXE_BUNDLE_ID
         "${OPENAXE_BUNDLE_DOMAIN}.${OPENAXE_BUNDLE_MFR}.${api_ext}.${OPENAXE_PLUG_NAME}")
     set(OPENAXE_PLIST_EXTRA "${extra}")
+    # Plugins are loadable bundles (BNDL); the standalone is an application
+    # (APPL). macOS will not treat a bundle as a launchable app otherwise, and
+    # SWELL's NSApplication setup — which is what puts the host window on
+    # screen — needs a real app bundle to attach to.
+    if(kind STREQUAL "APP")
+      set(OPENAXE_BUNDLE_PACKAGE_TYPE "APPL")
+    else()
+      set(OPENAXE_BUNDLE_PACKAGE_TYPE "BNDL")
+    endif()
     set(_out "${CMAKE_BINARY_DIR}/generated_plists/${OPENAXE_PLUG_NAME}-${kind}-Info.plist")
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in" "${_out}" @ONLY)
     set(${out_var} "${_out}" PARENT_SCOPE)
@@ -326,6 +335,25 @@ if(APPLE)
     "  <key>NSPrincipalClass</key>\n"
     "  <string>OpenAxePlugin_View</string>")
   openaxe_write_plist(OPENAXE_AU_PLIST "AU" "audiounit" "${OPENAXE_AU_EXTRA}")  # API_EXT for AU_API
+
+  # The standalone app. NSHighResolutionCapable keeps the webview crisp on a
+  # Retina display; without it macOS runs the window through 2x upscaling.
+  # NSPrincipalClass is not cosmetic: SWELL's app bootstrap runs entirely from
+  # SWELLApplication's delegate callbacks, and SWELLAppMain(SWELLAPP_ONLOAD) —
+  # which creates the plugin instance and the host window — fires from
+  # applicationWillFinishLaunching. Without this key AppKit instantiates a
+  # plain NSApplication, none of that ever runs, and the app launches, sits
+  # idle at 0% CPU and shows no window at all. Which is what it did.
+  string(CONCAT OPENAXE_APP_EXTRA
+    "  <key>NSPrincipalClass</key>\n"
+    "  <string>SWELLApplication</string>\n"
+    "  <key>NSMainNibFile</key>\n"
+    "  <string>OpenAxe-macOS-MainMenu</string>\n"
+    "  <key>NSHighResolutionCapable</key>\n"
+    "  <true/>\n"
+    "  <key>NSMicrophoneUsageDescription</key>\n"
+    "  <string>OpenAxe processes your guitar or bass input.</string>")
+  openaxe_write_plist(OPENAXE_APP_PLIST "APP" "app" "${OPENAXE_APP_EXTRA}")
 endif()
 
 
@@ -335,8 +363,17 @@ function(openaxe_write_pkginfo target)
   if(NOT APPLE OR NOT TARGET ${target})
     return()
   endif()
-  set(_pkginfo "${CMAKE_BINARY_DIR}/generated_plists/PkgInfo")
-  file(WRITE "${_pkginfo}" "BNDL????")
+  # Must agree with CFBundlePackageType in the plist: BNDL for the loadable
+  # plugin bundles, APPL for the standalone application.
+  get_target_property(_is_app ${target} MACOSX_BUNDLE)
+  if(_is_app)
+    set(_type "APPL????")
+    set(_pkginfo "${CMAKE_BINARY_DIR}/generated_plists/PkgInfo-APPL")
+  else()
+    set(_type "BNDL????")
+    set(_pkginfo "${CMAKE_BINARY_DIR}/generated_plists/PkgInfo")
+  endif()
+  file(WRITE "${_pkginfo}" "${_type}")
   add_custom_command(TARGET ${target} POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy "${_pkginfo}"
             "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/PkgInfo"
@@ -439,7 +476,7 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
     endif()
   endif()
 
-  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/input_routing.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/app_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/storage_bridge.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ui_url.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/monitor_tap.cpp src/main_standalone.cpp)
+  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/input_routing.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/app_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/storage_bridge.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ui_url.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/monitor_tap.cpp)
   target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/APP ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src)
   if(TARGET iPlug2::IGraphics)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2::IGraphics)
@@ -472,17 +509,68 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   target_compile_definitions(openaxe_standalone PRIVATE APP_API=1 STANDALONE_APP=1)
   set_target_properties(openaxe_standalone PROPERTIES EXCLUDE_FROM_ALL TRUE)
   if(APPLE)
+    # A real .app bundle, not a bare executable. SWELL brings up the host
+    # window through NSApplication, which macOS only wires up properly for a
+    # bundled app — a plain Mach-O launches, sits idle and never shows a
+    # window, which is exactly what it did.
+    set_target_properties(openaxe_standalone PROPERTIES
+      MACOSX_BUNDLE TRUE
+      OUTPUT_NAME "${OPENAXE_PLUG_NAME}"
+      MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_APP_PLIST}")
+    openaxe_write_pkginfo(openaxe_standalone)
+
+    # The main nib is what actually starts the app. NSApplicationMain loads it,
+    # which instantiates SWELLAppController, whose awakeFromNib does
+    # [NSApp setDelegate:self] — and only then does
+    # applicationWillFinishLaunching fire, which is where SWELL calls
+    # SWELLAppMain(SWELLAPP_ONLOAD) to create the plugin and the host window.
+    # No nib, no delegate, no app: it launches and sits there.
+    #
+    # The xib is iPlug2's own stock app menu, renamed. ibtool ships with
+    # Xcode, which is already required to build any of this.
+    add_custom_command(TARGET openaxe_standalone POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E make_directory
+              "$<TARGET_BUNDLE_CONTENT_DIR:openaxe_standalone>/Resources"
+      COMMAND xcrun ibtool --errors --warnings --notices --output-format human-readable-text
+              --compile
+              "$<TARGET_BUNDLE_CONTENT_DIR:openaxe_standalone>/Resources/OpenAxe-macOS-MainMenu.nib"
+              "${CMAKE_CURRENT_SOURCE_DIR}/resources/OpenAxe-macOS-MainMenu.xib"
+      COMMENT "openaxe_standalone: compiling the main menu nib"
+      VERBATIM)
+  endif()
+  if(APPLE)
     set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
-    # NOTE (issue #300 F5): this target does not currently build on macOS.
-    # iPlug2's IPlugAPP_dialog.cpp is Objective-C++ despite its .cpp extension
-    # (it pulls in Foundation) and fails when compiled as plain C++. It arrives
-    # through iPlug2::APP's INTERFACE_SOURCES, and neither
-    # set_source_files_properties here nor set_property(... TARGET_DIRECTORY)
-    # makes the LANGUAGE OBJCXX stick — the property is not reaching the source
-    # as consumed. Left EXCLUDE_FROM_ALL and unfixed rather than papered over:
-    # it needs either an iPlug2-side fix or building the APP sources into our
-    # own object library where we control the language. Not wired into CI until
-    # it builds, since a job that is red from day one gets ignored.
+
+    # iPlug2's APP sources are Objective-C++ despite their .cpp extensions —
+    # IPlugAPP_main.cpp pulls in Cocoa, IPlugAPP_dialog.cpp pulls in
+    # Foundation — and so is all of SWELL, which provides the Win32 API the
+    # APP host is written against (issue #300 F5).
+    #
+    # The properties have to name the same source paths iPlug2::APP put in its
+    # INTERFACE_SOURCES, which is exactly what the IPLUG2_APP_SRC and
+    # IPLUG2_SWELL_SRC cache variables from APP.cmake hold, and they need
+    # TARGET_DIRECTORY so they attach to the sources as this target consumes
+    # them. An earlier attempt here failed and was written up as needing an
+    # iPlug2-side fix; it did not — it was setting the property on the wrong
+    # source list. iPlug2 does this itself in iplug_configure_app(), which we
+    # do not call because it also imposes its own bundle layout, plist path
+    # and output directory, all of which this file already handles its own way
+    # for the other three formats.
+    if(IPLUG2_APP_SRC)
+      set_source_files_properties(${IPLUG2_APP_SRC}
+        TARGET_DIRECTORY openaxe_standalone
+        PROPERTIES LANGUAGE OBJCXX)
+    endif()
+    if(IPLUG2_SWELL_SRC)
+      # SWELL needs Cocoa imported before swell-internal.h, hence the forced
+      # prefix header — same flags iplug_configure_app() uses.
+      set_source_files_properties(${IPLUG2_SWELL_SRC}
+        TARGET_DIRECTORY openaxe_standalone
+        PROPERTIES
+        LANGUAGE OBJCXX
+        COMPILE_FLAGS "-Wno-deprecated-declarations -include ${iplug2_SOURCE_DIR}/IPlug/IPlugOBJCPrefix.pch")
+    endif()
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       target_compile_options(openaxe_standalone PRIVATE -Wno-auto-var-id)
     endif()
@@ -694,8 +782,12 @@ function(openaxe_bundle_ui target)
   if(NOT TARGET ${target})
     return()
   endif()
+  # BUNDLE covers the loadable plugin bundles; MACOSX_BUNDLE covers the
+  # standalone .app. Checking only BUNDLE put the app's UI in
+  # Contents/MacOS/ui, where the resolver does not look.
   get_target_property(_is_bundle ${target} BUNDLE)
-  if(APPLE AND _is_bundle)
+  get_target_property(_is_app_bundle ${target} MACOSX_BUNDLE)
+  if(APPLE AND (_is_bundle OR _is_app_bundle))
     set(_ui_dest "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources/ui")
   else()
     # Bare module (Linux/Windows .vst3/.clap, or a non-bundle build): the

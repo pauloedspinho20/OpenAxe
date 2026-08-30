@@ -7,7 +7,8 @@
   never disagree (issue #300 E6/F3).
 
   What was wrong before: CMake's default plist was used, which set
-  CFBundlePackageType to APPL (VST3 and AU both require BNDL) and left
+  CFBundlePackageType to APPL (VST3 and AU both require BNDL; only the
+  standalone app is APPL, which is why the type is substituted) and left
   CFBundleIdentifier, CFBundleName and both version strings empty. REAPER is
   lenient enough to load that; auval refuses the AU outright, and an empty
   bundle identifier makes codesigning and notarization meaningless.
@@ -27,7 +28,7 @@
   <key>CFBundleName</key>
   <string>@OPENAXE_PLUG_NAME@</string>
   <key>CFBundlePackageType</key>
-  <string>BNDL</string>
+  <string>@OPENAXE_BUNDLE_PACKAGE_TYPE@</string>
   <key>CFBundleShortVersionString</key>
   <string>@OPENAXE_VERSION@</string>
   <key>CFBundleSignature</key>

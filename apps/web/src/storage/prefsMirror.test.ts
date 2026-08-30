@@ -129,6 +129,22 @@ describe('prefs mirror', () => {
     expect(sessionStorage.getItem('ephemeral')).toBe('x')
   })
 
+  it('gives up rather than hanging when the bridge never answers', async () => {
+    // The one call that can cost the whole UI: this runs before the first
+    // render, so a promise that never settles means the app never mounts.
+    // That is not theoretical — a dropped response did exactly that.
+    vi.useFakeTimers()
+    const bridge = makeFakeBridge()
+    bridge.storageKeys.mockReturnValue(new Promise(() => {}) as never)
+    bridge.storageValues.mockReturnValue(new Promise(() => {}) as never)
+    vi.mocked(getOpenAxe).mockReturnValue(bridge as never)
+
+    const install = installPrefsMirror()
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(install).resolves.toBeUndefined()
+    vi.useRealTimers()
+  })
+
   it('still starts up when the shell is too old to have the storage bridge', async () => {
     const bridge = makeFakeBridge()
     bridge.storageKeys.mockRejectedValue(new Error('openAxe.storageKeys is unavailable'))
