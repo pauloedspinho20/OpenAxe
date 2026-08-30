@@ -69,9 +69,24 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // slot 8 ("Bypass") - the factory scene with an empty chain. Even an
   // "empty" chain still gets a merge Mixer (see buildFactoryPreset), so that
   // one block is removed before the grid is truly empty.
+  //
+  // Wait for the switch to actually land before removing anything. Slot
+  // switching is async end to end - sceneNavigator.applySlot awaits the
+  // IndexedDB preset read and then applyPreset's worklet teardown/rebuild,
+  // and the grid only re-renders on that final loadGraph. Clicking straight
+  // through leaves a window where the DOM still shows Clean's three blocks,
+  // so "Remove Mixer" removes *Clean's* Mixer and scene 8's own Mixer then
+  // arrives into a grid this test believes it just emptied - which is how
+  // this flaked on CI (run 33339848912: count went 2, then 1, never 0).
+  // Counts are unambiguous here because applyPreset calls loadGraph exactly
+  // once, after the rebuild: 3 is Clean, 1 is scene 8, there is no
+  // intermediate state to race against.
+  const blocks = page.getByRole('button', { name: /block - click or Enter to edit/ })
+  await expect(blocks).toHaveCount(3, { timeout: 30000 })
   await page.getByRole('button', { name: '8 Bypass' }).click()
+  await expect(blocks).toHaveCount(1, { timeout: 30000 })
   await page.getByRole('button', { name: 'Remove Mixer' }).click()
-  await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
+  await expect(blocks).toHaveCount(0)
 
   // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
   // migration - Gate, Compressor, EQ, Tremolo) plus six that already run on
