@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { EngineStatus } from '../../../hooks/useAudioEngine'
 import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../state/ioStore'
-import { getOpenAxe, shellOwnsAudioDevice } from '../../../native/openaxe'
+import { getOpenAxe, getShellKind, shellOwnsAudioDevice } from '../../../native/openaxe'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Auth } from '../../../tone3000/authStore'
 import {
@@ -79,6 +79,11 @@ export function SettingsDialog({
   // offering pickers for them is offering controls that do nothing
   // (issue #300 E1).
   const ownsAudioDevice = shellOwnsAudioDevice()
+  // A plugin has no device of its own at all: the DAW routes a track into it
+  // and takes the result back. That is different from the web, which also
+  // does not "own" a device but does still choose which microphone to open,
+  // so the two cannot share a branch.
+  const isPluginShell = getShellKind() === 'plugin'
   const namQuality = useSettingsStore((s) => s.namQuality)
   const setNamQuality = useSettingsStore((s) => s.setNamQuality)
   const auth = useTone3000Auth()
@@ -287,7 +292,14 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="Settings">
-      {ownsAudioDevice ? (
+      {/* No audio device sections in a plugin. The DAW decides what feeds the
+          plugin and where its output goes, so an input picker selects nothing,
+          the channel selector is never read (useNativeAudioEngine ignores
+          inputChannel - only the Web Audio path uses it), and the output
+          section would claim device selection "isn't supported in this
+          browser", which is not even the right category of answer inside a
+          DAW. */}
+      {isPluginShell ? null : ownsAudioDevice ? (
         /* Native (desktop): input and output are independent devices - the
          * C++ core opens them as separate createDevice(output, input) names
          * (apps/desktop/src/audio.cpp), so two selectors drive them. */

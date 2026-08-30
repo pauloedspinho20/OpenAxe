@@ -10,6 +10,7 @@ import { CableLayer, type DragPreview } from '../CableLayer/CableLayer'
 import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
 import { InputDeviceDialog } from '../InputDeviceDialog/InputDeviceDialog'
 import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
+import { getShellKind } from '../../../native/openaxe'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
@@ -62,6 +63,10 @@ export function GridEditor({
   const [blockDrag, setBlockDrag] = useState<BlockDragInfo | null>(null)
   const [inputDialogOpen, setInputDialogOpen] = useState(false)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
+  // In a plugin the DAW routes a track in and takes the result back, so
+  // neither rail opens a device picker: the IN/OUT buttons stay as the jacks
+  // they label, but there is nothing to choose behind them.
+  const isPluginShell = getShellKind() === 'plugin'
   const draggingJackRef = useRef<string | null>(null)
   const [tunerOpen, setTunerOpen] = useState(false)
 
@@ -189,7 +194,10 @@ export function GridEditor({
             fullWidth
             label="IN"
             onClick={() => setInputDialogOpen(true)}
-            title="Input device and channel"
+            disabled={isPluginShell}
+            title={
+              isPluginShell ? 'The DAW decides what feeds this plugin' : 'Input device and channel'
+            }
           />
 
           <button
@@ -234,7 +242,10 @@ export function GridEditor({
             fullWidth
             label="OUT"
             onClick={() => setOutputDialogOpen(true)}
-            title="Output device and channel"
+            disabled={isPluginShell}
+            title={
+              isPluginShell ? "The DAW takes this plugin's output" : 'Output device and channel'
+            }
           />
           <HardwareButton
             label="MUTE"
@@ -296,12 +307,18 @@ export function GridEditor({
         />
       )}
 
-      <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
-      <OutputDeviceDialog
-        open={outputDialogOpen}
-        onClose={() => setOutputDialogOpen(false)}
-        outputSelectionSupported={outputSelectionSupported}
-      />
+      {/* Not merely closed in a plugin - not mounted, so no other path can
+          open a device picker for a device the plugin does not own. */}
+      {!isPluginShell && (
+        <>
+          <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
+          <OutputDeviceDialog
+            open={outputDialogOpen}
+            onClose={() => setOutputDialogOpen(false)}
+            outputSelectionSupported={outputSelectionSupported}
+          />
+        </>
+      )}
       <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />
     </div>
   )

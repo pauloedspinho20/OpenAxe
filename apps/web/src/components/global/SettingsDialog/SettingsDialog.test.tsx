@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { SettingsDialog } from './SettingsDialog'
-import { shellOwnsAudioDevice } from '../../../native/openaxe'
+import { getShellKind, shellOwnsAudioDevice } from '../../../native/openaxe'
 
 vi.mock('../../../native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
@@ -39,7 +39,14 @@ function renderDialog(over: Record<string, unknown> = {}) {
 }
 
 describe('components/SettingsDialog', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Explicit, not just clearAllMocks: these are vi.fn(() => …) from the
+    // module factory, so a return value set by one test survives into the
+    // next one and quietly changes which branch renders.
+    vi.mocked(getShellKind).mockReturnValue('web')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(false)
+  })
   afterEach(() => vi.restoreAllMocks())
 
   it('renders the panel when open', () => {
@@ -70,5 +77,39 @@ describe('components/SettingsDialog', () => {
     })
     expect(onPowerOff).toHaveBeenCalled()
     expect(onPowerOn).toHaveBeenCalled()
+  })
+
+  describe('audio device sections', () => {
+    it('offers an input device picker on the web', () => {
+      const { container } = renderDialog()
+      expect(container.textContent).toContain('Audio Input')
+      expect(screen.getByLabelText('Input device')).toBeInTheDocument()
+    })
+
+    it('offers input and output pickers on the desktop, which owns the device', () => {
+      vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
+      renderDialog()
+      expect(screen.getByLabelText('Input device')).toBeInTheDocument()
+      expect(screen.getByLabelText('Output device')).toBeInTheDocument()
+    })
+
+    it('offers no device sections at all in a plugin', () => {
+      // The DAW routes a track in and takes the result back: an input picker
+      // selects nothing, the channel selector is never read on the native
+      // path, and the output section would otherwise claim device selection
+      // "isn't supported in this browser" inside a DAW.
+      vi.mocked(getShellKind).mockReturnValue('plugin')
+      const { container } = renderDialog()
+
+      expect(screen.queryByLabelText('Input device')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Input channel')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Output device')).not.toBeInTheDocument()
+      expect(container.textContent).not.toContain('Audio Input')
+      expect(container.textContent).not.toContain('Audio Output')
+      expect(container.textContent).not.toContain("isn't supported in this browser")
+
+      // The rest of Settings is untouched.
+      expect(container.textContent).toContain('Neural Amp Modeler Quality')
+    })
   })
 })
