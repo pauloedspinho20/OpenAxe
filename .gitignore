@@ -24,6 +24,7 @@ packages/core/build/
 
 # VST3 build tree (repopulated on every build)
 packages/vst3/build/
+packages/vst3/build-tsan/
 
 # Native desktop build tree (apps/desktop/CMakeLists.txt + FetchContent deps)
 apps/desktop/build/

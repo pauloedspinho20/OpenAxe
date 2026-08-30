@@ -130,7 +130,7 @@ bool HostParamWrite(NamStudioGraph* graph, int host_id, float normalized, bool& 
 std::string GroupForSlot(int slot);
 
 // ── iPlug2 registration (only linked when the SDK is present) ───────────
-#if defined(VST3_API) || defined(AU_API) || defined(STANDALONE_APP)
+#if defined(VST3_API) || defined(AU_API) || defined(CLAP_API) || defined(STANDALONE_APP)
 // Declares the full stable 302-param list at construction from the generated
 // table, with stable ids and groups so a host's automation list is navigable
 // rather than 200 flat entries. Safe to call only from the main thread at

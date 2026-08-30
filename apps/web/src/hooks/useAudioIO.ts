@@ -4,7 +4,7 @@
  * auto-resets input selection to default if the chosen device disappears.
  */
 import { useCallback, useEffect, useRef } from 'react'
-import { getOpenAxe } from '../native/openaxe'
+import { getOpenAxe, shellOwnsAudioDevice } from '../native/openaxe'
 import type { OpenAxeDevice } from '../native/openaxe'
 import { useIOStore } from '../state/ioStore'
 
@@ -28,6 +28,14 @@ function mapNativeDevice(device: OpenAxeDevice) {
 async function enumerateNative(): Promise<boolean> {
   const bridge = getOpenAxe()
   if (!bridge) return false
+  // In a plugin the DAW owns device selection, and the bridge answers
+  // listDevices with an empty array. Returning true (handled) rather than
+  // falling through stops us from asking the browser instead - which is what
+  // opened a getUserMedia permission prompt inside the host (issue #300 E1).
+  if (!shellOwnsAudioDevice()) {
+    useIOStore.getState().setDeviceLists([], [])
+    return true
+  }
   try {
     const devices = await bridge.listDevices()
     useIOStore

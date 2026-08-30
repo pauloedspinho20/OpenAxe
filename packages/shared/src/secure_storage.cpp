@@ -1,4 +1,4 @@
-#include "secure_storage.h"
+#include "openaxe/secure_storage.h"
 
 // Debug builds (any platform, including a locally-built macOS/Windows dev
 // binary) deliberately skip the real OS keychain/credential manager below
@@ -32,7 +32,7 @@
 #include <wincred.h>
 #endif
 
-namespace openaxe_desktop::secure_storage {
+namespace openaxe::secure_storage {
 
 namespace {
 // Service name intentionally keeps the pre-OpenAxe branding (issue #151):
@@ -256,4 +256,4 @@ bool Delete(const std::string& key, std::string* error) {
 
 #endif
 
-}  // namespace openaxe_desktop::secure_storage
+}  // namespace openaxe::secure_storage

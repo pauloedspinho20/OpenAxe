@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useIOStore, type InputChannelMode } from '../../../state/ioStore'
+import { getShellKind } from '../../../native/openaxe'
 import { Dialog, SelectField, ErrorText } from '@openaxe/ui'
 
 export interface InputDeviceDialogProps {
@@ -9,6 +10,10 @@ export interface InputDeviceDialogProps {
 
 export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
   const io = useIOStore()
+  // A plugin has no device to pick - the DAW decides what feeds it - but it
+  // does have a stereo bus, and which side of it carries the guitar is the
+  // player's choice.
+  const isPluginShell = getShellKind() === 'plugin'
 
   useEffect(() => {
     if (!open) return
@@ -21,18 +26,20 @@ export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
 
   return (
     <Dialog open={open} onClose={onClose} title="Input" width="min(360px, 90vw)">
-      <SelectField
-        label="Device"
-        value={io.inputDeviceId}
-        onChange={(e) => io.setInputDevice(e.target.value)}
-      >
-        <option value="">Default input</option>
-        {io.inputDevices.map((d) => (
-          <option key={d.deviceId} value={d.deviceId}>
-            {d.label}
-          </option>
-        ))}
-      </SelectField>
+      {!isPluginShell && (
+        <SelectField
+          label="Device"
+          value={io.inputDeviceId}
+          onChange={(e) => io.setInputDevice(e.target.value)}
+        >
+          <option value="">Default input</option>
+          {io.inputDevices.map((d) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label}
+            </option>
+          ))}
+        </SelectField>
+      )}
 
       <SelectField
         label="Channel"

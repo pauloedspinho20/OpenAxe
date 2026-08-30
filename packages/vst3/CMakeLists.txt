@@ -6,6 +6,20 @@ string(STRIP "${OPENAXE_VERSION}" OPENAXE_VERSION)
 
 project(openaxe_vst3 VERSION ${OPENAXE_VERSION} LANGUAGES CXX C)
 
+# Version, generated from the root VERSION file so the host's plugin manager,
+# the bridge's openAxe.version and the update check can never disagree
+# (issue #300 E6 — they were reporting 0.1.0 while VERSION said 0.2.5).
+# PLUG_VERSION_HEX is iPlug2's packed 0x00MMmmpp form.
+math(EXPR OPENAXE_VERSION_HEX
+  "(${PROJECT_VERSION_MAJOR} << 16) + (${PROJECT_VERSION_MINOR} << 8) + ${PROJECT_VERSION_PATCH}"
+  OUTPUT_FORMAT HEXADECIMAL)
+math(EXPR OPENAXE_VERSION_HEX_DEC
+  "(${PROJECT_VERSION_MAJOR} << 16) + (${PROJECT_VERSION_MINOR} << 8) + ${PROJECT_VERSION_PATCH}")
+add_compile_definitions(
+  OPENAXE_VERSION_STR="${OPENAXE_VERSION}"
+  OPENAXE_VERSION_HEX=${OPENAXE_VERSION_HEX})
+message(STATUS "packages/vst3: version ${OPENAXE_VERSION} (hex ${OPENAXE_VERSION_HEX})")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -50,18 +64,64 @@ if(POLICY CMP0169)
 endif()
 set(IPLUG2_AVAILABLE OFF)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/core/third_party/nam-core/NAM/dsp.cpp")
-  FetchContent_GetProperties(iplug2)
+  # ── Editor availability (decided early: it gates iPlug2's own cmake includes) ──
+# The webview editor is an IGraphics control (IWebViewControl), so it can only be
+# built where iPlug2's IGraphics has a backend. In the pinned iPlug2 revision that
+# means macOS/iOS, Windows and WEB only: IGraphicsPrivate.h defines
+# FONT_DESCRIPTOR_TYPE for OS_MAC/OS_IOS/OS_WIN/OS_WEB and leaves the #else branch
+# commented "NO_IGRAPHICS". Compiling any IGraphics translation unit elsewhere
+# fails outright.
+#
+# That includes iPlug2's own IGraphics object libraries (IGraphicsFlexBox,
+# NanoVG, ...) which Scripts/cmake/IGraphics.cmake defines. They are part of the
+# default `all` target, so the include itself has to be skipped — gating only our
+# sources still leaves `cmake --build` compiling them.
+#
+# Where the editor is off the plugin builds headless: DSP, host parameters, state
+# chunks, presets and MIDI all work and the host draws its own generic parameter
+# UI. Overridable so the headless path can be built and tested anywhere:
+#   cmake -S packages/vst3 -B build -DOPENAXE_VST3_EDITOR=OFF
+set(_openaxe_igraphics_default OFF)
+if(APPLE OR WIN32)
+  set(_openaxe_igraphics_default ON)
+endif()
+option(OPENAXE_VST3_EDITOR "Build the plugin's webview editor (needs iPlug2 IGraphics)"
+       ${_openaxe_igraphics_default})
+set(OPENAXE_HAS_IGRAPHICS ${OPENAXE_VST3_EDITOR})
+
+FetchContent_GetProperties(iplug2)
   if(NOT iplug2_POPULATED)
     FetchContent_Populate(iplug2)
   endif()
+  # Fix an upstream webview teardown crash before anything compiles it — see
+  # patches/apply_iplug2_patches.cmake for the analysis. Idempotent, so a
+  # reconfigure over an already-patched tree is a no-op.
+  set(IPLUG2_SRC "${iplug2_SOURCE_DIR}")
+  if(APPLE AND EXISTS "${iplug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebView_mac.mm")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/patches/apply_iplug2_patches.cmake")
+  endif()
+
   if(EXISTS "${iplug2_SOURCE_DIR}/IPlug/IPlug_include_in_plug_hdr.h")
     set(IPLUG2_AVAILABLE ON)
     set(IPLUG2_DIR "${iplug2_SOURCE_DIR}" CACHE PATH "iPlug2 root" FORCE)
     # Do not include iPlug2's top-level CMake (it adds Examples/Tests needing SDKs).
     # Include only the core IPlug2 cmake helpers if needed.
-    if(EXISTS "${iplug2_SOURCE_DIR}/IPlug/IPlug.cmake")
-      include(${iplug2_SOURCE_DIR}/IPlug/IPlug.cmake)
-    endif()
+  if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/IPlug.cmake")
+    include(${iplug2_SOURCE_DIR}/Scripts/cmake/IPlug.cmake)
+  endif()
+  if(EXISTS "${iplug2_SOURCE_DIR}/IPlug/IPlug.cmake")
+    include(${iplug2_SOURCE_DIR}/IPlug/IPlug.cmake)
+  endif()
+  if(OPENAXE_HAS_IGRAPHICS AND EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake")
+    include(${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake)
+  endif()
+  # Fallback defines for standalone plugin CMake (not using IPlugPlugin.cmake's PROJECT_DIR)
+  if(NOT DEFINED PROJECT_DIR)
+    set(PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+  endif()
+  if(NOT DEFINED PLUG_RESOURCES_DIR)
+    set(PLUG_RESOURCES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+  endif()
   endif()
 endif()
 
@@ -112,19 +172,45 @@ FetchContent_GetProperties(webview)
 if(NOT webview_POPULATED)
   FetchContent_Populate(webview)
 endif()
+set(OPENAXE_WEBVIEW_SOURCES OFF)
 if(EXISTS "${webview_SOURCE_DIR}/webview.h" OR EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
-  add_compile_definitions(OPENAXE_HAS_WEBVIEW)
+  set(OPENAXE_WEBVIEW_SOURCES ON)
   if(EXISTS "${webview_SOURCE_DIR}/core/include/webview/webview.h")
     include_directories("${webview_SOURCE_DIR}/core/include")
   else()
     include_directories("${webview_SOURCE_DIR}")
   endif()
+endif()
+
+if(OPENAXE_HAS_IGRAPHICS)
+  add_compile_definitions(OPENAXE_HAS_IGRAPHICS)
+else()
+  # Gating our own includes is not enough: iPlug2's IPlugDelegate_select.h
+  # includes IGraphicsEditorDelegate.h unless one of COCOA_EDITOR_DELEGATE /
+  # WEBVIEW_EDITOR_DELEGATE / NO_IGRAPHICS is defined. NO_IGRAPHICS selects the
+  # plain iplug::IEditorDelegate, which is what a headless plugin wants.
+  add_compile_definitions(NO_IGRAPHICS)
+endif()
+
+set(OPENAXE_ENABLE_WEBVIEW OFF)
+if(OPENAXE_WEBVIEW_SOURCES AND OPENAXE_HAS_IGRAPHICS)
+  set(OPENAXE_ENABLE_WEBVIEW ON)
+  # NOTE: the compile definition and the CMake variable are two different
+  # things. add_compile_definitions() only reaches the compiler — guards below
+  # must test OPENAXE_ENABLE_WEBVIEW, not OPENAXE_HAS_WEBVIEW, or they evaluate
+  # an undefined variable and silently disable the editor's link libraries.
+  add_compile_definitions(OPENAXE_HAS_WEBVIEW)
   if(APPLE)
     enable_language(OBJCXX)
   endif()
   message(STATUS "packages/vst3: webview available — editor will use webview shell")
-else()
+elseif(NOT OPENAXE_WEBVIEW_SOURCES)
   message(STATUS "packages/vst3: webview not available — editor builds as stub (offline)")
+else()
+  message(STATUS
+    "packages/vst3: iPlug2 IGraphics has no backend on this platform — building "
+    "the plugin headless (DSP/params/state/MIDI, host-generic UI). The webview "
+    "editor needs IGraphics, see the comment above this message.")
 endif()
 FetchContent_GetProperties(nlohmann_json)
 if(NOT nlohmann_json_POPULATED)
@@ -149,27 +235,212 @@ if(IPLUG2_AVAILABLE AND EXISTS "${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK
   set(VST3_SDK_AVAILABLE ON)
 endif()
 
+
+# ── macOS bundle Info.plists (issue #300 F3) ──────────────────────────────
+# Generated from resources/Info.plist.in so the identifiers and version come
+# from config.h and the root VERSION file rather than being restated. CMake's
+# default plist declared CFBundlePackageType APPL (VST3 and AU require BNDL)
+# and left CFBundleIdentifier/Name/Version empty, which auval rejects outright
+# and which makes codesigning meaningless.
+if(APPLE)
+  # AU component type follows iPlug2's own rule
+  # (IPlugProcessor::GetAUPluginType, mirrored in Scripts/validate_audiounit.sh):
+  # an effect that accepts MIDI in is a music effect 'aumf', not 'aufx'. Getting
+  # this wrong is not cosmetic — auval reports "Class Data fields aumf, Nms1,
+  # NwSt do not match component description" and fails validation, because the
+  # plugin registers one type and the plist advertises another.
+  #
+  # Parsed out of config.h rather than restated, so flipping PLUG_DOES_MIDI_IN
+  # or PLUG_TYPE cannot silently desync the plist from the binary.
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config.h" _openaxe_config_h)
+  string(REGEX MATCH "#define[ \t]+PLUG_TYPE[ \t]+([0-9]+)" _m "${_openaxe_config_h}")
+  set(_plug_type "${CMAKE_MATCH_1}")
+  string(REGEX MATCH "#define[ \t]+PLUG_DOES_MIDI_IN[ \t]+([0-9]+)" _m "${_openaxe_config_h}")
+  set(_plug_midi_in "${CMAKE_MATCH_1}")
+  if(_plug_type STREQUAL "1")
+    set(OPENAXE_AU_TYPE "aumu")   # instrument
+  elseif(_plug_type STREQUAL "2")
+    set(OPENAXE_AU_TYPE "aumi")   # MIDI effect
+  elseif(_plug_midi_in STREQUAL "1")
+    set(OPENAXE_AU_TYPE "aumf")   # effect that takes MIDI in
+  else()
+    set(OPENAXE_AU_TYPE "aufx")   # plain effect
+  endif()
+  message(STATUS "packages/vst3: AU component type ${OPENAXE_AU_TYPE} "
+                 "(PLUG_TYPE=${_plug_type}, PLUG_DOES_MIDI_IN=${_plug_midi_in})")
+
+  set(OPENAXE_PLUG_NAME "OpenAxe")
+  set(OPENAXE_PLUG_UID "Nms1")   # PLUG_UNIQUE_ID in config.h
+  set(OPENAXE_PLUG_MFR_ID "NwSt")  # PLUG_MFR_ID
+  set(OPENAXE_COPYRIGHT "Copyright 2026 OpenAxe (GPLv3)")
+
+  # The identifier must match iPlug2's BUNDLE_ID exactly:
+  #   BUNDLE_DOMAIN "." BUNDLE_MFR "." API_EXT "." BUNDLE_NAME
+  # (IPlug_include_in_plug_hdr.h). IPlugAU::GetProperty looks the bundle up with
+  # CFBundleGetBundleWithIdentifier(BUNDLE_ID) when the host asks for the Cocoa
+  # UI and passes the result straight to CFBundleCopyBundleURL — so an
+  # identifier that does not match returns NULL and segfaults the host. Getting
+  # this subtly wrong (omitting BUNDLE_MFR) is what crashed auval at
+  # "VERIFYING CUSTOM UI".
+  set(OPENAXE_BUNDLE_DOMAIN "com.openaxe")  # BUNDLE_DOMAIN in config.h
+  set(OPENAXE_BUNDLE_MFR "OpenAxe")         # BUNDLE_MFR
+  function(openaxe_write_plist out_var kind api_ext extra)
+    set(OPENAXE_BUNDLE_ID
+        "${OPENAXE_BUNDLE_DOMAIN}.${OPENAXE_BUNDLE_MFR}.${api_ext}.${OPENAXE_PLUG_NAME}")
+    set(OPENAXE_PLIST_EXTRA "${extra}")
+    # Plugins are loadable bundles (BNDL); the standalone is an application
+    # (APPL). macOS will not treat a bundle as a launchable app otherwise, and
+    # SWELL's NSApplication setup — which is what puts the host window on
+    # screen — needs a real app bundle to attach to.
+    if(kind STREQUAL "APP")
+      set(OPENAXE_BUNDLE_PACKAGE_TYPE "APPL")
+    else()
+      set(OPENAXE_BUNDLE_PACKAGE_TYPE "BNDL")
+    endif()
+    set(_out "${CMAKE_BINARY_DIR}/generated_plists/${OPENAXE_PLUG_NAME}-${kind}-Info.plist")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in" "${_out}" @ONLY)
+    set(${out_var} "${_out}" PARENT_SCOPE)
+  endfunction()
+
+  openaxe_write_plist(OPENAXE_VST3_PLIST "VST3" "vst3" "")   # API_EXT for VST3_API
+  openaxe_write_plist(OPENAXE_CLAP_PLIST "CLAP" "clap" "")   # API_EXT for CLAP_API
+
+  # The AU needs its AudioComponents registration, or the system never
+  # advertises the plugin and auval cannot find it. factoryFunction and
+  # NSPrincipalClass must match AUV2_FACTORY / AUV2_VIEW_CLASS_STR in config.h.
+  string(CONCAT OPENAXE_AU_EXTRA
+    "  <key>AudioComponents</key>\n"
+    "  <array>\n"
+    "    <dict>\n"
+    "      <key>description</key>\n"
+    "      <string>Guitar/bass amp + cab + effects powered by Neural Amp Modeler</string>\n"
+    "      <key>factoryFunction</key>\n"
+    "      <string>OpenAxePlugin_Factory</string>\n"
+    "      <key>manufacturer</key>\n"
+    "      <string>${OPENAXE_PLUG_MFR_ID}</string>\n"
+    "      <key>name</key>\n"
+    "      <string>OpenAxe: OpenAxe</string>\n"
+    "      <key>sandboxSafe</key>\n"
+    "      <true/>\n"
+    "      <key>subtype</key>\n"
+    "      <string>${OPENAXE_PLUG_UID}</string>\n"
+    "      <key>type</key>\n"
+    "      <string>${OPENAXE_AU_TYPE}</string>\n"
+    "      <key>version</key>\n"
+    "      <integer>${OPENAXE_VERSION_HEX_DEC}</integer>\n"
+    "    </dict>\n"
+    "  </array>\n"
+    "  <key>AudioUnit Version</key>\n"
+    "  <string>${OPENAXE_VERSION_HEX}</string>\n"
+    "  <key>NSPrincipalClass</key>\n"
+    "  <string>OpenAxePlugin_View</string>")
+  openaxe_write_plist(OPENAXE_AU_PLIST "AU" "audiounit" "${OPENAXE_AU_EXTRA}")  # API_EXT for AU_API
+
+  # The standalone app. NSHighResolutionCapable keeps the webview crisp on a
+  # Retina display; without it macOS runs the window through 2x upscaling.
+  # NSPrincipalClass is not cosmetic: SWELL's app bootstrap runs entirely from
+  # SWELLApplication's delegate callbacks, and SWELLAppMain(SWELLAPP_ONLOAD) —
+  # which creates the plugin instance and the host window — fires from
+  # applicationWillFinishLaunching. Without this key AppKit instantiates a
+  # plain NSApplication, none of that ever runs, and the app launches, sits
+  # idle at 0% CPU and shows no window at all. Which is what it did.
+  string(CONCAT OPENAXE_APP_EXTRA
+    "  <key>NSPrincipalClass</key>\n"
+    "  <string>SWELLApplication</string>\n"
+    "  <key>NSMainNibFile</key>\n"
+    "  <string>OpenAxe-macOS-MainMenu</string>\n"
+    "  <key>NSHighResolutionCapable</key>\n"
+    "  <true/>\n"
+    "  <key>NSMicrophoneUsageDescription</key>\n"
+    "  <string>OpenAxe processes your guitar or bass input.</string>")
+  openaxe_write_plist(OPENAXE_APP_PLIST "APP" "app" "${OPENAXE_APP_EXTRA}")
+endif()
+
+
+# A conformant macOS bundle carries Contents/PkgInfo; CMake does not create one
+# for a plain MODULE library bundle (issue #300 F3).
+function(openaxe_write_pkginfo target)
+  if(NOT APPLE OR NOT TARGET ${target})
+    return()
+  endif()
+  # Must agree with CFBundlePackageType in the plist: BNDL for the loadable
+  # plugin bundles, APPL for the standalone application.
+  get_target_property(_is_app ${target} MACOSX_BUNDLE)
+  if(_is_app)
+    set(_type "APPL????")
+    set(_pkginfo "${CMAKE_BINARY_DIR}/generated_plists/PkgInfo-APPL")
+  else()
+    set(_type "BNDL????")
+    set(_pkginfo "${CMAKE_BINARY_DIR}/generated_plists/PkgInfo")
+  endif()
+  file(WRITE "${_pkginfo}" "${_type}")
+  add_custom_command(TARGET ${target} POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy "${_pkginfo}"
+            "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/PkgInfo"
+    COMMENT "${target}: writing Contents/PkgInfo"
+    VERBATIM)
+endfunction()
+
 # ── Plugin sources (shared across all formats) ───────────────────────
 # Editor shell (issue #132) hosts the shared React app via webview — thin
 # bridge like desktop, no IGraphics fork. Primitives (issue #133) reuse the
 # same React primitives via the webview — no IControl fork. Grid/cables/
 # inspector (issue #134) reuses GridEditor/BlockInspector via the same webview.
-set(PLUGIN_SOURCES src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp)
+# src/http_server.cpp uses the Winsock API, which needs an explicit link on
+# Windows (apps/desktop already does this for its own copy). Applies to every
+# target that compiles it, tests included — the ui_serving test failed to link
+# with 11 unresolved __imp_* socket symbols before this.
+function(openaxe_link_sockets target)
+  if(WIN32 AND TARGET ${target})
+    target_link_libraries(${target} PRIVATE ws2_32)
+  endif()
+endfunction()
+
+set(PLUGIN_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/app_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/storage_bridge.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ui_url.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/monitor_tap.cpp src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/input_routing.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp)
 
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   # VST3 target (issue #125) — the first format, always built when SDK present.
+  if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/VST3.cmake")
+    include("${iplug2_SOURCE_DIR}/Scripts/cmake/VST3.cmake")
+  endif()
 
   add_library(openaxe_vst3 MODULE ${PLUGIN_SOURCES})
-  target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  target_include_directories(openaxe_vst3 PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/VST3 ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  # VST3 SDK headers for pluginterfaces etc. (iPlug2::VST3 adds them via INTERFACE, but add explicitly for robustness)
+  if(EXISTS "${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK")
+    target_include_directories(openaxe_vst3 PRIVATE ${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK ${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK/pluginterfaces ${iplug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK/base)
+  endif()
   target_link_libraries(openaxe_vst3 PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_HAS_IGRAPHICS AND TARGET iPlug2::IGraphics)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2::IGraphics)
+  endif()
+  if(APPLE)
+    if(TARGET iPlug2::IGraphics::NanoVG::Metal)
+      target_link_libraries(openaxe_vst3 PRIVATE iPlug2::IGraphics::NanoVG::Metal)
+    elseif(TARGET iPlug2::IGraphics::Metal)
+      target_link_libraries(openaxe_vst3 PRIVATE iPlug2::IGraphics::Metal)
+    endif()
+  else()
+    if(TARGET iPlug2::IGraphics::NanoVG)
+      target_link_libraries(openaxe_vst3 PRIVATE iPlug2::IGraphics::NanoVG)
+    endif()
+  endif()
+  if(TARGET iPlug2::VST3)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2::VST3)
+  elseif(TARGET iPlug2)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2::Extras::IWebViewControl)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2_Extras_IWebViewControl_obj)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_vst3 PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
     target_link_libraries(openaxe_vst3 PRIVATE nlohmann_json::nlohmann_json)
-  endif()
-  if(TARGET iPlug2)
-    target_link_libraries(openaxe_vst3 PRIVATE iPlug2)
   endif()
   target_compile_definitions(openaxe_vst3 PRIVATE VST3_API=1)
   if(APPLE)
@@ -179,11 +450,54 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
       target_compile_options(openaxe_vst3 PRIVATE -Wno-auto-var-id)
     endif()
   endif()
+  # Configure bundle layout — use iPlug helper when plist exists, else minimal bundle without plist
+  if(COMMAND iplug_configure_vst3 AND EXISTS "${PLUG_RESOURCES_DIR}/OpenAxe-VST3-Info.plist")
+    iplug_configure_vst3(openaxe_vst3 OpenAxe)
+  else()
+    if(APPLE)
+      set_target_properties(openaxe_vst3 PROPERTIES
+        BUNDLE TRUE
+        BUNDLE_EXTENSION "vst3"
+        OUTPUT_NAME "OpenAxe"
+        PREFIX ""
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_VST3_PLIST}"
+      )
+      openaxe_write_pkginfo(openaxe_vst3)
+      # (The Info.plist is generated above from resources/Info.plist.in and
+      # attached via MACOSX_BUNDLE_INFO_PLIST — no template file is expected
+      # in PLUG_RESOURCES_DIR.)
+    else()
+      set_target_properties(openaxe_vst3 PROPERTIES
+        OUTPUT_NAME "OpenAxe"
+        PREFIX ""
+        SUFFIX ".vst3"
+      )
+    endif()
+  endif()
 
-  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/main_standalone.cpp)
-  target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/input_routing.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/app_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/storage_bridge.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ui_url.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/monitor_tap.cpp)
+  target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/APP ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src)
+  if(TARGET iPlug2::IGraphics)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2::IGraphics)
+  endif()
+  if(TARGET iPlug2::IGraphics::NanoVG)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2::IGraphics::NanoVG)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2::Extras::IWebViewControl)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2_Extras_IWebViewControl_obj)
+  endif()
+  if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/APP.cmake")
+    include("${iplug2_SOURCE_DIR}/Scripts/cmake/APP.cmake")
+  endif()
+  if(TARGET iPlug2::APP)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2::APP)
+  endif()
   target_link_libraries(openaxe_standalone PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_standalone PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -192,9 +506,71 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   if(TARGET iPlug2)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2)
   endif()
-  target_compile_definitions(openaxe_standalone PRIVATE STANDALONE_APP=1)
+  target_compile_definitions(openaxe_standalone PRIVATE APP_API=1 STANDALONE_APP=1)
+  set_target_properties(openaxe_standalone PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  if(APPLE)
+    # A real .app bundle, not a bare executable. SWELL brings up the host
+    # window through NSApplication, which macOS only wires up properly for a
+    # bundled app — a plain Mach-O launches, sits idle and never shows a
+    # window, which is exactly what it did.
+    set_target_properties(openaxe_standalone PROPERTIES
+      MACOSX_BUNDLE TRUE
+      OUTPUT_NAME "${OPENAXE_PLUG_NAME}"
+      MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_APP_PLIST}")
+    openaxe_write_pkginfo(openaxe_standalone)
+
+    # The main nib is what actually starts the app. NSApplicationMain loads it,
+    # which instantiates SWELLAppController, whose awakeFromNib does
+    # [NSApp setDelegate:self] — and only then does
+    # applicationWillFinishLaunching fire, which is where SWELL calls
+    # SWELLAppMain(SWELLAPP_ONLOAD) to create the plugin and the host window.
+    # No nib, no delegate, no app: it launches and sits there.
+    #
+    # The xib is iPlug2's own stock app menu, renamed. ibtool ships with
+    # Xcode, which is already required to build any of this.
+    add_custom_command(TARGET openaxe_standalone POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E make_directory
+              "$<TARGET_BUNDLE_CONTENT_DIR:openaxe_standalone>/Resources"
+      COMMAND xcrun ibtool --errors --warnings --notices --output-format human-readable-text
+              --compile
+              "$<TARGET_BUNDLE_CONTENT_DIR:openaxe_standalone>/Resources/OpenAxe-macOS-MainMenu.nib"
+              "${CMAKE_CURRENT_SOURCE_DIR}/resources/OpenAxe-macOS-MainMenu.xib"
+      COMMENT "openaxe_standalone: compiling the main menu nib"
+      VERBATIM)
+  endif()
   if(APPLE)
     set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
+
+    # iPlug2's APP sources are Objective-C++ despite their .cpp extensions —
+    # IPlugAPP_main.cpp pulls in Cocoa, IPlugAPP_dialog.cpp pulls in
+    # Foundation — and so is all of SWELL, which provides the Win32 API the
+    # APP host is written against (issue #300 F5).
+    #
+    # The properties have to name the same source paths iPlug2::APP put in its
+    # INTERFACE_SOURCES, which is exactly what the IPLUG2_APP_SRC and
+    # IPLUG2_SWELL_SRC cache variables from APP.cmake hold, and they need
+    # TARGET_DIRECTORY so they attach to the sources as this target consumes
+    # them. An earlier attempt here failed and was written up as needing an
+    # iPlug2-side fix; it did not — it was setting the property on the wrong
+    # source list. iPlug2 does this itself in iplug_configure_app(), which we
+    # do not call because it also imposes its own bundle layout, plist path
+    # and output directory, all of which this file already handles its own way
+    # for the other three formats.
+    if(IPLUG2_APP_SRC)
+      set_source_files_properties(${IPLUG2_APP_SRC}
+        TARGET_DIRECTORY openaxe_standalone
+        PROPERTIES LANGUAGE OBJCXX)
+    endif()
+    if(IPLUG2_SWELL_SRC)
+      # SWELL needs Cocoa imported before swell-internal.h, hence the forced
+      # prefix header — same flags iplug_configure_app() uses.
+      set_source_files_properties(${IPLUG2_SWELL_SRC}
+        TARGET_DIRECTORY openaxe_standalone
+        PROPERTIES
+        LANGUAGE OBJCXX
+        COMPILE_FLAGS "-Wno-deprecated-declarations -include ${iplug2_SOURCE_DIR}/IPlug/IPlugOBJCPrefix.pch")
+    endif()
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       target_compile_options(openaxe_standalone PRIVATE -Wno-auto-var-id)
     endif()
@@ -224,9 +600,21 @@ endif()
 # of truth for all formats (capability flag, not a second implementation).
 if(IPLUG2_AVAILABLE AND CLAP_SDK_AVAILABLE)
   add_library(openaxe_clap MODULE ${PLUGIN_SOURCES})
-  target_include_directories(openaxe_clap PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  target_include_directories(openaxe_clap PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/CLAP ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src)
+  if(TARGET iPlug2::IGraphics)
+    target_link_libraries(openaxe_clap PRIVATE iPlug2::IGraphics)
+  endif()
+  if(TARGET iPlug2::IGraphics::NanoVG)
+    target_link_libraries(openaxe_clap PRIVATE iPlug2::IGraphics::NanoVG)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
+    target_link_libraries(openaxe_clap PRIVATE iPlug2::Extras::IWebViewControl)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
+    target_link_libraries(openaxe_clap PRIVATE iPlug2_Extras_IWebViewControl_obj)
+  endif()
   target_link_libraries(openaxe_clap PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_clap PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -240,12 +628,29 @@ if(IPLUG2_AVAILABLE AND CLAP_SDK_AVAILABLE)
     if(TARGET iPlug2::CLAP)
       target_link_libraries(openaxe_clap PRIVATE iPlug2::CLAP)
     endif()
-    if(COMMAND iplug_configure_clap)
-      iplug_configure_clap(openaxe_clap OpenAxe)
-    endif()
+    # iplug_configure_clap is deliberately not used: it relocates output to
+    # ${CMAKE_BINARY_DIR}/out, which every path in the CI artifact globs, the
+    # VS Code tasks and the validator tests would have to follow. We configure
+    # the bundle ourselves and supply the same generated plist.
   endif()
   target_compile_definitions(openaxe_clap PRIVATE CLAP_API=1)
-  set_target_properties(openaxe_clap PROPERTIES OUTPUT_NAME "OpenAxe" PREFIX "" SUFFIX ".clap" EXCLUDE_FROM_ALL TRUE)
+  if(APPLE)
+    # A real directory bundle, not a bare Mach-O file. The CLAP shipped as a
+    # bare file had no Contents/Resources to hold the React UI, so an installed
+    # .clap found no index.html and opened an empty editor (issue #300 F3).
+    set_target_properties(openaxe_clap PROPERTIES
+      BUNDLE TRUE
+      BUNDLE_EXTENSION "clap"
+      OUTPUT_NAME "OpenAxe"
+      PREFIX ""
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+      MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_CLAP_PLIST}"
+      EXCLUDE_FROM_ALL TRUE
+    )
+    openaxe_write_pkginfo(openaxe_clap)
+  else()
+    set_target_properties(openaxe_clap PROPERTIES OUTPUT_NAME "OpenAxe" PREFIX "" SUFFIX ".clap" EXCLUDE_FROM_ALL TRUE)
+  endif()
   if(APPLE)
     set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -268,9 +673,21 @@ if(APPLE AND IPLUG2_AVAILABLE)
   # the same PLUGIN_SOURCES with AU_API defined and produce a .component
   # bundle. The host loads it via AudioComponentManager, not a plain dlopen.
   add_library(openaxe_au MODULE ${PLUGIN_SOURCES})
-  target_include_directories(openaxe_au PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL)
+  target_include_directories(openaxe_au PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/AUv2 ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src)
+  if(TARGET iPlug2::IGraphics)
+    target_link_libraries(openaxe_au PRIVATE iPlug2::IGraphics)
+  endif()
+  if(TARGET iPlug2::IGraphics::NanoVG)
+    target_link_libraries(openaxe_au PRIVATE iPlug2::IGraphics::NanoVG)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2::Extras::IWebViewControl)
+    target_link_libraries(openaxe_au PRIVATE iPlug2::Extras::IWebViewControl)
+  endif()
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
+    target_link_libraries(openaxe_au PRIVATE iPlug2_Extras_IWebViewControl_obj)
+  endif()
   target_link_libraries(openaxe_au PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  if(TARGET webview)
+  if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_au PRIVATE webview::core)
   endif()
   if(TARGET nlohmann_json)
@@ -296,8 +713,12 @@ if(APPLE AND IPLUG2_AVAILABLE)
     BUNDLE_EXTENSION "component"
     OUTPUT_NAME "OpenAxe"
     PREFIX ""
+    MACOSX_BUNDLE_INFO_PLIST "${OPENAXE_AU_PLIST}"
     EXCLUDE_FROM_ALL TRUE
   )
+  # Without the AudioComponents dict in this plist the system never advertises
+  # the component and auval reports "didn't find the component" (issue #300 F3).
+  openaxe_write_pkginfo(openaxe_au)
   # APPL needs Obj-C++ for the AU glue + webview.
   set_source_files_properties(src/editor.cpp PROPERTIES LANGUAGE OBJCXX)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -326,6 +747,107 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenAxe — guitar/bass amp + cab + effec
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "openaxe-plugin")
 set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}")
+
+# Shared secret store (issue #300 D4). Same module and same keychain service
+# name as apps/desktop, so one Tone3000 login covers the desktop app and the
+# plugin instead of each keeping its own copy — the plugin previously held the
+# token in a std::map that died with the instance.
+foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
+  openaxe_link_sockets(${_t})
+  if(TARGET ${_t})
+    target_include_directories(${_t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../shared/include")
+    if(APPLE)
+      target_link_libraries(${_t} PRIVATE "-framework Security" "-framework CoreFoundation")
+    elseif(WIN32)
+      target_link_libraries(${_t} PRIVATE credui advapi32)
+    endif()
+  endif()
+endforeach()
+
+# ── Bundle the React UI into every plugin bundle (issue #300 F2) ─────────
+# The plugin serves apps/web's build over loopback HTTP (WKWebView sandboxes
+# file:// subresources), so the built UI has to physically live inside the
+# bundle. Without this step an installed plugin found no index.html and fell
+# back to the "UI not found" IGraphics placeholder — it only worked in-tree
+# because plugin.cpp used to resolve the UI through __FILE__ (see F1).
+#
+# The existence check lives in cmake/copy_ui.cmake so it runs at BUILD time,
+# not configure time: configuring the plugin before building the web app is
+# the normal order, and a configure-time `if(EXISTS)` would silently skip the
+# copy forever after. A missing UI is a loud build warning, not a hard error,
+# so C++-only CI stays green.
+set(OPENAXE_WEB_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../../apps/web/dist")
+
+function(openaxe_bundle_ui target)
+  if(NOT TARGET ${target})
+    return()
+  endif()
+  # BUNDLE covers the loadable plugin bundles; MACOSX_BUNDLE covers the
+  # standalone .app. Checking only BUNDLE put the app's UI in
+  # Contents/MacOS/ui, where the resolver does not look.
+  get_target_property(_is_bundle ${target} BUNDLE)
+  get_target_property(_is_app_bundle ${target} MACOSX_BUNDLE)
+  if(APPLE AND (_is_bundle OR _is_app_bundle))
+    set(_ui_dest "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources/ui")
+  else()
+    # Bare module (Linux/Windows .vst3/.clap, or a non-bundle build): the
+    # resolver also looks for a sibling ui/ directory next to the binary.
+    set(_ui_dest "$<TARGET_FILE_DIR:${target}>/ui")
+  endif()
+  # POST_BUILD alone is not enough: it only fires when the target relinks, so
+  # rebuilding just the web app and then the plugin left the bundle carrying a
+  # stale UI with nothing to indicate it — the plugin sources had not changed,
+  # so there was nothing to relink. Pairing it with an always-out-of-date
+  # custom target that the plugin depends on means a fresh apps/web/dist is
+  # always picked up; copy_ui.cmake compares timestamps so the usual case is a
+  # no-op rather than a directory copy on every build.
+  #
+  # The sync target must inherit the plugin's own EXCLUDE_FROM_ALL. Marking it
+  # ALL unconditionally quietly undid that exclusion: the sync depends on the
+  # target, so an ALL sync for openaxe_standalone pulled the deliberately
+  # excluded (and known-broken on macOS, issue #300 F5) standalone build back
+  # into the default build, and `cmake --build` — the VST: Export task's step 3
+  # — started failing on it before it ever reached the tests or the install.
+  get_target_property(_excluded_from_all ${target} EXCLUDE_FROM_ALL)
+  if(_excluded_from_all)
+    add_custom_target(${target}_ui
+      COMMAND "${CMAKE_COMMAND}"
+              -DSRC=${OPENAXE_WEB_DIST}
+              -DDST=${_ui_dest}
+              -DTARGET=${target}
+              -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+      COMMENT "${target}: syncing apps/web/dist into the bundle"
+      VERBATIM)
+    set_target_properties(${target}_ui PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  else()
+    add_custom_target(${target}_ui ALL
+      COMMAND "${CMAKE_COMMAND}"
+              -DSRC=${OPENAXE_WEB_DIST}
+              -DDST=${_ui_dest}
+              -DTARGET=${target}
+              -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+      COMMENT "${target}: syncing apps/web/dist into the bundle"
+      VERBATIM)
+  endif()
+  add_dependencies(${target}_ui ${target})
+
+  add_custom_command(TARGET ${target} POST_BUILD
+    COMMAND "${CMAKE_COMMAND}"
+            -DSRC=${OPENAXE_WEB_DIST}
+            -DDST=${_ui_dest}
+            -DTARGET=${target}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+    COMMENT "${target}: bundling apps/web/dist into Resources/ui"
+    VERBATIM)
+endfunction()
+
+if(OPENAXE_ENABLE_WEBVIEW)
+  foreach(_t openaxe_vst3 openaxe_clap openaxe_au openaxe_standalone)
+    openaxe_bundle_ui(${_t})
+  endforeach()
+else()
+  message(STATUS "packages/vst3: headless build — skipping the bundled UI copy")
+endif()
 
 # Install the built bundles to standard locations (CPack + workflow's
 # productbuild/WIX/DEB generators handle the platform specifics).

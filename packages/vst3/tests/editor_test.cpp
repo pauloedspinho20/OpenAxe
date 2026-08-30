@@ -46,14 +46,35 @@ void TestClampSize() {
   using openaxe_vst3::editor::kMaxWidth;
   using openaxe_vst3::editor::kMinHeight;
   using openaxe_vst3::editor::kMaxHeight;
-  auto s = ClampSize(800, 600);
-  CHECK(s.width == 800 && s.height == 600);
-  s = ClampSize(100, 100);
+  // Assertions are expressed against the constants, not magic numbers: the
+  // editor's bounds are derived from config.h's PLUG_MIN/MAX_* so that the host
+  // and IGraphics agree (issue #300), and a hard-coded "640x480 is in range"
+  // silently became false when those changed.
+  const int mid_w = kMinWidth + (kMaxWidth - kMinWidth) / 2;
+  const int mid_h = kMinHeight + (kMaxHeight - kMinHeight) / 2;
+
+  // In-range values pass through untouched, including exactly on the bounds.
+  auto s = ClampSize(mid_w, mid_h);
+  CHECK(s.width == mid_w && s.height == mid_h);
+  s = ClampSize(kMinWidth, kMinHeight);
   CHECK(s.width == kMinWidth && s.height == kMinHeight);
-  s = ClampSize(5000, 5000);
+  s = ClampSize(kMaxWidth, kMaxHeight);
   CHECK(s.width == kMaxWidth && s.height == kMaxHeight);
-  s = ClampSize(640, 480);
-  CHECK(s.width == 640 && s.height == 480);
+
+  // Out-of-range clamps to the bound, in both directions.
+  s = ClampSize(kMinWidth - 1, kMinHeight - 1);
+  CHECK(s.width == kMinWidth && s.height == kMinHeight);
+  s = ClampSize(kMaxWidth + 1, kMaxHeight + 1);
+  CHECK(s.width == kMaxWidth && s.height == kMaxHeight);
+  s = ClampSize(0, 0);
+  CHECK(s.width == kMinWidth && s.height == kMinHeight);
+
+  // The default must itself be inside the range the host is told about,
+  // otherwise MakeGraphics creates a context the host never negotiated.
+  const auto def = openaxe_vst3::editor::DefaultSize();
+  CHECK(def.width >= kMinWidth && def.width <= kMaxWidth);
+  CHECK(def.height >= kMinHeight && def.height <= kMaxHeight);
+  CHECK(ClampSize(def.width, def.height) == def);
   std::printf("  ClampSize: ok\n");
 }
 

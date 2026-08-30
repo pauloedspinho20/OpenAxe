@@ -6,26 +6,13 @@
 #include <string>
 
 #include "openaxe/api.h"
+#include "openaxe/ui_url.h"
 
 namespace openaxe_vst3::editor {
 
 bool IsTrustedUiUrl(const std::string& url) {
-  std::string lower;
-  lower.reserve(url.size());
-  for (char c : url) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-  const size_t scheme_end = lower.find("://");
-  if (scheme_end == std::string::npos) return false;
-  const std::string scheme = lower.substr(0, scheme_end);
-  if (scheme != "http" && scheme != "https") return false;
-  std::string host = lower.substr(scheme_end + 3);
-  const size_t slash = host.find('/');
-  if (slash != std::string::npos) host = host.substr(0, slash);
-  // Reject userinfo (user:pass@host) — a loopback host hidden behind
-  // credentials (http://evil.com@127.0.0.1) must not be trusted.
-  if (host.find('@') != std::string::npos) return false;
-  const size_t colon = host.rfind(':');
-  if (colon != std::string::npos) host = host.substr(0, colon);
-  return host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+  // Single implementation in packages/shared (issue #300 J1).
+  return openaxe::IsTrustedUiUrl(url);
 }
 
 std::string ResolveUiUrl(const char* env_url, const std::string& bundled_index_path) {

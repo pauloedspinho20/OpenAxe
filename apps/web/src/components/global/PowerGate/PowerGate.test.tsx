@@ -4,11 +4,13 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import { PowerGate } from './PowerGate'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useIOStore } from '@/state/ioStore'
-import { getOpenAxe } from '@/native/openaxe'
+import { getOpenAxe, getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 
 vi.mock('@/native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
+  getShellKind: vi.fn(() => 'web'),
+  shellOwnsAudioDevice: vi.fn(() => false),
 }))
 
 vi.mock('@/hooks/useUpdateCheck', () => ({
@@ -31,7 +33,13 @@ const baseProps = {
 
 describe('PowerGate', () => {
   beforeEach(() => {
+    // Reset the shell mocks too, not just getOpenAxe: a test that switches to
+    // the plugin shell would otherwise leak into every test after it, and in
+    // plugin mode the gate renders nothing at all — so the failures land
+    // somewhere unrelated and look like a different bug.
     vi.mocked(getOpenAxe).mockReturnValue(null)
+    vi.mocked(getShellKind).mockReturnValue('web')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(false)
     useTone3000Auth.setState({ status: 'anonymous', user: null, error: null, pendingFlow: false })
     useIOStore.setState({
       inputDeviceId: '',
@@ -114,12 +122,46 @@ describe('PowerGate', () => {
 
   it('always shows the output selector in the native (desktop) shell', () => {
     vi.mocked(getOpenAxe).mockReturnValue({} as never)
+    vi.mocked(getShellKind).mockReturnValue('desktop')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
     useIOStore.setState({
       inputDevices: [{ deviceId: 'i', label: 'In', groupId: 'grp' }],
       outputDevices: [{ deviceId: 'o', label: 'Out', groupId: 'grp' }],
     })
     render(<PowerGate {...baseProps} outputSelectionSupported={false} />)
     expect(screen.getByLabelText('Output device')).toBeInTheDocument()
+  })
+
+  it('renders nothing at all in the plugin shell', () => {
+    // A plugin has no power switch to offer: the DAW owns the transport and App
+    // powers the engine on automatically, so the gate would only flash up and
+    // dismiss itself. Previously it rendered device pickers here; now it
+    // renders nothing.
+    vi.mocked(getOpenAxe).mockReturnValue({} as never)
+    vi.mocked(getShellKind).mockReturnValue('plugin')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(false)
+    useIOStore.setState({
+      inputDevices: [{ deviceId: 'i', label: 'In', groupId: 'grp' }],
+      outputDevices: [{ deviceId: 'o', label: 'Out', groupId: 'grp' }],
+    })
+    const { container } = render(<PowerGate {...baseProps} outputSelectionSupported={false} />)
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByLabelText('Input device')).toBeNull()
+    expect(screen.queryByLabelText('Output device')).toBeNull()
+    expect(screen.queryByRole('button', { name: /power/i })).toBeNull()
+  })
+
+  it('still surfaces a failure in the plugin shell, with a retry rather than a power switch', () => {
+    // Rendering nothing on error would leave a blank editor with no
+    // explanation, so the gate stays for that one case — but retry is the only
+    // action that means anything when the host owns the transport.
+    vi.mocked(getOpenAxe).mockReturnValue({} as never)
+    vi.mocked(getShellKind).mockReturnValue('plugin')
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(false)
+    render(<PowerGate {...baseProps} status="error" error="engine failed to start" />)
+    expect(screen.getByText('engine failed to start')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /power on/i })).toBeNull()
   })
 
   it('shows the download and source links via the hero wordmark', () => {

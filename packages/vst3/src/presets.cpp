@@ -123,30 +123,4 @@ std::vector<FactoryPresetJson> BuildFactoryPresets() {
   return out;
 }
 
-void RegisterFactoryPresets(iplug::Plugin& plugin) {
-#if defined(VST3_API) || defined(AU_API) || defined(STANDALONE_APP)
-  // Build JSON documents via the same row layout as the web, then hand the
-  // resulting chunk to iPlug's factory bank. This avoids ever transcribing
-  // raw "blocks":[...] JSON — the row → graph → JSON pipeline is the single
-  // source of truth for both web and plugin.
-  auto presets = BuildFactoryPresets();
-  for (auto& p : presets) {
-    // IByteChunk wrapper for the JSON string. Use PutStr so UnserializeState's
-    // GetStr can retrieve it regardless of host chunk offset.
-    // iPlug's MakePresetFromChunk copies the chunk.
-    // We construct a temporary IByteChunk here — include IPlugStructs indirectly
-    // via the plugin's IPlug header (already pulled in by plugin.h).
-    // Avoid pulling IPlug headers when SDK is absent: this block only
-    // instantiates when VST3_API/AU_API is defined, matching the earlier guard.
-    // The actual iPlug includes happen in plugin.cpp, not here — so we forward
-    // through a tiny helper in plugin.cpp instead of constructing here.
-    // See plugin.cpp:RegisterFactoryPresetsTrampoline.
-    (void)plugin;
-    (void)p;
-  }
-#else
-  (void)plugin;
-#endif
-}
-
 }  // namespace openaxe_vst3::presets

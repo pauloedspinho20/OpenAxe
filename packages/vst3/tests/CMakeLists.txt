@@ -46,24 +46,72 @@ target_include_directories(openaxe_vst3_realtime_safety_test PRIVATE ../src ${CM
 add_test(NAME vst3_realtime_safety COMMAND openaxe_vst3_realtime_safety_test)
 
 # Editor shell — webview hosting the shared React app (#132)
-add_executable(openaxe_vst3_editor_test editor_test.cpp ../src/editor.cpp)
+add_executable(openaxe_vst3_editor_test editor_test.cpp ../src/editor.cpp
+  ../../shared/src/ui_url.cpp)
 target_link_libraries(openaxe_vst3_editor_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_editor COMMAND openaxe_vst3_editor_test)
 
+# Input channel routing — which of the host's input channels reach the rig.
+add_executable(openaxe_vst3_input_routing_test input_routing_test.cpp ../src/input_routing.cpp)
+target_include_directories(openaxe_vst3_input_routing_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME vst3_input_routing COMMAND openaxe_vst3_input_routing_test)
+
+# The storage bridge both shells bind. Pins that the desktop's array-shaped
+# args and the plugin's object-shaped args both work (#300 follow-up).
+add_executable(openaxe_vst3_storage_bridge_test storage_bridge_test.cpp
+  ../../shared/src/storage_bridge.cpp ../../shared/src/app_storage.cpp)
+target_include_directories(openaxe_vst3_storage_bridge_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+add_test(NAME vst3_storage_bridge COMMAND openaxe_vst3_storage_bridge_test)
+
+# Shared on-disk app store — one library for the desktop app and the plugins,
+# and the reason the factory pack no longer resets every launch (#300).
+add_executable(openaxe_vst3_app_storage_test app_storage_test.cpp
+  ../../shared/src/app_storage.cpp)
+target_include_directories(openaxe_vst3_app_storage_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+add_test(NAME vst3_app_storage COMMAND openaxe_vst3_app_storage_test)
+
 # Shared React primitives — no IControl fork (#133)
-add_executable(openaxe_vst3_primitives_test primitives_test.cpp ../src/primitives.cpp ../src/automation_params.cpp ../src/editor.cpp)
+add_executable(openaxe_vst3_primitives_test primitives_test.cpp ../src/primitives.cpp ../src/automation_params.cpp ../src/editor.cpp
+  ../../shared/src/ui_url.cpp)
 target_link_libraries(openaxe_vst3_primitives_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_primitives_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(openaxe_vst3_primitives_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_primitives COMMAND openaxe_vst3_primitives_test)
 
 # Block grid, cables, and block inspector — shared React via webview (#134)
-add_executable(openaxe_vst3_grid_test grid_test.cpp ../src/grid_bridge.cpp ../src/editor.cpp)
+add_executable(openaxe_vst3_grid_test grid_test.cpp ../src/grid_bridge.cpp ../src/editor.cpp
+  ../../shared/src/ui_url.cpp)
 target_link_libraries(openaxe_vst3_grid_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-target_include_directories(openaxe_vst3_grid_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(openaxe_vst3_grid_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_grid COMMAND openaxe_vst3_grid_test)
 
 # MIDI mapping — host event bus forwarding to core (issue #124)
+# UI serving: bridge polyfill contract, HTML head injection, path containment,
+# bundle UI-root resolution (issue #300 A/F/G). SDK-free by design — none of
+# these TUs pull in iPlug or the webview.
+# http_server.cpp serves /__asset/<key> out of the shared on-disk store, so
+# the test binary needs app_storage and the store name storage_bridge owns.
+add_executable(openaxe_vst3_ui_serving_test ui_serving_test.cpp
+  ../src/http_server.cpp ../src/ui_root.cpp ../src/bridge_polyfill.cpp
+  ../../shared/src/ui_url.cpp ../../shared/src/app_storage.cpp
+  ../../shared/src/storage_bridge.cpp)
+target_include_directories(openaxe_vst3_ui_serving_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+# http_server.cpp calls into Winsock; MSVC needs the import library named.
+if(WIN32)
+  target_link_libraries(openaxe_vst3_ui_serving_test PRIVATE ws2_32)
+endif()
+add_test(NAME vst3_ui_serving COMMAND openaxe_vst3_ui_serving_test)
+
+# Monitor tap ring + seqlock (issue #300 E4c). No SDK, no graph — just the
+# concurrency contract between the audio thread and the UI thread.
+add_executable(openaxe_vst3_monitor_tap_test monitor_tap_test.cpp
+  ../../shared/src/monitor_tap.cpp)
+target_include_directories(openaxe_vst3_monitor_tap_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+find_package(Threads REQUIRED)
+target_link_libraries(openaxe_vst3_monitor_tap_test PRIVATE Threads::Threads)
+add_test(NAME vst3_monitor_tap COMMAND openaxe_vst3_monitor_tap_test)
+
 add_executable(openaxe_vst3_midi_test midi_test.cpp)
 target_link_libraries(openaxe_vst3_midi_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
 target_include_directories(openaxe_vst3_midi_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -111,7 +159,7 @@ endif()
 # pluginval strictness 10 for VST3 (and AU on macOS when bundle exists).
 # Bundle path depends on generator; try common locations under the build dir.
 add_test(NAME vst3_pluginval
-  COMMAND bash -c "if ! command -v pluginval >/dev/null 2>&1; then echo 'SKIP: pluginval not found (https://github.com/Tracktion/pluginval) — install and re-run ctest'; exit 0; fi; VST3=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Debug/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/openaxe_vst3.vst3\" \"${CMAKE_BINARY_DIR}/Release/openaxe_vst3.vst3\"; do if [ -e \"\$p\" ]; then VST3=\"\$p\"; break; fi; done; if [ -z \"\$VST3\" ]; then echo 'SKIP: VST3 bundle not built yet (cmake --build packages/vst3/build) — nothing to validate'; exit 0; fi; echo \"pluginval --strictness-level 10 --validate \$VST3\"; exec pluginval --strictness-level 10 --validate \"\$VST3\""
+  COMMAND bash -c "PV=\"${PLUGINVAL_BIN}\"; if [ -z \"\$PV\" ] || [ ! -x \"\$PV\" ]; then PV=\"\$(command -v pluginval 2>/dev/null)\"; fi; if [ -z \"\$PV\" ]; then echo 'SKIP: pluginval not found (https://github.com/Tracktion/pluginval) — install and re-run ctest'; exit 0; fi; VST3=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Debug/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/openaxe_vst3.vst3\" \"${CMAKE_BINARY_DIR}/Release/openaxe_vst3.vst3\"; do if [ -e \"\$p\" ]; then VST3=\"\$p\"; break; fi; done; if [ -z \"\$VST3\" ]; then echo 'SKIP: VST3 bundle not built yet (cmake --build packages/vst3/build) — nothing to validate'; exit 0; fi; echo \"\$PV --strictness-level 10 --validate \$VST3\"; exec \"\$PV\" --strictness-level 10 --validate \"\$VST3\""
 )
 
 add_test(NAME vst3_pluginval_au
@@ -124,10 +172,39 @@ add_test(NAME vst3_vst3_validator
 )
 
 add_test(NAME vst3_auval
-  COMMAND bash -c "if [ \"$(uname)\" != \"Darwin\" ]; then echo 'SKIP: auval only on macOS'; exit 0; fi; if ! command -v auval >/dev/null 2>&1; then echo 'SKIP: auval not found (Xcode command line tools)'; exit 0; fi; echo 'auval -v aufx Nms1 NwSt (expects AU installed in ~/Library/Audio/Plug-Ins/Components/ or /Library/Audio/Plug-Ins/Components/)'; if ! auval -v aufx Nms1 NwSt 2>&1; then echo 'SKIP: AU not installed in system plug-in dir — copy OpenAxe.component there and re-run'; exit 0; fi"
+  COMMAND bash -c "if [ \"$(uname)\" != \"Darwin\" ]; then echo 'SKIP: auval only on macOS'; exit 0; fi; if ! command -v auval >/dev/null 2>&1; then echo 'SKIP: auval not found (Xcode command line tools)'; exit 0; fi; echo 'auval -v aumf Nms1 NwSt (expects AU installed in ~/Library/Audio/Plug-Ins/Components/ or /Library/Audio/Plug-Ins/Components/)'; if ! auval -v aumf Nms1 NwSt 2>&1; then echo 'SKIP: AU not installed in system plug-in dir — copy OpenAxe.component there and re-run'; exit 0; fi"
 )
 
 find_program(CLAP_VALIDATOR_BIN clap-validator)
 add_test(NAME vst3_clap_validator
   COMMAND bash -c "if ! command -v clap-validator >/dev/null 2>&1; then echo 'SKIP: clap-validator not found (https://github.com/free-audio/clap-validator)'; exit 0; fi; CLAP=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.clap\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.clap\" \"${CMAKE_BINARY_DIR}/openaxe.clap\"; do if [ -e \"\$p\" ]; then CLAP=\"\$p\"; break; fi; done; if [ -z \"\$CLAP\" ]; then echo 'SKIP: CLAP bundle not built yet (CLAP target planned) — nothing to validate'; exit 0; fi; echo \"clap-validator validate \$CLAP\"; exec clap-validator validate \"\$CLAP\""
 )
+
+# The validators shell out to real hosts/tools and are slow — pluginval at
+# strictness 10 takes ~13 minutes. They used to be free because they silently
+# skipped (the test probed PATH while CMake found the binary inside
+# /Applications/*.app), so nothing had to opt out of them. Now that they really
+# run, label them so routine runs can exclude them:
+#   ctest --test-dir packages/vst3/build -LE validator   # fast, ~1s
+#   ctest --test-dir packages/vst3/build -L validator    # just the validators
+# Editor open/close lifecycle (issue #300 H5). The desktop shell has
+# teardown_race_test for the equivalent bug on its side; this is the plugin's.
+#
+# Closing the editor used to crash the host: iPlug2's CloseWebView dropped its
+# reference to the WKScriptMessageHandler without unregistering it, so a script
+# message queued before teardown was delivered to a destroyed IWebView. Our UI
+# polls continuously for meters, scope and tuner, so there is nearly always one
+# in flight. patches/apply_iplug2_patches.cmake fixes it; this catches a
+# regression.
+#
+# It is a race, so a single pass proves very little — that is exactly how the
+# original crash slipped past me. Three repeats at low strictness, which is
+# ~1 minute rather than pluginval's ~13 at strictness 10, and REPEAT UNTIL_FAIL
+# so a flaky crash surfaces rather than averaging out.
+add_test(NAME vst3_editor_lifecycle
+  COMMAND bash -c "PV=\"${PLUGINVAL_BIN}\"; if [ -z \"\$PV\" ] || [ ! -x \"\$PV\" ]; then PV=\"\$(command -v pluginval 2>/dev/null)\"; fi; if [ -z \"\$PV\" ]; then echo 'SKIP: pluginval not found'; exit 0; fi; VST3=''; for p in \"${CMAKE_BINARY_DIR}/OpenAxe.vst3\" \"${CMAKE_BINARY_DIR}/Release/OpenAxe.vst3\"; do if [ -e \"\$p\" ]; then VST3=\"\$p\"; break; fi; done; if [ -z \"\$VST3\" ]; then echo 'SKIP: VST3 bundle not built yet'; exit 0; fi; exec \"\$PV\" --strictness-level 5 --validate \"\$VST3\"")
+set_tests_properties(vst3_editor_lifecycle PROPERTIES
+  LABELS "validator" TIMEOUT 600 REPEAT "UNTIL_FAIL:3")
+
+set_tests_properties(vst3_pluginval vst3_pluginval_au vst3_vst3_validator vst3_auval vst3_clap_validator
+  PROPERTIES LABELS "validator" TIMEOUT 1800)
