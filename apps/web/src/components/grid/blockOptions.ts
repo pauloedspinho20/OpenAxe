@@ -149,8 +149,11 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     kind: 'tremolo',
     label: 'Tremolo',
     group: 'Effects',
-    vendor: 'packages/core (C++ WASM) — DSPark',
-    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
+    // Hand-rolled in packages/core, not DSPark - tremolo.cpp includes only
+    // internal/biquad.h. The DSPark credit here was wrong; issue #319 is the
+    // migration that would make it true.
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
   {
     kind: 'delay',

@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <vector>
+
+#include "internal/biquad.h"
+#include "internal/variable_delay.h"
 
 namespace openaxe::dsp {
 
@@ -23,83 +25,35 @@ const Delay::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/delay_params.inc"
 };
 
-constexpr float kMaxDelaySeconds = 1.1f;  // 1.1s max buffer (covers 1000ms + wow)
+// 1.1s of buffer, covering the 1000ms maximum delay plus the tape model's
+// wow excursion.
+constexpr float kMaxDelayMs = 1100.0f;
 
-// Simple biquad lowpass (one per channel). Computes coefficients once per
-// block so the tone filter stays smooth across parameter changes.
-struct ToneFilter {
-  float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
-  float a1 = 0.0f, a2 = 0.0f;
-  float x1 = 0.0f, x2 = 0.0f;
-  float y1 = 0.0f, y2 = 0.0f;
-
-  // Butterworth (Q = 0.707) lowpass coefficients via the bilinear transform,
-  // or a straight pass-through when the cutoff reaches Nyquist - the standard
-  // RBJ cookbook forms. Coefficients are recomputed once per block, not per
-  // sample, since the tone knob doesn't need sample-accurate smoothing.
-  void SetCutoff(float freq, float sample_rate) {
-    if (freq >= sample_rate * 0.49f) {
-      b0 = 1.0f; b1 = 0.0f; b2 = 0.0f;
-      a1 = 0.0f; a2 = 0.0f;
-      return;
-    }
-    const float w0 = 6.28318530718f * freq / sample_rate;
-    const float alpha = std::sin(w0) * 0.5f;  // Q = 0.707 (Butterworth)
-    const float cos_w0 = std::cos(w0);
-    const float a0_inv = 1.0f / (1.0f + alpha);
-    b0 = (0.5f - 0.5f * cos_w0) * a0_inv;
-    b1 = (1.0f - cos_w0) * a0_inv;
-    b2 = b0;
-    a1 = (-2.0f * cos_w0) * a0_inv;
-    a2 = (1.0f - alpha) * a0_inv;
-  }
-
-  // Direct Form I biquad step: two input and two output history taps.
-  float Process(float x) {
-    const float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = x;
-    y2 = y1; y1 = y;
-    return y;
-  }
-
-  // Clear the filter history (model or sample-rate change).
-  void Reset() { x1 = x2 = y1 = y2 = 0.0f; }
-};
+// Q of the lowpass in the feedback path. This is 1.0, not the 0.707 the
+// previous hand-rolled filter's comment claimed - it computed
+// `alpha = sin(w0) * 0.5`, which is sin(w0)/(2Q) at Q = 1. The value is kept
+// as it was so the repeats keep their existing colour; only the comment was
+// wrong. Whoever revisits the feedback filter should pick a Q deliberately
+// rather than inherit this one.
+constexpr float kToneQ = 1.0f;
 
 // Soft saturator for analog/tape models — gentle tanh-based compression
 // applied to the feedback path to emulate BBD/tape electronics.
 inline float SoftClip(float x) { return std::tanh(x * 1.5f) / 1.5f; }
 
-// One channel's delay line: the circular buffer, its write cursor, the tape
-// wow LFO phase, and the tone filter that sits in the feedback path.
+// One channel's delay line: the modulated buffer, the tape wow LFO phase, and
+// the tone filter that sits in the feedback path. The line's interpolated
+// read is what keeps the tape model's continuously-moving tap from quantising
+// to whole samples.
 struct Channel {
-  std::vector<float> buffer;
-  int write_pos = 0;
+  internal::VariableDelay line;
   float wow_phase = 0.0f;
-  ToneFilter filter;
+  internal::Biquad filter;
 
-  // Allocate for the longest delay the params allow (kMaxDelaySeconds covers
-  // the 1000ms maximum plus the tape model's wow excursion) and clear state.
+  // Allocate for the longest delay the params allow and clear the filter.
   void Resize(float sample_rate) {
-    const int size = static_cast<int>(std::ceil(sample_rate * kMaxDelaySeconds)) + 1;
-    buffer.assign(static_cast<size_t>(size), 0.0f);
-    write_pos = 0;
+    line.Prepare(sample_rate, kMaxDelayMs);
     filter.Reset();
-  }
-
-  // Read `delay_ms` in the past with linear interpolation, so the tape model's
-  // continuously-moving tap doesn't quantise to whole samples.
-  float ReadTap(float delay_ms, float sample_rate) const {
-    const float delay_samples = delay_ms * sample_rate / 1000.0f;
-    const float read_pos = static_cast<float>(write_pos) - delay_samples;
-    const int size = static_cast<int>(buffer.size());
-    int idx0 = static_cast<int>(std::floor(read_pos));
-    const float frac = read_pos - static_cast<float>(idx0);
-    while (idx0 < 0) idx0 += size;
-    const int idx1 = (idx0 + 1) % size;
-    idx0 %= size;
-    return buffer[static_cast<size_t>(idx0)] * (1.0f - frac) +
-           buffer[static_cast<size_t>(idx1)] * frac;
   }
 };
 
@@ -133,7 +87,7 @@ void Delay::Reset(double sample_rate) {
   impl_->ApplySampleRate();
 }
 
-// Switch model (Digital / Tape / Analog). Clears the tone filters so the
+// Switch model (Digital / Analog / Tape). Clears the tone filters so the
 // previous model's filter state can't ring into the new one; the delay buffer
 // contents are deliberately kept, so switching mid-repeat doesn't cut the tail.
 void Delay::SetModel(Model model) {
@@ -174,7 +128,7 @@ void Delay::Process(const float* const* input, float* const* output, int num_fra
 
   for (int ch = 0; ch < 2; ++ch) {
     Channel& c = impl_->channels[static_cast<size_t>(ch)];
-    c.filter.SetCutoff(impl_->tone, sr);
+    c.filter.SetLowpass(impl_->tone, kToneQ, sr);
     if (tape && c.wow_phase == 0.0f && ch == 1) c.wow_phase = 1.57079632679f;  // π/2 stereo offset
 
     for (int i = 0; i < num_frames; ++i) {
@@ -183,14 +137,13 @@ void Delay::Process(const float* const* input, float* const* output, int num_fra
         const float wow = std::sin(c.wow_phase + static_cast<float>(i) * wow_step * 6.28318530718f);
         delay_ms += wow_depth * wow;
       }
-      const float wet = c.ReadTap(delay_ms, sr);
+      const float wet = c.line.Read(delay_ms, sr);
 
       float fb_signal = wet;
       if (analog_like) fb_signal = c.filter.Process(fb_signal);
       fb_signal = SoftClip(fb_signal);
 
-      c.buffer[static_cast<size_t>(c.write_pos)] = input[ch][i] + fb_signal * fb;
-      c.write_pos = (c.write_pos + 1) % static_cast<int>(c.buffer.size());
+      c.line.Write(input[ch][i] + fb_signal * fb);
       output[ch][i] = wet;
     }
     if (tape) {
@@ -201,8 +154,9 @@ void Delay::Process(const float* const* input, float* const* output, int num_fra
 }
 
 // Param surface: time (ms), feedback (0..0.9), tone (Hz cutoff in the feedback
-// loop), model (0=Digital, 1=Tape, 2=Analog), wow depth (ms) and wow rate (Hz)
-// for the tape model.
+// loop), model (0=Digital, 1=Analog, 2=Tape - matching Delay::Model and
+// NamStudioDelayModel; this comment used to have Analog and Tape swapped),
+// wow depth (ms) and wow rate (Hz) for the tape model.
 int Delay::ParamCount() { return kParamCount; }
 
 // Name/symbol/range/unit for one param index.
