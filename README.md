@@ -348,7 +348,7 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 
 ### Branching
 
-`feature/* → dev` via **squash** (one commit per feature). `dev → main` via **merge commit** (`--no-ff`) — preserves ancestry so next `dev→main` doesn't conflict on `added in both` files (see `CONTRIBUTING.md#Branching`). Releases cut from `main` (`VERSION` + `v*` tag → `auto-release.yml` → `release.yml`/`plugin.yml`).
+`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main`; `auto-release.yml` then merges `main` back into `dev` automatically so `dev` never falls behind on `VERSION` and the next `dev→main` doesn't conflict on `added in both` files (see `CONTRIBUTING.md#Branching`). Releases cut from `main` (`VERSION` + `v*` tag → `auto-release.yml` → `release.yml`/`plugin.yml`).
 
 ## Roadmap
 
