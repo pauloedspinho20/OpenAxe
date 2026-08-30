@@ -88,6 +88,16 @@ std::vector<std::string> Values(const std::string& store);
 // Removes every record in `store`.
 bool Clear(const std::string& store, std::string* error = nullptr);
 
+// Record count and total value bytes in `store`, from file sizes alone —
+// nothing is read or decoded. The Settings dialog shows this for the model/IR
+// cache, and reading every capture back just to total them up would mean
+// pulling the whole cache through the bridge.
+struct StoreStats {
+  unsigned long long count = 0;
+  unsigned long long bytes = 0;
+};
+StoreStats Stats(const std::string& store);
+
 // Absolute path of the file backing a record, whether or not it exists. The
 // HTTP server uses this to serve asset blobs to the webview directly,
 // skipping a base64 round-trip through the bridge — see

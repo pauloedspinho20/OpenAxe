@@ -222,6 +222,32 @@ export interface OpenAxeBridge {
   secureLoad(args: { key: string }): Promise<OpenAxeOk & { value: string | null }>
   /** No-op success if there was nothing stored under `key`. */
   secureDelete(args: { key: string }): Promise<OpenAxeOk>
+
+  /**
+   * Shared on-disk library (issue #300 follow-up). The webview's own
+   * localStorage/IndexedDB cannot hold this: the UI server binds an ephemeral
+   * port so their origin changes every launch, and WKWebView/WebView2 scope
+   * website data per host application, so the desktop app and a plugin inside
+   * a DAW could never see one library through them. These go to a directory
+   * both shells read instead. Values are strings; callers serialize.
+   */
+  storageGet(args: { store: string; key: string }): Promise<OpenAxeOk & { value: string | null }>
+  storagePut(args: { store: string; key: string; value: string }): Promise<OpenAxeOk>
+  storageDelete(args: { store: string; key: string }): Promise<OpenAxeOk>
+  storageKeys(args: { store: string }): Promise<OpenAxeOk & { keys: string[] }>
+  storageValues(args: { store: string }): Promise<OpenAxeOk & { values: string[] }>
+  storageClear(args: { store: string }): Promise<OpenAxeOk>
+
+  /** Asset blobs (.nam captures, IR wavs), kept out of the record calls
+   * because they are bytes rather than text. Reads normally go over HTTP
+   * (`/__asset/<key>`) instead of through assetGet — see assetUrl(). */
+  assetPut(args: { key: string; base64: string; type: string }): Promise<OpenAxeOk>
+  assetGet(args: { key: string }): Promise<OpenAxeOk & { base64: string | null; type?: string }>
+  assetDelete(args: { key: string }): Promise<OpenAxeOk>
+  assetHas(args: { key: string }): Promise<OpenAxeOk & { present: boolean }>
+  assetKeys(): Promise<OpenAxeOk & { keys: string[] }>
+  assetStats(): Promise<OpenAxeOk & { count: number; bytes: number }>
+  assetClear(): Promise<OpenAxeOk>
 }
 
 type Args = Record<string, unknown> | undefined
@@ -368,6 +394,45 @@ class NativeBridge implements OpenAxeBridge {
   }
   secureDelete(args: { key: string }) {
     return this.call<OpenAxeOk>('secureDelete', args)
+  }
+  storageGet(args: { store: string; key: string }) {
+    return this.call<OpenAxeOk & { value: string | null }>('storageGet', args)
+  }
+  storagePut(args: { store: string; key: string; value: string }) {
+    return this.call<OpenAxeOk>('storagePut', args)
+  }
+  storageDelete(args: { store: string; key: string }) {
+    return this.call<OpenAxeOk>('storageDelete', args)
+  }
+  storageKeys(args: { store: string }) {
+    return this.call<OpenAxeOk & { keys: string[] }>('storageKeys', args)
+  }
+  storageValues(args: { store: string }) {
+    return this.call<OpenAxeOk & { values: string[] }>('storageValues', args)
+  }
+  storageClear(args: { store: string }) {
+    return this.call<OpenAxeOk>('storageClear', args)
+  }
+  assetPut(args: { key: string; base64: string; type: string }) {
+    return this.call<OpenAxeOk>('assetPut', args)
+  }
+  assetGet(args: { key: string }) {
+    return this.call<OpenAxeOk & { base64: string | null; type?: string }>('assetGet', args)
+  }
+  assetDelete(args: { key: string }) {
+    return this.call<OpenAxeOk>('assetDelete', args)
+  }
+  assetHas(args: { key: string }) {
+    return this.call<OpenAxeOk & { present: boolean }>('assetHas', args)
+  }
+  assetKeys() {
+    return this.call<OpenAxeOk & { keys: string[] }>('assetKeys')
+  }
+  assetStats() {
+    return this.call<OpenAxeOk & { count: number; bytes: number }>('assetStats')
+  }
+  assetClear() {
+    return this.call<OpenAxeOk>('assetClear')
   }
 }
 

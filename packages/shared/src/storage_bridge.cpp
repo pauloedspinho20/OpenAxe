@@ -247,4 +247,24 @@ std::string HandleAssetKeys(const std::string& /*argsJson*/) {
   }
 }
 
+std::string HandleAssetStats(const std::string& /*argsJson*/) {
+  try {
+    const auto stats = app_storage::Stats(kAssetStore);
+    return json{{"ok", true}, {"count", stats.count}, {"bytes", stats.bytes}}.dump();
+  } catch (...) {
+    return JsonError("assetStats failed");
+  }
+}
+
+std::string HandleAssetClear(const std::string& /*argsJson*/) {
+  try {
+    std::string error;
+    if (!app_storage::Clear(kAssetStore, &error)) return JsonError("assetClear: " + error);
+    app_storage::Clear(kAssetTypeStore, nullptr);
+    return json{{"ok", true}}.dump();
+  } catch (...) {
+    return JsonError("assetClear failed");
+  }
+}
+
 }  // namespace openaxe::storage_bridge

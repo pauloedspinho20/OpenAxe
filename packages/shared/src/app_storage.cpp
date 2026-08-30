@@ -266,6 +266,24 @@ bool Clear(const std::string& store, std::string* error) {
   return !ec;
 }
 
+StoreStats Stats(const std::string& store) {
+  StoreStats stats;
+  if (!IsValidStoreName(store)) return stats;
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(StoreDir(store), ec)) {
+    if (!entry.is_regular_file(ec)) continue;
+    if (entry.path().extension() == ".tmp") continue;
+    unsigned long long offset = 0;
+    if (!ReadKeyLine(entry.path(), &offset)) continue;
+    const auto size = fs::file_size(entry.path(), ec);
+    if (ec) continue;
+    ++stats.count;
+    // The key line is part of the file but not part of the value.
+    if (size > offset) stats.bytes += size - offset;
+  }
+  return stats;
+}
+
 std::string PathFor(const std::string& store, const std::string& key) {
   if (!IsValidStoreName(store)) return {};
   if (const auto path = ResolvePath(store, key, /*for_write=*/false)) return path->string();

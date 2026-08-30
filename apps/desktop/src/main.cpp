@@ -369,6 +369,8 @@ int main(int argc, char** argv) {
     BindShared(w, "openAxe.assetDelete", &openaxe::storage_bridge::HandleAssetDelete);
     BindShared(w, "openAxe.assetHas", &openaxe::storage_bridge::HandleAssetHas);
     BindShared(w, "openAxe.assetKeys", &openaxe::storage_bridge::HandleAssetKeys);
+    BindShared(w, "openAxe.assetStats", &openaxe::storage_bridge::HandleAssetStats);
+    BindShared(w, "openAxe.assetClear", &openaxe::storage_bridge::HandleAssetClear);
 
     // OPENAXE_UI_URL wins over the bundled copy: it points the webview at
     // an already-running dev server (Vite, http://127.0.0.1:5173) so the

@@ -134,6 +134,8 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   else if (method == "openAxe.assetDelete") result = openaxe::storage_bridge::HandleAssetDelete(args.dump());
   else if (method == "openAxe.assetHas") result = openaxe::storage_bridge::HandleAssetHas(args.dump());
   else if (method == "openAxe.assetKeys") result = openaxe::storage_bridge::HandleAssetKeys(args.dump());
+  else if (method == "openAxe.assetStats") result = openaxe::storage_bridge::HandleAssetStats(args.dump());
+  else if (method == "openAxe.assetClear") result = openaxe::storage_bridge::HandleAssetClear(args.dump());
   else if (method == "openAxe.takeStreamError") result = HandleTakeStreamError(args.dump());
   else if (method == "openAxe.getState") result = HandleGetState(args.dump());
   else if (method == "openAxe.getTap") result = HandleGetTap(args.dump());

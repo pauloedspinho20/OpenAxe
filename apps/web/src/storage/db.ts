@@ -36,6 +36,23 @@ export const STORE_MIDI = 'midi'
 /** Preset bank: keyPath 'id', a single 512-slot row keyed 'default' (see presets/presetBankStore.ts). */
 export const STORE_PRESET_BANK = 'presetBank'
 
+/**
+ * Which stores declare a keyPath, and what it is. `null` means an out-of-line
+ * store whose key is passed separately (assets, keyed by asset id).
+ *
+ * storage/kv.ts needs this: the native backend has no notion of a keyPath, so
+ * it must be told the key for every record, and IndexedDB throws if a key is
+ * passed for a store that has one.
+ */
+export const STORE_KEY_PATHS: Record<string, string | null> = {
+  [STORE_ASSETS]: null,
+  [STORE_PRESETS]: 'id',
+  [STORE_LIBRARY]: 'id',
+  [STORE_SCENES]: 'id',
+  [STORE_MIDI]: 'id',
+  [STORE_PRESET_BANK]: 'id',
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)

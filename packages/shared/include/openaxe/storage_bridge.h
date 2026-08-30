@@ -35,6 +35,14 @@ std::string HandleAssetDelete(const std::string& argsJson);
 std::string HandleAssetHas(const std::string& argsJson);
 std::string HandleAssetKeys(const std::string& argsJson);
 
+// Count and total bytes of the cached captures/IRs, from file sizes only.
+std::string HandleAssetStats(const std::string& argsJson);
+
+// Empties the asset store and the types kept alongside it. Not just
+// storageClear("assets"): that would leave every MIME type behind as an
+// orphan record.
+std::string HandleAssetClear(const std::string& argsJson);
+
 // The store name asset blobs live in, shared with the HTTP server so it can
 // resolve /__asset/<key> against the same place HandleAssetPut wrote to.
 extern const char* const kAssetStore;
