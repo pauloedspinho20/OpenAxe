@@ -7,6 +7,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openaxe/storage_bridge.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -117,6 +119,21 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   else if (method == "openAxe.secureStore") result = HandleSecureStore(args.dump());
   else if (method == "openAxe.secureLoad") result = HandleSecureLoad(args.dump());
   else if (method == "openAxe.secureDelete") result = HandleSecureDelete(args.dump());
+  // Shared on-disk library (issue #300 follow-up). These are the same
+  // functions the desktop shell binds, so a preset saved in one shows up in
+  // the other — the webview's own storage could never do that, being scoped
+  // both to an origin that changes every launch and to the host application.
+  else if (method == "openAxe.storageGet") result = openaxe::storage_bridge::HandleGet(args.dump());
+  else if (method == "openAxe.storagePut") result = openaxe::storage_bridge::HandlePut(args.dump());
+  else if (method == "openAxe.storageDelete") result = openaxe::storage_bridge::HandleDelete(args.dump());
+  else if (method == "openAxe.storageKeys") result = openaxe::storage_bridge::HandleKeys(args.dump());
+  else if (method == "openAxe.storageValues") result = openaxe::storage_bridge::HandleValues(args.dump());
+  else if (method == "openAxe.storageClear") result = openaxe::storage_bridge::HandleClear(args.dump());
+  else if (method == "openAxe.assetPut") result = openaxe::storage_bridge::HandleAssetPut(args.dump());
+  else if (method == "openAxe.assetGet") result = openaxe::storage_bridge::HandleAssetGet(args.dump());
+  else if (method == "openAxe.assetDelete") result = openaxe::storage_bridge::HandleAssetDelete(args.dump());
+  else if (method == "openAxe.assetHas") result = openaxe::storage_bridge::HandleAssetHas(args.dump());
+  else if (method == "openAxe.assetKeys") result = openaxe::storage_bridge::HandleAssetKeys(args.dump());
   else if (method == "openAxe.takeStreamError") result = HandleTakeStreamError(args.dump());
   else if (method == "openAxe.getState") result = HandleGetState(args.dump());
   else if (method == "openAxe.getTap") result = HandleGetTap(args.dump());

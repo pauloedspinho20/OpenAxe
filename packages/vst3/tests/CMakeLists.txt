@@ -52,6 +52,13 @@ target_link_libraries(openaxe_vst3_editor_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCH
 target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_editor COMMAND openaxe_vst3_editor_test)
 
+# Shared on-disk app store — one library for the desktop app and the plugins,
+# and the reason the factory pack no longer resets every launch (#300).
+add_executable(openaxe_vst3_app_storage_test app_storage_test.cpp
+  ../../shared/src/app_storage.cpp)
+target_include_directories(openaxe_vst3_app_storage_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+add_test(NAME vst3_app_storage COMMAND openaxe_vst3_app_storage_test)
+
 # Shared React primitives — no IControl fork (#133)
 add_executable(openaxe_vst3_primitives_test primitives_test.cpp ../src/primitives.cpp ../src/automation_params.cpp ../src/editor.cpp
   ../../shared/src/ui_url.cpp)

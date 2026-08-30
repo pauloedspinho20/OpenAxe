@@ -4,6 +4,7 @@
 #include "debug_log.h"
 #include "http_server.h"
 #include "mac_menu.h"
+#include "openaxe/storage_bridge.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -260,6 +261,14 @@ void Bind(webview::webview& w, openaxe_desktop::StudioBridge& bridge, const char
   w.bind(name, [&bridge, method](const std::string& req) { return (bridge.*method)(req); });
 }
 
+// Same, for handlers that need no bridge state. The shared on-disk library
+// (issue #300 follow-up) is pure filesystem work, so the plugin and the
+// desktop shell bind the identical functions rather than each growing their
+// own copy — that is what makes a preset saved here show up in the VST3.
+void BindShared(webview::webview& w, const char* name, std::string (*fn)(const std::string&)) {
+  w.bind(name, [fn](const std::string& req) { return fn(req); });
+}
+
 }  // namespace
 
 #ifdef _WIN32
@@ -345,6 +354,21 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "openAxe.secureStore", &openaxe_desktop::StudioBridge::HandleSecureStore);
     Bind(w, bridge, "openAxe.secureLoad", &openaxe_desktop::StudioBridge::HandleSecureLoad);
     Bind(w, bridge, "openAxe.secureDelete", &openaxe_desktop::StudioBridge::HandleSecureDelete);
+
+    // Shared library: presets, scenes, the preset bank, MIDI maps, Tone3000
+    // metadata and the factory pack's blobs, all in one place on disk that
+    // the plugin reads too.
+    BindShared(w, "openAxe.storageGet", &openaxe::storage_bridge::HandleGet);
+    BindShared(w, "openAxe.storagePut", &openaxe::storage_bridge::HandlePut);
+    BindShared(w, "openAxe.storageDelete", &openaxe::storage_bridge::HandleDelete);
+    BindShared(w, "openAxe.storageKeys", &openaxe::storage_bridge::HandleKeys);
+    BindShared(w, "openAxe.storageValues", &openaxe::storage_bridge::HandleValues);
+    BindShared(w, "openAxe.storageClear", &openaxe::storage_bridge::HandleClear);
+    BindShared(w, "openAxe.assetPut", &openaxe::storage_bridge::HandleAssetPut);
+    BindShared(w, "openAxe.assetGet", &openaxe::storage_bridge::HandleAssetGet);
+    BindShared(w, "openAxe.assetDelete", &openaxe::storage_bridge::HandleAssetDelete);
+    BindShared(w, "openAxe.assetHas", &openaxe::storage_bridge::HandleAssetHas);
+    BindShared(w, "openAxe.assetKeys", &openaxe::storage_bridge::HandleAssetKeys);
 
     // OPENAXE_UI_URL wins over the bundled copy: it points the webview at
     // an already-running dev server (Vite, http://127.0.0.1:5173) so the

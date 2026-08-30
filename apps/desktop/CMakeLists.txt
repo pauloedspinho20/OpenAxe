@@ -120,6 +120,8 @@ add_library(openaxe_desktop_lib STATIC
   src/latency.cpp
   src/debug_log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/secure_storage.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/app_storage.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/storage_bridge.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../../packages/shared/src/ui_url.cpp
 )
 

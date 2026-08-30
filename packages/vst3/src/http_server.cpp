@@ -1,5 +1,8 @@
 #include "http_server.h"
 
+#include "openaxe/app_storage.h"
+#include "openaxe/storage_bridge.h"
+
 #include <array>
 #include <cctype>
 #include <cstdio>
@@ -187,6 +190,62 @@ bool RecvRequestHead(int fd, std::string& out) {
 
 // Serves one request. Returns true when the connection should stay open for
 // another (issue #300 G5).
+// Percent-decoding for the asset key in a /__asset/<key> path. Keys are
+// Tone3000 ids and similar, so this only has to undo what encodeURIComponent
+// did on the way out.
+std::string UrlDecode(const std::string& in) {
+  const auto hex = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  std::string out;
+  out.reserve(in.size());
+  for (size_t i = 0; i < in.size(); ++i) {
+    if (in[i] == '%' && i + 2 < in.size()) {
+      const int hi = hex(in[i + 1]), lo = hex(in[i + 2]);
+      if (hi >= 0 && lo >= 0) { out.push_back(static_cast<char>(hi * 16 + lo)); i += 2; continue; }
+    }
+    out.push_back(in[i]);
+  }
+  return out;
+}
+
+// Sends one asset blob. The record file carries the key on its first line, so
+// the payload starts at the offset app_storage reports — sending from byte 0
+// would prefix every capture the UI loads with its own key.
+bool ServeAsset(int fd, const std::string& key, bool keep_alive) {
+  const std::string path = openaxe::app_storage::PathFor(openaxe::storage_bridge::kAssetStore, key);
+  const auto offset = openaxe::app_storage::ValueOffsetInFile(
+      openaxe::storage_bridge::kAssetStore, key);
+  if (path.empty() || !offset) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain", {}, keep_alive);
+    return keep_alive;
+  }
+  std::error_code ec;
+  const auto file_size = std::filesystem::file_size(path, ec);
+  if (ec || file_size < *offset) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain", {}, keep_alive);
+    return keep_alive;
+  }
+  std::ifstream ifs(path, std::ios::binary);
+  if (!ifs) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain", {}, keep_alive);
+    return keep_alive;
+  }
+  ifs.seekg(static_cast<std::streamoff>(*offset));
+  std::string body((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  std::string type =
+      openaxe::app_storage::Get(openaxe::storage_bridge::kAssetTypeStore, key).value_or("");
+  if (type.empty()) type = "application/octet-stream";
+  // Not immutable: an asset id can be re-downloaded and overwritten, and the
+  // fetch is loopback anyway, so revalidation costs nothing worth saving.
+  if (!SendHeader(fd, 200, "OK", body.size(), type, "no-cache", keep_alive)) return false;
+  if (!SendAll(fd, body.data(), body.size())) return false;
+  return keep_alive;
+}
+
 bool HandleOneRequest(int fd, const std::string& root, const std::string& inject_head_script,
                       unsigned short port) {
   std::string req;
@@ -207,6 +266,15 @@ bool HandleOneRequest(int fd, const std::string& root, const std::string& inject
   const std::string target = req.substr(sp1 + 1, sp2 == std::string::npos ? std::string::npos : sp2 - sp1 - 1);
   std::string path = target.substr(0, target.find('?'));
   if (path.empty() || path == "/") path = "/index.html";
+
+  // /__asset/<key> streams a blob out of the shared on-disk library rather
+  // than out of the UI root (issue #300 follow-up). Going through the bridge
+  // instead would mean base64, which inflates every capture by a third and
+  // hands the webview one giant string; a plain GET streams and lets the
+  // webview turn the response straight into a Blob.
+  if (path.rfind("/__asset/", 0) == 0) {
+    return ServeAsset(fd, UrlDecode(path.substr(9)), keep_alive);
+  }
   std::error_code ec;
   const std::filesystem::path root_norm = std::filesystem::path(root).lexically_normal();
   std::filesystem::path full = (root_norm / path.substr(1)).lexically_normal();

@@ -1,5 +1,8 @@
 #include "http_server.h"
 
+#include "openaxe/app_storage.h"
+#include "openaxe/storage_bridge.h"
+
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -78,6 +81,50 @@ bool SendHeader(int fd, int status, const char* reason, size_t content_length,
   return SendAll(fd, head.data(), head.size());
 }
 
+// Undoes encodeURIComponent for the key in a /__asset/<key> path.
+std::string UrlDecode(const std::string& in) {
+  const auto hex = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  std::string out;
+  out.reserve(in.size());
+  for (size_t i = 0; i < in.size(); ++i) {
+    if (in[i] == '%' && i + 2 < in.size()) {
+      const int hi = hex(in[i + 1]), lo = hex(in[i + 2]);
+      if (hi >= 0 && lo >= 0) { out.push_back(static_cast<char>(hi * 16 + lo)); i += 2; continue; }
+    }
+    out.push_back(in[i]);
+  }
+  return out;
+}
+
+// The record file keeps its key on the first line, so the payload starts at
+// the offset app_storage reports rather than at byte 0.
+void ServeAsset(int fd, const std::string& key) {
+  const std::string path = openaxe::app_storage::PathFor(openaxe::storage_bridge::kAssetStore, key);
+  const auto offset =
+      openaxe::app_storage::ValueOffsetInFile(openaxe::storage_bridge::kAssetStore, key);
+  if (path.empty() || !offset) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain");
+    return;
+  }
+  std::ifstream ifs(path, std::ios::binary);
+  if (!ifs) {
+    SendHeader(fd, 404, "Not Found", 0, "text/plain");
+    return;
+  }
+  ifs.seekg(static_cast<std::streamoff>(*offset));
+  std::string body((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  std::string type =
+      openaxe::app_storage::Get(openaxe::storage_bridge::kAssetTypeStore, key).value_or("");
+  if (type.empty()) type = "application/octet-stream";
+  if (!SendHeader(fd, 200, "OK", body.size(), type)) return;
+  SendAll(fd, body.data(), body.size());
+}
+
 void HandleClient(int fd, const std::string& root) {
   std::array<char, kMaxRequest> buf;
 #ifdef _WIN32
@@ -101,6 +148,16 @@ void HandleClient(int fd, const std::string& root) {
   // Keep only the path (strip query), default to index.html.
   std::string path = target.substr(0, target.find('?'));
   if (path.empty() || path == "/") path = "/index.html";
+
+  // /__asset/<key> serves a blob out of the shared on-disk library, which
+  // lives outside the UI root — the plugin serves the identical route, so the
+  // React app fetches its captures and IRs the same way in both shells
+  // (issue #300 follow-up). A plain GET streams; the bridge alternative would
+  // mean base64 and a third more bytes.
+  if (path.rfind("/__asset/", 0) == 0) {
+    ServeAsset(fd, UrlDecode(path.substr(9)));
+    return;
+  }
 
   // Resolve under root, rejecting traversal and non-files.
   std::error_code ec;
