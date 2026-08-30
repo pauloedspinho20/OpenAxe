@@ -1,7 +1,7 @@
 {
   "name": "@openaxe/web",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "OpenAxe web app — Vite + React + AudioWorklet + WASM",
   "repository": {
     "type": "git",
