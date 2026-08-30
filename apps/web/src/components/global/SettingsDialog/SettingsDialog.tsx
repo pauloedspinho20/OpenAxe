@@ -398,37 +398,43 @@ export function SettingsDialog({
         </>
       )}
 
-      {/* Buffer size / latency */}
-      <section className={styles.section}>
-        <span className={`label ${styles.sectionLabel}`}>Buffer Size / Latency</span>
-        <p className={styles.sectionHint}>
-          A smaller buffer responds faster but is more likely to click/drop out on a slower machine.
-          Changes only take effect after restarting the audio engine.
-        </p>
-        <div className={styles.row}>
-          <Select
-            label="Buffer"
-            value={io.latencyHint}
-            onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
-            aria-label="Buffer size / latency"
-            className={styles.field}
-          >
-            {LATENCY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-          {status === 'ready' && (
-            <HardwareButton
-              label="Restart Audio Engine"
-              disabled={busy === 'restart'}
-              onClick={() => void handleRestartEngine()}
-              title="Power-cycles the audio engine to apply the buffer size"
-            />
-          )}
-        </div>
-      </section>
+      {/* Buffer size / latency — the DAW owns both in a plugin, so the whole
+          section is hidden there rather than left as controls that do nothing.
+          That also removes "Restart Audio Engine", which is a power control:
+          in a plugin it would tear down the UI's view of a graph the host keeps
+          processing. */}
+      {ownsAudioDevice && (
+        <section className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>Buffer Size / Latency</span>
+          <p className={styles.sectionHint}>
+            A smaller buffer responds faster but is more likely to click/drop out on a slower
+            machine. Changes only take effect after restarting the audio engine.
+          </p>
+          <div className={styles.row}>
+            <Select
+              label="Buffer"
+              value={io.latencyHint}
+              onChange={(e) => io.setLatencyHint(e.target.value as LatencyHint)}
+              aria-label="Buffer size / latency"
+              className={styles.field}
+            >
+              {LATENCY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            {status === 'ready' && (
+              <HardwareButton
+                label="Restart Audio Engine"
+                disabled={busy === 'restart'}
+                onClick={() => void handleRestartEngine()}
+                title="Power-cycles the audio engine to apply the buffer size"
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       {/* NAM quality */}
       <section className={styles.section}>

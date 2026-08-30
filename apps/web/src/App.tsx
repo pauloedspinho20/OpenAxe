@@ -206,7 +206,10 @@ function App() {
             onClick={openMidiManager}
             title={midiStatusTitle}
           />
-          {isReady && (
+          {/* No power switch in a plugin: the DAW decides when the plugin runs,
+              and powering off here would only stop the UI's own view of a graph
+              that keeps processing — leaving no obvious way back. */}
+          {isReady && !isPluginShell && (
             <HardwareButton
               label="Power off"
               icon={<PowerIcon size={16} />}

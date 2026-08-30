@@ -52,11 +52,22 @@ export function PowerGate({
   // plugin into desktop, and branching on ownsAudioDevice alone would have
   // collapsed it into web - either way the user got pickers that do nothing.
   const ownsAudioDevice = shellOwnsAudioDevice()
-  const isPlugin = getShellKind() === 'plugin'
-  const hostOwnsTransport = isPlugin
+  const isPluginShell = getShellKind() === 'plugin'
+  const hostOwnsTransport = isPluginShell
   const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
 
   if (status === 'ready') return null
+
+  // A plugin has no power switch to offer: the DAW owns the transport, it is
+  // already calling ProcessBlock, and App powers the engine on automatically
+  // when the editor opens. Showing the gate meant a panel that flashed up and
+  // dismissed itself, with a button that did nothing a user would want.
+  //
+  // Failures still surface — silently rendering nothing when the engine could
+  // not start would leave a blank editor with no explanation — but with a
+  // retry rather than a power button, since retrying is the only action that
+  // means anything here.
+  if (isPluginShell && status !== 'error') return null
 
   const starting = status === 'starting'
 
@@ -89,11 +100,7 @@ export function PowerGate({
           </p>
         )}
 
-        {hostOwnsTransport ? (
-          <p className={styles.deviceHint}>
-            Audio input, output and buffer size are set by your DAW.
-          </p>
-        ) : ownsAudioDevice ? (
+        {hostOwnsTransport ? null : ownsAudioDevice ? (
           <div className={styles.deviceRow}>
             <Select
               label="Input"
@@ -185,14 +192,23 @@ export function PowerGate({
           </div>
         )}
 
-        <HardwareButton
-          label={starting ? 'Starting…' : 'POWER ON'}
-          iconOnly
-          icon={<PowerIcon />}
-          onClick={() => onPowerOn()}
-          disabled={starting}
-          size="large"
-        />
+        {isPluginShell ? (
+          <HardwareButton
+            label="Retry"
+            onClick={() => onPowerOn()}
+            disabled={starting}
+            size="large"
+          />
+        ) : (
+          <HardwareButton
+            label={starting ? 'Starting…' : 'POWER ON'}
+            iconOnly
+            icon={<PowerIcon />}
+            onClick={() => onPowerOn()}
+            disabled={starting}
+            size="large"
+          />
+        )}
         {updateLatest && (
           <div className={styles.updateBanner} role="status" aria-live="polite">
             <span className={styles.updateText}>New version {updateLatest.tag} available</span>

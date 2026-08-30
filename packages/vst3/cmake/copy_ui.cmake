@@ -20,6 +20,20 @@ if(NOT EXISTS "${SRC}/index.html")
   return()
 endif()
 
-file(REMOVE_RECURSE "${DST}")
-file(COPY "${SRC}/" DESTINATION "${DST}")
-message(STATUS "${TARGET}: bundled UI from ${SRC}")
+# Skip when the bundled copy is already current. This runs on every build (see
+# the always-out-of-date target in CMakeLists.txt), so an unconditional
+# directory copy would be wasted work on most builds.
+set(_stale TRUE)
+if(EXISTS "${DST}/index.html")
+  file(TIMESTAMP "${SRC}/index.html" _src_ts "%Y%m%d%H%M%S")
+  file(TIMESTAMP "${DST}/index.html" _dst_ts "%Y%m%d%H%M%S")
+  if(NOT _src_ts STRGREATER _dst_ts)
+    set(_stale FALSE)
+  endif()
+endif()
+
+if(_stale)
+  file(REMOVE_RECURSE "${DST}")
+  file(COPY "${SRC}/" DESTINATION "${DST}")
+  message(STATUS "${TARGET}: bundled UI from ${SRC}")
+endif()

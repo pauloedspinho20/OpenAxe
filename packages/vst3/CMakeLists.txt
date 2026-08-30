@@ -702,6 +702,23 @@ function(openaxe_bundle_ui target)
     # resolver also looks for a sibling ui/ directory next to the binary.
     set(_ui_dest "$<TARGET_FILE_DIR:${target}>/ui")
   endif()
+  # POST_BUILD alone is not enough: it only fires when the target relinks, so
+  # rebuilding just the web app and then the plugin left the bundle carrying a
+  # stale UI with nothing to indicate it — the plugin sources had not changed,
+  # so there was nothing to relink. Pairing it with an always-out-of-date
+  # custom target that the plugin depends on means a fresh apps/web/dist is
+  # always picked up; copy_ui.cmake compares timestamps so the usual case is a
+  # no-op rather than a directory copy on every build.
+  add_custom_target(${target}_ui ALL
+    COMMAND "${CMAKE_COMMAND}"
+            -DSRC=${OPENAXE_WEB_DIST}
+            -DDST=${_ui_dest}
+            -DTARGET=${target}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_ui.cmake"
+    COMMENT "${target}: syncing apps/web/dist into the bundle"
+    VERBATIM)
+  add_dependencies(${target}_ui ${target})
+
   add_custom_command(TARGET ${target} POST_BUILD
     COMMAND "${CMAKE_COMMAND}"
             -DSRC=${OPENAXE_WEB_DIST}

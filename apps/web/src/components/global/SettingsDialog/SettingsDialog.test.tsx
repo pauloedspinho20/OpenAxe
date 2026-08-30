@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { SettingsDialog } from './SettingsDialog'
+import { shellOwnsAudioDevice } from '../../../native/openaxe'
 
 vi.mock('../../../native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
@@ -59,6 +60,9 @@ describe('components/SettingsDialog', () => {
   })
 
   it('restarts the audio engine through the power callbacks', async () => {
+    // The buffer/latency section (and with it "Restart Audio Engine") only
+    // exists where this shell owns the audio device — a plugin has neither.
+    vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
     const { onPowerOff, onPowerOn } = renderDialog()
     const btn = screen.getByRole('button', { name: 'Restart Audio Engine' })
     await act(async () => {
