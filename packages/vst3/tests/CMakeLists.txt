@@ -57,6 +57,13 @@ add_executable(openaxe_vst3_input_routing_test input_routing_test.cpp ../src/inp
 target_include_directories(openaxe_vst3_input_routing_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_test(NAME vst3_input_routing COMMAND openaxe_vst3_input_routing_test)
 
+# The storage bridge both shells bind. Pins that the desktop's array-shaped
+# args and the plugin's object-shaped args both work (#300 follow-up).
+add_executable(openaxe_vst3_storage_bridge_test storage_bridge_test.cpp
+  ../../shared/src/storage_bridge.cpp ../../shared/src/app_storage.cpp)
+target_include_directories(openaxe_vst3_storage_bridge_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
+add_test(NAME vst3_storage_bridge COMMAND openaxe_vst3_storage_bridge_test)
+
 # Shared on-disk app store — one library for the desktop app and the plugins,
 # and the reason the factory pack no longer resets every launch (#300).
 add_executable(openaxe_vst3_app_storage_test app_storage_test.cpp

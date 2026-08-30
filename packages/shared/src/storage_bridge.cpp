@@ -21,12 +21,21 @@ std::string JsonError(const std::string& message) {
   return json{{"ok", false}, {"error", message}}.dump();
 }
 
-// The webview posts args as an array whose first element is the argument
-// object, the same shape the other handlers already parse.
+// The two shells hand us different shapes and both have to work.
+//
+// The desktop shell goes through webview::bind, which passes the JS call's
+// arguments as an array — so `[{"store":"prefs"}]`. The plugin's own dispatch
+// passes the args value straight out of the posted message, which is a bare
+// object — `{"store":"prefs"}`. VstBridge::ParseArgs papers over exactly this
+// by wrapping a non-array in an array, and these handlers did not, so every
+// storage call inside a plugin resolved to "invalid store": the store name
+// came back empty, and because the failures are swallowed on the UI side the
+// app carried on as if nothing were wrong.
 json FirstArg(const std::string& argsJson) {
   json parsed = json::parse(argsJson, nullptr, /*allow_exceptions=*/false);
-  if (parsed.is_discarded() || !parsed.is_array() || parsed.empty()) return json::object();
-  if (!parsed[0].is_object()) return json::object();
+  if (parsed.is_discarded()) return json::object();
+  if (parsed.is_object()) return parsed;
+  if (!parsed.is_array() || parsed.empty() || !parsed[0].is_object()) return json::object();
   return parsed[0];
 }
 
