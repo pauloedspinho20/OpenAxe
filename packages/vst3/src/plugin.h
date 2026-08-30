@@ -100,6 +100,14 @@ class OpenAxePlugin final : public iplug::Plugin {
   // hosts latch onto when recording automation.
   bool NotifyHostParamChangedFromUI(int32_t block, int32_t param_index, float real_value);
 
+  // Which of the host's input channels reach the rig ('stereo' | 'l' | 'r' |
+  // 'sum'; see input_routing.h). Set from the UI thread, read on the audio
+  // thread, so it is one relaxed atomic rather than anything the audio thread
+  // could block on. Persisted in the host chunk, since it is part of how the
+  // track is set up rather than a UI preference.
+  void SetInputChannelModeName(const std::string& name);
+  std::string InputChannelModeNameValue() const;
+
   // Monitor tap for the UI's meters, scope and tuner (issue #300 E4c). The
   // plugin's getTap used to return empty arrays, so anything fed by waveform
   // data read flat inside a DAW. Written by ProcessBlock, read by the bridge on
@@ -166,6 +174,10 @@ class OpenAxePlugin final : public iplug::Plugin {
    // must be atomic rather than plain scalars (issue #300 C4).
    mutable std::atomic<double> sample_rate_{48000.0};
    mutable std::atomic<int> max_block_size_{0};
+   // openaxe_vst3::InputChannelMode as an int — the header for it is not
+   // included here to keep plugin.h free of another dependency, and the enum
+   // is a plain 0..3.
+   std::atomic<int> input_channel_mode_{0};
 
    // Channel-conversion scratch, sized in OnReset. Previously these were
    // 2 x 8192 float arrays declared on the audio-thread stack in two separate

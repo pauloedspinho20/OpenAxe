@@ -292,14 +292,34 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="Settings">
-      {/* No audio device sections in a plugin. The DAW decides what feeds the
-          plugin and where its output goes, so an input picker selects nothing,
-          the channel selector is never read (useNativeAudioEngine ignores
-          inputChannel - only the Web Audio path uses it), and the output
-          section would claim device selection "isn't supported in this
-          browser", which is not even the right category of answer inside a
-          DAW. */}
-      {isPluginShell ? null : ownsAudioDevice ? (
+      {/* In a plugin there is no device to pick - the DAW decides what feeds
+          it and where the result goes - so the input device picker and the
+          whole output section are gone. Which channel of the incoming bus the
+          rig hears is still a real choice, though: a guitar is one cable on a
+          stereo track. */}
+      {isPluginShell ? (
+        <section className={styles.section}>
+          <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
+          <div className={styles.row}>
+            <Select
+              label="Channel"
+              value={io.inputChannel}
+              onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
+              aria-label="Input channel"
+              className={styles.field}
+            >
+              <option value="l">Ch 1</option>
+              <option value="r">Ch 2</option>
+              <option value="stereo">Stereo</option>
+              <option value="sum">Ch 1+2</option>
+            </Select>
+          </div>
+          <p className={styles.sectionHint}>
+            Which channels of the track feeding this plugin reach the rig. Ch 1 or Ch 2 sends that
+            one in as mono; Ch 1+2 averages them.
+          </p>
+        </section>
+      ) : ownsAudioDevice ? (
         /* Native (desktop): input and output are independent devices - the
          * C++ core opens them as separate createDevice(output, input) names
          * (apps/desktop/src/audio.cpp), so two selectors drive them. */

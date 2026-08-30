@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { SettingsDialog } from './SettingsDialog'
 import { getShellKind, shellOwnsAudioDevice } from '../../../native/openaxe'
+import { useIOStore } from '../../../state/ioStore'
 
 vi.mock('../../../native/openaxe', () => ({
   getOpenAxe: vi.fn(() => null),
@@ -93,23 +94,33 @@ describe('components/SettingsDialog', () => {
       expect(screen.getByLabelText('Output device')).toBeInTheDocument()
     })
 
-    it('offers no device sections at all in a plugin', () => {
-      // The DAW routes a track in and takes the result back: an input picker
-      // selects nothing, the channel selector is never read on the native
-      // path, and the output section would otherwise claim device selection
-      // "isn't supported in this browser" inside a DAW.
+    it('offers no device pickers in a plugin, but keeps the channel choice', () => {
+      // The DAW routes a track in and takes the result back, so an input
+      // device picker selects nothing and the output section would otherwise
+      // claim device selection "isn't supported in this browser" inside a
+      // DAW. Which channel of that track the rig hears is a real choice,
+      // though - a guitar is one cable on a stereo bus.
       vi.mocked(getShellKind).mockReturnValue('plugin')
       const { container } = renderDialog()
 
       expect(screen.queryByLabelText('Input device')).not.toBeInTheDocument()
-      expect(screen.queryByLabelText('Input channel')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Output device')).not.toBeInTheDocument()
-      expect(container.textContent).not.toContain('Audio Input')
       expect(container.textContent).not.toContain('Audio Output')
       expect(container.textContent).not.toContain("isn't supported in this browser")
 
+      expect(screen.getByLabelText('Input channel')).toBeInTheDocument()
+
       // The rest of Settings is untouched.
       expect(container.textContent).toContain('Neural Amp Modeler Quality')
+    })
+
+    it('sends a channel change to the plugin through the store', () => {
+      vi.mocked(getShellKind).mockReturnValue('plugin')
+      renderDialog()
+      fireEvent.change(screen.getByLabelText('Input channel'), { target: { value: 'r' } })
+      // useNativeAudioEngine watches this and pushes it over the bridge; the
+      // store is the single place both the plugin and the web read it from.
+      expect(useIOStore.getState().inputChannel).toBe('r')
     })
   })
 })

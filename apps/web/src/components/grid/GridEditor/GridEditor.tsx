@@ -64,8 +64,9 @@ export function GridEditor({
   const [inputDialogOpen, setInputDialogOpen] = useState(false)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
   // In a plugin the DAW routes a track in and takes the result back, so
-  // neither rail opens a device picker: the IN/OUT buttons stay as the jacks
-  // they label, but there is nothing to choose behind them.
+  // there is no device to pick. The input side still has a real choice —
+  // which channel of the incoming bus the rig hears — so IN keeps its dialog
+  // and OUT loses one entirely.
   const isPluginShell = getShellKind() === 'plugin'
   const draggingJackRef = useRef<string | null>(null)
   const [tunerOpen, setTunerOpen] = useState(false)
@@ -194,10 +195,7 @@ export function GridEditor({
             fullWidth
             label="IN"
             onClick={() => setInputDialogOpen(true)}
-            disabled={isPluginShell}
-            title={
-              isPluginShell ? 'The DAW decides what feeds this plugin' : 'Input device and channel'
-            }
+            title={isPluginShell ? 'Input channel' : 'Input device and channel'}
           />
 
           <button
@@ -307,17 +305,17 @@ export function GridEditor({
         />
       )}
 
-      {/* Not merely closed in a plugin - not mounted, so no other path can
-          open a device picker for a device the plugin does not own. */}
+      <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
+      {/* The output dialog is not merely closed in a plugin - it is not
+          mounted, so no path can open a picker for a device the plugin does
+          not own. The input one stays: its channel selector is a real choice
+          there. */}
       {!isPluginShell && (
-        <>
-          <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
-          <OutputDeviceDialog
-            open={outputDialogOpen}
-            onClose={() => setOutputDialogOpen(false)}
-            outputSelectionSupported={outputSelectionSupported}
-          />
-        </>
+        <OutputDeviceDialog
+          open={outputDialogOpen}
+          onClose={() => setOutputDialogOpen(false)}
+          outputSelectionSupported={outputSelectionSupported}
+        />
       )}
       <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />
     </div>

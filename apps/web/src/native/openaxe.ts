@@ -41,6 +41,10 @@ export interface OpenAxeConfig {
   cpuLoad: number
   /** Which native shell answered. Absent on older desktop builds. */
   shell?: ShellKind
+  /** Which of the host's input channels feed the rig. Plugin only, and
+   * absent on older builds — the plugin owns this rather than the shared
+   * store, because it describes how this instance's track is wired. */
+  inputChannel?: 'stereo' | 'l' | 'r' | 'sum'
   /** False in a plugin, where the DAW owns the device. Absent on older builds;
    * prefer shellOwnsAudioDevice() for the synchronous check. */
   ownsAudioDevice?: boolean
@@ -221,6 +225,10 @@ export interface OpenAxeBridge {
    * "never connected" case, not a failure (still `ok: true`). */
   secureLoad(args: { key: string }): Promise<OpenAxeOk & { value: string | null }>
   /** No-op success if there was nothing stored under `key`. */
+  /** Route the host's input channels into the rig (plugin only; a no-op
+   * elsewhere). Mirrors the web's channel modes — see input_routing.h. */
+  setInputChannel(args: { mode: 'stereo' | 'l' | 'r' | 'sum' }): Promise<OpenAxeOk>
+
   secureDelete(args: { key: string }): Promise<OpenAxeOk>
 
   /**
@@ -391,6 +399,9 @@ class NativeBridge implements OpenAxeBridge {
   }
   secureLoad(args: { key: string }) {
     return this.call<OpenAxeOk & { value: string | null }>('secureLoad', args)
+  }
+  setInputChannel(args: { mode: 'stereo' | 'l' | 'r' | 'sum' }) {
+    return this.call<OpenAxeOk>('setInputChannel', args)
   }
   secureDelete(args: { key: string }) {
     return this.call<OpenAxeOk>('secureDelete', args)

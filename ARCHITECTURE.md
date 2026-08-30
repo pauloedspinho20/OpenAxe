@@ -60,24 +60,25 @@ meters, and CPU load.
 
 ## Per-target status
 
-| Concern                      | Web                                                 | Desktop                            | VST3/CLAP/AU                                     | Owner it should have                 |
-| ---------------------------- | --------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | ------------------------------------ |
-| DSP effects                  | core via the rig worklet                            | core, in-process                   | core, in-process                                 | core ✅                              |
-| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                 | core's `NamAmp`                    | core's `NamAmp`                                  | core ✅                              |
-| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet         | core                               | core                                             | core ✅                              |
-| Signal graph + routing rules | core `graph_rig` (single rig worklet)               | core `graph_rig`                   | core `graph_rig`                                 | core ✅                              |
-| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | core                                             | core ✅                              |
-| Block I/O trims              | core trims via the rig worklet                      | core trims                         | core trims                                       | core ✅                              |
-| Bypass / master bus          | core via the rig worklet                            | core                               | core                                             | core ✅                              |
-| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | core, via `loadIrWav`                            | core ✅                              |
-| Tuner pitch detection        | core via WASM, TS fallback kept for tests           | core (`nam_studio_detect_pitch`)   | core, fed by the monitor tap                     | core ✅                              |
-| Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | core peak + `MonitorTap` (seqlock ring)          | core ✅                              |
-| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | core table + generated automation map            | **generated from core** ⚠️           |
-| Host automation              | n/a                                                 | n/a                                | generated slot map, params reported to host      | core ✅                              |
-| MIDI mapping                 | TS Web MIDI → core mapping model                    | core mapping model                 | host MIDI bus → core, sample-accurate            | core ✅                              |
-| Rig state (save/restore)     | browser store                                       | browser store                      | core state doc in the host chunk (authoritative) | core ✅                              |
-| Presets / scenes / bank      | TS model + IndexedDB                                | TS model + shared on-disk store    | TS model + the same shared store                 | **core model**, front-end storage ❌ |
-| Library, prefs, asset cache  | IndexedDB + localStorage                            | shared on-disk store               | the same shared store                            | front end ✅                         |
+| Concern                      | Web                                                 | Desktop                            | VST3/CLAP/AU                                       | Owner it should have                 |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------- | -------------------------------------------------- | ------------------------------------ |
+| DSP effects                  | core via the rig worklet                            | core, in-process                   | core, in-process                                   | core ✅                              |
+| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                 | core's `NamAmp`                    | core's `NamAmp`                                    | core ✅                              |
+| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet         | core                               | core                                               | core ✅                              |
+| Signal graph + routing rules | core `graph_rig` (single rig worklet)               | core `graph_rig`                   | core `graph_rig`                                   | core ✅                              |
+| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | core                                               | core ✅                              |
+| Block I/O trims              | core trims via the rig worklet                      | core trims                         | core trims                                         | core ✅                              |
+| Bypass / master bus          | core via the rig worklet                            | core                               | core                                               | core ✅                              |
+| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | core, via `loadIrWav`                              | core ✅                              |
+| Tuner pitch detection        | core via WASM, TS fallback kept for tests           | core (`nam_studio_detect_pitch`)   | core, fed by the monitor tap                       | core ✅                              |
+| Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | core peak + `MonitorTap` (seqlock ring)            | core ✅                              |
+| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | core table + generated automation map              | **generated from core** ⚠️           |
+| Input channel routing        | Web Audio splitter/merger                           | not offered (device layer)         | host bus → `input_routing.cpp`, in the state chunk | front end ✅                         |
+| Host automation              | n/a                                                 | n/a                                | generated slot map, params reported to host        | core ✅                              |
+| MIDI mapping                 | TS Web MIDI → core mapping model                    | core mapping model                 | host MIDI bus → core, sample-accurate              | core ✅                              |
+| Rig state (save/restore)     | browser store                                       | browser store                      | core state doc in the host chunk (authoritative)   | core ✅                              |
+| Presets / scenes / bank      | TS model + IndexedDB                                | TS model + shared on-disk store    | TS model + the same shared store                   | **core model**, front-end storage ❌ |
+| Library, prefs, asset cache  | IndexedDB + localStorage                            | shared on-disk store               | the same shared store                              | front end ✅                         |
 
 ✅ done · ⚠️ core owns it, a front end still duplicates part · ❌ not in core yet
 

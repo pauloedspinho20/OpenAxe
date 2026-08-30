@@ -53,6 +53,7 @@ class VstBridge {
   std::string HandleVersion(const std::string& argsJson);
   std::string HandleListDevices(const std::string& argsJson);
   std::string HandleGetConfig(const std::string& argsJson);
+  std::string HandleSetInputChannel(const std::string& argsJson);
   std::string HandleAddBlock(const std::string& argsJson);
   std::string HandleRemoveBlock(const std::string& argsJson);
   std::string HandleMoveBlock(const std::string& argsJson);

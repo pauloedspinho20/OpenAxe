@@ -7,7 +7,12 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import { getOpenAxe, shellOwnsAudioDevice, type OpenAxeBridge } from '../native/openaxe'
+import {
+  getOpenAxe,
+  getShellKind,
+  shellOwnsAudioDevice,
+  type OpenAxeBridge,
+} from '../native/openaxe'
 
 export interface NativeAudioEngineState {
   status: EngineStatus
@@ -139,12 +144,25 @@ export function useNativeAudioEngine() {
   // meter and tuner read post-trim on both paths. Runs on power-on too (the
   // status transition), so the knob's current value is never left behind.
   const inputGain = useIOStore((s) => s.inputGain)
+  const inputChannel = useIOStore((s) => s.inputChannel)
   useEffect(() => {
     if (state.status !== 'ready') return
     const bridge = bridgeRef.current
     if (!bridge) return
     void bridge.setInputGain({ gain: inputGain }).catch(() => {})
   }, [inputGain, state.status])
+
+  // Push input-channel changes down to the plugin. Only in a plugin: the
+  // desktop shell opens the device itself, where channel selection belongs at
+  // the device layer rather than in the graph feed, and it offers no such
+  // control yet (see scripts/check-bridge-methods.mjs).
+  useEffect(() => {
+    if (state.status !== 'ready') return
+    if (getShellKind() !== 'plugin') return
+    const bridge = bridgeRef.current
+    if (!bridge) return
+    void bridge.setInputChannel({ mode: inputChannel }).catch(() => {})
+  }, [inputChannel, state.status])
 
   // While the engine is running, keep the analysers fed from the latest native
   // taps and drive block meters from the core's real peaks. No-op in no-sound
@@ -221,6 +239,15 @@ export function useNativeAudioEngine() {
         if (!hostOwnsDevice) {
           const started = await bridge.start()
           if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
+        }
+
+        // Adopt the plugin's own input routing rather than pushing the store's
+        // at it. The choice describes how this instance's track is wired — it
+        // rides the host's state chunk, and two instances in one project can
+        // legitimately differ — so the plugin is the authority here, exactly
+        // as it is for the rig itself.
+        if ('inputChannel' in opened && opened.inputChannel) {
+          useIOStore.setState({ inputChannel: opened.inputChannel })
         }
 
         // SAMPLE_RATE is only a last-resort fallback: the host's real rate

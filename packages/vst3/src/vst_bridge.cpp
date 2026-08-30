@@ -140,6 +140,7 @@ std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   else if (method == "openAxe.getState") result = HandleGetState(args.dump());
   else if (method == "openAxe.getTap") result = HandleGetTap(args.dump());
   else if (method == "openAxe.setInputGain") result = (json{{"ok", true}}).dump();
+  else if (method == "openAxe.setInputChannel") result = HandleSetInputChannel(args.dump());
   else if (method == "openAxe.setTunerMuted") result = (json{{"ok", true}}).dump();
   else result = JsonError("unknown method: " + method);
 
@@ -243,6 +244,22 @@ std::string VstBridge::HandleVersion(const std::string&) {
   return json(OPENAXE_VERSION_STR).dump();
 }
 std::string VstBridge::HandleListDevices(const std::string&) { return json::array().dump(); }
+std::string VstBridge::HandleSetInputChannel(const std::string& req) {
+  try {
+    json args = ParseArgs(req);
+    json o = args.empty() ? json::object() : args[0];
+    const std::string mode = o.value("mode", "");
+    if (!plugin_) return JsonError("setInputChannel: no plugin");
+    // An unknown name resolves to stereo rather than failing: the UI and the
+    // plugin should never disagree about which modes exist, but if they ever
+    // do, passthrough is the safe answer.
+    plugin_->SetInputChannelModeName(mode);
+    return (json{{"ok", true}, {"mode", plugin_->InputChannelModeNameValue()}}).dump();
+  } catch (...) {
+    return JsonError("setInputChannel failed");
+  }
+}
+
 std::string VstBridge::HandleGetConfig(const std::string&) {
   // Report the HOST's real sample rate and block size (issue #300 E2). These
   // used to be hard-coded 48000/512 behind a comment claiming
@@ -268,7 +285,13 @@ std::string VstBridge::HandleGetConfig(const std::string&) {
                {"latencyFrames", 0},
                {"latencyMs", 0.0},
                {"lastError", ""},
-               {"cpuLoad", graph_ ? nam_studio_get_cpu_load(graph_) : 0.0}})
+               {"cpuLoad", graph_ ? nam_studio_get_cpu_load(graph_) : 0.0},
+               // Which input channels feed the rig. Reported here so the UI
+               // adopts the plugin's own setting on open rather than pushing
+               // whatever the shared store happened to hold — the choice
+               // belongs to this instance's track, and two instances in one
+               // project can legitimately differ.
+               {"inputChannel", plugin_ ? plugin_->InputChannelModeNameValue() : "stereo"}})
       .dump();
 }
 

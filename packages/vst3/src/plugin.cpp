@@ -1,5 +1,14 @@
 #include "plugin.h"
 
+#include "input_routing.h"
+
+using openaxe_vst3::InputChannelMode;
+using openaxe_vst3::InputChannelModeFromName;
+using openaxe_vst3::InputChannelModeName;
+using openaxe_vst3::InputChannelFromStateJson;
+using openaxe_vst3::InputChannelToStateJson;
+using openaxe_vst3::RouteInput;
+
 #include "IPlug_include_in_plug_src.h"
 
 #include <algorithm>
@@ -378,6 +387,16 @@ void OpenAxePlugin::OnActivate(bool enable) {
   nam_studio_reset(graph_, sr, effective_bs);
 }
 
+void OpenAxePlugin::SetInputChannelModeName(const std::string& name) {
+  input_channel_mode_.store(static_cast<int>(InputChannelModeFromName(name)),
+                            std::memory_order_relaxed);
+}
+
+std::string OpenAxePlugin::InputChannelModeNameValue() const {
+  return InputChannelModeName(
+      static_cast<InputChannelMode>(input_channel_mode_.load(std::memory_order_relaxed)));
+}
+
 void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) {
   // Suspend handshake: control thread raised suspend_requested_ before
   // mutating the graph. Acknowledge and silence this block so no
@@ -426,24 +445,40 @@ void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs
     const float* inPtrs[kMaxChans] = {nullptr, nullptr};
     float* outPtrs[kMaxChans] = {nullptr, nullptr};
 
+    // Convert the host's channels into our float scratch first, then decide
+    // which of them the rig actually hears. Routing after the conversion
+    // means kSum can average in place, into a buffer we own.
+    float* staged[kMaxChans] = {nullptr, nullptr};
     for (int c = 0; c < nChansIn; ++c) {
       if (!inputs[c]) continue;
       float* dst = inBase + static_cast<size_t>(c) * static_cast<size_t>(scratch_frames_);
       const iplug::sample* src = inputs[c] + offset;
       for (int i = 0; i < frames; ++i) dst[i] = static_cast<float>(src[i]);
-      inPtrs[c] = dst;
+      staged[c] = dst;
     }
+    // A guitar is one cable on a stereo track, so feeding the bus through
+    // untouched would run the rig on a half-silent pair. Mirrors the web's
+    // channel modes exactly (see input_routing.h).
+    const int coreChansIn = RouteInput(
+        static_cast<InputChannelMode>(input_channel_mode_.load(std::memory_order_relaxed)),
+        staged, nChansIn, frames, inPtrs);
     for (int c = 0; c < nChansOut; ++c) {
       if (!outputs[c]) continue;
       outPtrs[c] = outBase + static_cast<size_t>(c) * static_cast<size_t>(scratch_frames_);
     }
 
-    nam_studio_process(graph_, inPtrs, nChansIn, outPtrs, nChansOut, frames);
+    nam_studio_process(graph_, inPtrs, coreChansIn, outPtrs, nChansOut, frames);
 
     // Capture the window the UI's meters/scope/tuner read (issue #300 E4c).
     // Both sides come from the float scratch, so this is a straight copy into a
     // preallocated ring — no allocation and no locking on the audio thread.
-    tap_.Write(inPtrs, outPtrs, static_cast<unsigned int>(frames));
+    //
+    // When the routing collapsed the input to mono, show that mono signal on
+    // both sides rather than passing a null second channel: MonitorTap skips
+    // a null channel instead of clearing it, so the input meter's right half
+    // would otherwise sit on whatever it last held, frozen and stale.
+    const float* tapIn[kMaxChans] = {inPtrs[0], coreChansIn >= 2 ? inPtrs[1] : inPtrs[0]};
+    tap_.Write(coreChansIn > 0 ? tapIn : nullptr, outPtrs, static_cast<unsigned int>(frames));
 
     for (int c = 0; c < nChansOut; ++c) {
       if (!outputs[c] || !outPtrs[c]) continue;
@@ -491,6 +526,10 @@ bool OpenAxePlugin::SerializeState(iplug::IByteChunk& chunk) const {
   if (editor_) {
     json = openaxe_vst3::editor::SizeToStateJson(editor_->GetSize(), json);
   }
+  // Input routing belongs to the track, so it rides the host chunk rather
+  // than the shared library — reopening the project restores the same wiring.
+  json = InputChannelToStateJson(
+      static_cast<InputChannelMode>(input_channel_mode_.load(std::memory_order_relaxed)), json);
   chunk.Clear();
   chunk.PutStr(json.c_str());
   return true;
@@ -509,6 +548,9 @@ int OpenAxePlugin::UnserializeState(const iplug::IByteChunk& chunk, int startPos
     const auto sz = openaxe_vst3::editor::SizeFromStateJson(json.Get());
     editor_->SetSize(sz.width, sz.height);
   }
+  // Same as size: no audio thread involvement, so restore it before topology.
+  input_channel_mode_.store(static_cast<int>(InputChannelFromStateJson(json.Get())),
+                            std::memory_order_relaxed);
   // Restore topology + params. State helpers do the single reset (#62) and
   // leave the graph untouched on parse / version errors (#64 graceful).
   // Must be suspended (Tier 2).

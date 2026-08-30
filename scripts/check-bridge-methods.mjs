@@ -78,6 +78,11 @@ const desktopBinds = namesMatching(DESKTOP_BINDS, /"openAxe\.([a-zA-Z]+)"/g)
  */
 const EXPECTED_ABSENT = {
   desktop: {
+    setInputChannel:
+      'plugin-only so far: the desktop shell opens the device itself, so ' +
+      'channel selection there belongs in audio.cpp at the device layer ' +
+      'rather than in the graph feed, and its Settings offers no Channel ' +
+      'control yet. useNativeAudioEngine only calls this in a plugin.',
     getState:
       'plugin-only: useNativeAudioEngine calls adoptFromCore() behind ' +
       '!shellOwnsAudioDevice(), so the desktop shell never reaches it — there ' +

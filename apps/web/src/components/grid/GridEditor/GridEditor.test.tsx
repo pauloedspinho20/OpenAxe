@@ -54,17 +54,18 @@ describe('components/GridEditor', () => {
       expect(screen.getByText('Default input')).toBeInTheDocument()
     })
 
-    it('does not open an input device picker in a plugin', () => {
+    it('offers the channel but not the device in a plugin', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
 
       const inButton = screen.getByRole('button', { name: 'IN' })
-      expect(inButton).toBeDisabled()
-      expect(inButton).toHaveAttribute('title', 'The DAW decides what feeds this plugin')
+      expect(inButton).toHaveAttribute('title', 'Input channel')
 
-      // Not merely closed — never mounted, so no other path reaches it.
       fireEvent.click(inButton)
+      // No device to pick — the DAW decides what feeds the plugin — but which
+      // channel of that feed reaches the rig is the player's choice.
       expect(screen.queryByText('Default input')).not.toBeInTheDocument()
+      expect(screen.getByText('Ch 1+2')).toBeInTheDocument()
     })
 
     it('does not open an output device picker in a plugin either', () => {

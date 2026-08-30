@@ -52,6 +52,11 @@ target_link_libraries(openaxe_vst3_editor_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCH
 target_include_directories(openaxe_vst3_editor_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/include)
 add_test(NAME vst3_editor COMMAND openaxe_vst3_editor_test)
 
+# Input channel routing — which of the host's input channels reach the rig.
+add_executable(openaxe_vst3_input_routing_test input_routing_test.cpp ../src/input_routing.cpp)
+target_include_directories(openaxe_vst3_input_routing_test PRIVATE ../src ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME vst3_input_routing COMMAND openaxe_vst3_input_routing_test)
+
 # Shared on-disk app store — one library for the desktop app and the plugins,
 # and the reason the factory pack no longer resets every launch (#300).
 add_executable(openaxe_vst3_app_storage_test app_storage_test.cpp
