@@ -5,6 +5,9 @@ import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../st
 import { getOpenAxe, getShellKind, shellOwnsAudioDevice } from '../../../native/openaxe'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Auth } from '../../../tone3000/authStore'
+import { downloadFactoryPack, type FactoryDownloadSummary } from '../../../factory/factoryDownload'
+import { FACTORY_PACK } from '../../../factory/factoryPack'
+import { refreshBanks, setFactorySetupDone } from '../../../factory/factorySetup'
 import {
   buildDataBundle,
   clearAssetCache,
@@ -104,6 +107,13 @@ export function SettingsDialog({
   } | null>(null)
 
   // Account tones bulk import — independent of other settings busy states
+  const [factoryBusy, setFactoryBusy] = useState(false)
+  const [factoryConfirming, setFactoryConfirming] = useState(false)
+  const [factoryProgress, setFactoryProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  )
+  const [factorySummary, setFactorySummary] = useState<FactoryDownloadSummary | null>(null)
+  const [factoryError, setFactoryError] = useState<string | null>(null)
   const [accountScope, setAccountScope] = useState<AccountImportScope>('all')
   const [accountBusy, setAccountBusy] = useState(false)
   const [accountProgress, setAccountProgress] = useState<AccountImportProgress | null>(null)
@@ -247,6 +257,35 @@ export function SettingsDialog({
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err))
       setBusy(null)
+    }
+  }
+
+  const handleFactoryDownload = async () => {
+    setFactoryBusy(true)
+    setFactoryConfirming(false)
+    setFactoryError(null)
+    setFactorySummary(null)
+    try {
+      const result = await downloadFactoryPack((p) =>
+        setFactoryProgress({ done: p.done, total: p.total }),
+      )
+      setFactorySummary(result)
+      // Mark first-run setup handled and re-read both banks in place, so the
+      // newly placed presets and scene appear without a reload — the same
+      // thing the first-run dialog does, and the reason the engine can stay
+      // powered on through it.
+      setFactorySetupDone()
+      await refreshBanks()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setFactoryError(
+        message === 'Not authenticated'
+          ? 'Downloading the factory pack needs a Tone3000 account connection.'
+          : message,
+      )
+    } finally {
+      setFactoryProgress(null)
+      setFactoryBusy(false)
     }
   }
 
@@ -587,6 +626,71 @@ export function SettingsDialog({
             <HardwareButton label="Connect Tone3000" onClick={() => void auth.connect()} />
           )}
         </div>
+      </section>
+
+      {/* Factory pack — the curated starter rig, downloadable after first run.
+          It is offered in the first-run dialog, but that dialog is shown once
+          and never again, so skipping it (or clearing data later) used to
+          leave no way back to the pack. */}
+      <section className={styles.section}>
+        <span className={`label ${styles.sectionLabel}`}>Factory Pack</span>
+        <p className={styles.sectionHint}>
+          Downloads the {FACTORY_PACK.models.length} curated amp/cab captures from Tone3000 and
+          builds the starter presets from them. Models already in your library are skipped, so
+          re-running this only fetches what is missing.
+        </p>
+        <div className={styles.actions}>
+          <HardwareButton
+            label={
+              factoryProgress
+                ? `Downloading ${factoryProgress.done}/${factoryProgress.total}…`
+                : 'Download Factory Pack'
+            }
+            disabled={
+              factoryBusy || auth.status !== 'connected' || FACTORY_PACK.models.length === 0
+            }
+            onClick={() => setFactoryConfirming(true)}
+          />
+        </div>
+        {auth.status !== 'connected' && (
+          <p className={styles.sectionHint}>
+            Connect your Tone3000 account above to download the pack.
+          </p>
+        )}
+        {factoryConfirming && (
+          <div className={styles.confirmBox}>
+            <p className={styles.confirmText}>
+              This writes the pack&rsquo;s presets into their preset-bank slots, replacing whatever
+              is in those slots now. Your other slots, scenes and saved presets are left alone, and
+              nothing already downloaded is fetched again.
+            </p>
+            <div className={styles.actions}>
+              <HardwareButton
+                label="Download Factory Pack"
+                disabled={factoryBusy}
+                onClick={() => void handleFactoryDownload()}
+              />
+              <HardwareButton label="Cancel" onClick={() => setFactoryConfirming(false)} />
+            </div>
+          </div>
+        )}
+        {factorySummary && !factoryProgress && (
+          <p className={styles.sectionHint}>
+            {factorySummary.downloaded} downloaded, {factorySummary.skipped} already cached,{' '}
+            {factorySummary.placedPresets} preset(s) placed
+            {factorySummary.failed.length > 0 ? `, ${factorySummary.failed.length} failed` : ''}.
+          </p>
+        )}
+        {factorySummary && factorySummary.failed.length > 0 && (
+          <p className={styles.errorText}>
+            {factorySummary.failed
+              .slice(0, 3)
+              .map((f) => `${f.name}: ${f.error}`)
+              .join('; ')}
+            {factorySummary.failed.length > 3 ? '…' : ''}
+          </p>
+        )}
+        {factoryError && <p className={styles.errorText}>{factoryError}</p>}
       </section>
 
       {/* Tone3000 Library — bulk import from account history */}
