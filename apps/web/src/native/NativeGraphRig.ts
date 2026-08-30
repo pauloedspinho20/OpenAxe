@@ -1,6 +1,6 @@
 import type { GraphRigControls } from '../engine/bindGraphRig'
 import type { Block, BlockKind, EffectParams } from '../engine/blocks/Block'
-import { IN_RAIL, OUT_RAIL, type Jack } from '../engine/gridConfig'
+import { IN_RAIL, OUT_RAIL, jack, type Jack } from '../engine/gridConfig'
 import {
   canConnect,
   canMoveTo,
@@ -63,6 +63,83 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     if (!result.ok) throw new Error(result.error ?? 'addBlock failed')
     this.blocks.set(jsId, { block: new NativeBlock(this.bridge, jsId, kind), row, col })
     return jsId
+  }
+
+  /**
+   * Adopt the rig the C++ core already holds, without touching the graph.
+   *
+   * In a plugin the core is the source of truth (issue #300 D1/D2): the DAW
+   * restores its chunk into the graph before the editor ever opens, and closing
+   * the editor destroys this object while the graph keeps playing. So on open
+   * there are already blocks and edges in the core that this rig knows nothing
+   * about — re-adding them would duplicate the whole signal chain.
+   *
+   * This only populates the local bookkeeping from `openAxe.getState`; every id
+   * is the core's own id, so subsequent setParam/removeBlock address the right
+   * block. Returns the blocks and edges in the shape graphStore.loadGraph wants.
+   */
+  async adoptFromCore(): Promise<{
+    blocks: {
+      id: string
+      kind: BlockKind
+      row: number
+      col: number
+      bypass?: boolean
+      params: EffectParams
+    }[]
+    edges: { id: string; from: Jack; to: Jack }[]
+    masterLevel: number
+    masterMuted: boolean
+  } | null> {
+    const result = await this.bridge.getState()
+    if (!result.ok || !result.state) return null
+
+    this.blocks.clear()
+    this.edges.clear()
+    this.analysers.clear()
+    this.peaks.clear()
+
+    const blocks = result.state.blocks.map((b) => {
+      const kind = b.kind as BlockKind
+      this.blocks.set(b.id, {
+        block: new NativeBlock(this.bridge, b.id, kind),
+        row: b.row,
+        col: b.col,
+      })
+      // The core reports params by symbol with real (not normalised) values,
+      // which is the same shape the store holds.
+      // exactOptionalPropertyTypes: omit `bypass` entirely when the core did
+      // not report one, rather than setting it to undefined.
+      return {
+        id: b.id,
+        kind,
+        row: b.row,
+        col: b.col,
+        ...(b.bypass === undefined ? {} : { bypass: b.bypass }),
+        params: (b.params ?? {}) as EffectParams,
+      }
+    })
+
+    // The core writes the rails as the numeric sentinels; the UI speaks
+    // IN_RAIL/OUT_RAIL.
+    const toJack = (side: { blockId: string; port: number }): Jack => {
+      if (side.blockId === '-1' || side.blockId === 'IN') return jack(IN_RAIL, side.port)
+      if (side.blockId === '-2' || side.blockId === 'OUT') return jack(OUT_RAIL, side.port)
+      return jack(side.blockId, side.port)
+    }
+    const edges = result.state.edges.map((e) => {
+      const from = toJack(e.from)
+      const to = toJack(e.to)
+      this.edges.set(e.id, { from, to })
+      return { id: e.id, from, to }
+    })
+
+    return {
+      blocks,
+      edges,
+      masterLevel: result.state.masterLevel ?? 1,
+      masterMuted: result.state.masterMuted ?? false,
+    }
   }
 
   async removeBlock(id: string): Promise<void> {

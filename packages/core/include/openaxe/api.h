@@ -132,6 +132,21 @@ typedef enum NamStudioLoadResult {
 // buffers. Do not call concurrently with nam_studio_process.
 
 // Returns the new block's id (>= 0).
+// Canonical wire name for a block kind, e.g. "noise-gate" for
+// NAM_STUDIO_BLOCK_NOISE_GATE. Returns nullptr for an unknown value.
+//
+// These strings are the contract between the C++ core and every front end: the
+// web app, the desktop bridge and the plugin bridge all speak them. They lived
+// as a hand-maintained table in each bridge (issue #300 J3), so adding a block
+// kind meant editing the same 27 rows in two places — and the plugin's copy had
+// been rewritten as a 27-branch if/else chain besides. Mobile would have made
+// it four copies.
+const char* nam_studio_block_kind_name(NamStudioBlockKind kind);
+
+// Inverse of the above. Returns 0 on success and fills *out_kind; returns
+// non-zero for an unknown name, leaving *out_kind untouched.
+int32_t nam_studio_block_kind_from_name(const char* name, NamStudioBlockKind* out_kind);
+
 int32_t nam_studio_add_block(NamStudioGraph* graph, NamStudioBlockKind kind, int32_t row, int32_t col);
 // No-op if block_id is unknown.
 void nam_studio_remove_block(NamStudioGraph* graph, int32_t block_id);

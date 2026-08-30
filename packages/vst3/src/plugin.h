@@ -16,6 +16,7 @@
 //   - Zero reported latency (PLUG_LATENCY 0; latency_test proves the DSP path
 //     adds none) and bus arrangements 1-1 2-2 (core folds mono/stereo itself).
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -26,8 +27,14 @@
 #include "IPlug_include_in_plug_hdr.h"
 
 #include "openaxe/api.h"
+#include "openaxe/monitor_tap.h"
 
 #include "editor.h"
+
+namespace openaxe_vst3 {
+class VstBridge;
+class HttpServer;
+}
 
 const int kNumPresets = 2;  // Clean Boost, Ambient Swell — generated from same rows as web
 
@@ -41,9 +48,12 @@ class OpenAxePlugin final : public iplug::Plugin {
   void OnReset() override;
   void OnActivate(bool enable) override;
   void OnParamChange(int paramIdx) override;
-  bool SerializeState(IByteChunk& chunk) const override;
-  int UnserializeState(const IByteChunk& chunk, int startPos) override;
-  void ProcessMidiMsg(const IMidiMsg& msg) override;
+  bool SerializeState(iplug::IByteChunk& chunk) const override;
+  int UnserializeState(const iplug::IByteChunk& chunk, int startPos) override;
+  void ProcessMidiMsg(const iplug::IMidiMsg& msg) override;
+  // Main-thread pump. Applies Tier-2 parameter writes the audio thread parked
+  // in deferred_writes_ (issue #300 C1).
+  void OnIdle() override;
 #endif
 
   // Portable JSON round-trip (same document as the host chunk, just on disk)
@@ -72,6 +82,39 @@ class OpenAxePlugin final : public iplug::Plugin {
   // Returns false when block has no model.
   bool GetModelInfo(int32_t block_id, double* out_sample_rate, int* out_has_loudness,
                     double* out_loudness_db, int* out_is_slimmable, int* out_bp_count) const;
+
+  // Report a parameter the *editor* changed to the host (issue #300 E5).
+  //
+  // HandleSetParam wrote straight to the core, so the host never learned that
+  // anything moved: turning a knob in the plugin's own UI recorded no
+  // automation, showed no movement in the DAW's parameter list, and could be
+  // overwritten by the host's stale value on the next block. Automation you can
+  // read but not write is only half a parameter surface.
+  //
+  // `block` and `param_index` are the core's own; this resolves them to a host
+  // parameter id through the automation slot map and returns false when the
+  // block is not currently bound to a slot (only 15 slots exist, so most blocks
+  // in a large rig are not automatable — that is expected, not an error).
+  //
+  // UI thread only: it drives iPlug2's begin/set/end gesture, which is what
+  // hosts latch onto when recording automation.
+  bool NotifyHostParamChangedFromUI(int32_t block, int32_t param_index, float real_value);
+
+  // Which of the host's input channels reach the rig ('stereo' | 'l' | 'r' |
+  // 'sum'; see input_routing.h). Set from the UI thread, read on the audio
+  // thread, so it is one relaxed atomic rather than anything the audio thread
+  // could block on. Persisted in the host chunk, since it is part of how the
+  // track is set up rather than a UI preference.
+  void SetInputChannelModeName(const std::string& name);
+  std::string InputChannelModeNameValue() const;
+
+  // Monitor tap for the UI's meters, scope and tuner (issue #300 E4c). The
+  // plugin's getTap used to return empty arrays, so anything fed by waveform
+  // data read flat inside a DAW. Written by ProcessBlock, read by the bridge on
+  // the UI thread; the seqlock inside means the audio thread never waits.
+  openaxe::TapFrame ReadTap(bool input, unsigned int max_frames) const {
+    return tap_.Read(input, max_frames);
+  }
 
   // Editor shell (issue #132) — webview hosting the shared React app.
   // Exposed for state persistence and host window embedding; the audio path
@@ -107,20 +150,78 @@ class OpenAxePlugin final : public iplug::Plugin {
     EndSuspend();
   }
 
- private:
-  mutable NamStudioGraph* graph_ = nullptr;
-  mutable double sample_rate_ = 48000.0;
-  mutable int max_block_size_ = 0;
+  private:
+   // Tier-2 parameter writes deferred off the audio thread (issue #300 C1).
+   // Producer: OnParamChange (audio thread) — lock-free, wait-free, no alloc.
+   // Consumer: OnIdle (main thread) — suspends and mutates the graph.
+   static constexpr int kNoHostParam = -1;
+   // One slot per Tier-2 host param. The schema has a handful (the Amp
+   // family's slim_size), so 32 is generous headroom; see
+   // QueueDeferredParamWrite for the drop-on-overflow rationale.
+   static constexpr size_t kDeferredWriteSlots = 32;
+   struct DeferredWrite {
+     std::atomic<int> host_id{kNoHostParam};
+     std::atomic<float> normalized{0.0f};
+     std::atomic<bool> pending{false};
+   };
+   std::array<DeferredWrite, kDeferredWriteSlots> deferred_writes_{};
+   void QueueDeferredParamWrite(int host_id, float normalized);
+   void DrainDeferredParamWrites();
 
-  // Suspend handshake state — same shape as RtCallbackState::suspend +
-  // suspended_callbacks in apps/desktop/src/audio.h. Audio thread only reads
-  // suspend_requested_ and bumps suspend_ack_; control thread only writes
-  // suspend_requested_ and waits on suspend_ack_.
-  mutable std::atomic<bool> suspend_requested_{false};
-  mutable std::atomic<unsigned> suspend_ack_{0};
+   mutable NamStudioGraph* graph_ = nullptr;
+   // Read by ProcessBlock on the audio thread, written by OnReset/OnActivate,
+   // read by UnserializeState/LoadPortableJson on the main thread — so they
+   // must be atomic rather than plain scalars (issue #300 C4).
+   mutable std::atomic<double> sample_rate_{48000.0};
+   mutable std::atomic<int> max_block_size_{0};
+   // openaxe_vst3::InputChannelMode as an int — the header for it is not
+   // included here to keep plugin.h free of another dependency, and the enum
+   // is a plain 0..3.
+   std::atomic<int> input_channel_mode_{0};
 
-  // Editor shell — owned here, borrowed graph pointer (no audio thread touch
-  // on open/close). Mutable so SerializeState (const) can read editor size
-  // for chunk inclusion.
-  mutable std::unique_ptr<openaxe_vst3::editor::Editor> editor_;
+   // Channel-conversion scratch, sized in OnReset. Previously these were
+   // 2 x 8192 float arrays declared on the audio-thread stack in two separate
+   // branches of ProcessBlock — up to ~256 KB of frame that compilers reserve
+   // in the prologue, on a thread with a modest stack (issue #300 C2).
+   // The core's ABI accepts 1 or 2 channels regardless of graph topology
+   // (openaxe/api.h), and PLUG_CHANNEL_IO is "1-1 2-2".
+   static constexpr int kMaxChans = 2;
+   mutable openaxe::MonitorTap tap_;
+
+   mutable std::vector<float> scratch_in_;
+   mutable std::vector<float> scratch_out_;
+   mutable int scratch_frames_ = 0;
+   void EnsureScratch(int frames) const;
+
+   // Suspend handshake state — same shape as RtCallbackState::suspend +
+   // suspended_callbacks in apps/desktop/src/audio.h. Audio thread only reads
+   // suspend_requested_ and bumps suspend_ack_; control thread only writes
+   // suspend_requested_ and waits on suspend_ack_.
+   mutable std::atomic<bool> suspend_requested_{false};
+   mutable std::atomic<unsigned> suspend_ack_{0};
+
+   // Editor shell — owned here, borrowed graph pointer (no audio thread touch
+   // on open/close). Mutable so SerializeState (const) can read editor size
+   // for chunk inclusion.
+   mutable std::unique_ptr<openaxe_vst3::editor::Editor> editor_;
+
+   // Webview bridge + loopback HTTP server for the React UI (like desktop's
+   // HttpServer). Serves apps/web/dist over 127.0.0.1 so WKWebView can load
+   // it with subresources (file:// is sandboxed). The bridge exposes the same
+   // window.openAxe.* surface the desktop does.
+   //
+   // Guarded, not just left unused, in the headless configuration: VstBridge
+   // and HttpServer are only forward-declared here, and std::unique_ptr needs
+   // the complete type to instantiate its deleter at destruction. Leaving the
+   // members in place without the webview fails to compile with
+   // "invalid application of 'sizeof' to an incomplete type".
+#ifdef OPENAXE_HAS_WEBVIEW
+   std::unique_ptr<openaxe_vst3::VstBridge> bridge_;
+   // The UI server is process-wide (openaxe_vst3::SharedUiServer), not owned
+   // per instance — this only records whether this instance holds a reference
+   // to release.
+   bool uiServerAcquired_ = false;
+   unsigned short uiPort_ = 0;
+   std::string uiRoot_;
+#endif
 };

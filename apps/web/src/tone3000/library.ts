@@ -5,8 +5,9 @@
  * source url) which the partner terms require when a tone is used.
  */
 import { create } from 'zustand'
-import { getCachedAsset, putCachedAsset } from '../engine/assetCache'
-import { STORE_LIBRARY, withStore } from '../storage/db'
+import { getCachedAsset, hasCachedAsset, putCachedAsset } from '../engine/assetCache'
+import { STORE_LIBRARY } from '../storage/db'
+import { kvDelete, kvGetAll, kvPut } from '../storage/kv'
 import { apiDownloadModel } from './client'
 import type { ArchitectureVersion, EmbeddedUser, Gear, ToneFormat, Tone3000Slot } from './types'
 
@@ -102,11 +103,7 @@ export const useTone3000Library = create<{
 }))
 
 async function getLibrary(): Promise<Tone3000LibraryEntry[]> {
-  return withStore<Tone3000LibraryEntry[]>(
-    STORE_LIBRARY,
-    'readonly',
-    (store) => store.getAll() as IDBRequest<Tone3000LibraryEntry[]>,
-  )
+  return kvGetAll<Tone3000LibraryEntry>(STORE_LIBRARY)
     .catch(() => [])
     .then((list) => list.sort((a, b) => b.importedAt - a.importedAt))
 }
@@ -117,7 +114,10 @@ export const Tone3000Library: LibraryQuery = {
   },
 
   async has(id) {
-    return (await getCachedAsset(id)) !== null
+    // Existence only - this is asked once per library row, and in a native
+    // shell reading the bytes back just to discard them would mean fetching
+    // every cached capture on render.
+    return hasCachedAsset(id)
   },
 
   async getBlob(id) {
@@ -150,22 +150,14 @@ export const Tone3000Library: LibraryQuery = {
       tone: tone ?? null,
       model: model ?? null,
     }
-    await withStore<IDBValidKey>(
-      STORE_LIBRARY,
-      'readwrite',
-      (store) => store.put(entry) as IDBRequest<unknown> as IDBRequest<IDBValidKey>,
-    )
+    await kvPut(STORE_LIBRARY, entry)
     const entries = await getLibrary()
     useTone3000Library.setState((s) => ({ entries, version: s.version + 1 }))
     return entry
   },
 
   async remove(id) {
-    await withStore<IDBValidKey>(
-      STORE_LIBRARY,
-      'readwrite',
-      (store) => store.delete(id) as IDBRequest<unknown> as IDBRequest<IDBValidKey>,
-    )
+    await kvDelete(STORE_LIBRARY, id)
     const entries = await getLibrary()
     useTone3000Library.setState((s) => ({ entries, version: s.version + 1 }))
   },

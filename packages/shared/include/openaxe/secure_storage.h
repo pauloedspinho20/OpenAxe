@@ -3,9 +3,17 @@
 #include <optional>
 #include <string>
 
-namespace openaxe_desktop::secure_storage {
+namespace openaxe::secure_storage {
 
-// Small per-key secret store for the desktop shell (issue #146): persists
+// Small per-key secret store shared by the desktop shell and the plugin
+// (issue #146; moved out of apps/desktop for issue #300 D4/J2).
+//
+// The service name below is deliberately stable and identical for both: the
+// Tone3000 refresh token lands in one keychain item, so signing in from the
+// desktop app also signs you in inside the VST3/CLAP/AU, and vice versa.
+// Changing it would silently sign everyone out.
+//
+// Originally described as "for the desktop shell (issue #146)": persists
 // the Tone3000 refresh token across app restarts without going through the
 // webview's own storage, which can't survive a restart here - the UI server
 // (and therefore the webview's origin) binds a fresh ephemeral port every
@@ -41,4 +49,4 @@ std::optional<std::string> Load(const std::string& key, std::string* error = nul
 // was nothing stored.
 bool Delete(const std::string& key, std::string* error = nullptr);
 
-}  // namespace openaxe_desktop::secure_storage
+}  // namespace openaxe::secure_storage

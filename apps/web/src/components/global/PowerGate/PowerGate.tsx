@@ -2,7 +2,7 @@ import { HardwareButton, Panel, PowerIcon, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
-import { getOpenAxe } from '@/native/openaxe'
+import { getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 import styles from './PowerGate.module.css'
@@ -45,10 +45,29 @@ export function PowerGate({
 }: PowerGateProps) {
   const auth = useTone3000Auth()
   const io = useIOStore()
-  const isNative = getOpenAxe() !== null
+  // Three shells, not two (issue #300 E1). The desktop shell picks devices
+  // through the native bridge; the browser picks them through MediaDevices;
+  // a plugin picks nothing at all, because the DAW already chose the device,
+  // sample rate and buffer size. Branching on "is there a bridge?" collapsed
+  // plugin into desktop, and branching on ownsAudioDevice alone would have
+  // collapsed it into web - either way the user got pickers that do nothing.
+  const ownsAudioDevice = shellOwnsAudioDevice()
+  const isPluginShell = getShellKind() === 'plugin'
+  const hostOwnsTransport = isPluginShell
   const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
 
   if (status === 'ready') return null
+
+  // A plugin has no power switch to offer: the DAW owns the transport, it is
+  // already calling ProcessBlock, and App powers the engine on automatically
+  // when the editor opens. Showing the gate meant a panel that flashed up and
+  // dismissed itself, with a button that did nothing a user would want.
+  //
+  // Failures still surface — silently rendering nothing when the engine could
+  // not start would leave a blank editor with no explanation — but with a
+  // retry rather than a power button, since retrying is the only action that
+  // means anything here.
+  if (isPluginShell && status !== 'error') return null
 
   const starting = status === 'starting'
 
@@ -81,7 +100,7 @@ export function PowerGate({
           </p>
         )}
 
-        {isNative ? (
+        {hostOwnsTransport ? null : ownsAudioDevice ? (
           <div className={styles.deviceRow}>
             <Select
               label="Input"
@@ -173,14 +192,23 @@ export function PowerGate({
           </div>
         )}
 
-        <HardwareButton
-          label={starting ? 'Starting…' : 'POWER ON'}
-          iconOnly
-          icon={<PowerIcon />}
-          onClick={() => onPowerOn()}
-          disabled={starting}
-          size="large"
-        />
+        {isPluginShell ? (
+          <HardwareButton
+            label="Retry"
+            onClick={() => onPowerOn()}
+            disabled={starting}
+            size="large"
+          />
+        ) : (
+          <HardwareButton
+            label={starting ? 'Starting…' : 'POWER ON'}
+            iconOnly
+            icon={<PowerIcon />}
+            onClick={() => onPowerOn()}
+            disabled={starting}
+            size="large"
+          />
+        )}
         {updateLatest && (
           <div className={styles.updateBanner} role="status" aria-live="polite">
             <span className={styles.updateText}>New version {updateLatest.tag} available</span>

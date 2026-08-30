@@ -112,11 +112,22 @@ jobs:
             cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} --target openaxe_au 2>/dev/null || echo "::notice::AU target not available (SDK missing)"
           fi
 
-      - name: Smoke test (no host)
-        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
+      # Everything except the host validators, selected by label rather than a
+      # name regex. The regex here used to be
+      #   -R "smoke|latency|suspend|realtime|editor|primitives|grid|midi"
+      # which silently skipped param_surface, state, asset, ui_serving and
+      # monitor_tap: a new test simply never ran in CI unless someone
+      # remembered to extend the pattern. -LE cannot miss one (issue #300).
+      - name: Plugin tests (no host)
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -LE validator
 
-      - name: Plugin validators (when bundle present)
-        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -R "pluginval|auval|validator|clap" || true
+      # The validators need real host tooling (pluginval, auval, the VST3
+      # validator, clap-validator) and each SKIPs cleanly when its tool is
+      # absent, which on a bare runner is all of them — hence `|| true`. That
+      # also means a genuine validator failure cannot fail this job today; the
+      # cost of installing pluginval in CI is tracked separately in #130.
+      - name: Plugin validators (when the tools are present)
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -L validator || true
 
       # ── Signing (only when secrets are present, otherwise builds unsigned) ──
 

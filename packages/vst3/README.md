@@ -79,7 +79,7 @@ The same task palette also exists for **C++** (`C++: Configure/Build/Test`) and 
 
 | What you want                                | File on the Release                                  | What it is                                                                                                                                                                                                                                                                                         |
 | -------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS installer (recommended)**            | `openaxe-plugin-<ver>-Darwin.pkg`                    | `productbuild` installer — drops `OpenAxe.vst3` + `OpenAxe.component` (AUv2 `aufx Nms1 NwSt`) + `OpenAxe.clap` into `/Library/Audio/Plug-Ins/*` (double-click to install; signed + notarized when secrets are present)                                                                             |
+| **macOS installer (recommended)**            | `openaxe-plugin-<ver>-Darwin.pkg`                    | `productbuild` installer — drops `OpenAxe.vst3` + `OpenAxe.component` (AUv2 `aumf Nms1 NwSt`) + `OpenAxe.clap` into `/Library/Audio/Plug-Ins/*` (double-click to install; signed + notarized when secrets are present)                                                                             |
 | **Windows installer (recommended)**          | `openaxe-plugin-<ver>-win64.msi` (`WIX`) / `.zip`    | `WIX` installer — drops `OpenAxe.vst3` + `OpenAxe.clap` into `%COMMONPROGRAMFILES%\VST3\` and `…\CLAP\` (or `C:\Program Files\Common Files\…`); signed via Authenticode when `WINDOWS_CERTIFICATE_P12` is present — `plugin.yml:155-164`                                                           |
 | **Linux installer (recommended)**            | `openaxe-plugin-<ver>-Linux.deb` / `.tar.gz` (`DEB`) | `DEB` + `TGZ` via `apt`/`dpkg` — drops `OpenAxe.vst3` → `~/.vst3/` / `/usr/lib/vst3/` and `OpenAxe.clap` → `~/.clap/`, same payload as bundles zip — `plugin.yml:34-43,168-189`                                                                                                                    |
 | **Manual install — macOS**                   | `openaxe-plugin-bundles-macos-14-<tag>.zip`          | Bare bundles — unzip and copy `OpenAxe.vst3` → `~/Library/Audio/Plug-Ins/VST3/`, `OpenAxe.component` → `~/Library/Audio/Plug-Ins/Components/`, `OpenAxe.clap` → `~/Library/Audio/Plug-Ins/CLAP/` — `plugin.yml:206-211` (handles flat layout `build/*.vst3`)                                       |
@@ -93,7 +93,7 @@ Unsigned manual bundles are quarantined by Gatekeeper — clear once:
 
 ```bash
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/OpenAxe.vst3 ~/Library/Audio/Plug-Ins/Components/OpenAxe.component
-auval -v aufx Nms1 NwSt   # AU validation (macOS only)
+auval -v aumf Nms1 NwSt   # AU validation (macOS only)
 # Windows: Defender SmartScreen may warn on unsigned .msi/.vst3 — sign via Authenticode or allow once
 # Linux: no quarantine; ensure ~/.vst3 and ~/.clap are in your host's scan paths
 ```

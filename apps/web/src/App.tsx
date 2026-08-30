@@ -42,12 +42,28 @@ import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
 import { useUpdateCheck } from './hooks/useUpdateCheck'
 
+import { getShellKind } from '@/native/openaxe'
 import styles from './App.module.css'
 
 function App() {
   const engine = useAudioEngine()
   const { theme, setTheme } = useTheme()
   const isReady = engine.status === 'ready'
+  // In a plugin the host owns the transport: the DAW is already running audio
+  // and calling ProcessBlock whether or not the editor is open, and closing the
+  // editor tears down the webview, so the React app remounts from scratch the
+  // next time the user opens it. Without this the plugin came back sitting
+  // behind a power gate every single time, as if it had been switched off
+  // (issue #300 E1). The C++ graph never stopped; only this UI's view of it
+  // did. powerOn is idempotent (it returns early when already starting or
+  // ready), so the effect is safe to re-run.
+  const isPluginShell = getShellKind() === 'plugin'
+  const engineStatus = engine.status
+  const enginePowerOn = engine.powerOn
+  useEffect(() => {
+    if (!isPluginShell) return
+    if (engineStatus === 'off') void enginePowerOn()
+  }, [isPluginShell, engineStatus, enginePowerOn])
   const [setupStatus, setSetupStatus] = useState<'boot' | 'pending' | 'done'>('boot')
   const browser = useTone3000Browser()
   const io = useIOStore()
@@ -190,7 +206,10 @@ function App() {
             onClick={openMidiManager}
             title={midiStatusTitle}
           />
-          {isReady && (
+          {/* No power switch in a plugin: the DAW decides when the plugin runs,
+              and powering off here would only stop the UI's own view of a graph
+              that keeps processing — leaving no obvious way back. */}
+          {isReady && !isPluginShell && (
             <HardwareButton
               label="Power off"
               icon={<PowerIcon size={16} />}

@@ -10,6 +10,7 @@ import { CableLayer, type DragPreview } from '../CableLayer/CableLayer'
 import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
 import { InputDeviceDialog } from '../InputDeviceDialog/InputDeviceDialog'
 import { OutputDeviceDialog } from '../OutputDeviceDialog/OutputDeviceDialog'
+import { getShellKind } from '../../../native/openaxe'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
@@ -62,6 +63,11 @@ export function GridEditor({
   const [blockDrag, setBlockDrag] = useState<BlockDragInfo | null>(null)
   const [inputDialogOpen, setInputDialogOpen] = useState(false)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
+  // In a plugin the DAW routes a track in and takes the result back, so
+  // there is no device to pick. The input side still has a real choice —
+  // which channel of the incoming bus the rig hears — so IN keeps its dialog
+  // and OUT loses one entirely.
+  const isPluginShell = getShellKind() === 'plugin'
   const draggingJackRef = useRef<string | null>(null)
   const [tunerOpen, setTunerOpen] = useState(false)
 
@@ -189,7 +195,7 @@ export function GridEditor({
             fullWidth
             label="IN"
             onClick={() => setInputDialogOpen(true)}
-            title="Input device and channel"
+            title={isPluginShell ? 'Input channel' : 'Input device and channel'}
           />
 
           <button
@@ -234,7 +240,10 @@ export function GridEditor({
             fullWidth
             label="OUT"
             onClick={() => setOutputDialogOpen(true)}
-            title="Output device and channel"
+            disabled={isPluginShell}
+            title={
+              isPluginShell ? "The DAW takes this plugin's output" : 'Output device and channel'
+            }
           />
           <HardwareButton
             label="MUTE"
@@ -297,11 +306,17 @@ export function GridEditor({
       )}
 
       <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
-      <OutputDeviceDialog
-        open={outputDialogOpen}
-        onClose={() => setOutputDialogOpen(false)}
-        outputSelectionSupported={outputSelectionSupported}
-      />
+      {/* The output dialog is not merely closed in a plugin - it is not
+          mounted, so no path can open a picker for a device the plugin does
+          not own. The input one stays: its channel selector is a real choice
+          there. */}
+      {!isPluginShell && (
+        <OutputDeviceDialog
+          open={outputDialogOpen}
+          onClose={() => setOutputDialogOpen(false)}
+          outputSelectionSupported={outputSelectionSupported}
+        />
+      )}
       <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />
     </div>
   )

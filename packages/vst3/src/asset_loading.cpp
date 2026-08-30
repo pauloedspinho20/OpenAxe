@@ -278,4 +278,34 @@ std::optional<std::string> PickIrWavFile() {
 #endif
 }
 
+
+std::vector<uint8_t> DecodeBase64(const std::string& in) {
+  static constexpr signed char kInvalid = -1;
+  auto value = [](unsigned char c) -> signed char {
+    if (c >= 'A' && c <= 'Z') return static_cast<signed char>(c - 'A');
+    if (c >= 'a' && c <= 'z') return static_cast<signed char>(c - 'a' + 26);
+    if (c >= '0' && c <= '9') return static_cast<signed char>(c - '0' + 52);
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return kInvalid;
+  };
+  std::vector<uint8_t> out;
+  out.reserve(in.size() / 4 * 3);
+  uint32_t buf = 0;
+  int bits = 0;
+  for (unsigned char c : in) {
+    if (c == '=') break;
+    if (c == '\n' || c == '\r' || c == ' ' || c == '\t') continue;
+    const signed char v = value(c);
+    if (v == kInvalid) return {};
+    buf = (buf << 6) | static_cast<uint32_t>(v);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push_back(static_cast<uint8_t>((buf >> bits) & 0xFFu));
+    }
+  }
+  return out;
+}
+
 }  // namespace openaxe_vst3::assets
