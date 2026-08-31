@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { BlockIcon, Panel, toast } from '@openaxe/ui'
+import { BlockIcon, toast } from '@openaxe/ui'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { useGraphStore } from '../../../state/graphStore'
 import { BLOCK_OPTIONS, BLOCK_KIND_LABELS } from '../blockOptions'

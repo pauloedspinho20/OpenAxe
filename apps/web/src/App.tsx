@@ -10,6 +10,7 @@ import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
 import { FactorySetupDialog } from './components/global/FactorySetupDialog/FactorySetupDialog'
+import { AboutDialog } from './components/global/AboutDialog/AboutDialog'
 import {
   HardwareButton,
   IconButton,
@@ -88,6 +89,7 @@ function App() {
 
   const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
   const toastedTagRef = useRef<string | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
   // library metadata, and run the scene/preset boot decision: hydrate an
@@ -131,9 +133,15 @@ function App() {
   return (
     <div className={styles.chassis}>
       <header className={styles.header}>
-        <div className={`${styles.headerGroup} ${styles.brand}`}>
+        <button
+          type="button"
+          className={`${styles.headerGroup} ${styles.brand} ${styles.brandButton}`}
+          onClick={() => setAboutOpen(true)}
+          aria-label="About OpenAxe"
+          title="About OpenAxe — click for credits and info"
+        >
           <Wordmark version={pkg.version} />
-        </div>
+        </button>
 
         {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
@@ -281,13 +289,19 @@ function App() {
             TONE3000
           </a>
         </span>
-
+        <span className={styles.footerDot}>·</span>
         <span>
           Made with ❤ by{' '}
           <a href="https://hotdogtor.com" target="_blank" rel="noreferrer">
             Hot Dogtor
           </a>
         </span>
+        <span className={styles.footerDot}>·</span>
+        <button type="button" className={styles.footerLink} onClick={() => setAboutOpen(true)}>
+          About
+        </button>
+        <span className={styles.footerDot}>·</span>
+        <span className={styles.footerVersion}>v{pkg.version}</span>
       </footer>
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
@@ -317,6 +331,7 @@ function App() {
         open={setupStatus === 'pending' && isReady}
         onDone={() => setSetupStatus('done')}
       />
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <Toaster />
     </div>
   )

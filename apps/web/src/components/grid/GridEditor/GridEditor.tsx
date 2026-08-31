@@ -303,6 +303,7 @@ export function GridEditor({
               ? { fromJackId: pendingJackId, toJackId: pendingTargetId }
               : null
           }
+          vertical={isMobile}
           onDisconnect={(edgeId) => useGraphStore.getState().disconnect(edgeId)}
         />
 
