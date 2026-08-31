@@ -19,6 +19,11 @@
  * too, so the grouping is what keeps it scannable instead of a wall of
  * unrelated buttons and selects.
  */
+
+.headerGroupWrapper {
+  display: flex;
+  margin-left: auto;
+}
 .headerGroup {
   display: flex;
   align-items: center;

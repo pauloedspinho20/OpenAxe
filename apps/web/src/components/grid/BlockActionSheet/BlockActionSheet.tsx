@@ -108,6 +108,10 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
       <div className={styles.sheet}>
         {/* Change block type — same list as Add a block */}
         <div className={styles.section}>
+          {/* Destructive actions */}
+          <div className={styles.section}>
+            <HardwareButton label="Remove block" onClick={handleRemove} fullWidth />
+          </div>
           <p className={styles.sectionTitle}>Change block type</p>
           {/*   <p className={styles.hint}>Replace this slot with a different block. Current: {label}.</p> */}
           {groups.map((group) => (
@@ -205,11 +209,6 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
               )}
             </div>
           )}
-        </div>
-
-        {/* Destructive actions */}
-        <div className={styles.section}>
-          <HardwareButton label="Remove block" onClick={handleRemove} fullWidth />
         </div>
       </div>
     </Dialog>

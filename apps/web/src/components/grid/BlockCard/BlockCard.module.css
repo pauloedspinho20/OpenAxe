@@ -56,11 +56,11 @@
   width: 100%;
 }
 
-@media (max-width: var(--mw-md)) {
+/* @media (max-width: var(--mw-md)) {
   .blockIcon {
     display: none;
   }
-}
+} */
 
 .blockIcon,
 .blockLabel {
