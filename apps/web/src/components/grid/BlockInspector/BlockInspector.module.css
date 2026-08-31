@@ -129,3 +129,45 @@
   gap: var(--sp-2);
   height: 100%;
 }
+
+.connections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--seam);
+}
+
+.connectionsTitle {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.connectionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+}
+
+.connectionActions {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.removeBlockRow {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}

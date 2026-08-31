@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { HardwareButton, Knob, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
+import { HardwareButton, Knob, MixerIcon, Panel, PowerIcon, toast } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { useEngineVersion } from '../../../state/engineVersion'
@@ -16,6 +16,7 @@ import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '.
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
 import type { Gear } from '@/tone3000/types'
+import { GRID_ROWS, GRID_COLS, jack } from '../../../engine/gridConfig'
 
 function RawReverbPanel({
   blockId,
@@ -103,6 +104,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const libraryEntries = useTone3000Library((s) => s.entries)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
   const blocks = useGraphStore((s) => s.blocks)
+  const edgesAll = useGraphStore((s) => s.edges)
   const instance = blocks.find((b) => b.id === selectedBlockId) ?? null
   const [reverbExpert, setReverbExpert] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -157,6 +159,19 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const panelLabel = isNamCore ? loaded?.name : label
   const panelLabelUrl = isNamCore ? libraryEntry?.creator : vendor
   const panelUrl = isNamCore ? libraryEntry?.sourceUrl : vendorUrl
+  const edges = edgesAll
+  const incoming = edges.filter((e) => e.to.blockId === blockId)
+  const outgoing = edges.filter((e) => e.from.blockId === blockId)
+
+  const handleMove = (dr: number, dc: number) => {
+    const targetRow = instance.row + dr
+    const targetCol = instance.col + dc
+    if (targetRow < 0 || targetRow >= GRID_ROWS || targetCol < 0 || targetCol >= GRID_COLS) return
+    const res = useGraphStore.getState().moveBlock(blockId, targetRow, targetCol)
+    if (!res.ok) {
+      toast.error("Can't move there", { description: res.reason })
+    }
+  }
 
   return (
     <Panel
@@ -248,6 +263,94 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
               {analyser && <LiveMeter variant="mini" analyser={analyser} />}
             </div>
           )}
+
+          {/* Mobile-friendly cable management + move/remove */}
+          <div className={styles.connections}>
+            <p className={styles.connectionsTitle}>Cables</p>
+            {incoming.length === 0 && outgoing.length === 0 && (
+              <p className={styles.empty} style={{ fontSize: 11 }}>
+                No cables. Tap an output jack (IN or block) then an input to connect — or drag on
+                desktop.
+              </p>
+            )}
+            {incoming.map((e) => {
+              const src = blocks.find((b) => b.id === e.from.blockId)
+              const srcLabel =
+                e.from.blockId === 'IN'
+                  ? 'IN'
+                  : src
+                    ? BLOCK_KIND_LABELS[src.kind]
+                    : e.from.blockId.slice(0, 4)
+              return (
+                <div key={e.id} className={styles.connectionRow}>
+                  <span>
+                    ← {srcLabel} (in {e.to.port + 1})
+                  </span>
+                  <div className={styles.connectionActions}>
+                    <HardwareButton
+                      label="Disconnect"
+                      onClick={() => useGraphStore.getState().disconnect(e.id)}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+            {outgoing.map((e) => {
+              const dst = blocks.find((b) => b.id === e.to.blockId)
+              const dstLabel =
+                e.to.blockId === 'OUT'
+                  ? 'OUT'
+                  : dst
+                    ? BLOCK_KIND_LABELS[dst.kind]
+                    : e.to.blockId.slice(0, 4)
+              return (
+                <div key={e.id} className={styles.connectionRow}>
+                  <span>
+                    → {dstLabel} (out {e.from.port + 1})
+                  </span>
+                  <div className={styles.connectionActions}>
+                    <HardwareButton
+                      label="Disconnect"
+                      onClick={() => useGraphStore.getState().disconnect(e.id)}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className={styles.connections}>
+            <p className={styles.connectionsTitle}>Position — tap to move (or drag card)</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <HardwareButton label="↑ Up" onClick={() => handleMove(-1, 0)} />
+              <HardwareButton label="↓ Down" onClick={() => handleMove(1, 0)} />
+              <HardwareButton label="← Left" onClick={() => handleMove(0, -1)} />
+              <HardwareButton label="→ Right" onClick={() => handleMove(0, 1)} />
+            </div>
+            <p className={styles.empty} style={{ fontSize: 11 }}>
+              Or select block then tap an empty (+) cell to move there.
+            </p>
+          </div>
+
+          <div className={styles.removeBlockRow}>
+            <HardwareButton
+              label="Remove block"
+              onClick={() => {
+                useGraphStore.getState().removeBlock(blockId)
+                useSelection.getState().clear()
+              }}
+            />
+            <HardwareButton
+              label="Disconnect all"
+              onClick={() => {
+                incoming.forEach((e) => useGraphStore.getState().disconnect(e.id))
+                outgoing.forEach((e) => useGraphStore.getState().disconnect(e.id))
+                // also handle multi-port via jack helpers
+                useGraphStore.getState().disconnectConnections(jack(blockId, 0), 'in')
+                useGraphStore.getState().disconnectConnections(jack(blockId, 0), 'out')
+              }}
+            />
+          </div>
         </div>
       </div>
       {isNamCore && (

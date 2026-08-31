@@ -32,3 +32,22 @@
   stroke-dasharray: 4 3;
   stroke-linecap: round;
 }
+
+.cablePending {
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
+
+@media (pointer: coarse) {
+  .cable {
+    stroke-width: 4;
+  }
+
+  .cable:hover {
+    stroke-width: 5;
+  }
+
+  .cablePreview {
+    stroke-width: 3;
+  }
+}

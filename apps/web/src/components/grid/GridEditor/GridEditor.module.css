@@ -68,6 +68,80 @@
   left: -7px;
 }
 
+.railIn,
+.railOut {
+  /* semantic hooks for mobile — no desktop effect */
+}
+
+/* === Mobile: vertical signal flow (IN top, grid, OUT bottom), no horizontal scroll === */
+@media (max-width: var(--mw-md)) {
+  .wrap {
+    flex-direction: column;
+    overflow: visible;
+    overflow-x: visible;
+    gap: var(--sp-3);
+    padding: var(--sp-2);
+  }
+
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+    min-height: auto;
+    padding: var(--sp-2);
+    gap: var(--sp-2);
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* IN (top rail) jack centered on bottom edge, OUT (bottom rail) on top edge */
+  .railJackWrap {
+    width: 24px;
+    height: 24px;
+    transform: translateX(-50%);
+    display: grid;
+    place-items: center;
+  }
+
+  .railIn .railJackWrap {
+    top: auto;
+    bottom: -12px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .railOut .railJackWrap {
+    top: -12px;
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  /* keep right/left helpers from desktop from interfering when scoped to mobile rails */
+  .railIn .railJackWrapRight,
+  .railIn .railJackWrapLeft,
+  .railOut .railJackWrapRight,
+  .railOut .railJackWrapLeft {
+    left: 50%;
+    right: auto;
+  }
+}
+
+@media (max-width: var(--mw-sm)) {
+  .wrap {
+    gap: var(--sp-2);
+    padding: var(--sp-1);
+  }
+
+  .rail {
+    padding: var(--sp-1);
+    gap: var(--sp-1);
+  }
+}
+
 .railJack {
   position: absolute;
   inset: 0;
@@ -99,6 +173,38 @@
    * and overlap whatever comes next in the row (the OUT rail) instead of
    * the whole row overflowing cleanly into .wrap's horizontal scroll.
    */
+}
+
+/* Mobile vertical: 4 visual columns × 10 visual rows (transposed). Cells are
+   placed via inline gridRow/gridColumn swap in GridEditor.tsx so signal flows
+   top→bottom (col increases downward). No horizontal scroll. */
+@media (max-width: var(--mw-md)) {
+  .grid {
+    flex: none;
+    width: 100%;
+    /* 4 across (original ROWS), 10 down (original COLS) — fits 390px without x-scroll */
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(10, minmax(56px, auto));
+    grid-auto-columns: unset;
+    gap: var(--sp-2);
+    padding: 0;
+    overflow: visible;
+  }
+}
+
+@media (max-width: var(--mw-sm)) {
+  .grid {
+    grid-template-rows: repeat(10, minmax(48px, auto));
+    gap: var(--sp-1);
+  }
+}
+
+/* Keep labels readable at ≤380px — don't shrink below 64px effective col */
+@media (max-width: 380px) {
+  .grid {
+    grid-template-rows: repeat(10, minmax(44px, auto));
+    gap: var(--sp-1);
+  }
 }
 
 .cell {
@@ -163,4 +269,43 @@
 .tunerLive {
   width: 70px;
   min-width: 0;
+}
+
+.pendingBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-raised);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-control);
+}
+
+.pendingText {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--ink-1);
+  letter-spacing: 0.02em;
+}
+
+.pendingActions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.railJackArmed {
+  border-color: var(--accent) !important;
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 8px var(--accent);
+}
+
+/* Mobile: keep labels readable — don't shrink below usable */
+@media (max-width: var(--mw-md)) {
+  .pendingBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

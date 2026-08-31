@@ -10,8 +10,24 @@ export function resolveGridCell(
   gridEl: HTMLElement,
   clientX: number,
   clientY: number,
+  opts?: { transposed?: boolean },
 ): { row: number; col: number } {
   const rect = gridEl.getBoundingClientRect()
+  const transposed = opts?.transposed ?? gridEl.dataset.transposed === 'true'
+  if (transposed) {
+    // On mobile vertical we visually transpose: cols run top→bottom (rows in CSS),
+    // rows run left→right (cols in CSS). Swap the axes so a touch downward
+    // increments `col` (signal flow) and rightward increments `row`.
+    const col = Math.min(
+      GRID_COLS - 1,
+      Math.max(0, Math.floor((clientY - rect.top) / (rect.height / GRID_COLS))),
+    )
+    const row = Math.min(
+      GRID_ROWS - 1,
+      Math.max(0, Math.floor((clientX - rect.left) / (rect.width / GRID_ROWS))),
+    )
+    return { row, col }
+  }
   const col = Math.min(
     GRID_COLS - 1,
     Math.max(0, Math.floor((clientX - rect.left) / (rect.width / GRID_COLS))),
