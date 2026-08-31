@@ -6,6 +6,12 @@
   user-select: none;
 }
 
+@media (max-width: var(--mw-md)) {
+  .wrap {
+    scale: 90%;
+  }
+}
+
 .knob {
   cursor: ns-resize;
   touch-action: none;

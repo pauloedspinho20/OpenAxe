@@ -269,14 +269,7 @@ export function GridEditor({
 
   return (
     <div className={styles.editor}>
-      <div className={styles.paletteAndInspector}>
-        <div className={styles.paletteAndInspectorItem}>
-          <BlockPalette tunerAnalyser={tunerAnalyser} />
-        </div>
-        <div className={styles.paletteAndInspectorItem}>
-          <BlockInspector rig={rig} context={context} />
-        </div>
-      </div>
+      <BlockInspector rig={rig} context={context} />
       {(pendingJackId || pendingTargetId) && (
         <div className={styles.pendingBar} data-testid="pending-bar">
           <span className={styles.pendingText}>
@@ -427,6 +420,8 @@ export function GridEditor({
           onClose={() => setAddMenuCell(null)}
         />
       )}
+
+      <BlockPalette tunerAnalyser={tunerAnalyser} />
 
       {actionSheetBlock && (
         <BlockActionSheet

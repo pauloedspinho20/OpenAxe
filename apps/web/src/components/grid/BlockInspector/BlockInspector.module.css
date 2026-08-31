@@ -1,32 +1,30 @@
-.panel {
-  background-image: url('../../../../public/textures/grilled-noise.png');
-  background-repeat: repeat;
-  background-blend-mode: hard-light;
-  background-size: 20%;
-}
-
 .content {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
   min-height: 64px;
-  padding: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
   justify-content: flex-end;
   z-index: 1;
   background-color: var(--panel-raised);
   border-radius: var(--r-md);
-  border: 1px solid var(--panel-recessed);
+  border: 1px solid var(--chassis);
   box-shadow: var(--shadow-recessed);
+}
+
+@media (max-width: var(--mw-md)) {
+  .content {
+    padding: var(--sp-3);
+  }
 }
 
 .inspectorLayout {
   display: flex;
   position: relative;
-  gap: var(--sp-4);
   align-items: flex-end;
   height: 100%;
   width: 100%;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .squareColumn {
@@ -54,9 +52,11 @@
   z-index: 1;
 }
 
-@media (max-width: var(--mw-sm)) {
+@media (max-width: var(--mw-lg)) {
   .inspectorLayout {
     flex-direction: column;
+    justify-content: flex-end;
+    align-items: inherit;
   }
   .squareColumn {
     flex: 0 0 auto;
@@ -71,6 +71,13 @@
   flex-direction: row;
   gap: var(--sp-4);
   align-items: center;
+}
+
+@media (max-width: var(--mw-sm)) {
+  .meterAndParams {
+    align-items: flex-end;
+    gap: var(--sp-3);
+  }
 }
 
 .empty {
@@ -94,6 +101,12 @@
   align-items: center;
   justify-content: space-between;
   height: 100%;
+}
+
+@media (max-width: var(--mw-sm)) {
+  .buttons {
+    justify-content: flex-end;
+  }
 }
 
 .bypassBtn {

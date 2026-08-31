@@ -1,15 +1,11 @@
-.panel {
-  background-image: url('../../../../public/textures/grilled-noise.png');
-  background-repeat: repeat;
-  background-blend-mode: hard-light;
-  background-size: 20%;
-}
-
 .paletteRow {
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
+  column-gap: var(--sp-5);
+  row-gap: var(--sp-3);
+  flex-wrap: wrap;
 }
+
 .group {
   display: flex;
   align-items: center;
@@ -25,8 +21,13 @@
 
 .chips {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--sp-2);
+}
+
+@media (max-width: var(--mw-lg)) {
+  .chips {
+    flex-wrap: wrap;
+  }
 }
 
 .chip {

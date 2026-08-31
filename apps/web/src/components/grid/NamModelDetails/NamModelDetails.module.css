@@ -1,6 +1,6 @@
 .body {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--sp-4);
   padding: var(--sp-4);
   height: 100%;

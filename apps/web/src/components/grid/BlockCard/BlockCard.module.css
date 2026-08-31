@@ -17,6 +17,12 @@
   outline: 2px solid transparent;
 }
 
+@media (max-width: var(--mw-md)) {
+  .card {
+    padding: var(--sp-1);
+  }
+}
+
 .card:hover {
   border: 1px solid var(--ink-3);
 }
@@ -50,6 +56,12 @@
   width: 100%;
 }
 
+@media (max-width: var(--mw-md)) {
+  .blockIcon {
+    display: none;
+  }
+}
+
 .blockIcon,
 .blockLabel {
   color: var(--ink-2);
@@ -68,7 +80,9 @@
 }
 
 .headerActions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-1);
@@ -114,10 +128,10 @@
   background: none;
   border: 1px solid transparent;
   color: var(--ink-2);
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: var(--sp-1);
   border-radius: var(--r-sm);
 }
 
@@ -203,41 +217,17 @@
     letter-spacing: 0.6px;
   }
 
-  .bypassBtn {
-    min-width: 44px;
-    min-height: 44px;
-    display: grid;
-    place-items: center;
-    padding: 6px;
-  }
-
-  .removeBtn {
-    min-width: 44px;
-    min-height: 44px;
-    display: grid;
-    place-items: center;
-    padding: 6px;
-    font-size: 18px;
-  }
-
-  .menuBtn {
-    min-width: 44px;
-    min-height: 44px;
-    display: grid;
-    place-items: center;
-  }
-
-  .jackWrap {
+  /*   .jackWrap {
     width: 44px;
     height: 44px;
     display: grid;
     place-items: center;
   }
-
-  .jack {
+ */
+  /*   .jack {
     width: 12px;
     height: 12px;
-  }
+  } */
 
   /* Transposed vertical flow: inputs on top edge, outputs on bottom */
   .jacks {

@@ -118,11 +118,14 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         const mainFields = fields.filter((f) => !(f.control === 'select' && f.primary))
         return (
           <div key={groupName || '_'} className={styles.group}>
-            {/*     {groupName && <span className={`label ${styles.groupLabel}`}>{groupName}</span>} */}
-            {selectors.length > 0 && (
+            {/*      {groupName && <span className={`label ${styles.groupLabel}`}>{groupName}</span>} */}
+            {/*  {selectors.length > 0 && (
               <div className={styles.selectRow}>{selectors.map(renderField)}</div>
-            )}
-            <div className={styles.fields}>{mainFields.map(renderField)}</div>
+            )} */}
+            <div className={styles.fields}>
+              {selectors.map(renderField)}
+              {mainFields.map(renderField)}
+            </div>
           </div>
         )
       })}

@@ -30,10 +30,6 @@
     grid-template-columns: auto;
     padding: var(--sp-3);
   }
-
-  .bar :nth-child(3) {
-    grid-area: 3 / 1 / span 1 / span 1;
-  }
 }
 
 .sceneNav {
@@ -184,16 +180,6 @@
   flex-shrink: 0;
   padding-left: var(--sp-3);
   margin-left: auto;
-}
-
-.currentPresetName {
-  font-family: var(--font-display);
-  font-size: 12px;
-  color: var(--ink-2);
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .hint {

@@ -27,14 +27,6 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
   const outgoing = edges.filter((e) => e.from.blockId === blockId)
   const hasConnections = incoming.length > 0 || outgoing.length > 0
 
-  const handleMove = (dr: number, dc: number) => {
-    const targetRow = instance.row + dr
-    const targetCol = instance.col + dc
-    if (targetRow < 0 || targetRow >= GRID_ROWS || targetCol < 0 || targetCol >= GRID_COLS) return
-    const res = useGraphStore.getState().moveBlock(blockId, targetRow, targetCol)
-    if (!res.ok) toast.error("Can't move there", { description: res.reason })
-  }
-
   const handleRemove = () => {
     useGraphStore.getState().removeBlock(blockId)
     useSelection.getState().clear()
@@ -47,14 +39,6 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
     useGraphStore.getState().disconnectConnections(jack(blockId, 0), 'in')
     useGraphStore.getState().disconnectConnections(jack(blockId, 0), 'out')
     toast('Disconnected', { description: `${label} — all cables removed` })
-  }
-
-  const handleMoveHint = () => {
-    toast('Tap an empty cell to move', {
-      description: `${label} is selected — tap any + cell`,
-    })
-    useSelection.getState().select(blockId)
-    onClose()
   }
 
   const handleChangeKind = (kind: BlockKind) => {
@@ -122,22 +106,44 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
   return (
     <Dialog open={open} onClose={onClose} title={`${label} — actions`}>
       <div className={styles.sheet}>
-        <p className={styles.hint}>
-          Tap an empty cell to move this block. Connections must stay left→right (top→bottom on
-          mobile).
-        </p>
-
-        {/* Position */}
+        {/* Change block type — same list as Add a block */}
         <div className={styles.section}>
-          <p className={styles.sectionTitle}>Position</p>
-          <div className={styles.moveGrid}>
-            <HardwareButton label="↑ Up" onClick={() => handleMove(-1, 0)} />
-            <HardwareButton label="↓ Down" onClick={() => handleMove(1, 0)} />
-            <HardwareButton label="← Left" onClick={() => handleMove(0, -1)} />
-            <HardwareButton label="→ Right" onClick={() => handleMove(0, 1)} />
-          </div>
-          <HardwareButton label="Move — tap empty cell" onClick={handleMoveHint} fullWidth />
-          <p className={styles.hint}>Or drag the card, or use arrow keys when focused.</p>
+          <p className={styles.sectionTitle}>Change block type</p>
+          {/*   <p className={styles.hint}>Replace this slot with a different block. Current: {label}.</p> */}
+          {groups.map((group) => (
+            <div key={group} className={styles.group}>
+              <span className={`label ${styles.groupLabel}`}>{group}</span>
+              <div className={styles.options}>
+                {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => {
+                  const isCurrent = option.kind === instance.kind
+                  return (
+                    <Chip
+                      key={option.kind}
+                      disabled={option.disabled}
+                      kind={option.kind}
+                      aria-label={
+                        option.disabled
+                          ? `${option.label} - not yet available (${option.vendor})`
+                          : isCurrent
+                            ? `${option.label} (current)`
+                            : undefined
+                      }
+                      title={
+                        option.disabled
+                          ? option.vendor
+                          : isCurrent
+                            ? 'Current block type'
+                            : undefined
+                      }
+                      label={option.label + (isCurrent ? ' ✓' : '')}
+                      style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
+                      onPick={() => handleChangeKind(option.kind)}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Cables */}
@@ -199,46 +205,6 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
               )}
             </div>
           )}
-        </div>
-
-        {/* Change block type — same list as Add a block */}
-        <div className={styles.section}>
-          <p className={styles.sectionTitle}>Change block type</p>
-          <p className={styles.hint}>Replace this slot with a different block. Current: {label}.</p>
-          {groups.map((group) => (
-            <div key={group} className={styles.group}>
-              <span className={`label ${styles.groupLabel}`}>{group}</span>
-              <div className={styles.options}>
-                {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => {
-                  const isCurrent = option.kind === instance.kind
-                  return (
-                    <Chip
-                      key={option.kind}
-                      disabled={option.disabled}
-                      kind={option.kind}
-                      aria-label={
-                        option.disabled
-                          ? `${option.label} - not yet available (${option.vendor})`
-                          : isCurrent
-                            ? `${option.label} (current)`
-                            : undefined
-                      }
-                      title={
-                        option.disabled
-                          ? option.vendor
-                          : isCurrent
-                            ? 'Current block type'
-                            : undefined
-                      }
-                      label={option.label + (isCurrent ? ' ✓' : '')}
-                      style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
-                      onPick={() => handleChangeKind(option.kind)}
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          ))}
         </div>
 
         {/* Destructive actions */}

@@ -6,6 +6,12 @@
   align-items: flex-end;
 }
 
+@media (max-width: var(--mw-md)) {
+  .panel {
+    gap: var(--sp-1);
+  }
+}
+
 .group {
   display: flex;
   flex-direction: row;
@@ -19,8 +25,20 @@
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   align-items: flex-end;
+}
+
+@media (max-width: var(--mw-md)) {
+  .fields {
+    gap: var(--sp-1);
+  }
+}
+
+@media (max-width: var(--mw-xl)) {
+  .fields {
+    gap: var(--sp-3);
+  }
 }
 
 /* Primary (model/character) selectors, rendered in their own row above the

@@ -255,20 +255,19 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
     >
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          {hasBypass && (
-            <button
-              type="button"
-              className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
-              onClick={() => {
-                useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-                ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-              }}
-              title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-              aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-            >
-              ●
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={!hasBypass}
+            className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
+            onClick={() => {
+              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+            }}
+            title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+            aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+          >
+            ●
+          </button>
 
           {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
 
@@ -284,14 +283,6 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
             title="More actions — move, remove, disconnect"
           >
             ⋯
-          </button>
-          <button
-            type="button"
-            className={styles.removeBtn}
-            onClick={() => useGraphStore.getState().removeBlock(instance.id)}
-            aria-label={`Remove ${label}`}
-          >
-            ×
           </button>
         </div>
       </div>
