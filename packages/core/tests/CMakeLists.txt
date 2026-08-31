@@ -150,6 +150,19 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   target_link_libraries(engine_test PRIVATE openaxe_core)
   add_test(NAME engine_test COMMAND engine_test)
 
+  # Golden-audio regression harness (issue #315). Drives AudioEngine over every
+  # compiled effect, so it needs the same three families this block guards.
+  # WHOLE_ARCHIVE for NAM's self-registering architecture parsers. Reads json.h
+  # out of src/ (same pattern as json_test), and is handed its golden directory
+  # as a define rather than guessing a path relative to cwd - that differs
+  # between a bare run and ctest.
+  add_executable(dsp_regression_test dsp_regression_test.cpp)
+  target_include_directories(dsp_regression_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  target_link_libraries(dsp_regression_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  target_compile_definitions(dsp_regression_test PRIVATE
+    OPENAXE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
+  add_test(NAME dsp_regression_test COMMAND dsp_regression_test)
+
   add_executable(smoothing_test smoothing_test.cpp)
   target_link_libraries(smoothing_test PRIVATE openaxe_core)
   add_test(NAME smoothing_test COMMAND smoothing_test)

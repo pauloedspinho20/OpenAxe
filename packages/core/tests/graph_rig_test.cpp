@@ -3,6 +3,8 @@
 // setTunerMuted/master-gain silencing, countActiveHeavyBlocks.
 #include "openaxe/graph_rig.h"
 
+#include <string>
+
 #include "test_harness.h"
 
 using openaxe::graph::BlockKind;

@@ -7,6 +7,7 @@
 // same answer the C++ predicate does, and that a document naming a kind this
 // build cannot place still restores the rest of the rig.
 
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
