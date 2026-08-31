@@ -15,6 +15,9 @@ constexpr int kStereoParam = 3;
 constexpr int kModeParam = 4;
 constexpr int kParamCount = 5;
 
+// Harmonic mode's split point, between a guitar's body and its bite.
+constexpr float kCrossoverHz = 800.0f;
+
 const Tremolo::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/tremolo_params.inc"
 };
@@ -50,14 +53,26 @@ struct Tremolo::Impl {
   int mode=0; // 0 normal,1 harmonic
   float sr = 48000;
   float phase = 0;
-  internal::Biquad lpL, lpR, hpL, hpR;
+  // Harmonic mode's band split. One lowpass per channel; the high band is the
+  // remainder (input - low), which is what makes the split *complementary*:
+  // low + high is identically the input, so with no modulation applied the
+  // mode is transparent.
+  //
+  // It used to be a separate highpass at the same cutoff and Q, and that
+  // cancelled. A second-order lowpass and highpass sharing a cutoff are 180
+  // degrees apart at that frequency - H_lp(jw0) = -jQ and H_hp(jw0) = +jQ for
+  // any Q - so their sum is exactly zero there. Measured, the effect was a
+  // 112dB null at 800Hz with a wide skirt (-8.4dB at 600Hz, -10.4dB at 1kHz)
+  // present even at depth 0, i.e. harmonic mode notched a hole in the middle
+  // of the guitar's fundamental range whether or not it was doing anything.
+  // This is why real crossovers either invert one band or use fourth-order
+  // sections; deriving the high band by subtraction sidesteps the question.
+  internal::Biquad lpL, lpR;
 
   void ResetFilters(){
-    lpL.Reset(); lpR.Reset(); hpL.Reset(); hpR.Reset();
-    lpL.SetLowpass(800,0.707f,sr);
-    lpR.SetLowpass(800,0.707f,sr);
-    hpL.SetHighpass(800,0.707f,sr);
-    hpR.SetHighpass(800,0.707f,sr);
+    lpL.Reset(); lpR.Reset();
+    lpL.SetLowpass(kCrossoverHz, 0.707f, sr);
+    lpR.SetLowpass(kCrossoverHz, 0.707f, sr);
   }
 };
 
@@ -95,17 +110,20 @@ void Tremolo::Process(const float* const* input, float* const* output, int num_f
       output[0][i]= input[0][i]*gainL;
       output[1][i]= input[1][i]*gainR;
     } else {
-      // harmonic: split each channel into low/high, modulate opposite phase
-      float lowL = impl_->lpL.Process(input[0][i]);
-      float highL = impl_->hpL.Process(input[0][i]);
-      float lowR = impl_->lpR.Process(input[1][i]);
-      float highR = impl_->hpR.Process(input[1][i]);
-      // opposite phase: highs use opposite gain to lows
-      float invGainL = 1.0f - depth * (1.0f + modL) * 0.5f; // inverted
-      float invGainR = 1.0f - depth * (1.0f + modR) * 0.5f;
-      // lows get gain, highs get inverse gain (or vice versa)
-      output[0][i]= lowL*gainL + highL*invGainL;
-      output[1][i]= lowR*gainR + highR*invGainR;
+      // Harmonic: split each channel, then modulate the two bands in opposite
+      // phase, so the tone sweeps between dark and bright instead of the whole
+      // signal getting quieter. invGain is gain(-mod), so the two are mirror
+      // images and their sum is the constant (2 - depth) at every phase.
+      const float inL = input[0][i];
+      const float inR = input[1][i];
+      const float lowL = impl_->lpL.Process(inL);
+      const float lowR = impl_->lpR.Process(inR);
+      const float highL = inL - lowL;
+      const float highR = inR - lowR;
+      const float invGainL = 1.0f - depth * (1.0f + modL) * 0.5f;
+      const float invGainR = 1.0f - depth * (1.0f + modR) * 0.5f;
+      output[0][i] = lowL * gainL + highL * invGainL;
+      output[1][i] = lowR * gainR + highR * invGainR;
     }
 
     phase += inc;
