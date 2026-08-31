@@ -36,6 +36,7 @@ export interface GridEditorProps {
 function useIsMobile(breakpoint = 720) {
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
     const mql = window.matchMedia(`(max-width: ${breakpoint}px)`)
     const onChange = () => setIsMobile(mql.matches)
     onChange()
@@ -99,7 +100,9 @@ export function GridEditor({
     const jackId = jackEl.dataset.jackId!
 
     // Coarse pointer: use two-tap + confirm flow instead of drag
-    const isCoarse = window.matchMedia('(pointer: coarse)').matches || isMobile
+    const isCoarse =
+      (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) ||
+      isMobile
     if (isCoarse) {
       // If we already have a pending output and tap an input, set target and show confirm
       if (pendingJackId && side === 'in') {
@@ -253,11 +256,6 @@ export function GridEditor({
   const actionSheetBlock = actionSheetBlockId
     ? blocks.find((b) => b.id === actionSheetBlockId)
     : null
-  const actionHasConnections = actionSheetBlockId
-    ? edges.some(
-        (e) => e.from.blockId === actionSheetBlockId || e.to.blockId === actionSheetBlockId,
-      )
-    : false
 
   // Clear pending when clicking outside jacks
   const handleWrapClick = (e: React.MouseEvent) => {
@@ -434,29 +432,8 @@ export function GridEditor({
         <BlockActionSheet
           open={!!actionSheetBlock}
           label={BLOCK_KIND_LABELS[actionSheetBlock.kind]}
+          blockId={actionSheetBlockId}
           onClose={() => setActionSheetBlockId(null)}
-          onRemove={() => {
-            useGraphStore.getState().removeBlock(actionSheetBlock.id)
-            setActionSheetBlockId(null)
-          }}
-          onMoveHint={() => {
-            toast('Tap an empty cell to move', {
-              description: `${BLOCK_KIND_LABELS[actionSheetBlock.kind]} is selected — tap any + cell`,
-            })
-            useSelection.getState().select(actionSheetBlock.id)
-            setActionSheetBlockId(null)
-          }}
-          onDisconnectAll={() => {
-            useGraphStore.getState().disconnectConnections(jack(actionSheetBlock.id, 0), 'in')
-            // disconnect all outgoing too
-            const toRemove = useGraphStore
-              .getState()
-              .edges.filter((e) => e.from.blockId === actionSheetBlock.id)
-              .map((e) => e.id)
-            toRemove.forEach((id) => useGraphStore.getState().disconnect(id))
-            setActionSheetBlockId(null)
-          }}
-          hasConnections={actionHasConnections}
         />
       )}
 
