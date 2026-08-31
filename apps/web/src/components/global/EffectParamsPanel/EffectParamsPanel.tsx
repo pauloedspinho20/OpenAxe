@@ -69,9 +69,12 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
       const current =
         typeof values[field.key] === 'string' ? (values[field.key] as string) : field.defaultValue
       return (
-        <div className={styles.selectWrapper}>
+        // The key belongs on the wrapper - it is what renderField returns into
+        // `selectors.map(...)`. It sat on the inner Select until Delay became
+        // the first kind with two selects in one row (#314), at which point
+        // React started warning about a keyless list.
+        <div key={field.key} className={styles.selectWrapper}>
           <Select
-            key={field.key}
             value={current}
             onChange={(e) => setParam(field.key, e.target.value)}
             className={styles.selectField}

@@ -29,7 +29,6 @@ export type ArtVariant =
   | 'phaser'
   | 'tremolo'
   | 'delay'
-  | 'ping-pong-delay'
   | 'reverb'
   | 'ring-mod'
   | 'filter'
@@ -291,7 +290,6 @@ const ART_VARIANT_KINDS = new Set<string>([
   'phaser',
   'tremolo',
   'delay',
-  'ping-pong-delay',
   'reverb',
   'ring-mod',
   'filter',
@@ -321,8 +319,6 @@ export function createArtDrawer(variant: ArtVariant): DrawFn {
       return createSweepDrawer()
     case 'delay':
       return createPulseRingsDrawer({ stereo: false })
-    case 'ping-pong-delay':
-      return createPulseRingsDrawer({ stereo: true })
     case 'tremolo':
       return createOrbDrawer({ colorRole: 'ledOn', wobble: true })
     case 'compressor':

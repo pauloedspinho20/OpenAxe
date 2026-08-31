@@ -16,7 +16,6 @@ set(OPENAXE_BLOCK_SOURCES
   src/dsp/phaser.cpp
   src/dsp/tremolo.cpp
   src/dsp/delay.cpp
-  src/dsp/ping_pong_delay.cpp
   src/dsp/ring_mod.cpp
   src/dsp/granular_delay.cpp
   src/dsp/filter.cpp
@@ -38,7 +37,6 @@ set(OPENAXE_BLOCK_FLANGER ON)
 set(OPENAXE_BLOCK_PHASER ON)
 set(OPENAXE_BLOCK_TREMOLO ON)
 set(OPENAXE_BLOCK_DELAY ON)
-set(OPENAXE_BLOCK_PING_PONG_DELAY ON)
 set(OPENAXE_BLOCK_REVERB ON)
 set(OPENAXE_BLOCK_RING_MOD ON)
 set(OPENAXE_BLOCK_GRANULAR_DELAY ON)

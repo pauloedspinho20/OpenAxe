@@ -58,9 +58,6 @@
 #if OPENAXE_BLOCK_PHASER
 #include "openaxe/dsp/phaser.h"
 #endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-#include "openaxe/dsp/ping_pong_delay.h"
-#endif
 #if OPENAXE_BLOCK_PITCH_SHIFTER
 #include "openaxe/dsp/pitch_shifter.h"
 #endif
@@ -148,9 +145,6 @@ inline bool NeedsEngineMix(graph::BlockKind kind) {
 #if OPENAXE_BLOCK_DELAY
     case graph::BlockKind::kDelay:
 #endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-    case graph::BlockKind::kPingPongDelay:
-#endif
 #if OPENAXE_BLOCK_RING_MOD
     case graph::BlockKind::kRingMod:
 #endif
@@ -194,9 +188,6 @@ inline int DspParamCountFor(graph::BlockKind kind) {
 #if OPENAXE_BLOCK_DELAY
     case graph::BlockKind::kDelay: return dsp::Delay::ParamCount();
 #endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-    case graph::BlockKind::kPingPongDelay: return dsp::PingPongDelay::ParamCount();
-#endif
 #if OPENAXE_BLOCK_RING_MOD
     case graph::BlockKind::kRingMod: return dsp::RingMod::ParamCount();
 #endif
@@ -225,9 +216,6 @@ constexpr ParamDescriptor kEngineLevelDescriptor{"Level", "level", 0.0f, 1.5f, "
 inline bool NeedsEngineLevel(graph::BlockKind kind) {
 #if OPENAXE_BLOCK_DELAY
   if (kind == graph::BlockKind::kDelay) return true;
-#endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-  if (kind == graph::BlockKind::kPingPongDelay) return true;
 #endif
   (void)kind;
   return false;
@@ -317,9 +305,6 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp
 #if OPENAXE_BLOCK_DELAY
                                 , dsp::Delay
 #endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-                                , dsp::PingPongDelay
-#endif
 #if OPENAXE_BLOCK_RING_MOD
                                 , dsp::RingMod
 #endif
@@ -397,11 +382,6 @@ constexpr dsp::ParamSmoothing kTremoloSmoothing[] = {
 #if OPENAXE_BLOCK_DELAY
 constexpr dsp::ParamSmoothing kDelaySmoothing[] = {
 #include "dsp/generated/delay_smoothing.inc"
-};
-#endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-constexpr dsp::ParamSmoothing kPingPongDelaySmoothing[] = {
-#include "dsp/generated/ping_pong_delay_smoothing.inc"
 };
 #endif
 #if OPENAXE_BLOCK_REVERB
@@ -823,12 +803,6 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       count = dsp::Delay::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-    case graph::BlockKind::kPingPongDelay:
-      table = kPingPongDelaySmoothing;
-      count = dsp::PingPongDelay::ParamCount();
-      break;
-#endif
 #if OPENAXE_BLOCK_COMPRESSOR
     case graph::BlockKind::kCompressor:
       table = kCompressorSmoothing;
@@ -1127,13 +1101,6 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_PING_PONG_DELAY
-  else if (kind == graph::BlockKind::kPingPongDelay) {
-    state->dsp.emplace<dsp::PingPongDelay>();
-    state->param_count.store(dsp::PingPongDelay::ParamCount(), std::memory_order_relaxed);
-    SeedParamsFromDsp(*state);
-  }
-#endif
 #if OPENAXE_BLOCK_COMPRESSOR
   else if (kind == graph::BlockKind::kCompressor) {
     state->dsp.emplace<dsp::Compressor>();
@@ -1199,8 +1166,8 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
 #endif
   // Engine-level mix for the wet-only effects (hybrid, issue #263): append a
   // 0..1 mix after the DSP's own table. Chorus/flanger/phaser/tremolo/eq/gate
-  // default 40% wet for a subtle effect, delay/ping-pong 10% per user feedback.
-  // Delay/ping-pong also get an additional level (volume) param after mix.
+  // default 40% wet for a subtle effect, delay 10% per user feedback.
+  // Delay also gets an additional level (volume) param after mix.
   if (NeedsEngineMix(kind)) {
     const int dspCount = DspParamCountFor(kind);
     const int mixIdx = EngineMixIndexFor(kind);
@@ -1757,7 +1724,7 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
               }
             }
           }
-          // Engine-level level (volume) for delay/ping-pong after mix
+          // Engine-level level (volume) for delay after mix
           if (NeedsEngineLevel(state.kind)) {
             const int levelIdx = EngineLevelIndexFor(state.kind);
             const double level = std::clamp(state.smoothed[static_cast<size_t>(levelIdx)], 0.0, 1.5);

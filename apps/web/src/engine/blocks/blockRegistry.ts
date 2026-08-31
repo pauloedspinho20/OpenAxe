@@ -9,7 +9,6 @@ export const EFFECT_KINDS = new Set<BlockKind>([
   'phaser',
   'tremolo',
   'delay',
-  'ping-pong-delay',
   'reverb',
   'ring-mod',
   'filter',

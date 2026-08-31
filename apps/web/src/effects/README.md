@@ -73,7 +73,6 @@ it belongs to the UI/UX epic, which will call `move()`. Fully unit tested agains
 | `Phaser`            | Modulation | Compiled to WASM from `packages/core/src/dsp/phaser.cpp` (`phaserWorklet.js`): cascaded allpass stages swept by one shared LFO, with feedback for resonance. Migrated from the `BiquadFilterNode` chain.                                                                             |
 | `Tremolo`           | Modulation | DSPark stereo tremolo compiled to WASM (packages/core/src/dsp/tremolo.cpp): rate/depth/shape (Sine/Triangle/Square), right-channel LFO 180°-offset. Migrated from the LFO-modulated `GainNode` (issue #22).                                                                          |
 | `Delay`             | Delay      | Compiled to WASM from `packages/core/src/dsp/delay.cpp` (`delayWorklet.js`): feedback delay with a tone filter in the loop and three models (Digital/Tape/Analog) selected through the core's `set_delay_model` ABI. Migrated from the `DelayNode` + `WaveShaperNode` loop.          |
-| `PingPongDelay`     | Delay      | Compiled to WASM from `packages/core/src/dsp/ping_pong_delay.cpp` (`pingPongWorklet.js`): two cross-coupled delay lines, each hard-panned opposite the other, so repeats alternate left/right. Stereo output (2-channel), unlike every other effect here.                            |
 
 ```ts
 import { EffectsChain } from '@/effects/EffectsChain'

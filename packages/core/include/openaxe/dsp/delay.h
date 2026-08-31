@@ -32,6 +32,8 @@ namespace openaxe::dsp {
 //   - model:    0=Digital, 1=Analog, 2=Tape (see NamStudioDelayModel in api.h)
 //   - wowDepth: 0–5 ms, default 1.5 — tape wow depth (tape only)
 //   - wowRate:  0.1–3 Hz, default 0.5 — tape wow rate (tape only)
+//   - stereoMode: 0=Stereo, 1=Ping-Pong (see StereoMode below)
+//   - width:    0–1, default 1 — ping-pong stereo width (ping-pong only)
 class Delay {
  public:
   struct ParamInfo {
@@ -43,6 +45,18 @@ class Delay {
   };
 
   enum class Model { kDigital = 0, kAnalog, kTape };
+
+  // How the two delay lines relate to each other. Deliberately orthogonal to
+  // Model: ping-pong is a routing topology, not a character, so every model
+  // can ping-pong (a tape ping-pong being the obvious thing the old separate
+  // ping-pong-delay block could never do - issue #314).
+  //
+  //   kStereo   — two independent lines, L in / L out and R in / R out.
+  //   kPingPong — one cross-fed pair: the input enters the left line, left
+  //               feeds right, right feeds back into left, so successive
+  //               repeats alternate across the image. `width` collapses the
+  //               two taps toward their mean; at 0 it is a mono echo.
+  enum class StereoMode { kStereo = 0, kPingPong };
 
   Delay();
   ~Delay();

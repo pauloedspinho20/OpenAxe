@@ -38,7 +38,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
   4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
   `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
-  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`/`kPingPongDelay`, and passthrough
+  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`, and passthrough
   for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
   `include/openaxe/api.h` + `src/api.cpp`
@@ -136,7 +136,7 @@ record relinkable references only.
   "blocks": [
     {
       "id": "2",
-      "kind": "ping-pong-delay",
+      "kind": "delay",
       "row": 0,
       "col": 3,
       "bypass": false,
@@ -174,7 +174,7 @@ Field notes:
   regardless of renumbering; duplicate ids in one document skip the second
   block. Rail jacks serialize as `"-1"`/`"-2"`; `"IN"`/`"OUT"` load equally.
 - **`kind` strings** are the TS union's hyphenated literals
-  (`noise-gate`, ..., `ping-pong-delay`, `amp`, `amp-cab`, `pedal`,
+  (`noise-gate`, ..., `delay`, `reverb`, `amp`, `amp-cab`, `pedal`,
   `outboard`, `space`, `cab`, `mixer`, `splitter`) - block.h's documented
   future mapping lives in `rig_state.cpp`.
 - **`bypass`** appears only for kinds with a bypass concept (everything except

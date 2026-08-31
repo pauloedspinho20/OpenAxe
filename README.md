@@ -59,7 +59,7 @@ per-target status of that split, the migration order, and the latency budget).
 interface)
 ```
 
-- **Block types**: `Amp` / `AmpCab` / `Pedal` / `Outboard` (NAM captures via NeuralAmpModelerCore), `Cab` (IR convolution), 15 effects, `Mixer`, `Splitter`, `Send`/`Return` ×2 — 27 kinds in total (`NamStudioBlockKind` in `packages/core/include/openaxe/api.h`)
+- **Block types**: `Amp` / `AmpCab` / `Pedal` / `Outboard` (NAM captures via NeuralAmpModelerCore), `Cab` (IR convolution), 14 effects, `Mixer`, `Splitter`, `Send`/`Return` ×2 — 26 kinds in total (`NamStudioBlockKind` in `packages/core/include/openaxe/api.h`)
 - Blocks sit on a **4-row × 10-column grid** with IN/OUT rails
 - Graph validates connections for feedback loops; automatic semi-smart wiring on block placement
 

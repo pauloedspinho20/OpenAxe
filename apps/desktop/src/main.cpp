@@ -115,7 +115,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
         <option>chorus</option><option>flanger</option><option>phaser</option>
         <option>tremolo</option><option>ring-mod</option><option>filter</option>
         <option>pitch-shifter</option><option>granular-delay</option><option>rotary</option>
-        <option>delay</option><option>ping-pong-delay</option>
+        <option>delay</option>
         <option>reverb</option><option>amp</option>
         <option>amp-cab</option><option>pedal</option><option>outboard</option>
         <option>space</option><option>cab</option><option>mixer</option><option>splitter</option>

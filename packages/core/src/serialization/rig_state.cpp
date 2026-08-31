@@ -43,7 +43,6 @@ const char* BlockKindToString(graph::BlockKind kind) {
     case graph::BlockKind::kPhaser: return "phaser";
     case graph::BlockKind::kTremolo: return "tremolo";
     case graph::BlockKind::kDelay: return "delay";
-    case graph::BlockKind::kPingPongDelay: return "ping-pong-delay";
     case graph::BlockKind::kReverb: return "reverb";
     case graph::BlockKind::kAmp: return "amp";
     case graph::BlockKind::kAmpCab: return "amp-cab";
@@ -76,7 +75,6 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
       {"phaser", graph::BlockKind::kPhaser},
       {"tremolo", graph::BlockKind::kTremolo},
       {"delay", graph::BlockKind::kDelay},
-      {"ping-pong-delay", graph::BlockKind::kPingPongDelay},
       {"reverb", graph::BlockKind::kReverb},
       {"amp", graph::BlockKind::kAmp},
       {"amp-cab", graph::BlockKind::kAmpCab},

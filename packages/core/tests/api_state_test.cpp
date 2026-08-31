@@ -28,7 +28,7 @@ constexpr int32_t kOutRail = NAM_STUDIO_OUT_RAIL;
 //   IN -> noise-gate(0,0) -> amp(0,1) -> splitter(0,2) -+-> cab(0,3) -----+
 //                                                       |-> reverb(1,3) --+|
 //   IN -> compressor(2,0) ------------------------------> delay(2,3) ----+|-> mixer(0,4) -> OUT
-//                                                       \-> ping-pong(3,3)+
+//                                                       \-> delay/ping-pong(3,3)+
 void BuildRig(NamStudioGraph* g) {
   const int32_t gate = nam_studio_add_block(g, NAM_STUDIO_BLOCK_NOISE_GATE, 0, 0);
   const int32_t comp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_COMPRESSOR, 2, 0);
@@ -37,7 +37,9 @@ void BuildRig(NamStudioGraph* g) {
   const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 3);
   const int32_t reverb = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 1, 3);
   const int32_t delay = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 2, 3);
-  const int32_t ppd = nam_studio_add_block(g, NAM_STUDIO_BLOCK_PING_PONG_DELAY, 3, 3);
+  // A second Delay, put into ping-pong mode below - the standalone
+  // ping-pong-delay kind was folded into Delay in #314.
+  const int32_t ppd = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 3, 3);
   const int32_t mixer = nam_studio_add_block(g, NAM_STUDIO_BLOCK_MIXER, 0, 4);
 
   OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, gate, 0) >= 0);
@@ -70,6 +72,7 @@ void BuildRig(NamStudioGraph* g) {
       {delay, "tone", 3000.0f},    {delay, "model", 1.0f},
       {delay, "wow_depth", 2.5f},  {delay, "wow_rate", 0.9f},
       {ppd, "time", 333.0f},       {ppd, "feedback", 0.61f},
+      {ppd, "stereo_mode", 1.0f}, {ppd, "width", 0.75f},
       {mixer, "in0_level", 0.8f},  {mixer, "in1_pan", -0.5f},
       {mixer, "in2_level", 1.2f},
   };
@@ -165,7 +168,8 @@ int main() {
 
   // The document carries the schema stamp and symbol-keyed params.
   OPENAXE_EXPECT(document.find("\"schemaVersion\": 1") != std::string::npos);
-  OPENAXE_EXPECT(document.find("\"ping-pong-delay\"") != std::string::npos);
+  // The ping-pong block is a Delay carrying stereo_mode = 1 now (#314).
+  OPENAXE_EXPECT(document.find("\"stereo_mode\": 1") != std::string::npos);
   OPENAXE_EXPECT(document.find("\"time\": 333") != std::string::npos);
   OPENAXE_EXPECT(document.find("\"reverbAlgorithm\": \"room\"") != std::string::npos);
   OPENAXE_EXPECT(document.find("\"delayModel\": \"analog\"") != std::string::npos);
