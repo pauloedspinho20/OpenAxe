@@ -151,8 +151,10 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     label: 'Tremolo',
     group: 'Effects',
     // Hand-rolled in packages/core, not DSPark - tremolo.cpp includes only
-    // internal/biquad.h. The DSPark credit here was wrong; issue #319 is the
-    // migration that would make it true.
+    // internal/biquad.h. It stays that way: #319 looked at migrating to
+    // dspark::Tremolo and found it buys nothing here - the same three shapes,
+    // the same 2% slew on the square, and no access to the LFO phase that
+    // harmonic mode needs.
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
