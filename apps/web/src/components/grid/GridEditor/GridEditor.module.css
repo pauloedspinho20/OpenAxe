@@ -138,11 +138,12 @@
 }
 
 .grid {
+  justify-content: center;
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: repeat(4, minmax(80px, auto));
-  grid-auto-columns: minmax(80px, auto);
+  grid-template-rows: repeat(4, minmax(80px, 80px));
+  grid-auto-columns: minmax(80px, 80px);
   gap: var(--sp-4);
   flex: 1;
   padding: var(--sp-2) 0;
@@ -161,8 +162,8 @@
     flex: none;
     width: 100%;
     /* 4 across (original ROWS), 10 down (original COLS) — fits 390px without x-scroll */
-    grid-template-rows: repeat(10, minmax(80px, auto));
-    grid-template-columns: repeat(4, minmax(80px, 1fr));
+    grid-template-rows: repeat(10, minmax(80px, 80px));
+    grid-template-columns: repeat(4, minmax(80px, 80px));
     grid-auto-columns: unset;
     gap: var(--sp-4);
     padding: 0;
