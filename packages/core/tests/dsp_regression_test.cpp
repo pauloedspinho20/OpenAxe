@@ -20,9 +20,11 @@
 // fingerprint covers the engine's staging too - the wet/dry mix, the output
 // level, and the param smoothing ramps are all part of what ships.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>

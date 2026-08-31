@@ -4,8 +4,10 @@
 // matter most: this parses whatever a user drags in.
 #include "openaxe/dsp/wav.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <vector>
 

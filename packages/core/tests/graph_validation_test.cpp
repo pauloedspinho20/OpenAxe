@@ -1,6 +1,9 @@
 // Ports every case in apps/web/src/engine/graphValidation.test.ts.
 #include "openaxe/graph_validation.h"
 
+#include <string>
+#include <vector>
+
 #include "test_harness.h"
 
 using openaxe::graph::BlockKind;

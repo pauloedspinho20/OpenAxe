@@ -25,6 +25,7 @@
 //               shaped like a guitar note. Musical sanity, and the only
 //               stimulus with a non-trivial stereo image.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>

@@ -6,7 +6,9 @@
 // dynamic descriptor resolution, remove/clear unbinding, normalization
 // clamping, and soft-failure tolerance for malformed binding documents.
 
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
