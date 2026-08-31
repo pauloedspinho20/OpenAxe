@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "openaxe/api.h"
+#include "openaxe/generated/enabled_blocks.h"
 #include "test_harness.h"
 
 namespace {
@@ -537,6 +538,9 @@ int main() {
     blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_GRANULAR_DELAY, 0, 3);
     blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_ROTARY, 0, 4);
     for (const KindWrite& w : writes) {
+      // A refused block (-1) is a kind this build compiled out - skip it
+      // rather than hunting for params on a block that was never created.
+      if (blocks[w.block] < 0) continue;
       bool found = false;
       for (int32_t i = 0; i < nam_studio_block_param_count(g, blocks[w.block]); ++i) {
         const char* symbol = nullptr;
@@ -556,8 +560,14 @@ int main() {
     const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
     std::vector<char> buf(static_cast<size_t>(needed));
     nam_studio_serialize_state(g, buf.data(), needed);
-    OPENAXE_EXPECT(std::strstr(buf.data(), "\"ring-mod\"") != nullptr);
-    OPENAXE_EXPECT(std::strstr(buf.data(), "\"granular-delay\"") != nullptr);
+    // ring-mod and granular-delay can be compiled out (#313), in which case
+    // add_block refused them above and they are legitimately absent.
+    if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kRingMod)) {
+      OPENAXE_EXPECT(std::strstr(buf.data(), "\"ring-mod\"") != nullptr);
+    }
+    if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kGranularDelay)) {
+      OPENAXE_EXPECT(std::strstr(buf.data(), "\"granular-delay\"") != nullptr);
+    }
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"rotary\"") != nullptr);
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
@@ -565,6 +575,7 @@ int main() {
     NamStudioGraph* r = nam_studio_graph_create();
     OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
     for (const KindWrite& w : writes) {
+      if (blocks[w.block] < 0) continue;  // kind compiled out (#313)
       OPENAXE_EXPECT(GetParamBySymbol(r, blocks[w.block], w.symbol) == w.value);
     }
     nam_studio_graph_destroy(r);
