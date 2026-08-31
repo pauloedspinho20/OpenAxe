@@ -380,6 +380,15 @@ results differ across the compilers and platforms CI runs, so every gate is a
 tolerance. And it does not hash the output, for the same reason: a hash would
 differ everywhere and could only ever be noise.
 
+The band tolerance is level-dependent for the same reason, and the figures come
+from a measurement rather than a guess: the harness' first Linux/GCC run against
+macOS/clang references drifted in one case of 25 — Dragonfly's room reverb,
+whose recursive feedback network compounds a libm difference over the render —
+and only in bands 47–63 dB down. Bands carrying real energy are held to 1 dB;
+bands below −45 dB relative get 6 dB, which costs no sensitivity that matters
+because a change big enough to hear moves the loud bands and the level metrics
+too. Both figures are re-checked against deliberately injected regressions.
+
 Re-blessing is documented in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#changing-how-an-effect-sounds).
 
 ## Non-goals (not yet — tracked for follow-up work)

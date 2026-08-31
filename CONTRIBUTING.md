@@ -102,7 +102,10 @@ needs a bless run — a case with no reference fails rather than passing quietly
 The fingerprint is metrics rather than raw audio on purpose: float results are
 not bit-identical across the platforms CI runs, and a metric diff is reviewable
 where a binary diff is not. See `packages/core/tests/dsp_metrics.h` for the
-reasoning and the tolerances.
+reasoning, and `dsp_regression_test.cpp` for the tolerances — band tolerance is
+level-dependent, because a band 45 dB below the signal's own energy is a few
+least-significant bits and drifts between toolchains, while the bands that
+carry real energy stay tight.
 
 ## Branching
 
