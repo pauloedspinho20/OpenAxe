@@ -17,7 +17,6 @@ export const COMPILED_BLOCK_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>([
   'phaser',
   'tremolo',
   'delay',
-  'ping-pong-delay',
   'reverb',
   'ring-mod',
   'granular-delay',

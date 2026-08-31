@@ -16,7 +16,6 @@
 #define OPENAXE_BLOCK_PHASER 1
 #define OPENAXE_BLOCK_TREMOLO 1
 #define OPENAXE_BLOCK_DELAY 1
-#define OPENAXE_BLOCK_PING_PONG_DELAY 1
 #define OPENAXE_BLOCK_REVERB 1
 #define OPENAXE_BLOCK_RING_MOD 1
 #define OPENAXE_BLOCK_GRANULAR_DELAY 1
@@ -51,7 +50,6 @@ inline constexpr bool IsCompiled(graph::BlockKind kind) {
     case graph::BlockKind::kPhaser: return true;
     case graph::BlockKind::kTremolo: return true;
     case graph::BlockKind::kDelay: return true;
-    case graph::BlockKind::kPingPongDelay: return true;
     case graph::BlockKind::kReverb: return true;
     case graph::BlockKind::kRingMod: return true;
     case graph::BlockKind::kGranularDelay: return true;
@@ -87,7 +85,6 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kPhaser: return true;
     case graph::BlockKind::kTremolo: return true;
     case graph::BlockKind::kDelay: return true;
-    case graph::BlockKind::kPingPongDelay: return false;
     case graph::BlockKind::kReverb: return true;
     case graph::BlockKind::kRingMod: return false;
     case graph::BlockKind::kGranularDelay: return false;

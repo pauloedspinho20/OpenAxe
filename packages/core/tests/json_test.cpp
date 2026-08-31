@@ -149,7 +149,7 @@ int main() {
   // Whole-document round trips.
   ExpectRoundTrip("{\"schemaVersion\": 1,\n\"blocks\": []}");
   ExpectRoundTrip(
-      "{\"blocks\": [{\"id\": \"7\", \"kind\": \"ping-pong-delay\", \"row\": 0, "
+      "{\"blocks\": [{\"id\": \"7\", \"kind\": \"delay\", \"row\": 0, "
       "\"col\": 3, \"bypass\": false, \"params\": {\"time\": 250, \"tone\": 6000}}],"
       " \"edges\": [], \"masterLevel\": 0.8, \"masterMuted\": false}");
 

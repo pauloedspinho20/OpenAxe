@@ -193,7 +193,7 @@ static void TestBlockKindNames() {
       NAM_STUDIO_BLOCK_CHORUS, NAM_STUDIO_BLOCK_FLANGER, NAM_STUDIO_BLOCK_PHASER,
       NAM_STUDIO_BLOCK_TREMOLO, NAM_STUDIO_BLOCK_RING_MOD, NAM_STUDIO_BLOCK_FILTER,
       NAM_STUDIO_BLOCK_PITCH_SHIFTER, NAM_STUDIO_BLOCK_GRANULAR_DELAY, NAM_STUDIO_BLOCK_ROTARY,
-      NAM_STUDIO_BLOCK_DELAY, NAM_STUDIO_BLOCK_PING_PONG_DELAY, NAM_STUDIO_BLOCK_REVERB,
+      NAM_STUDIO_BLOCK_DELAY, NAM_STUDIO_BLOCK_REVERB,
       NAM_STUDIO_BLOCK_AMP, NAM_STUDIO_BLOCK_AMP_CAB, NAM_STUDIO_BLOCK_PEDAL,
       NAM_STUDIO_BLOCK_OUTBOARD, NAM_STUDIO_BLOCK_SPACE, NAM_STUDIO_BLOCK_CAB,
       NAM_STUDIO_BLOCK_MIXER, NAM_STUDIO_BLOCK_SPLITTER, NAM_STUDIO_BLOCK_SEND_1,
@@ -211,7 +211,6 @@ static void TestBlockKindNames() {
   // Exact spellings the front ends send — a rename here silently breaks them.
   NamStudioBlockKind k;
   CHECK(nam_studio_block_kind_from_name("noise-gate", &k) == 0 && k == NAM_STUDIO_BLOCK_NOISE_GATE);
-  CHECK(nam_studio_block_kind_from_name("ping-pong-delay", &k) == 0 && k == NAM_STUDIO_BLOCK_PING_PONG_DELAY);
   CHECK(nam_studio_block_kind_from_name("pitch-shifter", &k) == 0 && k == NAM_STUDIO_BLOCK_PITCH_SHIFTER);
   CHECK(nam_studio_block_kind_from_name("send-1", &k) == 0 && k == NAM_STUDIO_BLOCK_SEND_1);
   CHECK(nam_studio_block_kind_from_name("amp-cab", &k) == 0 && k == NAM_STUDIO_BLOCK_AMP_CAB);

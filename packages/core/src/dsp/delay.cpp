@@ -17,7 +17,9 @@ constexpr int kToneParam = 2;
 constexpr int kModelParam = 3;
 constexpr int kWowDepthParam = 4;
 constexpr int kWowRateParam = 5;
-constexpr int kParamCount = 6;
+constexpr int kStereoModeParam = 6;
+constexpr int kWidthParam = 7;
+constexpr int kParamCount = 8;
 
 // Generated from packages/core/param_schema.json (issue #51) - run
 // scripts/gen-param-schema.mjs after editing the schema.
@@ -41,6 +43,12 @@ constexpr float kToneQ = 1.0f;
 // applied to the feedback path to emulate BBD/tape electronics.
 inline float SoftClip(float x) { return std::tanh(x * 1.5f) / 1.5f; }
 
+// Keep an LFO phase in [0, 2pi) without an unbounded loop.
+inline float WrapPhase(float phase) {
+  constexpr float kTwoPi = 6.28318530718f;
+  return phase >= kTwoPi ? phase - kTwoPi : phase;
+}
+
 // One channel's delay line: the modulated buffer, the tape wow LFO phase, and
 // the tone filter that sits in the feedback path. The line's interpolated
 // read is what keeps the tape model's continuously-moving tap from quantising
@@ -57,6 +65,15 @@ struct Channel {
   }
 };
 
+// One repeat's trip round the feedback loop: the analog/tape models colour it
+// with the tone lowpass, and every model soft-clips so a feedback near 0.9
+// saturates instead of running away.
+inline float Regenerate(Channel& channel, float tap, bool analog_like, float feedback) {
+  float signal = tap;
+  if (analog_like) signal = channel.filter.Process(signal);
+  return SoftClip(signal) * feedback;
+}
+
 }  // namespace
 
 struct Delay::Impl {
@@ -67,11 +84,22 @@ struct Delay::Impl {
   Model model = Model::kDigital;
   float wow_depth = 1.5f;
   float wow_rate = 0.5f;
+  StereoMode stereo_mode = StereoMode::kStereo;
+  float width = 1.0f;
   float sample_rate = 48000.0f;
 
-  // Re-allocate both delay lines for the current sample rate.
+  // Re-allocate both delay lines for the current sample rate and re-seed the
+  // tape wow LFOs a quarter cycle apart.
+  //
+  // The offset used to be applied inside Process, guarded by
+  // `wow_phase == 0.0f`, which fired on the first block and then never again -
+  // and would re-fire, jumping the right channel's pitch mid-tail, if the
+  // phase ever wrapped through exactly zero. Seeding once here is both the fix
+  // and the natural home for it.
   void ApplySampleRate() {
     for (auto& ch : channels) ch.Resize(sample_rate);
+    channels[0].wow_phase = 0.0f;
+    channels[1].wow_phase = 1.57079632679f;  // pi/2
   }
 };
 
@@ -122,41 +150,71 @@ void Delay::Process(const float* const* input, float* const* output, int num_fra
   const Model model = impl_->model;
   const float wow_depth = impl_->wow_depth;
   const float wow_rate = impl_->wow_rate;
-  const float wow_step = wow_rate / sr;
+  const float wow_step = wow_rate * 6.28318530718f / sr;
   const bool tape = (model == Model::kTape);
   const bool analog_like = (model == Model::kAnalog || tape);
+  const bool ping_pong = (impl_->stereo_mode == StereoMode::kPingPong);
+  const float width = std::clamp(impl_->width, 0.0f, 1.0f);
 
-  for (int ch = 0; ch < 2; ++ch) {
-    Channel& c = impl_->channels[static_cast<size_t>(ch)];
-    c.filter.SetLowpass(impl_->tone, kToneQ, sr);
-    if (tape && c.wow_phase == 0.0f && ch == 1) c.wow_phase = 1.57079632679f;  // π/2 stereo offset
+  Channel& left = impl_->channels[0];
+  Channel& right = impl_->channels[1];
+  left.filter.SetLowpass(impl_->tone, kToneQ, sr);
+  right.filter.SetLowpass(impl_->tone, kToneQ, sr);
 
-    for (int i = 0; i < num_frames; ++i) {
-      float delay_ms = base_time;
-      if (tape) {
-        const float wow = std::sin(c.wow_phase + static_cast<float>(i) * wow_step * 6.28318530718f);
-        delay_ms += wow_depth * wow;
-      }
-      const float wet = c.line.Read(delay_ms, sr);
-
-      float fb_signal = wet;
-      if (analog_like) fb_signal = c.filter.Process(fb_signal);
-      fb_signal = SoftClip(fb_signal);
-
-      c.line.Write(input[ch][i] + fb_signal * fb);
-      output[ch][i] = wet;
-    }
+  // The loop is sample-outer rather than channel-outer because ping-pong
+  // needs both lines advanced in lockstep - one channel's write depends on
+  // the other's tap from the same sample. Stereo mode is unaffected by the
+  // reordering: its two channels never touch each other.
+  for (int i = 0; i < num_frames; ++i) {
+    // One wow LFO per channel, the right a quarter cycle behind the left, so
+    // the tape drift widens the image instead of moving both taps together.
+    float left_ms = base_time;
+    float right_ms = base_time;
     if (tape) {
-      c.wow_phase = std::fmod(c.wow_phase + wow_step * static_cast<float>(num_frames) * 6.28318530718f,
-                               6.28318530718f);
+      left_ms += wow_depth * std::sin(left.wow_phase);
+      right_ms += wow_depth * std::sin(right.wow_phase);
+      left.wow_phase = WrapPhase(left.wow_phase + wow_step);
+      right.wow_phase = WrapPhase(right.wow_phase + wow_step);
+    }
+
+    const float left_tap = left.line.Read(left_ms, sr);
+    const float right_tap = right.line.Read(right_ms, sr);
+
+    if (ping_pong) {
+      // A true cross-feed: the input enters the left line, the left line's
+      // output feeds the right, and the right's feeds back into the left.
+      // Successive repeats therefore alternate L, R, L, R rather than each
+      // channel regenerating into itself.
+      //
+      // The input is summed to mono before it enters. Ping-pong is only
+      // legible if every repeat starts from one side, and a stereo source
+      // written into the left line alone would drop its right channel
+      // entirely. The dry signal keeps its stereo image - the engine mixes it
+      // back around this wet-only output.
+      const float in = (input[0][i] + input[1][i]) * 0.5f;
+      const float from_right = Regenerate(right, right_tap, analog_like, fb);
+      const float from_left = Regenerate(left, left_tap, analog_like, fb);
+      left.line.Write(in + from_right);
+      right.line.Write(from_left);
+
+      // Width collapses the two taps toward their mean: 1 = hard left/right,
+      // 0 = both taps centred, i.e. the ping-pong becomes a plain mono echo.
+      const float centre = (left_tap + right_tap) * 0.5f;
+      output[0][i] = centre + (left_tap - centre) * width;
+      output[1][i] = centre + (right_tap - centre) * width;
+    } else {
+      left.line.Write(input[0][i] + Regenerate(left, left_tap, analog_like, fb));
+      right.line.Write(input[1][i] + Regenerate(right, right_tap, analog_like, fb));
+      output[0][i] = left_tap;
+      output[1][i] = right_tap;
     }
   }
 }
 
 // Param surface: time (ms), feedback (0..0.9), tone (Hz cutoff in the feedback
 // loop), model (0=Digital, 1=Analog, 2=Tape - matching Delay::Model and
-// NamStudioDelayModel; this comment used to have Analog and Tape swapped),
-// wow depth (ms) and wow rate (Hz) for the tape model.
+// NamStudioDelayModel), wow depth (ms) and wow rate (Hz) for the tape model,
+// stereo_mode (0=Stereo, 1=Ping-Pong) and width (0..1, ping-pong only).
 int Delay::ParamCount() { return kParamCount; }
 
 // Name/symbol/range/unit for one param index.
@@ -174,6 +232,8 @@ float Delay::GetParam(int index) const {
     case kModelParam:    return static_cast<float>(impl_->model);
     case kWowDepthParam: return impl_->wow_depth;
     case kWowRateParam:  return impl_->wow_rate;
+    case kStereoModeParam: return static_cast<float>(impl_->stereo_mode);
+    case kWidthParam:    return impl_->width;
     default:             return 0.0f;
   }
 }
@@ -189,6 +249,10 @@ void Delay::SetParam(int index, float value) {
     case kModelParam:    impl_->model = static_cast<Model>(std::clamp(static_cast<int>(std::round(value)), 0, 2)); break;
     case kWowDepthParam: impl_->wow_depth = value; break;
     case kWowRateParam:  impl_->wow_rate = value; break;
+    case kStereoModeParam:
+      impl_->stereo_mode = static_cast<StereoMode>(std::clamp(static_cast<int>(std::round(value)), 0, 1));
+      break;
+    case kWidthParam:    impl_->width = value; break;
     default: return;
   }
 }

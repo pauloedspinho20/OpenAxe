@@ -156,7 +156,6 @@ void TestSymbolMappedParamRoundTripAllEffectKinds() {
       {"rotary",
        {"speed", "drive", "horn_level", "drum_level", "mic_distance", "crossover", "mix"}},
       {"delay", {"time", "feedback", "tone", "wow_depth", "wow_rate"}},
-      {"ping-pong-delay", {"time", "feedback", "tone"}},
       {"mixer",
        {"in0_level", "in0_pan", "in1_level", "in1_pan", "in2_level", "in2_pan", "in3_level",
         "in3_pan"}},

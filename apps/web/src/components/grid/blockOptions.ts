@@ -164,13 +164,6 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
   {
-    kind: 'ping-pong-delay',
-    label: 'Ping-Pong Delay',
-    group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
-  {
     kind: 'reverb',
     label: 'Reverb',
     group: 'Effects',

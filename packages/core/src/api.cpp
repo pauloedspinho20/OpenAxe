@@ -37,8 +37,6 @@ openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
       return BlockKind::kTremolo;
     case NAM_STUDIO_BLOCK_DELAY:
       return BlockKind::kDelay;
-    case NAM_STUDIO_BLOCK_PING_PONG_DELAY:
-      return BlockKind::kPingPongDelay;
     case NAM_STUDIO_BLOCK_REVERB:
       return BlockKind::kReverb;
     case NAM_STUDIO_BLOCK_AMP:
@@ -713,7 +711,6 @@ constexpr BlockKindName kBlockKindNames[] = {
     {"granular-delay", NAM_STUDIO_BLOCK_GRANULAR_DELAY},
     {"rotary", NAM_STUDIO_BLOCK_ROTARY},
     {"delay", NAM_STUDIO_BLOCK_DELAY},
-    {"ping-pong-delay", NAM_STUDIO_BLOCK_PING_PONG_DELAY},
     {"reverb", NAM_STUDIO_BLOCK_REVERB},
     {"amp", NAM_STUDIO_BLOCK_AMP},
     {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},

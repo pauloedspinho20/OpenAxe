@@ -26,8 +26,8 @@ namespace {
 constexpr BlockKind kAllKinds[] = {
     BlockKind::kNoiseGate,   BlockKind::kCompressor,    BlockKind::kEq,
     BlockKind::kChorus,      BlockKind::kFlanger,       BlockKind::kPhaser,
-    BlockKind::kTremolo,     BlockKind::kDelay,         BlockKind::kPingPongDelay,
-    BlockKind::kReverb,      BlockKind::kAmp,           BlockKind::kAmpCab,
+    BlockKind::kTremolo,     BlockKind::kDelay,         BlockKind::kReverb,
+    BlockKind::kAmp,         BlockKind::kAmpCab,
     BlockKind::kPedal,       BlockKind::kOutboard,      BlockKind::kSpace,
     BlockKind::kCab,         BlockKind::kMixer,         BlockKind::kSplitter,
     BlockKind::kRingMod,     BlockKind::kFilter,        BlockKind::kPitchShifter,
