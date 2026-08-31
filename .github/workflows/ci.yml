@@ -7,6 +7,39 @@ on:
     branches: [main, dev]
 
 jobs:
+  # packages/core's own C++ suite - 33 tests covering the DSP, the graph, the
+  # ABI and the state document. Until issue #315 this ran only on developers'
+  # machines: ci.yml tested the web app and plugin.yml tested packages/vst3, so
+  # nothing in CI exercised the engine's own tests. That is the job the
+  # golden-audio regression harness needs, since its whole purpose is to fail a
+  # PR that changes how an effect sounds.
+  #
+  # Separate from build-and-test because it needs the C++ toolchain and the DSP
+  # submodules, which the web job has no use for.
+  core-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build pkg-config
+
+      - name: Configure
+        run: cmake -S packages/core -B packages/core/build -DCMAKE_BUILD_TYPE=Release -DOPENAXE_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build packages/core/build -j
+
+      # --output-on-failure so a golden-metric drift prints the offending
+      # effect/stimulus/metric and both values straight into the CI log; the
+      # harness is written so that output alone is enough to judge the change.
+      - name: Test
+        run: ctest --test-dir packages/core/build --output-on-failure -j2
+
   build-and-test:
     runs-on: ubuntu-latest
     steps:

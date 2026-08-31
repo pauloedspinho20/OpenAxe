@@ -70,6 +70,40 @@ All checks must pass before merge — CI runs them on every push/PR to `main`/`d
 
 **VS Code:** Use `Terminal → Run Task` (`⇧⌘B`) — 46 tasks mirror every command above (`Setup: everything`, `Web: Dev server`, `C++: Configure/Build/Test`, `Desktop: …`, `VST: …`, drift/WASM tasks). See [`README.md`](./README.md#development) and [`.vscode/tasks.json`](./.vscode/tasks.json).
 
+## Changing how an effect sounds
+
+`packages/core`'s DSP is guarded by a golden-audio regression harness
+(`packages/core/tests/dsp_regression_test.cpp`, issue #315). It renders five
+deterministic stimuli through every compiled effect and compares a fingerprint
+of each output — levels, onsets, L/R correlation, and a ten-band spectral shape
+— against `packages/core/tests/golden/dsp_metrics.json`.
+
+If your change alters an effect's output, that test fails and names the effect,
+the stimulus, the metric, and both values:
+
+```
+delay/analog / impulse / band 1280Hz: golden 2.33 dB, got 3.01 dB
+delay/ping-pong / impulse / onsetR: golden 4800 samples, got -1 samples
+```
+
+**If the change was not intended**, that is a regression — fix it.
+
+**If it was intended**, re-bless the references and explain the diff:
+
+```bash
+cmake --build packages/core/build --target dsp_regression_test && ./packages/core/build/tests/dsp_regression_test --bless
+```
+
+Then commit the updated `dsp_metrics.json` **with the reason in your PR
+description**. The diff is the evidence the change was deliberate, so a bless
+with no explanation will be sent back. Adding a new effect or preset case also
+needs a bless run — a case with no reference fails rather than passing quietly.
+
+The fingerprint is metrics rather than raw audio on purpose: float results are
+not bit-identical across the platforms CI runs, and a metric diff is reviewable
+where a binary diff is not. See `packages/core/tests/dsp_metrics.h` for the
+reasoning and the tolerances.
+
 ## Branching
 
 - **All feature branches → `dev`** (including Dependabot — `target-branch: dev` in `.github/dependabot.yml`). Open every pull request with base `dev`.
