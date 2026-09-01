@@ -41,12 +41,12 @@ import createModule from './openaxe_core.js'
 // Web Audio's render quantum is fixed at 128 frames - not configurable.
 export const FRAMES = 128
 
-// packages/core/include/nam_studio/api.h rail sentinels - the JS side maps the
+// packages/core/include/openaxe/api.h rail sentinels - the JS side maps the
 // 'IN'/'OUT' grid rails onto these before sending a connect.
 const IN_RAIL = -1
 const OUT_RAIL = -2
 
-// packages/core/include/nam_studio/api.h OpenAxeBlockKind / ReverbControl /
+// packages/core/include/openaxe/api.h OpenAxeBlockKind / ReverbControl /
 // ReverbAlgorithm. Reverb blocks are driven through the core's ReverbControl
 // mapping (the UI's roomSize/damping/width/... are abstractions, not symbols),
 // mirroring the desktop bridge's ReverbControlFor.

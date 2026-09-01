@@ -2,7 +2,7 @@
 
 // ── ABI naming (issue #311) ────────────────────────────────────────────
 // Product-prefixed identifiers are `openaxe_*` / `OpenAxe*` / `OPENAXE_*`
-// (renamed from `nam_studio_*` in #311). They are baked into the committed
+// (renamed from `openaxe_*` in #311). They are baked into the committed
 // WASM artifacts (`apps/web/public/wasm-core/openaxe_core.{js,wasm}` +
 // `openAxeRigWorklet.js`), so any future rename must be atomic: api.h +
 // `EXPORTED_FUNCTIONS` + `scripts/check-wasm-exports.mjs` + WASM rebuild +
