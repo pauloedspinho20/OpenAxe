@@ -19,7 +19,7 @@
 #endif
 #define PLUG_UNIQUE_ID 'Nms1'  // Registered to this project; must stay stable
 #define PLUG_MFR_ID 'NwSt'
-#define PLUG_URL_STR "https://github.com/pauloedspinho20/NAM-Web-Studio"
+#define PLUG_URL_STR "https://github.com/pauloedspinho20/OpenAxe"
 #define PLUG_EMAIL_STR "dev@openaxe.local"
 #define PLUG_COPYRIGHT_STR "Copyright 2026 OpenAxe (GPLv3)"
 #define PLUG_CLASS_NAME OpenAxePlugin
@@ -70,8 +70,8 @@
 
 #define VST3_SUBCATEGORY "Fx|Amp"
 
-#define CLAP_MANUAL_URL "https://github.com/pauloedspinho20/NAM-Web-Studio"
-#define CLAP_SUPPORT_URL "https://github.com/pauloedspinho20/NAM-Web-Studio/issues"
+#define CLAP_MANUAL_URL "https://github.com/pauloedspinho20/OpenAxe"
+#define CLAP_SUPPORT_URL "https://github.com/pauloedspinho20/OpenAxe/issues"
 #define CLAP_DESCRIPTION "Guitar/bass amp + cab + effects powered by Neural Amp Modeler"
 #define CLAP_FEATURES "audio-effect", "amp"
 

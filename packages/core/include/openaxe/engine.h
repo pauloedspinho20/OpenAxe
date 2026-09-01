@@ -159,7 +159,7 @@ struct EdgeSnapshot {
 // metadata travelled with it. `json` is the .nam document for amp-family
 // blocks, `wav_bytes` the WAV file bytes for cab blocks; name is a display
 // label and path the best-effort source location (both empty when unknown -
-// e.g. anything loaded through nam_studio_load_nam_model_json). Returned by
+// e.g. anything loaded through openaxe_load_nam_model_json). Returned by
 // value: multi-megabyte copies, but serialization is a control-thread call
 // and the alternative hands out pointers into engine-owned storage.
 struct ModelAssetSource {
@@ -208,7 +208,7 @@ struct IrAssetSource {
 //     - apps/desktop: StudioBridge::Mutate wraps every Tier-2 call in the
 //       suspend handshake (AudioIO::BeginSuspend/EndSuspend) - it raises a
 //       flag the audio callback observes, waits until a callback confirms it
-//       (no nam_studio_process in flight), runs the mutation, then lifts the
+//       (no openaxe_process in flight), runs the mutation, then lifts the
 //       flag. That handshake is the chosen protocol for a host that runs the
 //       audio thread separately from its control thread; a future VST3/mobile
 //       shell must provide an equivalent (or the same one) before calling any

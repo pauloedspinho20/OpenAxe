@@ -39,8 +39,8 @@ std::vector<uint8_t> MakeWavBytes(int sample_rate, const std::vector<float>& mon
 }
 
 void TestSizeGuards() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0,0);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0,0);
   // Model: oversize via in-memory json size check (>32 MB) — use a string just over the limit but don't actually allocate 32MB fully if too heavy? 32MB is okay for test (allocate once)
   // Instead create a string view that would trigger size check without huge alloc by directly testing the guard threshold: create a string of kMax+1 via resize (32MB) — acceptable for one test
   // To keep CI light, we test the boundary via the file-path helper with a temp file of 32MB+1 disguised as small content + size check via file_size? But file_size guard also checks filesystem size, so we need a real file. Instead we test the in-memory guard directly with a string just over the limit using a smaller limit simulation:
@@ -62,13 +62,13 @@ void TestSizeGuards() {
   CHECK(r2 == openaxe_vst3::assets::LoadResult::TooLarge);
   CHECK(!err2.empty());
 
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  size guards (32MB/8MB): ok\n");
 }
 
 void TestTypeGuards() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0,0);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t cab = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0,0);
   std::string err;
   // Not WAV
   std::vector<uint8_t> not_wav = {'h','e','l','l','o'};
@@ -84,13 +84,13 @@ void TestTypeGuards() {
   auto r3 = openaxe_vst3::assets::LoadIrWavFromBytes(g, cab, wav.data(), wav.size(), &err3);
   CHECK(r3 == openaxe_vst3::assets::LoadResult::NotWav);
 
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  type guards (RIFF/WAVE, not WAV): ok\n");
 }
 
 void TestInvalidModelFormat() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0,0);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0,0);
   std::string err;
   auto r = openaxe_vst3::assets::LoadNamModelFromJson(g, amp, std::string(R"({"not":"a model"})"), &err);
   CHECK(r == openaxe_vst3::assets::LoadResult::InvalidFormat);
@@ -99,14 +99,14 @@ void TestInvalidModelFormat() {
   std::string err2;
   auto r2 = openaxe_vst3::assets::LoadNamModelFromJson(g, 999, std::string("{}"), &err2);
   CHECK(r2 == openaxe_vst3::assets::LoadResult::UnknownBlock);
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  invalid model format + unknown block: ok\n");
 }
 
 void TestValidIrLoadAndInfo() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0,0);
-  nam_studio_reset(g, 48000.0, 512);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t cab = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0,0);
+  openaxe_reset(g, 48000.0, 512);
   std::vector<float> mono(256);
   for(size_t i=0;i<mono.size();++i) mono[i] = std::sin(float(i)*0.2f)*0.5f;
   auto wav = MakeWavBytes(48000, mono);
@@ -120,7 +120,7 @@ void TestValidIrLoadAndInfo() {
   auto mi = openaxe_vst3::assets::GetModelInfo(g, cab);
   CHECK(!mi.has_value());
   // Amp without model also none
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0,1);
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0,1);
   auto mi2 = openaxe_vst3::assets::GetModelInfo(g, amp);
   CHECK(!mi2.has_value());
 
@@ -128,16 +128,16 @@ void TestValidIrLoadAndInfo() {
   float in[64]; for(int i=0;i<64;++i) in[i]=0.1f;
   float out[64]={};
   const float* ip[1]={in}; float* op[1]={out};
-  nam_studio_process(g, ip,1,op,1,64);
+  openaxe_process(g, ip,1,op,1,64);
   for(int i=0;i<64;++i) CHECK(std::isfinite(out[i]));
 
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  valid IR load + GetIrLength + GetModelInfo: ok\n");
 }
 
 void TestFilePathGuards() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0,0);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0,0);
   std::string err;
   auto r = openaxe_vst3::assets::LoadNamModelFromPath(g, amp, "/no/such/file.nam", &err);
   CHECK(r == openaxe_vst3::assets::LoadResult::FileNotFound);
@@ -161,7 +161,7 @@ void TestFilePathGuards() {
   auto r3 = openaxe_vst3::assets::LoadIrWavFromPath(g, amp, tmp, &err3);
   CHECK(r3 == openaxe_vst3::assets::LoadResult::TooLarge);
   std::filesystem::remove(tmp);
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  file-not-found + oversize via path: ok\n");
 }
 

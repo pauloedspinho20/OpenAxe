@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question / Discussion
-    url: https://github.com/pauloedspinho20/NAM-Web-Studio/discussions
+    url: https://github.com/pauloedspinho20/OpenAxe/discussions
     about: Ask questions, share ideas, or showcase rigs — use Discussions, not blank issues
   - name: Security vulnerability
-    url: https://github.com/pauloedspinho20/NAM-Web-Studio/security/advisories/new
+    url: https://github.com/pauloedspinho20/OpenAxe/security/advisories/new
     about: Do not open a public issue — report privately (see SECURITY.md)

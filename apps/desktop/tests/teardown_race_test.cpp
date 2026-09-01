@@ -22,12 +22,12 @@
 
 namespace {
 
-NamStudioGraph* MakePassthroughGraph(double sample_rate, int block_size) {
-  NamStudioGraph* graph = nam_studio_graph_create();
-  const int32_t mixer = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_MIXER, 0, 0);
-  nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, mixer, 0);
-  nam_studio_connect(graph, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(graph, sample_rate, block_size);
+OpenAxeGraph* MakePassthroughGraph(double sample_rate, int block_size) {
+  OpenAxeGraph* graph = openaxe_graph_create();
+  const int32_t mixer = openaxe_add_block(graph, OPENAXE_BLOCK_MIXER, 0, 0);
+  openaxe_connect(graph, OPENAXE_IN_RAIL, 0, mixer, 0);
+  openaxe_connect(graph, mixer, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(graph, sample_rate, block_size);
   return graph;
 }
 
@@ -53,7 +53,7 @@ int main() {
     std::printf("  Skipping: open failed (%s)\n", io.LastError().c_str());
     return 0;
   }
-  NamStudioGraph* graph = MakePassthroughGraph(io.SampleRate(), io.BufferFrames());
+  OpenAxeGraph* graph = MakePassthroughGraph(io.SampleRate(), io.BufferFrames());
   io.SetGraph(graph, io.SampleRate(), io.BufferFrames());
   io.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(150));
@@ -76,7 +76,7 @@ int main() {
   poller.join();
   // `io` destructs here, freeing state_ with no thread still referencing it.
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
   std::printf("teardown_race_test: completed (no use-after-free)\n");
   return 0;
 }

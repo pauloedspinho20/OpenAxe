@@ -31,9 +31,9 @@ add_test(NAME bridge COMMAND bridge_test)
 # TSan run needs one to be meaningful. Requires a toolchain that ships a TSan
 # runtime - Linux GCC/Clang yes; Apple's Clang on macOS links no
 # libclang_rt.tsan for arm64, so this is for Linux CI.
-option(NAM_DESKTOP_ENABLE_TSAN "Instrument core/lib/tests with ThreadSanitizer" OFF)
-if(NAM_DESKTOP_ENABLE_TSAN)
-  target_compile_options(nam_studio_core PRIVATE -fsanitize=thread -g)
+option(OPENAXE_DESKTOP_ENABLE_TSAN "Instrument core/lib/tests with ThreadSanitizer" OFF)
+if(OPENAXE_DESKTOP_ENABLE_TSAN)
+  target_compile_options(openaxe_core PRIVATE -fsanitize=thread -g)
   target_compile_options(nam_desktop_lib PRIVATE -fsanitize=thread -g)
   add_compile_options(-fsanitize=thread -g)
   add_link_options(-fsanitize=thread)

@@ -29,7 +29,7 @@ namespace openaxe::dsp {
 //   - time:     10–1000 ms, default 300 — delay time
 //   - feedback: 0–0.9, default 0.4 — regeneration
 //   - tone:     200–12000 Hz, default 6000 — lowpass cutoff in feedback path
-//   - model:    0=Digital, 1=Analog, 2=Tape (see NamStudioDelayModel in api.h)
+//   - model:    0=Digital, 1=Analog, 2=Tape (see OpenAxeDelayModel in api.h)
 //   - wowDepth: 0–5 ms, default 1.5 — tape wow depth (tape only)
 //   - wowRate:  0.1–3 Hz, default 0.5 — tape wow rate (tape only)
 //   - stereoMode: 0=Stereo, 1=Ping-Pong (see StereoMode below)

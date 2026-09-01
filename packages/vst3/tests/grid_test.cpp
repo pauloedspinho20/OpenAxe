@@ -26,8 +26,8 @@ void TestGridDims() {
 }
 
 void TestBlockCards() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  nam_studio_reset(g, 48000.0, 128);
+  OpenAxeGraph* g = openaxe_graph_create();
+  openaxe_reset(g, 48000.0, 128);
   const int32_t amp = openaxe_vst3::grid::AddBlock(g, "amp", 0, 0);
   const int32_t cab = openaxe_vst3::grid::AddBlock(g, "cab", 0, 1);
   CHECK(amp >= 0);
@@ -41,40 +41,40 @@ void TestBlockCards() {
   CHECK(card_amp->has_ir == false);
 
   // Bypass via inspector toggle (panel primitive)
-  nam_studio_set_bypass(g, amp, 1);
+  openaxe_set_bypass(g, amp, 1);
   card_amp = openaxe_vst3::grid::GetBlockCard(g, amp);
   CHECK(card_amp->bypassed);
 
   // Per-block meter after processing
   const int32_t mixer = openaxe_vst3::grid::AddBlock(g, "mixer", 0, 2);
-  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, mixer, 0);
-  nam_studio_connect(g, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(g, 48000.0, 64);
+  openaxe_connect(g, OPENAXE_IN_RAIL, 0, mixer, 0);
+  openaxe_connect(g, mixer, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(g, 48000.0, 64);
   float in[64], outL[64], outR[64];
   for (int i = 0; i < 64; ++i) in[i] = 0.3f;
   const float* ins[2] = {in, in};
   float* outs[2] = {outL, outR};
-  nam_studio_process(g, ins, 2, outs, 2, 64);
+  openaxe_process(g, ins, 2, outs, 2, 64);
   auto card_mix = openaxe_vst3::grid::GetBlockCard(g, mixer);
   CHECK(card_mix->meter > 0.0f);
 
   // Model/IR name would be populated after LoadNamModelFrom* — here we just
   // ensure the card reflects the has_model/has_ir booleans correctly.
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  Block cards (kind, bypass, meter, model/IR): ok\n");
 }
 
 void TestCableValidation() {
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   const int32_t a = openaxe_vst3::grid::AddBlock(g, "compressor", 0, 0);
   const int32_t b = openaxe_vst3::grid::AddBlock(g, "eq", 0, 1);
   CHECK(a >= 0 && b >= 0);
   // Valid: IN -> a, a -> b, b -> OUT
-  int32_t e1 = openaxe_vst3::grid::Connect(g, NAM_STUDIO_IN_RAIL, 0, a, 0);
+  int32_t e1 = openaxe_vst3::grid::Connect(g, OPENAXE_IN_RAIL, 0, a, 0);
   CHECK(e1 >= 0);
   int32_t e2 = openaxe_vst3::grid::Connect(g, a, 0, b, 0);
   CHECK(e2 >= 0);
-  int32_t e3 = openaxe_vst3::grid::Connect(g, b, 0, NAM_STUDIO_OUT_RAIL, 0);
+  int32_t e3 = openaxe_vst3::grid::Connect(g, b, 0, OPENAXE_OUT_RAIL, 0);
   CHECK(e3 >= 0);
   // Invalid: must honour -1 — don't draw phantom edge. Duplicate or reverse
   // edges are rejected by the core's graph validation (feedback loops etc).
@@ -87,12 +87,12 @@ void TestCableValidation() {
   int32_t e4 = openaxe_vst3::grid::Connect(g, a, 0, b, 0);
   CHECK(e4 >= 0);
   std::printf("  Cable validation (IN/OUT rails, honour -1): ok\n");
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
 }
 
 void TestAddRemoveMoveWithSuspend() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  nam_studio_reset(g, 48000.0, 128);
+  OpenAxeGraph* g = openaxe_graph_create();
+  openaxe_reset(g, 48000.0, 128);
   const int32_t blk = openaxe_vst3::grid::AddBlock(g, "delay", 1, 2);
   CHECK(blk >= 0);
   CHECK(openaxe_vst3::grid::MoveBlock(g, blk, 2, 3));
@@ -105,12 +105,12 @@ void TestAddRemoveMoveWithSuspend() {
   // b should still exist, but edge should be gone (core drops it).
   auto card = openaxe_vst3::grid::GetBlockCard(g, b);
   CHECK(card.has_value());
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  Add/remove/move with suspend: ok\n");
 }
 
 void TestInspectorDynamicParams() {
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   const int32_t verb = openaxe_vst3::grid::AddBlock(g, "reverb", 0, 0);
   const int32_t comp = openaxe_vst3::grid::AddBlock(g, "compressor", 0, 1);
   // Reverb hall has 18 params, compressor fewer — inspector must be dynamic.
@@ -125,7 +125,7 @@ void TestInspectorDynamicParams() {
     CHECK(p.min != p.max);
     const float mid = p.min + 0.5f * (p.max - p.min);
     CHECK(openaxe_vst3::grid::SetInspectorParam(g, comp, p.index, mid));
-    const float got = nam_studio_get_param(g, comp, p.index);
+    const float got = openaxe_get_param(g, comp, p.index);
     CHECK(got >= p.min - 1e-4f && got <= p.max + 1e-4f);
   }
   // New core param appears with no plugin change — model this by ensuring
@@ -133,35 +133,35 @@ void TestInspectorDynamicParams() {
   // We can't mutate the table here, but we verify the path is param-count-driven,
   // not hardcoded (so any growth would be visible).
   std::printf("  Inspector dynamic params (reverb %zu vs comp %zu): ok\n", params_verb.size(), params_comp.size());
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
 }
 
 void TestAutomationSlotBindingFromInspector() {
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   const int32_t gate = openaxe_vst3::grid::AddBlock(g, "noise-gate", 0, 0);
-  nam_studio_reset(g, 48000.0, 128);
+  openaxe_reset(g, 48000.0, 128);
   // Inspector control → automation slot binding (slot-map #121#127)
   openaxe_vst3::grid::ClearParamTitlesChanged();
   CHECK(!openaxe_vst3::grid::PollParamTitlesChanged());
   CHECK(openaxe_vst3::grid::BindAutomationSlot(g, 1, gate));
-  CHECK(nam_studio_automation_slot_block(g, 1) == gate);
+  CHECK(openaxe_automation_slot_block(g, 1) == gate);
   CHECK(openaxe_vst3::grid::PollParamTitlesChanged()); // titles changed on rebind
   openaxe_vst3::grid::ClearParamTitlesChanged();
   CHECK(!openaxe_vst3::grid::PollParamTitlesChanged());
   CHECK(openaxe_vst3::grid::UnbindAutomationSlot(g, 1));
-  CHECK(nam_studio_automation_slot_block(g, 1) == -1);
+  CHECK(openaxe_automation_slot_block(g, 1) == -1);
   CHECK(openaxe_vst3::grid::PollParamTitlesChanged());
   openaxe_vst3::grid::ClearParamTitlesChanged();
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  Automation slot binding from inspector + titles changed: ok\n");
 }
 
 void TestRenderingCostNotWholeGrid() {
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   // Populate a near-full grid (4x10 = 40 possible, add 8)
   std::vector<int32_t> ids;
   for (int i = 0; i < 8; ++i) ids.push_back(openaxe_vst3::grid::AddBlock(g, "mixer", i % 4, i));
-  nam_studio_reset(g, 48000.0, 128);
+  openaxe_reset(g, 48000.0, 128);
   // Changing one block's param must not require re-reading the whole grid.
   // We verify by ensuring GetInspectorParams for one block doesn't touch
   // others' cached state — it only queries the requested block's param table.
@@ -176,7 +176,7 @@ void TestRenderingCostNotWholeGrid() {
   CHECK(after_other.size() == before.size());
   (void)after_other;
   std::printf("  Rendering cost not whole-grid: ok\n");
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
 }
 
 } // namespace
@@ -188,39 +188,39 @@ void TestRenderingCostNotWholeGrid() {
 // core owns them, so this pins the round trip and the exact spellings.
 static void TestBlockKindNames() {
   // Every kind the graph can hold must have a name, and it must round-trip.
-  const NamStudioBlockKind kinds[] = {
-      NAM_STUDIO_BLOCK_NOISE_GATE, NAM_STUDIO_BLOCK_COMPRESSOR, NAM_STUDIO_BLOCK_EQ,
-      NAM_STUDIO_BLOCK_CHORUS, NAM_STUDIO_BLOCK_FLANGER, NAM_STUDIO_BLOCK_PHASER,
-      NAM_STUDIO_BLOCK_TREMOLO, NAM_STUDIO_BLOCK_RING_MOD, NAM_STUDIO_BLOCK_FILTER,
-      NAM_STUDIO_BLOCK_PITCH_SHIFTER, NAM_STUDIO_BLOCK_GRANULAR_DELAY, NAM_STUDIO_BLOCK_ROTARY,
-      NAM_STUDIO_BLOCK_DELAY, NAM_STUDIO_BLOCK_REVERB,
-      NAM_STUDIO_BLOCK_AMP, NAM_STUDIO_BLOCK_AMP_CAB, NAM_STUDIO_BLOCK_PEDAL,
-      NAM_STUDIO_BLOCK_OUTBOARD, NAM_STUDIO_BLOCK_SPACE, NAM_STUDIO_BLOCK_CAB,
-      NAM_STUDIO_BLOCK_MIXER, NAM_STUDIO_BLOCK_SPLITTER, NAM_STUDIO_BLOCK_SEND_1,
-      NAM_STUDIO_BLOCK_RETURN_1, NAM_STUDIO_BLOCK_SEND_2, NAM_STUDIO_BLOCK_RETURN_2,
+  const OpenAxeBlockKind kinds[] = {
+      OPENAXE_BLOCK_NOISE_GATE, OPENAXE_BLOCK_COMPRESSOR, OPENAXE_BLOCK_EQ,
+      OPENAXE_BLOCK_CHORUS, OPENAXE_BLOCK_FLANGER, OPENAXE_BLOCK_PHASER,
+      OPENAXE_BLOCK_TREMOLO, OPENAXE_BLOCK_RING_MOD, OPENAXE_BLOCK_FILTER,
+      OPENAXE_BLOCK_PITCH_SHIFTER, OPENAXE_BLOCK_GRANULAR_DELAY, OPENAXE_BLOCK_ROTARY,
+      OPENAXE_BLOCK_DELAY, OPENAXE_BLOCK_REVERB,
+      OPENAXE_BLOCK_AMP, OPENAXE_BLOCK_AMP_CAB, OPENAXE_BLOCK_PEDAL,
+      OPENAXE_BLOCK_OUTBOARD, OPENAXE_BLOCK_SPACE, OPENAXE_BLOCK_CAB,
+      OPENAXE_BLOCK_MIXER, OPENAXE_BLOCK_SPLITTER, OPENAXE_BLOCK_SEND_1,
+      OPENAXE_BLOCK_RETURN_1, OPENAXE_BLOCK_SEND_2, OPENAXE_BLOCK_RETURN_2,
   };
-  for (NamStudioBlockKind k : kinds) {
-    const char* name = nam_studio_block_kind_name(k);
+  for (OpenAxeBlockKind k : kinds) {
+    const char* name = openaxe_block_kind_name(k);
     CHECK(name != nullptr);
     if (!name) continue;
-    NamStudioBlockKind back;
-    CHECK(nam_studio_block_kind_from_name(name, &back) == 0);
+    OpenAxeBlockKind back;
+    CHECK(openaxe_block_kind_from_name(name, &back) == 0);
     CHECK(back == k);
   }
 
   // Exact spellings the front ends send — a rename here silently breaks them.
-  NamStudioBlockKind k;
-  CHECK(nam_studio_block_kind_from_name("noise-gate", &k) == 0 && k == NAM_STUDIO_BLOCK_NOISE_GATE);
-  CHECK(nam_studio_block_kind_from_name("pitch-shifter", &k) == 0 && k == NAM_STUDIO_BLOCK_PITCH_SHIFTER);
-  CHECK(nam_studio_block_kind_from_name("send-1", &k) == 0 && k == NAM_STUDIO_BLOCK_SEND_1);
-  CHECK(nam_studio_block_kind_from_name("amp-cab", &k) == 0 && k == NAM_STUDIO_BLOCK_AMP_CAB);
+  OpenAxeBlockKind k;
+  CHECK(openaxe_block_kind_from_name("noise-gate", &k) == 0 && k == OPENAXE_BLOCK_NOISE_GATE);
+  CHECK(openaxe_block_kind_from_name("pitch-shifter", &k) == 0 && k == OPENAXE_BLOCK_PITCH_SHIFTER);
+  CHECK(openaxe_block_kind_from_name("send-1", &k) == 0 && k == OPENAXE_BLOCK_SEND_1);
+  CHECK(openaxe_block_kind_from_name("amp-cab", &k) == 0 && k == OPENAXE_BLOCK_AMP_CAB);
 
   // Unknown input must fail cleanly and leave the out param untouched.
-  NamStudioBlockKind sentinel = NAM_STUDIO_BLOCK_REVERB;
-  CHECK(nam_studio_block_kind_from_name("no-such-kind", &sentinel) != 0);
-  CHECK(sentinel == NAM_STUDIO_BLOCK_REVERB);
-  CHECK(nam_studio_block_kind_from_name(nullptr, &sentinel) != 0);
-  CHECK(nam_studio_block_kind_from_name("amp", nullptr) != 0);
+  OpenAxeBlockKind sentinel = OPENAXE_BLOCK_REVERB;
+  CHECK(openaxe_block_kind_from_name("no-such-kind", &sentinel) != 0);
+  CHECK(sentinel == OPENAXE_BLOCK_REVERB);
+  CHECK(openaxe_block_kind_from_name(nullptr, &sentinel) != 0);
+  CHECK(openaxe_block_kind_from_name("amp", nullptr) != 0);
   std::printf("  block kind names: ok\n");
 }
 

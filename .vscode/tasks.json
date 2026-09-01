@@ -772,7 +772,7 @@
       "label": "Drift: check-wasm-exports --check",
       "type": "shell",
       "command": "node scripts/check-wasm-exports.mjs --check",
-      "detail": "Checks every _nam_studio_* symbol the web app calls is in packages/core CMake EXPORTED_FUNCTIONS — issue #70. Use --fix to rewrite CMakeLists.txt",
+      "detail": "Checks every _openaxe_* symbol the web app calls is in packages/core CMake EXPORTED_FUNCTIONS — issue #70. Use --fix to rewrite CMakeLists.txt",
       "group": {
         "kind": "test",
         "isDefault": false

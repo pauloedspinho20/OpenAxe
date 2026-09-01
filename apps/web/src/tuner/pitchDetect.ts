@@ -24,12 +24,12 @@ export interface PitchResult {
 
 // ——— WASM fast path (issue #123) ———
 // Loaded lazily on the main thread; when ready, detectPitch() forwards to
-// the core's `nam_studio_detect_pitch` and returns its result. Until then
+// the core's `openaxe_detect_pitch` and returns its result. Until then
 // (and in Node/jsdom tests where fetch/WASM is unavailable) the pure-TS
 // fallback below runs instead, so behaviour is never broken by WASM readiness.
-// namStudioWasm itself has no import of this file (it defines its own result
+// openAxeWasm itself has no import of this file (it defines its own result
 // types), so a static import here is safe — no circular dependency.
-import { detectPitchWasm, ensureWasm } from './namStudioWasm'
+import { detectPitchWasm, ensureWasm } from './openAxeWasm'
 
 let wasmMod: unknown | null = null
 let wasmReady = false
@@ -116,7 +116,7 @@ export function detectPitchFallback(
  * (~31Hz) up to well past a guitar's high frets.
  *
  * When the WASM module is ready and the default 25..1500Hz range is used,
- * this forwards to the core's `nam_studio_detect_pitch` so every front end
+ * this forwards to the core's `openaxe_detect_pitch` so every front end
  * shares one detector (issue #123); otherwise it runs the TS fallback
  * above. Custom ranges stay on the TS path since the ABI's Hz-only entry
  * point is fixed to that range — call `detectPitchFallback` directly for

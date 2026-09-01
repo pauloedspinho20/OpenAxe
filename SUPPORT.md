@@ -2,8 +2,8 @@
 
 ## Getting Help
 
-- **Questions / ideas / showcase:** Use [GitHub Discussions](https://github.com/pauloedspinho20/NAM-Web-Studio/discussions) (Q&A, Ideas).
-- **Bug reports / feature requests:** Open an [Issue](https://github.com/pauloedspinho20/NAM-Web-Studio/issues) — please use the templates (bug_report / feature_request).
+- **Questions / ideas / showcase:** Use [GitHub Discussions](https://github.com/pauloedspinho20/OpenAxe/discussions) (Q&A, Ideas).
+- **Bug reports / feature requests:** Open an [Issue](https://github.com/pauloedspinho20/OpenAxe/issues) — please use the templates (bug_report / feature_request).
 - **Security issues:** See [SECURITY.md](./SECURITY.md) — do not open a public issue.
 - **Docs:** [`README.md`](./README.md) (setup, tasks, commands), [`AGENTS.md`](./AGENTS.md) (verification, drift guards), [`CONTRIBUTING.md`](./CONTRIBUTING.md) (branching, DCO, releases), [`ARCHITECTURE.md`](./ARCHITECTURE.md), and per-package READMEs (`packages/core`, `packages/vst3`, `apps/desktop`).
 

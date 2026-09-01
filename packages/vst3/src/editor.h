@@ -23,7 +23,7 @@
 // editor's size (see the constants below).
 #include "config.h"
 
-struct NamStudioGraph;
+struct OpenAxeGraph;
 
 namespace openaxe_vst3::editor {
 
@@ -80,11 +80,11 @@ std::string ThemeToString(Theme t);
 Theme DefaultTheme();
 
 // ── Polling (60fps, never blocks audio thread) ────────────────────────
-// nam_studio_get_meter / nam_studio_get_cpu_load are cheap reads — no
+// openaxe_get_meter / openaxe_get_cpu_load are cheap reads — no
 // allocation, no lock. The editor polls them on a timer; audio thread never
 // waits for the UI.
-float GetMeter(NamStudioGraph* graph, int32_t block_id);
-float GetCpuLoad(NamStudioGraph* graph);
+float GetMeter(OpenAxeGraph* graph, int32_t block_id);
+float GetCpuLoad(OpenAxeGraph* graph);
 
 // ── Font resource ──────────────────────────────────────────────────────
 // Monospace display font used by the web UI (JetBrains Mono / SF Mono
@@ -98,7 +98,7 @@ const char* BundledFontLicenseName();
 // can construct/destroy the editor without pulling in the webview headers.
 class Editor {
  public:
-  explicit Editor(NamStudioGraph* graph);
+  explicit Editor(OpenAxeGraph* graph);
   ~Editor();
 
   Editor(const Editor&) = delete;

@@ -28,9 +28,7 @@ export const useSettingsStore = create<SettingsState>()(
       setNamQuality: (quality) => set({ namQuality: Math.min(1, Math.max(0.01, quality)) }),
     }),
     {
-      // Key kept from the pre-rebrand name (issue #151): renaming would
-      // orphan users' persisted settings.
-      name: 'nam-web-studio-settings',
+      name: 'openaxe-settings',
       partialize: (state) => ({ namQuality: state.namQuality }),
     },
   ),

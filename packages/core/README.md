@@ -119,8 +119,8 @@ surface.
 
 ## Rig state wire format (issues #119, #120)
 
-`nam_studio_serialize_state` / `nam_studio_serialize_state_ex` /
-`nam_studio_load_state` (`include/openaxe/api.h`, implemented in
+`openaxe_serialize_state` / `openaxe_serialize_state_ex` /
+`openaxe_load_state` (`include/openaxe/api.h`, implemented in
 `src/serialization/{json rig_state sha256 base64}.{h,cpp}` — a hand-written
 dependency-free JSON module plus the state mapping) turn an entire rig into
 one JSON document and back. This is the single preset/scene model for host
@@ -233,8 +233,8 @@ each cab block with an IR carries an `"ir"` object:
 
 Restoration order per block: **embedded payload first**, then **source path**
 (relinking), then the block stays empty and the asset is reported as missing -
-`nam_studio_load_state` publishes the names of unresolvable assets, which
-`nam_studio_state_missing_asset_count` / `nam_studio_state_missing_asset`
+`openaxe_load_state` publishes the names of unresolvable assets, which
+`openaxe_state_missing_asset_count` / `openaxe_state_missing_asset`
 hand back to the caller until the next load. A payload that fails to decode,
 overshoots the size ceiling below, or isn't a valid asset falls through to the
 path attempt before giving up. Missing assets never abort the restore -
@@ -257,7 +257,7 @@ name/path metadata (`SetModelSourceInfo` / `SetIrSourceInfo`).
 
 `schemaVersion` is bumped for any breaking shape change. Missing field means
 1 (the web app's existing presets predate it). Versions this build knows are
-accepted; a NEWER version is rejected (`NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION`)
+accepted; a NEWER version is rejected (`OPENAXE_LOAD_STATE_UNSUPPORTED_VERSION`)
 rather than guessed at. Unknown fields inside a known version are ignored -
 forward-compatible by construction.
 
@@ -268,7 +268,7 @@ The shape is a superset of `apps/web/src/presets/types.ts`'s `Preset`
 jacks, `masterLevel`, `masterMuted`), so today's exported `.json` files load
 as-is. Those files predate core symbols in a few places, so documents WITHOUT
 a `schemaVersion` get exactly the interpretation `RigBlock.ts` +
-`namStudioRigWorklet.js` apply today:
+`openAxeRigWorklet.js` apply today:
 
 - `params.input_level`/`output_level` mean the **I/O trims**, not the amp
   family's calibration params (which canonical documents carry under those
@@ -289,7 +289,7 @@ unparseable JSON, wrong root shape, missing `blocks`/`edges` arrays, or an
 unsupported `schemaVersion`. Everything else follows applyPreset's
 partial-failure tolerance (#64): malformed entries, unknown kinds, dangling
 or rejected edges, and unresolvable params each skip individually while the
-rest restores. `nam_studio_serialize_state` uses the usual two-call sizing
+rest restores. `openaxe_serialize_state` uses the usual two-call sizing
 pattern (pass NULL to get the required capacity, NUL included). Both calls
 are control-thread only - allocate/rebuild topology - so suspend audio around
 them like every other mutation.
@@ -298,7 +298,7 @@ Tests: `tests/json_test.cpp` covers the JSON module itself (escapes, number
 round-tripping, malformed input, depth limits); `tests/api_state_test.cpp`
 is issue #119's round-trip proof - a non-trivial rig (amp + cab + effects +
 mixer + splitter) serialized, reloaded into fresh graphs, and asserted
-field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`;
+field-by-field PLUS bit-exact audio equivalence through `openaxe_process`;
 `tests/api_state_assets_test.cpp` is issue #120's - a real capture and a real
 IR embedded into a document that restores sample-identically after the source
 graph is destroyed (the sources exist nowhere on disk), plus the payload ->
@@ -403,7 +403,7 @@ Re-blessing is documented in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#changing-
 - WASM/browser UI wiring beyond Reverb — NAM model loading, metering, and
   reverb algorithm switching aren't wired into the web app yet
   (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`, built on the
-  shared `namStudioEffectBase.js`, only calls
+  shared `openAxeEffectBase.js`, only calls
   `create`/`add_block`/`connect`/`reset`/`process`/`set_param`).
 - iOS/Android: still unverified, those toolchains aren't installed in this
   environment.
@@ -424,7 +424,7 @@ ctest --test-dir packages/core/build --output-on-failure
 
 **Emscripten: verified for issue #22's first slice.** `openaxe_core`
 itself stays a plain `STATIC` library (Emscripten's export/link flags only
-apply to a final linked module); a small `nam_studio_core_wasm` executable
+apply to a final linked module); a small `openaxe_core_wasm` executable
 target (empty `src/wasm_entry.cpp`, no `main()` needed for the
 `MODULARIZE=1` factory-function pattern) links it and gets the actual
 Emscripten treatment. `scripts/build-core-wasm.sh` builds it and copies the
@@ -501,7 +501,7 @@ cmake --build build/native
 # scripts/build-core-wasm.sh instead, which also copies the output into
 # apps/web/public/wasm-core/
 emcmake cmake -B build/wasm -DCMAKE_BUILD_TYPE=Release
-cmake --build build/wasm --target nam_studio_core_wasm
+cmake --build build/wasm --target openaxe_core_wasm
 
 # iOS - unverified
 cmake -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS

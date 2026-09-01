@@ -11,11 +11,11 @@
 //  - Grid dims are read from packages/core/include/openaxe/grid_config.h
 //    (scripts/check-grid-dims.mjs), never hardcoded.
 //  - Block cards show kind, bypass, meter, model/IR name.
-//  - Cables use IN/OUT rails (NAM_STUDIO_IN_RAIL=-1, OUT_RAIL=-2).
-//  - Drag-to-connect calls nam_studio_connect and honours -1 (rejected).
+//  - Cables use IN/OUT rails (OPENAXE_IN_RAIL=-1, OUT_RAIL=-2).
+//  - Drag-to-connect calls openaxe_connect and honours -1 (rejected).
 //  - Add/remove/move via WithSuspend (Tier 2, like desktop's Mutate).
-//  - Inspector builds params dynamically from nam_studio_block_param_*.
-//  - Automation slot binding via nam_studio_bind_automation_slot.
+//  - Inspector builds params dynamically from openaxe_block_param_*.
+//  - Automation slot binding via openaxe_bind_automation_slot.
 //  - Rendering cost: React memoization (not whole-grid re-render per knob).
 // This header is SDK-free for offline CTests.
 
@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-struct NamStudioGraph;
+struct OpenAxeGraph;
 
 namespace openaxe_vst3::grid {
 
@@ -74,25 +74,25 @@ struct InspectorParam {
 //    suspended-like guarantee (single-threaded, no concurrent Process).
 //    Return -1 on rejection / unknown.
 
-int32_t AddBlock(NamStudioGraph* graph, const std::string& kind_str, int row, int col);
-bool RemoveBlock(NamStudioGraph* graph, int32_t block_id);
-bool MoveBlock(NamStudioGraph* graph, int32_t block_id, int row, int col);
-int32_t Connect(NamStudioGraph* graph, int32_t from_block, int from_port, int32_t to_block, int to_port);
-bool Disconnect(NamStudioGraph* graph, int32_t edge_id);
+int32_t AddBlock(OpenAxeGraph* graph, const std::string& kind_str, int row, int col);
+bool RemoveBlock(OpenAxeGraph* graph, int32_t block_id);
+bool MoveBlock(OpenAxeGraph* graph, int32_t block_id, int row, int col);
+int32_t Connect(OpenAxeGraph* graph, int32_t from_block, int from_port, int32_t to_block, int to_port);
+bool Disconnect(OpenAxeGraph* graph, int32_t edge_id);
 
-std::optional<BlockCard> GetBlockCard(NamStudioGraph* graph, int32_t block_id);
-std::vector<BlockCard> ListBlockCards(NamStudioGraph* graph);
-std::vector<Cable> ListCables(NamStudioGraph* graph);
+std::optional<BlockCard> GetBlockCard(OpenAxeGraph* graph, int32_t block_id);
+std::vector<BlockCard> ListBlockCards(OpenAxeGraph* graph);
+std::vector<Cable> ListCables(OpenAxeGraph* graph);
 
-std::vector<InspectorParam> GetInspectorParams(NamStudioGraph* graph, int32_t block_id);
-bool SetInspectorParam(NamStudioGraph* graph, int32_t block_id, int32_t param_index, float value);
+std::vector<InspectorParam> GetInspectorParams(OpenAxeGraph* graph, int32_t block_id);
+bool SetInspectorParam(OpenAxeGraph* graph, int32_t block_id, int32_t param_index, float value);
 
 // Automation slot binding from the inspector (issue #127 slot map).
 // After a rebind the host's param titles have changed — the plugin must
 // fire the format's notification (VST3 restartComponent, AU property,
 // CLAP rescan). Offline this sets a pollable flag.
-bool BindAutomationSlot(NamStudioGraph* graph, int slot, int32_t block_id);
-bool UnbindAutomationSlot(NamStudioGraph* graph, int slot);
+bool BindAutomationSlot(OpenAxeGraph* graph, int slot, int32_t block_id);
+bool UnbindAutomationSlot(OpenAxeGraph* graph, int slot);
 bool PollParamTitlesChanged();
 void ClearParamTitlesChanged();
 void NotifyParamTitlesChanged();

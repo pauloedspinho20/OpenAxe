@@ -29,8 +29,8 @@ iPlug2 itself is fetched at configure time via `FetchContent_Declare` (pinned `G
 cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build --config Release
 # Smoke test (core linkage, passthrough — no host needed, no iPlug2 SDKs needed)
-./packages/vst3/build/nam_studio_vst3_smoke
-# Scan in a host: copy packages/vst3/build/nam_studio_vst3.vst3 to ~/Library/Audio/Plug-Ins/VST3/
+./packages/vst3/build/openaxe_vst3_smoke
+# Scan in a host: copy packages/vst3/build/openaxe_vst3.vst3 to ~/Library/Audio/Plug-Ins/VST3/
 ```
 
 ### Windows
@@ -38,8 +38,8 @@ cmake --build packages/vst3/build --config Release
 ```powershell
 cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build --config Release
-.\packages\vst3\build\Release\nam_studio_vst3_smoke.exe
-# Copy build\nam_studio_vst3.vst3 to %COMMONPROGRAMFILES%\VST3\
+.\packages\vst3\build\Release\openaxe_vst3_smoke.exe
+# Copy build\openaxe_vst3.vst3 to %COMMONPROGRAMFILES%\VST3\
 ```
 
 ### Linux
@@ -47,15 +47,15 @@ cmake --build packages/vst3/build --config Release
 ```bash
 cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build --config Release
-./packages/vst3/build/nam_studio_vst3_smoke
-# Copy build/nam_studio_vst3.vst3 to ~/.vst3/
+./packages/vst3/build/openaxe_vst3_smoke
+# Copy build/openaxe_vst3.vst3 to ~/.vst3/
 ```
 
 Standalone iteration (no host, debugger-friendly):
 
 ```bash
-cmake --build packages/vst3/build --target nam_studio_standalone
-./packages/vst3/build/nam_studio_standalone
+cmake --build packages/vst3/build --target openaxe_standalone
+./packages/vst3/build/openaxe_standalone
 ```
 
 ### VSCode tasks
@@ -100,9 +100,9 @@ auval -v aumf Nms1 NwSt   # AU validation (macOS only)
 
 ## What the scaffold does
 
-- `CMakeLists.txt` reads the root `VERSION` file (`#54` — one source of truth, like `packages/core` and `apps/desktop`), `add_subdirectory(../../packages/core core)` and links `nam_studio_core` **with `WHOLE_ARCHIVE`** (NAM parsers self-register via static initializers — plain archive link drops them; see `packages/core/CMakeLists.txt`).
+- `CMakeLists.txt` reads the root `VERSION` file (`#54` — one source of truth, like `packages/core` and `apps/desktop`), `add_subdirectory(../../packages/core core)` and links `openaxe_core` **with `WHOLE_ARCHIVE`** (NAM parsers self-register via static initializers — plain archive link drops them; see `packages/core/CMakeLists.txt`).
 - `config.h` — plugin name (`OpenAxe`), manufacturer, unique IDs (`Nms1`/`NwSt`), I/O (`1-1 2-2`), `PLUG_DOES_STATE_CHUNKS=1`, VST3 subcategory `Fx|Amp`. VST3 target only for now; CLAP/AU later.
-- `src/plugin.{h,cpp}` — minimal `NamStudioPlugin : public iplug::Plugin`: `nam_studio_graph_create`/`destroy`, `nam_studio_reset` on sample-rate/block-size change, `nam_studio_process` passthrough.
+- `src/plugin.{h,cpp}` — minimal `OpenAxePlugin : public iplug::Plugin`: `openaxe_graph_create`/`destroy`, `openaxe_reset` on sample-rate/block-size change, `openaxe_process` passthrough.
 - `src/main_standalone.cpp` — standalone entry reusing the same DSP path.
 
 Verification: builds on macOS/Windows/Linux; `.vst3` scans and instantiates in at least one host per platform; standalone runs. Audio is passthrough — expected at this stage.
@@ -121,7 +121,7 @@ VST3, AU and CLAP all require the parameter list to be **fixed and stable**:
 declared once at construction, with ids that persist across sessions so a
 host's automation lanes keep pointing at the same control. `packages/core`
 addresses params as `(block_id, index)` on a **dynamic** 4×10 grid - block
-ids are handed out at `nam_studio_add_block` time and each cell's param table
+ids are handed out at `openaxe_add_block` time and each cell's param table
 depends on what block kind currently sits there. Nothing about that is stable
 across a project reload, and #119 deliberately made param _indices_ an
 implementation detail (rig-state documents key by symbol).
@@ -157,14 +157,14 @@ grid-size coupling.
 
 ### The design
 
-- **Pool**: `NAM_STUDIO_AUTOMATION_SLOT_COUNT = 16` slots. Slot 0 is
+- **Pool**: `OPENAXE_AUTOMATION_SLOT_COUNT = 16` slots. Slot 0 is
   permanently the master bus (level, mute); slots 1..15 bind to live blocks -
   more than any realistic rig fills, far fewer than 480.
-- **Entries per slot**: `NAM_STUDIO_AUTOMATION_PARAMS_PER_SLOT = 20`, a frozen
+- **Entries per slot**: `OPENAXE_AUTOMATION_PARAMS_PER_SLOT = 20`, a frozen
   stride. Each entry of a bound slot _is_ an index into the bound block's
   param table; its display name, range and unit resolve dynamically from
-  `nam_studio_automation_slot_param_info` (which forwards to the bound
-  block's `nam_studio_block_param_info`). Unbound slots expose dead entries;
+  `openaxe_automation_slot_param_info` (which forwards to the bound
+  block's `openaxe_block_param_info`). Unbound slots expose dead entries;
   entries past the bound block's own table resolve to nothing.
 - **Host id layout** (`packages/vst3/generated/automation_param_map.h`,
   generated): id 0 = master level, id 1 = master mute, then slot-major:
@@ -231,14 +231,14 @@ Slot addressing pins TWO things as permanent API:
 
 #### Where everything lives
 
-| Artifact                                                                                                                                                                             | Role                                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `param_schema.json` → `"pluginAutomation"`                                                                                                                                           | Single source of truth: counts + master descriptors                                                                   |
-| `scripts/gen-param-schema.mjs --target=automation-map`                                                                                                                               | Renders the header below; validates kinds fit the stride                                                              |
-| `generated/automation_param_map.h` (this package)                                                                                                                                    | Plugin-side constants, id layout helper, master metadata, static_asserts pinning core's copies                        |
-| `packages/core/include/openaxe/engine.h` → `kAutomation*` / `kMasterAutomation*`                                                                                                     | Core's mirrored constants (asserted equal to the generated ones)                                                      |
-| ABI: `nam_studio_bind_automation_slot`, `_unbind_…`, `_automation_slot_block`, `_automation_slot_param_count`, `_automation_slot_param_info`, `_set/get_automation_param_normalized` | Everything a plugin wrapper needs                                                                                     |
-| Rig state `"automationSlots"`                                                                                                                                                        | Bindings ride the document (`{"<slot>": {"blockId": "<doc id>"}}`); restored after blocks, soft-skipped when dangling |
+| Artifact                                                                                                                                                                          | Role                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `param_schema.json` → `"pluginAutomation"`                                                                                                                                        | Single source of truth: counts + master descriptors                                                                   |
+| `scripts/gen-param-schema.mjs --target=automation-map`                                                                                                                            | Renders the header below; validates kinds fit the stride                                                              |
+| `generated/automation_param_map.h` (this package)                                                                                                                                 | Plugin-side constants, id layout helper, master metadata, static_asserts pinning core's copies                        |
+| `packages/core/include/openaxe/engine.h` → `kAutomation*` / `kMasterAutomation*`                                                                                                  | Core's mirrored constants (asserted equal to the generated ones)                                                      |
+| ABI: `openaxe_bind_automation_slot`, `_unbind_…`, `_automation_slot_block`, `_automation_slot_param_count`, `_automation_slot_param_info`, `_set/get_automation_param_normalized` | Everything a plugin wrapper needs                                                                                     |
+| Rig state `"automationSlots"`                                                                                                                                                     | Bindings ride the document (`{"<slot>": {"blockId": "<doc id>"}}`); restored after blocks, soft-skipped when dangling |
 
 Tests: `packages/core/tests/api_automation_slots_test.cpp` - rebind survival
 across kinds, save/reload landing on the same control, master immutability,

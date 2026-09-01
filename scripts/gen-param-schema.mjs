@@ -27,7 +27,10 @@ const JS_OUT_PATH = join(ROOT, 'apps/web/public/wasm-core/generatedParams.js')
 const TS_RANGES_OUT_PATH = join(ROOT, 'apps/web/src/effects/generatedParamRanges.ts')
 const AUTOMATION_MAP_OUT_PATH = join(ROOT, 'packages/vst3/generated/automation_param_map.h')
 const BLOCKS_CONFIG_PATH = join(ROOT, 'packages/core/effects.config.json')
-const BLOCKS_HEADER_OUT_PATH = join(ROOT, 'packages/core/include/openaxe/generated/enabled_blocks.h')
+const BLOCKS_HEADER_OUT_PATH = join(
+  ROOT,
+  'packages/core/include/openaxe/generated/enabled_blocks.h',
+)
 const BLOCKS_CMAKE_OUT_PATH = join(ROOT, 'packages/core/generated/block_sources.cmake')
 const BLOCKS_TS_OUT_PATH = join(ROOT, 'apps/web/src/effects/generatedBlockConfig.ts')
 
@@ -441,7 +444,7 @@ function renderAutomationMap(auto) {
 // own $comment for why they are two and not one.
 
 // "ping-pong-delay" -> "PING_PONG_DELAY", matching api.h's
-// NAM_STUDIO_BLOCK_* spelling so the two are greppable together.
+// OPENAXE_BLOCK_* spelling so the two are greppable together.
 function blockMacroSuffix(kind) {
   return kind.toUpperCase().replace(/-/g, '_')
 }
@@ -490,7 +493,10 @@ const GENERATED_HEADER_PLAIN = (source, comment) =>
 function renderBlocksHeader(config) {
   const entries = blockEntries(config)
   const defines = entries
-    .map(([kind, e]) => `#define OPENAXE_BLOCK_${blockMacroSuffix(kind)} ${e.compiled ? 1 : 0}`)
+    .map(
+      ([kind, e]) =>
+        `#define OPENAXE_BLOCK_${blockMacroSuffix(kind)}_COMPILED ${e.compiled ? 1 : 0}`,
+    )
     .join('\n')
   const compiledCases = entries
     .map(([, e]) => `    case graph::BlockKind::${e.enumName}: return ${e.compiled};`)

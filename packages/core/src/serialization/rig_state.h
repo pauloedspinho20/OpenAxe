@@ -13,7 +13,7 @@
 // The document is a superset of apps/web/src/presets/types.ts's Preset (see
 // packages/core/README.md's "Rig state wire format" for the full schema), and
 // the loader additionally understands the web app's existing files' UI-level
-// param keys exactly as RigBlock.ts + namStudioRigWorklet.js resolve them -
+// param keys exactly as RigBlock.ts + openAxeRigWorklet.js resolve them -
 // so today's exported presets load without migration.
 namespace openaxe::state {
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 export type Theme = 'dark' | 'light'
 
-const STORAGE_KEY = 'nam-web-studio:theme'
+const STORAGE_KEY = 'openaxe:theme'
 
 function readStoredTheme(): Theme {
   if (typeof localStorage === 'undefined') return 'dark'
