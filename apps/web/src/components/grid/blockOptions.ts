@@ -113,7 +113,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
   },
   {
     kind: 'compressor',
-    label: 'Compressor',
+    label: 'Comp',
     group: 'Effects',
     vendor: 'DSPark',
     vendorUrl: 'https://github.com/CristianMoresi/DSPark',

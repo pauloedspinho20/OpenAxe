@@ -7,6 +7,12 @@
   margin: 0 auto;
 }
 
+@media (max-width: var(--mw-xl)) {
+  .chassis {
+    margin: 0;
+  }
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -25,6 +31,13 @@
 .headerGroupWrapper {
   display: flex;
   margin-left: auto;
+}
+
+@media (max-width: var(--mw-xs)) {
+  .headerGroupWrapper {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 .headerGroup {
@@ -110,6 +123,7 @@
     border-left: none;
     padding: 0;
     margin: 0;
+    padding: 0 var(--sp-2);
   }
 
   .brand,

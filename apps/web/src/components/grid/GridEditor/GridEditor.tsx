@@ -314,8 +314,9 @@ export function GridEditor({
         <div className={`${styles.rail} ${styles.railIn}`}>
           <HardwareButton
             fullWidth
+            size="small"
             active={engine.diPlaying}
-            label={engine.diPlaying ? 'Sample' : 'IN'}
+            label={engine.diPlaying ? 'SAMPLE' : 'INPUT'}
             onClick={() => setInputDialogOpen(true)}
             title={
               engine.diPlaying
@@ -366,7 +367,8 @@ export function GridEditor({
         <div className={`${styles.rail} ${styles.railOut}`}>
           <HardwareButton
             fullWidth
-            label="OUT"
+            size="small"
+            label="OUTPUT"
             onClick={() => setOutputDialogOpen(true)}
             disabled={isPluginShell}
             title={
@@ -374,6 +376,8 @@ export function GridEditor({
             }
           />
           <HardwareButton
+            fullWidth
+            size="small"
             label="MUTE"
             active={masterMuted}
             onClick={() => setMasterMuted(!masterMuted)}

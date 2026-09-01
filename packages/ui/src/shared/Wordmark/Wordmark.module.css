@@ -51,6 +51,13 @@
   line-height: 1;
 }
 
+@media (max-width: var(--mw-sm)) {
+  .version,
+  .beta {
+    display: none;
+  }
+}
+
 .beta {
   font-size: 10px;
   font-weight: 700;

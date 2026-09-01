@@ -96,7 +96,7 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // packages/core.
   const FX_KINDS = [
     'Gate',
-    'Compressor',
+    'Comp',
     'EQ',
     'Tremolo',
     'Reverb',

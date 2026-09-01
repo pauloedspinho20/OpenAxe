@@ -7,6 +7,12 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-09-01
+
+### Changed
+
+- Dev to Main (#347) (bf10cc2)
+
 ## [0.2.7] - 2026-08-30
 
 ### Changed

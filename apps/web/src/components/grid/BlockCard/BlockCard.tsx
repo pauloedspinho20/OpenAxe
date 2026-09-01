@@ -269,7 +269,11 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
             ●
           </button>
 
-          {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
+          {analyser && (
+            <div className={styles.meterWrap}>
+              <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />
+            </div>
+          )}
 
           <button
             type="button"
