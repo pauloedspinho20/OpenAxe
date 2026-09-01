@@ -5,6 +5,17 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'apps/landing/**'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/auto-release.yml'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # packages/core's own C++ suite - 33 tests covering the DSP, the graph, the
@@ -23,16 +34,29 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-core-${{ runner.os }}-${{ hashFiles('packages/core/CMakeLists.txt', 'packages/core/src/**', 'packages/core/include/**', 'packages/core/tests/**') }}
+          restore-keys: |
+            ccache-core-${{ runner.os }}-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build pkg-config
+          sudo apt-get install -y --no-install-recommends ccache cmake ninja-build pkg-config
+          ccache --set-config=max_size=400M
+          ccache -z
 
       - name: Configure
-        run: cmake -S packages/core -B packages/core/build -DCMAKE_BUILD_TYPE=Release -DOPENAXE_BUILD_TESTS=ON
+        run: cmake -S packages/core -B packages/core/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOPENAXE_BUILD_TESTS=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build packages/core/build -j
+
+      - name: ccache stats (pre-test)
+        run: ccache -s
 
       # --output-on-failure so a golden-metric drift prints the offending
       # effect/stimulus/metric and both values straight into the CI log; the
@@ -40,7 +64,14 @@ jobs:
       - name: Test
         run: ctest --test-dir packages/core/build --output-on-failure -j2
 
-  build-and-test:
+      - name: ccache stats (post)
+        if: always()
+        run: ccache -s
+
+  # Fast drift/lint/format/typecheck+build — fails in <2 min without needing
+  # browsers or the full test suite. Split from unit/e2e so these run in
+  # parallel and a prettier typo doesn't wait for Playwright (47s+100s).
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -98,25 +129,60 @@ jobs:
       - name: Typecheck & build
         run: pnpm build
 
+  unit:
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Test
         run: pnpm test:run
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck & build (for E2E)
+        run: pnpm build
 
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}-1.62.1
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-1.62.1
           restore-keys: |
-            ${{ runner.os }}-playwright-
+            playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @openaxe/web exec playwright install --with-deps chromium firefox webkit
+        run: pnpm --filter @openaxe/web exec playwright install --with-deps chromium
 
       - name: Install Playwright system deps (cache hit)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter @openaxe/web exec playwright install-deps chromium firefox webkit
+        run: pnpm --filter @openaxe/web exec playwright install-deps chromium
 
       - name: E2E test
         # Full 4-project matrix (chromium/firefox/webkit + mobile) is ~3× slower.
