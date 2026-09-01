@@ -64,7 +64,7 @@ describe('components/GridEditor', () => {
     // the result back, so a device picker there chooses nothing.
     it('offers device pickers on the web', () => {
       render(<GridEditor {...baseProps} />)
-      const inButton = screen.getByRole('button', { name: 'IN' })
+      const inButton = screen.getByRole('button', { name: 'INPUT' })
       expect(inButton).not.toBeDisabled()
 
       fireEvent.click(inButton)
@@ -75,7 +75,7 @@ describe('components/GridEditor', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
 
-      const inButton = screen.getByRole('button', { name: 'IN' })
+      const inButton = screen.getByRole('button', { name: 'INPUT' })
       expect(inButton).toHaveAttribute('title', 'Input channel')
 
       fireEvent.click(inButton)
@@ -89,7 +89,7 @@ describe('components/GridEditor', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
 
-      const outButton = screen.getByRole('button', { name: 'OUT' })
+      const outButton = screen.getByRole('button', { name: 'OUTPUT' })
       expect(outButton).toBeDisabled()
       fireEvent.click(outButton)
       expect(screen.queryByText('Default output')).not.toBeInTheDocument()
@@ -98,8 +98,8 @@ describe('components/GridEditor', () => {
     it('keeps the rails themselves, since they are still the jacks cables land on', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
-      expect(screen.getByRole('button', { name: 'IN' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'OUT' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'INPUT' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'OUTPUT' })).toBeInTheDocument()
     })
   })
 })
