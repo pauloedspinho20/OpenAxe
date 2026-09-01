@@ -10,6 +10,7 @@ import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
 import { FactorySetupDialog } from './components/global/FactorySetupDialog/FactorySetupDialog'
+import { AboutDialog } from './components/global/AboutDialog/AboutDialog'
 import {
   HardwareButton,
   IconButton,
@@ -88,6 +89,7 @@ function App() {
 
   const { latest: updateLatest, dismiss: dismissUpdate } = useUpdateCheck()
   const toastedTagRef = useRef<string | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   // Complete a Tone3000 OAuth redirect-back on launch, refresh the local
   // library metadata, and run the scene/preset boot decision: hydrate an
@@ -131,9 +133,15 @@ function App() {
   return (
     <div className={styles.chassis}>
       <header className={styles.header}>
-        <div className={`${styles.headerGroup} ${styles.brand}`}>
+        <button
+          type="button"
+          className={`${styles.headerGroup} ${styles.brand} ${styles.brandButton}`}
+          onClick={() => setAboutOpen(true)}
+          aria-label="About OpenAxe"
+          title="About OpenAxe — click for credits and info"
+        >
           <Wordmark version={pkg.version} />
-        </div>
+        </button>
 
         {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
@@ -158,66 +166,68 @@ function App() {
           )}
         </div> */}
 
-        <div className={styles.headerGroup}>
-          <HeaderPerfWidget context={engine.context} />
-        </div>
+        <div className={styles.headerGroupWrapper}>
+          <div className={styles.headerGroup}>
+            <HeaderPerfWidget context={engine.context} />
+          </div>
 
-        <div className={styles.headerGroup}>
-          <Toggle
-            label="Theme"
-            checked={theme === 'light'}
-            onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
-          />
-        </div>
+          <div className={styles.headerGroup}>
+            <Toggle
+              label="Theme"
+              checked={theme === 'light'}
+              onChange={(checked) => setTheme(checked ? 'light' : 'dark')}
+            />
+          </div>
 
-        <div className={styles.headerGroup}>
-          <HardwareButton
-            label="Undo"
-            size="small"
-            disabled={!canUndo}
-            title={undoTitle}
-            icon={<UndoIcon size={12} />}
-            iconOnly
-            onClick={() => void undo()}
-          ></HardwareButton>
-          <IconButton
-            label="Redo"
-            disabled={!canRedo}
-            title={redoTitle}
-            onClick={() => void redo()}
-          >
-            <RedoIcon size={12} />
-          </IconButton>
-        </div>
+          <div className={styles.headerGroup}>
+            <HardwareButton
+              label="Undo"
+              size="small"
+              disabled={!canUndo}
+              title={undoTitle}
+              icon={<UndoIcon size={12} />}
+              iconOnly
+              onClick={() => void undo()}
+            ></HardwareButton>
+            <IconButton
+              label="Redo"
+              disabled={!canRedo}
+              title={redoTitle}
+              onClick={() => void redo()}
+            >
+              <RedoIcon size={12} />
+            </IconButton>
+          </div>
 
-        <div className={styles.headerGroup}>
-          <HardwareButton
-            label="Settings"
-            icon={<SettingsIcon size={16} />}
-            iconOnly
-            onClick={openSettings}
-            title="Open app settings"
-          />
-          <HardwareButton
-            label="MIDI"
-            icon={<MidiIcon size={16} />}
-            iconOnly
-            active={midiConnected}
-            onClick={openMidiManager}
-            title={midiStatusTitle}
-          />
-          {/* No power switch in a plugin: the DAW decides when the plugin runs,
+          <div className={styles.headerGroup}>
+            <HardwareButton
+              label="Settings"
+              icon={<SettingsIcon size={16} />}
+              iconOnly
+              onClick={openSettings}
+              title="Open app settings"
+            />
+            <HardwareButton
+              label="MIDI"
+              icon={<MidiIcon size={16} />}
+              iconOnly
+              active={midiConnected}
+              onClick={openMidiManager}
+              title={midiStatusTitle}
+            />
+            {/* No power switch in a plugin: the DAW decides when the plugin runs,
               and powering off here would only stop the UI's own view of a graph
               that keeps processing — leaving no obvious way back. */}
-          {isReady && !isPluginShell && (
-            <HardwareButton
-              label="Power off"
-              icon={<PowerIcon size={16} />}
-              iconOnly
-              active
-              onClick={() => void engine.powerOff()}
-            />
-          )}
+            {isReady && !isPluginShell && (
+              <HardwareButton
+                label="Power off"
+                icon={<PowerIcon size={16} />}
+                iconOnly
+                active
+                onClick={() => void engine.powerOff()}
+              />
+            )}
+          </div>
         </div>
       </header>
 
@@ -263,33 +273,6 @@ function App() {
         />
       </main>
 
-      <footer className={styles.footer}>
-        <span>
-          Built using{' '}
-          <a
-            href="https://github.com/tone-3000/neural-amp-modeler-wasm"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Neural Amp Modeler
-          </a>
-        </span>
-        <span className={styles.footerDot}>·</span>
-        <span>
-          Models &amp; IRs via{' '}
-          <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">
-            TONE3000
-          </a>
-        </span>
-
-        <span>
-          Made with ❤ by{' '}
-          <a href="https://hotdogtor.com" target="_blank" rel="noreferrer">
-            Hot Dogtor
-          </a>
-        </span>
-      </footer>
-
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
       <SceneManager />
@@ -317,6 +300,7 @@ function App() {
         open={setupStatus === 'pending' && isReady}
         onDone={() => setSetupStatus('done')}
       />
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <Toaster />
     </div>
   )

@@ -12,6 +12,20 @@
   z-index: 2;
 }
 
+/* Larger tap target on touch devices */
+@media (pointer: coarse), (max-width: var(--mw-md)) {
+  .badge {
+    width: 16px;
+    height: 16px;
+  }
+
+  .badge::before {
+    content: '';
+    position: absolute;
+    inset: -14px;
+  }
+}
+
 .badge:hover {
   background: #ff6a57;
 }

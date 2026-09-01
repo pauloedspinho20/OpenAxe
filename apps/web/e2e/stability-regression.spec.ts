@@ -85,7 +85,10 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await expect(blocks).toHaveCount(3, { timeout: 30000 })
   await page.getByRole('button', { name: '8 Bypass' }).click()
   await expect(blocks).toHaveCount(1, { timeout: 30000 })
-  await page.getByRole('button', { name: 'Remove Mixer' }).click()
+  // Mixer removal now lives in the block's actions sheet (⋯ menu) — the direct
+  // Remove button was moved from BlockCard to BlockActionSheet for mobile.
+  await page.getByRole('button', { name: 'Actions for Mixer' }).click()
+  await page.getByRole('button', { name: 'Remove block' }).click()
   await expect(blocks).toHaveCount(0)
 
   // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
@@ -126,7 +129,8 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   }
 
   for (const kind of [...FX_KINDS, 'Mixer']) {
-    await page.getByRole('button', { name: `Remove ${kind}`, exact: true }).click()
+    await page.getByRole('button', { name: `Actions for ${kind}` }).click()
+    await page.getByRole('button', { name: 'Remove block' }).click()
   }
 
   await expect(page.getByRole('button', { name: /block - click or Enter to edit/ })).toHaveCount(0)
