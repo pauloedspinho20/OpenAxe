@@ -27,7 +27,7 @@
 //     loads, reverb/delay algorithm swaps, and the post-Open reset.
 //     Handlers Call() into it so these serialize against each other and never
 //     run on the audio thread.
-//   - audio (real-time) thread: only ever nam_studio_process. Before touching
+//   - audio (real-time) thread: only ever openaxe_process. Before touching
 //     the graph the control thread raises the suspend flag and waits for the
 //     audio callback to observe it (see AudioIO::BeginSuspend), so a mutation
 //     can never race an in-flight process.
@@ -148,7 +148,7 @@ class StudioBridge {
 
   // State -----------------------------------------------------------------
   AudioIO audio_;
-  NamStudioGraph* graph_ = nullptr;
+  OpenAxeGraph* graph_ = nullptr;
 
   std::thread control_thread_;
   std::mutex queue_mutex_;

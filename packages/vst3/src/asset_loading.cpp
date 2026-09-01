@@ -33,11 +33,11 @@ std::mutex g_dir_mutex;
 std::string g_last_nam_dir;
 std::string g_last_ir_dir;
 
-LoadResult MapNamResult(NamStudioLoadResult core) {
+LoadResult MapNamResult(OpenAxeLoadResult core) {
   switch (core) {
-    case NAM_STUDIO_LOAD_OK: return LoadResult::Ok;
-    case NAM_STUDIO_LOAD_FILE_NOT_FOUND: return LoadResult::FileNotFound;
-    case NAM_STUDIO_LOAD_INVALID_FORMAT: return LoadResult::InvalidFormat;
+    case OPENAXE_LOAD_OK: return LoadResult::Ok;
+    case OPENAXE_LOAD_FILE_NOT_FOUND: return LoadResult::FileNotFound;
+    case OPENAXE_LOAD_INVALID_FORMAT: return LoadResult::InvalidFormat;
     default: return LoadResult::InvalidFormat;
   }
 }
@@ -119,16 +119,16 @@ std::string GetLastIrDirectory() {
 }
 
 namespace {
-bool BlockExists(NamStudioGraph* g, int32_t id) {
+bool BlockExists(OpenAxeGraph* g, int32_t id) {
   // Every current block kind has at least one param (cab=1, amp=7, mixer=8,
   // etc.), so param_count==0 is a reliable sentinel for "unknown" without
   // exposing FindBlock. Note: GetInputTrim returns 1.0 for unknown, so we
   // can't use trims as sentinel.
-  return nam_studio_block_param_count(g, id) != 0;
+  return openaxe_block_param_count(g, id) != 0;
 }
 }  // namespace
 
-LoadResult LoadNamModelFromJson(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadNamModelFromJson(OpenAxeGraph* graph, int32_t block_id,
                                 const std::string& json, std::string* error) {
   if (!graph || block_id < 0 || !BlockExists(graph, block_id)) {
     if (error) *error = "unknown block";
@@ -138,18 +138,18 @@ LoadResult LoadNamModelFromJson(NamStudioGraph* graph, int32_t block_id,
     if (error) *error = "loadModel: file too large (max 32 MB)";
     return LoadResult::TooLarge;
   }
-  if (!nam_studio_block_has_model(graph, block_id) && nam_studio_block_param_count(graph, block_id) == 0) {
+  if (!openaxe_block_has_model(graph, block_id) && openaxe_block_param_count(graph, block_id) == 0) {
     // Cheap check: block kind without DSP still has param table? But for non-amp kinds the load is no-op; let core decide.
   }
-  const auto r = nam_studio_load_nam_model_json(graph, block_id, json.c_str());
-  if (r != NAM_STUDIO_LOAD_OK) {
+  const auto r = openaxe_load_nam_model_json(graph, block_id, json.c_str());
+  if (r != OPENAXE_LOAD_OK) {
     if (error) *error = std::string("loadModel: ") + ToString(MapNamResult(r));
     return MapNamResult(r);
   }
   return LoadResult::Ok;
 }
 
-LoadResult LoadNamModelFromPath(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadNamModelFromPath(OpenAxeGraph* graph, int32_t block_id,
                                 const std::string& file_path, std::string* error) {
   if (!graph || block_id < 0 || !BlockExists(graph, block_id)) {
     if (error) *error = "unknown block";
@@ -173,7 +173,7 @@ LoadResult LoadNamModelFromPath(NamStudioGraph* graph, int32_t block_id,
   return r;
 }
 
-LoadResult LoadIrWavFromBytes(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadIrWavFromBytes(OpenAxeGraph* graph, int32_t block_id,
                               const uint8_t* wav_bytes, size_t wav_size,
                               std::string* error) {
   if (!graph || block_id < 0 || !BlockExists(graph, block_id)) {
@@ -188,7 +188,7 @@ LoadResult LoadIrWavFromBytes(NamStudioGraph* graph, int32_t block_id,
     if (error) *error = "loadIrWav: not a WAV file";
     return LoadResult::NotWav;
   }
-  const int32_t n = nam_studio_load_ir_wav(graph, block_id, wav_bytes, static_cast<int32_t>(wav_size));
+  const int32_t n = openaxe_load_ir_wav(graph, block_id, wav_bytes, static_cast<int32_t>(wav_size));
   if (n == 0) {
     if (error) *error = "loadIrWav: the core could not decode this file";
     return LoadResult::InvalidFormat;
@@ -196,7 +196,7 @@ LoadResult LoadIrWavFromBytes(NamStudioGraph* graph, int32_t block_id,
   return LoadResult::Ok;
 }
 
-LoadResult LoadIrWavFromPath(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadIrWavFromPath(OpenAxeGraph* graph, int32_t block_id,
                              const std::string& file_path, std::string* error) {
   if (!graph || block_id < 0 || !BlockExists(graph, block_id)) {
     if (error) *error = "unknown block";
@@ -217,15 +217,15 @@ LoadResult LoadIrWavFromPath(NamStudioGraph* graph, int32_t block_id,
   return r;
 }
 
-std::optional<ModelInfo> GetModelInfo(NamStudioGraph* graph, int32_t block_id) {
+std::optional<ModelInfo> GetModelInfo(OpenAxeGraph* graph, int32_t block_id) {
   if (!graph || block_id < 0) return std::nullopt;
-  if (!nam_studio_block_has_model(graph, block_id)) return std::nullopt;
+  if (!openaxe_block_has_model(graph, block_id)) return std::nullopt;
   ModelInfo mi;
   mi.has_model = true;
   double sr = -1;
   int32_t has_l = 0, has_in = 0, has_out = 0, is_slim = 0, bp_count = 0;
   double loud = 0, in_dbu = 0, out_dbu = 0;
-  if (!nam_studio_block_model_info(graph, block_id, &sr, &has_l, &loud, &has_in, &in_dbu, &has_out, &out_dbu, &is_slim, &bp_count)) {
+  if (!openaxe_block_model_info(graph, block_id, &sr, &has_l, &loud, &has_in, &in_dbu, &has_out, &out_dbu, &is_slim, &bp_count)) {
     return std::nullopt;
   }
   mi.sample_rate = sr;
@@ -239,15 +239,15 @@ std::optional<ModelInfo> GetModelInfo(NamStudioGraph* graph, int32_t block_id) {
   mi.slim_breakpoint_count = bp_count;
   if (bp_count > 0) {
     mi.slim_breakpoints.resize(static_cast<size_t>(bp_count));
-    const int got = nam_studio_block_model_slim_breakpoints(graph, block_id, mi.slim_breakpoints.data(), bp_count);
+    const int got = openaxe_block_model_slim_breakpoints(graph, block_id, mi.slim_breakpoints.data(), bp_count);
     mi.slim_breakpoints.resize(static_cast<size_t>(got));
   }
   return mi;
 }
 
-std::optional<int> GetIrLength(NamStudioGraph* graph, int32_t block_id) {
+std::optional<int> GetIrLength(OpenAxeGraph* graph, int32_t block_id) {
   if (!graph || block_id < 0) return std::nullopt;
-  const int n = nam_studio_block_ir_length(graph, block_id);
+  const int n = openaxe_block_ir_length(graph, block_id);
   if (n < 0) return std::nullopt;
   return n;
 }

@@ -59,7 +59,7 @@ per-target status of that split, the migration order, and the latency budget).
 interface)
 ```
 
-- **Block types**: `Amp` / `AmpCab` / `Pedal` / `Outboard` (NAM captures via NeuralAmpModelerCore), `Cab` (IR convolution), 14 effects, `Mixer`, `Splitter`, `Send`/`Return` ×2 — 26 kinds in total (`NamStudioBlockKind` in `packages/core/include/openaxe/api.h`)
+- **Block types**: `Amp` / `AmpCab` / `Pedal` / `Outboard` (NAM captures via NeuralAmpModelerCore), `Cab` (IR convolution), 14 effects, `Mixer`, `Splitter`, `Send`/`Return` ×2 — 26 kinds in total (`OpenAxeBlockKind` in `packages/core/include/openaxe/api.h`)
 - Blocks sit on a **4-row × 10-column grid** with IN/OUT rails
 - Graph validates connections for feedback loops; automatic semi-smart wiring on block placement
 
@@ -216,7 +216,7 @@ See [`.vscode/tasks.json`](./.vscode/tasks.json) for the full list and `AGENTS.m
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Param schema (web ↔ core + plugin automation) | `node scripts/gen-param-schema.mjs --check` (+ `--target=automation-map` for `packages/vst3/generated/automation_param_map.h`) | remove `--check`                                                        | Edit `packages/core/param_schema.json` / `apps/web/src/effects/paramSchema.ts` / `api.h` ranges |
 | Grid dims (TS ↔ C++ `4×10`)                   | `node scripts/check-grid-dims.mjs --check`                                                                                     | `--fix`                                                                 | Edit `apps/web/src/engine/gridConfig.ts` or `packages/core/include/openaxe/grid_config.h`       |
-| WASM exports                                  | `node scripts/check-wasm-exports.mjs --check`                                                                                  | `--fix` rewrites `EXPORTED_FUNCTIONS` in `packages/core/CMakeLists.txt` | Add `_nam_studio_*` symbol called from JS                                                       |
+| WASM exports                                  | `node scripts/check-wasm-exports.mjs --check`                                                                                  | `--fix` rewrites `EXPORTED_FUNCTIONS` in `packages/core/CMakeLists.txt` | Add `_openaxe_*` symbol called from JS                                                          |
 | Version sync                                  | `node scripts/sync-version.mjs --check`                                                                                        | run without flag (syncs `VERSION` → 5 `package.json` + CMake)           | Bump version (don't edit `package.json` manually)                                               |
 | Design tokens                                 | `node packages/ui/scripts/generate-tokens.mjs --check` (`--target=css`/`cpp`)                                                  | run without flag                                                        | Edit `packages/ui/tokens/design-tokens.json`                                                    |
 

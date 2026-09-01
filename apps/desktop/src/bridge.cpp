@@ -41,19 +41,19 @@ std::string JsonError(const std::string& message) {
 }
 
 // The name<->kind mapping lives in the core ABI now
-// (nam_studio_block_kind_from_name / nam_studio_block_kind_name), so adding a
+// (openaxe_block_kind_from_name / openaxe_block_kind_name), so adding a
 // block kind is one edit there rather than one per front end — this file and
 // the plugin bridge each carried their own copy of the same 27 rows
 // (issue #300 J3). These two stay as thin adapters because the call sites want
 // std::optional and a never-null string.
-std::optional<NamStudioBlockKind> WebToCoreKind(const std::string& web) {
-  NamStudioBlockKind kind;
-  if (nam_studio_block_kind_from_name(web.c_str(), &kind) != 0) return std::nullopt;
+std::optional<OpenAxeBlockKind> WebToCoreKind(const std::string& web) {
+  OpenAxeBlockKind kind;
+  if (openaxe_block_kind_from_name(web.c_str(), &kind) != 0) return std::nullopt;
   return kind;
 }
 
-const char* CoreToWebKind(NamStudioBlockKind core) {
-  const char* name = nam_studio_block_kind_name(core);
+const char* CoreToWebKind(OpenAxeBlockKind core) {
+  const char* name = openaxe_block_kind_name(core);
   return name ? name : "unknown";
 }
 
@@ -85,7 +85,7 @@ bool IsTrustedUiUrl(const std::string& url) {
 // ── Control executor ────────────────────────────────────────────────────
 
 StudioBridge::StudioBridge() {
-  graph_ = nam_studio_graph_create();
+  graph_ = openaxe_graph_create();
   audio_.SetGraph(graph_, graph_sample_rate_, graph_block_);
   control_thread_ = std::thread(&StudioBridge::ControlLoop, this);
 }
@@ -97,7 +97,7 @@ StudioBridge::~StudioBridge() {
   }
   queue_cv_.notify_all();
   if (control_thread_.joinable()) control_thread_.join();
-  nam_studio_graph_destroy(graph_);
+  openaxe_graph_destroy(graph_);
 }
 
 void StudioBridge::Submit(std::function<void()> task) {
@@ -158,7 +158,7 @@ void StudioBridge::ControlLoop() {
 void StudioBridge::Mutate(const std::function<void()>& mutation, bool reset_after) {
   const bool suspended_cleanly = audio_.BeginSuspend();
   mutation();
-  if (reset_after) nam_studio_reset(graph_, graph_sample_rate_, graph_block_);
+  if (reset_after) openaxe_reset(graph_, graph_sample_rate_, graph_block_);
   audio_.EndSuspend();
   if (!suspended_cleanly) {
     // BeginSuspend timed out waiting for the callback to observe the pause and
@@ -182,8 +182,8 @@ int32_t ResolveCoreId(const json& id_json, const std::map<std::string, BlockReco
   if (id_json.is_number()) return id_json.get<int32_t>();
   if (!id_json.is_string()) return kUnknownBlock;
   const std::string s = id_json.get<std::string>();
-  if (s == "-1" || s == "IN") return NAM_STUDIO_IN_RAIL;
-  if (s == "-2" || s == "OUT") return NAM_STUDIO_OUT_RAIL;
+  if (s == "-1" || s == "IN") return OPENAXE_IN_RAIL;
+  if (s == "-2" || s == "OUT") return OPENAXE_OUT_RAIL;
   const auto it = blocks.find(s);
   return it == blocks.end() ? kUnknownBlock : it->second.core_id;
 }
@@ -255,7 +255,7 @@ std::string StudioBridge::HandleGetConfig(const std::string&) {
                                 ? 1000.0 * static_cast<double>(latency_frames) / rate
                                 : -1.0},
               {"lastError", audio_.LastError()},
-              {"cpuLoad", nam_studio_get_cpu_load(graph_)}};
+              {"cpuLoad", openaxe_get_cpu_load(graph_)}};
   return out.dump();
 }
 
@@ -273,7 +273,7 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
 
     // Reopening while a previous stream is still live (device switch, or the
     // no-sound recovery poll retrying every few seconds) must not let
-    // Open()/SetGraph() below race an in-flight nam_studio_process call on
+    // Open()/SetGraph() below race an in-flight openaxe_process call on
     // that old stream - both touch the same long-lived AudioEngine
     // (ext_in_l_/max_block_size_ etc., resized here and read every callback),
     // and ASAN has caught the resulting heap-buffer-overflow when a resize
@@ -341,7 +341,7 @@ std::string StudioBridge::HandleAddBlock(const std::string& req) {
         return;
       }
       int32_t core_id = -1;
-      Mutate([&] { core_id = nam_studio_add_block(graph_, *core_kind, row, col); }, true);
+      Mutate([&] { core_id = openaxe_add_block(graph_, *core_kind, row, col); }, true);
       if (core_id < 0) {
         error = "failed to add block";
         return;
@@ -363,7 +363,7 @@ std::string StudioBridge::HandleRemoveBlock(const std::string& req) {
     Call([&] {
       auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_remove_block(graph_, it->second.core_id); }, true);
+      Mutate([&] { openaxe_remove_block(graph_, it->second.core_id); }, true);
       DropEdgesTouching(js_id);
       blocks_.erase(it);
     });
@@ -387,7 +387,7 @@ std::string StudioBridge::HandleMoveBlock(const std::string& req) {
       // RecomputeRouting, not Reset), so it needs no reallocation and must
       // not suspend/reset the audio thread - doing so made every param
       // change reset the whole engine (issue #62).
-      Mutate([&] { nam_studio_move_block(graph_, it->second.core_id, row, col); }, false);
+      Mutate([&] { openaxe_move_block(graph_, it->second.core_id, row, col); }, false);
       it->second.row = row;
       it->second.col = col;
     });
@@ -420,7 +420,7 @@ std::string StudioBridge::HandleConnect(const std::string& req) {
         return;
       }
       int32_t core_edge = -1;
-      Mutate([&] { core_edge = nam_studio_connect(graph_, from, from_port, to, to_port); }, true);
+      Mutate([&] { core_edge = openaxe_connect(graph_, from, from_port, to, to_port); }, true);
       if (core_edge < 0) {
         error = "connection rejected";
         return;
@@ -444,7 +444,7 @@ std::string StudioBridge::HandleDisconnect(const std::string& req) {
     Call([&] {
       const auto it = edge_ids_.find(js_edge_id);
       if (it == edge_ids_.end()) return;
-      Mutate([&] { nam_studio_disconnect(graph_, it->second); }, true);
+      Mutate([&] { openaxe_disconnect(graph_, it->second); }, true);
       edge_ids_rev_.erase(it->second);
       edge_ids_.erase(it);
       edges_.erase(js_edge_id);
@@ -469,7 +469,7 @@ const char* CoreSymbolAliasFor(const std::string& key) {
   return nullptr;
 }
 
-int32_t ResolveParamIndex(const json& key, int32_t core_id, NamStudioGraph* graph,
+int32_t ResolveParamIndex(const json& key, int32_t core_id, OpenAxeGraph* graph,
                           const std::map<std::string, BlockRecord>& blocks,
                           const std::string& js_id) {
   if (key.is_number()) return key.get<int32_t>();
@@ -477,13 +477,13 @@ int32_t ResolveParamIndex(const json& key, int32_t core_id, NamStudioGraph* grap
   std::string symbol = key.get<std::string>();
   if (const char* alias = CoreSymbolAliasFor(symbol)) symbol = alias;
   const auto it = blocks.find(js_id);
-  const int32_t count = it == blocks.end() ? 0 : nam_studio_block_param_count(graph, core_id);
+  const int32_t count = it == blocks.end() ? 0 : openaxe_block_param_count(graph, core_id);
   for (int32_t i = 0; i < count; ++i) {
     const char* name = nullptr;
     const char* sym = nullptr;
     const char* unit = nullptr;
     float min = 0, max = 0;
-    if (nam_studio_block_param_info(graph, core_id, i, &name, &sym, &min, &max, &unit) &&
+    if (openaxe_block_param_info(graph, core_id, i, &name, &sym, &min, &max, &unit) &&
         sym && symbol == sym)
       return i;
   }
@@ -495,14 +495,14 @@ int32_t ResolveParamIndex(const json& key, int32_t core_id, NamStudioGraph* grap
 // Room), so they resolve through the core's own ReverbControl mapping rather
 // than a symbol lookup. Returns -1 for anything that isn't one of them.
 int32_t ReverbControlFor(const std::string& key) {
-  if (key == "roomSize") return NAM_STUDIO_REVERB_ROOM_SIZE;
-  if (key == "damping") return NAM_STUDIO_REVERB_DAMPING;
-  if (key == "width") return NAM_STUDIO_REVERB_WIDTH;
-  if (key == "predelay") return NAM_STUDIO_REVERB_PREDELAY;
-  if (key == "spin") return NAM_STUDIO_REVERB_SPIN;
-  if (key == "wander") return NAM_STUDIO_REVERB_WANDER;
-  if (key == "earlySend") return NAM_STUDIO_REVERB_EARLY_SEND;
-  if (key == "dryLevel") return NAM_STUDIO_REVERB_DRY_LEVEL;
+  if (key == "roomSize") return OPENAXE_REVERB_ROOM_SIZE;
+  if (key == "damping") return OPENAXE_REVERB_DAMPING;
+  if (key == "width") return OPENAXE_REVERB_WIDTH;
+  if (key == "predelay") return OPENAXE_REVERB_PREDELAY;
+  if (key == "spin") return OPENAXE_REVERB_SPIN;
+  if (key == "wander") return OPENAXE_REVERB_WANDER;
+  if (key == "earlySend") return OPENAXE_REVERB_EARLY_SEND;
+  if (key == "dryLevel") return OPENAXE_REVERB_DRY_LEVEL;
   return -1;
 }
 
@@ -531,8 +531,8 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
         });
         if (reverb_core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
         if (is_reverb) {
-          nam_studio_set_reverb_control(
-              graph_, reverb_core_id, static_cast<NamStudioReverbControl>(control), value);
+          openaxe_set_reverb_control(
+              graph_, reverb_core_id, static_cast<OpenAxeReverbControl>(control), value);
           return (json{{"ok", true}}).dump();
         }
       }
@@ -551,7 +551,7 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
         const char* sym = nullptr;
         const char* unit = nullptr;
         float min = 0, max = 0;
-        if (nam_studio_block_param_info(graph_, core_id, index, &name, &sym, &min, &max, &unit) &&
+        if (openaxe_block_param_info(graph_, core_id, index, &name, &sym, &min, &max, &unit) &&
             sym && std::strcmp(sym, "slim_size") == 0) {
           slim_size = true;
         }
@@ -560,20 +560,20 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
     if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
     if (index < 0) return JsonError("unknown param key");
     if (slim_size) {
-      // nam_studio_set_param forwards the Amp-family slim-size param
+      // openaxe_set_param forwards the Amp-family slim-size param
       // synchronously into NAMCore, which may reallocate (issue #211) - it is
       // Tier 2, not the lock-free atomic write the rest of the param surface
       // is. Called straight from the webview thread it would race an in-flight
-      // nam_studio_process on the audio thread, so route it through the
+      // openaxe_process on the audio thread, so route it through the
       // control thread's suspend handshake like every other structural
       // mutation.
       Call([&] {
-        Mutate([&] { nam_studio_set_param(graph_, core_id, index, value); },
+        Mutate([&] { openaxe_set_param(graph_, core_id, index, value); },
                /*reset_after=*/false);
       });
     } else {
-      // nam_studio_set_param is lock-free and thread-safe (see api.h).
-      nam_studio_set_param(graph_, core_id, index, value);
+      // openaxe_set_param is lock-free and thread-safe (see api.h).
+      openaxe_set_param(graph_, core_id, index, value);
     }
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -597,7 +597,7 @@ std::string StudioBridge::HandleGetParam(const std::string& req) {
       index = ResolveParamIndex(key, core_id, graph_, blocks_, js_id);
     });
     if (core_id == kUnknownBlock || index < 0) return JsonError("unknown block or param");
-    return (json{{"ok", true}, {"value", nam_studio_get_param(graph_, core_id, index)}}).dump();
+    return (json{{"ok", true}, {"value", openaxe_get_param(graph_, core_id, index)}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("getParam: ") + e.what());
   }
@@ -614,14 +614,14 @@ std::string StudioBridge::HandleBlockInfo(const std::string& req) {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
       const BlockRecord& rec = it->second;
-      const int32_t count = nam_studio_block_param_count(graph_, rec.core_id);
+      const int32_t count = openaxe_block_param_count(graph_, rec.core_id);
       json params = json::array();
       for (int32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
         const char* symbol = nullptr;
         const char* unit = nullptr;
         float min = 0, max = 0;
-        if (nam_studio_block_param_info(graph_, rec.core_id, i, &name, &symbol, &min, &max,
+        if (openaxe_block_param_info(graph_, rec.core_id, i, &name, &symbol, &min, &max,
                                         &unit)) {
           params.push_back({{"index", i},
                             {"name", name ? name : ""},
@@ -629,7 +629,7 @@ std::string StudioBridge::HandleBlockInfo(const std::string& req) {
                             {"min", min},
                             {"max", max},
                             {"unit", unit ? unit : ""},
-                            {"value", nam_studio_get_param(graph_, rec.core_id, i)}});
+                            {"value", openaxe_get_param(graph_, rec.core_id, i)}});
         }
       }
       out = json{{"ok", true},
@@ -637,10 +637,10 @@ std::string StudioBridge::HandleBlockInfo(const std::string& req) {
                  {"kind", rec.kind},
                  {"row", rec.row},
                  {"col", rec.col},
-                 {"hasModel", nam_studio_block_has_model(graph_, rec.core_id) != 0},
+                 {"hasModel", openaxe_block_has_model(graph_, rec.core_id) != 0},
                  {"paramCount", count},
                  {"params", params},
-                 {"meter", nam_studio_get_meter(graph_, rec.core_id)}};
+                 {"meter", openaxe_get_meter(graph_, rec.core_id)}};
     });
     return out.empty() ? JsonError("unknown block: " + js_id) : out.dump();
   } catch (const std::exception& e) {
@@ -700,7 +700,7 @@ std::string StudioBridge::HandleLoadModel(const std::string& req) {
 
     int result = -1;
     Call([&] {
-      Mutate([&] { result = static_cast<int>(nam_studio_load_nam_model(graph_, core_id, path.c_str())); },
+      Mutate([&] { result = static_cast<int>(openaxe_load_nam_model(graph_, core_id, path.c_str())); },
              /*reset_after=*/false);
     });
     return (json{{"ok", result == 0}, {"result", result}}).dump();
@@ -732,7 +732,7 @@ std::string StudioBridge::HandleLoadModelJson(const std::string& req) {
         // temp file because the core could only load by path; it now has a JSON
         // entry point (the one the web app's WASM build needs, since a browser
         // has no filesystem), so the round-trip through disk is gone.
-        result = static_cast<int>(nam_studio_load_nam_model_json(graph_, core_id, content.c_str()));
+        result = static_cast<int>(openaxe_load_nam_model_json(graph_, core_id, content.c_str()));
       }, /*reset_after=*/false);
     });
     return (json{{"ok", result == 0}, {"result", result}}).dump();
@@ -749,7 +749,7 @@ std::string StudioBridge::HandleUnloadModel(const std::string& req) {
     Call([&] {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_unload_nam_model(graph_, it->second.core_id); },
+      Mutate([&] { openaxe_unload_nam_model(graph_, it->second.core_id); },
              /*reset_after=*/false);
     });
     return (json{{"ok", true}}).dump();
@@ -764,18 +764,18 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const std::string name = o.value("algorithm", "");
-    static const std::pair<const char*, NamStudioReverbAlgorithm> kAlgos[] = {
-        {"hall", NAM_STUDIO_REVERB_HALL},
-        {"room", NAM_STUDIO_REVERB_ROOM},
-        {"plate", NAM_STUDIO_REVERB_PLATE},
-        {"earlyReflections", NAM_STUDIO_REVERB_EARLY_REFLECTIONS},
+    static const std::pair<const char*, OpenAxeReverbAlgorithm> kAlgos[] = {
+        {"hall", OPENAXE_REVERB_HALL},
+        {"room", OPENAXE_REVERB_ROOM},
+        {"plate", OPENAXE_REVERB_PLATE},
+        {"earlyReflections", OPENAXE_REVERB_EARLY_REFLECTIONS},
     };
     const auto algo = MapByName(name, kAlgos, std::size(kAlgos));
     if (!algo) return JsonError("unknown reverb algorithm: " + name);
     Call([&] {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_set_reverb_algorithm(graph_, it->second.core_id, *algo); },
+      Mutate([&] { openaxe_set_reverb_algorithm(graph_, it->second.core_id, *algo); },
              /*reset_after=*/false);
     });
     return (json{{"ok", true}}).dump();
@@ -790,17 +790,17 @@ std::string StudioBridge::HandleSetDelayModel(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const std::string name = o.value("model", "");
-    static const std::pair<const char*, NamStudioDelayModel> kModels[] = {
-        {"digital", NAM_STUDIO_DELAY_DIGITAL},
-        {"analog", NAM_STUDIO_DELAY_ANALOG},
-        {"tape", NAM_STUDIO_DELAY_TAPE},
+    static const std::pair<const char*, OpenAxeDelayModel> kModels[] = {
+        {"digital", OPENAXE_DELAY_DIGITAL},
+        {"analog", OPENAXE_DELAY_ANALOG},
+        {"tape", OPENAXE_DELAY_TAPE},
     };
     const auto model = MapByName(name, kModels, std::size(kModels));
     if (!model) return JsonError("unknown delay model: " + name);
     Call([&] {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      Mutate([&] { nam_studio_set_delay_model(graph_, it->second.core_id, *model); },
+      Mutate([&] { openaxe_set_delay_model(graph_, it->second.core_id, *model); },
              /*reset_after=*/false);
     });
     return (json{{"ok", true}}).dump();
@@ -820,7 +820,7 @@ std::string StudioBridge::HandleSetBypass(const std::string& req) {
     Call([&] {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
-      nam_studio_set_bypass(graph_, it->second.core_id, bypassed ? 1 : 0);
+      openaxe_set_bypass(graph_, it->second.core_id, bypassed ? 1 : 0);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -850,8 +850,8 @@ std::string StudioBridge::HandleSetBlockTrim(const std::string& req) {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
       found = true;
-      if (has_input) nam_studio_set_block_input_trim(graph_, it->second.core_id, input);
-      if (has_output) nam_studio_set_block_output_trim(graph_, it->second.core_id, output);
+      if (has_input) openaxe_set_block_input_trim(graph_, it->second.core_id, input);
+      if (has_output) openaxe_set_block_output_trim(graph_, it->second.core_id, output);
     });
     if (!found) return JsonError("setBlockTrim: unknown block " + js_id);
     return (json{{"ok", true}}).dump();
@@ -890,7 +890,7 @@ std::vector<uint8_t> DecodeBase64(const std::string& text) {
 }
 
 // { blockId, wavBase64 } - install a cab IR from the bytes of a WAV file. The
-// core decodes and resamples it (nam_studio_load_ir_wav), so this handler only
+// core decodes and resamples it (openaxe_load_ir_wav), so this handler only
 // has to get the bytes across and serialize the mutation like any other.
 std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
   try {
@@ -921,7 +921,7 @@ std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
     Call([&] {
       Mutate([&] {
         frames = static_cast<int>(
-            nam_studio_load_ir_wav(graph_, core_id, bytes.data(), static_cast<int32_t>(bytes.size())));
+            openaxe_load_ir_wav(graph_, core_id, bytes.data(), static_cast<int32_t>(bytes.size())));
       }, /*reset_after=*/false);
     });
     if (frames == 0) return JsonError("loadIrWav: the core could not decode this file");
@@ -942,7 +942,7 @@ std::string StudioBridge::HandleUnloadIr(const std::string& req) {
       const auto it = blocks_.find(js_id);
       if (it == blocks_.end()) return;
       found = true;
-      Mutate([&] { nam_studio_unload_ir(graph_, it->second.core_id); }, /*reset_after=*/false);
+      Mutate([&] { openaxe_unload_ir(graph_, it->second.core_id); }, /*reset_after=*/false);
     });
     if (!found) return JsonError("unloadIr: unknown block " + js_id);
     return (json{{"ok", true}}).dump();
@@ -968,7 +968,7 @@ std::string StudioBridge::HandleSetMasterLevel(const std::string& req) {
   try {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
-    nam_studio_set_master_level(graph_, o.value("level", 1.0f));
+    openaxe_set_master_level(graph_, o.value("level", 1.0f));
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setMasterLevel: ") + e.what());
@@ -979,7 +979,7 @@ std::string StudioBridge::HandleSetMasterMuted(const std::string& req) {
   try {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
-    nam_studio_set_master_muted(graph_, o.value("muted", false) ? 1 : 0);
+    openaxe_set_master_muted(graph_, o.value("muted", false) ? 1 : 0);
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setMasterMuted: ") + e.what());
@@ -990,7 +990,7 @@ std::string StudioBridge::HandleSetTunerMuted(const std::string& req) {
   try {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
-    nam_studio_set_tuner_muted(graph_, o.value("muted", false) ? 1 : 0);
+    openaxe_set_tuner_muted(graph_, o.value("muted", false) ? 1 : 0);
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("setTunerMuted: ") + e.what());
@@ -1044,14 +1044,14 @@ std::string StudioBridge::HandleMeters(const std::string&) {
   json out = json::array();
   Call([&] {
     for (const auto& [js_id, rec] : blocks_) {
-      out.push_back({{"id", js_id}, {"value", nam_studio_get_meter(graph_, rec.core_id)}});
+      out.push_back({{"id", js_id}, {"value", openaxe_get_meter(graph_, rec.core_id)}});
     }
   });
   return out.dump();
 }
 
 std::string StudioBridge::HandleCpuLoad(const std::string&) {
-  return json(nam_studio_get_cpu_load(graph_)).dump();
+  return json(openaxe_get_cpu_load(graph_)).dump();
 }
 
 std::string StudioBridge::HandleGetTap(const std::string& req) {

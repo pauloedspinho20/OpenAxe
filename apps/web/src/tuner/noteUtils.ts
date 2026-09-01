@@ -1,12 +1,12 @@
 // Core note mapping lives in packages/core/src/dsp/note_utils.cpp (issue #123).
 // The TS implementation here is the presentational fallback; when the WASM
-// module is ready, `frequencyToNote` forwards to `nam_studio_frequency_to_note`
+// module is ready, `frequencyToNote` forwards to `openaxe_frequency_to_note`
 // so every front end displays the same reading. Both paths are proven
 // equivalent by the ported suite in packages/core/tests (pitch_note_test)
 // and by noteUtils.test.ts here — see noteUtils.test.ts's WASM-parity case.
 // Keeping the TS path also preserves offline/test determinism when WASM
 // isn't loaded (Node/jsdom, etc.).
-import { ensureWasm, frequencyToNoteWasm } from './namStudioWasm'
+import { ensureWasm, frequencyToNoteWasm } from './openAxeWasm'
 
 let wasmNoteMod: unknown | null = null
 let wasmNoteReady = false

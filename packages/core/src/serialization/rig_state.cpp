@@ -379,7 +379,7 @@ std::string SerializeState(const AudioEngine& engine, bool embed_assets) {
 namespace {
 
 // The legacy param keys existing web presets use that are NOT core symbols -
-// resolved exactly as RigBlock.ts + namStudioRigWorklet.js resolve them today:
+// resolved exactly as RigBlock.ts + openAxeRigWorklet.js resolve them today:
 // input_level/output_level mean the per-block I/O trims everywhere, and a
 // reverb block's roomSize/damping/... route through ReverbControl.
 struct ReverbControlKey {

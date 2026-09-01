@@ -22,8 +22,8 @@ export interface DynamicsMeterProps {
  * - compressor: gain reduction (red-only, 0..GR_RANGE_DB)
  * - noise-gate: gate openness (red-only, 0..1)
  *
- * Driven by the core's metering (nam_studio_get_gain_reduction /
- * nam_studio_get_gate_gain) polled via the rig's own meter polling.
+ * Driven by the core's metering (openaxe_get_gain_reduction /
+ * openaxe_get_gate_gain) polled via the rig's own meter polling.
  */
 export function DynamicsMeter({ rig, blockId, kind }: DynamicsMeterProps) {
   const [level, setLevel] = useState(0)

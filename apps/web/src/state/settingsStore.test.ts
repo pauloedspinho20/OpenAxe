@@ -31,7 +31,7 @@ describe('settingsStore', () => {
 
   it('persists only namQuality (partialize) to localStorage', () => {
     useSettingsStore.getState().setNamQuality(0.42)
-    const raw = localStorage.getItem('nam-web-studio-settings')
+    const raw = localStorage.getItem('openaxe-settings')
     expect(raw).not.toBeNull()
     const parsed = JSON.parse(raw!)
     expect(parsed.state).toEqual({ namQuality: 0.42 })

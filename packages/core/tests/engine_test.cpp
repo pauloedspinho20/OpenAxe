@@ -113,12 +113,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   // gets the engine-level mix, so param_count must be dsp + 1. Each is
   // guarded because effects.config.json can compile its DSP out (#313), and
   // the assertion below names a type that would not exist in that build.
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
 #endif
   const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
   const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
 #endif
   const BlockId rotary = engine.AddBlock(BlockKind::kRotary, 0, 8);
@@ -128,12 +128,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
 #endif
   OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
 #endif
   OPENAXE_EXPECT(engine.ParamCount(rotary) == openaxe::dsp::Rotary::ParamCount() + 1);
@@ -142,12 +142,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   // order, so a config that compiles one out (#313) still exercises the rest
   // of the chain end to end instead of failing to compile.
   std::vector<BlockId> chain{compressor, eq, noise_gate, tremolo};
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   chain.push_back(ring_mod);
 #endif
   chain.push_back(filter);
   chain.push_back(pitch);
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   chain.push_back(granular);
 #endif
   chain.push_back(rotary);

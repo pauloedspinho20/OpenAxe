@@ -14,7 +14,7 @@ describe('hooks/useOnboarding', () => {
   })
 
   it('is closed when the dismissal is already stored', () => {
-    localStorage.setItem('nam-web-studio:onboarding-dismissed', '1')
+    localStorage.setItem('openaxe:onboarding-dismissed', '1')
     const { result } = renderHook(() => useOnboarding())
     expect(result.current.open).toBe(false)
   })
@@ -23,6 +23,6 @@ describe('hooks/useOnboarding', () => {
     const { result } = renderHook(() => useOnboarding())
     act(() => result.current.dismiss())
     expect(result.current.open).toBe(false)
-    expect(localStorage.getItem('nam-web-studio:onboarding-dismissed')).toBe('1')
+    expect(localStorage.getItem('openaxe:onboarding-dismissed')).toBe('1')
   })
 })

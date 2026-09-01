@@ -12,9 +12,9 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-const WORKLET_URL = new URL('../../public/wasm-core/namStudioRigWorklet.js', import.meta.url)
+const WORKLET_URL = new URL('../../public/wasm-core/openAxeRigWorklet.js', import.meta.url)
 const WASM_PATH = fileURLToPath(
-  new URL('../../public/wasm-core/nam_studio_core.wasm', import.meta.url),
+  new URL('../../public/wasm-core/openaxe_core.wasm', import.meta.url),
 )
 
 // AudioWorkletGlobalScope globals the worklet references at import / construct time.
@@ -94,7 +94,7 @@ describe('Web->WASM ABI boundary (real core)', () => {
     })
     const reply = replies.find((r) => r.id === 2)
     expect(reply?.ok).toBe(true)
-    // The core accepted the edge (edgeByJs only gets set on _nam_studio_connect >= 0).
+    // The core accepted the edge (edgeByJs only gets set on _openaxe_connect >= 0).
     expect(proc.edgeByJs.get('e1')).toBeGreaterThanOrEqual(0)
   })
 
@@ -106,7 +106,7 @@ describe('Web->WASM ABI boundary (real core)', () => {
     const minPtr = mod._malloc(4)
     const maxPtr = mod._malloc(4)
     const unitPtr = mod._malloc(4)
-    mod._nam_studio_block_param_info(
+    mod._openaxe_block_param_info(
       proc.graph,
       proc.blockByJs.get('d1'),
       0,
@@ -126,8 +126,8 @@ describe('Web->WASM ABI boundary (real core)', () => {
 
     // Spy on the C ABI call to prove the message fields reached it.
     let captured: any[] | null = null
-    const orig = mod._nam_studio_set_param
-    mod._nam_studio_set_param = (...args: any[]) => {
+    const orig = mod._openaxe_set_param
+    mod._openaxe_set_param = (...args: any[]) => {
       captured = args
       return orig.apply(mod, args)
     }

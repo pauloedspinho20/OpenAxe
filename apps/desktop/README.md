@@ -11,7 +11,7 @@ Native desktop shell (macOS, Windows, Linux) for OpenAxe (issue #15).
   ABI — same process as the audio, no IPC.
 - **Audio I/O:** JUCE `juce_audio_devices` (issue #15 M1) — CoreAudio / WASAPI / ALSA (see `src/audio.*`) —
   WASAPI / ALSA / JACK, fetched via CMake. The real-time callback calls
-  `nam_studio_process` directly: same process, zero IPC, no Web Audio.
+  `openaxe_process` directly: same process, zero IPC, no Web Audio.
 - **Tests:** `cmake -S apps/desktop -B build -DOPENAXE_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
   (`ctest --test-dir build`). The callback wiring is tested with fake buffers
   (no hardware needed); the open/start/stop test uses a real device pair when
@@ -131,7 +131,7 @@ server) instead of the bundled copy.
       JUCE audio_devices. `scripts/build.mjs` bundles the web build (relative base)
       into `build/ui`, served by a small loopback HTTP server (WKWebView
       sandboxes file://). Block/input meters and the tuner are fed from C++ taps
-      (`namStudio.getTap`); model JSON is loaded via `namStudio.loadModelJson`.
+      (`openAxe.getTap`); model JSON is loaded via `openAxe.loadModelJson`.
 - [x] M4 — CPack packaging + CI. `scripts/package.mjs` produces a `.dmg`
       (macOS `.app` bundle), `.zip` (Windows) or `.deb` (Linux) in `build/`.
       `.github/workflows/desktop.yml` builds all three and uploads unsigned dev

@@ -6,13 +6,13 @@
 #include <mutex>
 #include <string>
 
-struct NamStudioGraph;
+struct OpenAxeGraph;
 class OpenAxePlugin;
 
 namespace openaxe_vst3 {
 
 // VST bridge — mirrors apps/desktop/src/bridge.h but for the plugin's
-// NamStudioGraph that the host's ProcessBlock also drives. Exposes the same
+// OpenAxeGraph that the host's ProcessBlock also drives. Exposes the same
 // window.openAxe.* surface the React app expects (NativeGraphRig, etc.).
 // Each handler takes the raw JSON string the webview posted and returns a JSON
 // string the webview will resolve. Threading: called on the UI thread via
@@ -21,13 +21,13 @@ namespace openaxe_vst3 {
 
 class VstBridge {
  public:
-  explicit VstBridge(OpenAxePlugin* plugin, NamStudioGraph* graph);
+  explicit VstBridge(OpenAxePlugin* plugin, OpenAxeGraph* graph);
   ~VstBridge() = default;
 
   // Rebuild the jsId <-> core id maps from the graph itself.
   //
   // The core is the source of truth for the rig (issue #300 D1/D2). Restoring a
-  // host chunk calls nam_studio_load_state, which rebuilds the topology and
+  // host chunk calls openaxe_load_state, which rebuilds the topology and
   // assigns fresh core ids — the bridge's maps still held the previous
   // session's pairs, so every setParam/blockInfo/removeBlock from the UI then
   // addressed the wrong block or returned "unknown block". Anything that
@@ -85,7 +85,7 @@ class VstBridge {
   std::string HandleGetTap(const std::string& argsJson);
 
   OpenAxePlugin* plugin_ = nullptr;
-  NamStudioGraph* graph_ = nullptr;
+  OpenAxeGraph* graph_ = nullptr;
 
   std::mutex mutex_;
   // jsId -> core

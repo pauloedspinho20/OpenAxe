@@ -20,7 +20,7 @@ packages/core/src/dsp/generated
 # hand-edited and not run through prettier when regenerated, unlike the other
 # checked-in files under wasm-core/ (hand-written worklets, our own codegen's
 # generatedParams.js, which is formatted through prettier's own API already).
-apps/web/public/wasm-core/nam_studio_core.js
+apps/web/public/wasm-core/openaxe_core.js
 
 # Golden references for the DSP regression harness (issue #315). Written by
 # dsp_regression_test --bless through packages/core's own JSON writer; letting

@@ -30,8 +30,8 @@ using openaxe::state::Sha256Hex;
 
 namespace {
 
-constexpr int32_t kInRail = NAM_STUDIO_IN_RAIL;
-constexpr int32_t kOutRail = NAM_STUDIO_OUT_RAIL;
+constexpr int32_t kInRail = OPENAXE_IN_RAIL;
+constexpr int32_t kOutRail = OPENAXE_OUT_RAIL;
 constexpr int32_t kFrames = 256;
 constexpr int kIrFrames = 512;
 
@@ -42,7 +42,7 @@ std::string ReadFileText(const std::string& path) {
 }
 
 // A short synthetic cab IR: a decaying resonance. Encoded as float32 WAV so
-// nam_studio_load_ir_wav decodes exactly these samples back (no resampling -
+// openaxe_load_ir_wav decodes exactly these samples back (no resampling -
 // same rate as the graph).
 std::vector<uint8_t> MakeIrWav() {
   std::vector<float> samples;
@@ -56,29 +56,29 @@ std::vector<uint8_t> MakeIrWav() {
 
 // The rig under test: IN -> amp(0,0) -> cab(0,1) -> OUT. Small on purpose -
 // the assertion that matters is sample identity of the whole chain.
-void BuildRig(NamStudioGraph* g) {
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0, 0);
-  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 1);
+void BuildRig(OpenAxeGraph* g) {
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0, 0);
+  const int32_t cab = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0, 1);
   OPENAXE_EXPECT(amp == 0);
   OPENAXE_EXPECT(cab == 1);
-  OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, amp, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, amp, 0, cab, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, cab, 0, kOutRail, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, kInRail, 0, amp, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, cab, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, cab, 0, kOutRail, 0) >= 0);
 }
 
-void LoadAssets(NamStudioGraph* g, const char* model_json_or_path, bool from_path,
+void LoadAssets(OpenAxeGraph* g, const char* model_json_or_path, bool from_path,
                 const std::vector<uint8_t>& ir_wav) {
   if (from_path) {
-    OPENAXE_EXPECT(nam_studio_load_nam_model(g, 0, model_json_or_path) == NAM_STUDIO_LOAD_OK);
+    OPENAXE_EXPECT(openaxe_load_nam_model(g, 0, model_json_or_path) == OPENAXE_LOAD_OK);
   } else {
-    OPENAXE_EXPECT(nam_studio_load_nam_model_json(g, 0, model_json_or_path) == NAM_STUDIO_LOAD_OK);
+    OPENAXE_EXPECT(openaxe_load_nam_model_json(g, 0, model_json_or_path) == OPENAXE_LOAD_OK);
   }
-  OPENAXE_EXPECT(nam_studio_load_ir_wav(g, 1, ir_wav.data(), static_cast<int32_t>(ir_wav.size())) ==
+  OPENAXE_EXPECT(openaxe_load_ir_wav(g, 1, ir_wav.data(), static_cast<int32_t>(ir_wav.size())) ==
              kIrFrames);
 }
 
 // Runs the test signal through `g` and returns the stereo output.
-void Render(NamStudioGraph* g, std::vector<float>& out_l, std::vector<float>& out_r) {
+void Render(OpenAxeGraph* g, std::vector<float>& out_l, std::vector<float>& out_r) {
   std::vector<float> in_l(kFrames);
   std::vector<float> in_r(kFrames);
   for (int32_t i = 0; i < kFrames; ++i) {
@@ -87,12 +87,12 @@ void Render(NamStudioGraph* g, std::vector<float>& out_l, std::vector<float>& ou
   }
   out_l.assign(static_cast<size_t>(kFrames), 0.0f);
   out_r.assign(static_cast<size_t>(kFrames), 0.0f);
-  nam_studio_reset(g, 48000.0, kFrames);
-  nam_studio_set_master_muted(g, 0);
+  openaxe_reset(g, 48000.0, kFrames);
+  openaxe_set_master_muted(g, 0);
   const float* in_ptrs[2] = {in_l.data(), in_r.data()};
   float* out_ptrs[2] = {out_l.data(), out_r.data()};
   for (int block = 0; block < 4; ++block) {
-    nam_studio_process(g, in_ptrs, 2, out_ptrs, 2, kFrames);
+    openaxe_process(g, in_ptrs, 2, out_ptrs, 2, kFrames);
   }
 }
 
@@ -110,11 +110,11 @@ bool SameSamples(const std::vector<float>& a, const std::vector<float>& b) {
   return true;
 }
 
-std::string Serialize(NamStudioGraph* g, int embed) {
-  const int32_t needed = nam_studio_serialize_state_ex(g, embed, nullptr, 0);
+std::string Serialize(OpenAxeGraph* g, int embed) {
+  const int32_t needed = openaxe_serialize_state_ex(g, embed, nullptr, 0);
   OPENAXE_EXPECT(needed > 16);
   std::vector<char> buf(static_cast<size_t>(needed));
-  OPENAXE_EXPECT(nam_studio_serialize_state_ex(g, embed, buf.data(), needed) == needed);
+  OPENAXE_EXPECT(openaxe_serialize_state_ex(g, embed, buf.data(), needed) == needed);
   return std::string(buf.data());
 }
 
@@ -181,7 +181,7 @@ int main() {
       ReadFileText(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/lstm.nam");
   OPENAXE_EXPECT(!model_json.empty());
 
-  NamStudioGraph* source = nam_studio_graph_create();
+  OpenAxeGraph* source = openaxe_graph_create();
   BuildRig(source);  // amp=0, cab=1
   const auto ir_wav = MakeIrWav();
   LoadAssets(source, model_json.c_str(), /*from_path=*/false, ir_wav);
@@ -208,13 +208,13 @@ int main() {
   // The sources are already "deleted": the capture exists only in this
   // process's memory, the IR never had a file at all. Restoration must come
   // entirely from the document.
-  nam_studio_graph_destroy(source);
-  NamStudioGraph* restored = nam_studio_graph_create();
-  OPENAXE_EXPECT(nam_studio_load_state(restored, embedded_doc.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-  OPENAXE_EXPECT(nam_studio_state_missing_asset_count(restored) == 0);
-  OPENAXE_EXPECT(nam_studio_block_has_model(restored, 0) == 1);
-  OPENAXE_EXPECT(nam_studio_block_ir_length(restored, 1) == kIrFrames);
-  OPENAXE_EXPECT(nam_studio_state_missing_asset(restored, 0) == nullptr);  // out of range
+  openaxe_graph_destroy(source);
+  OpenAxeGraph* restored = openaxe_graph_create();
+  OPENAXE_EXPECT(openaxe_load_state(restored, embedded_doc.c_str()) == OPENAXE_LOAD_STATE_OK);
+  OPENAXE_EXPECT(openaxe_state_missing_asset_count(restored) == 0);
+  OPENAXE_EXPECT(openaxe_block_has_model(restored, 0) == 1);
+  OPENAXE_EXPECT(openaxe_block_ir_length(restored, 1) == kIrFrames);
+  OPENAXE_EXPECT(openaxe_state_missing_asset(restored, 0) == nullptr);  // out of range
 
   // The issue's done-when: audio.
   std::vector<float> got_l;
@@ -226,15 +226,15 @@ int main() {
   // Re-serializing the restored rig must reproduce the document byte for
   // byte - the payload-restored blocks kept the document's name/path metadata.
   OPENAXE_EXPECT(Serialize(restored, 1) == embedded_doc);
-  nam_studio_graph_destroy(restored);
+  openaxe_graph_destroy(restored);
 
   // ── Without embedding: references only, and the missing list when they dangle ──
   {
-    NamStudioGraph* g = nam_studio_graph_create();
+    OpenAxeGraph* g = openaxe_graph_create();
     BuildRig(g);
     LoadAssets(g, model_json.c_str(), /*from_path=*/false, ir_wav);
     const std::string lean_doc = Serialize(g, 0);
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(g);
 
     // References are always written; the payload is not.
     OPENAXE_EXPECT(lean_doc.find("\"payload\"") == std::string::npos);
@@ -244,15 +244,15 @@ int main() {
     // path) and the IR never had a file. Both blocks stay empty; both assets
     // are reported by name. Partial-failure tolerance applies - the blocks
     // themselves restored fine.
-    NamStudioGraph* fresh = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(fresh, lean_doc.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(fresh) == 2);
-    OPENAXE_EXPECT(std::string(nam_studio_state_missing_asset(fresh, 0)) == "(unnamed model)");
-    OPENAXE_EXPECT(std::string(nam_studio_state_missing_asset(fresh, 1)) == "(unnamed IR)");
-    OPENAXE_EXPECT(nam_studio_block_has_model(fresh, 0) == 0);   // left empty...
-    OPENAXE_EXPECT(nam_studio_block_ir_length(fresh, 1) == 0);   // ...not aborted
-    OPENAXE_EXPECT(nam_studio_is_bypassed(fresh, 1) == 0);
-    nam_studio_graph_destroy(fresh);
+    OpenAxeGraph* fresh = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(fresh, lean_doc.c_str()) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(fresh) == 2);
+    OPENAXE_EXPECT(std::string(openaxe_state_missing_asset(fresh, 0)) == "(unnamed model)");
+    OPENAXE_EXPECT(std::string(openaxe_state_missing_asset(fresh, 1)) == "(unnamed IR)");
+    OPENAXE_EXPECT(openaxe_block_has_model(fresh, 0) == 0);   // left empty...
+    OPENAXE_EXPECT(openaxe_block_ir_length(fresh, 1) == 0);   // ...not aborted
+    OPENAXE_EXPECT(openaxe_is_bypassed(fresh, 1) == 0);
+    openaxe_graph_destroy(fresh);
   }
 
   // ── Path relinking, model side: embed=0 restores while the file exists ──
@@ -270,12 +270,12 @@ int main() {
     OPENAXE_EXPECT(ofs.good());
   }
 
-  NamStudioGraph* from_path = nam_studio_graph_create();
-  nam_studio_add_block(from_path, NAM_STUDIO_BLOCK_AMP, 0, 0);
-  nam_studio_connect(from_path, kInRail, 0, 0, 0);
-  nam_studio_connect(from_path, 0, 0, kOutRail, 0);
-  OPENAXE_EXPECT(nam_studio_load_nam_model(from_path, 0, model_path.string().c_str()) ==
-             NAM_STUDIO_LOAD_OK);
+  OpenAxeGraph* from_path = openaxe_graph_create();
+  openaxe_add_block(from_path, OPENAXE_BLOCK_AMP, 0, 0);
+  openaxe_connect(from_path, kInRail, 0, 0, 0);
+  openaxe_connect(from_path, 0, 0, kOutRail, 0);
+  OPENAXE_EXPECT(openaxe_load_nam_model(from_path, 0, model_path.string().c_str()) ==
+             OPENAXE_LOAD_OK);
   std::vector<float> amp_ref_l;
   std::vector<float> amp_ref_r;
   Render(from_path, amp_ref_l, amp_ref_r);
@@ -289,30 +289,30 @@ int main() {
 
   {
     // File still present: embed=0 restores through the recorded path.
-    NamStudioGraph* relinked = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(relinked, lean_amp_doc.c_str()) ==
-               NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(relinked) == 0);
-    OPENAXE_EXPECT(nam_studio_block_has_model(relinked, 0) == 1);
+    OpenAxeGraph* relinked = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(relinked, lean_amp_doc.c_str()) ==
+               OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(relinked) == 0);
+    OPENAXE_EXPECT(openaxe_block_has_model(relinked, 0) == 1);
     std::vector<float> rl;
     std::vector<float> rr;
     Render(relinked, rl, rr);
     OPENAXE_EXPECT(SameSamples(amp_ref_l, rl));
     OPENAXE_EXPECT(SameSamples(amp_ref_r, rr));
-    nam_studio_graph_destroy(relinked);
+    openaxe_graph_destroy(relinked);
   }
 
   // File deleted: the block stays empty and the asset is reported by name.
   fs::remove(model_path, fs_ec);
   {
-    NamStudioGraph* after_delete = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(after_delete, lean_amp_doc.c_str()) ==
-               NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(after_delete) == 1);
-    OPENAXE_EXPECT(std::string(nam_studio_state_missing_asset(after_delete, 0)) == "bench_amp");
-    OPENAXE_EXPECT(nam_studio_block_has_model(after_delete, 0) == 0);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset(after_delete, 1) == nullptr);
-    nam_studio_graph_destroy(after_delete);
+    OpenAxeGraph* after_delete = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(after_delete, lean_amp_doc.c_str()) ==
+               OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(after_delete) == 1);
+    OPENAXE_EXPECT(std::string(openaxe_state_missing_asset(after_delete, 0)) == "bench_amp");
+    OPENAXE_EXPECT(openaxe_block_has_model(after_delete, 0) == 0);
+    OPENAXE_EXPECT(openaxe_state_missing_asset(after_delete, 1) == nullptr);
+    openaxe_graph_destroy(after_delete);
 
     // A payload that fails to load must fall back to the recorded path before
     // giving up. Rewrite the file, craft a document whose payload is garbage
@@ -330,16 +330,16 @@ int main() {
         { "from": { "blockId": "a", "port": 0 }, "to": { "blockId": "-2", "port": 0 } }
       ],
       "masterLevel": 1.0, "masterMuted": false })";
-    NamStudioGraph* fallback = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(fallback, crafted.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(fallback) == 0);
-    OPENAXE_EXPECT(nam_studio_block_has_model(fallback, 0) == 1);
+    OpenAxeGraph* fallback = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(fallback, crafted.c_str()) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(fallback) == 0);
+    OPENAXE_EXPECT(openaxe_block_has_model(fallback, 0) == 1);
     std::vector<float> fl;
     std::vector<float> fr;
     Render(fallback, fl, fr);
     OPENAXE_EXPECT(SameSamples(amp_ref_l, fl));  // same capture -> same audio
     OPENAXE_EXPECT(SameSamples(amp_ref_r, fr));
-    nam_studio_graph_destroy(fallback);
+    openaxe_graph_destroy(fallback);
   }
 
   // ── Path relinking, IR side: a hand-built document with an ir.path ──────
@@ -356,19 +356,19 @@ int main() {
                        ir_path.string() + R"(", "payload": "" } } ],
       "edges": [], "masterLevel": 1.0, "masterMuted": false })";
   {
-    NamStudioGraph* g = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(g, ir_doc.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(g) == 0);
-    OPENAXE_EXPECT(nam_studio_block_ir_length(g, 0) == kIrFrames);
-    nam_studio_graph_destroy(g);
+    OpenAxeGraph* g = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(g, ir_doc.c_str()) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(g) == 0);
+    OPENAXE_EXPECT(openaxe_block_ir_length(g, 0) == kIrFrames);
+    openaxe_graph_destroy(g);
 
     fs::remove(ir_path, fs_ec);
-    NamStudioGraph* after_delete = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(after_delete, ir_doc.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(after_delete) == 1);
-    OPENAXE_EXPECT(std::string(nam_studio_state_missing_asset(after_delete, 0)) == "bench");
-    OPENAXE_EXPECT(nam_studio_block_ir_length(after_delete, 0) == 0);
-    nam_studio_graph_destroy(after_delete);
+    OpenAxeGraph* after_delete = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(after_delete, ir_doc.c_str()) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(after_delete) == 1);
+    OPENAXE_EXPECT(std::string(openaxe_state_missing_asset(after_delete, 0)) == "bench");
+    OPENAXE_EXPECT(openaxe_block_ir_length(after_delete, 0) == 0);
+    openaxe_graph_destroy(after_delete);
   }
 
   // ── Size ceilings (#69): an embedded payload is untrusted project input ──
@@ -386,32 +386,32 @@ int main() {
                    std::string(12000000, 'A') + R"(" } }
           ],
           "edges": [], "masterLevel": 1.0, "masterMuted": false })";
-    NamStudioGraph* g = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(g, oversized.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(g) == 1);
-    OPENAXE_EXPECT(std::string(nam_studio_state_missing_asset(g, 0)) == "huge");
-    OPENAXE_EXPECT(nam_studio_block_ir_length(g, 1) == 0);
+    OpenAxeGraph* g = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(g, oversized.c_str()) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(g) == 1);
+    OPENAXE_EXPECT(std::string(openaxe_state_missing_asset(g, 0)) == "huge");
+    OPENAXE_EXPECT(openaxe_block_ir_length(g, 1) == 0);
     // The gate next door restored regardless.
     bool threshold_found = false;
-    const int32_t count = nam_studio_block_param_count(g, 0);
+    const int32_t count = openaxe_block_param_count(g, 0);
     for (int32_t i = 0; i < count && !threshold_found; ++i) {
       const char* symbol = nullptr;
-      if (nam_studio_block_param_info(g, 0, i, nullptr, &symbol, nullptr, nullptr, nullptr) &&
+      if (openaxe_block_param_info(g, 0, i, nullptr, &symbol, nullptr, nullptr, nullptr) &&
           std::strcmp(symbol, "threshold") == 0) {
-        OPENAXE_EXPECT(nam_studio_get_param(g, 0, i) == 0.3f);
+        OPENAXE_EXPECT(openaxe_get_param(g, 0, i) == 0.3f);
         threshold_found = true;
       }
     }
     OPENAXE_EXPECT(threshold_found);
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(g);
 
     // Same ceiling enforced directly on the engine entry point.
-    NamStudioGraph* g2 = nam_studio_graph_create();
-    nam_studio_add_block(g2, NAM_STUDIO_BLOCK_AMP, 0, 0);
+    OpenAxeGraph* g2 = openaxe_graph_create();
+    openaxe_add_block(g2, OPENAXE_BLOCK_AMP, 0, 0);
     const std::string huge_json(openaxe::engine::kMaxModelBytes + 1, 'x');
-    OPENAXE_EXPECT(nam_studio_load_nam_model_json(g2, 0, huge_json.c_str()) ==
-               NAM_STUDIO_LOAD_INVALID_FORMAT);
-    nam_studio_graph_destroy(g2);
+    OPENAXE_EXPECT(openaxe_load_nam_model_json(g2, 0, huge_json.c_str()) ==
+               OPENAXE_LOAD_INVALID_FORMAT);
+    openaxe_graph_destroy(g2);
   }
 
   // ── Legacy documents without any model/ir objects load unchanged ─────────
@@ -419,15 +419,15 @@ int main() {
     const char* legacy = R"({"schemaVersion": 1,
       "blocks": [ { "id": "a", "kind": "amp", "row": 0, "col": 0, "params": {} } ],
       "edges": [], "masterLevel": 1.0, "masterMuted": false })";
-    NamStudioGraph* g = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(g, legacy) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_state_missing_asset_count(g) == 0);
-    nam_studio_graph_destroy(g);
+    OpenAxeGraph* g = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(g, legacy) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_state_missing_asset_count(g) == 0);
+    openaxe_graph_destroy(g);
   }
 
   fs::remove_all(temp_dir, fs_ec);
 
-  nam_studio_graph_destroy(from_path);
+  openaxe_graph_destroy(from_path);
 
   if (::openaxe::test::g_failures == 0) {
     std::printf("api_state_assets_test passed\n");

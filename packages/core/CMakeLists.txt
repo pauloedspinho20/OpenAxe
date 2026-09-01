@@ -207,45 +207,45 @@ if(EMSCRIPTEN)
   # malformed .nam file killed the audio thread instead of returning an error.
   # -fexceptions (the JS-based implementation) rather than -fwasm-exceptions:
   # universally supported, and the cost lands on unwinding paths, not on
-  # nam_studio_process.
+  # openaxe_process.
   target_compile_options(openaxe_core PRIVATE -fexceptions)
-  add_executable(nam_studio_core_wasm src/wasm_entry.cpp)
-  target_compile_options(nam_studio_core_wasm PRIVATE -fexceptions)
+  add_executable(openaxe_core_wasm src/wasm_entry.cpp)
+  target_compile_options(openaxe_core_wasm PRIVATE -fexceptions)
   # WHOLE_ARCHIVE for the same reason the desktop app and the tests need it:
   # NAM's architecture parsers (LSTM/WaveNet/ConvNet/Linear) self-register via
   # static initializers that nothing calls directly, so a plain archive link
   # drops them and every model load fails - silently, with a "bad model" error.
   # This only started to matter once the web app's amp block ran core's own NAM
   # inference (ampWorklet.js) instead of a separate npm engine.
-  target_link_libraries(nam_studio_core_wasm PRIVATE
+  target_link_libraries(openaxe_core_wasm PRIVATE
     $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
-  # OUTPUT_NAME stays "nam_studio_core": the committed artifacts the web app fetches
-  # are nam_studio_core.{js,wasm}; renaming the output without an Emscripten
+  # OUTPUT_NAME stays "openaxe_core": the committed artifacts the web app fetches
+  # are openaxe_core.{js,wasm}; renaming the output without an Emscripten
   # rebuild + recommit would break the loader (see api.h's ABI note).
-  set_target_properties(nam_studio_core_wasm PROPERTIES OUTPUT_NAME "nam_studio_core")
-  target_link_options(nam_studio_core_wasm PRIVATE
+  set_target_properties(openaxe_core_wasm PROPERTIES OUTPUT_NAME "openaxe_core")
+  target_link_options(openaxe_core_wasm PRIVATE
     "SHELL:-s MODULARIZE=1"
     "SHELL:-s EXPORT_ES6=1"
     "SHELL:-s ENVIRONMENT=web,worklet"
-    "SHELL:-s EXPORT_NAME=NamStudioCoreModule"
+    "SHELL:-s EXPORT_NAME=OpenAxeCoreModule"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
     -fexceptions
     # Extend this list as more of the graph ABI gets used from the browser.
     # Every name here must exist in the linked archive: wasm-ld fails the build
-    # on an export it can't find, which is how _nam_studio_set_drive_model
+    # on an export it can't find, which is how _openaxe_set_drive_model
     # (removed with the Drive effect) went unnoticed - the compiled artifacts
     # are checked in and nothing rebuilds them automatically. wasm-ld only
     # catches an export listed here that doesn't exist though - the opposite
     # drift (a symbol the web app calls that ISN'T listed here) fails silently
     # at runtime instead, since Emscripten just leaves it undefined on the JS
     # Module object. scripts/check-wasm-exports.mjs (issue #70) catches that
-    # direction by diffing every `_nam_studio_*`/`_malloc`/`_free` identifier
+    # direction by diffing every `_openaxe_*`/`_malloc`/`_free` identifier
     # referenced in apps/web against this list - run in CI, and standalone
     # with `--fix` to add any it finds missing (a wasm rebuild is still
     # required after - see scripts/build-core-wasm.sh).
-     "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_nam_studio_get_gain_reduction','_nam_studio_get_gate_gain','_nam_studio_detect_pitch','_nam_studio_frequency_to_note','_nam_studio_midi_mapping_count','_nam_studio_midi_get_mapping','_nam_studio_midi_add_mapping','_nam_studio_midi_remove_mapping','_nam_studio_midi_clear_mappings','_nam_studio_midi_arm_learn','_nam_studio_midi_cancel_learn','_nam_studio_midi_is_learning','_nam_studio_midi_get_learn_target','_nam_studio_midi_parse_message','_nam_studio_midi_is_trigger_edge','_nam_studio_midi_message_matches','_nam_studio_midi_handle_message','_nam_studio_serialize_state','_nam_studio_serialize_state_ex','_nam_studio_load_state','_nam_studio_state_missing_asset_count','_nam_studio_state_missing_asset','_nam_studio_state_unsupported_block_count','_nam_studio_state_unsupported_block','_nam_studio_block_kind_compiled','_nam_studio_compute_fingerprint','_malloc','_free']"
+"SHELL:-s EXPORTED_FUNCTIONS=['_openaxe_graph_create','_openaxe_graph_destroy','_openaxe_add_block','_openaxe_remove_block','_openaxe_move_block','_openaxe_connect','_openaxe_disconnect','_openaxe_reset','_openaxe_process','_openaxe_set_param','_openaxe_block_param_count','_openaxe_block_param_info','_openaxe_load_nam_model_json','_openaxe_unload_nam_model','_openaxe_block_has_model','_openaxe_block_model_info','_openaxe_block_model_slim_breakpoints','_openaxe_load_ir','_openaxe_unload_ir','_openaxe_block_ir_length','_openaxe_set_reverb_algorithm','_openaxe_set_reverb_control','_openaxe_set_delay_model','_openaxe_set_bypass','_openaxe_set_block_input_trim','_openaxe_set_block_output_trim','_openaxe_set_master_level','_openaxe_set_master_muted','_openaxe_set_tuner_muted','_openaxe_get_meter','_openaxe_get_gain_reduction','_openaxe_get_gate_gain','_openaxe_detect_pitch','_openaxe_frequency_to_note','_openaxe_midi_mapping_count','_openaxe_midi_get_mapping','_openaxe_midi_add_mapping','_openaxe_midi_remove_mapping','_openaxe_midi_clear_mappings','_openaxe_midi_arm_learn','_openaxe_midi_cancel_learn','_openaxe_midi_is_learning','_openaxe_midi_get_learn_target','_openaxe_midi_parse_message','_openaxe_midi_is_trigger_edge','_openaxe_midi_message_matches','_openaxe_midi_handle_message','_openaxe_serialize_state','_openaxe_serialize_state_ex','_openaxe_load_state','_openaxe_state_missing_asset_count','_openaxe_state_missing_asset','_openaxe_state_unsupported_block_count','_openaxe_state_unsupported_block','_openaxe_block_kind_compiled','_openaxe_compute_fingerprint','_malloc','_free']"
     # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
-    # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's
+    # into WASM memory as UTF-8 bytes and reads openaxe_block_model_info's
     # double/int32 out-params back out.
     "SHELL:-s EXPORTED_RUNTIME_METHODS=['HEAPF32','HEAPU32','HEAPU8','HEAPF64','HEAP32','UTF8ToString']"
     -O3
@@ -254,7 +254,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # iOS target (issue #17): linked into apps/ios via an XCFramework.
   set_target_properties(openaxe_core PROPERTIES
     FRAMEWORK TRUE
-    MACOSX_FRAMEWORK_IDENTIFIER "io.miew.namstudio.core"
+    MACOSX_FRAMEWORK_IDENTIFIER "io.miew.openaxe.core"
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
   # Android target (issue #17): shared lib for the JNI bridge.

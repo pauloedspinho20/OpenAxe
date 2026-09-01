@@ -18,58 +18,58 @@
 // that into the OPENAXE_BLOCK_* macros guarding every call site below, and
 // generated/block_sources.cmake decides what reaches the compiler at all.
 #include "openaxe/generated/enabled_blocks.h"
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
 #include "openaxe/dsp/chorus.h"
 #endif
 #include "openaxe/dsp/convolver.h"
-#if OPENAXE_BLOCK_COMPRESSOR
+#if OPENAXE_BLOCK_COMPRESSOR_COMPILED
 #include "openaxe/dsp/compressor.h"
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
 #include "openaxe/dsp/delay.h"
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/dragonfly_early_reflections.h"
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/dragonfly_room_reverb.h"
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
 #include "openaxe/dsp/equalizer.h"
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
 #include "openaxe/dsp/filter.h"
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
 #include "openaxe/dsp/flanger.h"
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
 #include "openaxe/dsp/granular_delay.h"
 #endif
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
 #include "openaxe/dsp/noise_gate.h"
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
 #include "openaxe/dsp/phaser.h"
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
 #include "openaxe/dsp/pitch_shifter.h"
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
 #include "openaxe/dsp/ring_mod.h"
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
 #include "openaxe/dsp/rotary.h"
 #endif
 #include "openaxe/dsp/smoothing.h"
 #include "openaxe/dsp/tone_stack.h"
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
 #include "openaxe/dsp/tremolo.h"
 #endif
 #include "openaxe/dsp/wav.h"
@@ -94,7 +94,7 @@ constexpr int kAmpToneBandCount = 4;
 // Every amp-family block exposes the same 7: two calibration values, slim size,
 // and the four tone bands. Fixed rather than growing with the loaded model -
 // whether slim size does anything is a property of the capture
-// (nam_studio_block_model_info reports it), not of the param surface.
+// (openaxe_block_model_info reports it), not of the param surface.
 constexpr int kAmpParamCount = 7;
 
 // Cab blocks: a single wet/dry blend over the convolved signal. 1 = fully wet
@@ -124,40 +124,40 @@ constexpr int kSplitterParamCount = graph::kSplitterOutputCount;
 // regular param and automation/presets persist it without engine-specific API.
 inline bool NeedsEngineMix(graph::BlockKind kind) {
   switch (kind) {
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
     case graph::BlockKind::kNoiseGate:
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
     case graph::BlockKind::kEq:
 #endif
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
     case graph::BlockKind::kChorus:
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
     case graph::BlockKind::kFlanger:
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
     case graph::BlockKind::kPhaser:
 #endif
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
     case graph::BlockKind::kTremolo:
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
     case graph::BlockKind::kDelay:
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
     case graph::BlockKind::kRingMod:
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
     case graph::BlockKind::kFilter:
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
     case graph::BlockKind::kPitchShifter:
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
     case graph::BlockKind::kGranularDelay:
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
     case graph::BlockKind::kRotary:
 #endif
       return true;
@@ -167,40 +167,40 @@ inline bool NeedsEngineMix(graph::BlockKind kind) {
 }
 inline int DspParamCountFor(graph::BlockKind kind) {
   switch (kind) {
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
     case graph::BlockKind::kNoiseGate: return dsp::NoiseGate::ParamCount();
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
     case graph::BlockKind::kEq: return dsp::Equalizer::ParamCount();
 #endif
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
     case graph::BlockKind::kChorus: return dsp::Chorus::ParamCount();
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
     case graph::BlockKind::kFlanger: return dsp::Flanger::ParamCount();
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
     case graph::BlockKind::kPhaser: return dsp::Phaser::ParamCount();
 #endif
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
     case graph::BlockKind::kTremolo: return dsp::Tremolo::ParamCount();
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
     case graph::BlockKind::kDelay: return dsp::Delay::ParamCount();
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
     case graph::BlockKind::kRingMod: return dsp::RingMod::ParamCount();
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
     case graph::BlockKind::kFilter: return dsp::Filter::ParamCount();
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
     case graph::BlockKind::kPitchShifter: return dsp::PitchShifter::ParamCount();
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
     case graph::BlockKind::kGranularDelay: return dsp::GranularDelay::ParamCount();
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
     case graph::BlockKind::kRotary: return dsp::Rotary::ParamCount();
 #endif
     default: return 0;
@@ -214,7 +214,7 @@ constexpr ParamDescriptor kEngineMixDescriptor{"Mix", "mix", 0.0f, 1.0f, "x"};
 constexpr dsp::ParamSmoothing kEngineLevelSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.5f};
 constexpr ParamDescriptor kEngineLevelDescriptor{"Level", "level", 0.0f, 1.5f, "x"};
 inline bool NeedsEngineLevel(graph::BlockKind kind) {
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
   if (kind == graph::BlockKind::kDelay) return true;
 #endif
   (void)kind;
@@ -277,47 +277,47 @@ std::optional<graph::BlockKind> SendReturnPairOf(graph::BlockKind kind) {
 // in that build its type does not exist. The variant is only ever reached
 // through std::visit, so shrinking it changes nothing for the kinds that stay.
 using DspVariant = std::variant<std::monostate, dsp::NamAmp
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
                                 , dsp::DragonflyHallReverb, dsp::DragonflyRoomReverb
                                 , dsp::DragonflyPlateReverb, dsp::DragonflyEarlyReflections
 #endif
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
                                 , dsp::NoiseGate
 #endif
-#if OPENAXE_BLOCK_COMPRESSOR
+#if OPENAXE_BLOCK_COMPRESSOR_COMPILED
                                 , dsp::Compressor
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
                                 , dsp::Equalizer
 #endif
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
                                 , dsp::Chorus
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
                                 , dsp::Flanger
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
                                 , dsp::Phaser
 #endif
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
                                 , dsp::Tremolo
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
                                 , dsp::Delay
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
                                 , dsp::RingMod
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
                                 , dsp::Filter
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
                                 , dsp::PitchShifter
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
                                 , dsp::GranularDelay
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
                                 , dsp::Rotary
 #endif
                                 >;
@@ -344,87 +344,87 @@ constexpr dsp::ParamSmoothing kMixerSmoothing[] = {
 constexpr dsp::ParamSmoothing kSplitterSmoothing[] = {
 #include "dsp/generated/engine_splitter_smoothing.inc"
 };
-#if OPENAXE_BLOCK_COMPRESSOR
+#if OPENAXE_BLOCK_COMPRESSOR_COMPILED
 constexpr dsp::ParamSmoothing kCompressorSmoothing[] = {
 #include "dsp/generated/compressor_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
 constexpr dsp::ParamSmoothing kEqualizerSmoothing[] = {
 #include "dsp/generated/equalizer_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
 constexpr dsp::ParamSmoothing kNoiseGateSmoothing[] = {
 #include "dsp/generated/noise_gate_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
 constexpr dsp::ParamSmoothing kChorusSmoothing[] = {
 #include "dsp/generated/chorus_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
 constexpr dsp::ParamSmoothing kFlangerSmoothing[] = {
 #include "dsp/generated/flanger_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
 constexpr dsp::ParamSmoothing kPhaserSmoothing[] = {
 #include "dsp/generated/phaser_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
 constexpr dsp::ParamSmoothing kTremoloSmoothing[] = {
 #include "dsp/generated/tremolo_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
 constexpr dsp::ParamSmoothing kDelaySmoothing[] = {
 #include "dsp/generated/delay_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 constexpr dsp::ParamSmoothing kDragonflyHallReverbSmoothing[] = {
 #include "dsp/generated/dragonfly_hall_reverb_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 constexpr dsp::ParamSmoothing kDragonflyRoomReverbSmoothing[] = {
 #include "dsp/generated/dragonfly_room_reverb_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 constexpr dsp::ParamSmoothing kDragonflyPlateReverbSmoothing[] = {
 #include "dsp/generated/dragonfly_plate_reverb_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
 constexpr dsp::ParamSmoothing kDragonflyEarlyReflectionsSmoothing[] = {
 #include "dsp/generated/dragonfly_early_reflections_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
 constexpr dsp::ParamSmoothing kRingModSmoothing[] = {
 #include "dsp/generated/ring_mod_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
 constexpr dsp::ParamSmoothing kFilterSmoothing[] = {
 #include "dsp/generated/filter_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
 constexpr dsp::ParamSmoothing kPitchShifterSmoothing[] = {
 #include "dsp/generated/pitch_shifter_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
 constexpr dsp::ParamSmoothing kGranularDelaySmoothing[] = {
 #include "dsp/generated/granular_delay_smoothing.inc"
 };
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
 constexpr dsp::ParamSmoothing kRotarySmoothing[] = {
 #include "dsp/generated/rotary_smoothing.inc"
 };
@@ -764,7 +764,7 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       table = kSplitterSmoothing;
       count = kSplitterParamCount;
       break;
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
     case graph::BlockKind::kReverb: {
       if (std::holds_alternative<dsp::DragonflyHallReverb>(state.dsp)) {
         table = kDragonflyHallReverbSmoothing;
@@ -779,79 +779,79 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       break;
     }
 #endif
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
     case graph::BlockKind::kChorus:
       table = kChorusSmoothing;
       count = dsp::Chorus::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
     case graph::BlockKind::kFlanger:
       table = kFlangerSmoothing;
       count = dsp::Flanger::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
     case graph::BlockKind::kPhaser:
       table = kPhaserSmoothing;
       count = dsp::Phaser::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
     case graph::BlockKind::kDelay:
       table = kDelaySmoothing;
       count = dsp::Delay::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_COMPRESSOR
+#if OPENAXE_BLOCK_COMPRESSOR_COMPILED
     case graph::BlockKind::kCompressor:
       table = kCompressorSmoothing;
       count = dsp::Compressor::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
     case graph::BlockKind::kEq:
       table = kEqualizerSmoothing;
       count = dsp::Equalizer::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
     case graph::BlockKind::kNoiseGate:
       table = kNoiseGateSmoothing;
       count = dsp::NoiseGate::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
     case graph::BlockKind::kTremolo:
       table = kTremoloSmoothing;
       count = dsp::Tremolo::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
     case graph::BlockKind::kRingMod:
       table = kRingModSmoothing;
       count = dsp::RingMod::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
     case graph::BlockKind::kFilter:
       table = kFilterSmoothing;
       count = dsp::Filter::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
     case graph::BlockKind::kPitchShifter:
       table = kPitchShifterSmoothing;
       count = dsp::PitchShifter::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
     case graph::BlockKind::kGranularDelay:
       table = kGranularDelaySmoothing;
       count = dsp::GranularDelay::ParamCount();
       break;
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
     case graph::BlockKind::kRotary:
       table = kRotarySmoothing;
       count = dsp::Rotary::ParamCount();
@@ -1065,7 +1065,7 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->dsp.emplace<dsp::NamAmp>();
     state->param_count.store(kAmpParamCount, std::memory_order_relaxed);
   }
-#if OPENAXE_BLOCK_REVERB
+#if OPENAXE_BLOCK_REVERB_COMPILED
   else if (kind == graph::BlockKind::kReverb) {
     state->dsp.emplace<dsp::DragonflyHallReverb>();  // default algorithm; see SetReverbAlgorithm
     state->param_count.store(dsp::DragonflyHallReverb::ParamCount(), std::memory_order_relaxed);
@@ -1073,91 +1073,91 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     RefreshReverbControlSlots(*state);
   }
 #endif
-#if OPENAXE_BLOCK_CHORUS
+#if OPENAXE_BLOCK_CHORUS_COMPILED
   else if (kind == graph::BlockKind::kChorus) {
     state->dsp.emplace<dsp::Chorus>();
     state->param_count.store(dsp::Chorus::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_FLANGER
+#if OPENAXE_BLOCK_FLANGER_COMPILED
   else if (kind == graph::BlockKind::kFlanger) {
     state->dsp.emplace<dsp::Flanger>();
     state->param_count.store(dsp::Flanger::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_PHASER
+#if OPENAXE_BLOCK_PHASER_COMPILED
   else if (kind == graph::BlockKind::kPhaser) {
     state->dsp.emplace<dsp::Phaser>();
     state->param_count.store(dsp::Phaser::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_DELAY
+#if OPENAXE_BLOCK_DELAY_COMPILED
   else if (kind == graph::BlockKind::kDelay) {
     state->dsp.emplace<dsp::Delay>();
     state->param_count.store(dsp::Delay::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_COMPRESSOR
+#if OPENAXE_BLOCK_COMPRESSOR_COMPILED
   else if (kind == graph::BlockKind::kCompressor) {
     state->dsp.emplace<dsp::Compressor>();
     state->param_count.store(dsp::Compressor::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_EQ
+#if OPENAXE_BLOCK_EQ_COMPILED
   else if (kind == graph::BlockKind::kEq) {
     state->dsp.emplace<dsp::Equalizer>();
     state->param_count.store(dsp::Equalizer::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
   else if (kind == graph::BlockKind::kNoiseGate) {
     state->dsp.emplace<dsp::NoiseGate>();
     state->param_count.store(dsp::NoiseGate::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_TREMOLO
+#if OPENAXE_BLOCK_TREMOLO_COMPILED
   else if (kind == graph::BlockKind::kTremolo) {
     state->dsp.emplace<dsp::Tremolo>();
     state->param_count.store(dsp::Tremolo::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   else if (kind == graph::BlockKind::kRingMod) {
     state->dsp.emplace<dsp::RingMod>();
     state->param_count.store(dsp::RingMod::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_FILTER
+#if OPENAXE_BLOCK_FILTER_COMPILED
   else if (kind == graph::BlockKind::kFilter) {
     state->dsp.emplace<dsp::Filter>();
     state->param_count.store(dsp::Filter::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_PITCH_SHIFTER
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   else if (kind == graph::BlockKind::kPitchShifter) {
     state->dsp.emplace<dsp::PitchShifter>();
     state->param_count.store(dsp::PitchShifter::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   else if (kind == graph::BlockKind::kGranularDelay) {
     state->dsp.emplace<dsp::GranularDelay>();
     state->param_count.store(dsp::GranularDelay::ParamCount(), std::memory_order_relaxed);
     SeedParamsFromDsp(*state);
   }
 #endif
-#if OPENAXE_BLOCK_ROTARY
+#if OPENAXE_BLOCK_ROTARY_COMPILED
   else if (kind == graph::BlockKind::kRotary) {
     state->dsp.emplace<dsp::Rotary>();
     state->param_count.store(dsp::Rotary::ParamCount(), std::memory_order_relaxed);

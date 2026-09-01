@@ -17,6 +17,10 @@ on:
       - packages/ui/tokens/**
       - .github/workflows/plugin.yml
 
+concurrency:
+  group: plugin-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -47,15 +51,43 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/Library/Caches/ccache
+            C:/ccache
+          key: ccache-plugin-${{ matrix.os }}-${{ matrix.cmake_preset }}-${{ hashFiles('packages/vst3/CMakeLists.txt', 'packages/core/CMakeLists.txt', 'packages/vst3/src/**', 'packages/core/src/**') }}
+          restore-keys: |
+            ccache-plugin-${{ matrix.os }}-
+
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config \
+            ccache cmake ninja-build pkg-config \
             libwebkit2gtk-4.1-dev libgtk-3-dev \
             libasound2-dev libpulse-dev \
             libcurl4-openssl-dev
+          ccache --set-config=max_size=600M 2>/dev/null || true
+          ccache -z 2>/dev/null || true
+
+      - name: Install ccache (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ccache 2>/dev/null || true
+          ccache --set-config=max_size=600M 2>/dev/null || true
+          ccache -z 2>/dev/null || true
+
+      - name: Install ccache (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ccache -y --no-progress 2>$null || Write-Host "ccache not installed via choco, continuing"
+          ccache --set-config=max_size=600M 2>$null || true
+          ccache -z 2>$null || true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -99,10 +131,15 @@ jobs:
           if [ "${{ runner.os }}" = "macOS" ]; then
             extra_args='-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
           fi
-          cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=${{ matrix.cmake_preset }} $extra_args -DOPENAXE_BUILD_TESTS=OFF
+          cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=${{ matrix.cmake_preset }} $extra_args -DOPENAXE_BUILD_TESTS=OFF -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
       - name: Build plugin
         run: cmake --build packages/vst3/build --config ${{ matrix.cmake_preset }} -j
+
+      - name: ccache stats
+        if: always()
+        shell: bash
+        run: ccache -s 2>/dev/null || true
 
       - name: Build AU/CLAP bundles (explicit targets, when SDK present)
         shell: bash

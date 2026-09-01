@@ -44,8 +44,8 @@ import { useIOStore, type InputChannelMode, type LatencyHint } from '../state/io
 import { useSettingsStore } from '../state/settingsStore'
 
 const BUNDLE_VERSION = 1
-const THEME_KEY = 'nam-web-studio:theme'
-const ONBOARDING_KEY = 'nam-web-studio:onboarding-dismissed'
+const THEME_KEY = 'openaxe:theme'
+const ONBOARDING_KEY = 'openaxe:onboarding-dismissed'
 
 export interface DataBundleAsset {
   id: string
@@ -213,8 +213,8 @@ export async function clearAssetCache(): Promise<void> {
 }
 
 const REFRESH_TOKEN_KEY = 't3k_refresh_token'
-const IO_STORAGE_KEY = 'nam-web-studio-io'
-const SETTINGS_STORAGE_KEY = 'nam-web-studio-settings'
+const IO_STORAGE_KEY = 'openaxe-io'
+const SETTINGS_STORAGE_KEY = 'openaxe-settings'
 
 /** Wipes every store and every localStorage key this app owns - a full factory reset. */
 export async function deleteAllData(options: { signOutTone3000: boolean }): Promise<void> {

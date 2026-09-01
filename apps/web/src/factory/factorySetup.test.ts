@@ -17,7 +17,7 @@ beforeEach(async () => {
   for (const preset of await listPresets()) await deletePreset(preset.id)
   await clearStore(STORE_SCENES)
   await clearStore(STORE_PRESET_BANK)
-  localStorage.removeItem('nam-web-studio:factory-setup-dismissed')
+  localStorage.removeItem('openaxe:factory-setup-dismissed')
 })
 
 describe('hasExistingSession', () => {

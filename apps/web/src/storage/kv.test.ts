@@ -104,7 +104,7 @@ describe('kv storage', () => {
       // this suite would pass just as happily against an in-memory map, and
       // the browser build would quietly stop persisting anything.
       const raw = await new Promise<unknown>((resolve, reject) => {
-        const open = indexedDB.open('nam-web-studio')
+        const open = indexedDB.open('openaxe')
         open.onerror = () => reject(open.error)
         open.onsuccess = () => {
           const db = open.result

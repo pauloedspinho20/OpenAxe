@@ -10,10 +10,10 @@
 // ever ship) are unaffected - their signature is stable, so this trade only
 // ever applies during local development.
 #if !defined(NDEBUG) || (!defined(__APPLE__) && !defined(_WIN32))
-#define NAM_SECURE_STORAGE_USE_PLAIN_FILE 1
+#define OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE 1
 #endif
 
-#if defined(NAM_SECURE_STORAGE_USE_PLAIN_FILE)
+#if defined(OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE)
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -35,13 +35,13 @@
 namespace openaxe::secure_storage {
 
 namespace {
-// Service name intentionally keeps the pre-OpenAxe branding (issue #151):
-// renaming it would strand users' saved Tone3000 credentials in the
-// keychain under the old service.
-constexpr const char* kServiceName = "NAM Web Studio";
+// Migrated in #311 / #326: `NAM Web Studio` -> `OpenAxe` with copy-then-delete.
+// Old service is tried as fallback and migrated on first successful read/write.
+constexpr const char* kServiceName = "OpenAxe";
+constexpr const char* kOldServiceName = "NAM Web Studio";
 }  // namespace
 
-#if defined(NAM_SECURE_STORAGE_USE_PLAIN_FILE)
+#if defined(OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE)
 
 namespace {
 // NOTE: this is a plain file, not a real OS keychain/credential manager -
@@ -51,7 +51,7 @@ namespace {
 // way it's readable by any other process running as the same OS user, which
 // a real keychain would not allow - fine for a developer's own refresh
 // token during local iteration, not something to ship.
-std::filesystem::path SecretsDir() {
+std::filesystem::path BaseDataDir() {
 #if defined(_WIN32)
   const char* local_app_data = std::getenv("LOCALAPPDATA");
   const std::filesystem::path base =
@@ -64,10 +64,13 @@ std::filesystem::path SecretsDir() {
                                           : std::filesystem::path(home ? home : ".") / ".local" /
                                                 "share";
 #endif
-  return base / "nam-web-studio" / "secrets";
+  return base;
 }
+std::filesystem::path SecretsDir() { return BaseDataDir() / "openaxe" / "secrets"; }
+std::filesystem::path OldSecretsDir() { return BaseDataDir() / "nam-web-studio" / "secrets"; }
 
 std::filesystem::path PathFor(const std::string& key) { return SecretsDir() / key; }
+std::filesystem::path OldPathFor(const std::string& key) { return OldSecretsDir() / key; }
 }  // namespace
 
 bool Store(const std::string& key, const std::string& value, std::string* error) {
@@ -84,18 +87,49 @@ bool Store(const std::string& key, const std::string& value, std::string* error)
 #ifndef _WIN32
   ::chmod(path.c_str(), S_IRUSR | S_IWUSR);
 #endif
+  if (!ofs) {
+    if (error) *error = "failed while writing " + path.string();
+    return false;
+  }
+  // Copy-then-delete: remove old file only after verified new write.
+  std::filesystem::remove(OldPathFor(key), ec);
   return true;
 }
 
 std::optional<std::string> Load(const std::string& key, std::string* /*error*/) {
-  std::ifstream ifs(PathFor(key), std::ios::binary);
-  if (!ifs) return std::nullopt;
-  return std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+  // Try new location first
+  {
+    std::ifstream ifs(PathFor(key), std::ios::binary);
+    if (ifs) {
+      return std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+    }
+  }
+  // Fallback to old location, migrate on success
+  {
+    std::ifstream ifs(OldPathFor(key), std::ios::binary);
+    if (!ifs) return std::nullopt;
+    std::string value((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    // Migrate: write to new, delete old only after verified write
+    std::error_code ec;
+    std::filesystem::create_directories(SecretsDir(), ec);
+    const auto newPath = PathFor(key);
+    std::ofstream ofs(newPath, std::ios::binary | std::ios::trunc);
+    if (ofs) {
+      ofs << value;
+      ofs.close();
+#ifndef _WIN32
+      ::chmod(newPath.c_str(), S_IRUSR | S_IWUSR);
+#endif
+      if (ofs) std::filesystem::remove(OldPathFor(key), ec);
+    }
+    return value;
+  }
 }
 
 bool Delete(const std::string& key, std::string* /*error*/) {
   std::error_code ec;
   std::filesystem::remove(PathFor(key), ec);
+  std::filesystem::remove(OldPathFor(key), ec);
   return true;
 }
 
@@ -129,9 +163,6 @@ bool Store(const std::string& key, const std::string& value, std::string* error)
 
   const void* add_keys[] = {kSecClass, kSecAttrService, kSecAttrAccount, kSecValueData,
                             kSecAttrAccessible};
-  // AfterFirstUnlock (not the "ThisDeviceOnly" siblings some sample code
-  // uses): a background/no-sound launch right after boot but before the
-  // user has unlocked the session should still be able to read it back.
   const void* add_values[] = {kSecClassGenericPassword, service, account, data,
                               kSecAttrAccessibleAfterFirstUnlock};
   CFDictionaryRef add_query = CFDictionaryCreate(kCFAllocatorDefault, add_keys, add_values, 5,
@@ -148,60 +179,135 @@ bool Store(const std::string& key, const std::string& value, std::string* error)
     if (error) *error = "SecItemAdd failed (" + std::to_string(status) + ")";
     return false;
   }
+  // Copy-then-delete: remove old service entry only after verified new write.
+  {
+    CFStringRef oldService = CFStringFromStd(kOldServiceName);
+    CFStringRef oldAccount = CFStringFromStd(key);
+    const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
+    const void* values[] = {kSecClassGenericPassword, oldService, oldAccount};
+    CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 3,
+                                                &kCFTypeDictionaryKeyCallBacks,
+                                                &kCFTypeDictionaryValueCallBacks);
+    SecItemDelete(query);
+    CFRelease(oldService);
+    CFRelease(oldAccount);
+    CFRelease(query);
+  }
   return true;
 }
 
 std::optional<std::string> Load(const std::string& key, std::string* error) {
-  CFStringRef service = CFStringFromStd(kServiceName);
-  CFStringRef account = CFStringFromStd(key);
-
-  const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount, kSecReturnData,
-                        kSecMatchLimit};
-  const void* values[] = {kSecClassGenericPassword, service, account, kCFBooleanTrue,
-                          kSecMatchLimitOne};
-  CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 5,
-                                              &kCFTypeDictionaryKeyCallBacks,
-                                              &kCFTypeDictionaryValueCallBacks);
-
-  CFTypeRef result = nullptr;
-  const OSStatus status = SecItemCopyMatching(query, &result);
-  CFRelease(service);
-  CFRelease(account);
-  CFRelease(query);
-
-  if (status == errSecItemNotFound) return std::nullopt;
-  if (status != errSecSuccess || !result) {
-    if (error) *error = "SecItemCopyMatching failed (" + std::to_string(status) + ")";
-    return std::nullopt;
+  // Try new service first
+  {
+    CFStringRef service = CFStringFromStd(kServiceName);
+    CFStringRef account = CFStringFromStd(key);
+    const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount, kSecReturnData,
+                          kSecMatchLimit};
+    const void* values[] = {kSecClassGenericPassword, service, account, kCFBooleanTrue,
+                            kSecMatchLimitOne};
+    CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 5,
+                                                &kCFTypeDictionaryKeyCallBacks,
+                                                &kCFTypeDictionaryValueCallBacks);
+    CFTypeRef result = nullptr;
+    const OSStatus status = SecItemCopyMatching(query, &result);
+    CFRelease(service);
+    CFRelease(account);
+    CFRelease(query);
+    if (status == errSecSuccess && result) {
+      CFDataRef data = static_cast<CFDataRef>(result);
+      std::string value(reinterpret_cast<const char*>(CFDataGetBytePtr(data)),
+                        static_cast<size_t>(CFDataGetLength(data)));
+      CFRelease(result);
+      return value;
+    }
+    if (result) CFRelease(result);
+    if (status != errSecItemNotFound && status != errSecSuccess) {
+      if (error) *error = "SecItemCopyMatching failed (" + std::to_string(status) + ")";
+      return std::nullopt;
+    }
   }
-
-  CFDataRef data = static_cast<CFDataRef>(result);
-  std::string value(reinterpret_cast<const char*>(CFDataGetBytePtr(data)),
-                    static_cast<size_t>(CFDataGetLength(data)));
-  CFRelease(result);
-  return value;
+  // Fallback to old service, migrate on success
+  {
+    CFStringRef service = CFStringFromStd(kOldServiceName);
+    CFStringRef account = CFStringFromStd(key);
+    const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount, kSecReturnData,
+                          kSecMatchLimit};
+    const void* values[] = {kSecClassGenericPassword, service, account, kCFBooleanTrue,
+                            kSecMatchLimitOne};
+    CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 5,
+                                                &kCFTypeDictionaryKeyCallBacks,
+                                                &kCFTypeDictionaryValueCallBacks);
+    CFTypeRef result = nullptr;
+    const OSStatus status = SecItemCopyMatching(query, &result);
+    CFRelease(service);
+    CFRelease(account);
+    CFRelease(query);
+    if (status == errSecItemNotFound) return std::nullopt;
+    if (status != errSecSuccess || !result) {
+      if (error) *error = "SecItemCopyMatching failed (" + std::to_string(status) + ")";
+      return std::nullopt;
+    }
+    CFDataRef data = static_cast<CFDataRef>(result);
+    std::string value(reinterpret_cast<const char*>(CFDataGetBytePtr(data)),
+                      static_cast<size_t>(CFDataGetLength(data)));
+    CFRelease(result);
+    // Migrate: write to new, delete old only after verified write
+    std::string migrateError;
+    if (Store(key, value, &migrateError)) {
+      CFStringRef oldService = CFStringFromStd(kOldServiceName);
+      CFStringRef oldAccount = CFStringFromStd(key);
+      const void* delKeys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
+      const void* delValues[] = {kSecClassGenericPassword, oldService, oldAccount};
+      CFDictionaryRef delQuery = CFDictionaryCreate(kCFAllocatorDefault, delKeys, delValues, 3,
+                                                     &kCFTypeDictionaryKeyCallBacks,
+                                                     &kCFTypeDictionaryValueCallBacks);
+      SecItemDelete(delQuery);
+      CFRelease(oldService);
+      CFRelease(oldAccount);
+      CFRelease(delQuery);
+    }
+    return value;
+  }
 }
 
 bool Delete(const std::string& key, std::string* error) {
-  CFStringRef service = CFStringFromStd(kServiceName);
-  CFStringRef account = CFStringFromStd(key);
-  const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
-  const void* values[] = {kSecClassGenericPassword, service, account};
-  CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 3,
-                                              &kCFTypeDictionaryKeyCallBacks,
-                                              &kCFTypeDictionaryValueCallBacks);
-  const OSStatus status = SecItemDelete(query);
-  CFRelease(service);
-  CFRelease(account);
-  CFRelease(query);
-  if (status != errSecSuccess && status != errSecItemNotFound) {
-    if (error) *error = "SecItemDelete failed (" + std::to_string(status) + ")";
-    return false;
+  bool ok = true;
+  // Delete new
+  {
+    CFStringRef service = CFStringFromStd(kServiceName);
+    CFStringRef account = CFStringFromStd(key);
+    const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
+    const void* values[] = {kSecClassGenericPassword, service, account};
+    CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 3,
+                                                &kCFTypeDictionaryKeyCallBacks,
+                                                &kCFTypeDictionaryValueCallBacks);
+    const OSStatus status = SecItemDelete(query);
+    CFRelease(service);
+    CFRelease(account);
+    CFRelease(query);
+    if (status != errSecSuccess && status != errSecItemNotFound) {
+      if (error) *error = "SecItemDelete failed (" + std::to_string(status) + ")";
+      ok = false;
+    }
   }
-  return true;
+  // Delete old as well (copy-then-delete cleanup)
+  {
+    CFStringRef service = CFStringFromStd(kOldServiceName);
+    CFStringRef account = CFStringFromStd(key);
+    const void* keys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
+    const void* values[] = {kSecClassGenericPassword, service, account};
+    CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 3,
+                                                &kCFTypeDictionaryKeyCallBacks,
+                                                &kCFTypeDictionaryValueCallBacks);
+    SecItemDelete(query);
+    CFRelease(service);
+    CFRelease(account);
+    CFRelease(query);
+  }
+  return ok;
 }
 
-#else  // _WIN32, Release (NAM_SECURE_STORAGE_USE_PLAIN_FILE excluded this already for Debug)
+#else  // _WIN32, Release (OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE excluded this already for Debug)
 
 namespace {
 // CRED_TYPE_GENERIC credentials are keyed by an app-chosen "target name"
@@ -210,6 +316,10 @@ namespace {
 // own ASCII identifiers (e.g. "tone3000_refresh_token"), never user data.
 std::wstring TargetNameFor(const std::string& key) {
   const std::string combined = std::string(kServiceName) + ":" + key;
+  return std::wstring(combined.begin(), combined.end());
+}
+std::wstring OldTargetNameFor(const std::string& key) {
+  const std::string combined = std::string(kOldServiceName) + ":" + key;
   return std::wstring(combined.begin(), combined.end());
 }
 }  // namespace
@@ -226,32 +336,62 @@ bool Store(const std::string& key, const std::string& value, std::string* error)
     if (error) *error = "CredWriteW failed (" + std::to_string(GetLastError()) + ")";
     return false;
   }
+  // Copy-then-delete: remove old service entry only after verified new write.
+  const std::wstring oldTarget = OldTargetNameFor(key);
+  CredDeleteW(oldTarget.c_str(), CRED_TYPE_GENERIC, 0);
   return true;
 }
 
 std::optional<std::string> Load(const std::string& key, std::string* error) {
-  const std::wstring target = TargetNameFor(key);
-  PCREDENTIALW cred = nullptr;
-  if (!CredReadW(target.c_str(), CRED_TYPE_GENERIC, 0, &cred)) {
+  // Try new service first
+  {
+    const std::wstring target = TargetNameFor(key);
+    PCREDENTIALW cred = nullptr;
+    if (CredReadW(target.c_str(), CRED_TYPE_GENERIC, 0, &cred)) {
+      std::string value(reinterpret_cast<const char*>(cred->CredentialBlob), cred->CredentialBlobSize);
+      CredFree(cred);
+      return value;
+    }
     const DWORD err = GetLastError();
-    if (err == ERROR_NOT_FOUND) return std::nullopt;
-    if (error) *error = "CredReadW failed (" + std::to_string(err) + ")";
-    return std::nullopt;
+    if (err != ERROR_NOT_FOUND) {
+      if (error) *error = "CredReadW failed (" + std::to_string(err) + ")";
+      return std::nullopt;
+    }
   }
-  std::string value(reinterpret_cast<const char*>(cred->CredentialBlob), cred->CredentialBlobSize);
-  CredFree(cred);
-  return value;
+  // Fallback to old service, migrate on success
+  {
+    const std::wstring oldTarget = OldTargetNameFor(key);
+    PCREDENTIALW cred = nullptr;
+    if (!CredReadW(oldTarget.c_str(), CRED_TYPE_GENERIC, 0, &cred)) {
+      const DWORD err = GetLastError();
+      if (err == ERROR_NOT_FOUND) return std::nullopt;
+      if (error) *error = "CredReadW failed (" + std::to_string(err) + ")";
+      return std::nullopt;
+    }
+    std::string value(reinterpret_cast<const char*>(cred->CredentialBlob), cred->CredentialBlobSize);
+    CredFree(cred);
+    // Migrate: write to new, delete old only after verified write
+    std::string migrateError;
+    if (Store(key, value, &migrateError)) {
+      CredDeleteW(oldTarget.c_str(), CRED_TYPE_GENERIC, 0);
+    }
+    return value;
+  }
 }
 
 bool Delete(const std::string& key, std::string* error) {
+  bool ok = true;
   const std::wstring target = TargetNameFor(key);
   if (!CredDeleteW(target.c_str(), CRED_TYPE_GENERIC, 0)) {
     const DWORD err = GetLastError();
-    if (err == ERROR_NOT_FOUND) return true;
-    if (error) *error = "CredDeleteW failed (" + std::to_string(err) + ")";
-    return false;
+    if (err != ERROR_NOT_FOUND) {
+      if (error) *error = "CredDeleteW failed (" + std::to_string(err) + ")";
+      ok = false;
+    }
   }
-  return true;
+  const std::wstring oldTarget = OldTargetNameFor(key);
+  CredDeleteW(oldTarget.c_str(), CRED_TYPE_GENERIC, 0);
+  return ok;
 }
 
 #endif

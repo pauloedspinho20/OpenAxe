@@ -30,7 +30,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
 /**
  * The web rig: a thin driver over the single rig `AudioWorkletProcessor`
  * (issue #55). It owns one `RigWorkletNode`, which in turn owns one
- * openaxe_core module and one nam_studio_graph holding the whole rig - every
+ * openaxe_core module and one openaxe_graph holding the whole rig - every
  * block kind, connection, param, trim, bypass, model/IR and the master bus
  * live in the core. This class is the Web Audio path's analogue of the
  * desktop's NativeGraphRig: it keeps the same block/edge bookkeeping and UI
@@ -42,7 +42,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * between DSP nodes, no mixer/splitter/master GainNodes, no wet/dry staging.
  * The only Web Audio the rig owns is the single worklet node feeding the
  * graph's IN rail from the mic and carrying the graph's OUT rail to the
- * destination. Per-block meters come from `nam_studio_get_meter` (polled here)
+ * destination. Per-block meters come from `openaxe_get_meter` (polled here)
  * presented through a Web-Audio-free `NativeAnalyser` facade fed a sine scaled
  * to each block's real peak - identical to the desktop path.
  */
@@ -183,7 +183,7 @@ export class GraphRig implements GraphRigControls, PresetRig {
   /**
    * A live meter tap for this block's output: a Web-Audio-free `NativeAnalyser`
    * fed a sine whose amplitude tracks the block's real core peak
-   * (`nam_studio_get_meter`, polled via updateMeter). Cast to `AnalyserNode` at
+   * (`openaxe_get_meter`, polled via updateMeter). Cast to `AnalyserNode` at
    * the boundary because the shared meter widgets consume the narrow
    * getByteTimeDomainData surface - the same cast the desktop engine applies to
    * its NativeAnalyser, so web and desktop present the same type. Null for an

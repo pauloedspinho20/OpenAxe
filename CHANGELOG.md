@@ -211,7 +211,7 @@ All notable changes to OpenAxe are documented here. Format loosely follows
   `@openaxe/*`; CMake projects/options/targets and env vars
   (`OPENAXE_UI_URL`, `OPENAXE_DESKTOP_DEBUG`) renamed; new OpenAxe logo,
   favicon set, PWA icons and desktop app icons. The `extern "C"` ABI prefix
-  `nam_studio_*` is deliberately unchanged — it is baked into the committed
+  `openaxe_*` is deliberately unchanged — it is baked into the committed
   prebuilt WASM artifacts and can only move atomically with a rebuild (see
   `packages/core/include/openaxe/api.h`). Persisted storage names (IndexedDB
   `nam-web-studio`, localStorage keys, the desktop keychain service) are also

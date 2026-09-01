@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-const STORAGE_KEY = 'nam-web-studio:onboarding-dismissed'
+const STORAGE_KEY = 'openaxe:onboarding-dismissed'
 
 function readDismissed(): boolean {
   if (typeof localStorage === 'undefined') return true

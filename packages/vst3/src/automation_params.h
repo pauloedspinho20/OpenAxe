@@ -13,7 +13,7 @@
 //     file must never invent a second layout.
 //   - Slot 0 is permanently the master bus (level, mute). Slots 1..15 bind to
 //     live blocks. Each slot exposes kParamsPerSlot entries whose display
-//     name/range/unit resolve dynamically via nam_studio_automation_slot_*.
+//     name/range/unit resolve dynamically via openaxe_automation_slot_*.
 //   - Values cross the boundary normalized 0..1 and map linearly onto the
 //     resolved param's [min, max]. No non-linear shaping is done here today;
 //     #127's issue notes that frequency/time params ultimately want log-ish
@@ -21,7 +21,7 @@
 //     per-param decision — linear remains the correct host contract until that
 //     ships, so automation lanes remain meaningful across kinds.
 //   - Host -> core for generic params lands via
-//     nam_studio_set_automation_param_normalized (lock-free). The one
+//     openaxe_set_automation_param_normalized (lock-free). The one
 //     exception is any Amp-family Slim Size write that resolved through a
 //     slot — the ABI documents _that_ index as Tier 2, so it must be routed
 //     through the control thread's suspend handshake (see plugin.h's
@@ -30,7 +30,7 @@
 //     BeginInformHostOfParamChange / EndInformHostOfParamChange so the host
 //     records automation. The editor will call NotifyHostParamChanged for
 //     that.
-//   - Reverb blocks automate through nam_studio_set_reverb_control, not raw
+//   - Reverb blocks automate through openaxe_set_reverb_control, not raw
 //     params. The per-algorithm mapping is core's job; plugin wrappers just
 //     forward the slot's normalized value through the reverb-control path when
 //     the bound block is a reverb. That indirection lives here rather than in
@@ -40,7 +40,7 @@
 //     controls. Those two symbols carry the loaded capture's dBu calibration;
 //     writing to them recalibrates the amp. The per-block Input/Output trims
 //     are the user-facing volume controls and live as separate block trims
-//     (nam_studio_set_block_input_trim / output_trim), not as generic params.
+//     (openaxe_set_block_input_trim / output_trim), not as generic params.
 //     Host automation for "amp volume" should therefore target a separate
 //     trim param set — which is a future chunk-format concern, not part of
 //     this slot map. This header enforces that by never treating those two
@@ -114,7 +114,7 @@ inline float RealToNormalized(float real, float mn, float mx) {
 // Formats a host-visible string for the resolved slot entry (e.g. "-12.0 dB").
 // Hosts call this for every automation lane / generic editor. Returns "—"
 // when the entry resolves to nothing (unbound slot, beyond the block's table).
-std::string DisplayForSlotEntry(NamStudioGraph* graph, int slot, int entry, float normalized);
+std::string DisplayForSlotEntry(OpenAxeGraph* graph, int slot, int entry, float normalized);
 
 // ── Host -> core write ───────────────────────────────────────────────────
 // Applies one host param write (host_id, normalized 0..1) to core. The
@@ -122,7 +122,7 @@ std::string DisplayForSlotEntry(NamStudioGraph* graph, int slot, int entry, floa
 // "slim_size" on an Amp-family block, this returns false so the caller MUST
 // reroute the write through the control thread's suspend handshake
 // (plugin.h:WithSuspend). All other cases forward lock-free and return true.
-bool HostParamWrite(NamStudioGraph* graph, int host_id, float normalized, bool& out_needs_suspend);
+bool HostParamWrite(OpenAxeGraph* graph, int host_id, float normalized, bool& out_needs_suspend);
 
 // ── Host param group name for host automation lists ──────────────────────
 // Hosts group params by this string (VST3/AU/CLAP automation dialogs).
