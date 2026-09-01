@@ -10,3 +10,5 @@
     {openaxe::dsp::SmoothingMode::kExponential, 0.02f, 0.0f, 1.0f},
     {openaxe::dsp::SmoothingMode::kNone, 0.0f, 0.0f, 2.0f},
     {openaxe::dsp::SmoothingMode::kExponential, 0.02f, 0.1f, 10.0f},
+    {openaxe::dsp::SmoothingMode::kExponential, 0.02f, 0.5f, 100.0f},
+    {openaxe::dsp::SmoothingMode::kExponential, 0.02f, 5.0f, 500.0f},

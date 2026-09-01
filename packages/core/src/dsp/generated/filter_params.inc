@@ -9,3 +9,5 @@
     {"Sensitivity", "sensitivity", 0.0f, 1.0f, "x"},
     {"Drive Mode", "mode", 0.0f, 2.0f, ""},
     {"LFO Rate", "lfo_rate", 0.1f, 10.0f, "Hz"},
+    {"Env Attack", "env_attack", 0.5f, 100.0f, "ms"},
+    {"Env Release", "env_release", 5.0f, 500.0f, "ms"},

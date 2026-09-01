@@ -6,3 +6,4 @@
     {"Depth", "depth", 0.1f, 5.0f, "ms"},
     {"Feedback", "feedback", -0.9f, 0.9f, "%"},
     {"Delay", "delay", 0.1f, 3.0f, "ms"},
+    {"Manual", "manual", 0.1f, 3.0f, "ms"},
