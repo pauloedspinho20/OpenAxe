@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { BlockIcon, Panel, toast } from '@openaxe/ui'
+import { BlockIcon, toast } from '@openaxe/ui'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { useGraphStore } from '../../../state/graphStore'
 import { BLOCK_OPTIONS, BLOCK_KIND_LABELS } from '../blockOptions'
@@ -90,7 +90,7 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
   const groups = Array.from(new Set(BLOCK_OPTIONS.map((o) => o.group)))
 
   return (
-    <Panel className={styles.panel}>
+    <div className={styles.paletteRow}>
       {groups.map((group) => (
         <div key={group} className={styles.group}>
           <span className={`label ${styles.groupLabel}`}>{group}</span>
@@ -140,6 +140,6 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
       )}
 
       <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />
-    </Panel>
+    </div>
   )
 }

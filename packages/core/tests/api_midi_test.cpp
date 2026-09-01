@@ -1,7 +1,9 @@
 // Issue #124: port of apps/web/src/midi/{message,actions,dispatch}.test.ts
 // plus MIDI state (mappings, learn, serialization) into packages/core.
 
+#include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>

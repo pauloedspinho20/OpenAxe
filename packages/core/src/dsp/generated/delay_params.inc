@@ -8,3 +8,5 @@
     {"Model", "model", 0.0f, 2.0f, ""},
     {"Wow Depth", "wow_depth", 0.0f, 5.0f, "ms"},
     {"Wow Rate", "wow_rate", 0.1f, 3.0f, "Hz"},
+    {"Stereo", "stereo_mode", 0.0f, 1.0f, ""},
+    {"Width", "width", 0.0f, 1.0f, "x"},

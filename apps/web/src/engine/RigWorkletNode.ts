@@ -1,3 +1,4 @@
+import { COMPILED_BLOCK_KINDS } from '../effects/generatedBlockConfig'
 import type { BlockKind } from './blocks/Block'
 
 /**
@@ -31,25 +32,24 @@ const KIND_TO_CORE: Record<BlockKind, number> = {
   phaser: 5,
   tremolo: 6,
   delay: 7,
-  'ping-pong-delay': 8,
-  reverb: 9,
-  amp: 10,
-  'amp-cab': 11,
-  pedal: 12,
-  outboard: 13,
-  space: 14,
-  cab: 15,
-  mixer: 16,
-  splitter: 17,
-  'ring-mod': 18,
-  filter: 19,
-  'pitch-shifter': 20,
-  'granular-delay': 21,
-  rotary: 22,
-  'send-1': 23,
-  'return-1': 24,
-  'send-2': 25,
-  'return-2': 26,
+  reverb: 8,
+  amp: 9,
+  'amp-cab': 10,
+  pedal: 11,
+  outboard: 12,
+  space: 13,
+  cab: 14,
+  mixer: 15,
+  splitter: 16,
+  'ring-mod': 17,
+  filter: 18,
+  'pitch-shifter': 19,
+  'granular-delay': 20,
+  rotary: 21,
+  'send-1': 22,
+  'return-1': 23,
+  'send-2': 24,
+  'return-2': 25,
 }
 
 /** What the core reports about a loaded capture (`nam_studio_block_model_info`). */
@@ -73,6 +73,8 @@ interface WorkletReply {
   error?: string
   info?: RigModelInfo | null
   meters?: Record<string, number>
+  /** Core block-kind ids this WASM was built with - see assertCompiledKindsMatchConfig. */
+  compiledKinds?: number[]
 }
 
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
@@ -129,7 +131,52 @@ export class RigWorkletNode {
       outputChannelCount: [2],
       processorOptions: { wasmBytes },
     })
-    return new RigWorkletNode(node)
+    const rig = new RigWorkletNode(node)
+    // Deliberately not awaited: this is a diagnostic, and blocking engine
+    // startup on a reply that may never arrive would turn a config mismatch
+    // into a dead app.
+    void rig.assertCompiledKindsMatchConfig()
+    return rig
+  }
+
+  /**
+   * Cross-check the WASM against `effects.config.json` (issue #313).
+   *
+   * `apps/web/public/wasm-core/nam_studio_core.wasm` is a checked-in artifact
+   * that only a manual `scripts/build-core-wasm.sh` regenerates, so flipping a
+   * kind's `compiled` flag and forgetting the rebuild leaves the palette and
+   * the engine disagreeing about which blocks exist - the kind of drift that
+   * otherwise shows up as a block that silently refuses to be added. Asking
+   * the core directly is the only check that can catch it; a generated file
+   * compared against another generated file could not.
+   *
+   * A mismatch is logged rather than thrown: the app is still usable for every
+   * kind both sides agree on, and taking the whole engine down over a stale
+   * artifact would be worse than the drift.
+   */
+  private async assertCompiledKindsMatchConfig(): Promise<void> {
+    const maxKind = Math.max(...Object.values(KIND_TO_CORE))
+    const reply = await this.request({ type: 'compiledKinds', maxKind })
+    const fromCore = reply.compiledKinds
+    if (!reply.ok || !Array.isArray(fromCore)) return
+    const coreKinds = new Set(fromCore)
+    const drift: string[] = []
+    for (const [kind, coreId] of Object.entries(KIND_TO_CORE) as [BlockKind, number][]) {
+      const inConfig = COMPILED_BLOCK_KINDS.has(kind)
+      const inCore = coreKinds.has(coreId)
+      if (inConfig !== inCore) {
+        drift.push(
+          `${kind} (config: ${inConfig ? 'compiled' : 'omitted'}, wasm: ${inCore ? 'compiled' : 'omitted'})`,
+        )
+      }
+    }
+    if (drift.length > 0) {
+      console.error(
+        '[rig] the prebuilt WASM disagrees with packages/core/effects.config.json - ' +
+          'run `bash scripts/build-core-wasm.sh` and re-commit the artifacts. Drift: ' +
+          drift.join(', '),
+      )
+    }
   }
 
   /** Send one message and resolve with the worklet's reply. */

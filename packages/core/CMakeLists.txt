@@ -13,6 +13,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(OPENAXE_BUILD_TESTS "Build packages/core unit tests" OFF)
 
+# Which block kinds this build contains (issue #313). effects.config.json is
+# the source of truth; this file is generated from it by
+# `node scripts/gen-param-schema.mjs --target=effects` and defines
+# OPENAXE_BLOCK_SOURCES (the per-kind DSP sources, omitting anything marked
+# compiled:false) and OPENAXE_DRAGONFLY_ENABLED. A disabled kind's .cpp is
+# never listed here, so it is never handed to the compiler - the matching
+# `#if OPENAXE_BLOCK_*` guards in src/engine.cpp remove its call sites.
+include("${CMAKE_CURRENT_SOURCE_DIR}/generated/block_sources.cmake")
+
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
 # openaxe::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and the 4
 # DSPark-based dynamics/EQ wrappers (Compressor/Equalizer/NoiseGate/Tremolo)
@@ -32,20 +41,7 @@ add_library(openaxe_core STATIC
   src/serialization/rig_state.cpp
   src/serialization/sha256.cpp
   src/serialization/base64.cpp
-  src/dsp/chorus.cpp
-  src/dsp/delay.cpp
-  src/dsp/flanger.cpp
-  src/dsp/phaser.cpp
-  src/dsp/ping_pong_delay.cpp
-  src/dsp/compressor.cpp
-  src/dsp/equalizer.cpp
-  src/dsp/noise_gate.cpp
-  src/dsp/tremolo.cpp
-  src/dsp/ring_mod.cpp
-  src/dsp/filter.cpp
-  src/dsp/pitch_shifter.cpp
-  src/dsp/granular_delay.cpp
-  src/dsp/rotary.cpp
+  ${OPENAXE_BLOCK_SOURCES}
   src/dsp/tone_stack.cpp
   src/dsp/convolver.cpp
   src/dsp/wav.cpp
@@ -117,7 +113,12 @@ endif()
 #     just DSP.cpp) - so each algorithm's target here is just that one
 #     self-contained wrapper source file, nothing else to list.
 set(DRAGONFLY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dragonfly-reverb")
-if(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
+if(NOT OPENAXE_DRAGONFLY_ENABLED)
+  # effects.config.json has reverb compiled:false - skip all four algorithm
+  # targets. engine.cpp's OPENAXE_BLOCK_REVERB guards drop the call sites.
+  message(STATUS "openaxe_core: reverb disabled by effects.config.json - "
+                 "not building the Dragonfly algorithms")
+elseif(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
    AND EXISTS "${DRAGONFLY_DIR}/dpf/distrho/DistrhoPlugin.hpp")
   set(OPENAXE_HAS_DRAGONFLY TRUE)
 
@@ -242,7 +243,7 @@ if(EMSCRIPTEN)
     # referenced in apps/web against this list - run in CI, and standalone
     # with `--fix` to add any it finds missing (a wasm rebuild is still
     # required after - see scripts/build-core-wasm.sh).
-     "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_nam_studio_detect_pitch','_nam_studio_frequency_to_note','_nam_studio_midi_mapping_count','_nam_studio_midi_get_mapping','_nam_studio_midi_add_mapping','_nam_studio_midi_remove_mapping','_nam_studio_midi_clear_mappings','_nam_studio_midi_arm_learn','_nam_studio_midi_cancel_learn','_nam_studio_midi_is_learning','_nam_studio_midi_get_learn_target','_nam_studio_midi_parse_message','_nam_studio_midi_is_trigger_edge','_nam_studio_midi_message_matches','_nam_studio_midi_handle_message','_nam_studio_serialize_state','_nam_studio_serialize_state_ex','_nam_studio_load_state','_nam_studio_state_missing_asset_count','_nam_studio_state_missing_asset','_nam_studio_compute_fingerprint','_malloc','_free']"
+     "SHELL:-s EXPORTED_FUNCTIONS=['_nam_studio_graph_create','_nam_studio_graph_destroy','_nam_studio_add_block','_nam_studio_remove_block','_nam_studio_move_block','_nam_studio_connect','_nam_studio_disconnect','_nam_studio_reset','_nam_studio_process','_nam_studio_set_param','_nam_studio_block_param_count','_nam_studio_block_param_info','_nam_studio_load_nam_model_json','_nam_studio_unload_nam_model','_nam_studio_block_has_model','_nam_studio_block_model_info','_nam_studio_block_model_slim_breakpoints','_nam_studio_load_ir','_nam_studio_unload_ir','_nam_studio_block_ir_length','_nam_studio_set_reverb_algorithm','_nam_studio_set_reverb_control','_nam_studio_set_delay_model','_nam_studio_set_bypass','_nam_studio_set_block_input_trim','_nam_studio_set_block_output_trim','_nam_studio_set_master_level','_nam_studio_set_master_muted','_nam_studio_set_tuner_muted','_nam_studio_get_meter','_nam_studio_detect_pitch','_nam_studio_frequency_to_note','_nam_studio_midi_mapping_count','_nam_studio_midi_get_mapping','_nam_studio_midi_add_mapping','_nam_studio_midi_remove_mapping','_nam_studio_midi_clear_mappings','_nam_studio_midi_arm_learn','_nam_studio_midi_cancel_learn','_nam_studio_midi_is_learning','_nam_studio_midi_get_learn_target','_nam_studio_midi_parse_message','_nam_studio_midi_is_trigger_edge','_nam_studio_midi_message_matches','_nam_studio_midi_handle_message','_nam_studio_serialize_state','_nam_studio_serialize_state_ex','_nam_studio_load_state','_nam_studio_state_missing_asset_count','_nam_studio_state_missing_asset','_nam_studio_state_unsupported_block_count','_nam_studio_state_unsupported_block','_nam_studio_block_kind_compiled','_nam_studio_compute_fingerprint','_malloc','_free']"
     # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
     # into WASM memory as UTF-8 bytes and reads nam_studio_block_model_info's
     # double/int32 out-params back out.

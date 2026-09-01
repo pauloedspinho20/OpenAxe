@@ -38,7 +38,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
   4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
   `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
-  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`/`kPingPongDelay`, and passthrough
+  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`, and passthrough
   for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
   `include/openaxe/api.h` + `src/api.cpp`
@@ -136,7 +136,7 @@ record relinkable references only.
   "blocks": [
     {
       "id": "2",
-      "kind": "ping-pong-delay",
+      "kind": "delay",
       "row": 0,
       "col": 3,
       "bypass": false,
@@ -174,7 +174,7 @@ Field notes:
   regardless of renumbering; duplicate ids in one document skip the second
   block. Rail jacks serialize as `"-1"`/`"-2"`; `"IN"`/`"OUT"` load equally.
 - **`kind` strings** are the TS union's hyphenated literals
-  (`noise-gate`, ..., `ping-pong-delay`, `amp`, `amp-cab`, `pedal`,
+  (`noise-gate`, ..., `delay`, `reverb`, `amp`, `amp-cab`, `pedal`,
   `outboard`, `space`, `cab`, `mixer`, `splitter`) - block.h's documented
   future mapping lives in `rig_state.cpp`.
 - **`bypass`** appears only for kinds with a bypass concept (everything except
@@ -353,6 +353,43 @@ as NAM captures too (NAM's format isn't amp-specific — it captures any
 nonlinear audio device), reusing the same `NamAmp` wrapper and graph engine
 already built here rather than adding a second, narrower inference engine
 alongside it.
+
+## DSP regression testing (issue #315)
+
+`tests/dsp_regression_test.cpp` is the guard on how the effects sound. Five
+deterministic stimuli — impulse, exponential sweep, two-tone, silence, and a
+synthetic pluck — are rendered through every compiled effect via `AudioEngine`
+(so the engine's mix/level staging and param smoothing are covered too), and
+each output is reduced to a fingerprint compared against
+`tests/golden/dsp_metrics.json`.
+
+| file                            | role                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| `tests/dsp_stimuli.h`           | the five signal generators, and why each one exists                         |
+| `tests/dsp_metrics.h`           | the fingerprint and its tolerances, and why it is metrics rather than audio |
+| `tests/dsp_regression_test.cpp` | the case table, the comparison, and `--bless`                               |
+| `tests/golden/dsp_metrics.json` | the references — generated, reviewed by diff                                |
+
+The metrics are chosen so a failure localises the change rather than just
+reporting one: `onset` pins a delay time or added latency to the sample, the
+band shape localises a filter move to an octave, and L/R correlation catches a
+channel swap or a width change that no mono level metric would see.
+
+Two things it deliberately does not do. It does not compare raw audio — float
+results differ across the compilers and platforms CI runs, so every gate is a
+tolerance. And it does not hash the output, for the same reason: a hash would
+differ everywhere and could only ever be noise.
+
+The band tolerance is level-dependent for the same reason, and the figures come
+from a measurement rather than a guess: the harness' first Linux/GCC run against
+macOS/clang references drifted in one case of 25 — Dragonfly's room reverb,
+whose recursive feedback network compounds a libm difference over the render —
+and only in bands 47–63 dB down. Bands carrying real energy are held to 1 dB;
+bands below −45 dB relative get 6 dB, which costs no sensitivity that matters
+because a change big enough to hear moves the loud bands and the level metrics
+too. Both figures are re-checked against deliberately injected regressions.
+
+Re-blessing is documented in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#changing-how-an-effect-sounds).
 
 ## Non-goals (not yet — tracked for follow-up work)
 

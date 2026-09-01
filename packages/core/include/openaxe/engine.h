@@ -27,8 +27,8 @@
 // (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
 // algorithms (all back the single kReverb kind - algorithm choice is a
 // per-block setting this layer owns, see SetReverbAlgorithm), the
-// hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay/
-// kPingPongDelay), and the DSPark-based dynamics/EQ wrappers (kCompressor/
+// hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay),
+// and the DSPark-based dynamics/EQ wrappers (kCompressor/
 // kEq/kNoiseGate/kTremolo - issue #22's last four still-native effect
 // kinds). kCab/kMixer/kSplitter pass audio through unchanged rather than
 // erroring - none of them are a DSP effect kind, so a full rig is
@@ -39,6 +39,12 @@ namespace openaxe::engine {
 // ownership questions crossing the extern "C" boundary. Translated to
 // GraphRig's string ids internally via std::to_string.
 using BlockId = int32_t;
+
+// What AddBlock returns when it refuses: today only for a kind this build has
+// no DSP for (effects.config.json's compiled:false - see generated/
+// enabled_blocks.h). Negative, so it can never collide with a real id, and it
+// matches Connect's existing -1-on-failure convention.
+inline constexpr BlockId kInvalidBlockId = -1;
 using EdgeId = int32_t;
 
 // Reserved sentinels for the two rail endpoints (never real block ids -

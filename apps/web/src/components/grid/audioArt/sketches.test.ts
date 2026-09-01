@@ -74,7 +74,6 @@ const ALL_VARIANTS: ArtVariant[] = [
   'phaser',
   'tremolo',
   'delay',
-  'ping-pong-delay',
   'reverb',
   'cab',
   'mixer',
@@ -84,7 +83,6 @@ const ALL_VARIANTS: ArtVariant[] = [
 describe('toArtVariant', () => {
   it('maps known effect kinds to their variant', () => {
     expect(toArtVariant('reverb')).toBe('reverb')
-    expect(toArtVariant('ping-pong-delay')).toBe('ping-pong-delay')
     expect(toArtVariant('mixer')).toBe('mixer')
   })
 
@@ -117,15 +115,8 @@ describe('createArtDrawer', () => {
   it('advances internal state across repeated frames (no crash, stateful drawers)', () => {
     const p = makeP5()
     const ctx = makeCtx()
-    // reverb/chorus/flanger (particles), delay/ping-pong (rings), orb/sweep/cone/flow keep state.
-    for (const variant of [
-      'reverb',
-      'delay',
-      'ping-pong-delay',
-      'tremolo',
-      'cab',
-      'mixer',
-    ] as const) {
+    // reverb/chorus/flanger (particles), delay (rings), orb/sweep/cone/flow keep state.
+    for (const variant of ['reverb', 'delay', 'tremolo', 'cab', 'mixer'] as const) {
       const drawer = createArtDrawer(variant)
       for (let i = 0; i < 5; i++) drawer(p, ctx)
     }

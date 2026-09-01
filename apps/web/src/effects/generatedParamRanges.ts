@@ -104,12 +104,6 @@ export const PARAM_RANGES = Object.freeze({
     mic_distance: { min: 0, max: 1 },
     crossover: { min: 400, max: 1200 },
   }),
-  'ping-pong-delay': Object.freeze({
-    time: { min: 50, max: 1000 },
-    feedback: { min: 0, max: 0.9 },
-    tone: { min: 200, max: 12000 },
-    width: { min: 0, max: 1 },
-  }),
   delay: Object.freeze({
     time: { min: 10, max: 1000 },
     feedback: { min: 0, max: 0.9 },
@@ -117,6 +111,8 @@ export const PARAM_RANGES = Object.freeze({
     model: { min: 0, max: 2 },
     wow_depth: { min: 0, max: 5 },
     wow_rate: { min: 0.1, max: 3 },
+    stereo_mode: { min: 0, max: 1 },
+    width: { min: 0, max: 1 },
   }),
   amp: Object.freeze({
     input_level: { min: -100, max: 100 },

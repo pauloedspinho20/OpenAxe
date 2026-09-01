@@ -1,0 +1,152 @@
+{
+  "$comment": "Single source of truth for which block kinds this build compiles and which of them the block palette offers (issue #313). Generated outputs are produced from this file by scripts/gen-param-schema.mjs --target=effects - never hand-edit them: packages/core/include/openaxe/generated/enabled_blocks.h, packages/core/generated/block_sources.cmake, and apps/web/src/effects/generatedBlockConfig.ts. Two independent flags, because they are two independent states: `compiled` decides whether the DSP source is handed to the compiler at all, `inPalette` decides whether a user can place the block. Before this file existed the second was expressed by commenting entries out of apps/web/src/components/grid/blockOptions.ts while the DSP still compiled into every binary - ring-mod and granular-delay are exactly that case, and are why the two flags are not one. `compiled: false` implies `inPalette: false` (the generator enforces it). A kind with no `cppFile` has no DSP source of its own - it is routing, a NAM-model kind, or handled inside engine.cpp - so it cannot be compiled out and the generator rejects `compiled: false` for it. `enumName` is the openaxe::graph::BlockKind enumerator and the key is the wire string used by presets and the state document (src/serialization/rig_state.cpp owns that mapping); both are repeated here so the generator never has to re-derive them from C++. Changing `compiled` requires rebuilding the checked-in WASM (bash scripts/build-core-wasm.sh) - the app asks the running core via nam_studio_block_kind_compiled at startup and logs an error if the artifact disagrees with this file.",
+  "blocks": {
+    "noise-gate": {
+      "enumName": "kNoiseGate",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "noise_gate.cpp"
+    },
+    "compressor": {
+      "enumName": "kCompressor",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "compressor.cpp"
+    },
+    "eq": {
+      "enumName": "kEq",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "equalizer.cpp"
+    },
+    "chorus": {
+      "enumName": "kChorus",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "chorus.cpp"
+    },
+    "flanger": {
+      "enumName": "kFlanger",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "flanger.cpp"
+    },
+    "phaser": {
+      "enumName": "kPhaser",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "phaser.cpp"
+    },
+    "tremolo": {
+      "enumName": "kTremolo",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "tremolo.cpp"
+    },
+    "delay": {
+      "enumName": "kDelay",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "delay.cpp"
+    },
+    "$comment_reverb": "The four Dragonfly algorithms are separate CMake targets with their own include paths and a C++14 override (see CMakeLists.txt), so this one entry gates the whole DRAGONFLY_ALGOS block rather than a single source file.",
+    "reverb": {
+      "enumName": "kReverb",
+      "compiled": true,
+      "inPalette": true,
+      "cmakeGroup": "dragonfly"
+    },
+    "$comment_hidden_effects": "Compiled today, hidden today. ring-mod aliases badly (no oversampling on the carrier - issue #318) and granular-delay runs only two grain voices with periodic pseudo-jitter (issue #321). Turn inPalette on once those land; turn compiled off to reclaim the WASM bytes in the meantime.",
+    "ring-mod": {
+      "enumName": "kRingMod",
+      "compiled": true,
+      "inPalette": false,
+      "cppFile": "ring_mod.cpp"
+    },
+    "granular-delay": {
+      "enumName": "kGranularDelay",
+      "compiled": true,
+      "inPalette": false,
+      "cppFile": "granular_delay.cpp"
+    },
+    "filter": {
+      "enumName": "kFilter",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "filter.cpp"
+    },
+    "pitch-shifter": {
+      "enumName": "kPitchShifter",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "pitch_shifter.cpp"
+    },
+    "rotary": {
+      "enumName": "kRotary",
+      "compiled": true,
+      "inPalette": true,
+      "cppFile": "rotary.cpp"
+    },
+    "$comment_nam_kinds": "The NAM-capture gear kinds and cab/mixer/splitter and the Send/Return relays. No DSP source of their own (nam_amp.cpp and convolver.cpp back several kinds each, and routing lives in engine.cpp), so they are palette-gated only. `outboard` and `splitter` were the other two commented-out palette entries.",
+    "amp": {
+      "enumName": "kAmp",
+      "compiled": true,
+      "inPalette": true
+    },
+    "amp-cab": {
+      "enumName": "kAmpCab",
+      "compiled": true,
+      "inPalette": true
+    },
+    "pedal": {
+      "enumName": "kPedal",
+      "compiled": true,
+      "inPalette": true
+    },
+    "outboard": {
+      "enumName": "kOutboard",
+      "compiled": true,
+      "inPalette": false
+    },
+    "space": {
+      "enumName": "kSpace",
+      "compiled": true,
+      "inPalette": true
+    },
+    "cab": {
+      "enumName": "kCab",
+      "compiled": true,
+      "inPalette": true
+    },
+    "mixer": {
+      "enumName": "kMixer",
+      "compiled": true,
+      "inPalette": true
+    },
+    "splitter": {
+      "enumName": "kSplitter",
+      "compiled": true,
+      "inPalette": false
+    },
+    "send-1": {
+      "enumName": "kSend1",
+      "compiled": true,
+      "inPalette": true
+    },
+    "return-1": {
+      "enumName": "kReturn1",
+      "compiled": true,
+      "inPalette": true
+    },
+    "send-2": {
+      "enumName": "kSend2",
+      "compiled": true,
+      "inPalette": true
+    },
+    "return-2": {
+      "enumName": "kReturn2",
+      "compiled": true,
+      "inPalette": true
+    }
+  }
+}

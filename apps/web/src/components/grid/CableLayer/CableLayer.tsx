@@ -22,13 +22,22 @@ export interface CableLayerProps {
    */
   recomputeKey: unknown
   dragPreview: DragPreview | null
+  pendingConnection?: { fromJackId: string; toJackId: string } | null
+  /** When true cables curve vertically (mobile top→bottom), otherwise horizontally (desktop). */
+  vertical?: boolean
   /** Called when the user clicks one of the drawn cables to unhook it. */
   onDisconnect: (edgeId: string) => void
 }
 
-function cablePath(from: Point, to: Point): string {
-  const dx = Math.max(24, Math.abs(to.x - from.x) / 2)
-  return `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`
+function cablePath(from: Point, to: Point, vertical = false): string {
+  if (vertical) {
+    const dy = Math.abs(to.y - from.y)
+    const d = Math.max(24, dy / 2)
+    return `M ${from.x} ${from.y} C ${from.x} ${from.y + d}, ${to.x} ${to.y - d}, ${to.x} ${to.y}`
+  }
+  const dx = Math.abs(to.x - from.x)
+  const d = Math.max(24, dx / 2)
+  return `M ${from.x} ${from.y} C ${from.x + d} ${from.y}, ${to.x - d} ${to.y}, ${to.x} ${to.y}`
 }
 
 /**
@@ -39,10 +48,18 @@ function cablePath(from: Point, to: Point): string {
  * All pointer interaction (drag-to-connect) is owned by GridEditor, which is
  * the nearest common ancestor of both the jacks and this layer.
  */
-export function CableLayer({ edges, recomputeKey, dragPreview, onDisconnect }: CableLayerProps) {
+export function CableLayer({
+  edges,
+  recomputeKey,
+  dragPreview,
+  pendingConnection,
+  vertical = false,
+  onDisconnect,
+}: CableLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [paths, setPaths] = useState<Array<{ id: string; d: string }>>([])
   const [previewD, setPreviewD] = useState<string | null>(null)
+  const [pendingD, setPendingD] = useState<string | null>(null)
 
   const pointFor = useCallback((elementId: string) => {
     const svg = svgRef.current
@@ -61,10 +78,10 @@ export function CableLayer({ edges, recomputeKey, dragPreview, onDisconnect }: C
     for (const edge of edges) {
       const from = pointFor(jackElementId(edge.from.blockId, 'out', edge.from.port))
       const to = pointFor(jackElementId(edge.to.blockId, 'in', edge.to.port))
-      if (from && to) next.push({ id: edge.id, d: cablePath(from, to) })
+      if (from && to) next.push({ id: edge.id, d: cablePath(from, to, vertical) })
     }
     setPaths(next)
-  }, [edges, pointFor])
+  }, [edges, pointFor, vertical])
 
   useLayoutEffect(() => {
     recompute()
@@ -95,9 +112,27 @@ export function CableLayer({ edges, recomputeKey, dragPreview, onDisconnect }: C
     if (!svg || !from) return
     const rect = svg.getBoundingClientRect()
     setPreviewD(
-      cablePath(from, { x: dragPreview.clientX - rect.left, y: dragPreview.clientY - rect.top }),
+      cablePath(
+        from,
+        { x: dragPreview.clientX - rect.left, y: dragPreview.clientY - rect.top },
+        vertical,
+      ),
     )
-  }, [dragPreview, pointFor])
+  }, [dragPreview, pointFor, vertical])
+
+  useLayoutEffect(() => {
+    if (!pendingConnection) {
+      setPendingD(null)
+      return
+    }
+    const from = pointFor(pendingConnection.fromJackId)
+    const to = pointFor(pendingConnection.toJackId)
+    if (!from || !to) {
+      setPendingD(null)
+      return
+    }
+    setPendingD(cablePath(from, to, vertical))
+  }, [pendingConnection, pointFor, recomputeKey, vertical])
 
   return (
     <svg ref={svgRef} className={styles.svg} aria-hidden="true">
@@ -114,6 +149,9 @@ export function CableLayer({ edges, recomputeKey, dragPreview, onDisconnect }: C
         </g>
       ))}
       {previewD && <path className={styles.cablePreview} d={previewD} />}
+      {pendingD && (
+        <path className={`${styles.cablePreview} ${styles.cablePending}`} d={pendingD} />
+      )}
     </svg>
   )
 }

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -32,6 +33,7 @@
 #include "openaxe/dsp/ring_mod.h"
 #include "openaxe/dsp/rotary.h"
 #include "openaxe/dsp/tremolo.h"
+#include "openaxe/generated/enabled_blocks.h"
 #include "test_harness.h"
 
 using openaxe::engine::AudioEngine;
@@ -108,11 +110,17 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   const BlockId noise_gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 2);
   const BlockId tremolo = engine.AddBlock(BlockKind::kTremolo, 0, 3);
   // Phase-2 kinds (issue #268): every one is a wet-only DSP kind that also
-  // gets the engine-level mix, so param_count must be dsp + 1.
+  // gets the engine-level mix, so param_count must be dsp + 1. Each is
+  // guarded because effects.config.json can compile its DSP out (#313), and
+  // the assertion below names a type that would not exist in that build.
+#if OPENAXE_BLOCK_RING_MOD
   const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
+#endif
   const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
   const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
+#if OPENAXE_BLOCK_GRANULAR_DELAY
   const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
+#endif
   const BlockId rotary = engine.AddBlock(BlockKind::kRotary, 0, 8);
 
   OPENAXE_EXPECT(engine.ParamCount(compressor) == openaxe::dsp::Compressor::ParamCount());
@@ -120,22 +128,35 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
+#if OPENAXE_BLOCK_RING_MOD
   OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
+#endif
   OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
+#if OPENAXE_BLOCK_GRANULAR_DELAY
   OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
+#endif
   OPENAXE_EXPECT(engine.ParamCount(rotary) == openaxe::dsp::Rotary::ParamCount() + 1);
 
-  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(compressor, 0, eq, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(eq, 0, noise_gate, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(noise_gate, 0, tremolo, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(tremolo, 0, ring_mod, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(ring_mod, 0, filter, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(filter, 0, pitch, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(pitch, 0, granular, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(granular, 0, rotary, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(rotary, 0, kOutRailId, 0).ok);
+  // Assembled from whatever kinds this build actually has, in placement
+  // order, so a config that compiles one out (#313) still exercises the rest
+  // of the chain end to end instead of failing to compile.
+  std::vector<BlockId> chain{compressor, eq, noise_gate, tremolo};
+#if OPENAXE_BLOCK_RING_MOD
+  chain.push_back(ring_mod);
+#endif
+  chain.push_back(filter);
+  chain.push_back(pitch);
+#if OPENAXE_BLOCK_GRANULAR_DELAY
+  chain.push_back(granular);
+#endif
+  chain.push_back(rotary);
+
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, chain.front(), 0).ok);
+  for (size_t i = 1; i < chain.size(); ++i) {
+    OPENAXE_EXPECT(engine.Connect(chain[i - 1], 0, chain[i], 0).ok);
+  }
+  OPENAXE_EXPECT(engine.Connect(chain.back(), 0, kOutRailId, 0).ok);
   engine.Reset(48000.0, kFrames);
 
   // A loud sine through the full chain: every stage engaged, output must stay
@@ -602,60 +623,95 @@ void TestModulationEffects() {
     std::printf("chorus dry %f\n", maxDry);
     OPENAXE_EXPECT(std::fabs(maxDry-0.3f) < 0.05f);
   }
-  // Ping-pong true stereo and mix
+  // Delay in ping-pong mode (#314): repeats must alternate across the image.
+  // The old standalone ping-pong-delay kind is gone; stereo_mode is a Delay
+  // param now, orthogonal to model.
   {
+    // Param indices, in kParamInfo order (see delay.cpp).
+    constexpr int kTime = 0, kFeedback = 1, kStereoMode = 6, kWidth = 7, kMix = 8;
+    constexpr double kSr = 48000.0;
+    constexpr int kBlock = 128;
+    constexpr float kTimeMs = 100.0f;
+
     AudioEngine eng;
-    auto id = eng.AddBlock(BlockKind::kPingPongDelay,0,0);
-    eng.Connect(kInRailId,0,id,0);
-    eng.Connect(id,0,kOutRailId,0);
-    eng.Reset(48000,128);
-    // width 1 hard, mix 0.5, time 100
-    eng.SetParam(id, 3, 1.0f); // width
-    eng.SetParam(id, 4, 0.5f); // mix
-    eng.SetParam(id, 0, 100.0f); // time
-    // warmup with silence
-    for(int i=0;i<10;i++) {
-      std::vector<float> inL(128,0), inR(128,0), outL(128,0), outR(128,0);
-      const float* in[2]={inL.data(), inR.data()};
-      float* out[2]={outL.data(), outR.data()};
-      eng.Process(in,2,out,2,128);
+    auto id = eng.AddBlock(BlockKind::kDelay, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(kSr, kBlock);
+    eng.SetParam(id, kStereoMode, 1.0f);   // ping-pong
+    eng.SetParam(id, kWidth, 1.0f);        // hard left/right
+    eng.SetParam(id, kTime, kTimeMs);
+    eng.SetParam(id, kFeedback, 0.6f);
+    eng.SetParam(id, kMix, 1.0f);          // wet only, so the taps aren't masked by dry
+
+    // Let the engine's param smoothing settle before the impulse, so the
+    // first echo lands at the delay time rather than part-way through a ramp.
+    for (int i = 0; i < 40; ++i) {
+      std::vector<float> inL(kBlock, 0.0f), inR(kBlock, 0.0f), oL(kBlock, 0.0f), oR(kBlock, 0.0f);
+      const float* in[2] = {inL.data(), inR.data()};
+      float* out[2] = {oL.data(), oR.data()};
+      eng.Process(in, 2, out, 2, kBlock);
     }
-    // impulse on left only
-    std::vector<float> inL(128,0), inR(128,0), outL(128,0), outR(128,0);
-    inL[0]=1.0f;
-    const float* in[2]={inL.data(), inR.data()};
-    float* out[2]={outL.data(), outR.data()};
-    eng.Process(in,2,out,2,128);
-    std::printf("pingpong impulse L in, outL0 %f outR0 %f (expect dry 0.5 left)\n", outL[0], outR[0]);
-    // With mix 0.5, dry 0.5*in + wet*0.5, wet at time 0 is 0, so should be 0.5 left
-    // Allow some tolerance for level and smoothing
-    OPENAXE_EXPECT(outL[0] > 0.3f && outL[0] < 0.8f);
-    OPENAXE_EXPECT(std::fabs(outR[0]) < 0.2f);
-    // Next block after 100ms (0.1 sec = 4800 samples = ~37 blocks of 128), first echo should be on right
-    // With mix 0.5 and feedback 0.5, the echo should be 0.5*0.5=0.25 on right
-    bool foundEcho = false;
-    for(int i=0;i<50;i++) {
-      std::vector<float> in2(128,0), inR2(128,0), oL(128,0), oR(128,0);
-      const float* in2Ptr[2]={in2.data(), inR2.data()};
-      float* out2Ptr[2]={oL.data(), oR.data()};
-      eng.Process(in2Ptr,2,out2Ptr,2,128);
-      float maxL=0, maxR=0;
-      for(int j=0;j<128;j++) { maxL=std::max(maxL, std::fabs(oL[j])); maxR=std::max(maxR, std::fabs(oR[j])); }
-      if(maxL > 0.05f || maxR > 0.05f) {
-        std::printf("pingpong echo at block %d maxL %f maxR %f\n", i, maxL, maxR);
-        foundEcho = true;
-        OPENAXE_EXPECT(maxR > 0.05f);
-        break;
-      }
-      if(i==49) {
-        std::printf("no echo found after 50 blocks\n");
-        for(int p=0;p<eng.ParamCount(id);p++) {
-          auto info = eng.ParamInfo(id,p);
-          if(info) std::printf(" param %d %s %f\n", p, info->symbol, eng.GetParam(id,p));
-        }
-      }
+
+    // One impulse, then render three delay times' worth and record where each
+    // echo lands. Ping-pong's defining property is the alternation, so that is
+    // what this asserts - not the absolute levels, which the mix/feedback
+    // staging owns.
+    const int total = static_cast<int>(kSr * (kTimeMs / 1000.0f) * 3.5f);
+    std::vector<float> wholeL, wholeR;
+    bool first = true;
+    for (int done = 0; done < total; done += kBlock) {
+      std::vector<float> inL(kBlock, 0.0f), inR(kBlock, 0.0f), oL(kBlock, 0.0f), oR(kBlock, 0.0f);
+      if (first) { inL[0] = 1.0f; inR[0] = 1.0f; first = false; }
+      const float* in[2] = {inL.data(), inR.data()};
+      float* out[2] = {oL.data(), oR.data()};
+      eng.Process(in, 2, out, 2, kBlock);
+      wholeL.insert(wholeL.end(), oL.begin(), oL.end());
+      wholeR.insert(wholeR.end(), oR.begin(), oR.end());
     }
-    OPENAXE_EXPECT(foundEcho);
+
+    // Peak in a window around each expected echo time.
+    auto peak_near = [](const std::vector<float>& v, int centre, int radius) {
+      float peak = 0.0f;
+      const int lo = std::max(0, centre - radius);
+      const int hi = std::min(static_cast<int>(v.size()), centre + radius);
+      for (int i = lo; i < hi; ++i) peak = std::max(peak, std::fabs(v[i]));
+      return peak;
+    };
+    const int step = static_cast<int>(kSr * kTimeMs / 1000.0f);
+    const int radius = step / 4;
+
+    const float echo1L = peak_near(wholeL, step, radius);
+    const float echo1R = peak_near(wholeR, step, radius);
+    const float echo2L = peak_near(wholeL, step * 2, radius);
+    const float echo2R = peak_near(wholeR, step * 2, radius);
+
+    // The input enters the left line, so the first repeat is left and the
+    // second - having crossed over - is right. Each must clearly dominate its
+    // opposite channel, which is the whole point of the mode.
+    OPENAXE_EXPECT(echo1L > 0.05f);
+    OPENAXE_EXPECT(echo1L > echo1R * 4.0f);
+    OPENAXE_EXPECT(echo2R > 0.02f);
+    OPENAXE_EXPECT(echo2R > echo2L * 4.0f);
+
+    // Width 0 collapses the pair to the centre: both channels equal. Width is
+    // a smoothed param, so let the ramp finish before asserting - during it
+    // the output is legitimately still part-way between hard and centred.
+    eng.SetParam(id, kWidth, 0.0f);
+    auto render_block = [&](std::vector<float>& oL, std::vector<float>& oR) {
+      std::vector<float> inL(kBlock, 0.0f), inR(kBlock, 0.0f);
+      oL.assign(kBlock, 0.0f);
+      oR.assign(kBlock, 0.0f);
+      const float* in[2] = {inL.data(), inR.data()};
+      float* out[2] = {oL.data(), oR.data()};
+      eng.Process(in, 2, out, 2, kBlock);
+    };
+    std::vector<float> oL, oR;
+    for (int i = 0; i < 60; ++i) render_block(oL, oR);  // settle the ramp
+    for (int i = 0; i < 10; ++i) {
+      render_block(oL, oR);
+      for (int j = 0; j < kBlock; ++j) OPENAXE_EXPECT(std::fabs(oL[j] - oR[j]) < 1e-4f);
+    }
   }
   {
     AudioEngine eng;

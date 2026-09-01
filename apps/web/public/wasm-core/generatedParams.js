@@ -83,8 +83,6 @@ export const ROTARY_PARAMS = Object.freeze({
   crossover: 5,
 })
 
-export const PINGPONGDELAY_PARAMS = Object.freeze({ time: 0, feedback: 1, tone: 2, width: 3 })
-
 export const DELAY_PARAMS = Object.freeze({
   time: 0,
   feedback: 1,
@@ -92,6 +90,8 @@ export const DELAY_PARAMS = Object.freeze({
   model: 3,
   wow_depth: 4,
   wow_rate: 5,
+  stereo_mode: 6,
+  width: 7,
 })
 
 export const AMP_PARAMS = Object.freeze({

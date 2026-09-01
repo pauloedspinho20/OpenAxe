@@ -70,7 +70,7 @@
   width: 100%;
 }
 
-@media (max-width: var(--mw-sm)) {
+@media (max-width: var(--mw-xs)) {
   .deviceRow {
     flex-direction: column;
   }
@@ -87,6 +87,7 @@
   flex: 1;
   min-width: 140px;
   text-align: left;
+  width: 100%;
 }
 
 .deviceLabel {

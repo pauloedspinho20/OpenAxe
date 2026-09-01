@@ -1,3 +1,4 @@
+import { PALETTE_BLOCK_KINDS } from '../../effects/generatedBlockConfig'
 import type { BlockKind } from '../../engine/blocks/Block'
 
 export interface BlockOption {
@@ -35,7 +36,7 @@ export interface BlockOption {
  * "Core" holds the pure-routing blocks - Mixer/Splitter and the Send/Return
  * relay pairs (issue #274).
  */
-export const BLOCK_OPTIONS: BlockOption[] = [
+const ALL_BLOCK_OPTIONS: BlockOption[] = [
   {
     kind: 'pedal',
     label: 'Pedal',
@@ -70,15 +71,15 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
-  /*  {
+  {
     kind: 'outboard',
     label: 'Outboard',
     group: 'Neural Amp Modeler',
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
-  }, */
+  },
   { kind: 'mixer', label: 'Mixer', group: 'Core', vendor: 'Native routing (no DSP)' },
-  /*  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' }, */
+  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' },
   {
     kind: 'send-1',
     label: 'Send 1',
@@ -149,8 +150,13 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     kind: 'tremolo',
     label: 'Tremolo',
     group: 'Effects',
-    vendor: 'packages/core (C++ WASM) — DSPark',
-    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
+    // Hand-rolled in packages/core, not DSPark - tremolo.cpp includes only
+    // internal/biquad.h. It stays that way: #319 looked at migrating to
+    // dspark::Tremolo and found it buys nothing here - the same three shapes,
+    // the same 2% slew on the square, and no access to the LFO phase that
+    // harmonic mode needs.
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
   {
     kind: 'delay',
@@ -159,13 +165,6 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  /*   {
-    kind: 'ping-pong-delay',
-    label: 'Ping-Pong Delay',
-    group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  }, */
   {
     kind: 'reverb',
     label: 'Reverb',
@@ -173,13 +172,13 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Dragonfly Reverb',
     vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
   },
-  /*   {
+  {
     kind: 'ring-mod',
     label: 'Ring Mod',
     group: 'Effects',
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  }, */
+  },
   {
     kind: 'filter',
     label: 'Filter',
@@ -194,13 +193,13 @@ export const BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  /*   {
+  {
     kind: 'granular-delay',
     label: 'Granular Delay',
     group: 'Effects',
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  }, */
+  },
   {
     kind: 'rotary',
     label: 'Rotary',
@@ -210,14 +209,27 @@ export const BLOCK_OPTIONS: BlockOption[] = [
   },
 ]
 
+/**
+ * What the palette actually offers: every kind above whose `inPalette` flag is
+ * set in packages/core/effects.config.json (issue #313). Withholding a kind
+ * used to mean commenting its entry out here, which lost its label and vendor
+ * too and left the DSP compiled into every binary regardless. The config owns
+ * that decision now, so this file stays the presentation data for *every*
+ * kind - a block restored from a preset still resolves a label even when the
+ * palette does not offer it.
+ */
+export const BLOCK_OPTIONS: BlockOption[] = ALL_BLOCK_OPTIONS.filter((o) =>
+  PALETTE_BLOCK_KINDS.has(o.kind),
+)
+
 export const BLOCK_KIND_LABELS: Record<BlockKind, string> = Object.fromEntries(
-  BLOCK_OPTIONS.map((o) => [o.kind, o.label]),
+  ALL_BLOCK_OPTIONS.map((o) => [o.kind, o.label]),
 ) as Record<BlockKind, string>
 
 export const BLOCK_KIND_VENDORS: Record<BlockKind, string> = Object.fromEntries(
-  BLOCK_OPTIONS.map((o) => [o.kind, o.vendor]),
+  ALL_BLOCK_OPTIONS.map((o) => [o.kind, o.vendor]),
 ) as Record<BlockKind, string>
 
 export const BLOCK_KIND_VENDOR_URLS: Record<BlockKind, string | undefined> = Object.fromEntries(
-  BLOCK_OPTIONS.map((o) => [o.kind, o.vendorUrl]),
+  ALL_BLOCK_OPTIONS.map((o) => [o.kind, o.vendorUrl]),
 ) as Record<BlockKind, string | undefined>

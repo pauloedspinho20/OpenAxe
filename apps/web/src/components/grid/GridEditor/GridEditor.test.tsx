@@ -25,6 +25,23 @@ describe('components/GridEditor', () => {
     analyser: null,
     outputSelectionSupported: false,
     context: null,
+    engine: {
+      status: 'off',
+      error: null,
+      rig: null,
+      context: null,
+      analyser: null,
+      tunerAnalyser: null,
+      micGranted: false,
+      noSound: false,
+      diPlaying: false,
+      diSampleId: null,
+      diError: null,
+      powerOn: async () => {},
+      powerOff: async () => {},
+      playDI: async () => {},
+      stopDI: () => {},
+    } as never,
   }
 
   it('renders the block palette, the inspector placeholder, and the master output rail', () => {

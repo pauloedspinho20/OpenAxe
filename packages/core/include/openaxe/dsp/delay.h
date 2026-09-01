@@ -4,8 +4,9 @@
 
 namespace openaxe::dsp {
 
-// Stereo delay with three character models, backed by Signalsmith Audio's
-// header-only delay library for high-quality interpolated tap reads:
+// Stereo delay with three character models, built on the shared modulated
+// delay line in src/dsp/internal/variable_delay.h (a power-of-two circular
+// buffer read through a 3rd-order Lagrange interpolator):
 //
 //   Digital — clean, pristine delay with configurable tone filtering.
 //   Analog  — BBD-style: heavier lowpass in the feedback path and a subtle
@@ -16,7 +17,13 @@ namespace openaxe::dsp {
 // BaseEffect handles dry/wet crossfade; this DSP outputs the 100%-wet
 // delayed signal. The feedback path includes a biquad lowpass filter
 // determined by the `tone` param; at max tone (12kHz) the filter is
-// effectively bypassed, giving clean digital repeats.
+// effectively bypassed, giving clean digital repeats. Its Q is 1.0 - see
+// delay.cpp's kToneQ for why that is not the 0.707 it once claimed.
+//
+// (An earlier version of this comment credited Signalsmith Audio's
+// header-only delay library. That library is not vendored in this repository
+// and never backed this class - the reads were hand-rolled 2-point linear
+// interpolation until they moved to VariableDelay.)
 //
 // Parameters (see delay.cpp's kParamInfo):
 //   - time:     10–1000 ms, default 300 — delay time
@@ -25,6 +32,8 @@ namespace openaxe::dsp {
 //   - model:    0=Digital, 1=Analog, 2=Tape (see NamStudioDelayModel in api.h)
 //   - wowDepth: 0–5 ms, default 1.5 — tape wow depth (tape only)
 //   - wowRate:  0.1–3 Hz, default 0.5 — tape wow rate (tape only)
+//   - stereoMode: 0=Stereo, 1=Ping-Pong (see StereoMode below)
+//   - width:    0–1, default 1 — ping-pong stereo width (ping-pong only)
 class Delay {
  public:
   struct ParamInfo {
@@ -36,6 +45,18 @@ class Delay {
   };
 
   enum class Model { kDigital = 0, kAnalog, kTape };
+
+  // How the two delay lines relate to each other. Deliberately orthogonal to
+  // Model: ping-pong is a routing topology, not a character, so every model
+  // can ping-pong (a tape ping-pong being the obvious thing the old separate
+  // ping-pong-delay block could never do - issue #314).
+  //
+  //   kStereo   — two independent lines, L in / L out and R in / R out.
+  //   kPingPong — one cross-fed pair: the input enters the left line, left
+  //               feeds right, right feeds back into left, so successive
+  //               repeats alternate across the image. `width` collapses the
+  //               two taps toward their mean; at 0 it is a mono echo.
+  enum class StereoMode { kStereo = 0, kPingPong };
 
   Delay();
   ~Delay();

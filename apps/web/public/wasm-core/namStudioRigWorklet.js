@@ -409,6 +409,19 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        // Which block kinds this WASM was built with (issue #313). The core
+        // ids are contiguous from 0, so scanning to the highest one the JS
+        // side knows about is enough; anything past that is not a kind this
+        // build of the app can ask for anyway.
+        case 'compiledKinds': {
+          const compiled = []
+          for (let kind = 0; kind <= message.maxKind; ++kind) {
+            if (module._nam_studio_block_kind_compiled(kind)) compiled.push(kind)
+          }
+          reply.compiledKinds = compiled
+          reply.ok = true
+          break
+        }
         case 'meters': {
           const out = {}
           for (const [jsId, coreBlock] of this.blockByJs) {

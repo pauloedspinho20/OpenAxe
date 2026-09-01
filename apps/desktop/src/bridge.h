@@ -114,6 +114,10 @@ class StudioBridge {
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);
+  // DI audition (issue #273): wavBase64 -> decoded/resampled mono, then play/stop.
+  std::string HandleLoadDIWav(const std::string& req);
+  std::string HandlePlayDI(const std::string& req);
+  std::string HandleStopDI(const std::string& req);
 
   // Small secret store (issue #146) backing the Tone3000 refresh token so it
   // survives an app restart - see secure_storage.h. Independent of the

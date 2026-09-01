@@ -14,6 +14,7 @@
 #include "base64.h"
 #include "json.h"
 #include "openaxe/block.h"
+#include "openaxe/generated/enabled_blocks.h"
 #include "openaxe/dsp/delay.h"
 #include "openaxe/midi.h"
 #include "sha256.h"
@@ -42,7 +43,6 @@ const char* BlockKindToString(graph::BlockKind kind) {
     case graph::BlockKind::kPhaser: return "phaser";
     case graph::BlockKind::kTremolo: return "tremolo";
     case graph::BlockKind::kDelay: return "delay";
-    case graph::BlockKind::kPingPongDelay: return "ping-pong-delay";
     case graph::BlockKind::kReverb: return "reverb";
     case graph::BlockKind::kAmp: return "amp";
     case graph::BlockKind::kAmpCab: return "amp-cab";
@@ -75,7 +75,6 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
       {"phaser", graph::BlockKind::kPhaser},
       {"tremolo", graph::BlockKind::kTremolo},
       {"delay", graph::BlockKind::kDelay},
-      {"ping-pong-delay", graph::BlockKind::kPingPongDelay},
       {"reverb", graph::BlockKind::kReverb},
       {"amp", graph::BlockKind::kAmp},
       {"amp-cab", graph::BlockKind::kAmpCab},
@@ -99,6 +98,15 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
   if (it == kMap.end()) return false;
   out = it->second;
   return true;
+}
+
+// Record a kind the document wanted and this build cannot place, de-duped:
+// a rig with four ring-mods should read as one missing pedal type, not four.
+void NoteUnsupportedBlock(LoadOutcome& outcome, const std::string& kind_text) {
+  for (const std::string& seen : outcome.unsupported_blocks) {
+    if (seen == kind_text) return;
+  }
+  outcome.unsupported_blocks.push_back(kind_text.empty() ? "(unnamed kind)" : kind_text);
 }
 
 const char* ReverbAlgorithmToString(engine::ReverbAlgorithm algorithm) {
@@ -671,8 +679,20 @@ LoadOutcome LoadState(AudioEngine& engine, const char* json_text) {
       continue;
     }
     graph::BlockKind kind;
-    if (!StringToBlockKind(*kind_field->AsString(), kind)) {
-      ++outcome.stats.blocks_skipped;  // unknown kind string - skip, don't abort
+    const std::string& kind_text = *kind_field->AsString();
+    if (!StringToBlockKind(kind_text, kind)) {
+      // A kind this build has no name for - most likely a document written by
+      // a newer OpenAxe. Skip it, don't abort, and tell the caller which one.
+      ++outcome.stats.blocks_skipped;
+      NoteUnsupportedBlock(outcome, kind_text);
+      continue;
+    }
+    if (!blocks::IsCompiled(kind)) {
+      // A kind this build knows but was compiled without
+      // (effects.config.json). Same outcome as the unknown-string case: the
+      // rest of the rig still restores, and the caller can say what was lost.
+      ++outcome.stats.blocks_skipped;
+      NoteUnsupportedBlock(outcome, kind_text);
       continue;
     }
     const std::string& doc_id = *id_field->AsString();

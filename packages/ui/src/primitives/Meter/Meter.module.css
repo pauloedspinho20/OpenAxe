@@ -18,7 +18,7 @@
 .segment {
   width: 20px;
   height: 6px;
-  border-radius: 1px;
+  border-radius: 2px;
   background: var(--meter-off);
   transition: background-color 0.05s linear;
 }
@@ -53,7 +53,7 @@
 }
 
 .miniWrap {
-  width: 25px;
+  width: 22px;
   height: 5px;
   border-radius: 2px;
 }

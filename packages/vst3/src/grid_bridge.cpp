@@ -43,7 +43,6 @@ std::string KindToString(NamStudioBlockKind k) {
     case NAM_STUDIO_BLOCK_PHASER: return "phaser";
     case NAM_STUDIO_BLOCK_TREMOLO: return "tremolo";
     case NAM_STUDIO_BLOCK_DELAY: return "delay";
-    case NAM_STUDIO_BLOCK_PING_PONG_DELAY: return "ping-pong-delay";
     case NAM_STUDIO_BLOCK_REVERB: return "reverb";
     case NAM_STUDIO_BLOCK_AMP: return "amp";
     case NAM_STUDIO_BLOCK_AMP_CAB: return "amp-cab";
@@ -70,7 +69,6 @@ std::optional<NamStudioBlockKind> StringToKind(const std::string& s) {
       {"phaser", NAM_STUDIO_BLOCK_PHASER},
       {"tremolo", NAM_STUDIO_BLOCK_TREMOLO},
       {"delay", NAM_STUDIO_BLOCK_DELAY},
-      {"ping-pong-delay", NAM_STUDIO_BLOCK_PING_PONG_DELAY},
       {"reverb", NAM_STUDIO_BLOCK_REVERB},
       {"amp", NAM_STUDIO_BLOCK_AMP},
       {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},

@@ -18,12 +18,12 @@ describe('BlockCard', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the label, a bypass toggle, and a remove button for an effect block', () => {
+  it('renders the label, a bypass toggle, and an actions menu for an effect block', () => {
     render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} />)
     const card = screen.getByRole('button', { name: /Reverb block/ })
     expect(card).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Bypass Reverb' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Remove Reverb' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Actions for Reverb' })).toBeInTheDocument()
   })
 
   it('renders the amp label without inline asset status text', () => {
@@ -61,11 +61,11 @@ describe('BlockCard', () => {
     expect(spy).toHaveBeenCalledWith('b1', true)
   })
 
-  it('removes the block through the graph store', () => {
-    const spy = vi.spyOn(useGraphStore.getState(), 'removeBlock')
-    render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Reverb' }))
-    expect(spy).toHaveBeenCalledWith('b1')
+  it('opens the actions menu for the block', () => {
+    const onOpenMenu = vi.fn()
+    render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} onOpenMenu={onOpenMenu} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Reverb' }))
+    expect(onOpenMenu).toHaveBeenCalled()
   })
 
   it('moves the block with arrow keys', () => {

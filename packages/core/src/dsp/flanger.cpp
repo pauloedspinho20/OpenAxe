@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <vector>
+
+#include "internal/variable_delay.h"
 
 namespace openaxe::dsp {
 
@@ -21,38 +22,19 @@ const Flanger::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/flanger_params.inc"
 };
 
-// One channel's modulated delay line: a circular buffer, its write cursor, and
-// the LFO phase carried across Process() calls so the sweep stays continuous
-// across block boundaries.
+// The longest tap the params can ask for: delay's maximum (3ms) plus depth's
+// full excursion (5ms), per packages/core/param_schema.json. Sized once in
+// Reset rather than per knob position - see chorus.cpp's note.
+constexpr float kMaxDelayMs = 8.0f;
+
+// One channel's modulated delay line plus the LFO phase, carried across
+// Process() calls so the sweep stays continuous over block boundaries. A
+// flanger sweeps a very short delay (~1-5ms), so the interpolated read
+// VariableDelay provides is what keeps the comb notches gliding rather than
+// stepping.
 struct Channel {
-  std::vector<float> buffer;
-  int write_pos = 0;
+  internal::VariableDelay line;
   float phase = 0.0f;
-
-  // (Re)allocate the buffer for the longest delay the current params can ask
-  // for, plus a sample of slack for the fractional read below.
-  void Prepare(float sample_rate, float max_delay_ms) {
-    const int size = static_cast<int>(std::ceil(max_delay_ms * sample_rate / 1000.0f)) + 1;
-    buffer.assign(static_cast<size_t>(size), 0.0f);
-    write_pos = 0;
-  }
-
-  // Read `delay_ms` in the past, linearly interpolating between the two
-  // neighbouring samples. A flanger sweeps a very short delay (~1-5ms), so
-  // sub-sample precision here is what keeps the comb notches gliding smoothly
-  // instead of stepping.
-  float ReadDelay(float delay_ms, float sample_rate) const {
-    const float delay_samples = delay_ms * sample_rate / 1000.0f;
-    const float read_pos = static_cast<float>(write_pos) - delay_samples;
-    const int size = static_cast<int>(buffer.size());
-    int idx0 = static_cast<int>(std::floor(read_pos));
-    const float frac = read_pos - static_cast<float>(idx0);
-    while (idx0 < 0) idx0 += size;
-    const int idx1 = (idx0 + 1) % size;
-    idx0 %= size;
-    return buffer[static_cast<size_t>(idx0)] * (1.0f - frac) +
-           buffer[static_cast<size_t>(idx1)] * frac;
-  }
 };
 
 }  // namespace
@@ -65,16 +47,15 @@ struct Flanger::Impl {
   float delay = 0.3f;
   float sample_rate = 48000.0f;
 
-  // Size both delay lines for the longest delay the current settings allow -
-  // base delay plus the full modulation excursion, plus a sample of headroom.
+  // Size both delay lines for the largest tap the param schema allows; only
+  // the sample rate can change that.
   void ApplySampleRate() {
-    const float max_delay = delay + depth + 1.0f;
-    for (auto& ch : channels) ch.Prepare(sample_rate, max_delay);
+    for (auto& ch : channels) ch.line.Prepare(sample_rate, kMaxDelayMs);
   }
 };
 
-// Buffers are allocated here (and on Reset/base-delay changes) so Process()
-// never allocates on the audio thread.
+// Buffers are allocated here (and on Reset) so Process() never allocates on
+// the audio thread.
 Flanger::Flanger() : impl_(std::make_unique<Impl>()) { impl_->ApplySampleRate(); }
 
 Flanger::~Flanger() = default;
@@ -110,9 +91,8 @@ void Flanger::Process(const float* const* input, float* const* output, int num_f
       const float in = input[ch][i];
       const float lfo = std::sin(c.phase + static_cast<float>(i) * phase_step * 6.28318530718f);
       const float delay_ms = base_delay + mod_depth * (0.5f + 0.5f * lfo);
-      const float wet = c.ReadDelay(delay_ms, sr);
-      c.buffer[static_cast<size_t>(c.write_pos)] = in + wet * fb;
-      c.write_pos = (c.write_pos + 1) % static_cast<int>(c.buffer.size());
+      const float wet = c.line.Read(delay_ms, sr);
+      c.line.Write(in + wet * fb);
       output[ch][i] = wet;
     }
     c.phase = std::fmod(c.phase + phase_step * static_cast<float>(num_frames) * 6.28318530718f,
@@ -145,9 +125,8 @@ float Flanger::GetParam(int index) const {
   }
 }
 
-// Store one param. Real-time safe except for the base delay, which resizes
-// the delay lines and so must run between blocks (which is how the engine
-// applies params anyway). Only reallocates when the value actually changes.
+// Store one param. All real-time safe: the delay lines are sized for
+// kMaxDelayMs up front, so moving the Delay knob only moves the read tap.
 void Flanger::SetParam(int index, float value) {
   switch (index) {
     case kRateParam:
@@ -160,10 +139,7 @@ void Flanger::SetParam(int index, float value) {
       impl_->feedback = value;
       break;
     case kDelayParam:
-      if (impl_->delay != value) {
-        impl_->delay = value;
-        impl_->ApplySampleRate();
-      }
+      impl_->delay = value;
       break;
     default:
       return;

@@ -10,6 +10,7 @@
 
 #include "openaxe/dsp/smoothing.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
