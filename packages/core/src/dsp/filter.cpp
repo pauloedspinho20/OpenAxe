@@ -18,7 +18,9 @@ constexpr int kDriveParam = 3;
 constexpr int kSensitivityParam = 4;
 constexpr int kModeParam = 5;
 constexpr int kLfoRateParam = 6;
-constexpr int kParamCount = 7;
+constexpr int kEnvAttackParam = 7;
+constexpr int kEnvReleaseParam = 8;
+constexpr int kParamCount = 9;
 
 const Filter::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/filter_params.inc"
@@ -56,6 +58,8 @@ struct Filter::Impl {
   float sensitivity = 0.5f;
   float mode = 0; // 0 pedal, 1 env, 2 lfo
   float lfo_rate = 1.0f;
+  float env_attack = 5.0f;
+  float env_release = 50.0f;
   float sr = 48000;
   ChannelState ch[2];
 
@@ -63,7 +67,7 @@ struct Filter::Impl {
     for (auto& c : ch) {
       c.bq.Reset();
       c.ladder.Reset();
-      c.env.Prepare(sr, 5.0f, 50.0f);
+      c.env.Prepare(sr, env_attack, env_release);
       c.env.Reset();
       c.lfo_phase = 0.0f;
     }
@@ -150,6 +154,8 @@ float Filter::GetParam(int index) const {
     case kSensitivityParam: return impl_->sensitivity;
     case kModeParam: return impl_->mode;
     case kLfoRateParam: return impl_->lfo_rate;
+    case kEnvAttackParam: return impl_->env_attack;
+    case kEnvReleaseParam: return impl_->env_release;
     default: return 0;
   }
 }
@@ -162,6 +168,8 @@ void Filter::SetParam(int index, float value) {
     case kSensitivityParam: impl_->sensitivity = std::clamp(value, 0.0f, 1.0f); break;
     case kModeParam: impl_->mode = std::clamp(std::round(value), 0.0f, 2.0f); break;
     case kLfoRateParam: impl_->lfo_rate = std::clamp(value, 0.1f, 10.0f); break;
+    case kEnvAttackParam: impl_->env_attack = std::clamp(value, 0.5f, 100.0f); for(auto& c: impl_->ch) c.env.Prepare(impl_->sr, impl_->env_attack, impl_->env_release); break;
+    case kEnvReleaseParam: impl_->env_release = std::clamp(value, 5.0f, 500.0f); for(auto& c: impl_->ch) c.env.Prepare(impl_->sr, impl_->env_attack, impl_->env_release); break;
     default: break;
   }
 }
