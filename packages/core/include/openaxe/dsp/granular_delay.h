@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "openaxe/dsp/dspark_param.h"
+
 namespace openaxe::dsp {
 
 // Granular delay with pristine↔lo-fi character via `character` knob,
@@ -15,13 +17,7 @@ namespace openaxe::dsp {
 //   jitter 0-1, feedback 0-0.9, spread 0-1, character 0-1, freeze 0/1
 class GranularDelay {
  public:
-  struct ParamInfo {
-    const char* name;
-    const char* symbol;
-    float min_value;
-    float max_value;
-    const char* unit;
-  };
+  using ParamInfo = DsparkParamInfo;
 
   GranularDelay();
   ~GranularDelay();
