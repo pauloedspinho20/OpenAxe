@@ -92,10 +92,6 @@ void Filter::Process(const float* const* input, float* const* output, int num_fr
     ChannelState& c = impl_->ch[ch];
     float lfo_phase = c.lfo_phase;
 
-    // Envelope attack/release coefficients are constant for the block - the
-    // EnvelopeFollower's Prepare computes them once, not per sample.
-    c.env.Prepare(sr, 5.0f, 50.0f);
-
     for (int i = 0; i < num_frames; ++i) {
       const float in = input[ch][i];
 
@@ -131,9 +127,7 @@ void Filter::Process(const float* const* input, float* const* output, int num_fr
         c.ladder.Set(mod_freq, q, sr);
         out = c.ladder.Process(driven);
       } else {
-        // Wah/Envelope as bandpass; the cutoff modulates per sample, so the
-        // biquad coefficients follow it (a time-varying wah is inherently
-        // per-sample coefficient work - constants stay hoisted).
+        // Wah/Envelope as bandpass; biquad per-sample is inherent to wah
         c.bq.SetBandpass(mod_freq, q, sr);
         out = c.bq.Process(driven);
       }

@@ -54,7 +54,7 @@ export const PARAM_RANGES = Object.freeze({
   flanger: Object.freeze({
     rate: { min: 0.1, max: 10 },
     depth: { min: 0.1, max: 5 },
-    feedback: { min: 0, max: 0.9 },
+    feedback: { min: -0.9, max: 0.9 },
     delay: { min: 0.1, max: 3 },
   }),
   phaser: Object.freeze({

@@ -379,7 +379,7 @@
         {
           "symbol": "feedback",
           "label": "Feedback",
-          "min": 0,
+          "min": -0.9,
           "max": 0.9,
           "unit": "%",
           "smoothing": {
