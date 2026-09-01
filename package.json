@@ -48,7 +48,7 @@
   "devDependencies": {
     "turbo": "^2.10.11",
     "typescript": "~7.0.2",
-    "oxlint": "^1.79.0",
+    "oxlint": "^1.80.0",
     "prettier": "^3.9.6",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
