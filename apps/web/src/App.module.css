@@ -3,7 +3,7 @@
   flex-direction: column;
   min-height: 100svh;
   background: var(--chassis);
-  max-width: var(--mw-xxl);
+  max-width: var(--mw-xl);
   margin: 0 auto;
 }
 
