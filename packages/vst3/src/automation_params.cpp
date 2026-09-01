@@ -9,12 +9,12 @@
 
 namespace openaxe_vst3::params {
 
-std::string DisplayForSlotEntry(NamStudioGraph* graph, int slot, int entry, float normalized) {
+std::string DisplayForSlotEntry(OpenAxeGraph* graph, int slot, int entry, float normalized) {
   const char* name = nullptr;
   const char* symbol = nullptr;
   float mn = 0.0f, mx = 1.0f;
   const char* unit = nullptr;
-  const int32_t ok = nam_studio_automation_slot_param_info(graph, slot, entry, &name, &symbol, &mn, &mx, &unit);
+  const int32_t ok = openaxe_automation_slot_param_info(graph, slot, entry, &name, &symbol, &mn, &mx, &unit);
   if (ok == 0 || !symbol) return std::string("—");
   const float real = NormalizedToReal(normalized, mn, mx);
   char buf[64];
@@ -26,7 +26,7 @@ std::string DisplayForSlotEntry(NamStudioGraph* graph, int slot, int entry, floa
   return std::string(buf);
 }
 
-bool HostParamWrite(NamStudioGraph* graph, int host_id, float normalized, bool& out_needs_suspend) {
+bool HostParamWrite(OpenAxeGraph* graph, int host_id, float normalized, bool& out_needs_suspend) {
   out_needs_suspend = false;
   int slot = -1, entry = -1;
   if (!HostIdToSlotEntry(host_id, slot, entry)) return false;
@@ -38,11 +38,11 @@ bool HostParamWrite(NamStudioGraph* graph, int host_id, float normalized, bool& 
   // unbound this resolves to nothing — fall through to the generic
   // normalized write path anyway so the slot's remembered value updates.
   const int32_t has_info =
-      nam_studio_automation_slot_param_info(graph, slot, entry, nullptr, &symbol, &mn, &mx, &unit);
+      openaxe_automation_slot_param_info(graph, slot, entry, nullptr, &symbol, &mn, &mx, &unit);
   if (has_info != 0 && symbol && std::strcmp(symbol, "slim_size") == 0) {
     // Amp-family slim_size is Tier 2 (may reallocate in NAMCore). The ABI
-    // documents nam_studio_set_param for this index as NOT real-time safe.
-    // Caller must reroute via WithSuspend + nam_studio_set_param on the
+    // documents openaxe_set_param for this index as NOT real-time safe.
+    // Caller must reroute via WithSuspend + openaxe_set_param on the
     // underlying block, not via the slot's normalized path either (both end
     // in the same NAMCore call). Signal that back.
     out_needs_suspend = true;
@@ -51,7 +51,7 @@ bool HostParamWrite(NamStudioGraph* graph, int host_id, float normalized, bool& 
 
   // Normal lock-free path — also updates the slot's remembered value when
   // unbound, per the automation slot spec (issue #121).
-  nam_studio_set_automation_param_normalized(graph, slot, entry, normalized);
+  openaxe_set_automation_param_normalized(graph, slot, entry, normalized);
   return true;
 }
 

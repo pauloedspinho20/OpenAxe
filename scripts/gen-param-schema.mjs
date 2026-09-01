@@ -441,7 +441,7 @@ function renderAutomationMap(auto) {
 // own $comment for why they are two and not one.
 
 // "ping-pong-delay" -> "PING_PONG_DELAY", matching api.h's
-// NAM_STUDIO_BLOCK_* spelling so the two are greppable together.
+// OPENAXE_BLOCK_* spelling so the two are greppable together.
 function blockMacroSuffix(kind) {
   return kind.toUpperCase().replace(/-/g, '_')
 }
@@ -490,7 +490,7 @@ const GENERATED_HEADER_PLAIN = (source, comment) =>
 function renderBlocksHeader(config) {
   const entries = blockEntries(config)
   const defines = entries
-    .map(([kind, e]) => `#define OPENAXE_BLOCK_${blockMacroSuffix(kind)} ${e.compiled ? 1 : 0}`)
+    .map(([kind, e]) => `#define OPENAXE_BLOCK_${blockMacroSuffix(kind)}_COMPILED ${e.compiled ? 1 : 0}`)
     .join('\n')
   const compiledCases = entries
     .map(([, e]) => `    case graph::BlockKind::${e.enumName}: return ${e.compiled};`)

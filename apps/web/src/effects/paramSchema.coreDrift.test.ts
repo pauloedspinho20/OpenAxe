@@ -107,7 +107,7 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     // Both sides happen to use the symbols `input_level`/`output_level`, but they
     // mean different things: in the core they are the loaded capture's dBu
     // calibration (-100..100 dBu), while the UI's knobs are linear I/O trims
-    // (0..1.5) that route to nam_studio_set_block_{input,output}_trim instead.
+    // (0..1.5) that route to openaxe_set_block_{input,output}_trim instead.
     // This asserts the mismatch is the known, deliberate one - if the ranges ever
     // coincide, someone has conflated them.
     const core = coreParamsFor('amp')

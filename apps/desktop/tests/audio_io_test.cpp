@@ -27,12 +27,12 @@ namespace {
 
 // Build a passthrough rig: IN rail -> Mixer -> OUT rail. The mixer is a
 // monostate block (no DSP), so its output equals its input exactly.
-NamStudioGraph* MakePassthroughGraph(double sample_rate, int block_size) {
-  NamStudioGraph* graph = nam_studio_graph_create();
-  const int32_t mixer = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_MIXER, 0, 0);
-  nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, mixer, 0);
-  nam_studio_connect(graph, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(graph, sample_rate, block_size);
+OpenAxeGraph* MakePassthroughGraph(double sample_rate, int block_size) {
+  OpenAxeGraph* graph = openaxe_graph_create();
+  const int32_t mixer = openaxe_add_block(graph, OPENAXE_BLOCK_MIXER, 0, 0);
+  openaxe_connect(graph, OPENAXE_IN_RAIL, 0, mixer, 0);
+  openaxe_connect(graph, mixer, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(graph, sample_rate, block_size);
   return graph;
 }
 
@@ -41,7 +41,7 @@ void TestCallbackPassthrough() {
   constexpr int kFrames = 64;
   constexpr int kBlock = 512;
 
-  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
   openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
@@ -65,7 +65,7 @@ void TestCallbackPassthrough() {
     CHECK(out1[i] == in1[i]);
   }
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 // Issue #115: the input TRIM scales the signal before the graph AND before the
@@ -77,7 +77,7 @@ void TestCallbackAppliesInputGain() {
   constexpr int kBlock = 512;
   constexpr float kGain = 0.5f;
 
-  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
   openaxe_desktop::RtCallbackState state;
   for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
@@ -113,7 +113,7 @@ void TestCallbackAppliesInputGain() {
     CHECK(tap.r[i] == -0.25f * kGain);
   }
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 // Unity gain must not route through the scratch buffers at all, and an
@@ -124,7 +124,7 @@ void TestCallbackInputGainEdgeCases() {
   constexpr int kFrames = 64;
   constexpr int kBlock = 512;
 
-  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
   openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
@@ -150,7 +150,7 @@ void TestCallbackInputGainEdgeCases() {
   openaxe_desktop::RtProcessCallback(out, in, kFrames, &state);
   for (int i = 0; i < kFrames; ++i) CHECK(out0[i] == 0.5f);
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 void TestCallbackSilenceWhenNoGraph() {
@@ -184,7 +184,7 @@ void TestTapConcurrentReadWrite() {
   constexpr int kFrames = 128;
   constexpr int kBlock = 512;
 
-  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
   openaxe_desktop::RtCallbackState state;
   for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
@@ -236,7 +236,7 @@ void TestTapConcurrentReadWrite() {
   std::printf("  TestTapConcurrentReadWrite: %u callbacks, %u reads, no torn read\n",
               callbacks_done.load(), reads_done.load());
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 // A second process touching the same shared audio device (e.g. a browser tab
@@ -251,14 +251,14 @@ void TestCallbackHoldsSilenceOnStreamError() {
   constexpr int kFrames = 32;
   constexpr int kBlock = 512;
 
-  NamStudioGraph* graph = MakePassthroughGraph(kRate, kBlock);
+  OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
   openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
   state.stream_error.store(true, std::memory_order_release);
 
   // Sentinel values the callback must never touch - not zeroed (that would
-  // still mean it read/wrote the buffer, just not through nam_studio_process)
+  // still mean it read/wrote the buffer, just not through openaxe_process)
   // and not passed through either.
   float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
   for (int i = 0; i < kFrames; ++i) {
@@ -275,14 +275,14 @@ void TestCallbackHoldsSilenceOnStreamError() {
 
   // Still counted as a callback (diagnostics keep working)...
   CHECK(state.callbacks.load() == callbacks_before + 1);
-  // ...but the output buffer is untouched - proof nam_studio_process was
+  // ...but the output buffer is untouched - proof openaxe_process was
   // never called with it, and nothing else wrote to it either.
   for (int i = 0; i < kFrames; ++i) {
     CHECK(out0[i] == -1.0f);
     CHECK(out1[i] == -1.0f);
   }
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 // A fresh AudioIO (or one that just reopened successfully) must report no
@@ -350,7 +350,7 @@ void TestOpenStartStop() {
   CHECK(io.IsOpen());
   CHECK(io.BufferFrames() <= 256);
 
-  NamStudioGraph* graph = MakePassthroughGraph(io.SampleRate(), io.BufferFrames());
+  OpenAxeGraph* graph = MakePassthroughGraph(io.SampleRate(), io.BufferFrames());
   io.SetGraph(graph, io.SampleRate(), io.BufferFrames());
   CHECK(io.Start());
 
@@ -364,7 +364,7 @@ void TestOpenStartStop() {
   io.Close();
   CHECK(!io.IsOpen());
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 // Two independent physical devices for input/output cause an acoustic

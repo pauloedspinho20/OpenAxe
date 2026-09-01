@@ -13,11 +13,11 @@
 // design-tokens.json (issue #131), not a C++ tokens.h for IGraphics.
 //
 // What the plugin must still guarantee for each primitive:
-//  - Knob/Fader/Toggle: param → nam_studio_set_param (or automation slot
+//  - Knob/Fader/Toggle: param → openaxe_set_param (or automation slot
 //    → SetAutomationParamNormalized) with host automation gestures
 //    (BeginInformHostOfParamChange on drag start, End on release) so
 //    recording doesn't drop writes.
-//  - Meter: meter → nam_studio_get_meter (same ballistics as web).
+//  - Meter: meter → openaxe_get_meter (same ballistics as web).
 //  - Panel: layout container, no bridge.
 // This header is SDK-free so the contract can be exercised offline.
 // When OPENAXE_HAS_WEBVIEW is set, the editor's window.openAxe.* bindings
@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-struct NamStudioGraph;
+struct OpenAxeGraph;
 
 namespace openaxe_vst3::primitives {
 
@@ -44,14 +44,14 @@ void EndHostParamChange(int host_param_id);
 // for direct block params we map through the block's [min,max] (same as
 // automation_params::NormalizedToReal). Tier 1: lock-free; slim_size is
 // Tier 2 and must go through the editor's WithSuspend.
-bool WriteParam(NamStudioGraph* graph, int32_t block_id, int param_index, float normalized_value);
-bool WriteAutomationParam(NamStudioGraph* graph, int host_param_id, float normalized_value);
+bool WriteParam(OpenAxeGraph* graph, int32_t block_id, int param_index, float normalized_value);
+bool WriteAutomationParam(OpenAxeGraph* graph, int host_param_id, float normalized_value);
 
 // ── Meter bridge (Meter / Led) ────────────────────────────────────────
 // Peak |sample| over the last Process() call — same ballistics the web
 // meter uses. Cheap read, never blocks the audio thread.
-float ReadMeter(NamStudioGraph* graph, int32_t block_id);
-float ReadCpuLoad(NamStudioGraph* graph);
+float ReadMeter(OpenAxeGraph* graph, int32_t block_id);
+float ReadCpuLoad(OpenAxeGraph* graph);
 
 // ── Visual spec guard ─────────────────────────────────────────────────
 // Returns true if a C++ IControl fork for the named primitive exists

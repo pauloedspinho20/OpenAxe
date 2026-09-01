@@ -24,7 +24,7 @@ class AudioIODevice;
 
 // The desktop shell's audio I/O layer (issue #15 M1): a thin wrapper over
 // JUCE's juce_audio_devices module that opens a low-latency full-duplex
-// stream and drives the shared C++ DSP core's nam_studio_graph directly from
+// stream and drives the shared C++ DSP core's openaxe_graph directly from
 // the real-time callback - same process, zero IPC, no Web Audio anywhere in
 // the path.
 //
@@ -70,12 +70,12 @@ struct AudioDeviceInfo {
 // DSP-in-callback wiring is directly unit-testable without hardware (tests
 // call RtProcessCallback with fake buffers).
 struct RtCallbackState {
-  NamStudioGraph* graph = nullptr;         // owned by the app; guarded by graph_ready
+  OpenAxeGraph* graph = nullptr;         // owned by the app; guarded by graph_ready
   std::atomic<bool> graph_ready{false};
   // Pause flag set by the control thread while it mutates the graph (topology
   // edits, NAM model loads, algorithm swaps). The audio callback, on observing
   // it, writes silence and bumps suspended_callbacks - the control thread waits
-  // for that bump so it knows no nam_studio_process is still in flight before
+  // for that bump so it knows no openaxe_process is still in flight before
   // touching the graph. See AudioIO::BeginSuspend/EndSuspend.
   std::atomic<bool> suspend{false};
   std::atomic<unsigned int> suspended_callbacks{0};
@@ -88,7 +88,7 @@ struct RtCallbackState {
   // a browser tab also using the same physical mic/speakers) forcing the OS
   // to reconfigure a device this stream is mid-callback on. The callback
   // checks this exactly like `suspend` - writes silence and stops calling
-  // nam_studio_process - so it never keeps reading/writing buffers against
+  // openaxe_process - so it never keeps reading/writing buffers against
   // input_channels/output_channels that may no longer match what the backend
   // is actually handing it. Cleared only by the next successful Open().
   std::atomic<bool> stream_error{false};
@@ -103,7 +103,7 @@ struct RtCallbackState {
   // Input TRIM (the web UI's ioStore.inputGain), 1 = unity. The web engine
   // applies this with a GainNode between the input source and the rig; the
   // desktop shell owns its own device I/O, so it applies the same scalar here
-  // instead (issue #115). Scaling happens before both nam_studio_process and
+  // instead (issue #115). Scaling happens before both openaxe_process and
   // the monitor tap, so the input meter and tuner see post-trim signal exactly
   // as they do on the web (where they hang off the GainNode's output).
   //
@@ -158,7 +158,7 @@ struct TapFrame {
 TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_frames);
 
 // The real-time audio callback. Runs on the audio thread: allocates nothing,
-// only calls nam_studio_process(). If no graph is attached yet it writes
+// only calls openaxe_process(). If no graph is attached yet it writes
 // silence to the output. Backend-agnostic (plain buffer pointers), called
 // from AudioIO::Callback's audioDeviceIOCallbackWithContext override in
 // audio.cpp.
@@ -209,9 +209,9 @@ class AudioIO {
   bool IsRunning() const;
 
   // Attach the DSP graph driven from the audio callback. Calls
-  // nam_studio_reset (not real-time safe) so it must be called before
+  // openaxe_reset (not real-time safe) so it must be called before
   // Start(), from a non-audio thread. Passing nullptr detaches.
-  void SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size);
+  void SetGraph(OpenAxeGraph* graph, double sample_rate, unsigned int max_block_size);
 
   // Input TRIM applied to the incoming signal before the graph and before the
   // monitor tap (see RtCallbackState::input_gain). 1 = unity. Safe to call
@@ -234,8 +234,8 @@ class AudioIO {
 
   // Suspend/resume the audio callback around graph mutations. BeginSuspend
   // blocks until a callback has observed the pause (so any in-flight
-  // nam_studio_process has fully returned), then the caller may safely run
-  // nam_studio_* topology/model/algorithm calls. EndSuspend lifts the pause.
+  // openaxe_process has fully returned), then the caller may safely run
+  // openaxe_* topology/model/algorithm calls. EndSuspend lifts the pause.
   // Both are no-ops thread-safely if the stream isn't running. BeginSuspend
   // returns false only if it timed out waiting (it force-stops the stream
   // first, so mutating the graph is still safe afterwards).

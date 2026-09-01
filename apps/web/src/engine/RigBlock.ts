@@ -15,7 +15,7 @@ import type { RigModelInfo, RigWorkletNode } from './RigWorkletNode'
  * (the same one NativeGraphRig makes).
  *
  * The per-block Input/Output knobs route to the core's own I/O trims
- * (nam_studio_set_block_{input,output}_trim), not to params - see setParams.
+ * (openaxe_set_block_{input,output}_trim), not to params - see setParams.
  */
 export class RigBlock implements PresetBlock {
   readonly kind: BlockKind
@@ -67,7 +67,7 @@ export class RigBlock implements PresetBlock {
       if (key === 'slim_size' || key === 'slimSize') continue
       // The reverb algorithm is a select (hall/room/plate/early-reflections),
       // not a numeric param - it has no core symbol and must go through
-      // nam_studio_set_reverb_algorithm. Reverb control knobs (roomSize/
+      // openaxe_set_reverb_algorithm. Reverb control knobs (roomSize/
       // damping/...) are routed by the worklet through the core's ReverbControl
       // mapping on setParam, so they stay generic.
       if (key === 'reverbAlgorithm' && typeof value === 'string') {

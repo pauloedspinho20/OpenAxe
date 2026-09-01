@@ -69,7 +69,7 @@ export function fingerprintFromJson(
 /**
  * Try the C++ probe via WASM when available. Falls back to metadata-only.
  * `wasmFingerprint` should resolve to { gainDb, brightness } when the
- * `_nam_studio_compute_fingerprint` symbol is present — null otherwise.
+ * `_openaxe_compute_fingerprint` symbol is present — null otherwise.
  */
 export async function fingerprintForBlob(
   blob: Blob,

@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-struct NamStudioGraph;
+struct OpenAxeGraph;
 
 namespace openaxe_vst3::assets {
 
@@ -52,20 +52,20 @@ std::vector<uint8_t> DecodeBase64(const std::string& in);
 // handshake (Plugin::WithSuspend) around them. They return the mapped
 // LoadResult and optionally fill *error with a readable message.
 
-LoadResult LoadNamModelFromPath(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadNamModelFromPath(OpenAxeGraph* graph, int32_t block_id,
                                 const std::string& file_path, std::string* error = nullptr);
 
-LoadResult LoadIrWavFromPath(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadIrWavFromPath(OpenAxeGraph* graph, int32_t block_id,
                              const std::string& file_path, std::string* error = nullptr);
 
 // ── In-memory loads (what the webview bridge and state restore use) ──
 // `json` is the .nam file's JSON text; `wav_bytes` are the raw WAV file bytes.
 // Same guards, same Tier-2 contract, but no filesystem.
 
-LoadResult LoadNamModelFromJson(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadNamModelFromJson(OpenAxeGraph* graph, int32_t block_id,
                                 const std::string& json, std::string* error = nullptr);
 
-LoadResult LoadIrWavFromBytes(NamStudioGraph* graph, int32_t block_id,
+LoadResult LoadIrWavFromBytes(OpenAxeGraph* graph, int32_t block_id,
                               const uint8_t* wav_bytes, size_t wav_size,
                               std::string* error = nullptr);
 
@@ -85,8 +85,8 @@ struct ModelInfo {
   std::string name;  // display name from last load, if any
 };
 
-std::optional<ModelInfo> GetModelInfo(NamStudioGraph* graph, int32_t block_id);
-std::optional<int> GetIrLength(NamStudioGraph* graph, int32_t block_id);
+std::optional<ModelInfo> GetModelInfo(OpenAxeGraph* graph, int32_t block_id);
+std::optional<int> GetIrLength(OpenAxeGraph* graph, int32_t block_id);
 
 // ── Last-used directory memory (per asset type) ──
 void SetLastNamDirectory(const std::string& dir);

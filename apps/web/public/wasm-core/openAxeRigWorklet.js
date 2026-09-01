@@ -1,10 +1,10 @@
 /**
- * The single "rig" AudioWorkletProcessor (issue #55): owns ONE nam_studio_core
- * module and ONE nam_studio_graph, and drives the whole rig inside it through
+ * The single "rig" AudioWorkletProcessor (issue #55): owns ONE openaxe_core
+ * module and ONE openaxe_graph, and drives the whole rig inside it through
  * the existing C ABI - add/remove/move/connect/disconnect, params by symbol,
  * per-block trims, bypass, the master bus, NAM model loading, IR convolution
  * and the reverb/delay algorithm switches. This replaces the per-effect
- * worklets (namStudioEffectBase.js + the 12 effect/amp/cab worklets), each of
+ * worklets (openAxeEffectBase.js + the 12 effect/amp/cab worklets), each of
  * which previously instantiated its own module and its own one-block graph.
  *
  * Everything the web path used to own as Web Audio plumbing - the left-to-right
@@ -36,7 +36,7 @@ if (typeof performance === 'undefined') {
   globalThis.performance = { now: () => Date.now() }
 }
 
-import createModule from './nam_studio_core.js'
+import createModule from './openaxe_core.js'
 
 // Web Audio's render quantum is fixed at 128 frames - not configurable.
 export const FRAMES = 128
@@ -46,7 +46,7 @@ export const FRAMES = 128
 const IN_RAIL = -1
 const OUT_RAIL = -2
 
-// packages/core/include/nam_studio/api.h NamStudioBlockKind / ReverbControl /
+// packages/core/include/nam_studio/api.h OpenAxeBlockKind / ReverbControl /
 // ReverbAlgorithm. Reverb blocks are driven through the core's ReverbControl
 // mapping (the UI's roomSize/damping/width/... are abstractions, not symbols),
 // mirroring the desktop bridge's ReverbControlFor.
@@ -72,10 +72,10 @@ const BYTES_PER_FLOAT = 4
 
 // The single render-quantum scratch: one pair of stereo in/out buffers shared
 // across the whole graph, sized for FRAMES. The graph's internal stereo pair is
-// what nam_studio_process reads/writes.
+// what openaxe_process reads/writes.
 const MAX_BLOCKS = 64
 
-class NamStudioRigProcessor extends AudioWorkletProcessor {
+class OpenAxeRigProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super()
     this.module = null
@@ -108,11 +108,11 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
       },
     }).then((module) => {
       this.module = module
-      this.graph = module._nam_studio_graph_create()
+      this.graph = module._openaxe_graph_create()
       // One reset arms the whole graph; topology mutations (add/remove/connect)
       // are handled by the core's own RecomputeRouting on each ABI call, so no
       // further reset is needed after the initial one.
-      module._nam_studio_reset(this.graph, sampleRate, FRAMES)
+      module._openaxe_reset(this.graph, sampleRate, FRAMES)
 
       this.inL = module._malloc(FRAMES * BYTES_PER_FLOAT)
       this.inR = module._malloc(FRAMES * BYTES_PER_FLOAT)
@@ -142,7 +142,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
     // CoreSymbolAliasFor.
     if (symbol === 'slimSize') symbol = 'slim_size'
     else if (symbol === 'irMix') symbol = 'ir_mix'
-    const count = module._nam_studio_block_param_count(this.graph, coreBlock)
+    const count = module._openaxe_block_param_count(this.graph, coreBlock)
     for (let i = 0; i < count; i++) {
       const namePtr = module._malloc(4)
       const symbolPtr = module._malloc(4)
@@ -151,7 +151,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
       const unitPtr = module._malloc(4)
       let found = false
       try {
-        const ok = module._nam_studio_block_param_info(
+        const ok = module._openaxe_block_param_info(
           this.graph,
           coreBlock,
           i,
@@ -207,7 +207,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
             reply.error = 'block limit reached'
             break
           }
-          const coreBlock = module._nam_studio_add_block(
+          const coreBlock = module._openaxe_add_block(
             this.graph,
             message.kind,
             message.row,
@@ -222,7 +222,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'removeBlock': {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._nam_studio_remove_block(this.graph, coreBlock)
+            module._openaxe_remove_block(this.graph, coreBlock)
           }
           this.blockByJs.delete(message.block)
           this.kindByJs.delete(message.block)
@@ -233,7 +233,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'moveBlock': {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._nam_studio_move_block(this.graph, coreBlock, message.row, message.col)
+            module._openaxe_move_block(this.graph, coreBlock, message.row, message.col)
           }
           reply.ok = true
           break
@@ -245,7 +245,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
             reply.error = 'unknown block'
             break
           }
-          const edgeId = module._nam_studio_connect(
+          const edgeId = module._openaxe_connect(
             this.graph,
             from,
             message.fromPort,
@@ -263,7 +263,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'disconnect': {
           const coreEdge = this.edgeByJs.get(message.edgeId)
           if (coreEdge !== undefined) {
-            module._nam_studio_disconnect(this.graph, coreEdge)
+            module._openaxe_disconnect(this.graph, coreEdge)
             this.edgeByJs.delete(message.edgeId)
           }
           reply.ok = true
@@ -278,7 +278,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
             // ReverbControl mapping, exactly as the desktop bridge does.
             const reverbControl = REVERB_CONTROL[message.key]
             if (reverbControl !== undefined && this.kindByJs.get(message.block) === REVERB_KIND) {
-              module._nam_studio_set_reverb_control(
+              module._openaxe_set_reverb_control(
                 this.graph,
                 coreBlock,
                 reverbControl,
@@ -287,7 +287,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
             } else {
               const index = this.paramIndex(module, coreBlock, message.key)
               if (index >= 0)
-                module._nam_studio_set_param(this.graph, coreBlock, index, message.value)
+                module._openaxe_set_param(this.graph, coreBlock, index, message.value)
             }
           }
           if (reply) reply.ok = true
@@ -298,7 +298,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           if (coreBlock !== null && coreBlock >= 0) {
             const algo = REVERB_ALGORITHM[message.algorithm]
             if (algo !== undefined && this.kindByJs.get(message.block) === REVERB_KIND) {
-              module._nam_studio_set_reverb_algorithm(this.graph, coreBlock, algo)
+              module._openaxe_set_reverb_algorithm(this.graph, coreBlock, algo)
             }
           }
           if (reply) reply.ok = true
@@ -307,7 +307,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'setBypass': {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._nam_studio_set_bypass(this.graph, coreBlock, message.bypassed ? 1 : 0)
+            module._openaxe_set_bypass(this.graph, coreBlock, message.bypassed ? 1 : 0)
           }
           if (reply) reply.ok = true
           break
@@ -316,25 +316,25 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
             if (typeof message.input === 'number') {
-              module._nam_studio_set_block_input_trim(this.graph, coreBlock, message.input)
+              module._openaxe_set_block_input_trim(this.graph, coreBlock, message.input)
             }
             if (typeof message.output === 'number') {
-              module._nam_studio_set_block_output_trim(this.graph, coreBlock, message.output)
+              module._openaxe_set_block_output_trim(this.graph, coreBlock, message.output)
             }
           }
           if (reply) reply.ok = true
           break
         }
         case 'setMasterLevel':
-          module._nam_studio_set_master_level(this.graph, message.level)
+          module._openaxe_set_master_level(this.graph, message.level)
           if (reply) reply.ok = true
           break
         case 'setMasterMuted':
-          module._nam_studio_set_master_muted(this.graph, message.muted ? 1 : 0)
+          module._openaxe_set_master_muted(this.graph, message.muted ? 1 : 0)
           if (reply) reply.ok = true
           break
         case 'setTunerMuted':
-          module._nam_studio_set_tuner_muted(this.graph, message.tunerMuted ? 1 : 0)
+          module._openaxe_set_tuner_muted(this.graph, message.tunerMuted ? 1 : 0)
           if (reply) reply.ok = true
           break
         case 'loadModel': {
@@ -352,7 +352,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           if (typeof message.slimSize === 'number') {
             const slim = this.paramIndex(module, coreBlock, 'slim_size')
             if (slim >= 0)
-              module._nam_studio_set_param(this.graph, coreBlock, slim, message.slimSize)
+              module._openaxe_set_param(this.graph, coreBlock, slim, message.slimSize)
           }
           reply.info = this.readModelInfo(module, coreBlock)
           reply.ok = true
@@ -361,7 +361,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'unloadModel': {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._nam_studio_unload_nam_model(this.graph, coreBlock)
+            module._openaxe_unload_nam_model(this.graph, coreBlock)
           }
           reply.ok = true
           break
@@ -370,7 +370,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
             const slim = this.paramIndex(module, coreBlock, 'slim_size')
-            if (slim >= 0) module._nam_studio_set_param(this.graph, coreBlock, slim, message.value)
+            if (slim >= 0) module._openaxe_set_param(this.graph, coreBlock, slim, message.value)
           }
           reply.ok = true
           break
@@ -384,17 +384,17 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           // The samples arrive as a Float32Array of mono audio at the graph's
           // rate (the main thread decoded the buffer with decodeAudioData and
           // resampled to the context rate). Copy into WASM, install, and free -
-          // nam_studio_load_ir copies the samples itself, so the temp is
+          // openaxe_load_ir copies the samples itself, so the temp is
           // disposable immediately.
           const samples = message.samples
           if (!samples || samples.length === 0) {
-            module._nam_studio_load_ir(this.graph, coreBlock, 0, 0)
+            module._openaxe_load_ir(this.graph, coreBlock, 0, 0)
             break
           }
           const ptr = module._malloc(samples.length * BYTES_PER_FLOAT)
           try {
             module.HEAPF32.set(samples, ptr >> 2)
-            module._nam_studio_load_ir(this.graph, coreBlock, ptr, samples.length)
+            module._openaxe_load_ir(this.graph, coreBlock, ptr, samples.length)
           } finally {
             module._free(ptr)
           }
@@ -404,7 +404,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'unloadIr': {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._nam_studio_unload_ir(this.graph, coreBlock)
+            module._openaxe_unload_ir(this.graph, coreBlock)
           }
           reply.ok = true
           break
@@ -416,7 +416,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'compiledKinds': {
           const compiled = []
           for (let kind = 0; kind <= message.maxKind; ++kind) {
-            if (module._nam_studio_block_kind_compiled(kind)) compiled.push(kind)
+            if (module._openaxe_block_kind_compiled(kind)) compiled.push(kind)
           }
           reply.compiledKinds = compiled
           reply.ok = true
@@ -425,14 +425,14 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
         case 'meters': {
           const out = {}
           for (const [jsId, coreBlock] of this.blockByJs) {
-            out[jsId] = module._nam_studio_get_meter(this.graph, coreBlock)
+            out[jsId] = module._openaxe_get_meter(this.graph, coreBlock)
           }
           reply.meters = out
           reply.ok = true
           break
         }
         case 'dispose': {
-          module._nam_studio_graph_destroy(this.graph)
+          module._openaxe_graph_destroy(this.graph)
           this.graph = null
           this.disposed = true
           reply.ok = true
@@ -458,8 +458,8 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
     try {
       module.HEAPU8.set(bytes, ptr)
       module.HEAPU8[ptr + bytes.length] = 0
-      // 0 is NAM_STUDIO_LOAD_OK.
-      return module._nam_studio_load_nam_model_json(this.graph, coreBlock, ptr) === 0
+      // 0 is OPENAXE_LOAD_OK.
+      return module._openaxe_load_nam_model_json(this.graph, coreBlock, ptr) === 0
     } finally {
       module._free(ptr)
     }
@@ -470,7 +470,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
     const doubles = module._malloc(4 * 8)
     const ints = module._malloc(5 * 4)
     try {
-      const ok = module._nam_studio_block_model_info(
+      const ok = module._openaxe_block_model_info(
         this.graph,
         coreBlock,
         doubles,
@@ -501,7 +501,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
       if (info.slimmable && count > 0) {
         const values = module._malloc(count * 8)
         try {
-          const written = module._nam_studio_block_model_slim_breakpoints(
+          const written = module._openaxe_block_model_slim_breakpoints(
             this.graph,
             coreBlock,
             values,
@@ -529,7 +529,7 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
     const input = inputs[0] ?? []
     module.HEAPF32.set(input[0] ?? this.silence, this.inL >> 2)
     module.HEAPF32.set(input[1] ?? input[0] ?? this.silence, this.inR >> 2)
-    module._nam_studio_process(this.graph, this.inPtrs, 2, this.outPtrs, 2, FRAMES)
+    module._openaxe_process(this.graph, this.inPtrs, 2, this.outPtrs, 2, FRAMES)
 
     const output = outputs[0] ?? []
     output[0]?.set(module.HEAPF32.subarray(this.outL >> 2, (this.outL >> 2) + FRAMES))
@@ -538,4 +538,4 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('nam-studio-rig-processor', NamStudioRigProcessor)
+registerProcessor('nam-studio-rig-processor', OpenAxeRigProcessor)

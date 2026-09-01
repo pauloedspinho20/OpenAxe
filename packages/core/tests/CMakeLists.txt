@@ -168,7 +168,7 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   add_test(NAME smoothing_test COMMAND smoothing_test)
 
   # Concurrent stress for the Tier-1 (any-thread) core surface (issue #211):
-  # races nam_studio_process against the lock-free param/reverb-control/trim/
+  # races openaxe_process against the lock-free param/reverb-control/trim/
   # master-bus calls. Plain link like engine_test - it loads no NAM model, so
   # it doesn't need the whole-archive self-registering-parser treatment.
   add_executable(api_threading_test api_threading_test.cpp)

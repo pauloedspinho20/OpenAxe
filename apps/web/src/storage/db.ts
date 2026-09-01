@@ -6,12 +6,12 @@
  * recipe for version-conflict errors.
  */
 
-// Deliberately still 'nam-web-studio' after the OpenAxe rebrand (issue #151):
-// this is the on-disk IndexedDB name users' saved rigs live under. Renaming
-// it without a migration would orphan every preset/scene/asset, so the old
-// name stays. If it is ever renamed, copy old DB -> new in a one-time
-// migration first.
-const DB_NAME = 'nam-web-studio'
+// Migrated in #311 / #326: `nam-web-studio` -> `openaxe` with a one-time
+// copy-then-delete migration (see ./migration.ts). New installs use `openaxe`
+// directly; existing users are migrated on first launch after the update.
+const NEW_DB_NAME = 'openaxe'
+const OLD_DB_NAME = 'nam-web-studio'
+const DB_NAME = NEW_DB_NAME
 /**
  * v4: the preset schema changed from a fixed dual-chain shape (chainA/
  * chainB) to a generic block/edge graph (see presets/types.ts) - old rows
@@ -53,9 +53,12 @@ export const STORE_KEY_PATHS: Record<string, string | null> = {
   [STORE_PRESET_BANK]: 'id',
 }
 
-function openDb(): Promise<IDBDatabase> {
+import { ensureMigrated } from './migration'
+
+async function openDb(): Promise<IDBDatabase> {
+  const effectiveName = await ensureMigrated()
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    const request = indexedDB.open(effectiveName, DB_VERSION)
     request.onupgradeneeded = (event) => {
       const db = request.result
       if (!db.objectStoreNames.contains(STORE_ASSETS)) {

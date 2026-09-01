@@ -118,7 +118,7 @@ target_include_directories(openaxe_vst3_midi_test PRIVATE ../src ${CMAKE_CURRENT
 add_test(NAME vst3_midi COMMAND openaxe_vst3_midi_test)
 
 # ── ThreadSanitizer over the concurrent suspend stress (issue #130) ─────────
-# Mirrors apps/desktop/tests/CMakeLists.txt's NAM_DESKTOP_ENABLE_TSAN shape.
+# Mirrors apps/desktop/tests/CMakeLists.txt's OPENAXE_DESKTOP_ENABLE_TSAN shape.
 # Run: cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_TSAN=ON
 # TSan is Linux GCC/Clang only; Apple's Clang on arm64 ships no libclang_rt.tsan.
 option(OPENAXE_VST3_ENABLE_TSAN "Instrument core/tests with ThreadSanitizer" OFF)

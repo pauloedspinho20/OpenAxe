@@ -39,7 +39,7 @@ test.beforeEach(async ({ page }) => {
     // Treat this as an established session so the first-run factory dialog
     // never appears: the offline FX starters seed and hydrate (see
     // src/factory/factorySetup.ts), which is exactly what these flows assume.
-    localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
+    localStorage.setItem('openaxe:factory-setup-dismissed', '1')
     const dbs = await indexedDB.databases()
     await Promise.all(
       dbs
