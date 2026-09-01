@@ -125,11 +125,12 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
 
     float inL = input[0][i];
     float inR = input[1][i];
-    // drive saturation pre
+    // drive saturation pre - continuous normaliser (no jump at g=2)
     if (drive > 0.001f) {
       const float g = 1 + drive * 3;
-      inL = std::tanh(inL * g) / std::max(1.0f, g * 0.5f);
-      inR = std::tanh(inR * g) / std::max(1.0f, g * 0.5f);
+      const float norm = (g + 1.0f) * 0.5f; // 1 at g=1, 2.5 at g=4, smooth vs max(1,g*0.5)
+      inL = std::tanh(inL * g) / norm;
+      inR = std::tanh(inR * g) / norm;
     }
 
     // crossover split
