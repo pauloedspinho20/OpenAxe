@@ -270,6 +270,7 @@ function App() {
           analyser={engine.analyser}
           outputSelectionSupported={outputSelectionSupported}
           context={engine.context}
+          engine={engine}
         />
       </main>
 

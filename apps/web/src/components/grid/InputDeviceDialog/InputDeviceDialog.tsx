@@ -2,25 +2,25 @@ import { useEffect } from 'react'
 import { useIOStore, type InputChannelMode } from '../../../state/ioStore'
 import { useDIAuditionStore } from '../../../state/diAuditionStore'
 import { DI_SAMPLES } from '../../../diSamples'
-import { useAudioEngine } from '../../../hooks/useAudioEngine'
+import type { AudioEngineState, AudioEngineActions } from '../../../hooks/useAudioEngine'
 import { getShellKind } from '../../../native/openaxe'
 import { Dialog, SelectField, ErrorText, Hint, OutlineButton } from '@openaxe/ui'
 
 export interface InputDeviceDialogProps {
   open: boolean
   onClose: () => void
+  engine: AudioEngineState & AudioEngineActions
 }
 
-export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
+export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogProps) {
   const io = useIOStore()
   const { selectedId, setSelectedId } = useDIAuditionStore()
-  const engine = useAudioEngine()
-  const diPlaying = (engine as unknown as { diPlaying?: boolean }).diPlaying ?? false
-  const diError = (engine as unknown as { diError?: string | null }).diError ?? null
-  const diSampleId = (engine as unknown as { diSampleId?: string | null }).diSampleId ?? null
+  const diPlaying = engine.diPlaying ?? false
+  const diError = engine.diError ?? null
+  const diSampleId = engine.diSampleId ?? null
   const engineReady = engine.status === 'ready'
-  const playDI = (engine as unknown as { playDI?: (id: string) => Promise<void> }).playDI
-  const stopDI = (engine as unknown as { stopDI?: () => void }).stopDI
+  const playDI = engine.playDI
+  const stopDI = engine.stopDI
   // A plugin has no device to pick - the DAW decides what feeds it - but it
   // does have a stereo bus, and which side of it carries the guitar is the
   // player's choice.
@@ -50,6 +50,9 @@ export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
   const guitarSamples = DI_SAMPLES.filter((s) => s.instrument === 'guitar')
   const bassSamples = DI_SAMPLES.filter((s) => s.instrument === 'bass')
 
+  const effectiveSelected = selectedId ?? diSampleId ?? 'guitar-clean'
+  const canPlay = engineReady && !!effectiveSelected && !!playDI && !!stopDI
+
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value || null
     setSelectedId(id as typeof selectedId)
@@ -62,13 +65,10 @@ export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
   const handlePlayPause = () => {
     if (diPlaying) {
       stopDI?.()
-    } else if (selectedId && playDI) {
-      void playDI(selectedId)
+    } else if (effectiveSelected && playDI) {
+      void playDI(effectiveSelected)
     }
   }
-
-  const effectiveSelected = selectedId ?? diSampleId ?? 'guitar-clean'
-  const canPlay = engineReady && !!effectiveSelected && !!playDI && !!stopDI
 
   return (
     <Dialog open={open} onClose={onClose} title="Input" width="min(360px, 90vw)">
