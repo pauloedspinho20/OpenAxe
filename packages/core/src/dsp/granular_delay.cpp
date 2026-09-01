@@ -49,6 +49,18 @@ struct GrainVoice {
   }
 };
 
+// Fast xorshift random for jitter (real-time safe, no allocation)
+struct FastRand {
+  uint32_t s = 0x9e3779b9u;
+  float next() {
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    return (s & 0x00ffffff) / 16777216.0f;
+  }
+  float nextBi() { return next() * 2.0f - 1.0f; }
+};
+
 } // namespace
 
 struct GranularDelay::Impl {
@@ -70,6 +82,7 @@ struct GranularDelay::Impl {
   GrainVoice voices[2];
   OnePoleLP lpL, lpR;
   float fb_l = 0, fb_r = 0;
+  FastRand rng;
 
   void Resize(float s) {
     sr = s;
@@ -143,7 +156,7 @@ void GranularDelay::Process(const float* const* input, float* const* output, int
       GrainVoice& v = impl_->voices[which];
       float jitter_off = 0.0f;
       if (impl_->jitter > 0.001f) {
-        jitter_off = std::sin(wp * 0.001f + phase * 0.1f) * impl_->jitter * grain_samps * 0.5f;
+        jitter_off = impl_->rng.nextBi() * impl_->jitter * grain_samps * 0.5f;
       }
       v.drift = 0.0f;
       v.jitter = jitter_off;
