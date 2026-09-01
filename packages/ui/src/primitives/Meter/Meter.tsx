@@ -35,7 +35,7 @@ export function MediumMeter({ level, title }: MiniMeterProps) {
     <span className={styles.mediumWrap} title={title}>
       <span
         className={`${styles.mediumFill} ${styles[levelColor(clamped)]}`}
-        style={{ width: `${clamped * 100}%` }}
+        style={{ height: `${clamped * 100}%` }}
       />
     </span>
   )

@@ -40,36 +40,50 @@
 .mediumWrap {
   display: inline-block;
   background: var(--panel-recessed);
-  box-shadow: var(--shadow-recessed);
   overflow: hidden;
   flex-shrink: 0;
 }
 
 .miniFill,
 .mediumFill {
-  display: block;
+  display: flex;
   height: 100%;
   transition: width 0.05s linear;
 }
 
+.mediumFill {
+  flex-direction: column-reverse;
+}
+
 .miniWrap {
-  width: 22px;
+  width: 20px;
   height: 5px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .mediumWrap {
   height: 70px;
   width: 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
+  rotate: 180deg;
 }
 
-.miniFill.statusGreen {
+.miniFill.statusGreen,
+.mediumFill.statusGreen {
   background: var(--led-on);
 }
-.miniFill.statusAmber {
+.miniFill.statusAmber,
+.mediumFill.statusAmber {
   background: var(--led-warn);
 }
-.miniFill.statusRed {
+.miniFill.statusRed,
+.mediumFill.statusRed {
   background: var(--led-hot);
+}
+
+@media (max-width: var(--mw-md)) {
+  .segment {
+    width: 18px;
+    height: 4px;
+  }
 }

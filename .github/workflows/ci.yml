@@ -101,11 +101,29 @@ jobs:
       - name: Test
         run: pnpm test:run
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}-1.62.1
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @openaxe/web exec playwright install --with-deps chromium firefox webkit
 
+      - name: Install Playwright system deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @openaxe/web exec playwright install-deps chromium firefox webkit
+
       - name: E2E test
-        run: pnpm test:e2e
+        # Full 4-project matrix (chromium/firefox/webkit + mobile) is ~3× slower.
+        # Keep PR feedback fast: only chromium (-mobile) here; main/dev retain
+        # full coverage via workflow_dispatch or a nightly job. Restore full
+        # `pnpm test:e2e` when cross-browser signal is worth the 25m install.
+        run: pnpm --filter @openaxe/web exec playwright test --project=chromium-desktop --project=chromium-mobile
 
       - name: Build Storybook
         run: pnpm build-storybook

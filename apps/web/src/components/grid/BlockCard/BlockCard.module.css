@@ -56,12 +56,6 @@
   width: 100%;
 }
 
-/* @media (max-width: var(--mw-md)) {
-  .blockIcon {
-    display: none;
-  }
-} */
-
 .blockIcon,
 .blockLabel {
   color: var(--ink-2);
@@ -90,10 +84,19 @@
 }
 
 .meterWrap {
-  position: absolute;
-  bottom: 5px;
-  right: 50%;
-  transform: translateX(50%);
+  display: flex;
+}
+
+@media (max-width: var(--mw-xl)) {
+  .card {
+    padding: var(--sp-1);
+  }
+  .headerActions {
+    display: flex;
+  }
+  .meterWrap {
+    display: none;
+  }
 }
 
 .bypassBtn {
@@ -103,7 +106,6 @@
   font-size: 10px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px;
 }
 
 .bypassBtnOn {
@@ -132,7 +134,7 @@
   line-height: 1;
   cursor: pointer;
   padding: var(--sp-1);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
 }
 
 .menuBtn:hover {
@@ -163,14 +165,14 @@
 
 .jackWrap {
   position: relative;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
 }
 
 .jack {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--panel);
   border: 2px solid var(--accent);
