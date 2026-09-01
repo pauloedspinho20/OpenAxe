@@ -39,6 +39,39 @@ export interface OpenAxeConfig {
   latencyMs: number
   lastError: string
   cpuLoad: number
+  /** Which native shell answered. Absent on older desktop builds. */
+  shell?: ShellKind
+  /** Which of the host's input channels feed the rig. Plugin only, and
+   * absent on older builds — the plugin owns this rather than the shared
+   * store, because it describes how this instance's track is wired. */
+  inputChannel?: 'stereo' | 'l' | 'r' | 'sum'
+  /** False in a plugin, where the DAW owns the device. Absent on older builds;
+   * prefer shellOwnsAudioDevice() for the synchronous check. */
+  ownsAudioDevice?: boolean
+}
+
+/** The core's serialized rig, as returned by `openAxe.getState`. This is the
+ * same document the DAW stores in its chunk, so it is the authoritative
+ * description of what the C++ graph currently holds (issue #300 D1/D2). */
+export interface OpenAxeCoreState {
+  schemaVersion: number
+  blocks: {
+    id: string
+    kind: string
+    row: number
+    col: number
+    bypass?: boolean
+    inputTrim?: number
+    outputTrim?: number
+    params?: Record<string, number>
+  }[]
+  edges: {
+    id: string
+    from: { blockId: string; port: number }
+    to: { blockId: string; port: number }
+  }[]
+  masterLevel?: number
+  masterMuted?: boolean
 }
 
 export interface OpenAxeBlockParam {
@@ -182,6 +215,7 @@ export interface OpenAxeBridge {
    * second process forcing a mid-stream reconfiguration on a shared device.
    * `error` is null when nothing is pending. */
   takeStreamError(): Promise<{ error: string | null }>
+  getState(): Promise<OpenAxeOk & { state?: OpenAxeCoreState }>
 
   /** Small secret store (issue #146) backed by the OS keychain (macOS/
    * Windows) or a permission-restricted file (Linux, until Secret Service
@@ -195,7 +229,37 @@ export interface OpenAxeBridge {
    * "never connected" case, not a failure (still `ok: true`). */
   secureLoad(args: { key: string }): Promise<OpenAxeOk & { value: string | null }>
   /** No-op success if there was nothing stored under `key`. */
+  /** Route the host's input channels into the rig (plugin only; a no-op
+   * elsewhere). Mirrors the web's channel modes — see input_routing.h. */
+  setInputChannel(args: { mode: 'stereo' | 'l' | 'r' | 'sum' }): Promise<OpenAxeOk>
+
   secureDelete(args: { key: string }): Promise<OpenAxeOk>
+
+  /**
+   * Shared on-disk library (issue #300 follow-up). The webview's own
+   * localStorage/IndexedDB cannot hold this: the UI server binds an ephemeral
+   * port so their origin changes every launch, and WKWebView/WebView2 scope
+   * website data per host application, so the desktop app and a plugin inside
+   * a DAW could never see one library through them. These go to a directory
+   * both shells read instead. Values are strings; callers serialize.
+   */
+  storageGet(args: { store: string; key: string }): Promise<OpenAxeOk & { value: string | null }>
+  storagePut(args: { store: string; key: string; value: string }): Promise<OpenAxeOk>
+  storageDelete(args: { store: string; key: string }): Promise<OpenAxeOk>
+  storageKeys(args: { store: string }): Promise<OpenAxeOk & { keys: string[] }>
+  storageValues(args: { store: string }): Promise<OpenAxeOk & { values: string[] }>
+  storageClear(args: { store: string }): Promise<OpenAxeOk>
+
+  /** Asset blobs (.nam captures, IR wavs), kept out of the record calls
+   * because they are bytes rather than text. Reads normally go over HTTP
+   * (`/__asset/<key>`) instead of through assetGet — see assetUrl(). */
+  assetPut(args: { key: string; base64: string; type: string }): Promise<OpenAxeOk>
+  assetGet(args: { key: string }): Promise<OpenAxeOk & { base64: string | null; type?: string }>
+  assetDelete(args: { key: string }): Promise<OpenAxeOk>
+  assetHas(args: { key: string }): Promise<OpenAxeOk & { present: boolean }>
+  assetKeys(): Promise<OpenAxeOk & { keys: string[] }>
+  assetStats(): Promise<OpenAxeOk & { count: number; bytes: number }>
+  assetClear(): Promise<OpenAxeOk>
 }
 
 type Args = Record<string, unknown> | undefined
@@ -337,15 +401,97 @@ class NativeBridge implements OpenAxeBridge {
   takeStreamError() {
     return this.call<{ error: string | null }>('takeStreamError')
   }
+  /** The core's current rig. Only the plugin implements this today — the
+   * desktop shell's own state lives in the same graph but the app there
+   * restores from its stores as before. */
+  getState() {
+    return this.call<OpenAxeOk & { state?: OpenAxeCoreState }>('getState')
+  }
   secureStore(args: { key: string; value: string }) {
     return this.call<OpenAxeOk>('secureStore', args)
   }
   secureLoad(args: { key: string }) {
     return this.call<OpenAxeOk & { value: string | null }>('secureLoad', args)
   }
+  setInputChannel(args: { mode: 'stereo' | 'l' | 'r' | 'sum' }) {
+    return this.call<OpenAxeOk>('setInputChannel', args)
+  }
   secureDelete(args: { key: string }) {
     return this.call<OpenAxeOk>('secureDelete', args)
   }
+  storageGet(args: { store: string; key: string }) {
+    return this.call<OpenAxeOk & { value: string | null }>('storageGet', args)
+  }
+  storagePut(args: { store: string; key: string; value: string }) {
+    return this.call<OpenAxeOk>('storagePut', args)
+  }
+  storageDelete(args: { store: string; key: string }) {
+    return this.call<OpenAxeOk>('storageDelete', args)
+  }
+  storageKeys(args: { store: string }) {
+    return this.call<OpenAxeOk & { keys: string[] }>('storageKeys', args)
+  }
+  storageValues(args: { store: string }) {
+    return this.call<OpenAxeOk & { values: string[] }>('storageValues', args)
+  }
+  storageClear(args: { store: string }) {
+    return this.call<OpenAxeOk>('storageClear', args)
+  }
+  assetPut(args: { key: string; base64: string; type: string }) {
+    return this.call<OpenAxeOk>('assetPut', args)
+  }
+  assetGet(args: { key: string }) {
+    return this.call<OpenAxeOk & { base64: string | null; type?: string }>('assetGet', args)
+  }
+  assetDelete(args: { key: string }) {
+    return this.call<OpenAxeOk>('assetDelete', args)
+  }
+  assetHas(args: { key: string }) {
+    return this.call<OpenAxeOk & { present: boolean }>('assetHas', args)
+  }
+  assetKeys() {
+    return this.call<OpenAxeOk & { keys: string[] }>('assetKeys')
+  }
+  assetStats() {
+    return this.call<OpenAxeOk & { count: number; bytes: number }>('assetStats')
+  }
+  assetClear() {
+    return this.call<OpenAxeOk>('assetClear')
+  }
+}
+
+/**
+ * Which native shell (if any) is hosting the React app.
+ *
+ * `getOpenAxe() !== null` only answers "is there a bridge?", which was enough
+ * while the only bridge was the desktop shell. The VST3/CLAP/AU plugin also
+ * has a bridge but does NOT own the audio device - the DAW does - so treating
+ * it as "desktop" put device pickers, buffer-size controls and a power gate in
+ * front of a user whose host already decided all three (issue #300 E1).
+ *
+ * The plugin publishes `window.openAxe.shell` from its injected bridge
+ * polyfill, so this resolves synchronously at module scope, the same way
+ * `isNativeShell` does - no awaiting getConfig() before the first render. The
+ * desktop shell binds its handlers natively and injects no polyfill, so an
+ * absent tag means desktop.
+ */
+export type ShellKind = 'web' | 'desktop' | 'plugin'
+
+export function getShellKind(): ShellKind {
+  if (getOpenAxe() === null) return 'web'
+  const w = window as unknown as { openAxe?: { shell?: unknown } }
+  return w.openAxe?.shell === 'plugin' ? 'plugin' : 'desktop'
+}
+
+/**
+ * True when this shell is responsible for opening and configuring the audio
+ * device. False in a plugin, where the host owns sample rate, buffer size and
+ * device selection, and false on the web, where the browser does.
+ *
+ * This - not "is there a bridge?" - is what audio-device UI should branch on.
+ */
+export function shellOwnsAudioDevice(): boolean {
+  return getShellKind() === 'desktop'
 }
 
 export function getOpenAxe(): OpenAxeBridge | null {

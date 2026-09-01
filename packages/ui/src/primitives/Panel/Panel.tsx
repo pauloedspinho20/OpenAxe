@@ -2,12 +2,12 @@ import type { ReactNode } from 'react'
 import styles from './Panel.module.css'
 
 export interface PanelProps {
-  label?: string
-  url?: string
-  labelUrl?: string
-  corner?: ReactNode
+  label?: string | undefined
+  url?: string | undefined
+  labelUrl?: string | undefined
+  corner?: ReactNode | undefined
   children: ReactNode
-  className?: string
+  className?: string | undefined
 }
 
 /** A rack-module container - the base unit every control group sits in. */

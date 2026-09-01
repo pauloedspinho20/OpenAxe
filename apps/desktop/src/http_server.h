@@ -32,6 +32,14 @@ class HttpServer {
   // out_port on success. Stop() joins the serve thread.
   bool Start(const std::string& root, unsigned short& out_port);
 
+  // Ports tried, in order, before falling back to an ephemeral one. A stable
+  // port keeps the webview's origin stable across launches, so the app stops
+  // leaving a fresh per-origin WebKit data directory behind every time it
+  // starts (issue #300). Mirrors the plugin's list in
+  // packages/vst3/src/http_server.h.
+  static constexpr unsigned short kPreferredPorts[] = {47821, 47822, 47823, 47824, 47825,
+                                                       47826, 47827, 47828, 47829, 47830};
+
   // Binds a FIXED port instead of an ephemeral one - the only job of this
   // mode is bouncing a Tone3000 OAuth redirect back to wherever the bundled
   // UI's own (ephemeral, unregisterable) port actually ended up this launch.

@@ -648,7 +648,7 @@
           "label": "Detune",
           "min": -15,
           "max": 15,
-          "unit": "¢",
+          "unit": "\u00a2",
           "smoothing": {
             "mode": "exponential",
             "timeConstant": 0.02
@@ -831,55 +831,6 @@
         }
       ]
     },
-    "ping-pong-delay": {
-      "cppFile": "ping_pong_delay.cpp",
-      "params": [
-        {
-          "symbol": "time",
-          "label": "Time",
-          "min": 50,
-          "max": 1000,
-          "unit": "ms",
-          "smoothing": {
-            "mode": "none",
-            "timeConstant": 0
-          }
-        },
-        {
-          "symbol": "feedback",
-          "label": "Feedback",
-          "min": 0,
-          "max": 0.9,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "tone",
-          "label": "Tone",
-          "min": 200,
-          "max": 12000,
-          "unit": "Hz",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "width",
-          "label": "Width",
-          "min": 0,
-          "max": 1,
-          "unit": "x",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.03
-          }
-        }
-      ]
-    },
     "delay": {
       "cppFile": "delay.cpp",
       "params": [
@@ -948,8 +899,31 @@
             "mode": "none",
             "timeConstant": 0
           }
+        },
+        {
+          "symbol": "stereo_mode",
+          "label": "Stereo",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "width",
+          "label": "Width",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.03
+          }
         }
-      ]
+      ],
+      "$comment": "stereo_mode (0 = Stereo, 1 = Ping-Pong) and width replace the separate ping-pong-delay kind (issue #314). They are orthogonal to `model`, so any character - digital, analog or tape - can ping-pong. Appended after wow_rate so the indices of the original six never move."
     },
     "amp": {
       "cppFile": "engine_amp.cpp",

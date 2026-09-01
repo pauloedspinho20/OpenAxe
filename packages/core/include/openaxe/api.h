@@ -70,7 +70,6 @@ typedef enum NamStudioBlockKind {
   NAM_STUDIO_BLOCK_PHASER,
   NAM_STUDIO_BLOCK_TREMOLO,
   NAM_STUDIO_BLOCK_DELAY,
-  NAM_STUDIO_BLOCK_PING_PONG_DELAY,
   NAM_STUDIO_BLOCK_REVERB,
   NAM_STUDIO_BLOCK_AMP,
   NAM_STUDIO_BLOCK_AMP_CAB,
@@ -132,6 +131,21 @@ typedef enum NamStudioLoadResult {
 // buffers. Do not call concurrently with nam_studio_process.
 
 // Returns the new block's id (>= 0).
+// Canonical wire name for a block kind, e.g. "noise-gate" for
+// NAM_STUDIO_BLOCK_NOISE_GATE. Returns nullptr for an unknown value.
+//
+// These strings are the contract between the C++ core and every front end: the
+// web app, the desktop bridge and the plugin bridge all speak them. They lived
+// as a hand-maintained table in each bridge (issue #300 J3), so adding a block
+// kind meant editing the same 27 rows in two places — and the plugin's copy had
+// been rewritten as a 27-branch if/else chain besides. Mobile would have made
+// it four copies.
+const char* nam_studio_block_kind_name(NamStudioBlockKind kind);
+
+// Inverse of the above. Returns 0 on success and fills *out_kind; returns
+// non-zero for an unknown name, leaving *out_kind untouched.
+int32_t nam_studio_block_kind_from_name(const char* name, NamStudioBlockKind* out_kind);
+
 int32_t nam_studio_add_block(NamStudioGraph* graph, NamStudioBlockKind kind, int32_t row, int32_t col);
 // No-op if block_id is unknown.
 void nam_studio_remove_block(NamStudioGraph* graph, int32_t block_id);
@@ -426,6 +440,32 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
 // until the next one.
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph);
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index);
+
+// Block kinds the most recent nam_studio_load_state could not place (#313),
+// de-duped: either this build was compiled without the kind
+// (packages/core/effects.config.json marked it compiled:false), or the
+// document names a kind from a newer OpenAxe. Either way the block is dropped
+// and the rest of the rig still restores, so a UI should tell the user which
+// pedals went missing rather than silently losing them. Entries are the wire
+// kind strings ("ring-mod", ...). Same lifetime rule as the missing-asset
+// list: valid until the next load on this graph.
+int32_t nam_studio_state_unsupported_block_count(NamStudioGraph* graph);
+const char* nam_studio_state_unsupported_block(NamStudioGraph* graph, int32_t index);
+
+// Whether this build contains the DSP for `kind` - the runtime view of
+// effects.config.json. A front end asserts its own generated block list
+// against this at startup, which is what stops a stale prebuilt WASM from
+// silently disagreeing with the checked-in config. Returns 1 or 0; an
+// out-of-range kind is 0.
+int32_t nam_studio_block_kind_compiled(NamStudioBlockKind kind);
+
+// ── Tone fingerprint (issue #288) ──────────────────────────────────────
+// Probe a NAM model JSON and return its gain (dB) + brightness (0..1).
+// Returns 1 on success, 0 if the JSON is not a valid NAM model or any
+// required out-pointer is null. Probe runs off the audio thread and is not
+// real-time safe.
+int32_t nam_studio_compute_fingerprint(const char* json, float* out_gain_db,
+                                       float* out_brightness);
 
 // ── Tuner — pitch detection + note mapping (issue #123) ────────────────
 // Pure functions over a buffer — no graph, no state. Safe from any thread.

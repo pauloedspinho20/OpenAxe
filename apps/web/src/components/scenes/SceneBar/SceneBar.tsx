@@ -253,7 +253,6 @@ export function SceneBar({ rig }: SceneBarProps) {
       </div>
 
       <div className={styles.currentPreset}>
-        <span className={styles.currentPresetName}>{saved?.name ?? '—'}</span>
         <HardwareButton
           label="PRESETS"
           onClick={openLibrary}

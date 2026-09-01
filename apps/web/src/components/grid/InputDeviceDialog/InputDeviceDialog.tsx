@@ -3,6 +3,7 @@ import { useIOStore, type InputChannelMode } from '../../../state/ioStore'
 import { useDIAuditionStore } from '../../../state/diAuditionStore'
 import { DI_SAMPLES } from '../../../diSamples'
 import { useAudioEngine } from '../../../hooks/useAudioEngine'
+import { getShellKind } from '../../../native/openaxe'
 import { Dialog, SelectField, ErrorText, Hint, OutlineButton } from '@openaxe/ui'
 
 export interface InputDeviceDialogProps {
@@ -20,6 +21,10 @@ export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
   const engineReady = engine.status === 'ready'
   const playDI = (engine as unknown as { playDI?: (id: string) => Promise<void> }).playDI
   const stopDI = (engine as unknown as { stopDI?: () => void }).stopDI
+  // A plugin has no device to pick - the DAW decides what feeds it - but it
+  // does have a stereo bus, and which side of it carries the guitar is the
+  // player's choice.
+  const isPluginShell = getShellKind() === 'plugin'
 
   useEffect(() => {
     if (!open) return
@@ -67,18 +72,20 @@ export function InputDeviceDialog({ open, onClose }: InputDeviceDialogProps) {
 
   return (
     <Dialog open={open} onClose={onClose} title="Input" width="min(360px, 90vw)">
-      <SelectField
-        label="Device"
-        value={io.inputDeviceId}
-        onChange={(e) => io.setInputDevice(e.target.value)}
-      >
-        <option value="">Default input</option>
-        {io.inputDevices.map((d) => (
-          <option key={d.deviceId} value={d.deviceId}>
-            {d.label}
-          </option>
-        ))}
-      </SelectField>
+      {!isPluginShell && (
+        <SelectField
+          label="Device"
+          value={io.inputDeviceId}
+          onChange={(e) => io.setInputDevice(e.target.value)}
+        >
+          <option value="">Default input</option>
+          {io.inputDevices.map((d) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label}
+            </option>
+          ))}
+        </SelectField>
+      )}
 
       <SelectField
         label="Channel"

@@ -3,6 +3,8 @@
 #include "bridge.h"
 #include "debug_log.h"
 #include "http_server.h"
+#include "mac_menu.h"
+#include "openaxe/storage_bridge.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -113,7 +115,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
         <option>chorus</option><option>flanger</option><option>phaser</option>
         <option>tremolo</option><option>ring-mod</option><option>filter</option>
         <option>pitch-shifter</option><option>granular-delay</option><option>rotary</option>
-        <option>delay</option><option>ping-pong-delay</option>
+        <option>delay</option>
         <option>reverb</option><option>amp</option>
         <option>amp-cab</option><option>pedal</option><option>outboard</option>
         <option>space</option><option>cab</option><option>mixer</option><option>splitter</option>
@@ -259,6 +261,14 @@ void Bind(webview::webview& w, openaxe_desktop::StudioBridge& bridge, const char
   w.bind(name, [&bridge, method](const std::string& req) { return (bridge.*method)(req); });
 }
 
+// Same, for handlers that need no bridge state. The shared on-disk library
+// (issue #300 follow-up) is pure filesystem work, so the plugin and the
+// desktop shell bind the identical functions rather than each growing their
+// own copy — that is what makes a preset saved here show up in the VST3.
+void BindShared(webview::webview& w, const char* name, std::string (*fn)(const std::string&)) {
+  w.bind(name, [fn](const std::string& req) { return fn(req); });
+}
+
 }  // namespace
 
 #ifdef _WIN32
@@ -291,6 +301,17 @@ int main(int argc, char** argv) {
     webview::webview w(openaxe_desktop::DebugEnabled(), nullptr);
     w.set_title("OpenAxe");
     w.set_size(1280, 800, WEBVIEW_HINT_NONE);
+    // Below this the grid UI can't lay out without clipping; webview.h's
+    // set_size with WEBVIEW_HINT_NONE imposes no floor of its own
+    // (issue #300 H4). Kept in step with the plugin editor's PLUG_MIN_* so
+    // both shells agree on the narrowest usable window.
+    w.set_size(720, 520, WEBVIEW_HINT_MIN);
+
+    // webview.h never creates an NSMenu, which costs more than the missing
+    // menus: no Cmd+Q, and — because AppKit routes clipboard actions through
+    // the Edit menu's key equivalents — no Cmd+C/V/X/A/Z in any text field
+    // either (issue #300 H1/H2). No-op off macOS.
+    openaxe_desktop::InstallMainMenu("OpenAxe");
 
     // window.openAxe.* bridge surface (issue #15 M2). Each bind exposes a
     // global JS function; webview marshals its JSON args here and resolves
@@ -336,6 +357,23 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "openAxe.secureStore", &openaxe_desktop::StudioBridge::HandleSecureStore);
     Bind(w, bridge, "openAxe.secureLoad", &openaxe_desktop::StudioBridge::HandleSecureLoad);
     Bind(w, bridge, "openAxe.secureDelete", &openaxe_desktop::StudioBridge::HandleSecureDelete);
+
+    // Shared library: presets, scenes, the preset bank, MIDI maps, Tone3000
+    // metadata and the factory pack's blobs, all in one place on disk that
+    // the plugin reads too.
+    BindShared(w, "openAxe.storageGet", &openaxe::storage_bridge::HandleGet);
+    BindShared(w, "openAxe.storagePut", &openaxe::storage_bridge::HandlePut);
+    BindShared(w, "openAxe.storageDelete", &openaxe::storage_bridge::HandleDelete);
+    BindShared(w, "openAxe.storageKeys", &openaxe::storage_bridge::HandleKeys);
+    BindShared(w, "openAxe.storageValues", &openaxe::storage_bridge::HandleValues);
+    BindShared(w, "openAxe.storageClear", &openaxe::storage_bridge::HandleClear);
+    BindShared(w, "openAxe.assetPut", &openaxe::storage_bridge::HandleAssetPut);
+    BindShared(w, "openAxe.assetGet", &openaxe::storage_bridge::HandleAssetGet);
+    BindShared(w, "openAxe.assetDelete", &openaxe::storage_bridge::HandleAssetDelete);
+    BindShared(w, "openAxe.assetHas", &openaxe::storage_bridge::HandleAssetHas);
+    BindShared(w, "openAxe.assetKeys", &openaxe::storage_bridge::HandleAssetKeys);
+    BindShared(w, "openAxe.assetStats", &openaxe::storage_bridge::HandleAssetStats);
+    BindShared(w, "openAxe.assetClear", &openaxe::storage_bridge::HandleAssetClear);
 
     // OPENAXE_UI_URL wins over the bundled copy: it points the webview at
     // an already-running dev server (Vite, http://127.0.0.1:5173) so the

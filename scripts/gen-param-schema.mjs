@@ -12,6 +12,7 @@
 //   node scripts/gen-param-schema.mjs --check            # exit 1 if anything is stale, no writes
 //   node scripts/gen-param-schema.mjs --target=base      # only the original three outputs
 //   node scripts/gen-param-schema.mjs --target=automation-map --check
+//   node scripts/gen-param-schema.mjs --target=effects       # effects.config.json outputs
 //   ...--target accepts a comma list; omitting it selects every target.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -25,11 +26,15 @@ const CPP_OUT_DIR = join(ROOT, 'packages/core/src/dsp/generated')
 const JS_OUT_PATH = join(ROOT, 'apps/web/public/wasm-core/generatedParams.js')
 const TS_RANGES_OUT_PATH = join(ROOT, 'apps/web/src/effects/generatedParamRanges.ts')
 const AUTOMATION_MAP_OUT_PATH = join(ROOT, 'packages/vst3/generated/automation_param_map.h')
+const BLOCKS_CONFIG_PATH = join(ROOT, 'packages/core/effects.config.json')
+const BLOCKS_HEADER_OUT_PATH = join(ROOT, 'packages/core/include/openaxe/generated/enabled_blocks.h')
+const BLOCKS_CMAKE_OUT_PATH = join(ROOT, 'packages/core/generated/block_sources.cmake')
+const BLOCKS_TS_OUT_PATH = join(ROOT, 'apps/web/src/effects/generatedBlockConfig.ts')
 
 // Target selection: `--target=a,b` narrows the run to those outputs; no flag
 // means all of them (what CI's plain `--check` runs, so a new generated file
 // is drift-covered without touching ci.yml).
-const KNOWN_TARGETS = ['base', 'automation-map']
+const KNOWN_TARGETS = ['base', 'automation-map', 'effects']
 const targetArg = process.argv.find((a) => a.startsWith('--target='))
 let selectedTargets = [...KNOWN_TARGETS]
 if (targetArg) {
@@ -430,6 +435,165 @@ function renderAutomationMap(auto) {
   return lines.join('\n') + '\n'
 }
 
+// ── effects.config.json (issue #313) ────────────────────────────────────────
+// Two flags per block kind: `compiled` (is the DSP source handed to the
+// compiler at all) and `inPalette` (may a user place it). See the config's
+// own $comment for why they are two and not one.
+
+// "ping-pong-delay" -> "PING_PONG_DELAY", matching api.h's
+// NAM_STUDIO_BLOCK_* spelling so the two are greppable together.
+function blockMacroSuffix(kind) {
+  return kind.toUpperCase().replace(/-/g, '_')
+}
+
+// Config entries only - keys starting with $ are prose, and JSON has no
+// comment syntax to put it in otherwise.
+function blockEntries(config) {
+  return Object.entries(config.blocks).filter(([key]) => !key.startsWith('$'))
+}
+
+function validateBlocksConfig(config) {
+  const entries = blockEntries(config)
+  if (entries.length === 0) throw new Error('effects.config.json declares no blocks')
+  const seenEnums = new Set()
+  for (const [kind, entry] of entries) {
+    for (const field of ['enumName', 'compiled', 'inPalette']) {
+      if (!(field in entry)) throw new Error(`block '${kind}' is missing '${field}'`)
+    }
+    if (typeof entry.compiled !== 'boolean' || typeof entry.inPalette !== 'boolean') {
+      throw new Error(`block '${kind}': compiled/inPalette must be booleans`)
+    }
+    if (seenEnums.has(entry.enumName)) {
+      throw new Error(`block '${kind}': duplicate enumName '${entry.enumName}'`)
+    }
+    seenEnums.add(entry.enumName)
+    // A kind with no DSP source of its own cannot be compiled out: routing,
+    // the NAM-model kinds, and anything handled inside engine.cpp.
+    if (!entry.compiled && !entry.cppFile && !entry.cmakeGroup) {
+      throw new Error(
+        `block '${kind}' has no cppFile/cmakeGroup, so it has no source to omit - ` +
+          `compiled:false is meaningless for it`,
+      )
+    }
+    // Offering a block the build does not contain would put a placeable
+    // entry in the palette that the core refuses to construct.
+    if (!entry.compiled && entry.inPalette) {
+      throw new Error(`block '${kind}': compiled:false requires inPalette:false`)
+    }
+  }
+}
+
+const GENERATED_HEADER_PLAIN = (source, comment) =>
+  `${comment} GENERATED FILE - do not edit by hand.\n` +
+  `${comment} Produced by scripts/gen-param-schema.mjs --target=effects from ${source}.\n`
+
+function renderBlocksHeader(config) {
+  const entries = blockEntries(config)
+  const defines = entries
+    .map(([kind, e]) => `#define OPENAXE_BLOCK_${blockMacroSuffix(kind)} ${e.compiled ? 1 : 0}`)
+    .join('\n')
+  const compiledCases = entries
+    .map(([, e]) => `    case graph::BlockKind::${e.enumName}: return ${e.compiled};`)
+    .join('\n')
+  const paletteCases = entries
+    .map(([, e]) => `    case graph::BlockKind::${e.enumName}: return ${e.inPalette};`)
+    .join('\n')
+  return `${GENERATED_HEADER_PLAIN('packages/core/effects.config.json', '//')}//
+// One macro per block kind for the \`#if\` guards in engine.cpp, plus the two
+// predicates the loader and the ABI use. Everything here is constexpr, so a
+// compiled-out kind folds away rather than costing a runtime branch.
+#pragma once
+
+#include "openaxe/block.h"
+
+${defines}
+
+namespace openaxe::blocks {
+
+// Whether this build contains the DSP for \`kind\`. A false here means
+// AddBlock refuses the kind and the state loader drops it - see
+// state::LoadOutcome::unsupported_blocks.
+inline constexpr bool IsCompiled(graph::BlockKind kind) {
+  switch (kind) {
+${compiledCases}
+  }
+  return false;
+}
+
+// Whether the block palette offers \`kind\`. Independent of IsCompiled: a
+// kind can be built and still withheld from the picker while its quality is
+// being worked on (ring-mod, granular-delay today).
+inline constexpr bool IsInPalette(graph::BlockKind kind) {
+  switch (kind) {
+${paletteCases}
+  }
+  return false;
+}
+
+}  // namespace openaxe::blocks
+`
+}
+
+function renderBlocksCmake(config) {
+  const entries = blockEntries(config)
+  const sources = entries
+    .filter(([, e]) => e.compiled && e.cppFile)
+    .map(([, e]) => `  src/dsp/${e.cppFile}`)
+    .join('\n')
+  const omitted = entries.filter(([, e]) => !e.compiled).map(([kind]) => kind)
+  const dragonfly = entries.find(([, e]) => e.cmakeGroup === 'dragonfly')
+  const dragonflyOn = dragonfly ? dragonfly[1].compiled : false
+  // Per-kind flags so tests/CMakeLists.txt can skip a compiled-out effect's
+  // test target - it would otherwise fail to link against a DSP that is no
+  // longer in the archive.
+  const flags = entries
+    .map(([kind, e]) => `set(OPENAXE_BLOCK_${blockMacroSuffix(kind)} ${e.compiled ? 'ON' : 'OFF'})`)
+    .join('\n')
+  return `${GENERATED_HEADER_PLAIN('packages/core/effects.config.json', '#')}#
+# Included by packages/core/CMakeLists.txt. A block with compiled:false has
+# its source omitted here entirely - it is never handed to the compiler, which
+# is the whole point of the config.
+${omitted.length > 0 ? `#\n# Omitted by effects.config.json: ${omitted.join(', ')}\n` : '#\n# Omitted by effects.config.json: (none)\n'}
+set(OPENAXE_BLOCK_SOURCES
+${sources}
+)
+
+# The four Dragonfly algorithms are separate targets with their own include
+# paths and a C++14 override, so the reverb kind gates the whole group.
+set(OPENAXE_DRAGONFLY_ENABLED ${dragonflyOn ? 'ON' : 'OFF'})
+
+# One flag per kind, mirroring enabled_blocks.h's macros - tests/CMakeLists.txt
+# gates each effect's test target on its own flag.
+${flags}
+`
+}
+
+function renderBlocksTs(config) {
+  const entries = blockEntries(config)
+  const list = (pred) =>
+    entries
+      .filter(([, e]) => pred(e))
+      .map(([kind]) => `  '${kind}',`)
+      .join('\n')
+  return `${GENERATED_HEADER_PLAIN('packages/core/effects.config.json', '//')}//
+// The palette and the block registry read these instead of hardcoding which
+// kinds exist. COMPILED_BLOCK_KINDS is asserted against the running core at
+// startup (see RigWorkletNode) so a stale prebuilt WASM cannot silently
+// disagree with this file.
+import type { BlockKind } from '../engine/blocks/Block'
+
+/** Kinds whose DSP is in this build. The core refuses to construct any other. */
+export const COMPILED_BLOCK_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>([
+${list((e) => e.compiled)}
+])
+
+/** Kinds the block palette offers. Always a subset of COMPILED_BLOCK_KINDS. */
+export const PALETTE_BLOCK_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>([
+${list((e) => e.inPalette)}
+])
+`
+}
+
 async function main() {
   const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'))
   const files = new Map()
@@ -462,6 +626,18 @@ async function main() {
     // the drift this guard exists to catch (see validateAutomationSection).
     validateAutomationSection(schema)
     files.set(AUTOMATION_MAP_OUT_PATH, renderAutomationMap(schema.pluginAutomation))
+  }
+
+  if (selectedTargets.includes('effects')) {
+    const blocksConfig = JSON.parse(readFileSync(BLOCKS_CONFIG_PATH, 'utf8'))
+    validateBlocksConfig(blocksConfig)
+    files.set(BLOCKS_HEADER_OUT_PATH, renderBlocksHeader(blocksConfig))
+    files.set(BLOCKS_CMAKE_OUT_PATH, renderBlocksCmake(blocksConfig))
+    const blocksTs = await prettier.format(renderBlocksTs(blocksConfig), {
+      ...(await prettier.resolveConfig(BLOCKS_TS_OUT_PATH)),
+      filepath: BLOCKS_TS_OUT_PATH,
+    })
+    files.set(BLOCKS_TS_OUT_PATH, blocksTs)
   }
 
   if (CHECK_ONLY) {

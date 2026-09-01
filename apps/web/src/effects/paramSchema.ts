@@ -873,63 +873,27 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       visible: (v) => v.model === 'tape',
     },
     {
-      key: 'mix',
-      label: 'Mix',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.1,
-      formatValue: percent,
-    },
-    {
-      key: 'level',
-      label: 'Level',
-      control: 'knob',
-      min: 0,
-      max: 1.5,
-      step: 0.01,
-      defaultValue: 1,
-      formatValue: percent,
-    },
-  ],
-  'ping-pong-delay': [
-    {
-      key: 'time',
-      label: 'Time',
-      control: 'knob',
-      ...range('ping-pong-delay', 'time'),
-      step: 5,
-      defaultValue: 250,
-      formatValue: msRaw,
-    },
-    {
-      key: 'feedback',
-      label: 'Feedback',
-      control: 'knob',
-      ...range('ping-pong-delay', 'feedback'),
-      step: 0.01,
-      defaultValue: 0.5,
-      formatValue: percent,
-    },
-    {
-      key: 'tone',
-      label: 'Tone',
-      control: 'knob',
-      ...range('ping-pong-delay', 'tone'),
-      step: 50,
-      defaultValue: 6000,
-      formatValue: hz,
+      // stereo_mode is a select in the UI over a plain numeric core param
+      // (0 = Stereo, 1 = Ping-Pong), like model above. It is deliberately
+      // independent of model, so any character can ping-pong (#314).
+      key: 'stereo_mode',
+      label: 'Stereo',
+      control: 'select',
+      options: [
+        { value: 'stereo', label: 'Stereo' },
+        { value: 'ping-pong', label: 'Ping-Pong' },
+      ],
+      defaultValue: 'stereo',
     },
     {
       key: 'width',
       label: 'Width',
       control: 'knob',
-      min: 0,
-      max: 1,
+      ...range('delay', 'width'),
       step: 0.01,
       defaultValue: 1,
       formatValue: percent,
+      visible: (v) => v.stereo_mode === 'ping-pong',
     },
     {
       key: 'mix',
@@ -1146,29 +1110,20 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
   },
 ]
 
-const SLIM_SIZE_FIELD: KnobField = {
-  key: 'slim_size',
-  label: 'Slim',
-  control: 'knob',
-  ...range('amp', 'slim_size'),
-  step: 0.01,
-  defaultValue: 1,
-  formatValue: percent,
-  group: 'Quality',
-}
-
 /**
  * Schema entries for grid block kinds beyond the 10 effects. The 5 NAM
  * model kinds (amp/amp-cab/pedal/outboard/space) each get the same 4-band
  * tone stack - model loading itself isn't a continuous "param" and stays a
  * dedicated action in the inspector, but the tone controls go through the
  * same generic knob panel as everything else.
+ *
+ * Slim size is intentionally not exposed per-block in the inspector
+ * (see BlockInspector): slimmable models always run at full quality
+ * (max slim size = 1) and are not per-block adjustable here. The
+ * global quality in SettingsDialog remains the single place to trade
+ * fidelity for CPU if needed, but per-block Slim knobs are hidden.
  */
-const AMP_CONTROLS: ParamFieldSchema[] = [
-  ...AMP_TONE_STACK,
-  SLIM_SIZE_FIELD,
-  ...IN_OUT_LEVEL_FIELDS,
-]
+const AMP_CONTROLS: ParamFieldSchema[] = [...AMP_TONE_STACK, ...IN_OUT_LEVEL_FIELDS]
 
 export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>> = {
   amp: AMP_CONTROLS,

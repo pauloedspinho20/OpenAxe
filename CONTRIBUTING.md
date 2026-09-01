@@ -70,11 +70,50 @@ All checks must pass before merge — CI runs them on every push/PR to `main`/`d
 
 **VS Code:** Use `Terminal → Run Task` (`⇧⌘B`) — 46 tasks mirror every command above (`Setup: everything`, `Web: Dev server`, `C++: Configure/Build/Test`, `Desktop: …`, `VST: …`, drift/WASM tasks). See [`README.md`](./README.md#development) and [`.vscode/tasks.json`](./.vscode/tasks.json).
 
+## Changing how an effect sounds
+
+`packages/core`'s DSP is guarded by a golden-audio regression harness
+(`packages/core/tests/dsp_regression_test.cpp`, issue #315). It renders five
+deterministic stimuli through every compiled effect and compares a fingerprint
+of each output — levels, onsets, L/R correlation, and a ten-band spectral shape
+— against `packages/core/tests/golden/dsp_metrics.json`.
+
+If your change alters an effect's output, that test fails and names the effect,
+the stimulus, the metric, and both values:
+
+```
+delay/analog / impulse / band 1280Hz: golden 2.33 dB, got 3.01 dB
+delay/ping-pong / impulse / onsetR: golden 4800 samples, got -1 samples
+```
+
+**If the change was not intended**, that is a regression — fix it.
+
+**If it was intended**, re-bless the references and explain the diff:
+
+```bash
+cmake --build packages/core/build --target dsp_regression_test && ./packages/core/build/tests/dsp_regression_test --bless
+```
+
+Then commit the updated `dsp_metrics.json` **with the reason in your PR
+description**. The diff is the evidence the change was deliberate, so a bless
+with no explanation will be sent back. Adding a new effect or preset case also
+needs a bless run — a case with no reference fails rather than passing quietly.
+
+The fingerprint is metrics rather than raw audio on purpose: float results are
+not bit-identical across the platforms CI runs, and a metric diff is reviewable
+where a binary diff is not. See `packages/core/tests/dsp_metrics.h` for the
+reasoning, and `dsp_regression_test.cpp` for the tolerances — band tolerance is
+level-dependent, because a band 45 dB below the signal's own energy is a few
+least-significant bits and drifts between toolchains, while the bands that
+carry real energy stay tight.
+
 ## Branching
 
 - **All feature branches → `dev`** (including Dependabot — `target-branch: dev` in `.github/dependabot.yml`). Open every pull request with base `dev`.
 - Feature `→ dev` merges via **squash** (one commit per feature, Conventional Commits `feat:`/`fix:`/`feat!:`).
-- **`dev` → `main`** is the **only** PR that targets `main`, via **merge commit** (`--no-ff`) — not squash. This preserves ancestry so the next `dev→main` doesn't conflict on `added in both` files (e.g. `plugin.yml`, `CMakeLists.txt`) and keeps `git merge-base` advancing. See `README.md#Branching`. After human review on `dev`, open the release PR `dev→main`.
+- **`dev` → `main`** is the **only** PR that targets `main`. After human review on `dev`, open the release PR `dev→main`.
+- **`main` → `dev` back-merge is automatic** — the last step of `.github/workflows/auto-release.yml` merges the release commit straight back into `dev` as `chore(sync): merge main vX.Y.Z back into dev` (issue #304). Two things depend on it: `dev` keeps the released `VERSION`, so branches cut from it are not born stale; and the merge stays trivial because it runs while the two trees are identical apart from the bump. Skipping it is what left `dev` on `0.2.5` after `0.2.6` shipped and made the next `dev→main` PR (#305) conflict on five files.
+- Merge commits are currently **disabled** in the repo settings, so the `dev→main` promotion lands on `main` as a **squash** — a single commit whose content duplicates `dev`'s work but shares no ancestry with it. That is survivable only because of the automatic back-merge above, which re-establishes a usable `git merge-base` immediately. If you would rather have `dev→main` preserve ancestry directly (the older documented `--no-ff` flow), re-enable **Settings → General → Pull Requests → Allow merge commits** and merge the release PR that way; the back-merge step is correct either way.
 - Branch protection on `main`/`dev` requires PR + required CI checks; `deleteBranchOnMerge` enabled.
 - Use `.gitattributes` for generated/lockfile merge strategy.
 
@@ -99,13 +138,14 @@ The root `VERSION` file is the one source of truth — every `package.json`'s `"
 
 Releases are **fully automatic — no manual bump or tag**. Merging to `main` is the only trigger:
 
-1. Open PRs against `dev` (feature work), then `dev` → `main` (merge commit) when ready to release. Use
+1. Open PRs against `dev` (feature work), then `dev` → `main` when ready to release. Use
    Conventional Commits (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:` etc.) — they drive the bump.
 2. Merging the `dev` → `main` PR fires `.github/workflows/auto-release.yml`, which:
    - reads conventional commits since the last `v*` tag (`scripts/auto-bump.mjs`),
    - decides `patch` (`fix:`/`chore:`), `minor` (`feat:`), or `major` (`BREAKING CHANGE` / `!` — with `0.y.z` mapping breaking → minor until `1.0.0`),
    - bumps `VERSION`, runs `node scripts/sync-version.mjs`, prepends `CHANGELOG.md`,
-   - commits `chore(release): X.Y.Z` (with `[skip ci]` only if needed), creates annotated tag `vX.Y.Z` and pushes both.
+   - commits `chore(release): X.Y.Z` (with `[skip ci]` only if needed), creates annotated tag `vX.Y.Z` and pushes both,
+   - then merges `main` back into `dev` (`chore(sync): …`) so `dev` carries the released `VERSION` — see `#Branching`. A conflict there fails the job loudly rather than leaving the drift in place.
 3. Pushing the `v*` tag triggers `.github/workflows/release.yml` (desktop: 3-OS `dmg`/`zip`/`deb` via `desktop.yml` matrix) and `.github/workflows/plugin.yml` (plugin: 9 artifacts VST3/CLAP/AU × 3 OS) which publish installers as public assets on a GitHub Release for that tag — see [CHANGELOG.md](./CHANGELOG.md).
 
 Manual escape hatch: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force

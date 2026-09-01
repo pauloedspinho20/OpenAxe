@@ -27,6 +27,10 @@ export interface BlockCardProps {
    * whether dropping there is a valid move. Null once the drag ends.
    */
   onDragChange?: (info: BlockDragInfo | null) => void
+  /** Armed jack id for mobile two-tap connection (pulse). */
+  armedJackId?: string | null
+  /** Open the mobile action sheet (⋯) for this block. */
+  onOpenMenu?: () => void
 }
 
 export interface BlockDragInfo {
@@ -61,8 +65,10 @@ interface MaybeBypassable {
  * asset load/browse controls live in BlockInspector instead - click the card
  * to select it there, rather than crowding every detail into a small tile.
  */
-function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
+function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }: BlockCardProps) {
   const dragState = useRef<{ startX: number; startY: number } | null>(null)
+  const longPressTimer = useRef<number | null>(null)
+  const longPressFired = useRef(false)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
   const edges = useGraphStore((s) => s.edges)
@@ -80,6 +86,17 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
 
   const handleCardPointerDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest('[data-jack-id], button, input, select')) return
+    // Long-press for mobile action sheet (500ms) — also accessible via ⋯ button.
+    longPressFired.current = false
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true
+      if (onOpenMenu) onOpenMenu()
+      else useSelection.getState().select(instance.id)
+      dragState.current = null
+      setDragOffset(null)
+      onDragChange?.(null)
+    }, 500)
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
     } catch {
@@ -94,6 +111,15 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
 
   const handleCardPointerMove = (e: React.PointerEvent) => {
     if (!dragState.current) return
+    // Cancel long-press if pointer moved
+    if (longPressTimer.current) {
+      const dx = e.clientX - dragState.current.startX
+      const dy = e.clientY - dragState.current.startY
+      if (Math.hypot(dx, dy) > 8) {
+        window.clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    }
     const offset = {
       x: e.clientX - dragState.current.startX,
       y: e.clientY - dragState.current.startY,
@@ -119,6 +145,20 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
   }
 
   const handleCardPointerUp = (e: React.PointerEvent) => {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    if (longPressFired.current) {
+      longPressFired.current = false
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {}
+      dragState.current = null
+      setDragOffset(null)
+      onDragChange?.(null)
+      return
+    }
     if (!dragState.current) return
     try {
       e.currentTarget.releasePointerCapture(e.pointerId)
@@ -215,30 +255,34 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
     >
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          {hasBypass && (
-            <button
-              type="button"
-              className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
-              onClick={() => {
-                useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-                ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-              }}
-              title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-              aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-            >
-              ●
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={!hasBypass}
+            className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
+            onClick={() => {
+              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+            }}
+            title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+            aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+          >
+            ●
+          </button>
 
           {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
 
           <button
             type="button"
-            className={styles.removeBtn}
-            onClick={() => useGraphStore.getState().removeBlock(instance.id)}
-            aria-label={`Remove ${label}`}
+            className={styles.menuBtn}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (onOpenMenu) onOpenMenu()
+              else useSelection.getState().select(instance.id)
+            }}
+            aria-label={`Actions for ${label}`}
+            title="More actions — move, remove, disconnect"
           >
-            ×
+            ⋯
           </button>
         </div>
       </div>
@@ -253,15 +297,17 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
         <div className={styles.jacksIn}>
           {Array.from({ length: portCount(instance.kind) }, (_, port) => {
             const occupied = edges.some((e) => e.to.blockId === instance.id && e.to.port === port)
+            const jackId = jackElementId(instance.id, 'in', port)
+            const armed = armedJackId === jackId
             return (
               <span key={port} className={styles.jackWrap}>
                 <div
-                  className={styles.jack}
-                  data-jack-id={jackElementId(instance.id, 'in', port)}
+                  className={`${styles.jack} ${armed ? styles.jackArmed : ''}`}
+                  data-jack-id={jackId}
                   data-jack-side="in"
                   title={
                     occupied
-                      ? 'Drag to rewire this cable, or click the badge on it to disconnect'
+                      ? 'Tap to rewire (or drag) — or click badge to disconnect'
                       : instance.kind === 'mixer'
                         ? `Input ${port + 1}`
                         : 'Input'
@@ -280,20 +326,24 @@ function BlockCardImpl({ instance, rig, onDragChange }: BlockCardProps) {
           })}
         </div>
         <div className={styles.jacksOut}>
-          {Array.from({ length: outputPortCount(instance.kind) }, (_, port) => (
-            <span key={port} className={styles.jackWrap}>
-              <div
-                className={styles.jack}
-                data-jack-id={jackElementId(instance.id, 'out', port)}
-                data-jack-side="out"
-                title={
-                  instance.kind === 'splitter'
-                    ? `Output ${port + 1} - drag from here to connect, or drag any of its cables`
-                    : 'Output - drag from here to connect, or drag any of its cables'
-                }
-              />
-            </span>
-          ))}
+          {Array.from({ length: outputPortCount(instance.kind) }, (_, port) => {
+            const jackId = jackElementId(instance.id, 'out', port)
+            const armed = armedJackId === jackId
+            return (
+              <span key={port} className={styles.jackWrap}>
+                <div
+                  className={`${styles.jack} ${armed ? styles.jackArmed : ''}`}
+                  data-jack-id={jackId}
+                  data-jack-side="out"
+                  title={
+                    instance.kind === 'splitter'
+                      ? `Output ${port + 1} — tap then tap input, or drag`
+                      : 'Output — tap then tap input, or drag'
+                  }
+                />
+              </span>
+            )
+          })}
         </div>
       </div>
     </div>

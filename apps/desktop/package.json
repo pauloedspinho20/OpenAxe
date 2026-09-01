@@ -1,7 +1,7 @@
 {
   "name": "@openaxe/desktop",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.7",
   "description": "OpenAxe desktop shell — C++ + webview.h + JUCE audio_devices",
   "repository": {
     "type": "git",

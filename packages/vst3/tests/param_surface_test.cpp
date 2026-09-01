@@ -113,7 +113,63 @@ void TestDisplayAndSlimRouting() {
 
 } // namespace
 
+
+// ── E5: the block -> host-param resolution the editor needs ─────────
+// NotifyHostParamChangedFromUI has to turn (core block, param index) into a
+// host parameter id so a knob moved in the plugin's own UI records automation.
+// The function itself needs the iPlug SDK, but the resolution it performs is
+// exactly this, and it is where a mistake would be silent — a wrong id would
+// automate somebody else's parameter.
+static void TestBlockToHostParamResolution() {
+  auto* g = nam_studio_graph_create();
+  nam_studio_reset(g, 48000, 512);
+
+  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0, 1);
+  const int32_t rev = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 1, 3);
+  const int32_t unbound = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 2, 5);
+  nam_studio_bind_automation_slot(g, 1, amp);
+  nam_studio_bind_automation_slot(g, 2, rev);
+
+  // The scan NotifyHostParamChangedFromUI does: find the slot holding a block.
+  auto slot_for = [&](int32_t block) {
+    for (int slot = openaxe::automation::kFirstBlockSlot;
+         slot < openaxe::automation::kSlotCount; ++slot) {
+      if (nam_studio_automation_slot_block(g, slot) == block) return slot;
+    }
+    return -1;
+  };
+  CHECK(slot_for(amp) == 1);
+  CHECK(slot_for(rev) == 2);
+  // Only 15 slots exist, so an unbound block must resolve to nothing rather
+  // than silently landing on slot 0 (the master bus).
+  CHECK(slot_for(unbound) == -1);
+
+  // Ids must be in range and land back on the same slot/entry.
+  for (int entry = 0; entry < openaxe::automation::kParamsPerSlot; ++entry) {
+    const int id_amp = openaxe_vst3::params::SlotEntryToHostId(1, entry);
+    const int id_rev = openaxe_vst3::params::SlotEntryToHostId(2, entry);
+    CHECK(id_amp >= 0 && id_amp < openaxe_vst3::params::HostParamCount());
+    CHECK(id_rev >= 0 && id_rev < openaxe_vst3::params::HostParamCount());
+    // Two different blocks must never share a host id — that would mean moving
+    // one knob wrote automation for another block's parameter.
+    CHECK(id_amp != id_rev);
+    int s = -1, e = -1;
+    CHECK(openaxe_vst3::params::HostIdToSlotEntry(id_amp, s, e) && s == 1 && e == entry);
+    CHECK(openaxe_vst3::params::HostIdToSlotEntry(id_rev, s, e) && s == 2 && e == entry);
+  }
+
+  // Master ids must not collide with any block slot's.
+  for (int entry = 0; entry < openaxe::automation::kParamsPerSlot; ++entry) {
+    CHECK(openaxe_vst3::params::SlotEntryToHostId(1, entry) >=
+          openaxe::automation::kMasterParamCount);
+  }
+
+  nam_studio_graph_destroy(g);
+  std::printf("  block -> host param resolution: ok\n");
+}
+
 int main() {
+  TestBlockToHostParamResolution();
   TestHostParamCount();
   TestHostIdLayout();
   TestNormalizedHelpers();

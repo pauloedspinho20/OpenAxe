@@ -123,14 +123,11 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     }
   })
 
-  it("the amp's slim_size knob matches the core", () => {
+  it("the amp's slim_size param is intentionally hidden in the inspector (always max)", () => {
     const core = coreParamsFor('amp').get('slim_size')
     expect(core).toBeDefined()
     const web = (BLOCK_PARAM_SCHEMAS.amp ?? []).find((f) => f.key === 'slim_size')
-    expect(web?.control).toBe('knob')
-    if (web?.control === 'knob') {
-      expect({ min: web.min, max: web.max }).toEqual({ min: core!.min, max: core!.max })
-    }
+    expect(web).toBeUndefined()
   })
 
   it('covers every effect kind the core implements', () => {

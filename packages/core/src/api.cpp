@@ -6,9 +6,11 @@
 #include <utility>
 #include <vector>
 
+#include "openaxe/dsp/fingerprint.h"
 #include "openaxe/dsp/note_utils.h"
 #include "openaxe/dsp/pitch_detect.h"
 #include "openaxe/engine.h"
+#include "openaxe/generated/enabled_blocks.h"
 #include "openaxe/midi.h"
 #include "serialization/rig_state.h"
 
@@ -35,8 +37,6 @@ openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
       return BlockKind::kTremolo;
     case NAM_STUDIO_BLOCK_DELAY:
       return BlockKind::kDelay;
-    case NAM_STUDIO_BLOCK_PING_PONG_DELAY:
-      return BlockKind::kPingPongDelay;
     case NAM_STUDIO_BLOCK_REVERB:
       return BlockKind::kReverb;
     case NAM_STUDIO_BLOCK_AMP:
@@ -115,6 +115,9 @@ struct NamStudioGraph {
   // The missing-asset list (#120) from the most recent load_state, kept for
   // the query ABI below. Control-thread data like everything else here.
   std::vector<std::string> missing_assets;
+  // Likewise the unsupported-kind list (#313) - kinds the document named that
+  // this build cannot place.
+  std::vector<std::string> unsupported_blocks;
 };
 
 extern "C" {
@@ -130,7 +133,9 @@ void nam_studio_graph_destroy(NamStudioGraph* graph) { delete graph; }
 // audio around them - which is precisely why they are grouped and labelled
 // here rather than mixed in with the lock-free calls further down.
 //
-// Returns the new block's id, which is never reused.
+// Returns the new block's id, which is never reused - or -1 if this build has
+// no DSP for `kind` (effects.config.json's compiled:false; ask
+// nam_studio_block_kind_compiled first, or just don't offer the kind).
 int32_t nam_studio_add_block(NamStudioGraph* graph, NamStudioBlockKind kind, int32_t row, int32_t col) {
   return graph->engine.AddBlock(ToBlockKind(kind), row, col);
 }
@@ -615,6 +620,7 @@ NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char
   // Publish the missing-asset list (#120) for the query ABI below - replaced
   // wholesale on every load, hard failures included (they restore nothing).
   graph->missing_assets = std::move(outcome.missing_assets);
+  graph->unsupported_blocks = std::move(outcome.unsupported_blocks);
   switch (outcome.error) {
     case openaxe::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
     case openaxe::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
@@ -646,6 +652,16 @@ int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
   return 1;
 }
 
+int32_t nam_studio_compute_fingerprint(const char* json, float* out_gain_db,
+                                       float* out_brightness) {
+  if (!json || !out_gain_db || !out_brightness) return 0;
+  auto fp = openaxe::dsp::ComputeFingerprint(json);
+  if (!fp) return 0;
+  *out_gain_db = fp->gain_db;
+  *out_brightness = fp->brightness;
+  return 1;
+}
+
 // ── Missing-asset queries (issue #120) ──────────────────────────────────
 
 int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {
@@ -655,6 +671,78 @@ int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {
 const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index) {
   if (index < 0 || static_cast<size_t>(index) >= graph->missing_assets.size()) return nullptr;
   return graph->missing_assets[static_cast<size_t>(index)].c_str();
+}
+
+int32_t nam_studio_state_unsupported_block_count(NamStudioGraph* graph) {
+  return static_cast<int32_t>(graph->unsupported_blocks.size());
+}
+
+const char* nam_studio_state_unsupported_block(NamStudioGraph* graph, int32_t index) {
+  if (index < 0 || static_cast<size_t>(index) >= graph->unsupported_blocks.size()) return nullptr;
+  return graph->unsupported_blocks[static_cast<size_t>(index)].c_str();
+}
+
+// Graph-free: it answers a property of the build, not of a rig, so a front end
+// can ask before it has created one.
+int32_t nam_studio_block_kind_compiled(NamStudioBlockKind kind) {
+  if (kind < 0 || kind > NAM_STUDIO_BLOCK_RETURN_2) return 0;
+  return openaxe::blocks::IsCompiled(ToBlockKind(kind)) ? 1 : 0;
+}
+
+
+namespace {
+// The canonical wire names. Kept adjacent to NamStudioBlockKind so a new kind
+// is one edit, not one per front end (issue #300 J3).
+struct BlockKindName {
+  const char* name;
+  NamStudioBlockKind kind;
+};
+constexpr BlockKindName kBlockKindNames[] = {
+    {"noise-gate", NAM_STUDIO_BLOCK_NOISE_GATE},
+    {"compressor", NAM_STUDIO_BLOCK_COMPRESSOR},
+    {"eq", NAM_STUDIO_BLOCK_EQ},
+    {"chorus", NAM_STUDIO_BLOCK_CHORUS},
+    {"flanger", NAM_STUDIO_BLOCK_FLANGER},
+    {"phaser", NAM_STUDIO_BLOCK_PHASER},
+    {"tremolo", NAM_STUDIO_BLOCK_TREMOLO},
+    {"ring-mod", NAM_STUDIO_BLOCK_RING_MOD},
+    {"filter", NAM_STUDIO_BLOCK_FILTER},
+    {"pitch-shifter", NAM_STUDIO_BLOCK_PITCH_SHIFTER},
+    {"granular-delay", NAM_STUDIO_BLOCK_GRANULAR_DELAY},
+    {"rotary", NAM_STUDIO_BLOCK_ROTARY},
+    {"delay", NAM_STUDIO_BLOCK_DELAY},
+    {"reverb", NAM_STUDIO_BLOCK_REVERB},
+    {"amp", NAM_STUDIO_BLOCK_AMP},
+    {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},
+    {"pedal", NAM_STUDIO_BLOCK_PEDAL},
+    {"outboard", NAM_STUDIO_BLOCK_OUTBOARD},
+    {"space", NAM_STUDIO_BLOCK_SPACE},
+    {"cab", NAM_STUDIO_BLOCK_CAB},
+    {"mixer", NAM_STUDIO_BLOCK_MIXER},
+    {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
+    {"send-1", NAM_STUDIO_BLOCK_SEND_1},
+    {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
+    {"send-2", NAM_STUDIO_BLOCK_SEND_2},
+    {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
+};
+}  // namespace
+
+const char* nam_studio_block_kind_name(NamStudioBlockKind kind) {
+  for (const auto& e : kBlockKindNames) {
+    if (e.kind == kind) return e.name;
+  }
+  return nullptr;
+}
+
+int32_t nam_studio_block_kind_from_name(const char* name, NamStudioBlockKind* out_kind) {
+  if (!name || !out_kind) return 1;
+  for (const auto& e : kBlockKindNames) {
+    if (std::strcmp(e.name, name) == 0) {
+      *out_kind = e.kind;
+      return 0;
+    }
+  }
+  return 1;
 }
 
 }  // extern "C"

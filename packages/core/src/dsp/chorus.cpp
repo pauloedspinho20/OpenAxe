@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <vector>
+
+#include "internal/variable_delay.h"
 
 namespace openaxe::dsp {
 
@@ -26,38 +27,17 @@ const Chorus::ParamInfo kParamInfo[kParamCount] = {
 // rather than two identical mono voices.
 constexpr float kStereoPhaseOffset = 1.57079632679f;  // π/2
 
-// One channel's modulated delay line: a circular buffer, its write cursor, and
-// the LFO phase carried across Process() calls so the sweep stays continuous
-// across block boundaries.
+// The longest tap the params can ask for: delay's maximum (30ms) plus depth's
+// full excursion (10ms), per packages/core/param_schema.json. The line is
+// sized for this once in Reset rather than for the current knob position, so
+// turning the Delay knob no longer reallocates and clears the buffer.
+constexpr float kMaxDelayMs = 40.0f;
+
+// One channel's modulated delay line plus the LFO phase, carried across
+// Process() calls so the sweep stays continuous over block boundaries.
 struct Channel {
-  std::vector<float> buffer;
-  int write_pos = 0;
+  internal::VariableDelay line;
   float phase = 0.0f;
-
-  // (Re)allocate the buffer for the longest delay the current params can ask
-  // for. +1 sample of slack so the fractional read below always has a second
-  // sample to interpolate towards.
-  void Prepare(float sample_rate, float max_delay_ms) {
-    const int size = static_cast<int>(std::ceil(max_delay_ms * sample_rate / 1000.0f)) + 1;
-    buffer.assign(static_cast<size_t>(size), 0.0f);
-    write_pos = 0;
-  }
-
-  // Read `delay_ms` in the past with linear interpolation between the two
-  // neighbouring samples. Fractional delay is the whole point: an integer-only
-  // tap would quantise the LFO sweep into audible steps ("zipper" artefacts).
-  float ReadDelay(float delay_ms, float sample_rate) const {
-    const float delay_samples = delay_ms * sample_rate / 1000.0f;
-    const float read_pos = static_cast<float>(write_pos) - delay_samples;
-    const int size = static_cast<int>(buffer.size());
-    int idx0 = static_cast<int>(std::floor(read_pos));
-    const float frac = read_pos - static_cast<float>(idx0);
-    while (idx0 < 0) idx0 += size;
-    const int idx1 = (idx0 + 1) % size;
-    idx0 %= size;
-    return buffer[static_cast<size_t>(idx0)] * (1.0f - frac) +
-           buffer[static_cast<size_t>(idx1)] * frac;
-  }
 };
 
 }  // namespace
@@ -70,17 +50,16 @@ struct Chorus::Impl {
   float feedback = 0.15f;
   float sample_rate = 48000.0f;
 
-  // Size both delay lines for the worst case the current settings allow -
-  // base delay plus the full modulation excursion, plus a sample of headroom.
-  // Called whenever the sample rate or the base delay changes.
+  // Size both delay lines for the largest tap the param schema allows. Only
+  // the sample rate can change that, so this runs from the constructor and
+  // Reset() and nowhere else.
   void ApplySampleRate() {
-    const float max_delay = delay + depth + 1.0f;
-    for (auto& ch : channels) ch.Prepare(sample_rate, max_delay);
+    for (auto& ch : channels) ch.line.Prepare(sample_rate, kMaxDelayMs);
   }
 };
 
-// The delay lines are allocated up front (and on every Reset/base-delay
-// change) so Process() never allocates on the audio thread.
+// The delay lines are allocated up front (and on every Reset) so Process()
+// never allocates on the audio thread.
 Chorus::Chorus() : impl_(std::make_unique<Impl>()) { impl_->ApplySampleRate(); }
 
 Chorus::~Chorus() = default;
@@ -115,9 +94,8 @@ void Chorus::Process(const float* const* input, float* const* output, int num_fr
       const float in = input[ch][i];
       const float lfo = std::sin(lfo_phase + static_cast<float>(i) * phase_step * 6.28318530718f);
       const float delay_ms = base_delay + mod_depth * lfo;
-      const float wet = c.ReadDelay(delay_ms, sr);
-      c.buffer[static_cast<size_t>(c.write_pos)] = in + wet * fb;
-      c.write_pos = (c.write_pos + 1) % static_cast<int>(c.buffer.size());
+      const float wet = c.line.Read(delay_ms, sr);
+      c.line.Write(in + wet * fb);
       output[ch][i] = wet;
     }
     c.phase = std::fmod(c.phase + phase_step * static_cast<float>(num_frames) * 6.28318530718f,
@@ -153,12 +131,10 @@ float Chorus::GetParam(int index) const {
   }
 }
 
-// Store one param. Real-time safe except for the base delay, which resizes
-// the delay lines (ApplySampleRate) and so must not be called from the audio
-// thread - the engine routes param writes through its own atomic mirror and
-// applies them between blocks for exactly this reason. Only reallocates when
-// the value actually changes to avoid clearing the delay line every block
-// (which would silence the chorus, see engine_test failure).
+// Store one param. All real-time safe: the delay lines are sized for
+// kMaxDelayMs up front, so moving the Delay knob only moves the read tap
+// instead of reallocating (which used to clear the line and silence the
+// chorus mid-note).
 void Chorus::SetParam(int index, float value) {
   switch (index) {
     case kRateParam:
@@ -168,10 +144,7 @@ void Chorus::SetParam(int index, float value) {
       impl_->depth = value;
       break;
     case kDelayParam:
-      if (impl_->delay != value) {
-        impl_->delay = value;
-        impl_->ApplySampleRate();
-      }
+      impl_->delay = value;
       break;
     case kFeedbackParam:
       impl_->feedback = value;

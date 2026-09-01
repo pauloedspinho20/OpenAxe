@@ -1,28 +1,27 @@
 /**
- * IndexedDB persistence for the scene bank - a single row (see types.ts for
+ * Persistence for the scene bank - a single row (see types.ts for
  * why one blob rather than 64 rows), mirroring presetStore.ts's thin-CRUD
  * style. Shares the app's one database via storage/db.ts.
  */
-import { STORE_SCENES, withStore } from '../storage/db'
+import { STORE_SCENES } from '../storage/db'
+import { kvDelete, kvGet, kvPut } from '../storage/kv'
 import { PRESET_SLOT_COUNT } from '../presets/presetBank'
 import { SCENE_COUNT, SLOTS_PER_SCENE, type Scene, type SceneBank } from './types'
 
 const SCENE_BANK_ID = 'default'
 
 export async function saveSceneBank(bank: SceneBank): Promise<void> {
-  await withStore<IDBValidKey>(STORE_SCENES, 'readwrite', (store) => store.put(bank))
+  await kvPut(STORE_SCENES, bank)
 }
 
 /** Read the scene bank, normalizing whatever's stored - null if nothing's been saved yet. */
 export async function loadSceneBank(): Promise<SceneBank | null> {
-  const result = await withStore<SceneBank | undefined>(STORE_SCENES, 'readonly', (store) =>
-    store.get(SCENE_BANK_ID),
-  )
+  const result = await kvGet<SceneBank>(STORE_SCENES, SCENE_BANK_ID)
   return result ? normalizeBank(result) : null
 }
 
 export async function clearSceneBank(): Promise<void> {
-  await withStore<undefined>(STORE_SCENES, 'readwrite', (store) => store.delete(SCENE_BANK_ID))
+  await kvDelete(STORE_SCENES, SCENE_BANK_ID)
 }
 
 /** A fresh bank: 64 unnamed scenes, every slot empty. */

@@ -19,7 +19,6 @@ const blockKinds: BlockKind[] = [
   'phaser',
   'tremolo',
   'delay',
-  'ping-pong-delay',
   'reverb',
   'ring-mod',
   'filter',

@@ -70,6 +70,10 @@ export class GraphRig implements GraphRigControls, PresetRig {
     return rig
   }
 
+  get audioContext(): AudioContext {
+    return this.context
+  }
+
   /** The rig's single output - the worklet node carrying the core graph's OUT rail. Connect this to your output chain / AudioContext.destination. */
   get outputNode(): AudioNode {
     return this.worklet.node

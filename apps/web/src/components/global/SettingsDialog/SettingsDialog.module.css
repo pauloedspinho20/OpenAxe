@@ -13,6 +13,7 @@
 
 .sectionLabel {
   color: var(--ink-1);
+  font-size: 14px;
 }
 
 .sectionHint {

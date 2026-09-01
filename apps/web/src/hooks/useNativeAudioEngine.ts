@@ -7,7 +7,12 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import { getOpenAxe, type OpenAxeBridge } from '../native/openaxe'
+import {
+  getOpenAxe,
+  getShellKind,
+  shellOwnsAudioDevice,
+  type OpenAxeBridge,
+} from '../native/openaxe'
 import { getDISample } from '../diSamples'
 
 export interface NativeAudioEngineState {
@@ -146,6 +151,8 @@ export function useNativeAudioEngine() {
   // meter and tuner read post-trim on both paths. Runs on power-on too (the
   // status transition), so the knob's current value is never left behind.
   const inputGain = useIOStore((s) => s.inputGain)
+  const inputDeviceId = useIOStore((s) => s.inputDeviceId)
+  const inputChannel = useIOStore((s) => s.inputChannel)
   useEffect(() => {
     if (state.status !== 'ready') return
     const bridge = bridgeRef.current
@@ -155,8 +162,6 @@ export function useNativeAudioEngine() {
 
   // ── DI audition (loops through the graph, muting live mic) ───────────────
   const diPlayingRef = useRef(false)
-  const inputDeviceId = useIOStore((s) => s.inputDeviceId)
-  const inputChannel = useIOStore((s) => s.inputChannel)
 
   const stopDI = useCallback(() => {
     const bridge = bridgeRef.current
@@ -215,6 +220,18 @@ export function useNativeAudioEngine() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputDeviceId, inputChannel])
 
+  // Push input-channel changes down to the plugin. Only in a plugin: the
+  // desktop shell opens the device itself, where channel selection belongs at
+  // the device layer rather than in the graph feed, and it offers no such
+  // control yet (see scripts/check-bridge-methods.mjs).
+  useEffect(() => {
+    if (state.status !== 'ready') return
+    if (getShellKind() !== 'plugin') return
+    const bridge = bridgeRef.current
+    if (!bridge) return
+    void bridge.setInputChannel({ mode: inputChannel }).catch(() => {})
+  }, [inputChannel, state.status])
+
   // While the engine is running, keep the analysers fed from the latest native
   // taps and drive block meters from the core's real peaks. No-op in no-sound
   // mode - there's no running stream to poll.
@@ -269,17 +286,44 @@ export function useNativeAudioEngine() {
     (bridge: OpenAxeBridge, inputDeviceId: number, outputDeviceId: number) =>
       runExclusive(async () => {
         const io = useIOStore.getState()
-        const opened = await bridge.open({
-          inputDeviceId,
-          outputDeviceId,
-          sampleRate: SAMPLE_RATE,
-          bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
-        })
-        if (!opened.ok) throw new Error(opened.error ?? 'failed to open audio device')
-        const started = await bridge.start()
-        if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
+        // In a plugin the DAW already has the device open at its own sample
+        // rate and buffer size; there is nothing for us to open or start, and
+        // the device ids are meaningless. We still need the real rate for the
+        // analyser/tuner shims, so read it from the host's config
+        // (issue #300 E1/E2).
+        const hostOwnsDevice = !shellOwnsAudioDevice()
+        const opened = hostOwnsDevice
+          ? await bridge.getConfig()
+          : await bridge.open({
+              inputDeviceId,
+              outputDeviceId,
+              sampleRate: SAMPLE_RATE,
+              bufferFrames: LATENCY_BUFFER[io.latencyHint] ?? 128,
+            })
+        if (!opened.ok) {
+          const reason = 'error' in opened ? opened.error : undefined
+          throw new Error(reason ?? 'failed to open audio device')
+        }
+        if (!hostOwnsDevice) {
+          const started = await bridge.start()
+          if (!started.ok) throw new Error(started.error ?? 'failed to start audio')
+        }
 
-        const actualRate = typeof opened.sampleRate === 'number' ? opened.sampleRate : SAMPLE_RATE
+        // Adopt the plugin's own input routing rather than pushing the store's
+        // at it. The choice describes how this instance's track is wired — it
+        // rides the host's state chunk, and two instances in one project can
+        // legitimately differ — so the plugin is the authority here, exactly
+        // as it is for the rig itself.
+        if ('inputChannel' in opened && opened.inputChannel) {
+          useIOStore.setState({ inputChannel: opened.inputChannel })
+        }
+
+        // SAMPLE_RATE is only a last-resort fallback: the host's real rate
+        // wins wherever the bridge reports one.
+        const actualRate =
+          typeof opened.sampleRate === 'number' && opened.sampleRate > 0
+            ? opened.sampleRate
+            : SAMPLE_RATE
         const context = new NativeAudioContext(actualRate)
         const analyser = new NativeAnalyser({
           fftSize: 256,
@@ -313,6 +357,22 @@ export function useNativeAudioEngine() {
         const rig = new NativeGraphRig(bridge)
         rigRef.current = rig
         bridgeRef.current = bridge
+
+        // In a plugin the C++ graph is the source of truth and already holds a
+        // rig: the DAW restored its chunk before the editor opened, and closing
+        // the editor destroys this hook while the graph keeps processing. Adopt
+        // what is there and push it into the store, rather than letting
+        // bindGraphRig reconcile the store's (browser-storage) idea of the rig
+        // onto the core and duplicate or clobber it (issue #300 D1/D2).
+        if (!shellOwnsAudioDevice()) {
+          const adopted = await rig.adoptFromCore()
+          if (adopted && adopted.blocks.length > 0) {
+            useGraphStore
+              .getState()
+              .loadGraph(adopted.blocks, adopted.edges, adopted.masterLevel, adopted.masterMuted)
+          }
+        }
+
         unbindRef.current = bindGraphRig(useGraphStore, rig)
 
         if (opts?.noSound) {

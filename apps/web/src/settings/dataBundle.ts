@@ -2,28 +2,33 @@
  * Whole-app backup: bundles every locally-persisted store (presets, scene
  * bank, MIDI config, Tone3000 library metadata, cached model/IR blobs) plus
  * the small localStorage-backed preferences into one downloadable JSON file,
- * and restores it. Deliberately written against storage/db.ts's low-level
- * `withStore`/`clearStore` rather than each module's own store-syncing
- * wrappers (e.g. Tone3000Library.importAsset) - those exist to keep a live
- * zustand cache in sync with IndexedDB, but a bundle import is always
- * followed by a full page reload (see SettingsDialog), so writing straight
- * to IndexedDB and letting the next boot re-hydrate everything is simpler
- * and avoids a bundle import triggering a network re-download.
+ * and restores it. Deliberately written against storage/kv.ts's low-level
+ * put/clear rather than each module's own store-syncing wrappers (e.g.
+ * Tone3000Library.importAsset) - those exist to keep a live zustand cache in
+ * sync with the store, but a bundle import is always followed by a full page
+ * reload (see SettingsDialog), so writing straight through and letting the
+ * next boot re-hydrate everything is simpler and avoids a bundle import
+ * triggering a network re-download.
  *
  * The Tone3000 OAuth refresh token is deliberately excluded - it's a live
  * credential, not app data.
  */
 import {
-  STORE_ASSETS,
   STORE_LIBRARY,
   STORE_MIDI,
   STORE_PRESETS,
   STORE_PRESET_BANK,
   STORE_SCENES,
-  clearStore,
-  withStore,
 } from '../storage/db'
-import { getCachedAsset, putCachedAsset } from '../engine/assetCache'
+import {
+  clearCachedAssets,
+  getCachedAsset,
+  getCachedAssetStats,
+  listCachedAssetIds,
+  putCachedAsset,
+} from '../engine/assetCache'
+import { base64ToBlob, blobToBase64 } from '../storage/base64'
+import { kvClear, kvPut } from '../storage/kv'
 import { listPresets, savePreset } from '../presets/presetStore'
 import type { Preset } from '../presets/types'
 import { loadPresetBank, savePresetBank } from '../presets/presetBankStore'
@@ -64,23 +69,6 @@ export interface DataBundle {
   namQuality: number
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const bytes = new Uint8Array(await blob.arrayBuffer())
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
-  }
-  return btoa(binary)
-}
-
-function base64ToBlob(base64: string, type: string): Blob {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return new Blob([bytes], { type })
-}
-
 /** Gathers every store into one in-memory bundle, ready to serialize. */
 export async function buildDataBundle(): Promise<DataBundle> {
   const [presets, sceneBank, presetBank, midiConfig, library, assetIds] = await Promise.all([
@@ -89,12 +77,11 @@ export async function buildDataBundle(): Promise<DataBundle> {
     loadPresetBank(),
     loadMidiConfig(),
     Tone3000Library.list(),
-    withStore<IDBValidKey[]>(STORE_ASSETS, 'readonly', (store) => store.getAllKeys()),
+    listCachedAssetIds(),
   ])
 
   const assets: DataBundleAsset[] = []
-  for (const key of assetIds) {
-    const id = String(key)
+  for (const id of assetIds) {
     const blob = await getCachedAsset(id)
     if (!blob) continue
     assets.push({
@@ -181,12 +168,12 @@ export async function readDataBundleFromFile(file: File): Promise<DataBundle> {
  * boot; there's no live re-hydration path for an external bulk write).
  */
 export async function importDataBundle(bundle: DataBundle): Promise<void> {
-  await clearStore(STORE_ASSETS)
-  await clearStore(STORE_PRESETS)
-  await clearStore(STORE_LIBRARY)
-  await clearStore(STORE_SCENES)
-  await clearStore(STORE_MIDI)
-  await clearStore(STORE_PRESET_BANK)
+  await clearCachedAssets()
+  await kvClear(STORE_PRESETS)
+  await kvClear(STORE_LIBRARY)
+  await kvClear(STORE_SCENES)
+  await kvClear(STORE_MIDI)
+  await kvClear(STORE_PRESET_BANK)
 
   for (const asset of bundle.assets) {
     await putCachedAsset(asset.id, base64ToBlob(asset.base64, asset.type))
@@ -196,7 +183,7 @@ export async function importDataBundle(bundle: DataBundle): Promise<void> {
   if (bundle.presetBank) await savePresetBank(bundle.presetBank)
   await saveMidiConfig(bundle.midiConfig)
   for (const entry of bundle.library) {
-    await withStore<IDBValidKey>(STORE_LIBRARY, 'readwrite', (store) => store.put(entry))
+    await kvPut(STORE_LIBRARY, entry)
   }
 
   if (bundle.theme === 'dark' || bundle.theme === 'light') {
@@ -217,13 +204,12 @@ export async function importDataBundle(bundle: DataBundle): Promise<void> {
 
 /** Total cached model/IR blobs, for the Settings dialog's cache section. */
 export async function getAssetCacheStats(): Promise<{ count: number; bytes: number }> {
-  const blobs = await withStore<Blob[]>(STORE_ASSETS, 'readonly', (store) => store.getAll())
-  return { count: blobs.length, bytes: blobs.reduce((sum, blob) => sum + blob.size, 0) }
+  return getCachedAssetStats()
 }
 
 /** Clears only the downloaded model/IR cache - library metadata/presets/scenes are untouched. */
 export async function clearAssetCache(): Promise<void> {
-  await clearStore(STORE_ASSETS)
+  await clearCachedAssets()
 }
 
 const REFRESH_TOKEN_KEY = 't3k_refresh_token'
@@ -232,12 +218,12 @@ const SETTINGS_STORAGE_KEY = 'nam-web-studio-settings'
 
 /** Wipes every store and every localStorage key this app owns - a full factory reset. */
 export async function deleteAllData(options: { signOutTone3000: boolean }): Promise<void> {
-  await clearStore(STORE_ASSETS)
-  await clearStore(STORE_PRESETS)
-  await clearStore(STORE_LIBRARY)
-  await clearStore(STORE_SCENES)
-  await clearStore(STORE_MIDI)
-  await clearStore(STORE_PRESET_BANK)
+  await clearCachedAssets()
+  await kvClear(STORE_PRESETS)
+  await kvClear(STORE_LIBRARY)
+  await kvClear(STORE_SCENES)
+  await kvClear(STORE_MIDI)
+  await kvClear(STORE_PRESET_BANK)
 
   localStorage.removeItem(THEME_KEY)
   localStorage.removeItem(ONBOARDING_KEY)

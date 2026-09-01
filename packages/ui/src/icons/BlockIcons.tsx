@@ -29,7 +29,6 @@ export type BlockKind =
   | 'phaser'
   | 'tremolo'
   | 'delay'
-  | 'ping-pong-delay'
   | 'reverb'
   | 'ring-mod'
   | 'filter'
@@ -181,13 +180,6 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
       <Dot cx="7.5" cy="12" r={0.9} />
       <rect x="13" y="10" width="7" height="4" rx="0.8" />
       <Dot cx="16.5" cy="12" r={0.7} />
-    </>
-  ),
-  'ping-pong-delay': (
-    <>
-      <path d="M4 5v14M20 5v14" />
-      <path d="M8 12h4M12 12h4" />
-      <path d="M11 9l3 3-3 3" />
     </>
   ),
   reverb: (

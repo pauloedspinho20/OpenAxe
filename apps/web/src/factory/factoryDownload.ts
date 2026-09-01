@@ -44,7 +44,12 @@ interface ResolvedModel extends ResolvedPackModel {
 
 async function resolvePackModel(ref: FactoryPackModel): Promise<ResolvedModel> {
   const tone = await apiGetTone(ref.toneId)
-  const page = await apiListModels(ref.toneId, { pageSize: 50 })
+  // Tone3000's /models endpoint defaults to A1+Custom when `architecture` is omitted (excludes A2).
+  // Factory tones are curated as A2, so request A2 explicitly and fall back to legacy for older IR/Custom packs.
+  let page = await apiListModels(ref.toneId, { pageSize: 50, architecture: 2 })
+  if (page.data.length === 0) {
+    page = await apiListModels(ref.toneId, { pageSize: 50 })
+  }
   const model = ref.modelId ? page.data.find((m) => m.id === ref.modelId) : page.data[0]
   if (!model) throw new Error(`No model file found for tone "${tone.title}" (id ${ref.toneId})`)
   return {

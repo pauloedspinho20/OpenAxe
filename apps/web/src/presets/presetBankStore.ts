@@ -1,29 +1,26 @@
 /**
- * IndexedDB persistence for the preset bank - a single row (see presetBank.ts
+ * Persistence for the preset bank - a single row (see presetBank.ts
  * for why one blob rather than 512 rows), mirroring sceneBankStore.ts's
  * thin-CRUD style. Shares the app's one database via storage/db.ts.
  */
-import { STORE_PRESET_BANK, withStore } from '../storage/db'
+import { STORE_PRESET_BANK } from '../storage/db'
+import { kvDelete, kvGet, kvPut } from '../storage/kv'
 import { PRESET_SLOT_COUNT, type PresetBank } from './presetBank'
 
 const PRESET_BANK_ID = 'default'
 
 export async function savePresetBank(bank: PresetBank): Promise<void> {
-  await withStore<IDBValidKey>(STORE_PRESET_BANK, 'readwrite', (store) => store.put(bank))
+  await kvPut(STORE_PRESET_BANK, bank)
 }
 
 /** Read the preset bank, normalizing whatever's stored - null if nothing's been saved yet. */
 export async function loadPresetBank(): Promise<PresetBank | null> {
-  const result = await withStore<PresetBank | undefined>(STORE_PRESET_BANK, 'readonly', (store) =>
-    store.get(PRESET_BANK_ID),
-  )
+  const result = await kvGet<PresetBank>(STORE_PRESET_BANK, PRESET_BANK_ID)
   return result ? normalizePresetBank(result) : null
 }
 
 export async function clearPresetBank(): Promise<void> {
-  await withStore<undefined>(STORE_PRESET_BANK, 'readwrite', (store) =>
-    store.delete(PRESET_BANK_ID),
-  )
+  await kvDelete(STORE_PRESET_BANK, PRESET_BANK_ID)
 }
 
 /** A fresh bank: every one of the 512 slots empty. */
