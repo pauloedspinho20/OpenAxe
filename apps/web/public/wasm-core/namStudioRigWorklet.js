@@ -46,11 +46,13 @@ export const FRAMES = 128
 const IN_RAIL = -1
 const OUT_RAIL = -2
 
-// packages/core/include/nam_studio/api.h NamStudioBlockKind / ReverbControl /
+// packages/core/include/openaxe/api.h OpenAxeBlockKind / ReverbControl /
 // ReverbAlgorithm. Reverb blocks are driven through the core's ReverbControl
 // mapping (the UI's roomSize/damping/width/... are abstractions, not symbols),
 // mirroring the desktop bridge's ReverbControlFor.
-const REVERB_KIND = 9
+// Must stay in sync with KIND_TO_CORE['reverb'] in RigWorkletNode.ts (issue #330
+// deleted kPingPongDelay so reverb moved 9 -> 8).
+const REVERB_KIND = 8
 const REVERB_CONTROL = {
   roomSize: 0,
   damping: 1,
