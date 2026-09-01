@@ -254,7 +254,7 @@ async function migrateIndexedDB(): Promise<string> {
 
     let verified = true
     for (const store of STORES) {
-      const kp = keyPaths[store]
+      const kp = keyPaths[store] ?? null
       const { oldCount, newCount } = await copyStore(oldDb, newDb, store, kp)
       if (oldCount !== newCount) {
         log(`store ${store} count mismatch after copy: old ${oldCount}, new ${newCount}`)

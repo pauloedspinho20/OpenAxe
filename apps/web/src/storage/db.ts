@@ -1,3 +1,5 @@
+import { ensureMigrated } from './migration'
+
 /**
  * Single shared IndexedDB database for everything the app persists locally
  * (asset blobs, presets). Centralized here so adding a store bumps one
@@ -9,9 +11,6 @@
 // Migrated in #311 / #326: `nam-web-studio` -> `openaxe` with a one-time
 // copy-then-delete migration (see ./migration.ts). New installs use `openaxe`
 // directly; existing users are migrated on first launch after the update.
-const NEW_DB_NAME = 'openaxe'
-const OLD_DB_NAME = 'nam-web-studio'
-const DB_NAME = NEW_DB_NAME
 /**
  * v4: the preset schema changed from a fixed dual-chain shape (chainA/
  * chainB) to a generic block/edge graph (see presets/types.ts) - old rows
@@ -52,8 +51,6 @@ export const STORE_KEY_PATHS: Record<string, string | null> = {
   [STORE_MIDI]: 'id',
   [STORE_PRESET_BANK]: 'id',
 }
-
-import { ensureMigrated } from './migration'
 
 async function openDb(): Promise<IDBDatabase> {
   const effectiveName = await ensureMigrated()

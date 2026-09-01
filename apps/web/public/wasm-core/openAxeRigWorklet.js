@@ -286,8 +286,7 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
               )
             } else {
               const index = this.paramIndex(module, coreBlock, message.key)
-              if (index >= 0)
-                module._openaxe_set_param(this.graph, coreBlock, index, message.value)
+              if (index >= 0) module._openaxe_set_param(this.graph, coreBlock, index, message.value)
             }
           }
           if (reply) reply.ok = true
@@ -351,8 +350,7 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           }
           if (typeof message.slimSize === 'number') {
             const slim = this.paramIndex(module, coreBlock, 'slim_size')
-            if (slim >= 0)
-              module._openaxe_set_param(this.graph, coreBlock, slim, message.slimSize)
+            if (slim >= 0) module._openaxe_set_param(this.graph, coreBlock, slim, message.slimSize)
           }
           reply.info = this.readModelInfo(module, coreBlock)
           reply.ok = true
