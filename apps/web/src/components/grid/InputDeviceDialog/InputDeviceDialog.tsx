@@ -4,7 +4,8 @@ import { useDIAuditionStore } from '../../../state/diAuditionStore'
 import { DI_SAMPLES } from '../../../diSamples'
 import type { AudioEngineState, AudioEngineActions } from '../../../hooks/useAudioEngine'
 import { getShellKind } from '../../../native/openaxe'
-import { Dialog, SelectField, ErrorText, Hint, OutlineButton } from '@openaxe/ui'
+import { Dialog, SelectField, ErrorText, Hint, HardwareButton } from '@openaxe/ui'
+import { PauseIcon, PlayIcon } from '../../../../../../packages/ui/src/icons/GeneraIcons'
 
 export interface InputDeviceDialogProps {
   open: boolean
@@ -118,9 +119,12 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
             </optgroup>
           </SelectField>
         </div>
-        <OutlineButton
+        <HardwareButton
+          label={diPlaying ? 'Pause' : 'Play'}
+          icon={diPlaying ? <PauseIcon /> : <PlayIcon />}
           onClick={handlePlayPause}
           disabled={!canPlay}
+          active={diPlaying}
           aria-pressed={diPlaying}
           aria-label={diPlaying ? 'Pause DI sample' : 'Play DI sample'}
           title={
@@ -130,10 +134,7 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
                 ? 'Pause — restores live input'
                 : 'Play — mutes live input, loops through rig'
           }
-          style={{ minWidth: 86, height: 'var(--input-height)' }}
-        >
-          {diPlaying ? '⏸ Pause' : '▶ Play'}
-        </OutlineButton>
+        ></HardwareButton>
       </div>
 
       {diPlaying && <Hint>Playing DI — live input muted</Hint>}

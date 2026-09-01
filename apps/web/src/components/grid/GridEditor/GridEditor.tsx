@@ -313,6 +313,7 @@ export function GridEditor({
         <div className={`${styles.rail} ${styles.railIn}`}>
           <HardwareButton
             fullWidth
+            active={engine.diPlaying}
             label={engine.diPlaying ? 'Sample' : 'IN'}
             onClick={() => setInputDialogOpen(true)}
             title={
