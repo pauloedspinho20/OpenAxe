@@ -136,7 +136,7 @@ void Flanger::SetParam(int index, float value) {
       impl_->depth = value;
       break;
     case kFeedbackParam:
-      impl_->feedback = value;
+      impl_->feedback = std::clamp(value, -0.9f, 0.9f);
       break;
     case kDelayParam:
       impl_->delay = value;

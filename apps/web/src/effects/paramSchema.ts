@@ -416,7 +416,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.25,
       formatValue: percent,
-      description: 'Regeneration around the effect. Adds thickness or resonance.',
+      description: 'Bipolar feedback. Positive = resonant, negative = hollow notches.',
     },
     {
       key: 'mix',
@@ -778,7 +778,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.3,
       formatValue: percent,
-      description: 'Regeneration around the effect. Adds thickness or resonance.',
+      description: 'Regeneration of the granular cloud. High = evolving wash.',
     },
     {
       key: 'spread',
@@ -936,7 +936,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
-      description: 'Regeneration around the effect. Adds thickness or resonance.',
+      description: 'Bipolar feedback. Positive = resonant, negative = hollow notches.',
     },
     {
       key: 'tone',
