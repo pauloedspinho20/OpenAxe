@@ -25,7 +25,7 @@ pnpm + Turborepo workspace (`apps/*`, `packages/*`):
 | `apps/desktop`             | Native shell (C++ + `webview.h` + JUCE `audio_devices`) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                                            |
 | `packages/ui`              | Shared React component/design-system library, consumed by `apps/web` and the desktop webview. Has its own Vitest config (`packages/ui/vite.config.ts`).                                               |
 | `packages/vst3`            | VST3 + standalone plugin (iPlug2 + `packages/core`, `WHOLE_ARCHIVE`) — scaffold builds and scans (issue #125); CLAP/AU later.                                                                         |
-| `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/17), [#16](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/16). |
+| `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/OpenAxe/issues/17), [#16](https://github.com/pauloedspinho20/OpenAxe/issues/16). |
 
 ## Verification commands
 

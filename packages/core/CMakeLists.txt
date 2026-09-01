@@ -254,7 +254,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # iOS target (issue #17): linked into apps/ios via an XCFramework.
   set_target_properties(openaxe_core PROPERTIES
     FRAMEWORK TRUE
-    MACOSX_FRAMEWORK_IDENTIFIER "io.miew.namstudio.core"
+    MACOSX_FRAMEWORK_IDENTIFIER "io.miew.openaxe.core"
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
   # Android target (issue #17): shared lib for the JNI bridge.
