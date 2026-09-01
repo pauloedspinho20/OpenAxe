@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+
+import type { AudioEngineActions, AudioEngineState } from '@/hooks/useAudioEngine'
 import { useGraphStore } from '../../../state/graphStore'
 import { useIOStore } from '../../../state/ioStore'
 import type { GraphRig } from '../../../engine/GraphRig'
@@ -32,19 +34,6 @@ export interface GridEditorProps {
   outputSelectionSupported: boolean
   context: AudioContext | null
   engine: AudioEngineState & AudioEngineActions
-}
-
-function useIsMobile(breakpoint = 720) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const mql = window.matchMedia(`(max-width: ${breakpoint}px)`)
-    const onChange = () => setIsMobile(mql.matches)
-    onChange()
-    mql.addEventListener('change', onChange)
-    return () => mql.removeEventListener('change', onChange)
-  }, [breakpoint])
-  return isMobile
 }
 
 function useIsMobile(breakpoint = 720) {

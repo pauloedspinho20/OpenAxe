@@ -94,48 +94,46 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
       </SelectField>
 
       {/* DI audition — bundled samples that loop through the rig, muting live mic */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-        <div style={{ flex: 1 }}>
-          <SelectField
-            label="DI Sample"
-            value={effectiveSelected}
-            onChange={handleSelectChange}
-            disabled={!engineReady}
-            title={DI_SAMPLES.find((s) => s.id === effectiveSelected)?.description}
-          >
-            <optgroup label="Guitar">
-              {guitarSamples.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Bass">
-              {bassSamples.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </optgroup>
-          </SelectField>
-        </div>
-        <HardwareButton
-          label={diPlaying ? 'Pause' : 'Play'}
-          icon={diPlaying ? <PauseIcon /> : <PlayIcon />}
-          onClick={handlePlayPause}
-          disabled={!canPlay}
-          active={diPlaying}
-          aria-pressed={diPlaying}
-          aria-label={diPlaying ? 'Pause DI sample' : 'Play DI sample'}
-          title={
-            !engineReady
-              ? 'Engine not ready'
-              : diPlaying
-                ? 'Pause — restores live input'
-                : 'Play — mutes live input, loops through rig'
-          }
-        ></HardwareButton>
-      </div>
+
+      <SelectField
+        label="DI Sample"
+        value={effectiveSelected}
+        onChange={handleSelectChange}
+        disabled={!engineReady}
+        title={DI_SAMPLES.find((s) => s.id === effectiveSelected)?.description}
+      >
+        <optgroup label="Guitar">
+          {guitarSamples.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Bass">
+          {bassSamples.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </optgroup>
+      </SelectField>
+
+      <HardwareButton
+        label={diPlaying ? 'Pause' : 'Play'}
+        icon={diPlaying ? <PauseIcon /> : <PlayIcon />}
+        onClick={handlePlayPause}
+        disabled={!canPlay}
+        active={diPlaying}
+        aria-pressed={diPlaying}
+        aria-label={diPlaying ? 'Pause DI sample' : 'Play DI sample'}
+        title={
+          !engineReady
+            ? 'Engine not ready'
+            : diPlaying
+              ? 'Pause — restores live input'
+              : 'Play — mutes live input, loops through rig'
+        }
+      ></HardwareButton>
 
       {diPlaying && <Hint>Playing DI — live input muted</Hint>}
       {diError && <ErrorText>{diError}</ErrorText>}
