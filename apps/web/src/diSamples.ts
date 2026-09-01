@@ -25,8 +25,8 @@ export const DI_SAMPLES: readonly DISample[] = [
     id: 'guitar-clean',
     label: 'Guitar — Clean',
     instrument: 'guitar',
-    url: '/di-samples/guitar-clean.wav',
-    description: 'Clean arpeggio — best for amp/cab colour',
+    url: '/di-samples/fender-stratocaster-neck-solo.wav',
+    description: 'Clean arpeggio — Fender Stratocaster Neck Solo',
   },
   {
     id: 'guitar-rock',

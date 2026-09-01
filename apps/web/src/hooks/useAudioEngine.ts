@@ -286,7 +286,7 @@ export function useWebAudioEngine() {
       try {
         let buffer = diBufferCache.current.get(sampleId)
         if (!buffer) {
-          const response = await fetch(sample.url)
+          const response = await fetch(encodeURI(sample.url))
           if (!response.ok) throw new Error(`Failed to fetch ${sample.url}: ${response.status}`)
           const arrayBuffer = await response.arrayBuffer()
           // decodeAudioData returns Promise in modern browsers; callback form is legacy.

@@ -140,6 +140,7 @@ void SetContentType(const std::string& path, std::string& out) {
   else if (ext == ".woff2") out = "font/woff2";
   else if (ext == ".woff") out = "font/woff";
   else if (ext == ".ttf") out = "font/ttf";
+  else if (ext == ".wav") out = "audio/wav";
   else out = "application/octet-stream";
 }
 
@@ -267,8 +268,11 @@ bool HandleOneRequest(int fd, const std::string& root, const std::string& inject
   }
   const size_t sp2 = req.find(' ', sp1 + 1);
   const std::string target = req.substr(sp1 + 1, sp2 == std::string::npos ? std::string::npos : sp2 - sp1 - 1);
+  // UrlDecode so `%20` on the wire maps to ` ` on disk — needed for DI
+  // samples and any other public asset with spaces (desktop fix equivalent).
   std::string path = target.substr(0, target.find('?'));
   if (path.empty() || path == "/") path = "/index.html";
+  path = UrlDecode(path);
 
   // /__asset/<key> streams a blob out of the shared on-disk library rather
   // than out of the UI root (issue #300 follow-up). Going through the bridge
@@ -276,7 +280,7 @@ bool HandleOneRequest(int fd, const std::string& root, const std::string& inject
   // hands the webview one giant string; a plain GET streams and lets the
   // webview turn the response straight into a Blob.
   if (path.rfind("/__asset/", 0) == 0) {
-    return ServeAsset(fd, UrlDecode(path.substr(9)), keep_alive);
+    return ServeAsset(fd, path.substr(9), keep_alive);
   }
   std::error_code ec;
   const std::filesystem::path root_norm = std::filesystem::path(root).lexically_normal();

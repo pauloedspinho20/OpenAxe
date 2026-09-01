@@ -189,7 +189,7 @@ export function useNativeAudioEngine() {
         } catch {}
       }
       try {
-        const response = await fetch(sample.url)
+        const response = await fetch(encodeURI(sample.url))
         if (!response.ok) throw new Error(`Failed to fetch ${sample.url}: ${response.status}`)
         const arrayBuffer = await response.arrayBuffer()
         const bytes = new Uint8Array(arrayBuffer)
