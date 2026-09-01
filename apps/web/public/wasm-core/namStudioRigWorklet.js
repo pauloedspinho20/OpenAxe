@@ -431,6 +431,28 @@ class NamStudioRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        case 'gainReductions': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            if (typeof module._nam_studio_get_gain_reduction === 'function') {
+              out[jsId] = module._nam_studio_get_gain_reduction(this.graph, coreBlock)
+            }
+          }
+          reply.gainReductions = out
+          reply.ok = true
+          break
+        }
+        case 'gateGains': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            if (typeof module._nam_studio_get_gate_gain === 'function') {
+              out[jsId] = module._nam_studio_get_gate_gain(this.graph, coreBlock)
+            }
+          }
+          reply.gateGains = out
+          reply.ok = true
+          break
+        }
         case 'dispose': {
           module._nam_studio_graph_destroy(this.graph)
           this.graph = null

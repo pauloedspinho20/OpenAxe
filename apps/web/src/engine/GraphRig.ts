@@ -53,6 +53,8 @@ export class GraphRig implements GraphRigControls, PresetRig {
   private readonly edges = new Map<string, Edge>()
   private readonly analysers = new Map<string, NativeAnalyser>()
   private readonly peaks = new Map<string, number>()
+  private readonly gainReductions = new Map<string, number>()
+  private readonly gateGains = new Map<string, number>()
   private inputSource: AudioNode | null = null
   private disposed = false
   private nextId = 0
@@ -92,6 +94,26 @@ export class GraphRig implements GraphRigControls, PresetRig {
           for (const [id, peak] of Object.entries(meters)) this.peaks.set(id, peak)
         })
         .catch(() => {})
+      const w = this.worklet as unknown as {
+        gainReductions?: () => Promise<Record<string, number>>
+        gateGains?: () => Promise<Record<string, number>>
+      }
+      if (typeof w.gainReductions === 'function') {
+        void w
+          .gainReductions()
+          .then((grs) => {
+            for (const [id, gr] of Object.entries(grs)) this.gainReductions.set(id, gr)
+          })
+          .catch(() => {})
+      }
+      if (typeof w.gateGains === 'function') {
+        void w
+          .gateGains()
+          .then((gains) => {
+            for (const [id, gain] of Object.entries(gains)) this.gateGains.set(id, gain)
+          })
+          .catch(() => {})
+      }
     }, 50)
   }
 
@@ -112,6 +134,8 @@ export class GraphRig implements GraphRigControls, PresetRig {
     }
     this.analysers.delete(id)
     this.peaks.delete(id)
+    this.gainReductions.delete(id)
+    this.gateGains.delete(id)
     this.blocks.delete(id)
     await this.worklet.removeBlock(id)
   }
@@ -136,6 +160,24 @@ export class GraphRig implements GraphRigControls, PresetRig {
   /** Drive a block's meter facade to a peak level (0..1). Safe to call often. */
   updateMeter(id: string, peak: number): void {
     this.peaks.set(id, peak)
+  }
+
+  /** Current gain reduction in dB (≤0) for a block, 0 if unknown/not a dynamics block. */
+  getGainReduction(id: string): number {
+    return this.gainReductions.get(id) ?? 0
+  }
+
+  /** Current gate openness 0..1 (1 = open) for a gate block, 0 if unknown/not a gate. */
+  getGateGain(id: string): number {
+    return this.gateGains.get(id) ?? 0
+  }
+
+  /** Update helpers for tests / NativeGraphRig path. */
+  updateGainReduction(id: string, grDb: number): void {
+    this.gainReductions.set(id, grDb)
+  }
+  updateGateGain(id: string, gain: number): void {
+    this.gateGains.set(id, gain)
   }
 
   /**
@@ -264,6 +306,8 @@ export class GraphRig implements GraphRigControls, PresetRig {
     this.blocks.clear()
     this.analysers.clear()
     this.peaks.clear()
+    this.gainReductions.clear()
+    this.gateGains.clear()
     await this.worklet.dispose()
   }
 }

@@ -192,6 +192,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                 key={`${instance.id}-${reverbExpert ? 'expert' : 'simple'}`}
                 blockId={instance.id}
                 block={block}
+                rig={rig}
               />
               <div className={styles.buttons}>
                 <HardwareButton

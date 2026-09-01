@@ -340,6 +340,10 @@ int32_t nam_studio_is_tuner_muted(NamStudioGraph* graph);
 float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id);
 // Fraction of real-time budget the last nam_studio_process call used.
 float nam_studio_get_cpu_load(NamStudioGraph* graph);
+// Compressor (and gate) gain reduction in dB (≤0, 0 = no reduction), 0 for unknown/non-dynamics blocks. Tier 1.
+float nam_studio_get_gain_reduction(NamStudioGraph* graph, int32_t block_id);
+// Noise-gate openness 0..1 (1 = fully open), 0 for unknown/non-gate blocks. Tier 1.
+float nam_studio_get_gate_gain(NamStudioGraph* graph, int32_t block_id);
 
 // ── Automation slot map (issue #121) ─────────────────────────────────────
 // VST3/AU/CLAP hosts need a fixed, session-stable parameter list; rigs are

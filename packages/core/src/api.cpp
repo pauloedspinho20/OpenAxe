@@ -386,6 +386,14 @@ float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
 
 float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetCpuLoad(); }
 
+float nam_studio_get_gain_reduction(NamStudioGraph* graph, int32_t block_id) {
+  return graph->engine.GetGainReduction(block_id);
+}
+
+float nam_studio_get_gate_gain(NamStudioGraph* graph, int32_t block_id) {
+  return graph->engine.GetGateGain(block_id);
+}
+
 // ── MIDI mapping (issue #124) ─────────────────────────────────────────
 // Thin forwarders onto the MIDI model. Helpers are pure functions; the rest
 // delegates to AudioEngine's MIDI state (see engine.h for the threading

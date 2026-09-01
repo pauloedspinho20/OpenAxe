@@ -9,19 +9,24 @@ function levelColor(level: number): 'statusGreen' | 'statusAmber' | 'statusRed' 
   return level > RED_FROM ? 'statusRed' : level > AMBER_FROM ? 'statusAmber' : 'statusGreen'
 }
 
+export type MeterVariant = 'level' | 'gainReduction'
+
 export interface MiniMeterProps {
   /** Signal level in [0, 1], 1 = clipping. */
   level: number
   title?: string | undefined
+  /** When 'gainReduction', the fill is always red regardless of level. */
+  variant?: MeterVariant
 }
 
 /** A single-bar meter for tight spaces (e.g. a grid block card) - same colour thresholds as Meter. */
-export function MiniMeter({ level, title }: MiniMeterProps) {
+export function MiniMeter({ level, title, variant = 'level' }: MiniMeterProps) {
   const clamped = Math.min(1, Math.max(0, level))
+  const color = variant === 'gainReduction' ? 'statusRed' : levelColor(clamped)
   return (
     <span className={styles.miniWrap} title={title}>
       <span
-        className={`${styles.miniFill} ${styles[levelColor(clamped)]}`}
+        className={`${styles.miniFill} ${styles[color]}`}
         style={{ width: `${clamped * 100}%` }}
       />
     </span>
@@ -29,13 +34,14 @@ export function MiniMeter({ level, title }: MiniMeterProps) {
 }
 
 /** A single-bar medium meter for tight spaces (e.g. the Block Inspector) - same colour thresholds as Meter. */
-export function MediumMeter({ level, title }: MiniMeterProps) {
+export function MediumMeter({ level, title, variant = 'level' }: MiniMeterProps) {
   const clamped = Math.min(1, Math.max(0, level))
+  const color = variant === 'gainReduction' ? 'statusRed' : levelColor(clamped)
   return (
     <span className={styles.mediumWrap} title={title}>
       <span
-        className={`${styles.mediumFill} ${styles[levelColor(clamped)]}`}
-        style={{ width: `${clamped * 100}%` }}
+        className={`${styles.mediumFill} ${styles[color]}`}
+        style={{ height: `${clamped * 100}%` }}
       />
     </span>
   )

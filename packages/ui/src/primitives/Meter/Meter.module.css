@@ -49,7 +49,9 @@
 .mediumFill {
   display: block;
   height: 100%;
-  transition: width 0.05s linear;
+  transition:
+    width 0.05s linear,
+    height 0.05s linear;
 }
 
 .miniWrap {
@@ -62,14 +64,43 @@
   height: 70px;
   width: 10px;
   border-radius: 2px;
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
 }
 
-.miniFill.statusGreen {
+.miniFill.statusGreen,
+.mediumFill.statusGreen {
   background: var(--led-on);
 }
-.miniFill.statusAmber {
+.miniFill.statusAmber,
+.mediumFill.statusAmber {
   background: var(--led-warn);
 }
-.miniFill.statusRed {
+.miniFill.statusRed,
+.mediumFill.statusRed {
   background: var(--led-hot);
+}
+
+/* Gain-reduction variant is always red - same colour but explicit for clarity.
+   The red-only styling is handled in the TS via variant prop; CSS just ensures
+   mediumFill has the same glow treatment as miniFill. */
+.miniFill.statusRed,
+.mediumFill.statusRed {
+  box-shadow: 0 0 4px var(--meter-glow-red);
+}
+.miniFill.statusGreen,
+.mediumFill.statusGreen {
+  box-shadow: 0 0 4px var(--meter-glow-green);
+}
+.miniFill.statusAmber,
+.mediumFill.statusAmber {
+  box-shadow: 0 0 4px var(--meter-glow-amber);
+}
+
+@media (max-width: var(--mw-md)) {
+  .segment {
+    width: 18px;
+    height: 4px;
+  }
 }
