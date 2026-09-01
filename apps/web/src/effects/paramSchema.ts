@@ -80,6 +80,24 @@ const hzPrecise = (value: number) => `${value.toFixed(1)}Hz`
 
 function eqBand(index: number, freqDefault: number): KnobField[] {
   const group = `Band ${index + 1}`
+  const descs =
+    index === 0
+      ? [
+          'Low shelf centre frequency. Below this, the shelf boosts/cuts.',
+          'Low shelf gain in dB. Positive boosts bass, negative cuts.',
+          'Low shelf slope/Q. Higher = steeper transition.',
+        ]
+      : index === 3
+        ? [
+            'High shelf centre frequency. Above this, the shelf acts.',
+            'High shelf gain in dB. Positive adds air, negative tames.',
+            'High shelf slope/Q. Higher = steeper transition.',
+          ]
+        : [
+            'Centre frequency of this peaking band.',
+            'Gain of this band in dB. Boost or cut.',
+            'Bandwidth/Q. Higher = narrower, more resonant.',
+          ]
   return [
     {
       key: `band${index}_frequency`,
@@ -90,6 +108,7 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
       defaultValue: freqDefault,
       formatValue: hz,
       group,
+      description: descs[0],
     },
     {
       key: `band${index}_gain`,
@@ -100,6 +119,7 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
       defaultValue: 0,
       formatValue: dB,
       group,
+      description: descs[1],
     },
     {
       key: `band${index}_q`,
@@ -110,6 +130,7 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
       defaultValue: 0.707,
       formatValue: plain,
       group,
+      description: descs[2],
     },
   ]
 }
