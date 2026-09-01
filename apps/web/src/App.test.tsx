@@ -14,7 +14,7 @@ describe('App', () => {
     expect(screen.getByRole('dialog', { name: 'Power on' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'POWER ON' })).toBeInTheDocument()
     // The grid stays mounted (just visually covered) so it's ready the instant the gate clears.
-    expect(screen.getByText('IN')).toBeInTheDocument()
-    expect(screen.getByText('OUT')).toBeInTheDocument()
+    expect(screen.getByText('INPUT')).toBeInTheDocument()
+    expect(screen.getByText('OUTPUT')).toBeInTheDocument()
   })
 })
