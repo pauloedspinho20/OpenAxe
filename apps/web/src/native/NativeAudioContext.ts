@@ -10,7 +10,7 @@
  * object that carries the *undecoded* file bytes instead of samples.
  *
  * Nothing on this path can decode audio - that is the whole point of the facade -
- * but the core can (`nam_studio_load_ir_wav`). So rather than throwing the bytes
+ * but the core can (`openaxe_load_ir_wav`). So rather than throwing the bytes
  * away, the stub keeps them, and `NativeBlock.loadIR` hands them to the core to
  * decode and resample. The shared UI keeps calling `decodeAudioData` then
  * `loadIR(buffer)` exactly as it does on the web.

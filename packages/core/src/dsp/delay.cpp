@@ -213,7 +213,7 @@ void Delay::Process(const float* const* input, float* const* output, int num_fra
 
 // Param surface: time (ms), feedback (0..0.9), tone (Hz cutoff in the feedback
 // loop), model (0=Digital, 1=Analog, 2=Tape - matching Delay::Model and
-// NamStudioDelayModel), wow depth (ms) and wow rate (Hz) for the tape model,
+// OpenAxeDelayModel), wow depth (ms) and wow rate (Hz) for the tape model,
 // stereo_mode (0=Stereo, 1=Ping-Pong) and width (0..1, ping-pong only).
 int Delay::ParamCount() { return kParamCount; }
 

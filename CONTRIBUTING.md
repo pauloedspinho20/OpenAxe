@@ -7,9 +7,9 @@ contributions of all sizes are welcome.
 
 ## Before you start
 
-- Check the [open issues](https://github.com/pauloedspinho20/NAM-Web-Studio/issues) — work is
+- Check the [open issues](https://github.com/pauloedspinho20/OpenAxe/issues) — work is
   organized into epics (labeled `epic`), each with a task checklist. Comment on an epic or a
-  specific task before starting significant work, so effort isn't duplicated. Filter by [`good first issue`](https://github.com/pauloedspinho20/NAM-Web-Studio/labels/good%20first%20issue) for starter tasks.
+  specific task before starting significant work, so effort isn't duplicated. Filter by [`good first issue`](https://github.com/pauloedspinho20/OpenAxe/labels/good%20first%20issue) for starter tasks.
 - If you want to add a new effect or DSP component, read the licensing note below first —
   it affects which upstream source you're allowed to port from.
 - Read [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) and [`SECURITY.md`](./SECURITY.md).

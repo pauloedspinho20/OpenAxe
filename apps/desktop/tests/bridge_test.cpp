@@ -289,11 +289,11 @@ void TestMonitorTap() {
   constexpr int kFrames = 64;
   constexpr int kBlock = 512;
 
-  NamStudioGraph* graph = nam_studio_graph_create();
-  const int32_t mixer = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_MIXER, 0, 0);
-  nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, mixer, 0);
-  nam_studio_connect(graph, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(graph, kRate, kBlock);
+  OpenAxeGraph* graph = openaxe_graph_create();
+  const int32_t mixer = openaxe_add_block(graph, OPENAXE_BLOCK_MIXER, 0, 0);
+  openaxe_connect(graph, OPENAXE_IN_RAIL, 0, mixer, 0);
+  openaxe_connect(graph, mixer, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(graph, kRate, kBlock);
 
   openaxe_desktop::RtCallbackState state;
   for (auto& ch : state.tap_in) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
@@ -328,11 +328,11 @@ void TestMonitorTap() {
     CHECK(tap_out.r[i] == static_cast<float>(i) * 2.0f);
   }
 
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 }
 
 // The suspend flag must silence the callback and bump suspended_callbacks so
-// the control thread knows no nam_studio_process is in flight.
+// the control thread knows no openaxe_process is in flight.
 void TestSuspendCallbackSilencesOutput() {
   constexpr int kFrames = 32;
   openaxe_desktop::RtCallbackState state;
@@ -503,7 +503,7 @@ void TestConcurrentMutationsWhileStreamRunning() {
                mutations.load(), kStressRounds);
 }
 
-// issue #211: nam_studio_set_param's Amp-family slim-size forward reallocates
+// issue #211: openaxe_set_param's Amp-family slim-size forward reallocates
 // inside NAMCore and used to run straight on the webview thread, so dragging
 // the slim-size knob while the audio callback was mid-process could race a
 // realloc against the model's inference buffers. HandleSetParam now routes it
@@ -619,7 +619,7 @@ void TestSlimSizeMutationsWhileStreamRunning() {
 // suspend/resume around it, unlike every other graph mutation in this file.
 // Reopening while a previous stream was still live - a device switch, or the
 // no-sound recovery poll retrying every few seconds - could race an in-flight
-// nam_studio_process call against that resize: ASAN caught it as a
+// openaxe_process call against that resize: ASAN caught it as a
 // heap-buffer-overflow store in AudioEngine::Process (engine.cpp, on
 // ext_in_l_). This drives that exact sequence - open+start, then reopen while
 // running with a real block wired in - so the race would show up as an ASAN

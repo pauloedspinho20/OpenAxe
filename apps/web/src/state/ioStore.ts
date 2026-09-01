@@ -76,9 +76,7 @@ export const useIOStore = create<IOStore>()(
       setDeviceLists: (inputDevices, outputDevices) => set({ inputDevices, outputDevices }),
     }),
     {
-      // Key kept from the pre-rebrand name (issue #151): renaming would
-      // orphan users' persisted I/O config.
-      name: 'nam-web-studio-io',
+      name: 'openaxe-io',
       partialize: (state) => ({
         inputDeviceId: state.inputDeviceId,
         outputDeviceId: state.outputDeviceId,

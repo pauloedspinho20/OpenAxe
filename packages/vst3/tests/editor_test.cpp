@@ -128,11 +128,11 @@ void TestTheme() {
 }
 
 void TestOpenCloseDoesNotDisturbAudio() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t gate = nam_studio_add_block(g, NAM_STUDIO_BLOCK_NOISE_GATE, 0, 0);
-  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, gate, 0);
-  nam_studio_connect(g, gate, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(g, 48000.0, 128);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t gate = openaxe_add_block(g, OPENAXE_BLOCK_NOISE_GATE, 0, 0);
+  openaxe_connect(g, OPENAXE_IN_RAIL, 0, gate, 0);
+  openaxe_connect(g, gate, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(g, 48000.0, 128);
 
   openaxe_vst3::editor::Editor ed(g);
   CHECK(!ed.IsOpen());
@@ -150,21 +150,21 @@ void TestOpenCloseDoesNotDisturbAudio() {
   for (int i = 0; i < 64; ++i) in[i] = 0.1f;
   const float* ins[2] = {in, in};
   float* outs[2] = {outL, outR};
-  nam_studio_process(g, ins, 2, outs, 2, 64);
+  openaxe_process(g, ins, 2, outs, 2, 64);
   for (int i = 0; i < 64; ++i) {
     CHECK(outL[i] == outL[i]); // not NaN
     CHECK(outR[i] == outR[i]);
   }
   std::printf("  Open/close not disturbing audio: ok\n");
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
 }
 
 void TestPollingCheap() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t mix = nam_studio_add_block(g, NAM_STUDIO_BLOCK_MIXER, 0, 0);
-  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, mix, 0);
-  nam_studio_connect(g, mix, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(g, 48000.0, 128);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t mix = openaxe_add_block(g, OPENAXE_BLOCK_MIXER, 0, 0);
+  openaxe_connect(g, OPENAXE_IN_RAIL, 0, mix, 0);
+  openaxe_connect(g, mix, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(g, 48000.0, 128);
   // Poll many times — must stay finite and not allocate (the editor's 60fps timer)
   for (int i = 0; i < 1000; ++i) {
     const float m = openaxe_vst3::editor::GetMeter(g, mix);
@@ -177,7 +177,7 @@ void TestPollingCheap() {
   CHECK(openaxe_vst3::editor::BundledFontName() != nullptr);
   CHECK(openaxe_vst3::editor::BundledFontLicenseName() != nullptr);
   std::printf("  Polling cheap (meter/cpu): ok\n");
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
 }
 
 } // namespace

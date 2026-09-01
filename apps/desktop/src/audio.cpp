@@ -190,11 +190,11 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   if (state->graph_ready.load(std::memory_order_acquire) && state->graph && n_frames > 0 &&
       out_l) {
     if (in_l) {
-      nam_studio_process(state->graph, in_ptrs, in_ch, out_ptrs, out_ch,
+      openaxe_process(state->graph, in_ptrs, in_ch, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     } else {
       // Output-only stream: feed silence into the graph.
-      nam_studio_process(state->graph, nullptr, 0, out_ptrs, out_ch,
+      openaxe_process(state->graph, nullptr, 0, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     }
   } else if (out_l) {
@@ -508,17 +508,17 @@ bool AudioIO::IsRunning() const {
   return device_ && device_->isPlaying();
 }
 
-void AudioIO::SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size) {
+void AudioIO::SetGraph(OpenAxeGraph* graph, double sample_rate, unsigned int max_block_size) {
   InitTap(state_);  // non-audio thread, so the audio thread never allocates
   // Same reasoning for the TRIM scratch buffers (see RtCallbackState::
   // in_scratch). Sized generously: a backend may hand the callback a slightly
   // larger block than the one it granted, and the callback will not allocate.
   for (auto& ch : state_.in_scratch) ch.assign(std::max(max_block_size, 1u) * 2, 0.0f);
-  // nam_studio_reset is documented not real-time safe - this must be called
+  // openaxe_reset is documented not real-time safe - this must be called
   // from a non-audio thread before Start(). Rebuild the graph while the
   // stream is stopped (or before it starts), then publish the pointer via
   // the acquire/release pair the callback reads.
-  if (graph) nam_studio_reset(graph, sample_rate, static_cast<int32_t>(max_block_size));
+  if (graph) openaxe_reset(graph, sample_rate, static_cast<int32_t>(max_block_size));
   state_.graph = graph;
   state_.graph_ready.store(graph != nullptr, std::memory_order_release);
 }
@@ -605,7 +605,7 @@ bool AudioIO::BeginSuspend() {
   state_.suspend.store(true, std::memory_order_release);
 
   // Wait for a callback that saw the pause: that guarantees every earlier
-  // nam_studio_process call has completed (the audio thread is now inside
+  // openaxe_process call has completed (the audio thread is now inside
   // the silence branch and stays there until EndSuspend).
   for (int i = 0; i < 2000; ++i) {
     if (state_.suspended_callbacks.load(std::memory_order_acquire) > before) return true;

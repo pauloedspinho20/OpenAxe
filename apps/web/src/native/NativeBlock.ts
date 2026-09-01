@@ -44,7 +44,7 @@ function toNumber(v: number | string | boolean): number {
  * Limitations (documented, issue #15 M3):
  * - IR/Cab blocks convolve for real now (dsp/convolver.cpp): loadIR forwards the
  *   file's bytes to the core, which decodes and resamples them
- *   (nam_studio_load_ir_wav).
+ *   (openaxe_load_ir_wav).
  * - Params apply by core param *symbol*. Issue #51's shared schema
  *   (packages/core/param_schema.json, generating both the C++ .inc fragments
  *   and this app's paramSchema.ts, checked by paramSchema.coreDrift.test.ts)
@@ -53,7 +53,7 @@ function toNumber(v: number | string | boolean): number {
  *   equality) by TestSymbolMappedParamRoundTripAllEffectKinds in
  *   apps/desktop/tests/bridge_test.cpp. Kinds that don't map 1:1 route
  *   through their own dedicated bridge call instead of setParam: reverb
- *   knobs (nam_studio_set_reverb_control), reverbAlgorithm/model (delay)
+ *   knobs (openaxe_set_reverb_control), reverbAlgorithm/model (delay)
  *   string selects (setReverbAlgorithm/setDelayModel), and the
  *   input_level/output_level I/O trims above (setBlockTrim, which collide in
  *   name but not meaning with the Amp family's core dBu-calibration params
@@ -108,7 +108,7 @@ export class NativeBlock implements PresetBlock {
       if (key === 'input_level' || key === 'output_level') continue
       // The reverb algorithm and delay model are string selects with no core
       // symbol - they must go through their dedicated bridge calls
-      // (nam_studio_set_reverb_algorithm / nam_studio_set_delay_model), not
+      // (openaxe_set_reverb_algorithm / openaxe_set_delay_model), not
       // setParam, which would reject the key and silently drop the knob.
       if (key === 'reverbAlgorithm' && typeof value === 'string') {
         void this.bridge.setReverbAlgorithm({ blockId: this.id, algorithm: value })

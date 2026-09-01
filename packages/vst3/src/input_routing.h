@@ -21,7 +21,7 @@ namespace openaxe_vst3 {
 //   kRight  — channel 2 only, as mono.
 //   kSum    — both channels averaged to mono.
 //
-// "As mono" means one channel handed to nam_studio_process, which the core
+// "As mono" means one channel handed to openaxe_process, which the core
 // documents as duplicating to both of its internal channels — the same result
 // the web gets by downmixing to a one-channel node.
 enum class InputChannelMode { kStereo = 0, kLeft = 1, kRight = 2, kSum = 3 };

@@ -3,8 +3,8 @@ import type { BlockKind } from './blocks/Block'
 
 /**
  * Thin TS wrapper around the single rig `AudioWorkletProcessor`
- * (`wasm-core/namStudioRigWorklet.js`), which owns one openaxe_core module
- * and one nam_studio_graph for the whole rig (issue #55). This is the web-path
+ * (`wasm-core/openAxeRigWorklet.js`), which owns one openaxe_core module
+ * and one openaxe_graph for the whole rig (issue #55). This is the web-path
  * counterpart to the desktop's OpenAxeBridge: every block kind, every
  * connection, every param, trim, bypass, model/IR load and master-bus write is
  * a message resolved against the core's C ABI inside that one worklet, so the
@@ -52,7 +52,7 @@ const KIND_TO_CORE: Record<BlockKind, number> = {
   'return-2': 25,
 }
 
-/** What the core reports about a loaded capture (`nam_studio_block_model_info`). */
+/** What the core reports about a loaded capture (`openaxe_block_model_info`). */
 export interface RigModelInfo {
   sampleRate: number
   hasLoudness: boolean
@@ -80,7 +80,7 @@ interface WorkletReply {
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
   let promise = registeredContexts.get(context)
   if (!promise) {
-    promise = context.audioWorklet.addModule('/wasm-core/namStudioRigWorklet.js')
+    promise = context.audioWorklet.addModule('/wasm-core/openAxeRigWorklet.js')
     registeredContexts.set(context, promise)
   }
   return promise
@@ -90,7 +90,7 @@ function ensureWorkletRegistered(context: AudioContext): Promise<void> {
 function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
   let promise = wasmBytesByContext.get(context)
   if (!promise) {
-    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    promise = fetch('/wasm-core/openaxe_core.wasm').then((response) => response.arrayBuffer())
     wasmBytesByContext.set(context, promise)
   }
   return promise
@@ -142,7 +142,7 @@ export class RigWorkletNode {
   /**
    * Cross-check the WASM against `effects.config.json` (issue #313).
    *
-   * `apps/web/public/wasm-core/nam_studio_core.wasm` is a checked-in artifact
+   * `apps/web/public/wasm-core/openaxe_core.wasm` is a checked-in artifact
    * that only a manual `scripts/build-core-wasm.sh` regenerates, so flipping a
    * kind's `compiled` flag and forgetting the rebuild leaves the palette and
    * the engine disagreeing about which blocks exist - the kind of drift that
@@ -339,7 +339,7 @@ export class RigWorkletNode {
 
   // ── Meters ──────────────────────────────────────────────────────────────
 
-  /** Peak per block id from the core's own meters (nam_studio_get_meter). */
+  /** Peak per block id from the core's own meters (openaxe_get_meter). */
   async meters(): Promise<Record<string, number>> {
     const reply = await this.request({ type: 'meters' })
     return reply.meters ?? {}

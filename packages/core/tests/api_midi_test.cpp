@@ -142,191 +142,191 @@ int main() {
 
   // ── Engine MIDI mapping + dispatch (ported dispatch.test.ts) ──────
   {
-    NamStudioGraph* g = nam_studio_graph_create();
+    OpenAxeGraph* g = openaxe_graph_create();
     // Add mappings like dispatch.test expects: slot/scene/next/prev.
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 20,
-                                           NAM_STUDIO_MIDI_ACTION_SLOT, 3, 0) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_PC, 0, 5,
-                                           NAM_STUDIO_MIDI_ACTION_SCENE, 0, 12) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 1, 10,
-                                           NAM_STUDIO_MIDI_ACTION_NEXT_SCENE, 0, 0) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_NOTEON, 0, 60,
-                                           NAM_STUDIO_MIDI_ACTION_PREV_SCENE, 0, 0) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(g) == 4);
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 20,
+                                           OPENAXE_MIDI_ACTION_SLOT, 3, 0) == 1);
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_PC, 0, 5,
+                                           OPENAXE_MIDI_ACTION_SCENE, 0, 12) == 1);
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 1, 10,
+                                           OPENAXE_MIDI_ACTION_NEXT_SCENE, 0, 0) == 1);
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_NOTEON, 0, 60,
+                                           OPENAXE_MIDI_ACTION_PREV_SCENE, 0, 0) == 1);
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(g) == 4);
 
     // CC trigger edge gating: value <64 is not a press.
     {
       uint8_t data_cc_low[] = {0xb0, 20, 10};
-      NamStudioMidiActionKind kind;
+      OpenAxeMidiActionKind kind;
       int32_t slot, scene;
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(g, data_cc_low, 3, 0, &kind, &slot, &scene, nullptr, nullptr, nullptr) == 0);
+      OPENAXE_EXPECT(openaxe_midi_handle_message(g, data_cc_low, 3, 0, &kind, &slot, &scene, nullptr, nullptr, nullptr) == 0);
     }
     {
       uint8_t data_cc[] = {0xb0, 20, 127};
-      NamStudioMidiActionKind kind;
+      OpenAxeMidiActionKind kind;
       int32_t slot = -1, scene = -1;
-      int32_t ret = nam_studio_midi_handle_message(g, data_cc, 3, 0, &kind, &slot, &scene, nullptr, nullptr, nullptr);
+      int32_t ret = openaxe_midi_handle_message(g, data_cc, 3, 0, &kind, &slot, &scene, nullptr, nullptr, nullptr);
       OPENAXE_EXPECT(ret == 1);
-      OPENAXE_EXPECT(kind == NAM_STUDIO_MIDI_ACTION_SLOT && slot == 3);
+      OPENAXE_EXPECT(kind == OPENAXE_MIDI_ACTION_SLOT && slot == 3);
     }
     {
       uint8_t data_pc[] = {0xc0, 5};
-      NamStudioMidiActionKind kind;
+      OpenAxeMidiActionKind kind;
       int32_t slot, scene;
-      int32_t ret = nam_studio_midi_handle_message(g, data_pc, 2, 0, &kind, &slot, &scene, nullptr, nullptr, nullptr);
+      int32_t ret = openaxe_midi_handle_message(g, data_pc, 2, 0, &kind, &slot, &scene, nullptr, nullptr, nullptr);
       OPENAXE_EXPECT(ret == 1);
-      OPENAXE_EXPECT(kind == NAM_STUDIO_MIDI_ACTION_SCENE && scene == 12);
+      OPENAXE_EXPECT(kind == OPENAXE_MIDI_ACTION_SCENE && scene == 12);
     }
     {
       uint8_t data_next[] = {0xb1, 10, 127};
-      NamStudioMidiActionKind kind;
-      int32_t ret = nam_studio_midi_handle_message(g, data_next, 3, 0, &kind, nullptr, nullptr, nullptr, nullptr, nullptr);
-      OPENAXE_EXPECT(ret == 1 && kind == NAM_STUDIO_MIDI_ACTION_NEXT_SCENE);
+      OpenAxeMidiActionKind kind;
+      int32_t ret = openaxe_midi_handle_message(g, data_next, 3, 0, &kind, nullptr, nullptr, nullptr, nullptr, nullptr);
+      OPENAXE_EXPECT(ret == 1 && kind == OPENAXE_MIDI_ACTION_NEXT_SCENE);
     }
     {
       uint8_t data_prev[] = {0x90, 60, 100};
-      NamStudioMidiActionKind kind;
-      int32_t ret = nam_studio_midi_handle_message(g, data_prev, 3, 0, &kind, nullptr, nullptr, nullptr, nullptr, nullptr);
-      OPENAXE_EXPECT(ret == 1 && kind == NAM_STUDIO_MIDI_ACTION_PREV_SCENE);
+      OpenAxeMidiActionKind kind;
+      int32_t ret = openaxe_midi_handle_message(g, data_prev, 3, 0, &kind, nullptr, nullptr, nullptr, nullptr, nullptr);
+      OPENAXE_EXPECT(ret == 1 && kind == OPENAXE_MIDI_ACTION_PREV_SCENE);
     }
 
     // Channel filtering: same number different channel does not match.
     {
       uint8_t data_wrong_ch[] = {0xb1, 20, 127}; // ch 1, but mapping is ch 0
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(g, data_wrong_ch, 3, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
+      OPENAXE_EXPECT(openaxe_midi_handle_message(g, data_wrong_ch, 3, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
     }
 
     // Sample offset is accepted but dispatch is immediate.
     {
       uint8_t data[] = {0xb0, 20, 127};
-      NamStudioMidiActionKind kind;
-      int32_t ret = nam_studio_midi_handle_message(g, data, 3, 42, &kind, nullptr, nullptr, nullptr, nullptr, nullptr);
+      OpenAxeMidiActionKind kind;
+      int32_t ret = openaxe_midi_handle_message(g, data, 3, 42, &kind, nullptr, nullptr, nullptr, nullptr, nullptr);
       OPENAXE_EXPECT(ret == 1);
     }
 
     // Dedup: adding a mapping with same match replaces old action.
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 20,
-                                           NAM_STUDIO_MIDI_ACTION_SCENE, 0, 5) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(g) == 4); // replaced, not grew
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 20,
+                                           OPENAXE_MIDI_ACTION_SCENE, 0, 5) == 1);
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(g) == 4); // replaced, not grew
     {
       uint8_t data[] = {0xb0, 20, 127};
-      NamStudioMidiActionKind kind;
+      OpenAxeMidiActionKind kind;
       int32_t scene;
-      int32_t ret = nam_studio_midi_handle_message(g, data, 3, 0, &kind, nullptr, &scene, nullptr, nullptr, nullptr);
-      OPENAXE_EXPECT(ret == 1 && kind == NAM_STUDIO_MIDI_ACTION_SCENE && scene == 5);
+      int32_t ret = openaxe_midi_handle_message(g, data, 3, 0, &kind, nullptr, &scene, nullptr, nullptr, nullptr);
+      OPENAXE_EXPECT(ret == 1 && kind == OPENAXE_MIDI_ACTION_SCENE && scene == 5);
     }
 
     // Dedup: same action key replaces old match.
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 99,
-                                           NAM_STUDIO_MIDI_ACTION_SCENE, 0, 5) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(g) == 4);
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 99,
+                                           OPENAXE_MIDI_ACTION_SCENE, 0, 5) == 1);
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(g) == 4);
     {
       uint8_t old_match[] = {0xb0, 20, 127};
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(g, old_match, 3, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
+      OPENAXE_EXPECT(openaxe_midi_handle_message(g, old_match, 3, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
       uint8_t new_match[] = {0xb0, 99, 127};
-      NamStudioMidiActionKind kind;
+      OpenAxeMidiActionKind kind;
       int32_t scene;
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(g, new_match, 3, 0, &kind, nullptr, &scene, nullptr, nullptr, nullptr) == 1);
-      OPENAXE_EXPECT(kind == NAM_STUDIO_MIDI_ACTION_SCENE && scene == 5);
+      OPENAXE_EXPECT(openaxe_midi_handle_message(g, new_match, 3, 0, &kind, nullptr, &scene, nullptr, nullptr, nullptr) == 1);
+      OPENAXE_EXPECT(kind == OPENAXE_MIDI_ACTION_SCENE && scene == 5);
     }
 
     // Learn mode: arm then next trigger completes learn (consumed, not dispatched).
-    OPENAXE_EXPECT(nam_studio_midi_arm_learn(g, NAM_STUDIO_MIDI_ACTION_SLOT, 2, 0) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_is_learning(g) == 1);
+    OPENAXE_EXPECT(openaxe_midi_arm_learn(g, OPENAXE_MIDI_ACTION_SLOT, 2, 0) == 1);
+    OPENAXE_EXPECT(openaxe_midi_is_learning(g) == 1);
     {
-      NamStudioMidiActionKind k;
+      OpenAxeMidiActionKind k;
       int32_t s, sc;
-      OPENAXE_EXPECT(nam_studio_midi_get_learn_target(g, &k, &s, &sc) == 1);
-      OPENAXE_EXPECT(k == NAM_STUDIO_MIDI_ACTION_SLOT && s == 2);
+      OPENAXE_EXPECT(openaxe_midi_get_learn_target(g, &k, &s, &sc) == 1);
+      OPENAXE_EXPECT(k == OPENAXE_MIDI_ACTION_SLOT && s == 2);
     }
     {
       uint8_t learn_msg[] = {0x90, 40, 100};
-      NamStudioMidiActionKind k;
-      int32_t ret = nam_studio_midi_handle_message(g, learn_msg, 3, 0, &k, nullptr, nullptr, nullptr, nullptr, nullptr);
+      OpenAxeMidiActionKind k;
+      int32_t ret = openaxe_midi_handle_message(g, learn_msg, 3, 0, &k, nullptr, nullptr, nullptr, nullptr, nullptr);
       OPENAXE_EXPECT(ret == 2); // learn completed
-      OPENAXE_EXPECT(nam_studio_midi_is_learning(g) == 0);
-      OPENAXE_EXPECT(nam_studio_midi_mapping_count(g) == 5); // new unique mapping appended
+      OPENAXE_EXPECT(openaxe_midi_is_learning(g) == 0);
+      OPENAXE_EXPECT(openaxe_midi_mapping_count(g) == 5); // new unique mapping appended
       // Now that match is bound to slot 2, dispatch works.
       uint8_t same[] = {0x90, 40, 100};
       int32_t slot;
-      ret = nam_studio_midi_handle_message(g, same, 3, 0, &k, &slot, nullptr, nullptr, nullptr, nullptr);
-      OPENAXE_EXPECT(ret == 1 && k == NAM_STUDIO_MIDI_ACTION_SLOT && slot == 2);
+      ret = openaxe_midi_handle_message(g, same, 3, 0, &k, &slot, nullptr, nullptr, nullptr, nullptr);
+      OPENAXE_EXPECT(ret == 1 && k == OPENAXE_MIDI_ACTION_SLOT && slot == 2);
     }
 
     // Learn is cancelled if we cancel.
-    OPENAXE_EXPECT(nam_studio_midi_arm_learn(g, NAM_STUDIO_MIDI_ACTION_SLOT, 1, 0) == 1);
-    nam_studio_midi_cancel_learn(g);
-    OPENAXE_EXPECT(nam_studio_midi_is_learning(g) == 0);
+    OPENAXE_EXPECT(openaxe_midi_arm_learn(g, OPENAXE_MIDI_ACTION_SLOT, 1, 0) == 1);
+    openaxe_midi_cancel_learn(g);
+    OPENAXE_EXPECT(openaxe_midi_is_learning(g) == 0);
     {
       uint8_t data[] = {0xb0, 55, 127};
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(g, data, 3, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
-      OPENAXE_EXPECT(nam_studio_midi_mapping_count(g) == 5); // no new mapping
+      OPENAXE_EXPECT(openaxe_midi_handle_message(g, data, 3, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
+      OPENAXE_EXPECT(openaxe_midi_mapping_count(g) == 5); // no new mapping
     }
 
     // Non-trigger (clock) while learning does NOT complete learn.
-    OPENAXE_EXPECT(nam_studio_midi_arm_learn(g, NAM_STUDIO_MIDI_ACTION_SLOT, 0, 0) == 1);
+    OPENAXE_EXPECT(openaxe_midi_arm_learn(g, OPENAXE_MIDI_ACTION_SLOT, 0, 0) == 1);
     {
       uint8_t clock[] = {0xF8};
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(g, clock, 1, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
-      OPENAXE_EXPECT(nam_studio_midi_is_learning(g) == 1);
+      OPENAXE_EXPECT(openaxe_midi_handle_message(g, clock, 1, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
+      OPENAXE_EXPECT(openaxe_midi_is_learning(g) == 1);
     }
-    nam_studio_midi_cancel_learn(g);
+    openaxe_midi_cancel_learn(g);
 
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(g);
   }
 
   // ── Pure ABI helpers ──────────────────────────────────────────────
   {
     uint8_t data[] = {0xb0, 20, 127};
-    NamStudioMidiMessageType t;
+    OpenAxeMidiMessageType t;
     int32_t ch, num, val;
-    OPENAXE_EXPECT(nam_studio_midi_parse_message(data, 3, &t, &ch, &num, &val) == 1);
-    OPENAXE_EXPECT(t == NAM_STUDIO_MIDI_CC && ch == 0 && num == 20 && val == 127);
-    OPENAXE_EXPECT(nam_studio_midi_is_trigger_edge(NAM_STUDIO_MIDI_CC, 10) == 0);
-    OPENAXE_EXPECT(nam_studio_midi_is_trigger_edge(NAM_STUDIO_MIDI_CC, 64) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_is_trigger_edge(NAM_STUDIO_MIDI_PC, 0) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_message_matches(NAM_STUDIO_MIDI_CC, 0, 20, NAM_STUDIO_MIDI_CC, 0, 20) == 1);
-    OPENAXE_EXPECT(nam_studio_midi_message_matches(NAM_STUDIO_MIDI_CC, 0, 20, NAM_STUDIO_MIDI_PC, 0, 20) == 0);
+    OPENAXE_EXPECT(openaxe_midi_parse_message(data, 3, &t, &ch, &num, &val) == 1);
+    OPENAXE_EXPECT(t == OPENAXE_MIDI_CC && ch == 0 && num == 20 && val == 127);
+    OPENAXE_EXPECT(openaxe_midi_is_trigger_edge(OPENAXE_MIDI_CC, 10) == 0);
+    OPENAXE_EXPECT(openaxe_midi_is_trigger_edge(OPENAXE_MIDI_CC, 64) == 1);
+    OPENAXE_EXPECT(openaxe_midi_is_trigger_edge(OPENAXE_MIDI_PC, 0) == 1);
+    OPENAXE_EXPECT(openaxe_midi_message_matches(OPENAXE_MIDI_CC, 0, 20, OPENAXE_MIDI_CC, 0, 20) == 1);
+    OPENAXE_EXPECT(openaxe_midi_message_matches(OPENAXE_MIDI_CC, 0, 20, OPENAXE_MIDI_PC, 0, 20) == 0);
   }
 
   // ── Serialization round-trip ──────────────────────────────────────
   {
-    NamStudioGraph* g = nam_studio_graph_create();
-    nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 20, NAM_STUDIO_MIDI_ACTION_SLOT, 3, 0);
-    nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_PC, 1, 5, NAM_STUDIO_MIDI_ACTION_SCENE, 0, 12);
-    nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_NOTEON, 9, 36, NAM_STUDIO_MIDI_ACTION_NEXT_SCENE, 0, 0);
+    OpenAxeGraph* g = openaxe_graph_create();
+    openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 20, OPENAXE_MIDI_ACTION_SLOT, 3, 0);
+    openaxe_midi_add_mapping(g, OPENAXE_MIDI_PC, 1, 5, OPENAXE_MIDI_ACTION_SCENE, 0, 12);
+    openaxe_midi_add_mapping(g, OPENAXE_MIDI_NOTEON, 9, 36, OPENAXE_MIDI_ACTION_NEXT_SCENE, 0, 0);
 
-    int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    int32_t needed = openaxe_serialize_state(g, nullptr, 0);
     OPENAXE_EXPECT(needed > 0);
     std::vector<char> buf(static_cast<size_t>(needed));
-    OPENAXE_EXPECT(nam_studio_serialize_state(g, buf.data(), needed) == needed);
+    OPENAXE_EXPECT(openaxe_serialize_state(g, buf.data(), needed) == needed);
     std::string doc(buf.data());
     OPENAXE_EXPECT(doc.find("\"midiMappings\"") != std::string::npos);
     OPENAXE_EXPECT(doc.find("\"noteon\"") != std::string::npos);
     OPENAXE_EXPECT(doc.find("\"nextScene\"") != std::string::npos);
 
-    NamStudioGraph* h = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(h, doc.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(h) == 3);
+    OpenAxeGraph* h = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(h, doc.c_str()) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(h) == 3);
     {
-      NamStudioMidiMessageType t; int32_t ch, num; NamStudioMidiActionKind k; int32_t slot, scene;
-      OPENAXE_EXPECT(nam_studio_midi_get_mapping(h, 0, &t, &ch, &num, &k, &slot, &scene) == 1);
-      OPENAXE_EXPECT(t == NAM_STUDIO_MIDI_CC && ch == 0 && num == 20);
-      OPENAXE_EXPECT(k == NAM_STUDIO_MIDI_ACTION_SLOT && slot == 3);
+      OpenAxeMidiMessageType t; int32_t ch, num; OpenAxeMidiActionKind k; int32_t slot, scene;
+      OPENAXE_EXPECT(openaxe_midi_get_mapping(h, 0, &t, &ch, &num, &k, &slot, &scene) == 1);
+      OPENAXE_EXPECT(t == OPENAXE_MIDI_CC && ch == 0 && num == 20);
+      OPENAXE_EXPECT(k == OPENAXE_MIDI_ACTION_SLOT && slot == 3);
     }
     // Handles still work after reload — sample-accurate offset accepted.
     {
       uint8_t data[] = {0xb0, 20, 127};
-      NamStudioMidiActionKind k;
+      OpenAxeMidiActionKind k;
       int32_t slot;
-      OPENAXE_EXPECT(nam_studio_midi_handle_message(h, data, 3, 10, &k, &slot, nullptr, nullptr, nullptr, nullptr) == 1);
-      OPENAXE_EXPECT(k == NAM_STUDIO_MIDI_ACTION_SLOT && slot == 3);
+      OPENAXE_EXPECT(openaxe_midi_handle_message(h, data, 3, 10, &k, &slot, nullptr, nullptr, nullptr, nullptr) == 1);
+      OPENAXE_EXPECT(k == OPENAXE_MIDI_ACTION_SLOT && slot == 3);
     }
 
     // Re-serialize must be byte-stable.
-    int32_t needed2 = nam_studio_serialize_state(h, nullptr, 0);
+    int32_t needed2 = openaxe_serialize_state(h, nullptr, 0);
     std::vector<char> buf2(static_cast<size_t>(needed2));
-    nam_studio_serialize_state(h, buf2.data(), needed2);
+    openaxe_serialize_state(h, buf2.data(), needed2);
     OPENAXE_EXPECT(std::string(buf2.data()) == doc);
 
     // Malformed MIDI entries skip without failing the load.
@@ -340,33 +340,33 @@ int main() {
         {"bad": "shape"}
       ]
     })";
-    NamStudioGraph* b = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(b, bad_doc) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(b) == 1);
-    nam_studio_graph_destroy(b);
+    OpenAxeGraph* b = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(b, bad_doc) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(b) == 1);
+    openaxe_graph_destroy(b);
 
     // Non-array midiMappings skips, not hard failure.
     const char* non_array = R"({"schemaVersion":1,"blocks":[],"edges":[],"masterLevel":1.0,"masterMuted":false,"midiMappings": {"a":1}})";
-    NamStudioGraph* n = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(n, non_array) == NAM_STUDIO_LOAD_STATE_OK);
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(n) == 0);
-    nam_studio_graph_destroy(n);
+    OpenAxeGraph* n = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(n, non_array) == OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(n) == 0);
+    openaxe_graph_destroy(n);
 
-    nam_studio_graph_destroy(g);
-    nam_studio_graph_destroy(h);
+    openaxe_graph_destroy(g);
+    openaxe_graph_destroy(h);
   }
 
   // ── Edge: invalid action/match rejected ───────────────────────────
   {
-    NamStudioGraph* g = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 20, NAM_STUDIO_MIDI_ACTION_SLOT, 8, 0) == 0); // slot out of range
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 16, 20, NAM_STUDIO_MIDI_ACTION_SLOT, 0, 0) == 0); // channel out of range
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 128, NAM_STUDIO_MIDI_ACTION_SLOT, 0, 0) == 0); // number out of range
-    OPENAXE_EXPECT(nam_studio_midi_add_mapping(g, NAM_STUDIO_MIDI_CC, 0, 20, NAM_STUDIO_MIDI_ACTION_SCENE, 0, 64) == 0); // scene out of range
-    OPENAXE_EXPECT(nam_studio_midi_mapping_count(g) == 0);
-    OPENAXE_EXPECT(nam_studio_midi_arm_learn(g, NAM_STUDIO_MIDI_ACTION_SLOT, 8, 0) == 0);
-    OPENAXE_EXPECT(nam_studio_midi_is_learning(g) == 0);
-    nam_studio_graph_destroy(g);
+    OpenAxeGraph* g = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 20, OPENAXE_MIDI_ACTION_SLOT, 8, 0) == 0); // slot out of range
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 16, 20, OPENAXE_MIDI_ACTION_SLOT, 0, 0) == 0); // channel out of range
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 128, OPENAXE_MIDI_ACTION_SLOT, 0, 0) == 0); // number out of range
+    OPENAXE_EXPECT(openaxe_midi_add_mapping(g, OPENAXE_MIDI_CC, 0, 20, OPENAXE_MIDI_ACTION_SCENE, 0, 64) == 0); // scene out of range
+    OPENAXE_EXPECT(openaxe_midi_mapping_count(g) == 0);
+    OPENAXE_EXPECT(openaxe_midi_arm_learn(g, OPENAXE_MIDI_ACTION_SLOT, 8, 0) == 0);
+    OPENAXE_EXPECT(openaxe_midi_is_learning(g) == 0);
+    openaxe_graph_destroy(g);
   }
 
   if (::openaxe::test::g_failures == 0) {

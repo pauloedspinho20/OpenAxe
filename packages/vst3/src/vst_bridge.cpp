@@ -40,20 +40,20 @@ const char* CoreSymbolAliasFor(const std::string& key) {
   return nullptr;
 }
 
-int32_t ResolveParamIndex(const std::string& symbol, int32_t core_id, NamStudioGraph* graph) {
+int32_t ResolveParamIndex(const std::string& symbol, int32_t core_id, OpenAxeGraph* graph) {
   if (symbol.empty() || core_id < 0 || !graph) return -1;
   std::string sym = symbol;
   if (const char* alias = CoreSymbolAliasFor(symbol)) sym = alias;
-  const int32_t n = nam_studio_block_param_count(graph, core_id);
+  const int32_t n = openaxe_block_param_count(graph, core_id);
   for (int32_t i = 0; i < n; ++i) {
     const char* s = nullptr;
-    if (!nam_studio_block_param_info(graph, core_id, i, nullptr, &s, nullptr, nullptr, nullptr)) continue;
+    if (!openaxe_block_param_info(graph, core_id, i, nullptr, &s, nullptr, nullptr, nullptr)) continue;
     if (s && sym == s) return i;
   }
   return -1;
 }
 
-int32_t ResolveParamIndexJson(const json& key, int32_t core_id, NamStudioGraph* graph) {
+int32_t ResolveParamIndexJson(const json& key, int32_t core_id, OpenAxeGraph* graph) {
   if (key.is_number()) return key.get<int32_t>();
   if (!key.is_string()) return -1;
   return ResolveParamIndex(key.get<std::string>(), core_id, graph);
@@ -66,7 +66,7 @@ bool IsValidSecretKey(const std::string& key) {
 
 }  // namespace
 
-VstBridge::VstBridge(OpenAxePlugin* plugin, NamStudioGraph* graph) : plugin_(plugin), graph_(graph) {}
+VstBridge::VstBridge(OpenAxePlugin* plugin, OpenAxeGraph* graph) : plugin_(plugin), graph_(graph) {}
 
 std::string VstBridge::HandleMessage(const std::string& jsonStr) {
   json j = json::parse(jsonStr, nullptr, false);
@@ -285,7 +285,7 @@ std::string VstBridge::HandleGetConfig(const std::string&) {
                {"latencyFrames", 0},
                {"latencyMs", 0.0},
                {"lastError", ""},
-               {"cpuLoad", graph_ ? nam_studio_get_cpu_load(graph_) : 0.0},
+               {"cpuLoad", graph_ ? openaxe_get_cpu_load(graph_) : 0.0},
                // Which input channels feed the rig. Reported here so the UI
                // adopts the plugin's own setting on open rather than pushing
                // whatever the shared store happened to hold — the choice
@@ -307,8 +307,8 @@ std::string VstBridge::HandleAddBlock(const std::string& req) {
     // Map kind string to core
     // Single mapping in the core (issue #300 J3) — this was a 27-branch
     // if/else chain duplicating the desktop bridge's table.
-    NamStudioBlockKind k;
-    if (nam_studio_block_kind_from_name(kind.c_str(), &k) != 0) {
+    OpenAxeBlockKind k;
+    if (openaxe_block_kind_from_name(kind.c_str(), &k) != 0) {
       return JsonError("unknown kind: " + kind);
     }
     int32_t coreId = -1;
@@ -316,8 +316,8 @@ std::string VstBridge::HandleAddBlock(const std::string& req) {
       std::lock_guard<std::mutex> lock(mutex_);
       if (blockIds_.count(jsId)) return JsonError("id exists");
     }
-    if (plugin_) plugin_->WithSuspend([&]{ coreId = nam_studio_add_block(graph_, k, row, col); });
-    else coreId = nam_studio_add_block(graph_, k, row, col);
+    if (plugin_) plugin_->WithSuspend([&]{ coreId = openaxe_add_block(graph_, k, row, col); });
+    else coreId = openaxe_add_block(graph_, k, row, col);
     if (coreId < 0) return JsonError("add_block failed");
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -327,22 +327,22 @@ std::string VstBridge::HandleAddBlock(const std::string& req) {
   } catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleRemoveBlock(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return (json{{"ok", true}}).dump(); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_remove_block(graph_, coreId); }); else nam_studio_remove_block(graph_, coreId); { std::lock_guard<std::mutex> lock(mutex_); blockIds_.erase(jsId); blockKinds_.erase(coreId); blockPos_.erase(jsId); } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("removeBlock failed"); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return (json{{"ok", true}}).dump(); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_remove_block(graph_, coreId); }); else openaxe_remove_block(graph_, coreId); { std::lock_guard<std::mutex> lock(mutex_); blockIds_.erase(jsId); blockKinds_.erase(coreId); blockPos_.erase(jsId); } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("removeBlock failed"); }
 }
 std::string VstBridge::HandleMoveBlock(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int row=o.value("row",0); int col=o.value("col",0); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_move_block(graph_, coreId, row, col); }); else nam_studio_move_block(graph_, coreId, row, col); { std::lock_guard<std::mutex> lock(mutex_); blockPos_[jsId]={row,col}; } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("moveBlock failed"); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int row=o.value("row",0); int col=o.value("col",0); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_move_block(graph_, coreId, row, col); }); else openaxe_move_block(graph_, coreId, row, col); { std::lock_guard<std::mutex> lock(mutex_); blockPos_[jsId]={row,col}; } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("moveBlock failed"); }
 }
 std::string VstBridge::HandleConnect(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("id",""); int fromPort=o.value("fromPort",0); int toPort=o.value("toPort",0); auto resolve=[&](const json& j)->int32_t{ if(j.is_number()) return j.get<int32_t>(); if(j.is_string()){ std::string s=j.get<std::string>(); if(s=="IN"||s=="-1") return NAM_STUDIO_IN_RAIL; if(s=="OUT"||s=="-2") return NAM_STUDIO_OUT_RAIL; std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(s); if(it!=blockIds_.end()) return it->second; } return -999; }; int32_t from=resolve(o.at("fromId")); int32_t to=resolve(o.at("toId")); if(from==-999||to==-999) return JsonError("unknown block in edge"); if(jsEdge.empty()){ std::lock_guard<std::mutex> lock(mutex_); jsEdge="edge-"+std::to_string(++nextEdgeId_); } int32_t coreEdge=-1; if(plugin_) plugin_->WithSuspend([&]{ coreEdge=nam_studio_connect(graph_, from, fromPort, to, toPort); }); else coreEdge=nam_studio_connect(graph_, from, fromPort, to, toPort); if(coreEdge<0) return JsonError("connection rejected"); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_[jsEdge]=coreEdge;
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("id",""); int fromPort=o.value("fromPort",0); int toPort=o.value("toPort",0); auto resolve=[&](const json& j)->int32_t{ if(j.is_number()) return j.get<int32_t>(); if(j.is_string()){ std::string s=j.get<std::string>(); if(s=="IN"||s=="-1") return OPENAXE_IN_RAIL; if(s=="OUT"||s=="-2") return OPENAXE_OUT_RAIL; std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(s); if(it!=blockIds_.end()) return it->second; } return -999; }; int32_t from=resolve(o.at("fromId")); int32_t to=resolve(o.at("toId")); if(from==-999||to==-999) return JsonError("unknown block in edge"); if(jsEdge.empty()){ std::lock_guard<std::mutex> lock(mutex_); jsEdge="edge-"+std::to_string(++nextEdgeId_); } int32_t coreEdge=-1; if(plugin_) plugin_->WithSuspend([&]{ coreEdge=openaxe_connect(graph_, from, fromPort, to, toPort); }); else coreEdge=openaxe_connect(graph_, from, fromPort, to, toPort); if(coreEdge<0) return JsonError("connection rejected"); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_[jsEdge]=coreEdge;
       auto asId=[](const json& j){ return j.is_string()? j.get<std::string>() : j.dump(); };
       edgeEndpoints_[jsEdge]=EdgeEndpoints{asId(o.at("fromId")), asId(o.at("toId")), fromPort, toPort}; } return (json{{"ok", true}, {"id", jsEdge}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleDisconnect(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("edgeId",""); int32_t coreEdge=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=edgeIds_.find(jsEdge); if(it==edgeIds_.end()) return (json{{"ok", true}}).dump(); coreEdge=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_disconnect(graph_, coreEdge); }); else nam_studio_disconnect(graph_, coreEdge); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_.erase(jsEdge); edgeEndpoints_.erase(jsEdge); } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("disconnect failed"); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsEdge=o.value("edgeId",""); int32_t coreEdge=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=edgeIds_.find(jsEdge); if(it==edgeIds_.end()) return (json{{"ok", true}}).dump(); coreEdge=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_disconnect(graph_, coreEdge); }); else openaxe_disconnect(graph_, coreEdge); { std::lock_guard<std::mutex> lock(mutex_); edgeIds_.erase(jsEdge); edgeEndpoints_.erase(jsEdge); } return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("disconnect failed"); }
 }
 std::string VstBridge::HandleSetParam(const std::string& req){
   try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); float value=o.value("value",0.0f); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param");
-    nam_studio_set_param(graph_, coreId, idx, value);
+    openaxe_set_param(graph_, coreId, idx, value);
     // Tell the host the editor moved this, so a DAW can record automation from
     // our own UI and its parameter list tracks the knob (issue #300 E5).
     // Returns false when the block is not bound to one of the 15 automation
@@ -351,10 +351,10 @@ std::string VstBridge::HandleSetParam(const std::string& req){
     return (json{{"ok", true}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleGetParam(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param"); float v=nam_studio_get_param(graph_, coreId, idx); return (json{{"ok", true}, {"value", v}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param"); float v=openaxe_get_param(graph_, coreId, idx); return (json{{"ok", true}, {"value", v}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleBlockInfo(const std::string& req){
-  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; std::string kind; int row=0,col=0; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; auto kIt=blockKinds_.find(coreId); if(kIt!=blockKinds_.end()) kind=kIt->second; auto pIt=blockPos_.find(jsId); if(pIt!=blockPos_.end()){ row=pIt->second.first; col=pIt->second.second; } } int32_t n=nam_studio_block_param_count(graph_, coreId); json params=json::array(); for(int32_t i=0;i<n;++i){ const char* name=nullptr; const char* sym=nullptr; const char* unit=nullptr; float mn=0,mx=0; if(!nam_studio_block_param_info(graph_, coreId, i, &name, &sym, &mn, &mx, &unit)) continue; params.push_back({{"index", i}, {"name", name?name:""}, {"symbol", sym?sym:""}, {"min", mn}, {"max", mx}, {"unit", unit?unit:""}, {"value", nam_studio_get_param(graph_, coreId, i)}}); } return (json{{"ok", true}, {"id", jsId}, {"kind", kind}, {"row", row}, {"col", col}, {"hasModel", nam_studio_block_has_model(graph_, coreId)!=0}, {"paramCount", n}, {"params", params}, {"meter", nam_studio_get_meter(graph_, coreId)}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
+  try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; std::string kind; int row=0,col=0; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; auto kIt=blockKinds_.find(coreId); if(kIt!=blockKinds_.end()) kind=kIt->second; auto pIt=blockPos_.find(jsId); if(pIt!=blockPos_.end()){ row=pIt->second.first; col=pIt->second.second; } } int32_t n=openaxe_block_param_count(graph_, coreId); json params=json::array(); for(int32_t i=0;i<n;++i){ const char* name=nullptr; const char* sym=nullptr; const char* unit=nullptr; float mn=0,mx=0; if(!openaxe_block_param_info(graph_, coreId, i, &name, &sym, &mn, &mx, &unit)) continue; params.push_back({{"index", i}, {"name", name?name:""}, {"symbol", sym?sym:""}, {"min", mn}, {"max", mx}, {"unit", unit?unit:""}, {"value", openaxe_get_param(graph_, coreId, i)}}); } return (json{{"ok", true}, {"id", jsId}, {"kind", kind}, {"row", row}, {"col", col}, {"hasModel", openaxe_block_has_model(graph_, coreId)!=0}, {"paramCount", n}, {"params", params}, {"meter", openaxe_get_meter(graph_, coreId)}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); }
 }
 std::string VstBridge::HandleListBlocks(const std::string&){
   std::lock_guard<std::mutex> lock(mutex_); json out=json::array(); for(auto& [jsId, coreId]: blockIds_){ auto kIt=blockKinds_.find(coreId); std::string kind=kIt!=blockKinds_.end()?kIt->second:"unknown"; auto pIt=blockPos_.find(jsId); int row=0,col=0; if(pIt!=blockPos_.end()){ row=pIt->second.first; col=pIt->second.second; } out.push_back({{"id", jsId}, {"kind", kind}, {"row", row}, {"col", col}}); } return out.dump();
@@ -374,17 +374,17 @@ std::string VstBridge::HandleListEdges(const std::string&) {
   return out.dump();
 }
 
-std::string VstBridge::HandleSetMasterLevel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; float v=o.value("level",1.0f); nam_studio_set_master_level(graph_, v); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setMasterLevel failed"); } }
-std::string VstBridge::HandleSetMasterMuted(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; bool m=o.value("muted",false); nam_studio_set_master_muted(graph_, m?1:0); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setMasterMuted failed"); } }
-std::string VstBridge::HandleSetBypass(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); bool b=o.value("bypassed",false); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } nam_studio_set_bypass(graph_, coreId, b?1:0); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setBypass failed"); } }
-std::string VstBridge::HandleSetBlockTrim(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); bool hasIn=o.contains("input"); bool hasOut=o.contains("output"); float inVal=hasIn?o["input"].get<float>():1.0f; float outVal=hasOut?o["output"].get<float>():1.0f; int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(hasIn) nam_studio_set_block_input_trim(graph_, coreId, inVal); if(hasOut) nam_studio_set_block_output_trim(graph_, coreId, outVal); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setBlockTrim failed"); } }
-std::string VstBridge::HandleMeters(const std::string&){ std::lock_guard<std::mutex> lock(mutex_); json out=json::array(); for(auto& [jsId, coreId]: blockIds_){ out.push_back({{"id", jsId}, {"value", nam_studio_get_meter(graph_, coreId)}}); } return out.dump(); }
-std::string VstBridge::HandleCpuLoad(const std::string&){ float v=graph_? nam_studio_get_cpu_load(graph_):0.0f; return json(v).dump(); }
+std::string VstBridge::HandleSetMasterLevel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; float v=o.value("level",1.0f); openaxe_set_master_level(graph_, v); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setMasterLevel failed"); } }
+std::string VstBridge::HandleSetMasterMuted(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; bool m=o.value("muted",false); openaxe_set_master_muted(graph_, m?1:0); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setMasterMuted failed"); } }
+std::string VstBridge::HandleSetBypass(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); bool b=o.value("bypassed",false); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } openaxe_set_bypass(graph_, coreId, b?1:0); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setBypass failed"); } }
+std::string VstBridge::HandleSetBlockTrim(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); bool hasIn=o.contains("input"); bool hasOut=o.contains("output"); float inVal=hasIn?o["input"].get<float>():1.0f; float outVal=hasOut?o["output"].get<float>():1.0f; int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(hasIn) openaxe_set_block_input_trim(graph_, coreId, inVal); if(hasOut) openaxe_set_block_output_trim(graph_, coreId, outVal); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setBlockTrim failed"); } }
+std::string VstBridge::HandleMeters(const std::string&){ std::lock_guard<std::mutex> lock(mutex_); json out=json::array(); for(auto& [jsId, coreId]: blockIds_){ out.push_back({{"id", jsId}, {"value", openaxe_get_meter(graph_, coreId)}}); } return out.dump(); }
+std::string VstBridge::HandleCpuLoad(const std::string&){ float v=graph_? openaxe_get_cpu_load(graph_):0.0f; return json(v).dump(); }
 std::string VstBridge::HandleLoadModel(const std::string&){ return (json{{"ok", false}, {"canceled", true}}).dump(); }
-std::string VstBridge::HandleLoadModelJson(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string content=o.value("json",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int r=-1; if(plugin_) plugin_->WithSuspend([&]{ r=nam_studio_load_nam_model_json(graph_, coreId, content.c_str()); }); else r=nam_studio_load_nam_model_json(graph_, coreId, content.c_str()); return (json{{"ok", r==0}, {"result", r}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); } }
-std::string VstBridge::HandleUnloadModel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_unload_nam_model(graph_, coreId); }); else nam_studio_unload_nam_model(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadModel failed"); } }
-std::string VstBridge::HandleSetReverbAlgorithm(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string alg=o.value("algorithm",""); NamStudioReverbAlgorithm a=NAM_STUDIO_REVERB_HALL; if(alg=="hall") a=NAM_STUDIO_REVERB_HALL; else if(alg=="room") a=NAM_STUDIO_REVERB_ROOM; else if(alg=="plate") a=NAM_STUDIO_REVERB_PLATE; else if(alg=="earlyReflections") a=NAM_STUDIO_REVERB_EARLY_REFLECTIONS; else return JsonError("unknown alg"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_set_reverb_algorithm(graph_, coreId, a); }); else nam_studio_set_reverb_algorithm(graph_, coreId, a); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setReverbAlgorithm failed"); } }
-std::string VstBridge::HandleSetDelayModel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string m=o.value("model",""); NamStudioDelayModel dm=NAM_STUDIO_DELAY_DIGITAL; if(m=="digital") dm=NAM_STUDIO_DELAY_DIGITAL; else if(m=="analog") dm=NAM_STUDIO_DELAY_ANALOG; else if(m=="tape") dm=NAM_STUDIO_DELAY_TAPE; else return JsonError("unknown model"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_set_delay_model(graph_, coreId, dm); }); else nam_studio_set_delay_model(graph_, coreId, dm); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setDelayModel failed"); } }
+std::string VstBridge::HandleLoadModelJson(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string content=o.value("json",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int r=-1; if(plugin_) plugin_->WithSuspend([&]{ r=openaxe_load_nam_model_json(graph_, coreId, content.c_str()); }); else r=openaxe_load_nam_model_json(graph_, coreId, content.c_str()); return (json{{"ok", r==0}, {"result", r}}).dump(); }catch(std::exception& e){ return JsonError(e.what()); } }
+std::string VstBridge::HandleUnloadModel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_unload_nam_model(graph_, coreId); }); else openaxe_unload_nam_model(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadModel failed"); } }
+std::string VstBridge::HandleSetReverbAlgorithm(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string alg=o.value("algorithm",""); OpenAxeReverbAlgorithm a=OPENAXE_REVERB_HALL; if(alg=="hall") a=OPENAXE_REVERB_HALL; else if(alg=="room") a=OPENAXE_REVERB_ROOM; else if(alg=="plate") a=OPENAXE_REVERB_PLATE; else if(alg=="earlyReflections") a=OPENAXE_REVERB_EARLY_REFLECTIONS; else return JsonError("unknown alg"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_set_reverb_algorithm(graph_, coreId, a); }); else openaxe_set_reverb_algorithm(graph_, coreId, a); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setReverbAlgorithm failed"); } }
+std::string VstBridge::HandleSetDelayModel(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); std::string m=o.value("model",""); OpenAxeDelayModel dm=OPENAXE_DELAY_DIGITAL; if(m=="digital") dm=OPENAXE_DELAY_DIGITAL; else if(m=="analog") dm=OPENAXE_DELAY_ANALOG; else if(m=="tape") dm=OPENAXE_DELAY_TAPE; else return JsonError("unknown model"); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_set_delay_model(graph_, coreId, dm); }); else openaxe_set_delay_model(graph_, coreId, dm); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("setDelayModel failed"); } }
 std::string VstBridge::HandleLoadIrWav(const std::string& req) {
   // Was a hard error string, so cab IRs could not be loaded from the plugin UI
   // at all (issue #300 E4). Mirrors the desktop bridge: decode, sanity-check the
@@ -426,7 +426,7 @@ std::string VstBridge::HandleLoadIrWav(const std::string& req) {
     return JsonError(std::string("loadIrWav: ") + e.what());
   }
 }
-std::string VstBridge::HandleUnloadIr(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ nam_studio_unload_ir(graph_, coreId); }); else nam_studio_unload_ir(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadIr failed"); } }
+std::string VstBridge::HandleUnloadIr(const std::string& req){ try{ json args=ParseArgs(req); json o=args.empty()?json::object():args[0]; std::string jsId=o.value("blockId",""); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } if(plugin_) plugin_->WithSuspend([&]{ openaxe_unload_ir(graph_, coreId); }); else openaxe_unload_ir(graph_, coreId); return (json{{"ok", true}}).dump(); }catch(...){ return JsonError("unloadIr failed"); } }
 // The Tone3000 refresh token goes to the platform keychain, the same module and
 // service name the desktop shell uses — so signing in once covers both, and the
 // token survives closing the plugin. It used to live in a std::map that died

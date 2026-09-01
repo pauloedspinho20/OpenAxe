@@ -1,6 +1,6 @@
 /**
  * Optional WASM-backed fingerprint probe (issue #288).
- * Tries to call `_nam_studio_compute_fingerprint` on the main thread's WASM
+ * Tries to call `_openaxe_compute_fingerprint` on the main thread's WASM
  * module when it has been built with that export; returns null when unavailable
  * so callers can fall back to the metadata helper.
  */
@@ -8,8 +8,8 @@
 // Lazy singleton — reused across chart renders.
 let wasmModulePromise: Promise<unknown> | null = null
 
-type NamStudioWasmModule = {
-  _nam_studio_compute_fingerprint?: (
+type OpenAxeWasmModule = {
+  _openaxe_compute_fingerprint?: (
     jsonPtr: number,
     outGainPtr: number,
     outBrightPtr: number,
@@ -23,10 +23,10 @@ type NamStudioWasmModule = {
   UTF8ToString?: (ptr: number) => string
 }
 
-async function getWasmModule(): Promise<NamStudioWasmModule | null> {
+async function getWasmModule(): Promise<OpenAxeWasmModule | null> {
   if (wasmModulePromise) {
     try {
-      return (await wasmModulePromise) as NamStudioWasmModule | null
+      return (await wasmModulePromise) as OpenAxeWasmModule | null
     } catch {
       return null
     }
@@ -36,14 +36,14 @@ async function getWasmModule(): Promise<NamStudioWasmModule | null> {
       // Dynamically import the Emscripten glue; it may not yet export the
       // fingerprint symbol if the wasm hasn't been rebuilt — that's fine.
       // @ts-ignore - wasm-core is a generated Emscripten output, not a TS module
-      const modFactory = (await import(/* @vite-ignore */ '/wasm-core/nam_studio_core.js')) as {
-        default?: (opts?: unknown) => Promise<NamStudioWasmModule>
+      const modFactory = (await import(/* @vite-ignore */ '/wasm-core/openaxe_core.js')) as {
+        default?: (opts?: unknown) => Promise<OpenAxeWasmModule>
       }
       const factory =
         modFactory.default ??
-        (modFactory as unknown as (opts?: unknown) => Promise<NamStudioWasmModule>)
+        (modFactory as unknown as (opts?: unknown) => Promise<OpenAxeWasmModule>)
       if (typeof factory !== 'function') return null
-      const wasmBytes = await fetch('/wasm-core/nam_studio_core.wasm').then((r) => r.arrayBuffer())
+      const wasmBytes = await fetch('/wasm-core/openaxe_core.wasm').then((r) => r.arrayBuffer())
       const mod = await factory({ wasmBinary: wasmBytes })
       return mod
     } catch {
@@ -51,7 +51,7 @@ async function getWasmModule(): Promise<NamStudioWasmModule | null> {
     }
   })()
   try {
-    return (await wasmModulePromise) as NamStudioWasmModule | null
+    return (await wasmModulePromise) as OpenAxeWasmModule | null
   } catch {
     return null
   }
@@ -61,7 +61,7 @@ export async function wasmFingerprintForJson(
   json: string,
 ): Promise<{ gainDb: number; brightness: number } | null> {
   const mod = await getWasmModule()
-  if (!mod || typeof mod._nam_studio_compute_fingerprint !== 'function') return null
+  if (!mod || typeof mod._openaxe_compute_fingerprint !== 'function') return null
   const malloc = mod._malloc
   const free = mod._free
   // Allocate JSON as NUL-terminated UTF-8.
@@ -78,7 +78,7 @@ export async function wasmFingerprintForJson(
     }
     gainPtr = malloc(4)
     brightPtr = malloc(4)
-    const ok = mod._nam_studio_compute_fingerprint(jsonPtr, gainPtr, brightPtr)
+    const ok = mod._openaxe_compute_fingerprint(jsonPtr, gainPtr, brightPtr)
     if (!ok) return null
     const gainDb = mod.HEAPF32[gainPtr >> 2]!
     const brightness = mod.HEAPF32[brightPtr >> 2]!

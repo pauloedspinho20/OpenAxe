@@ -18,23 +18,23 @@ void EndHostParamChange(int) {
   // Real: EndInformHostOfParamChange(host_param_id)
 }
 
-bool WriteParam(NamStudioGraph* graph, int32_t block_id, int param_index, float normalized) {
+bool WriteParam(OpenAxeGraph* graph, int32_t block_id, int param_index, float normalized) {
   if (!graph || block_id < 0 || param_index < 0) return false;
-  const int32_t count = nam_studio_block_param_count(graph, block_id);
+  const int32_t count = openaxe_block_param_count(graph, block_id);
   if (param_index >= count) return false;
   const char* name = nullptr;
   const char* sym = nullptr;
   const char* unit = nullptr;
   float mn = 0, mx = 1;
-  if (!nam_studio_block_param_info(graph, block_id, param_index, &name, &sym, &mn, &mx, &unit)) return false;
+  if (!openaxe_block_param_info(graph, block_id, param_index, &name, &sym, &mn, &mx, &unit)) return false;
   const float real = mn + normalized * (mx - mn);
   // Slim Size is Tier 2 (issue #127) — caller must have suspended; direct
-  // nam_studio_set_param here is correct for all other params (Tier 1).
-  nam_studio_set_param(graph, block_id, param_index, real);
+  // openaxe_set_param here is correct for all other params (Tier 1).
+  openaxe_set_param(graph, block_id, param_index, real);
   return true;
 }
 
-bool WriteAutomationParam(NamStudioGraph* graph, int host_param_id, float normalized) {
+bool WriteAutomationParam(OpenAxeGraph* graph, int host_param_id, float normalized) {
   if (!graph || host_param_id < 0) return false;
   bool needs_suspend = false;
   // HostParamWrite already handles slim_size deferral (returns needs_suspend).
@@ -45,13 +45,13 @@ bool WriteAutomationParam(NamStudioGraph* graph, int host_param_id, float normal
   return ok;
 }
 
-float ReadMeter(NamStudioGraph* graph, int32_t block_id) {
+float ReadMeter(OpenAxeGraph* graph, int32_t block_id) {
   if (!graph || block_id < 0) return 0.0f;
-  return nam_studio_get_meter(graph, block_id);
+  return openaxe_get_meter(graph, block_id);
 }
-float ReadCpuLoad(NamStudioGraph* graph) {
+float ReadCpuLoad(OpenAxeGraph* graph) {
   if (!graph) return 0.0f;
-  return nam_studio_get_cpu_load(graph);
+  return openaxe_get_cpu_load(graph);
 }
 
 bool HasIControlFork(const std::string& primitive) {

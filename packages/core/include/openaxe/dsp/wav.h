@@ -45,7 +45,7 @@ std::vector<float> ResampleMono(const std::vector<float>& samples, double source
 // Encode mono float samples as a 32-bit IEEE-float RIFF/WAVE byte buffer - the
 // exact inverse of DecodeWav's float path, so DecodeWav(EncodeWavF32(s, r), ...)
 // returns `samples` bit-for-bit. Exists for state serialization (#120): a cab
-// block whose IR arrived as raw samples (nam_studio_load_ir) still needs WAV
+// block whose IR arrived as raw samples (openaxe_load_ir) still needs WAV
 // bytes to embed in a saved rig. `sample_rate` is truncated to the unsigned
 // 32-bit integer the format stores; non-positive rates yield an empty buffer.
 std::vector<uint8_t> EncodeWavF32(const std::vector<float>& samples, double sample_rate);
