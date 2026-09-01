@@ -22,7 +22,6 @@ import { Tuner } from '@/components/Tuner/Tuner'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import { BlockActionSheet } from '../BlockActionSheet/BlockActionSheet'
 import { useSelection } from '../../../state/selection'
-import type { AudioEngineState, AudioEngineActions } from '../../../hooks/useAudioEngine'
 
 import styles from './GridEditor.module.css'
 
@@ -33,6 +32,19 @@ export interface GridEditorProps {
   outputSelectionSupported: boolean
   context: AudioContext | null
   engine: AudioEngineState & AudioEngineActions
+}
+
+function useIsMobile(breakpoint = 720) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const mql = window.matchMedia(`(max-width: ${breakpoint}px)`)
+    const onChange = () => setIsMobile(mql.matches)
+    onChange()
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [breakpoint])
+  return isMobile
 }
 
 function useIsMobile(breakpoint = 720) {
@@ -448,6 +460,7 @@ export function GridEditor({
         onClose={() => setInputDialogOpen(false)}
         engine={engine}
       />
+
       {!isPluginShell && (
         <OutputDeviceDialog
           open={outputDialogOpen}
