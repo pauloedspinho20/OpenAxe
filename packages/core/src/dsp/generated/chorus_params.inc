@@ -6,5 +6,3 @@
     {"Depth", "depth", 0.2f, 10.0f, "ms"},
     {"Delay", "delay", 5.0f, 30.0f, "ms"},
     {"Feedback", "feedback", 0.0f, 0.5f, "%"},
-    {"Voices", "voices", 1.0f, 4.0f, ""},
-    {"Spread", "stereo_spread", 0.0f, 1.0f, ""},

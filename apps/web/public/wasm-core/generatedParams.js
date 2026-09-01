@@ -40,27 +40,11 @@ export const EQ_PARAMS = Object.freeze({
   band3_q: 11,
 })
 
-export const CHORUS_PARAMS = Object.freeze({
-  rate: 0,
-  depth: 1,
-  delay: 2,
-  feedback: 3,
-  voices: 4,
-  stereo_spread: 5,
-})
+export const CHORUS_PARAMS = Object.freeze({ rate: 0, depth: 1, delay: 2, feedback: 3 })
 
-export const FLANGER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, delay: 3, manual: 4 })
+export const FLANGER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, delay: 3 })
 
-export const PHASER_PARAMS = Object.freeze({
-  rate: 0,
-  depth: 1,
-  feedback: 2,
-  stages: 3,
-  center_frequency: 4,
-  frequency_range: 5,
-  waveform: 6,
-  stereo_spread: 7,
-})
+export const PHASER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, stages: 3 })
 
 export const TREMOLO_PARAMS = Object.freeze({ rate: 0, depth: 1, shape: 2, stereo: 3, mode: 4 })
 
@@ -74,8 +58,6 @@ export const FILTER_PARAMS = Object.freeze({
   sensitivity: 4,
   mode: 5,
   lfo_rate: 6,
-  env_attack: 7,
-  env_release: 8,
 })
 
 export const PITCHSHIFTER_PARAMS = Object.freeze({ mode: 0, pitch: 1, detune_cents: 2 })

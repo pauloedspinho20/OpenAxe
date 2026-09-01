@@ -5,6 +5,5 @@
 // arrays. See openaxe/dsp/smoothing.h for the struct and the ramp math.
     {openaxe::dsp::SmoothingMode::kExponential, 0.05f, 0.1f, 10.0f},
     {openaxe::dsp::SmoothingMode::kExponential, 0.05f, 0.1f, 5.0f},
-    {openaxe::dsp::SmoothingMode::kExponential, 0.02f, -0.9f, 0.9f},
-    {openaxe::dsp::SmoothingMode::kExponential, 0.05f, 0.1f, 3.0f},
+    {openaxe::dsp::SmoothingMode::kExponential, 0.02f, 0.0f, 0.9f},
     {openaxe::dsp::SmoothingMode::kExponential, 0.05f, 0.1f, 3.0f},

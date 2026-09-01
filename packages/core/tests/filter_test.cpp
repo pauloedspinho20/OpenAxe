@@ -17,9 +17,9 @@ using openaxe::dsp::Filter;
 namespace {
 
 void TestParamCountAndInfo() {
-  OPENAXE_EXPECT(Filter::ParamCount() == 9);
+  OPENAXE_EXPECT(Filter::ParamCount() == 7);
   const char* expected[] = {"type",  "frequency", "q", "drive",
-                            "sensitivity", "mode", "lfo_rate", "env_attack", "env_release"};
+                            "sensitivity", "mode", "lfo_rate"};
   for (int i = 0; i < Filter::ParamCount(); ++i) {
     const auto& info = Filter::GetParamInfo(i);
     OPENAXE_EXPECT(std::string(info.symbol) == expected[i]);

@@ -14,8 +14,7 @@ constexpr int kRateParam = 0;
 constexpr int kDepthParam = 1;
 constexpr int kFeedbackParam = 2;
 constexpr int kDelayParam = 3;
-constexpr int kManualParam = 4;
-constexpr int kParamCount = 5;
+constexpr int kParamCount = 4;
 
 // Generated from packages/core/param_schema.json (issue #51) - run
 // scripts/gen-param-schema.mjs after editing the schema.
@@ -26,7 +25,7 @@ const Flanger::ParamInfo kParamInfo[kParamCount] = {
 // The longest tap the params can ask for: delay's maximum (3ms) plus depth's
 // full excursion (5ms), per packages/core/param_schema.json. Sized once in
 // Reset rather than per knob position - see chorus.cpp's note.
-constexpr float kMaxDelayMs = 11.0f;
+constexpr float kMaxDelayMs = 8.0f;
 
 // One channel's modulated delay line plus the LFO phase, carried across
 // Process() calls so the sweep stays continuous over block boundaries. A
@@ -46,7 +45,6 @@ struct Flanger::Impl {
   float depth = 0.4f;
   float feedback = 0.25f;
   float delay = 0.3f;
-  float manual = 0.3f;
   float sample_rate = 48000.0f;
 
   // Size both delay lines for the largest tap the param schema allows; only
@@ -83,7 +81,7 @@ void Flanger::Reset(double sample_rate) {
 void Flanger::Process(const float* const* input, float* const* output, int num_frames) {
   const float sr = impl_->sample_rate;
   const float fb = impl_->feedback;
-  const float base_delay = impl_->delay + impl_->manual;
+  const float base_delay = impl_->delay;
   const float mod_depth = impl_->depth;
   const float phase_step = impl_->rate / sr;
 
@@ -102,7 +100,7 @@ void Flanger::Process(const float* const* input, float* const* output, int num_f
   }
 }
 
-// Param surface: rate, depth, feedback(-0.9..0.9 bipolar), delay, manual
+// Param surface: rate (Hz), depth (ms of excursion), feedback (0..0.9),
 // base delay (ms). Index order comes from the generated kParamInfo table.
 int Flanger::ParamCount() { return kParamCount; }
 
@@ -122,8 +120,6 @@ float Flanger::GetParam(int index) const {
       return impl_->feedback;
     case kDelayParam:
       return impl_->delay;
-    case kManualParam:
-      return impl_->manual;
     default:
       return 0.0f;
   }
@@ -140,13 +136,10 @@ void Flanger::SetParam(int index, float value) {
       impl_->depth = value;
       break;
     case kFeedbackParam:
-      impl_->feedback = std::clamp(value, -0.9f, 0.9f);
+      impl_->feedback = value;
       break;
     case kDelayParam:
       impl_->delay = value;
-      break;
-    case kManualParam:
-      impl_->manual = value;
       break;
     default:
       return;

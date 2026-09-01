@@ -2,8 +2,6 @@
 
 #include <memory>
 
-#include "openaxe/dsp/dspark_param.h"
-
 namespace openaxe::dsp {
 
 // Classic stereo chorus: a modulated delay line whose read tap position is
@@ -37,7 +35,13 @@ namespace openaxe::dsp {
 // channel per Channel (left/right), no shared LFO state between them.
 class Chorus {
  public:
-  using ParamInfo = DsparkParamInfo;
+  struct ParamInfo {
+    const char* name;
+    const char* symbol;
+    float min_value;
+    float max_value;
+    const char* unit;
+  };
 
   Chorus();
   ~Chorus();

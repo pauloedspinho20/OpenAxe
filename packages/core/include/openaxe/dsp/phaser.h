@@ -2,8 +2,6 @@
 
 #include <memory>
 
-#include "openaxe/dsp/dspark_param.h"
-
 namespace openaxe::dsp {
 
 // Classic feedback phaser: a cascade of first-order all-pass filters whose
@@ -44,7 +42,13 @@ namespace openaxe::dsp {
 // (all-passed) signal. BaseEffect handles dry/wet blend.
 class Phaser {
  public:
-  using ParamInfo = DsparkParamInfo;
+  struct ParamInfo {
+    const char* name;
+    const char* symbol;
+    float min_value;
+    float max_value;
+    const char* unit;
+  };
 
   Phaser();
   ~Phaser();
