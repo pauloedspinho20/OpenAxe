@@ -73,7 +73,7 @@ export function Meter({ label, level }: MeterProps) {
           )
         })}
       </div>
-      {/*     {label && <span className="label">{label}</span>} */}
+      {label && <span className="label">{label}</span>}
     </div>
   )
 }
