@@ -313,9 +313,15 @@ export function GridEditor({
         <div className={`${styles.rail} ${styles.railIn}`}>
           <HardwareButton
             fullWidth
-            label="IN"
+            label={engine.diPlaying ? 'Sample' : 'IN'}
             onClick={() => setInputDialogOpen(true)}
-            title={isPluginShell ? 'Input channel' : 'Input device and channel'}
+            title={
+              engine.diPlaying
+                ? 'Sample is playing — click to open DI audition'
+                : isPluginShell
+                  ? 'Input channel'
+                  : 'Input device and channel'
+            }
           />
 
           <button

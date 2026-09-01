@@ -35,12 +35,6 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  // Stop DI when dialog closes (all-triggers: dialog close restores mic).
-  useEffect(() => {
-    if (!open && diPlaying) stopDI?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
   // If engine powers off, ensure DI stops (extra safety; engine already does).
   useEffect(() => {
     if (engine.status !== 'ready' && diPlaying) stopDI?.()
