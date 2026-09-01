@@ -203,6 +203,10 @@ export interface OpenAxeBridge {
   setMasterLevel(args: { level: number }): Promise<OpenAxeOk>
   setMasterMuted(args: { muted: boolean }): Promise<OpenAxeOk>
   setTunerMuted(args: { muted: boolean }): Promise<OpenAxeOk>
+  /** DI audition (issue #273) — wavBase64 is a RIFF/WAVE file, loop always true. */
+  loadDIWav(args: { wavBase64: string }): Promise<OpenAxeOk & { frames?: number }>
+  playDI(args: { loop?: boolean }): Promise<OpenAxeOk>
+  stopDI(): Promise<OpenAxeOk>
 
   meters(): Promise<Array<{ id: string; value: number }>>
   cpuLoad(): Promise<number>
@@ -375,6 +379,15 @@ class NativeBridge implements OpenAxeBridge {
   }
   setTunerMuted(args: { muted: boolean }) {
     return this.call<OpenAxeOk>('setTunerMuted', args)
+  }
+  loadDIWav(args: { wavBase64: string }) {
+    return this.call<OpenAxeOk & { frames?: number }>('loadDIWav', args)
+  }
+  playDI(args: { loop?: boolean }) {
+    return this.call<OpenAxeOk>('playDI', args)
+  }
+  stopDI() {
+    return this.call<OpenAxeOk>('stopDI')
   }
   meters() {
     return this.call<Array<{ id: string; value: number }>>('meters')

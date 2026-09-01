@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+
+import type { AudioEngineActions, AudioEngineState } from '@/hooks/useAudioEngine'
 import { useGraphStore } from '../../../state/graphStore'
 import { useIOStore } from '../../../state/ioStore'
 import type { GraphRig } from '../../../engine/GraphRig'
@@ -31,6 +33,7 @@ export interface GridEditorProps {
   analyser: AnalyserNode | null
   outputSelectionSupported: boolean
   context: AudioContext | null
+  engine: AudioEngineState & AudioEngineActions
 }
 
 function useIsMobile(breakpoint = 720) {
@@ -52,6 +55,7 @@ export function GridEditor({
   analyser,
   outputSelectionSupported,
   context,
+  engine,
 }: GridEditorProps) {
   const blocks = useGraphStore((s) => s.blocks)
   const edges = useGraphStore((s) => s.edges)
@@ -310,9 +314,16 @@ export function GridEditor({
         <div className={`${styles.rail} ${styles.railIn}`}>
           <HardwareButton
             fullWidth
-            label="IN"
+            active={engine.diPlaying}
+            label={engine.diPlaying ? 'Sample' : 'IN'}
             onClick={() => setInputDialogOpen(true)}
-            title={isPluginShell ? 'Input channel' : 'Input device and channel'}
+            title={
+              engine.diPlaying
+                ? 'Sample is playing — click to open DI audition'
+                : isPluginShell
+                  ? 'Input channel'
+                  : 'Input device and channel'
+            }
           />
 
           <button
@@ -433,7 +444,12 @@ export function GridEditor({
         />
       )}
 
-      <InputDeviceDialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)} />
+      <InputDeviceDialog
+        open={inputDialogOpen}
+        onClose={() => setInputDialogOpen(false)}
+        engine={engine}
+      />
+
       {!isPluginShell && (
         <OutputDeviceDialog
           open={outputDialogOpen}

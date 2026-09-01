@@ -17,7 +17,7 @@ export default defineConfig({
           // (regenerate via `node packages/ui/scripts/generate-tokens.mjs`).
           return code
             .replace(/var\(--mw-xxs\)/g, '320px')
-            .replace(/var\(--mw-xs\)/g, '520px')
+            .replace(/var\(--mw-xs\)/g, '496px')
             .replace(/var\(--mw-sm\)/g, '640px')
             .replace(/var\(--mw-md\)/g, '720px')
             .replace(/var\(--mw-lg\)/g, '920px')

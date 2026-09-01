@@ -54,6 +54,7 @@ void SetContentType(const std::string& path, std::string& out) {
   else if (ext == ".woff2") out = "font/woff2";
   else if (ext == ".woff") out = "font/woff";
   else if (ext == ".ttf") out = "font/ttf";
+  else if (ext == ".wav") out = "audio/wav";
   else out = "application/octet-stream";
 }
 
@@ -146,8 +147,13 @@ void HandleClient(int fd, const std::string& root) {
   const std::string target = req.substr(sp1 + 1, sp2 == std::string::npos ? std::string::npos
                                                                           : sp2 - sp1 - 1);
   // Keep only the path (strip query), default to index.html.
+  // UrlDecode handles %20 etc. so `fender%20strat.wav` on the wire maps to
+  // `fender strat.wav` on disk. Do it here for static files too — not only
+  // /__asset/ — so DI samples and any other public asset with spaces work in
+  // the desktop shell (the browser always percent-encodes them).
   std::string path = target.substr(0, target.find('?'));
   if (path.empty() || path == "/") path = "/index.html";
+  path = UrlDecode(path);
 
   // /__asset/<key> serves a blob out of the shared on-disk library, which
   // lives outside the UI root — the plugin serves the identical route, so the
@@ -155,7 +161,8 @@ void HandleClient(int fd, const std::string& root) {
   // (issue #300 follow-up). A plain GET streams; the bridge alternative would
   // mean base64 and a third more bytes.
   if (path.rfind("/__asset/", 0) == 0) {
-    ServeAsset(fd, UrlDecode(path.substr(9)));
+    // Already decoded once; avoid double-decode if someone double-encodes.
+    ServeAsset(fd, path.substr(9));
     return;
   }
 
