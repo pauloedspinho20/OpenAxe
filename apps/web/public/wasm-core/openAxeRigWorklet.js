@@ -50,7 +50,7 @@ const OUT_RAIL = -2
 // ReverbAlgorithm. Reverb blocks are driven through the core's ReverbControl
 // mapping (the UI's roomSize/damping/width/... are abstractions, not symbols),
 // mirroring the desktop bridge's ReverbControlFor.
-const REVERB_KIND = 9
+const REVERB_KIND = 8
 const REVERB_CONTROL = {
   roomSize: 0,
   damping: 1,

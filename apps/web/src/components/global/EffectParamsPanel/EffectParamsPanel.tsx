@@ -73,11 +73,12 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         // `selectors.map(...)`. It sat on the inner Select until Delay became
         // the first kind with two selects in one row (#314), at which point
         // React started warning about a keyless list.
-        <div key={field.key} className={styles.selectWrapper}>
+        <div key={field.key} className={styles.selectWrapper} title={field.description}>
           <Select
             value={current}
             onChange={(e) => setParam(field.key, e.target.value)}
             className={styles.selectField}
+            aria-label={field.label}
           >
             {field.options.map((option) => (
               <option key={option.value} value={option.value}>
@@ -103,6 +104,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         defaultValue={field.defaultValue}
         formatValue={field.formatValue}
         size={50}
+        description={field.description}
         onChange={(value) => setParam(field.key, value)}
       />
     )
