@@ -33,6 +33,12 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
     onClose()
   }
 
+  const handleBypass = () => {
+    useGraphStore.getState().setBlockBypass(blockId, !instance.bypass)
+    useSelection.getState().clear()
+    onClose()
+  }
+
   const handleDisconnectAll = () => {
     incoming.forEach((e) => useGraphStore.getState().disconnect(e.id))
     outgoing.forEach((e) => useGraphStore.getState().disconnect(e.id))
@@ -109,8 +115,18 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
         {/* Change block type — same list as Add a block */}
         <div className={styles.section}>
           {/* Destructive actions */}
-          <div className={styles.section}>
-            <HardwareButton label="Remove block" onClick={handleRemove} fullWidth />
+          <div className={styles.sectionActions}>
+            <HardwareButton
+              label={instance.bypass ? 'ENABLE BLOCK' : 'BYPASS BLOCK'}
+              onClick={handleBypass}
+              fullWidth
+            />
+            <HardwareButton
+              label="REMOVE BLOCK"
+              onClick={handleRemove}
+              fullWidth
+              variant="danger"
+            />
           </div>
           <p className={styles.sectionTitle}>Change block type</p>
           {/*   <p className={styles.hint}>Replace this slot with a different block. Current: {label}.</p> */}
