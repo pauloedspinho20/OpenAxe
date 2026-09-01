@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "openaxe/dsp/dspark_param.h"
+
 namespace openaxe::dsp {
 
 // Ring modulator with vintage diode/transformer saturation flavor.
@@ -13,13 +15,7 @@ namespace openaxe::dsp {
 //   - drive: 0–1 saturation amount
 class RingMod {
  public:
-  struct ParamInfo {
-    const char* name;
-    const char* symbol;
-    float min_value;
-    float max_value;
-    const char* unit;
-  };
+  using ParamInfo = DsparkParamInfo;
 
   RingMod();
   ~RingMod();

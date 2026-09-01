@@ -20,7 +20,7 @@ export interface KnobProps {
   size?: number
   disabled?: boolean
   /** Human-readable param help — rendered as native tooltip (title) and aria-describedby. */
-  description?: string
+  description?: string | undefined
 }
 
 function clamp(value: number, min: number, max: number): number {

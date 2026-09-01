@@ -142,7 +142,7 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title={`${label} Details`} width={720}>
+    <Dialog open={open} onClose={onClose} title={`${label} Details`} width="720px">
       <div className={styles.body}>
         <div className={styles.header}>
           <h3>{label}</h3>

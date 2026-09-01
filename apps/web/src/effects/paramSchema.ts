@@ -80,7 +80,7 @@ const hzPrecise = (value: number) => `${value.toFixed(1)}Hz`
 
 function eqBand(index: number, freqDefault: number): KnobField[] {
   const group = `Band ${index + 1}`
-  const descs =
+  const descs: [string, string, string] =
     index === 0
       ? [
           'Low shelf centre frequency. Below this, the shelf boosts/cuts.',
