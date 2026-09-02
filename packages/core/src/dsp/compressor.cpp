@@ -121,4 +121,6 @@ float Compressor::GetParam(int index) const { return impl_->dsp.GetParam(index);
 // Store one param and push it into the processor. Real-time safe.
 void Compressor::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
+float Compressor::GetGainReductionDb() const { return impl_->dsp.GetGainReductionDb(); }
+
 }  // namespace openaxe::dsp

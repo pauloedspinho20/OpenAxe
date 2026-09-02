@@ -37,6 +37,8 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   private readonly edges = new Map<string, { from: Jack; to: Jack }>()
   private readonly analysers = new Map<string, NativeAnalyser>()
   private readonly peaks = new Map<string, number>()
+  private readonly gainReductions = new Map<string, number>()
+  private readonly gateGains = new Map<string, number>()
   private disposed = false
   private nextId = 0
 
@@ -98,6 +100,8 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     this.edges.clear()
     this.analysers.clear()
     this.peaks.clear()
+    this.gainReductions.clear()
+    this.gateGains.clear()
 
     const blocks = result.state.blocks.map((b) => {
       const kind = b.kind as BlockKind
@@ -152,6 +156,8 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     }
     this.analysers.delete(id)
     this.peaks.delete(id)
+    this.gainReductions.delete(id)
+    this.gateGains.delete(id)
     this.blocks.delete(id)
     await this.bridge.removeBlock({ blockId: id })
   }
@@ -274,6 +280,19 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     this.peaks.set(id, peak)
   }
 
+  getGainReduction(id: string): number {
+    return this.gainReductions.get(id) ?? 0
+  }
+  getGateGain(id: string): number {
+    return this.gateGains.get(id) ?? 0
+  }
+  updateGainReduction(id: string, grDb: number): void {
+    this.gainReductions.set(id, grDb)
+  }
+  updateGateGain(id: string, gain: number): void {
+    this.gateGains.set(id, gain)
+  }
+
   private validatableBlocks(): Map<string, ValidatableBlock> {
     const map = new Map<string, ValidatableBlock>()
     for (const [id, entry] of this.blocks) {
@@ -304,6 +323,8 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     )
     this.analysers.clear()
     this.peaks.clear()
+    this.gainReductions.clear()
+    this.gateGains.clear()
     this.blocks.clear()
     this.edges.clear()
   }

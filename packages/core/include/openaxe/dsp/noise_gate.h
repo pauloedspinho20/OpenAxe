@@ -39,6 +39,10 @@ class NoiseGate {
   float GetParam(int index) const;
   void SetParam(int index, float value);
 
+  // Current gate gain 0..1 (1 = open) and gain reduction in dB (≤0). Tier 1.
+  float GetGateGain() const;
+  float GetGainReductionDb() const;
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

@@ -47,6 +47,10 @@ class Compressor {
   float GetParam(int index) const;
   void SetParam(int index, float value);
 
+  // Current gain reduction in dB (≤0, 0 = no reduction). Tier 1, safe from any
+  // thread including the audio thread; reads the DSPark metering atom.
+  float GetGainReductionDb() const;
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
