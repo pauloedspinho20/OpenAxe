@@ -51,7 +51,6 @@ std::string KindToString(OpenAxeBlockKind k) {
     case OPENAXE_BLOCK_SPACE: return "space";
     case OPENAXE_BLOCK_CAB: return "cab";
     case OPENAXE_BLOCK_MIXER: return "mixer";
-    case OPENAXE_BLOCK_SPLITTER: return "splitter";
     case OPENAXE_BLOCK_SEND_1: return "send-1";
     case OPENAXE_BLOCK_RETURN_1: return "return-1";
     case OPENAXE_BLOCK_SEND_2: return "send-2";
@@ -77,7 +76,6 @@ std::optional<OpenAxeBlockKind> StringToKind(const std::string& s) {
       {"space", OPENAXE_BLOCK_SPACE},
       {"cab", OPENAXE_BLOCK_CAB},
       {"mixer", OPENAXE_BLOCK_MIXER},
-      {"splitter", OPENAXE_BLOCK_SPLITTER},
       {"send-1", OPENAXE_BLOCK_SEND_1},
       {"return-1", OPENAXE_BLOCK_RETURN_1},
       {"send-2", OPENAXE_BLOCK_SEND_2},

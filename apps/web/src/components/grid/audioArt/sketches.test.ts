@@ -77,7 +77,6 @@ const ALL_VARIANTS: ArtVariant[] = [
   'reverb',
   'cab',
   'mixer',
-  'splitter',
 ]
 
 describe('toArtVariant', () => {

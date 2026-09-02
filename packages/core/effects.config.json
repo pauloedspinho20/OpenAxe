@@ -76,10 +76,11 @@
       "inPalette": true,
       "cppFile": "filter.cpp"
     },
+    "$comment_pitch_shifter": "Out of the palette for now. Issue #320 is still open: formant preservation would mean dspark::PitchShifter and 2 x fftSize of latency (4096 samples / 85 ms at the default) against this implementation's ~4, and issue #268 had already rejected 40 ms. Left compiled so a preset that references the kind still loads instead of going through the unsupported-block channel.",
     "pitch-shifter": {
       "enumName": "kPitchShifter",
       "compiled": true,
-      "inPalette": true,
+      "inPalette": false,
       "cppFile": "pitch_shifter.cpp"
     },
     "rotary": {
@@ -88,7 +89,7 @@
       "inPalette": true,
       "cppFile": "rotary.cpp"
     },
-    "$comment_nam_kinds": "The NAM-capture gear kinds and cab/mixer/splitter and the Send/Return relays. No DSP source of their own (nam_amp.cpp and convolver.cpp back several kinds each, and routing lives in engine.cpp), so they are palette-gated only. `outboard` and `splitter` were the other two commented-out palette entries.",
+    "$comment_nam_kinds": "The NAM-capture gear kinds and cab/mixer and the Send/Return relays. No DSP source of their own (nam_amp.cpp and convolver.cpp back several kinds each, and routing lives in engine.cpp), so they are palette-gated only. `outboard` is the remaining commented-out palette entry; `splitter` was removed outright - it was a routing primitive nobody could place, and it was the only kind with more than one output port.",
     "amp": {
       "enumName": "kAmp",
       "compiled": true,
@@ -123,11 +124,6 @@
       "enumName": "kMixer",
       "compiled": true,
       "inPalette": true
-    },
-    "splitter": {
-      "enumName": "kSplitter",
-      "compiled": true,
-      "inPalette": false
     },
     "send-1": {
       "enumName": "kSend1",

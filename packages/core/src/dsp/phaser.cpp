@@ -22,8 +22,21 @@ const Phaser::ParamInfo kParamInfo[kParamCount] = {
 };
 
 constexpr int kMaxStages = 8;
-constexpr float kLowFreq = 150.0f;       // minimum sweep frequency (Hz)
-constexpr float kHighFreq = 3000.0f;     // maximum sweep frequency (Hz)
+// The sweep is described as a geometric centre plus a width in octaves rather
+// than a fixed low/high pair, because `depth` has to narrow the sweep *around*
+// the centre rather than collapse it onto the bottom end.
+//
+// It used to be `freq = kLowFreq * pow(kHighFreq/kLowFreq, t * depth)` with
+// kLowFreq 150 and kHighFreq 3000. That made `depth` an exponent on the top of
+// the range only, so the default depth of 0.6 swept 150 Hz to 905 Hz - the
+// notches spent the whole cycle down in the low mids, which reads as a
+// wobbling mud filter rather than a phaser. Lower depth made it worse rather
+// than subtler: at 0.2 the sweep was 150-260 Hz.
+//
+// 700 Hz +/- 2 octaves at full depth is 175 Hz to 2.8 kHz, which is where a
+// pedal phaser's notches actually live.
+constexpr float kCentreFreq = 700.0f;
+constexpr float kRangeOctaves = 4.0f;
 constexpr float kStereoOffset = 1.57079632679f;  // π/2
 
 // One first-order allpass section: y[n] = a*x[n] + x[n-1] - a*y[n-1].
@@ -75,9 +88,9 @@ struct Channel {
 
 struct Phaser::Impl {
   std::array<Channel, 2> channels;
-  float rate = 0.2f;
+  float rate = 0.8f;
   float depth = 0.8f;
-  float feedback = 0.6f;
+  float feedback = 0.5f;
   int stages = 4;
   float sample_rate = 48000.0f;
 };
@@ -109,15 +122,18 @@ void Phaser::Process(const float* const* input, float* const* output, int num_fr
   const float depth = impl_->depth;
   const float phase_step = impl_->rate / sr;
   const int num_stages = impl_->stages;
-  const float freq_ratio = kHighFreq / kLowFreq;
+  // Half the sweep width in octaves at the current depth.
+  const float half_octaves = kRangeOctaves * 0.5f * depth;
 
   for (int ch = 0; ch < 2; ++ch) {
     Channel& chan = impl_->channels[static_cast<size_t>(ch)];
     const float lfo_base = chan.phase + (ch == 1 ? kStereoOffset : 0.0f);
     for (int i = 0; i < num_frames; ++i) {
       const float lfo = std::sin(lfo_base + static_cast<float>(i) * phase_step * 6.28318530718f);
-      const float t = 0.5f + 0.5f * lfo;                                    // [0, 1]
-      const float freq = kLowFreq * std::pow(freq_ratio, t * depth);        // exponential sweep
+      // Symmetric about kCentreFreq: lfo in [-1, 1] maps to +/- half_octaves,
+      // so `depth` narrows the sweep around the centre instead of dragging its
+      // top end down towards the old kLowFreq.
+      const float freq = kCentreFreq * std::exp2(lfo * half_octaves);
       const float a = ComputeCoeff(freq, sr);
 
       float x = input[ch][i] + fb * chan.stages[static_cast<size_t>(num_stages - 1)].y1;

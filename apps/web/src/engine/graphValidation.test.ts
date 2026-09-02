@@ -136,27 +136,7 @@ describe('canConnect', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('allows several cables out of a Splitter as long as each comes from a different port', () => {
-    const map = blocks([
-      ['s', 'splitter', 0],
-      ['a', 'compressor', 1],
-      ['b', 'eq', 1],
-    ])
-    const existing = [{ from: jack('s', 0), to: jack('a') }]
-    const result = canConnect(map, existing, jack('s', 1), jack('b'))
-    expect(result.ok).toBe(true)
-  })
-
-  it('rejects a port index beyond a Splitter output count', () => {
-    const map = blocks([
-      ['s', 'splitter', 0],
-      ['a', 'compressor', 1],
-    ])
-    const result = canConnect(map, [], jack('s', 4), jack('a'))
-    expect(result.ok).toBe(false)
-  })
-
-  it('rejects any non-zero source port on a non-Splitter block', () => {
+  it('rejects any non-zero source port (no kind has a second output)', () => {
     const map = blocks([
       ['a', 'compressor', 0],
       ['b', 'eq', 1],

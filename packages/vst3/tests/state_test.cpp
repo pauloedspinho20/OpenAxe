@@ -128,7 +128,7 @@ void TestPartialRestoreTolerance() {
   })";
   int res = openaxe_vst3::state::Restore(g, doc, 48000.0, 512);
   CHECK(res == OPENAXE_LOAD_STATE_OK);
-  CHECK(openaxe_block_param_count(g, 0) == 5); // chorus survived (4 DSP params + the engine mix, issue #263)
+  CHECK(openaxe_block_param_count(g, 0) == 6); // chorus survived (5 DSP params + the engine mix, issue #263/#357 stereo)
   CHECK(GetParamBySymbol(g,0,"rate")==1.5f);
   openaxe_graph_destroy(g);
   std::printf("  partial-restore tolerance (bad entry skipped): ok\n");

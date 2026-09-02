@@ -50,6 +50,7 @@ export const PARAM_RANGES = Object.freeze({
     depth: { min: 0.2, max: 10 },
     delay: { min: 5, max: 30 },
     feedback: { min: 0, max: 0.5 },
+    stereo: { min: 0, max: 1 },
   }),
   flanger: Object.freeze({
     rate: { min: 0.1, max: 10 },
@@ -103,6 +104,7 @@ export const PARAM_RANGES = Object.freeze({
     drum_level: { min: 0, max: 1 },
     mic_distance: { min: 0, max: 1 },
     crossover: { min: 400, max: 1200 },
+    velocity: { min: 0, max: 1 },
   }),
   delay: Object.freeze({
     time: { min: 10, max: 1000 },
@@ -204,11 +206,5 @@ export const PARAM_RANGES = Object.freeze({
     in2_pan: { min: -1, max: 1 },
     in3_level: { min: 0, max: 1.5 },
     in3_pan: { min: -1, max: 1 },
-  }),
-  splitter: Object.freeze({
-    out0_level: { min: 0, max: 1.5 },
-    out1_level: { min: 0, max: 1.5 },
-    out2_level: { min: 0, max: 1.5 },
-    out3_level: { min: 0, max: 1.5 },
   }),
 })

@@ -2,7 +2,6 @@ import type { EffectKind } from './Effect'
 import type { EffectParams } from './Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
-import { SPLITTER_OUTPUT_COUNT } from '../engine/blocks/SplitterBlock'
 import { PARAM_RANGES } from './generatedParamRanges'
 
 interface KnobField {
@@ -344,6 +343,21 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.15,
       formatValue: percent,
       description: 'Regeneration around the effect. Adds thickness or resonance.',
+    },
+    {
+      // Named values, not '0'/'1': stringParamMaps.ts already owns
+      // `stereo` -> { mono: 0, stereo: 1 } for tremolo, so both block facades
+      // send the same number and web/desktop can't drift.
+      key: 'stereo',
+      label: 'Image',
+      control: 'select',
+      options: [
+        { value: 'stereo', label: 'Stereo' },
+        { value: 'mono', label: 'Mono' },
+      ],
+      defaultValue: 'stereo',
+      description:
+        'Stereo offsets the two channels\u2019 LFOs by a quarter cycle for width. Mono sweeps them together, which survives a later mono sum instead of partly cancelling.',
     },
     {
       key: 'mix',
@@ -869,6 +883,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       description: 'Crossover frequency splitting high vs low rotors.',
     },
     {
+      key: 'velocity',
+      label: 'Velocity',
+      control: 'knob',
+      ...range('rotary', 'velocity'),
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+      description:
+        'Fine trim on the selected speed: 50% is the mode\u2019s canonical rate, 0% half, 100% double. Stop stays stopped.',
+    },
+    {
       key: 'mix',
       label: 'Mix',
       control: 'knob',
@@ -1277,17 +1302,6 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
     ]
     return fields
   }).flat(),
-  splitter: Array.from({ length: SPLITTER_OUTPUT_COUNT }, (_, i): KnobField => ({
-    key: `out${i}_level`,
-    description: 'Splitter branch level.',
-    label: 'Level',
-    control: 'knob',
-    ...range('splitter', `out${i}_level`),
-    step: 0.01,
-    defaultValue: 1,
-    formatValue: percent,
-    group: `Out ${i + 1}`,
-  })),
 }
 
 /** Raw Dragonfly reverb params for an algorithm variant, from generated ranges (issue #263 expert mode). */

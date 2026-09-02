@@ -480,61 +480,26 @@ void TestMixerPerInputLevelAndPan() {
   }
 }
 
-// Splitter per-output level: each of the splitter's independent output jacks
-// carries its own gain, the DSP that used to live only in the web
-// SplitterBlock's per-output GainNodes. Both fan-out branches feed separate
-// cab blocks whose per-block meters report what each splitter output delivered.
-void TestSplitterPerOutputLevel() {
-  AudioEngine engine;
-  const BlockId splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
-  const BlockId a = engine.AddBlock(BlockKind::kCab, 0, 1);
-  const BlockId b = engine.AddBlock(BlockKind::kCab, 1, 1);
-  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, splitter, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 0, a, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 1, b, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(a, 0, kOutRailId, 0).ok);
-  engine.Reset(48000.0, kFrames);
-
-  // Param surface: 4 outputs x level.
-  OPENAXE_EXPECT(engine.ParamCount(splitter) == 4);
-  const auto info0 = engine.ParamInfo(splitter, 0);
-  OPENAXE_EXPECT(info0 && std::string(info0->symbol) == "out0_level");
-  OPENAXE_EXPECT(engine.GetParam(splitter, 0) == 1.0f);
-
-  // Unity defaults: both fan-out branches carry the input unchanged.
-  RunMono(engine, 0.5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(a) - 0.5f) < 1e-5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
-
-  // out0_level halves branch a; branch b stays full. The splitter output level
-  // is exponentially smoothed (issue #122), so settle before the exact check.
-  engine.SetParam(splitter, 0, 0.5f);
-  SettleMono(engine, 0.5f, 400);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
-
-  // out1_level on the second port scales only branch b.
-  engine.SetParam(splitter, 1, 0.25f);
-  SettleMono(engine, 0.5f, 400);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(b) - 0.125f) < 1e-5f);
-}
 
 // issue #66: Process() walks per-block incoming edges (incoming_) rather than
 // rescanning the whole flat edge list. This rig exercises the grouping in both
-// directions a splitter creates: it fans out to multiple targets (each target
-// block gets exactly its own incoming edge), and a mixer fans those branches
-// back in across its independent input ports (the mixer's incoming_ vector
-// holds several edges) - all must be delivered so the summed output is correct.
-void TestSplitterFanOutAndMixerFanInRouting() {
+// directions: one block fans out to multiple targets (each target block gets
+// exactly its own incoming edge), and a mixer fans those branches back in
+// across its independent input ports (the mixer's incoming_ vector holds
+// several edges) - all must be delivered so the summed output is correct.
+//
+// The fan-out source used to be a splitter, on its two output ports. That kind
+// is gone, and fanning out was never what made it special - several edges off a
+// single output port do the same thing, which is what this now uses.
+void TestFanOutAndMixerFanInRouting() {
   AudioEngine engine;
-  const BlockId splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
+  const BlockId source = engine.AddBlock(BlockKind::kCab, 0, 0);
   const BlockId cab_a = engine.AddBlock(BlockKind::kCab, 0, 1);
   const BlockId cab_b = engine.AddBlock(BlockKind::kCab, 1, 1);
   const BlockId mixer = engine.AddBlock(BlockKind::kMixer, 0, 2);  // fans in from a and b
-  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, splitter, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 0, cab_a, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 1, cab_b, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, source, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(source, 0, cab_a, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(source, 0, cab_b, 0).ok);
   OPENAXE_EXPECT(engine.Connect(cab_a, 0, mixer, 0).ok);
   OPENAXE_EXPECT(engine.Connect(cab_b, 0, mixer, 1).ok);
   OPENAXE_EXPECT(engine.Connect(mixer, 0, kOutRailId, 0).ok);
@@ -553,11 +518,13 @@ void TestSplitterFanOutAndMixerFanInRouting() {
   OPENAXE_EXPECT(std::fabs(engine.GetMeter(cab_a) - 0.5f) < 1e-5f);
   OPENAXE_EXPECT(std::fabs(engine.GetMeter(cab_b) - 0.5f) < 1e-5f);
 
-  // Halving one splitter output must drop only that branch's contribution:
-  // mixer now sums 0.5 (from a) + 0.25 (from b) = 0.75. This proves both
-  // splitter fan-out edges and both mixer fan-in edges reached Process()
-  // through the per-block incoming_ lists.
-  engine.SetParam(splitter, 1, 0.5f);
+  // Halving one branch must drop only that branch's contribution: the mixer
+  // then sums 0.5 (from a) + 0.25 (from b) = 0.75. This proves both fan-out
+  // edges and both mixer fan-in edges reached Process() through the per-block
+  // incoming_ lists. The knob used to be the splitter's per-output level; with
+  // that kind gone it is the mixer's per-input level instead - input 1's level
+  // sits at index 1 * kMixerParamsPerInput.
+  engine.SetParam(mixer, 2, 0.5f);
   for (float sample : settled(0.5f)) OPENAXE_EXPECT(std::fabs(sample - 0.75f) < 1e-5f);
 }
 
@@ -882,8 +849,7 @@ int main() {
   TestPassthroughForUnwrappedKind();
   TestMixerSumsBothConnectedPorts();
   TestMixerPerInputLevelAndPan();
-  TestSplitterPerOutputLevel();
-  TestSplitterFanOutAndMixerFanInRouting();
+  TestFanOutAndMixerFanInRouting();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();

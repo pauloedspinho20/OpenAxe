@@ -30,7 +30,7 @@
 // hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay),
 // and the DSPark-based dynamics/EQ wrappers (kCompressor/
 // kEq/kNoiseGate/kTremolo - issue #22's last four still-native effect
-// kinds). kCab/kMixer/kSplitter pass audio through unchanged rather than
+// kinds). kCab/kMixer pass audio through unchanged rather than
 // erroring - none of them are a DSP effect kind, so a full rig is
 // buildable/testable today with no gap to fill in.
 namespace openaxe::engine {
@@ -577,7 +577,6 @@ class AudioEngine {
   static int SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state);
   // Advance a splitter's fan-out ramps by one buffer and freeze the snapshot
   // its consumers replay from (issue #122). See definition in engine.cpp.
-  static void PublishSplitterRamps(BlockState& state, int num_frames, double sample_rate);
 
   // One automation slot's bookkeeping (issue #121). `mirror` holds this
   // slot's last known normalized value per entry - written through the slot,
