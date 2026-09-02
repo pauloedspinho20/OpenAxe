@@ -236,7 +236,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 100,
       formatValue: msRaw,
-      description: 'Time to fade back to idle after hold. Longer = smoother.',
+      description:
+        'Time for gain reduction to recover once the signal falls back. Longer = smoother.',
     },
     {
       key: 'knee',
@@ -428,7 +429,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.6,
       formatValue: percent,
-      description: 'Modulation depth. Deeper = more pitch movement.',
+      description: 'How much of the sweep range the notches travel. Wider = broader swoosh.',
     },
     {
       key: 'feedback',
@@ -481,7 +482,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
-      description: 'Modulation depth. Deeper = more pitch movement.',
+      description: 'Amplitude modulation depth. Deeper = stronger volume pulse.',
     },
     {
       // shape is a select in the UI, backed by a plain numeric param
@@ -1024,7 +1025,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 'hall',
       primary: true,
       description:
-        'Reverb character: Hall=large diffuse, Room=t tighter, Plate=dense, Early=reflections only.',
+        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only.',
     },
     {
       key: 'roomSize',
@@ -1058,7 +1059,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 100,
       formatValue: percentRaw,
-      description: 'Stereo width. Only meaningful in Ping-Pong mode.',
+      description: 'Stereo width of the reverb field. 100% = as recorded, higher = wider.',
     },
     {
       key: 'predelay',

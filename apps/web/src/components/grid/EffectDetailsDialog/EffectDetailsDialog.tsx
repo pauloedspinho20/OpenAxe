@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
 import { Dialog, HardwareButton, Knob, Select } from '@openaxe/ui'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { BlockKind } from '../../../engine/blocks/Block'
-import type { EffectParams } from '../../../effects/Effect'
-import { getParamSchema, getReverbRawSchemas } from '../../../effects/paramSchema'
+import {
+  getParamSchema,
+  getReverbRawSchemas,
+  type ParamFieldSchema,
+} from '../../../effects/paramSchema'
+import { useBlockParamValues } from '../../../effects/useBlockParamValues'
 import { useGraphStore } from '../../../state/graphStore'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import styles from './EffectDetailsDialog.module.css'
@@ -16,96 +19,114 @@ interface Props {
   rig: GraphRig | null
 }
 
-function groupFields(schema: ReturnType<typeof getParamSchema>) {
-  const groups = new Map<string, typeof schema>()
-  for (const f of schema) {
-    const k = f.group ?? ''
-    const list = groups.get(k)
-    if (list) list.push(f)
-    else groups.set(k, [f])
+function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchema[]]> {
+  const groups = new Map<string, ParamFieldSchema[]>()
+  for (const field of schema) {
+    const key = field.group ?? ''
+    const list = groups.get(key)
+    if (list) list.push(field)
+    else groups.set(key, [field])
   }
   return Array.from(groups.entries())
 }
 
+/**
+ * Raw core symbols the ReverbControl abstraction already owns, so the Expert
+ * section must not offer a second knob for them.
+ *
+ * Two distinct hazards, both of which shipped in the first version of this
+ * dialog:
+ *
+ *  - `width`, `predelay`, `spin` and `wander` are spelled identically as a
+ *    raw symbol and as a REVERB_CONTROL key. The rig worklet checks
+ *    `REVERB_CONTROL[message.key]` before the raw-param path, so writing the
+ *    "raw" knob went through the abstraction anyway - scaled and clamped to
+ *    the *abstraction's* range, not the symbol's. Two knobs, one param,
+ *    different ranges, and the section header claiming a 1:1 mapping.
+ *
+ *  - `decay`, `high_cut`, `in_high_cut`, `delay`, `early_send` and
+ *    `dry_level` are different store keys that resolve onto the same core
+ *    param as roomSize / damping / predelay / earlySend / dryLevel. No
+ *    worklet collision, but the two knobs silently fight: whichever moved
+ *    last wins and the other's displayed position is a lie.
+ *
+ * Mirrors ReverbControlSymbols in packages/core/src/engine.cpp - keep the two
+ * in step. Anything genuinely per-algorithm (size, diffuse, low_mult,
+ * high_xo, program, ...) is still exposed, which is the point of the section.
+ */
+const REVERB_CONTROL_OWNED_SYMBOLS: ReadonlySet<string> = new Set([
+  'decay',
+  'high_cut',
+  'in_high_cut',
+  'width',
+  'predelay',
+  'delay',
+  'spin',
+  'wander',
+  'early_send',
+  'dry_level',
+])
+
+/** Help text for the raw per-algorithm symbols, which are generated without any. */
+const RAW_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  early_level: 'Level of early reflections. Controls initial room snap.',
+  late_level: 'Level of late/diffuse field. Controls wash.',
+  size: 'Virtual size in metres. Larger = longer paths.',
+  diffuse: 'Diffusion amount. Higher = smoother, less fluttery.',
+  low_cut: 'High-pass on input. Removes low rumble from reverb.',
+  low_xo: 'Crossover below which low_mult applies.',
+  low_mult: 'Decay multiplier below low_xo. Shapes the bass tail.',
+  high_xo: 'Crossover above which high_mult applies.',
+  high_mult: 'Decay multiplier above high_xo. Brightness of the tail.',
+  modulation: 'Modulation depth in the late field.',
+  early_damp: 'Damping of early reflections.',
+  late_damp: 'Damping of the late field.',
+  low_boost: 'Low-frequency boost amount.',
+  boost_freq: 'Frequency of the low boost.',
+  in_low_cut: 'Input low cut.',
+  algorithm: 'Plate algorithm variant.',
+  program: 'Early-reflections program/preset.',
+  // Spring tank (ReverbAlgorithm::kSpring) - the only spring-specific symbol
+  // the abstraction has no home for.
+  drive: 'Input transducer drive. Higher = more spring "crunch" before the tank.',
+}
+
 export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props) {
-  const schema = getParamSchema(kind)
   const label = BLOCK_KIND_LABELS[kind] ?? kind
   const isReverb = kind === 'reverb'
-  const instance = useGraphStore((s) =>
-    blockId ? s.blocks.find((b) => b.id === blockId) : undefined,
-  )
-  const reverbAlgorithm = (instance?.params.reverbAlgorithm as string) ?? 'hall'
-  const rawSchemas = isReverb ? getReverbRawSchemas(reverbAlgorithm) : []
-
-  // Attach descriptions to raw schemas (they are generated with no description)
-  const rawDescriptions: Record<string, string> = {
-    dry_level: 'Dry signal level preserved before wet blend.',
-    early_level: 'Level of early reflections. Controls initial room snap.',
-    late_level: 'Level of late/diffuse field. Controls wash.',
-    size: 'Virtual size in metres. Larger = longer paths.',
-    width: 'Stereo width of the field.',
-    delay: 'Pre-delay / delay before late onset (Hall uses delay).',
-    diffuse: 'Diffusion amount. Higher = smoother, less fluttery.',
-    low_cut: 'High-pass on input. Removes low rumble from reverb.',
-    low_xo: 'Crossover for low-frequency decay multiplier.',
-    low_mult: 'Multiplier for low decay. Shapes bass tail.',
-    high_cut: 'Low-pass on input. Darkens reverb input.',
-    high_xo: 'Crossover for high damping.',
-    high_mult: 'Multiplier for high decay. Controls brightness of tail.',
-    spin: 'Spin modulation rate in late field.',
-    wander: 'Wander time modulation. Adds lush movement.',
-    decay: 'Decay time in seconds. Direct control of tail length.',
-    early_send: 'Send from early into late. Controls build-up.',
-    modulation: 'Modulation depth in late field.',
-    predelay: 'Pre-delay before reverb onset.',
-    in_high_cut: 'Input high cut for Room.',
-    early_damp: 'Damping of early reflections.',
-    late_damp: 'Damping of late field.',
-    low_boost: 'Low-frequency boost amount.',
-    boost_freq: 'Frequency of low boost.',
-    in_low_cut: 'Input low cut.',
-    algorithm: 'Plate algorithm variant.',
-    program: 'Early-reflections program/preset.',
-  }
-
   const block = blockId && rig ? rig.getBlock(blockId) : null
+  const { values, setParam } = useBlockParamValues(blockId, block)
 
-  const [values, setValues] = useState<EffectParams>(() => ({
-    ...(block?.getParams() ?? {}),
-    ...(instance?.params ?? {}),
-  }))
-  const storeKey = useGraphStore((s) => {
-    if (!blockId) return ''
-    const p = s.blocks.find((b) => b.id === blockId)?.params
-    return p ? JSON.stringify(p) : ''
-  })
-  useEffect(() => {
-    if (!storeKey) return
-    const parsed = JSON.parse(storeKey) as EffectParams
-    setValues((prev) => ({ ...prev, ...parsed }))
-  }, [storeKey])
-  useEffect(() => {
-    if (!open) return
-    const latest = blockId
-      ? useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params
-      : undefined
-    setValues({ ...(block?.getParams() ?? {}), ...(latest ?? {}) })
-  }, [open, block, blockId])
+  const reverbAlgorithm = useGraphStore((s) =>
+    blockId
+      ? ((s.blocks.find((b) => b.id === blockId)?.params.reverbAlgorithm as string) ?? 'hall')
+      : 'hall',
+  )
 
-  const setParam = (key: string, value: number | string) => {
-    if (!blockId) return
-    useGraphStore.getState().setBlockParams(blockId, { [key]: value })
-    setValues((prev) => ({ ...prev, [key]: value }))
-  }
+  // Same `visible` filtering the inspector strip applies. Without it, Early
+  // Reflections rendered live-looking roomSize/predelay/spin/wander/earlySend
+  // knobs, and a Digital delay rendered wow_depth/wow_rate - controls the
+  // algorithm has no symbol for, so the writes reach the store, get re-applied
+  // forever by bindGraphRig, and map to nothing.
+  const schema = getParamSchema(kind).filter((f) => !f.visible || f.visible(values))
 
-  const renderField = (field: ReturnType<typeof getParamSchema>[number], size = 52) => {
+  // Raw per-algorithm symbols, minus everything the abstraction already owns.
+  const rawSchemas = isReverb
+    ? getReverbRawSchemas(reverbAlgorithm).filter(
+        (f) => f.control !== 'select' && !REVERB_CONTROL_OWNED_SYMBOLS.has(f.key),
+      )
+    : []
+
+  const renderField = (field: ParamFieldSchema, size = 52) => {
+    const description = field.description ?? RAW_DESCRIPTIONS[field.key]
     if (field.control === 'select') {
       const current =
         typeof values[field.key] === 'string' ? (values[field.key] as string) : field.defaultValue
       return (
-        <div key={field.key} className={styles.selectWrapper} title={field.description}>
+        <div key={field.key} className={styles.selectWrapper} title={description}>
           <Select
             value={current}
+            aria-label={field.label}
             onChange={(e) => setParam(field.key, e.target.value)}
             className={styles.selectField}
           >
@@ -116,7 +137,7 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
             ))}
           </Select>
           <span className={`label ${styles.selectLabel}`}>{field.label}</span>
-          {field.description && <span className={styles.desc}>{field.description}</span>}
+          {description && <span className={styles.desc}>{description}</span>}
         </div>
       )
     }
@@ -133,10 +154,10 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
           defaultValue={field.defaultValue}
           formatValue={field.formatValue}
           size={size}
-          description={field.description}
+          description={description}
           onChange={(v) => setParam(field.key, v)}
         />
-        {field.description && <span className={styles.desc}>{field.description}</span>}
+        {description && <span className={styles.desc}>{description}</span>}
       </div>
     )
   }
@@ -145,7 +166,6 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
     <Dialog open={open} onClose={onClose} title={`${label} Details`} width="720px">
       <div className={styles.body}>
         <div className={styles.header}>
-          <h3>{label}</h3>
           <p>
             All controls for this block, including expert / raw parameters. Hover a knob for a
             tooltip; descriptions are also shown below each control.
@@ -169,32 +189,19 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
 
             {isReverb && rawSchemas.length > 0 && (
               <div className={styles.section}>
-                <span className={styles.sectionTitle}>
-                  Expert — raw Dragonfly symbols ({reverbAlgorithm})
-                </span>
-                <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-3)' }}>
-                  Direct core symbols. These bypass the Size/Damping abstraction and map 1:1 to the
-                  DSP. Useful for fine-tuning per-algorithm behaviour.
+                <span className={styles.sectionTitle}>Expert — {reverbAlgorithm} core symbols</span>
+                <p className={styles.sectionNote}>
+                  Per-algorithm core params with no equivalent in the shared controls above. The
+                  ones the Size / Damping / Width / Pre-delay knobs already drive are deliberately
+                  not repeated here.
                 </p>
-                <div className={styles.fields}>
-                  {rawSchemas.map((f) => {
-                    if (f.control === 'select') return null
-                    const desc =
-                      (f as { description?: string }).description ??
-                      rawDescriptions[f.key] ??
-                      `Raw param ${f.key}.`
-                    const enriched = { ...f, description: desc } as typeof f & {
-                      description: string
-                    }
-                    return renderField(enriched, 44)
-                  })}
-                </div>
+                <div className={styles.fields}>{rawSchemas.map((f) => renderField(f, 44))}</div>
               </div>
             )}
           </>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div className={styles.footer}>
           <HardwareButton label="Close" onClick={onClose} />
         </div>
       </div>
