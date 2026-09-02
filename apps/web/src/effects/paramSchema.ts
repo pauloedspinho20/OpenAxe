@@ -346,6 +346,21 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
+      // Named values, not '0'/'1': stringParamMaps.ts already owns
+      // `stereo` -> { mono: 0, stereo: 1 } for tremolo, so both block facades
+      // send the same number and web/desktop can't drift.
+      key: 'stereo',
+      label: 'Image',
+      control: 'select',
+      options: [
+        { value: 'stereo', label: 'Stereo' },
+        { value: 'mono', label: 'Mono' },
+      ],
+      defaultValue: 'stereo',
+      description:
+        'Stereo offsets the two channels\u2019 LFOs by a quarter cycle for width. Mono sweeps them together, which survives a later mono sum instead of partly cancelling.',
+    },
+    {
       key: 'mix',
       label: 'Mix',
       control: 'knob',
@@ -867,6 +882,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 800,
       formatValue: hz,
       description: 'Crossover frequency splitting high vs low rotors.',
+    },
+    {
+      key: 'velocity',
+      label: 'Velocity',
+      control: 'knob',
+      ...range('rotary', 'velocity'),
+      step: 0.01,
+      defaultValue: 0.5,
+      formatValue: percent,
+      description:
+        'Fine trim on the selected speed: 50% is the mode\u2019s canonical rate, 0% half, 100% double. Stop stays stopped.',
     },
     {
       key: 'mix',

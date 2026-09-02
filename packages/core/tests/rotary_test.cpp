@@ -20,9 +20,9 @@ namespace {
 constexpr float kSr = 48000.0f;
 
 void TestParamCountAndInfo() {
-  OPENAXE_EXPECT(Rotary::ParamCount() == 6);
-  const char* expected[] = {"speed", "drive", "horn_level",
-                            "drum_level", "mic_distance", "crossover"};
+  OPENAXE_EXPECT(Rotary::ParamCount() == 7);
+  const char* expected[] = {"speed",        "drive",     "horn_level", "drum_level",
+                            "mic_distance", "crossover", "velocity"};
   for (int i = 0; i < Rotary::ParamCount(); ++i) {
     const auto& info = Rotary::GetParamInfo(i);
     OPENAXE_EXPECT(std::string(info.symbol) == expected[i]);
@@ -40,6 +40,44 @@ void TestGetSetEveryParam() {
     r.SetParam(i, info.max_value);
     OPENAXE_EXPECT(r.GetParam(i) == info.max_value);
   }
+}
+
+// velocity is an octave trim about unity on the selected mode's rotor rate.
+// Two properties worth pinning: it changes the sound at a fixed speed, and it
+// cannot start the rotors when speed is Stop.
+void TestVelocityTrimsRateButNotStop() {
+  constexpr int kFrames = 48000 * 2;
+  std::vector<float> in(kFrames);
+  for (int i = 0; i < kFrames; ++i)
+    in[i] = std::sin(6.28318530718f * 440.0f * static_cast<float>(i) / kSr) * 0.5f;
+
+  const auto render = [&](float speed, float velocity) {
+    Rotary r;
+    r.Reset(kSr);
+    r.SetParam(0, speed);
+    r.SetParam(6, velocity);
+    std::vector<float> l(kFrames), rr(kFrames);
+    const float* ip[2] = {in.data(), in.data()};
+    float* op[2] = {l.data(), rr.data()};
+    r.Process(ip, op, kFrames);
+    return l;
+  };
+
+  const auto slow = render(1.0f, 0.0f);
+  const auto fast = render(1.0f, 1.0f);
+  float moved = 0.0f;
+  for (int i = 0; i < kFrames; ++i)
+    moved = std::max(moved, std::fabs(slow[static_cast<size_t>(i)] - fast[static_cast<size_t>(i)]));
+  OPENAXE_EXPECT(moved > 0.01f);
+
+  // Stop: the rotors are braked, so velocity has nothing to scale.
+  const auto stopped_min = render(0.0f, 0.0f);
+  const auto stopped_max = render(0.0f, 1.0f);
+  float stop_diff = 0.0f;
+  for (int i = 0; i < kFrames; ++i)
+    stop_diff = std::max(stop_diff, std::fabs(stopped_min[static_cast<size_t>(i)] -
+                                              stopped_max[static_cast<size_t>(i)]));
+  OPENAXE_EXPECT(stop_diff < 1e-6f);
 }
 
 void TestSilenceStaysSilent() {
@@ -134,6 +172,7 @@ void TestTremoloSpinsUpGradually() {
 int main() {
   TestParamCountAndInfo();
   TestGetSetEveryParam();
+  TestVelocityTrimsRateButNotStop();
   TestSilenceStaysSilent();
   TestStoppedRotorIsUnmodulated();
   TestTremoloSpinsUpGradually();

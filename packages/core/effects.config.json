@@ -75,10 +75,11 @@
       "inPalette": true,
       "cppFile": "filter.cpp"
     },
+    "$comment_pitch_shifter": "Out of the palette for now. Issue #320 is still open: formant preservation would mean dspark::PitchShifter and 2 x fftSize of latency (4096 samples / 85 ms at the default) against this implementation's ~4, and issue #268 had already rejected 40 ms. Left compiled so a preset that references the kind still loads instead of going through the unsupported-block channel.",
     "pitch-shifter": {
       "enumName": "kPitchShifter",
       "compiled": true,
-      "inPalette": true,
+      "inPalette": false,
       "cppFile": "pitch_shifter.cpp"
     },
     "rotary": {

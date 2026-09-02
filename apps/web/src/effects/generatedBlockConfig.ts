@@ -51,7 +51,6 @@ export const PALETTE_BLOCK_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>([
   'ring-mod',
   'granular-delay',
   'filter',
-  'pitch-shifter',
   'rotary',
   'amp',
   'amp-cab',

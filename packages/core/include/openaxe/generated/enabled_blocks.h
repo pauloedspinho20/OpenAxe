@@ -89,7 +89,7 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kRingMod: return true;
     case graph::BlockKind::kGranularDelay: return true;
     case graph::BlockKind::kFilter: return true;
-    case graph::BlockKind::kPitchShifter: return true;
+    case graph::BlockKind::kPitchShifter: return false;
     case graph::BlockKind::kRotary: return true;
     case graph::BlockKind::kAmp: return true;
     case graph::BlockKind::kAmpCab: return true;

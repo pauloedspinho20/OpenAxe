@@ -14,7 +14,8 @@ constexpr int kRateParam = 0;
 constexpr int kDepthParam = 1;
 constexpr int kDelayParam = 2;
 constexpr int kFeedbackParam = 3;
-constexpr int kParamCount = 4;
+constexpr int kStereoParam = 4;
+constexpr int kParamCount = 5;
 
 // Generated from packages/core/param_schema.json (issue #51) - run
 // scripts/gen-param-schema.mjs after editing the schema.
@@ -24,7 +25,10 @@ const Chorus::ParamInfo kParamInfo[kParamCount] = {
 
 // The right channel's LFO runs a quarter cycle behind the left one, which is
 // what makes a single delay line per channel read as a stereo-wide chorus
-// rather than two identical mono voices.
+// rather than two identical mono voices. `stereo` switches that offset off,
+// for a mono chorus that stays put in the image - which is what you want in
+// front of an amp, or anywhere the rig sums to mono later and the offset would
+// partially cancel.
 constexpr float kStereoPhaseOffset = 1.57079632679f;  // π/2
 
 // The longest tap the params can ask for: delay's maximum (30ms) plus depth's
@@ -48,6 +52,9 @@ struct Chorus::Impl {
   float depth = 0.8f;
   float delay = 5.5f;
   float feedback = 0.15f;
+  // Default on, so existing presets - which have no `stereo` value stored and
+  // fall back to this - keep the sound they were saved with.
+  float stereo = 1.0f;
   float sample_rate = 48000.0f;
 
   // Size both delay lines for the largest tap the param schema allows. Only
@@ -89,7 +96,8 @@ void Chorus::Process(const float* const* input, float* const* output, int num_fr
 
   for (int ch = 0; ch < 2; ++ch) {
     Channel& c = impl_->channels[static_cast<size_t>(ch)];
-    const float lfo_phase = c.phase + (ch == 1 ? kStereoPhaseOffset : 0.0f);
+    const bool wide = impl_->stereo >= 0.5f;
+    const float lfo_phase = c.phase + (ch == 1 && wide ? kStereoPhaseOffset : 0.0f);
     for (int i = 0; i < num_frames; ++i) {
       const float in = input[ch][i];
       const float lfo = std::sin(lfo_phase + static_cast<float>(i) * phase_step * 6.28318530718f);
@@ -126,6 +134,8 @@ float Chorus::GetParam(int index) const {
       return impl_->delay;
     case kFeedbackParam:
       return impl_->feedback;
+    case kStereoParam:
+      return impl_->stereo;
     default:
       return 0.0f;
   }
@@ -148,6 +158,9 @@ void Chorus::SetParam(int index, float value) {
       break;
     case kFeedbackParam:
       impl_->feedback = value;
+      break;
+    case kStereoParam:
+      impl_->stereo = value >= 0.5f ? 1.0f : 0.0f;
       break;
     default:
       return;

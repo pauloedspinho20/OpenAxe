@@ -348,6 +348,16 @@
             "mode": "exponential",
             "timeConstant": 0.02
           }
+        },
+        {
+          "symbol": "stereo",
+          "label": "Stereo",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none"
+          }
         }
       ]
     },
@@ -827,6 +837,17 @@
           "smoothing": {
             "mode": "exponential",
             "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "velocity",
+          "label": "Velocity",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.05
           }
         }
       ]

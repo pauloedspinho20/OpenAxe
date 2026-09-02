@@ -1175,6 +1175,11 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->param_count.store(total, std::memory_order_relaxed);
     float defaultMix = 0.4f;
     if (NeedsEngineLevel(kind)) defaultMix = 0.1f;  // delay family, per user feedback
+    // A phaser's notches only exist where the allpass cascade's output cancels
+    // against the dry path, so their depth is set entirely by this blend: at
+    // 0.4 the deepest null is about -9.5 dB, which is a gentle swirl rather
+    // than the pedal's swoosh. Equal dry/wet nulls completely.
+    if (kind == graph::BlockKind::kPhaser) defaultMix = 0.5f;
     state->params[static_cast<size_t>(mixIdx)].store(defaultMix, std::memory_order_relaxed);
     if (NeedsEngineLevel(kind)) {
       const int levelIdx = EngineLevelIndexFor(kind);
