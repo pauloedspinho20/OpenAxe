@@ -9,8 +9,9 @@
 }
 
 .cable {
+  z-index: 9;
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--ink-1);
   stroke-width: 2;
   stroke-linecap: round;
   pointer-events: stroke;
@@ -21,13 +22,13 @@
 }
 
 .cable:hover {
-  stroke: var(--accent);
+  stroke: var(--ink-1);
   stroke-width: 3;
 }
 
 .cablePreview {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--ink-1);
   stroke-width: 2;
   stroke-dasharray: 4 3;
   stroke-linecap: round;

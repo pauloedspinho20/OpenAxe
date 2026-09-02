@@ -1,12 +1,13 @@
 .card {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
   height: 100%;
   min-width: 0;
-  padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  padding: 2px;
   background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
+  border: 1px solid var(--ink-1);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-control);
   cursor: grab;
@@ -17,6 +18,26 @@
   outline: 2px solid transparent;
 }
 
+.bypassed:not(.cardSelected) {
+  background: var(--panel);
+  border: 1px solid var(--ink-3);
+}
+
+.bypassed .blockIcon,
+.bypassed .blockLabel,
+.cardSelected.bypassed .blockIcon,
+.cardSelected.bypassed:hover .blockIcon,
+.cardSelected.bypassed .blockLabel,
+.cardSelected.bypassed:hover .blockLabel {
+  color: var(--ink-3);
+}
+
+.blockIconWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 @media (max-width: var(--mw-md)) {
   .card {
     padding: var(--sp-1);
@@ -24,12 +45,18 @@
 }
 
 .card:hover {
-  border: 1px solid var(--ink-3);
+  outline: 1px solid var(--ink-1);
 }
 
-.cardSelected,
-.cardSelected:hover {
-  border-color: var(--accent);
+.cardSelected.bypassed,
+.cardSelected.bypassed:hover {
+  outline: 1px solid var(--ink-1);
+  box-shadow: none;
+}
+
+.cardSelected:not(.bypassed),
+.cardSelected:not(.bypassed):hover {
+  border: 1px solid var(--accent);
   outline: 1px solid var(--accent);
   box-shadow: none;
 }
@@ -39,10 +66,10 @@
   color: var(--ink-1);
 }
 
-.cardSelected .blockIcon,
-.cardSelected:hover .blockIcon,
-.cardSelected .blockLabel,
-.cardSelected:hover .blockLabel {
+.cardSelected:not(.bypassed) .blockIcon,
+.cardSelected:not(.bypassed):hover .blockIcon,
+.cardSelected:not(.bypassed) .blockLabel,
+.cardSelected:not(.bypassed):hover .blockLabel {
   color: var(--accent);
 }
 
@@ -58,7 +85,7 @@
 
 .blockIcon,
 .blockLabel {
-  color: var(--ink-2);
+  color: var(--ink-1);
   text-align: center;
 }
 
@@ -67,6 +94,7 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
+  font-weight: bold;
 }
 
 .kindIcon {
@@ -74,8 +102,8 @@
 }
 
 .headerActions {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  display: flex;
+  grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr;
   align-items: center;
   justify-content: space-between;
@@ -134,7 +162,9 @@
   line-height: 1;
   cursor: pointer;
   padding: var(--sp-1);
-  border-radius: var(--r-md);
+  border-radius: 99px;
+  height: 22px;
+  width: 22px;
 }
 
 .menuBtn:hover {
@@ -146,8 +176,8 @@
 .jacks {
   position: absolute;
   z-index: 1;
-  top: var(--sp-2);
-  bottom: var(--sp-2);
+  top: 2px;
+  bottom: 2px;
   left: -6px;
   right: -6px;
   display: flex;
@@ -165,31 +195,35 @@
 
 .jackWrap {
   position: relative;
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   flex-shrink: 0;
 }
 
 .jack {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: var(--panel);
-  border: 2px solid var(--accent);
+  border: 2px solid var(--ink-1);
   cursor: pointer;
   pointer-events: auto;
   touch-action: none;
 }
 
+/* .cardSelected:not(.bypassed) .jack {
+  border: 2px solid var(--accent);
+}
+ */
 .jack:hover {
-  border-color: var(--accent);
+  border-color: var(--ink-1);
 }
 
 .jackArmed {
-  border-color: var(--accent);
+  border-color: var(--block-color);
   box-shadow:
-    0 0 0 2px var(--accent),
-    0 0 8px var(--accent);
+    0 0 0 2px var(--block-color),
+    0 0 8px var(--block-color);
   animation: jackPulse 1.2s ease-in-out infinite;
 }
 
@@ -197,13 +231,13 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 2px var(--accent),
-      0 0 8px var(--accent);
+      0 0 0 2px var(--block-color),
+      0 0 8px var(--block-color);
   }
   50% {
     box-shadow:
-      0 0 0 4px var(--accent-dim),
-      0 0 12px var(--accent);
+      0 0 0 4px color-mix(in srgb, var(--block-color) 35%, transparent),
+      0 0 12px var(--block-color);
   }
 }
 
@@ -218,18 +252,6 @@
     font-size: 8px;
     letter-spacing: 0.6px;
   }
-
-  /*   .jackWrap {
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-  }
- */
-  /*   .jack {
-    width: 12px;
-    height: 12px;
-  } */
 
   /* Transposed vertical flow: inputs on top edge, outputs on bottom */
   .jacks {

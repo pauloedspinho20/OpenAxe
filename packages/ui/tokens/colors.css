@@ -113,16 +113,16 @@
   --danger-bg-dim: rgb(255 59 48 / 14%);
   --danger-glow-dim: rgb(255 59 48 / 25%);
 
-  /* Blocks — semantic group colors (8 groups covering all 22 BlockKinds) */
-  --block-tone: #ff8a3d;
-  --block-drive: #e8b84a;
-  --block-dynamics: #e8c547;
-  --block-filter: #4ec9a6;
-  --block-mod: #7ab8ff;
-  --block-time: #a78bfa;
-  --block-space: #5fdc7a;
-  --block-utility: #9aa0a6;
-  --block-core: #ff8a3d;
-  --block-effects: #7ab8ff;
-  --block-nam: #ff8a3d;
+  /* Blocks — per-kind group colors (11 groups) */
+  --block-amp: rgb(0, 9, 13);
+  --block-amp-cab: #001219ff;
+  --block-pedal: #005f73ff;
+  --block-cab: #0a9396ff;
+  --block-filter: #94d2bdff;
+  --block-utility: #e9d8a6ff;
+  --block-delay: #ee9b00ff;
+  --block-reverb: #ca6702ff;
+  --block-modulation: #bb3e03ff;
+  --block-core: #ae2012ff;
+  --block-dynamics: #9b2226ff;
 }

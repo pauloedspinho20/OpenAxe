@@ -62,8 +62,7 @@
 .label {
   text-align: center;
   line-height: 1.2;
-  font-size: 9px !important;
-  color: var(--accent) !important;
+  white-space: nowrap;
 }
 
 .value {

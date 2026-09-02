@@ -74,17 +74,17 @@
       "btnActiveHighlight": "rgb(255 255 255 / 6%)",
       "dangerBgDim": "rgb(255 59 48 / 14%)",
       "dangerGlowDim": "rgb(255 59 48 / 25%)",
-      "blockTone": "#ff8a3d",
-      "blockDrive": "#e8b84a",
-      "blockDynamics": "#e8c547",
-      "blockFilter": "#4ec9a6",
-      "blockMod": "#7ab8ff",
-      "blockTime": "#a78bfa",
-      "blockSpace": "#5fdc7a",
-      "blockUtility": "#9aa0a6",
-      "blockCore": "#ff8a3d",
-      "blockEffects": "#7ab8ff",
-      "blockNam": "#ff8a3d"
+      "blockAmp": "rgb(0, 9, 13)",
+      "blockAmpCab": "#001219ff",
+      "blockPedal": "#005f73ff",
+      "blockCab": "#0a9396ff",
+      "blockFilter": "#94d2bdff",
+      "blockUtility": "#e9d8a6ff",
+      "blockDelay": "#ee9b00ff",
+      "blockReverb": "#ca6702ff",
+      "blockModulation": "#bb3e03ff",
+      "blockCore": "#ae2012ff",
+      "blockDynamics": "#9b2226ff"
     }
   },
   "spacing": {

@@ -137,7 +137,7 @@
   inset: 0;
   border-radius: 50%;
   background: var(--panel);
-  border: 2px solid var(--accent);
+  border: 2px solid var(--ink-1);
   cursor: crosshair;
   touch-action: none;
 }
@@ -306,10 +306,10 @@
 }
 
 .railJackArmed {
-  border-color: var(--accent) !important;
+  border-color: var(--ink-1) !important;
   box-shadow:
-    0 0 0 2px var(--accent),
-    0 0 8px var(--accent);
+    0 0 0 2px var(--ink-1),
+    0 0 8px var(--ink-1);
 }
 
 /* Mobile: keep labels readable — don't shrink below usable */

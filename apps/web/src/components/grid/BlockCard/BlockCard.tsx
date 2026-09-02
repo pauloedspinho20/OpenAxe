@@ -10,8 +10,8 @@ import { resolveGridCell } from '../gridGeometry'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '@/engine/blocks/MixerBlock'
-import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
+import { DotsHorizontalIcon } from '@openaxe/ui'
 import { blockColorVar } from '../blockColors'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { jackElementId } from '../jackId'
@@ -83,7 +83,6 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
   const isEffect = EFFECT_KINDS.has(instance.kind)
   const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   const isSelected = selectedBlockId === instance.id
 
   const handleCardPointerDown = (e: React.PointerEvent) => {
@@ -234,7 +233,7 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
 
   return (
     <div
-      className={`${styles.card} ${isSelected ? styles.cardSelected : ''}`}
+      className={`${styles.card} ${isSelected ? styles.cardSelected : ''} ${bypassed ? styles.bypassed : ''}`}
       style={
         {
           ...(dragOffset
@@ -271,11 +270,11 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
             ●
           </button>
 
-          {analyser && (
+          {/*     {analyser && (
             <div className={styles.meterWrap}>
               <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />
             </div>
-          )}
+          )} */}
 
           <button
             type="button"
@@ -288,12 +287,14 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
             aria-label={`Actions for ${label}`}
             title="More actions — move, remove, disconnect"
           >
-            ⋯
+            <DotsHorizontalIcon />
           </button>
         </div>
       </div>
 
-      <BlockIcon kind={instance.kind} size={24} className={styles.blockIcon} />
+      <div className={styles.blockIconWrapper}>
+        <BlockIcon kind={instance.kind} size={32} className={styles.blockIcon} />
+      </div>
 
       <span className={styles.blockLabel}>{label}</span>
 

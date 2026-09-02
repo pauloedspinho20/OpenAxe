@@ -258,6 +258,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: dB,
       description: 'Output gain to make up for level lost to compression.',
     },
+
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      ...range('compressor', 'mix'),
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
     {
       // character is a select in the UI, but a plain numeric param core-side
       // (0..3) - see range('compressor', 'character') if a range is ever
@@ -273,17 +284,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'varimu', label: 'Varimu' },
       ],
       defaultValue: 'clean',
-      primary: true,
-    },
-    {
-      key: 'mix',
-      label: 'Mix',
-      control: 'knob',
-      ...range('compressor', 'mix'),
-      step: 0.01,
-      defaultValue: 1,
-      formatValue: percent,
-      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   eq: [
@@ -345,6 +345,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
+      formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
+    {
       // Named values, not '0'/'1': stringParamMaps.ts already owns
       // `stereo` -> { mono: 0, stereo: 1 } for tremolo, so both block facades
       // send the same number and web/desktop can't drift.
@@ -358,17 +369,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 'stereo',
       description:
         'Stereo offsets the two channels\u2019 LFOs by a quarter cycle for width. Mono sweeps them together, which survives a later mono sum instead of partly cancelling.',
-    },
-    {
-      key: 'mix',
-      label: 'Mix',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.4,
-      formatValue: percent,
-      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   flanger: [
@@ -511,11 +511,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'square', label: 'Square' },
       ],
       defaultValue: 'sine',
-      primary: true,
     },
     {
       key: 'stereo',
-      label: 'Stereo',
+      label: 'Mode',
       control: 'select',
       options: [
         { value: 'mono', label: 'Mono' },
@@ -526,7 +525,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     },
     {
       key: 'mode',
-      label: 'Mode',
+      label: 'Type',
       control: 'select',
       options: [
         { value: 'normal', label: 'Normal' },
@@ -582,19 +581,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   ],
   filter: [
     {
-      key: 'type',
-      label: 'Type',
-      control: 'select',
-      options: [
-        { value: 'wah', label: 'Wah' },
-        { value: 'envelope', label: 'Envelope' },
-        { value: 'ladder', label: 'Ladder' },
-      ],
-      defaultValue: 'wah',
-      primary: true,
-      description: 'Filter type: Wah=bandpass sweep, Envelope=follower, Ladder=4-pole resonant.',
-    },
-    {
       key: 'frequency',
       label: 'Frequency',
       control: 'knob',
@@ -634,18 +620,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Sensitivity to picking dynamics. Higher = more reactive.',
     },
-    {
-      key: 'mode',
-      label: 'Drive Mode',
-      control: 'select',
-      options: [
-        { value: 'pedal', label: 'Pedal' },
-        { value: 'env', label: 'Env' },
-        { value: 'lfo', label: 'LFO' },
-      ],
-      defaultValue: 'pedal',
-      description: 'Mode selector for this block.',
-    },
+
     {
       key: 'lfo_rate',
       label: 'LFO Rate',
@@ -666,6 +641,30 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
+    {
+      key: 'mode',
+      label: 'Mode',
+      control: 'select',
+      options: [
+        { value: 'pedal', label: 'Pedal' },
+        { value: 'env', label: 'Env' },
+        { value: 'lfo', label: 'LFO' },
+      ],
+      defaultValue: 'pedal',
+      description: 'Mode selector for this block.',
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      control: 'select',
+      options: [
+        { value: 'wah', label: 'Wah' },
+        { value: 'envelope', label: 'Envelope' },
+        { value: 'ladder', label: 'Ladder' },
+      ],
+      defaultValue: 'wah',
+      description: 'Filter type: Wah=bandpass sweep, Envelope=follower, Ladder=4-pole resonant.',
     },
   ],
   'pitch-shifter': [
@@ -819,20 +818,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   ],
   rotary: [
     {
-      key: 'speed',
-      label: 'Speed',
-      control: 'select',
-      options: [
-        { value: 'stop', label: 'Stop' },
-        { value: 'chorale', label: 'Chorale' },
-        { value: 'tremolo', label: 'Tremolo' },
-      ],
-      defaultValue: 'chorale',
-      primary: true,
-      description:
-        'Speed selector, like a type: Stop=braked, Chorale=slow, Tremolo=fast, with ramped acceleration.',
-    },
-    {
       key: 'drive',
       label: 'Drive',
       control: 'knob',
@@ -904,25 +889,23 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
+    {
+      key: 'speed',
+      label: 'Type',
+      control: 'select',
+      options: [
+        { value: 'stop', label: 'Stop' },
+        { value: 'chorale', label: 'Chorale' },
+        { value: 'tremolo', label: 'Tremolo' },
+      ],
+      defaultValue: 'chorale',
+      description:
+        'Speed selector, like a type: Stop=braked, Chorale=slow, Tremolo=fast, with ramped acceleration.',
+    },
   ],
   // 3 character models: Digital (clean), Analog (BBD-style filtering +
   // saturation), Tape (Analog + wow/flutter pitch modulation).
   delay: [
-    {
-      // model is a select in the UI, backed by a plain numeric param
-      // core-side (0..2, see range('delay', 'model')) - same situation as
-      // compressor.character/tremolo.shape.
-      key: 'model',
-      label: 'Model',
-      control: 'select',
-      options: [
-        { value: 'digital', label: 'Digital' },
-        { value: 'analog', label: 'Analog' },
-        { value: 'tape', label: 'Tape' },
-      ],
-      defaultValue: 'digital',
-      primary: true,
-    },
     {
       key: 'time',
       label: 'Time',
@@ -975,19 +958,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       visible: (v) => v.model === 'tape',
       description: 'Tape wow rate. Speed of wobble.',
     },
-    {
-      // stereo_mode is a select in the UI over a plain numeric core param
-      // (0 = Stereo, 1 = Ping-Pong), like model above. It is deliberately
-      // independent of model, so any character can ping-pong (#314).
-      key: 'stereo_mode',
-      label: 'Stereo',
-      control: 'select',
-      options: [
-        { value: 'stereo', label: 'Stereo' },
-        { value: 'ping-pong', label: 'Ping-Pong' },
-      ],
-      defaultValue: 'stereo',
-    },
+
     {
       key: 'width',
       label: 'Width',
@@ -1021,6 +992,34 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Output level trim after the effect.',
     },
+
+    {
+      // model is a select in the UI, backed by a plain numeric param
+      // core-side (0..2, see range('delay', 'model')) - same situation as
+      // compressor.character/tremolo.shape.
+      key: 'model',
+      label: 'Model',
+      control: 'select',
+      options: [
+        { value: 'digital', label: 'Digital' },
+        { value: 'analog', label: 'Analog' },
+        { value: 'tape', label: 'Tape' },
+      ],
+      defaultValue: 'digital',
+    },
+    {
+      // stereo_mode is a select in the UI over a plain numeric core param
+      // (0 = Stereo, 1 = Ping-Pong), like model above. It is deliberately
+      // independent of model, so any character can ping-pong (#314).
+      key: 'stereo_mode',
+      label: 'Mode',
+      control: 'select',
+      options: [
+        { value: 'stereo', label: 'Stereo' },
+        { value: 'ping-pong', label: 'Ping-Pong' },
+      ],
+      defaultValue: 'stereo',
+    },
   ],
   // Four Dragonfly Reverb algorithms (packages/core): Hall, Room, Plate,
   // Early Reflections. Each algorithm exposes a different subset of the
@@ -1037,22 +1036,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   // `predelay` both back this one `predelay` knob) - see
   // packages/core/param_schema.json's reverb.comment and reverb.derived.
   reverb: [
-    {
-      key: 'reverbAlgorithm',
-      label: 'Algorithm',
-      control: 'select',
-      options: [
-        { value: 'hall', label: 'Hall' },
-        { value: 'room', label: 'Room' },
-        { value: 'plate', label: 'Plate' },
-        { value: 'early-reflections', label: 'Early Reflections' },
-        { value: 'spring', label: 'Spring' },
-      ],
-      defaultValue: 'hall',
-      primary: true,
-      description:
-        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only, Spring=boingy tank.',
-    },
     {
       key: 'roomSize',
       label: 'Size',
@@ -1151,6 +1134,21 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0,
       formatValue: percentRaw,
       description: 'Dry signal preserved. 0 lets engine handle blend.',
+    },
+    {
+      key: 'reverbAlgorithm',
+      label: 'Algorithm',
+      control: 'select',
+      options: [
+        { value: 'hall', label: 'Hall' },
+        { value: 'room', label: 'Room' },
+        { value: 'plate', label: 'Plate' },
+        { value: 'early-reflections', label: 'Early Reflections' },
+        { value: 'spring', label: 'Spring' },
+      ],
+      defaultValue: 'hall',
+      description:
+        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only, Spring=boingy tank.',
     },
   ],
 }

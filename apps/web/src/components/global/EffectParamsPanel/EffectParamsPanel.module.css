@@ -25,7 +25,7 @@
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-4);
+  gap: var(--sp-5);
   align-items: flex-end;
 }
 
@@ -54,9 +54,6 @@
 .selectLabel {
   text-align: center;
   line-height: 1.2;
-  font-size: 9px !important;
-  color: var(--accent) !important;
-  /*  font-weight: 500 !important; */
 }
 
 .selectRow {
