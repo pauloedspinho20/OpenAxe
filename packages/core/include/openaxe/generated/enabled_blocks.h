@@ -86,8 +86,8 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kTremolo: return true;
     case graph::BlockKind::kDelay: return true;
     case graph::BlockKind::kReverb: return true;
-    case graph::BlockKind::kRingMod: return false;
-    case graph::BlockKind::kGranularDelay: return false;
+    case graph::BlockKind::kRingMod: return true;
+    case graph::BlockKind::kGranularDelay: return true;
     case graph::BlockKind::kFilter: return true;
     case graph::BlockKind::kPitchShifter: return true;
     case graph::BlockKind::kRotary: return true;

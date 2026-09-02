@@ -48,6 +48,8 @@ export const PALETTE_BLOCK_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>([
   'tremolo',
   'delay',
   'reverb',
+  'ring-mod',
+  'granular-delay',
   'filter',
   'pitch-shifter',
   'rotary',
