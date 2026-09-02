@@ -769,6 +769,13 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
         {"room", OPENAXE_REVERB_ROOM},
         {"plate", OPENAXE_REVERB_PLATE},
         {"earlyReflections", OPENAXE_REVERB_EARLY_REFLECTIONS},
+        // The web UI sends the kebab-case option value verbatim
+        // (paramSchema.ts -> NativeBlock::setParams), so this spelling is the
+        // one that actually arrives. Only "earlyReflections" was accepted, which
+        // made selecting Early Reflections a JsonError("unknown reverb algorithm")
+        // and a silent no-op on desktop and in the plugin. Both are accepted so
+        // an older client keeps working.
+        {"early-reflections", OPENAXE_REVERB_EARLY_REFLECTIONS},
     };
     const auto algo = MapByName(name, kAlgos, std::size(kAlgos));
     if (!algo) return JsonError("unknown reverb algorithm: " + name);

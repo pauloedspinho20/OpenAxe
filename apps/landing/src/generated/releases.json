@@ -1,7 +1,73 @@
 {
-  "generated_at": "2026-09-01T10:31:18.010Z",
+  "generated_at": "2026-09-01T21:05:57.986Z",
   "repo": "pauloedspinho20/OpenAxe",
   "releases": [
+    {
+      "tag_name": "v0.2.8",
+      "name": "v0.2.8",
+      "published_at": "2026-09-01T18:52:38Z",
+      "prerelease": false,
+      "html_url": "https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.8",
+      "body": "## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/347\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.7...v0.2.8\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/347\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.7...v0.2.8\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/347\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.7...v0.2.8\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/347\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.7...v0.2.8\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/347\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.7...v0.2.8\n\n## What's Changed\n* Dev to Main by @pauloedspinho20 in https://github.com/pauloedspinho20/OpenAxe/pull/347\n\n\n**Full Changelog**: https://github.com/pauloedspinho20/OpenAxe/compare/v0.2.7...v0.2.8",
+      "assets": [
+        {
+          "name": "openaxe-desktop-0.2.8.deb",
+          "size": 13772610,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-desktop-0.2.8.deb",
+          "content_type": "application/x-debian-package"
+        },
+        {
+          "name": "openaxe-desktop-0.2.8.dmg",
+          "size": 13194298,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-desktop-0.2.8.dmg",
+          "content_type": "application/x-apple-diskimage"
+        },
+        {
+          "name": "openaxe-desktop-0.2.8.zip",
+          "size": 12273420,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-desktop-0.2.8.zip",
+          "content_type": "application/zip"
+        },
+        {
+          "name": "openaxe-plugin-0.2.8-Darwin.pkg",
+          "size": 1338,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-plugin-0.2.8-Darwin.pkg",
+          "content_type": "application/octet-stream"
+        },
+        {
+          "name": "openaxe-plugin-0.2.8-Linux.deb",
+          "size": 584,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-plugin-0.2.8-Linux.deb",
+          "content_type": "application/x-debian-package"
+        },
+        {
+          "name": "openaxe-plugin-0.2.8-Linux.tar.gz",
+          "size": 29,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-plugin-0.2.8-Linux.tar.gz",
+          "content_type": "application/gzip"
+        },
+        {
+          "name": "openaxe-plugin-0.2.8-Windows.msi",
+          "size": 622592,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-plugin-0.2.8-Windows.msi",
+          "content_type": "application/x-msdownload"
+        },
+        {
+          "name": "openaxe-plugin-bundles-macos-14-v0.2.8.zip",
+          "size": 13881268,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.8/openaxe-plugin-bundles-macos-14-v0.2.8.zip",
+          "content_type": "application/zip"
+        }
+      ]
+    },
     {
       "tag_name": "v0.2.7",
       "name": "v0.2.7",
@@ -20,7 +86,7 @@
         {
           "name": "openaxe-desktop-0.2.7.dmg",
           "size": 2645804,
-          "download_count": 1,
+          "download_count": 2,
           "browser_download_url": "https://github.com/pauloedspinho20/OpenAxe/releases/download/v0.2.7/openaxe-desktop-0.2.7.dmg",
           "content_type": "application/x-apple-diskimage"
         },

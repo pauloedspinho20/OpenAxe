@@ -18,6 +18,8 @@ interface KnobField {
   group?: string
   /** If set, the field is only rendered when this returns true for the current values. */
   visible?: (values: EffectParams) => boolean
+  /** Human-readable help shown in knob tooltip and Effect Details dialog. */
+  description?: string
 }
 
 interface SelectField {
@@ -36,6 +38,8 @@ interface SelectField {
    * this?" choice reads first.
    */
   primary?: boolean
+  /** Human-readable help shown in select tooltip and Effect Details dialog. */
+  description?: string
 }
 
 export type ParamFieldSchema = KnobField | SelectField
@@ -129,6 +133,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: -40,
       formatValue: dB,
+      description: 'Level where the effect starts acting. Lower catches more signal.',
     },
     {
       key: 'hysteresis',
@@ -138,6 +143,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 4,
       formatValue: dB,
+      description: 'Gap between open/close thresholds. Prevents chattering.',
     },
     {
       key: 'attack',
@@ -147,6 +153,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 0.5,
       formatValue: msRaw,
+      description: 'How fast the effect engages after crossing threshold.',
     },
     {
       key: 'hold',
@@ -156,6 +163,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 5,
       defaultValue: 50,
       formatValue: msRaw,
+      description: 'Time the gate stays open after signal drops.',
     },
     {
       key: 'release',
@@ -165,6 +173,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 100,
       formatValue: msRaw,
+      description: 'Time to fade back to idle after hold. Longer = smoother.',
     },
     {
       key: 'range',
@@ -174,6 +183,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: -80,
       formatValue: dB,
+      description: 'Gain reduction when closed. -100 dB = silent.',
     },
     {
       key: 'mix',
@@ -184,6 +194,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   compressor: [
@@ -195,6 +206,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: -18,
       formatValue: dB,
+      description: 'Level where the effect starts acting. Lower catches more signal.',
     },
     {
       key: 'ratio',
@@ -204,6 +216,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 4,
       formatValue: ratio,
+      description: 'Compression ratio above threshold. 4:1 is moderate, higher is stronger.',
     },
     {
       key: 'attack',
@@ -213,6 +226,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 5,
       formatValue: msRaw,
+      description: 'How fast the effect engages after crossing threshold.',
     },
     {
       key: 'release',
@@ -222,6 +236,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 100,
       formatValue: msRaw,
+      description:
+        'Time for gain reduction to recover once the signal falls back. Longer = smoother.',
     },
     {
       key: 'knee',
@@ -231,6 +247,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 0,
       formatValue: dB,
+      description: 'Softness at threshold. 0 = hard, higher = gentler onset.',
     },
     {
       key: 'makeup_gain',
@@ -240,6 +257,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 0,
       formatValue: dB,
+      description: 'Output gain to make up for level lost to compression.',
     },
     {
       // character is a select in the UI, but a plain numeric param core-side
@@ -266,6 +284,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 1,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   eq: [
@@ -282,6 +301,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   chorus: [
@@ -293,6 +313,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.05,
       defaultValue: 0.2,
       formatValue: hz,
+      description: 'LFO rate. Controls speed of modulation.',
     },
     {
       key: 'depth',
@@ -302,6 +323,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 0.8,
       formatValue: msRaw,
+      description: 'Modulation depth. Deeper = more pitch movement.',
     },
     {
       key: 'delay',
@@ -311,6 +333,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 5.5,
       formatValue: msRaw,
+      description: 'Base delay time. Sets centre of the sweep.',
     },
     {
       key: 'feedback',
@@ -320,6 +343,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.15,
       formatValue: percent,
+      description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
       key: 'mix',
@@ -330,6 +354,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   flanger: [
@@ -341,6 +366,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.05,
       defaultValue: 0.2,
       formatValue: hz,
+      description: 'LFO rate. Controls speed of modulation.',
     },
     {
       key: 'depth',
@@ -350,6 +376,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 0.4,
       formatValue: msRaw,
+      description: 'Modulation depth. Deeper = more pitch movement.',
     },
     {
       key: 'delay',
@@ -359,6 +386,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.05,
       defaultValue: 0.3,
       formatValue: msRaw,
+      description: 'Base delay time. Sets centre of the sweep.',
     },
     {
       key: 'feedback',
@@ -368,6 +396,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.25,
       formatValue: percent,
+      description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
       key: 'mix',
@@ -378,6 +407,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   phaser: [
@@ -389,6 +419,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.05,
       defaultValue: 0.2,
       formatValue: hz,
+      description: 'LFO rate. Controls speed of modulation.',
     },
     {
       key: 'depth',
@@ -398,6 +429,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.6,
       formatValue: percent,
+      description: 'How much of the sweep range the notches travel. Wider = broader swoosh.',
     },
     {
       key: 'feedback',
@@ -407,6 +439,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.35,
       formatValue: percent,
+      description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
       key: 'stages',
@@ -416,6 +449,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 4,
       formatValue: plain,
+      description: 'Number of phase stages. More = more notches, deeper effect.',
     },
     {
       key: 'mix',
@@ -426,6 +460,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   tremolo: [
@@ -437,6 +472,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 4,
       formatValue: hz,
+      description: 'LFO rate. Controls speed of modulation.',
     },
     {
       key: 'depth',
@@ -446,6 +482,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Amplitude modulation depth. Deeper = stronger volume pulse.',
     },
     {
       // shape is a select in the UI, backed by a plain numeric param
@@ -471,6 +508,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'stereo', label: 'Stereo' },
       ],
       defaultValue: 'stereo',
+      description: 'Stereo mode. Mono = same both sides, Stereo = antiphase width.',
     },
     {
       key: 'mode',
@@ -481,6 +519,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'harmonic', label: 'Harmonic' },
       ],
       defaultValue: 'normal',
+      description: 'Mode selector for this block.',
     },
     {
       key: 'mix',
@@ -491,6 +530,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   'ring-mod': [
@@ -502,6 +542,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 5,
       defaultValue: 400,
       formatValue: hz,
+      description: 'Centre frequency. Sets where the effect is focused.',
     },
     {
       key: 'drive',
@@ -511,6 +552,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.3,
       formatValue: percent,
+      description: 'Saturation/drive. Adds grit before or inside the effect.',
     },
     {
       key: 'mix',
@@ -521,6 +563,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   filter: [
@@ -535,6 +578,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       ],
       defaultValue: 'wah',
       primary: true,
+      description: 'Filter type: Wah=bandpass sweep, Envelope=follower, Ladder=4-pole resonant.',
     },
     {
       key: 'frequency',
@@ -544,6 +588,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 800,
       formatValue: hz,
+      description: 'Centre frequency. Sets where the effect is focused.',
     },
     {
       key: 'q',
@@ -553,6 +598,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 2,
       formatValue: plain,
+      description: 'Resonance/Q. Higher = narrower, more ringing.',
     },
     {
       key: 'drive',
@@ -562,6 +608,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0,
       formatValue: percent,
+      description: 'Saturation/drive. Adds grit before or inside the effect.',
     },
     {
       key: 'sensitivity',
@@ -571,6 +618,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Sensitivity to picking dynamics. Higher = more reactive.',
     },
     {
       key: 'mode',
@@ -582,6 +630,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'lfo', label: 'LFO' },
       ],
       defaultValue: 'pedal',
+      description: 'Mode selector for this block.',
     },
     {
       key: 'lfo_rate',
@@ -591,6 +640,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 1,
       formatValue: hz,
+      description: 'LFO rate for modulation.',
     },
     {
       key: 'mix',
@@ -601,6 +651,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   'pitch-shifter': [
@@ -614,6 +665,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       ],
       defaultValue: 'whammy',
       primary: true,
+      description: 'Mode selector for this block.',
     },
     {
       key: 'pitch',
@@ -623,6 +675,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 0,
       formatValue: plain,
+      description: 'Pitch shift in semitones.',
     },
     {
       key: 'detune_cents',
@@ -632,6 +685,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 5,
       formatValue: plain,
+      description: 'Fine detune in cents for doubling/chorus width.',
     },
     {
       key: 'mix',
@@ -642,6 +696,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   'granular-delay': [
@@ -653,6 +708,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 400,
       formatValue: msRaw,
+      description: 'Base time/delay. Sets repeat/spacing.',
     },
     {
       key: 'grain_size',
@@ -662,6 +718,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 5,
       defaultValue: 80,
       formatValue: msRaw,
+      description: 'Grain window length. Small = grainy, large = smooth.',
     },
     {
       key: 'density',
@@ -671,6 +728,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 8,
       formatValue: hz,
+      description: 'Grains per second. Higher = denser cloud.',
     },
     {
       key: 'pitch',
@@ -680,6 +738,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 0,
       formatValue: plain,
+      description: 'Pitch shift in semitones.',
     },
     {
       key: 'jitter',
@@ -689,6 +748,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.2,
       formatValue: percent,
+      description: 'Random scatter between grains. 0 = tight, 1 = loose.',
     },
     {
       key: 'feedback',
@@ -698,6 +758,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.3,
       formatValue: percent,
+      description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
       key: 'spread',
@@ -707,6 +768,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Stereo spread of grains/repeats.',
     },
     {
       key: 'character',
@@ -716,6 +778,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0,
       formatValue: percent,
+      description: 'Tone/character model. Changes saturation and response.',
     },
     {
       key: 'freeze',
@@ -726,6 +789,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'on', label: 'On' },
       ],
       defaultValue: 'off',
+      description: 'Freeze when On: loops current buffer infinitely.',
     },
     {
       key: 'mix',
@@ -736,6 +800,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.3,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   rotary: [
@@ -750,6 +815,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       ],
       defaultValue: 'chorale',
       primary: true,
+      description:
+        'Speed selector, like a type: Stop=braked, Chorale=slow, Tremolo=fast, with ramped acceleration.',
     },
     {
       key: 'drive',
@@ -759,6 +826,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.2,
       formatValue: percent,
+      description: 'Saturation/drive. Adds grit before or inside the effect.',
     },
     {
       key: 'horn_level',
@@ -768,6 +836,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.7,
       formatValue: percent,
+      description: 'Horn (high rotor) level. Balances shimmer.',
     },
     {
       key: 'drum_level',
@@ -777,6 +846,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.7,
       formatValue: percent,
+      description: 'Drum (low rotor) level. More = more throb.',
     },
     {
       key: 'mic_distance',
@@ -786,6 +856,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.3,
       formatValue: percent,
+      description: 'Virtual mic distance. Close = bright/wide, far = darker/narrower.',
     },
     {
       key: 'crossover',
@@ -795,6 +866,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 10,
       defaultValue: 800,
       formatValue: hz,
+      description: 'Crossover frequency splitting high vs low rotors.',
     },
     {
       key: 'mix',
@@ -805,6 +877,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   // 3 character models: Digital (clean), Analog (BBD-style filtering +
@@ -833,6 +906,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 5,
       defaultValue: 300,
       formatValue: msRaw,
+      description: 'Base time/delay. Sets repeat/spacing.',
     },
     {
       key: 'feedback',
@@ -842,6 +916,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.4,
       formatValue: percent,
+      description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
       key: 'tone',
@@ -851,6 +926,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 50,
       defaultValue: 6000,
       formatValue: hz,
+      description: 'Low-pass tone on repeats. Lower = darker decay.',
     },
     {
       key: 'wow_depth',
@@ -861,6 +937,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 1.5,
       formatValue: msRaw,
       visible: (v) => v.model === 'tape',
+      description: 'Tape wow depth (Tape model). Adds pitch wobble.',
     },
     {
       key: 'wow_rate',
@@ -871,6 +948,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: hz,
       visible: (v) => v.model === 'tape',
+      description: 'Tape wow rate. Speed of wobble.',
     },
     {
       // stereo_mode is a select in the UI over a plain numeric core param
@@ -894,6 +972,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 1,
       formatValue: percent,
       visible: (v) => v.stereo_mode === 'ping-pong',
+      description: 'Stereo width. Only meaningful in Ping-Pong mode.',
     },
     {
       key: 'mix',
@@ -904,6 +983,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.1,
       formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
     {
       key: 'level',
@@ -914,6 +994,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 1,
       formatValue: percent,
+      description: 'Output level trim after the effect.',
     },
   ],
   // Four Dragonfly Reverb algorithms (packages/core): Hall, Room, Plate,
@@ -943,6 +1024,8 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       ],
       defaultValue: 'hall',
       primary: true,
+      description:
+        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only.',
     },
     {
       key: 'roomSize',
@@ -954,6 +1037,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.84,
       formatValue: percent,
       visible: (v) => v.reverbAlgorithm !== 'early-reflections',
+      description: 'Virtual room size. Larger = longer decay (per-algorithm).',
     },
     {
       key: 'damping',
@@ -964,6 +1048,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.01,
       defaultValue: 0.5,
       formatValue: percent,
+      description: 'High-frequency damping. Higher = darker, less ring.',
     },
     {
       key: 'width',
@@ -974,6 +1059,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 100,
       formatValue: percentRaw,
+      description: 'Stereo width of the reverb field. 100% = as recorded, higher = wider.',
     },
     {
       key: 'predelay',
@@ -985,6 +1071,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 20,
       formatValue: msRaw,
       visible: (v) => v.reverbAlgorithm !== 'early-reflections',
+      description: 'Pre-delay before reverb onset. Separates dry from wet.',
     },
     {
       key: 'spin',
@@ -996,6 +1083,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.6,
       formatValue: hzPrecise,
       visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
+      description: 'Spin modulation in late field. More = animated diffusion.',
     },
     {
       key: 'wander',
@@ -1007,6 +1095,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 8,
       formatValue: msRaw,
       visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
+      description: 'Wander time modulation. More = lusher movement.',
     },
     {
       key: 'earlySend',
@@ -1018,6 +1107,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 20,
       formatValue: percentRaw,
       visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
+      description: 'Send from early reflections into late field. Controls build-up.',
     },
     {
       key: 'dryLevel',
@@ -1028,6 +1118,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 1,
       defaultValue: 0,
       formatValue: percentRaw,
+      description: 'Dry signal preserved. 0 lets engine handle blend.',
     },
   ],
 }
@@ -1043,6 +1134,7 @@ const AMP_TONE_STACK: KnobField[] = [
     defaultValue: 0,
     formatValue: dB,
     group: 'EQ',
+    description: 'Low shelf after NAM. ±12 dB.',
   },
   {
     key: 'mid',
@@ -1053,6 +1145,7 @@ const AMP_TONE_STACK: KnobField[] = [
     defaultValue: 0,
     formatValue: dB,
     group: 'EQ',
+    description: 'Mid peak after NAM.',
   },
   {
     key: 'treble',
@@ -1063,6 +1156,7 @@ const AMP_TONE_STACK: KnobField[] = [
     defaultValue: 0,
     formatValue: dB,
     group: 'EQ',
+    description: 'High shelf after NAM.',
   },
   {
     key: 'presence',
@@ -1073,6 +1167,7 @@ const AMP_TONE_STACK: KnobField[] = [
     defaultValue: 0,
     formatValue: dB,
     group: 'EQ',
+    description: 'Presence after NAM. High-mid sheen.',
   },
 ]
 
@@ -1096,6 +1191,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     defaultValue: 1,
     formatValue: percent,
     group: 'I/O',
+    description: 'Block input trim into model/effect.',
   },
   {
     key: 'output_level',
@@ -1107,6 +1203,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     defaultValue: 1,
     formatValue: percent,
     group: 'I/O',
+    description: 'Block output trim to next block.',
   },
 ]
 
@@ -1150,6 +1247,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
     const fields: KnobField[] = [
       {
         key: `in${i}_level`,
+        description: 'Mixer input level.',
         label: 'Level',
         control: 'knob',
         ...range('mixer', `in${i}_level`),
@@ -1160,6 +1258,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       },
       {
         key: `in${i}_pan`,
+        description: 'Mixer input pan.',
         label: 'Pan',
         control: 'knob',
         ...range('mixer', `in${i}_pan`),
@@ -1173,6 +1272,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
   }).flat(),
   splitter: Array.from({ length: SPLITTER_OUTPUT_COUNT }, (_, i): KnobField => ({
     key: `out${i}_level`,
+    description: 'Splitter branch level.',
     label: 'Level',
     control: 'knob',
     ...range('splitter', `out${i}_level`),
