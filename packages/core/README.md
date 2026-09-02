@@ -59,6 +59,14 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
+- **Chorus** (`include/openaxe/dsp/chorus.h` + `src/dsp/chorus.cpp`) — wraps
+  the MIT-licensed chorus from [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)
+  (`third_party/daisysp`, its `Source/Effects/chorus.{h,cpp}`) behind the same
+  thin-class interface, replacing a hand-rolled single-voice implementation
+  (issue #359). 5 params: rate/depth/delay/feedback/stereo. DaisySP's internal
+  equal wet/dry mix and pan/gain scaling are stripped in the wrapper so the
+  engine's own `mix` knob owns the blend; `stereo` sweeps the right channel's
+  LFO at a slightly higher rate for drift-based width, or collapses to mono.
 - **Convolver** (`include/openaxe/dsp/convolver.h` + `src/dsp/convolver.cpp`)
   — cabinet/room impulse-response convolution, the DSP behind a Cab block.
   Partitioned convolution in the standard two-part form: a direct time-domain FIR
@@ -313,11 +321,12 @@ binding documents.
 All added as git submodules under `third_party/`, and all wired into the
 build — every one backs a real effect kind:
 
-| Path               | Upstream                                                                                | License | Wired into the build?                                       |
-| ------------------ | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------- |
-| `nam-core`         | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                           |
-| `dragonfly-reverb` | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)   | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above             |
-| `dspark`           | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above |
+| Path               | Upstream                                                                                | License | Wired into the build?                                             |
+| ------------------ | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------- |
+| `nam-core`         | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                                 |
+| `dragonfly-reverb` | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)   | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above                   |
+| `dspark`           | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above       |
+| `daisysp`          | [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)                     | MIT     | **Yes** — Chorus (its `Source/Effects/chorus.{h,cpp}`), see above |
 
 Two of these libraries additionally vendor their own nested submodules —
 after cloning this repo, run:

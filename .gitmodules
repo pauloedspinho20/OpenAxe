@@ -10,3 +10,7 @@
 	path = packages/core/third_party/dspark
 	url = https://github.com/CristianMoresi/DSPark
 	shallow = true
+[submodule "packages/core/third_party/daisysp"]
+	path = packages/core/third_party/daisysp
+	url = https://github.com/electro-smith/DaisySP.git
+	shallow = true
