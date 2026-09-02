@@ -16,6 +16,7 @@ set(OPENAXE_BLOCK_SOURCES
   src/dsp/phaser.cpp
   src/dsp/tremolo.cpp
   src/dsp/delay.cpp
+  src/dsp/spring_reverb.cpp
   src/dsp/ring_mod.cpp
   src/dsp/granular_delay.cpp
   src/dsp/filter.cpp

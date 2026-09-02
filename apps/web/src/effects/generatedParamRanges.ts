@@ -185,6 +185,16 @@ export const PARAM_RANGES = Object.freeze({
       low_cut: { min: 0, max: 200 },
       high_cut: { min: 1000, max: 16000 },
     }),
+    spring: Object.freeze({
+      dry_level: { min: 0, max: 100 },
+      decay: { min: 0.1, max: 10 },
+      high_cut: { min: 1000, max: 16000 },
+      width: { min: 50, max: 150 },
+      predelay: { min: 0, max: 100 },
+      spin: { min: 0, max: 10 },
+      wander: { min: 0, max: 40 },
+      drive: { min: 0, max: 1 },
+    }),
   }),
   cab: Object.freeze({ ir_mix: { min: 0, max: 1 } }),
   mixer: Object.freeze({

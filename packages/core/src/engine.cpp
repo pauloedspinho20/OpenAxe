@@ -39,6 +39,7 @@
 #endif
 #if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/dragonfly_room_reverb.h"
+#include "openaxe/dsp/spring_reverb.h"
 #endif
 #if OPENAXE_BLOCK_EQ_COMPILED
 #include "openaxe/dsp/equalizer.h"
@@ -275,6 +276,7 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp
 #if OPENAXE_BLOCK_REVERB_COMPILED
                                 , dsp::DragonflyHallReverb, dsp::DragonflyRoomReverb
                                 , dsp::DragonflyPlateReverb, dsp::DragonflyEarlyReflections
+                                , dsp::SpringReverb
 #endif
 #if OPENAXE_BLOCK_NOISE_GATE_COMPILED
                                 , dsp::NoiseGate
@@ -394,6 +396,14 @@ constexpr dsp::ParamSmoothing kDragonflyPlateReverbSmoothing[] = {
 #if OPENAXE_BLOCK_REVERB_COMPILED
 constexpr dsp::ParamSmoothing kDragonflyEarlyReflectionsSmoothing[] = {
 #include "dsp/generated/dragonfly_early_reflections_smoothing.inc"
+};
+#endif
+#if OPENAXE_BLOCK_REVERB_COMPILED
+// The hand-rolled spring tank smooths no params internally (unlike the
+// Dragonfly algorithms), so it carries engine-side exponential smoothing -
+// see param_schema.json's reverb/spring variant.
+constexpr dsp::ParamSmoothing kSpringReverbSmoothing[] = {
+#include "dsp/generated/spring_reverb_smoothing.inc"
 };
 #endif
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
@@ -696,8 +706,10 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
         table = kDragonflyRoomReverbSmoothing;
       } else if (std::holds_alternative<dsp::DragonflyPlateReverb>(state.dsp)) {
         table = kDragonflyPlateReverbSmoothing;
-      } else {
+      } else if (std::holds_alternative<dsp::DragonflyEarlyReflections>(state.dsp)) {
         table = kDragonflyEarlyReflectionsSmoothing;
+      } else {
+        table = kSpringReverbSmoothing;
       }
       count = pc;
       break;
@@ -2423,6 +2435,10 @@ void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
       state->dsp.emplace<dsp::DragonflyEarlyReflections>();
       state->param_count.store(dsp::DragonflyEarlyReflections::ParamCount(),
                                std::memory_order_relaxed);
+      break;
+    case ReverbAlgorithm::kSpring:
+      state->dsp.emplace<dsp::SpringReverb>();
+      state->param_count.store(dsp::SpringReverb::ParamCount(), std::memory_order_relaxed);
       break;
   }
 

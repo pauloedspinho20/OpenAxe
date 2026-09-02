@@ -1612,6 +1612,100 @@
               }
             }
           ]
+        },
+        "spring": {
+          "cppFile": "spring_reverb.cpp",
+          "comment": "Hand-rolled Dattorro-style spring tank (src/dsp/spring_reverb.cpp). Unlike the Dragonfly algorithms it smooths no params internally, so every param carries engine-side exponential smoothing to keep knob moves zipper-free.",
+          "params": [
+            {
+              "symbol": "dry_level",
+              "label": "Dry Level",
+              "min": 0,
+              "max": 100,
+              "unit": "%",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.03
+              }
+            },
+            {
+              "symbol": "decay",
+              "label": "Decay",
+              "min": 0.1,
+              "max": 10,
+              "unit": "s",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.1
+              }
+            },
+            {
+              "symbol": "high_cut",
+              "label": "High Cut",
+              "min": 1000,
+              "max": 16000,
+              "unit": "Hz",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.05
+              }
+            },
+            {
+              "symbol": "width",
+              "label": "Width",
+              "min": 50,
+              "max": 150,
+              "unit": "%",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.03
+              }
+            },
+            {
+              "symbol": "predelay",
+              "label": "Pre-Delay",
+              "min": 0,
+              "max": 100,
+              "unit": "ms",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.02
+              }
+            },
+            {
+              "symbol": "spin",
+              "label": "Spin",
+              "min": 0,
+              "max": 10,
+              "unit": "Hz",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.05
+              }
+            },
+            {
+              "symbol": "wander",
+              "label": "Wander",
+              "min": 0,
+              "max": 40,
+              "unit": "ms",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.05
+              }
+            },
+            {
+              "symbol": "drive",
+              "label": "Drive",
+              "min": 0,
+              "max": 1,
+              "unit": "x",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.02
+              }
+            }
+          ]
         }
       },
       "derived": ["roomSize", "damping"]

@@ -769,6 +769,7 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
         {"room", OPENAXE_REVERB_ROOM},
         {"plate", OPENAXE_REVERB_PLATE},
         {"earlyReflections", OPENAXE_REVERB_EARLY_REFLECTIONS},
+        {"spring", OPENAXE_REVERB_SPRING},
         // The web UI sends the kebab-case option value verbatim
         // (paramSchema.ts -> NativeBlock::setParams), so this spelling is the
         // one that actually arrives. Only "earlyReflections" was accepted, which

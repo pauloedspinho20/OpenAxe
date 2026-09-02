@@ -23,6 +23,7 @@
 #include "openaxe/dsp/delay.h"
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
+#include "openaxe/dsp/spring_reverb.h"
 #include "openaxe/dsp/equalizer.h"
 #include "openaxe/dsp/filter.h"
 #include "openaxe/dsp/flanger.h"
@@ -101,6 +102,12 @@ void TestReverbDefaultsToHallThenSwitchesAlgorithm() {
 
   engine.SetReverbAlgorithm(reverb, ReverbAlgorithm::kPlate);
   OPENAXE_EXPECT(engine.ParamCount(reverb) == openaxe::dsp::DragonflyPlateReverb::ParamCount());
+
+  // The hand-rolled spring tank is a fifth algorithm with its own surface.
+  engine.SetReverbAlgorithm(reverb, ReverbAlgorithm::kSpring);
+  OPENAXE_EXPECT(engine.ParamCount(reverb) == openaxe::dsp::SpringReverb::ParamCount());
+  const auto spring_decay = engine.ParamInfo(reverb, 1);
+  OPENAXE_EXPECT(spring_decay.has_value() && spring_decay->symbol == std::string("decay"));
 }
 
 void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
