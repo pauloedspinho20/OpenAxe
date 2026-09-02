@@ -39,8 +39,6 @@
 #endif
 #if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/dragonfly_room_reverb.h"
-#endif
-#if OPENAXE_BLOCK_REVERB_COMPILED
 #include "openaxe/dsp/spring_reverb.h"
 #endif
 #if OPENAXE_BLOCK_EQ_COMPILED

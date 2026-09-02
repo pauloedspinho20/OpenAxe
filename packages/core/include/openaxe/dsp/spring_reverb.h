@@ -15,17 +15,25 @@ namespace openaxe::dsp {
 // hall/room/plate algorithmic reverb.
 //
 // This wrapper implements that model with four parallel delay lines (the
-// springs) of incommensurate lengths, each with:
+// springs) of incommensurate lengths per channel, each with:
 //   - a one-pole damping lowpass in the feedback path (springs are lossy,
 //     high frequencies die out faster), and
 //   - an allpass dispersion stage (a spring is dispersive - the round-trip
 //     time depends on frequency, which is what smears a transient into the
 //     characteristic metallic "boing" rather than a clean echo).
-// The two output channels read different taps along the springs and
-// cross-feed, producing the tank's stereo spread (the L output hears a
-// different mix of the springs than the R output). An input-drive
+// Each spring's input is scaled by sqrt(1 - feedback^2), so lengthening the
+// decay does not also raise the level.
+//
+// The two channels run separate tanks - the right one's springs stretched by
+// ~3% and its modulation LFO a quarter cycle behind - and tap them with
+// complementary even/odd weights set by `width`. That asymmetry, not a
+// cross-feed, is what gives a mono source a stereo image. An input-drive
 // saturation stage adds the "crunch" a real transducer/spring-tank has at
 // high levels.
+//
+// Process() is frame-outer: the pre-delay lines (one per channel) and the LFO
+// advance exactly once per frame, so the output is bit-identical whatever
+// block size the host renders in.
 //
 // Parameter surface mirrors the engine's ReverbControl abstraction where it
 // can (decay/high_cut/width/predelay/spin/wander/dry_level), so the UI's
