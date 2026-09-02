@@ -89,13 +89,14 @@ typedef enum OpenAxeBlockKind {
 } OpenAxeBlockKind;
 
 // Only meaningful for OPENAXE_BLOCK_REVERB blocks - selects which of the
-// 4 wrapped Dragonfly Reverb algorithms backs the block. New reverb blocks
-// default to Hall.
+// 4 wrapped Dragonfly Reverb algorithms (plus the hand-rolled spring tank)
+// backs the block. New reverb blocks default to Hall.
 typedef enum OpenAxeReverbAlgorithm {
   OPENAXE_REVERB_HALL,
   OPENAXE_REVERB_ROOM,
   OPENAXE_REVERB_PLATE,
   OPENAXE_REVERB_EARLY_REFLECTIONS,
+  OPENAXE_REVERB_SPRING,
 } OpenAxeReverbAlgorithm;
 
 // Only meaningful for OPENAXE_BLOCK_DELAY blocks - selects which delay

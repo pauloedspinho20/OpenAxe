@@ -1021,11 +1021,12 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'room', label: 'Room' },
         { value: 'plate', label: 'Plate' },
         { value: 'early-reflections', label: 'Early Reflections' },
+        { value: 'spring', label: 'Spring' },
       ],
       defaultValue: 'hall',
       primary: true,
       description:
-        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only.',
+        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only, Spring=boingy tank.',
     },
     {
       key: 'roomSize',
@@ -1082,7 +1083,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.1,
       defaultValue: 0.6,
       formatValue: hzPrecise,
-      visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
+      visible: (v) =>
+        v.reverbAlgorithm === 'hall' ||
+        v.reverbAlgorithm === 'room' ||
+        v.reverbAlgorithm === 'spring',
       description: 'Spin modulation in late field. More = animated diffusion.',
     },
     {
@@ -1094,7 +1098,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       step: 0.5,
       defaultValue: 8,
       formatValue: msRaw,
-      visible: (v) => v.reverbAlgorithm === 'hall' || v.reverbAlgorithm === 'room',
+      visible: (v) =>
+        v.reverbAlgorithm === 'hall' ||
+        v.reverbAlgorithm === 'room' ||
+        v.reverbAlgorithm === 'spring',
       description: 'Wander time modulation. More = lusher movement.',
     },
     {

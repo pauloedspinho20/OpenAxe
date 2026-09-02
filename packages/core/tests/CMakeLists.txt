@@ -215,6 +215,14 @@ else()
   message(WARNING "Skipping Dragonfly Reverb tests - dragonfly-reverb's dpf submodule not initialized")
 endif()
 
+# The hand-rolled spring tank is plain C++ (no Dragonfly/DPF machinery), so it
+# only needs the reverb kind to be compiled.
+if(OPENAXE_BLOCK_REVERB)
+  add_executable(spring_reverb_test spring_reverb_test.cpp)
+  target_link_libraries(spring_reverb_test PRIVATE openaxe_core)
+  add_test(NAME spring_reverb_test COMMAND spring_reverb_test)
+endif()
+
 if(OPENAXE_HAS_DSPARK)
   if(OPENAXE_BLOCK_COMPRESSOR)
     add_executable(compressor_test compressor_test.cpp)
