@@ -138,12 +138,7 @@ export function Knob({
   }
 
   return (
-    <div
-      className={styles.wrap}
-      style={{ width: size }}
-      title={description}
-      aria-describedby={description ? descId : undefined}
-    >
+    <div className={styles.wrap} style={{ width: size }} title={description}>
       {formatValue && <span className={styles.value}>{formatValue(value)}</span>}
       <svg
         role="slider"
@@ -154,6 +149,7 @@ export function Knob({
         aria-valuenow={value}
         aria-disabled={disabled}
         aria-labelledby={id}
+        aria-describedby={description ? descId : undefined}
         viewBox="0 0 80 80"
         width={size}
         height={size}
@@ -192,7 +188,7 @@ export function Knob({
         {label}
       </span>
       {description && (
-        <span id={descId} style={{ display: 'none' }}>
+        <span id={descId} className={styles.srOnly}>
           {description}
         </span>
       )}

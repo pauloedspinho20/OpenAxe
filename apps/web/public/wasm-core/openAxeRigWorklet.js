@@ -46,11 +46,21 @@ export const FRAMES = 128
 const IN_RAIL = -1
 const OUT_RAIL = -2
 
-// packages/core/include/openaxe/api.h OpenAxeBlockKind / ReverbControl /
-// ReverbAlgorithm. Reverb blocks are driven through the core's ReverbControl
-// mapping (the UI's roomSize/damping/width/... are abstractions, not symbols),
-// mirroring the desktop bridge's ReverbControlFor.
-const REVERB_KIND = 8
+// packages/core/include/openaxe/api.h ReverbControl / ReverbAlgorithm. Reverb
+// blocks are driven through the core's ReverbControl mapping (the UI's
+// roomSize/damping/width/... are abstractions, not symbols), mirroring the
+// desktop bridge's ReverbControlFor.
+//
+// The reverb *kind* ordinal is NOT written here. It used to be, as
+// `REVERB_KIND = 8`, and when #330 deleted the ping-pong-delay kind and
+// shifted reverb 9 -> 8 this file kept saying 9 - which is OPENAXE_BLOCK_AMP.
+// The `kindByJs.get(...) === REVERB_KIND` guards below therefore never
+// matched, and every reverb knob and the algorithm switch were silently
+// dropped for as long as that drift stood. The ordinal now arrives from
+// RigWorkletNode's KIND_TO_CORE through processorOptions, so there is exactly
+// one table on the web side, and rigWorkletKinds.test.ts asserts that table
+// against api.h.
+const REVERB_KIND_FALLBACK = 8
 const REVERB_CONTROL = {
   roomSize: 0,
   damping: 1,
@@ -93,6 +103,12 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
     // The graph's block count is bounded by the store, but we keep it under a
     // ceiling so the meter map can't grow unbounded if a driver leaks blocks.
     this.maxBlocks = MAX_BLOCKS
+
+    // Which OpenAxeBlockKind ordinal means "reverb", handed over by
+    // RigWorkletNode rather than duplicated here - see REVERB_KIND_FALLBACK.
+    const injectedReverbKind = options?.processorOptions?.reverbKind
+    this.reverbKind =
+      typeof injectedReverbKind === 'number' ? injectedReverbKind : REVERB_KIND_FALLBACK
 
     // The TS wrapper (RigWorkletNode) fetches the .wasm bytes on the main
     // thread and hands them over via processorOptions - AudioWorkletGlobalScope
@@ -278,7 +294,10 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
             // abstractions, not core symbols - route them through the core's
             // ReverbControl mapping, exactly as the desktop bridge does.
             const reverbControl = REVERB_CONTROL[message.key]
-            if (reverbControl !== undefined && this.kindByJs.get(message.block) === REVERB_KIND) {
+            if (
+              reverbControl !== undefined &&
+              this.kindByJs.get(message.block) === this.reverbKind
+            ) {
               module._openaxe_set_reverb_control(
                 this.graph,
                 coreBlock,
@@ -297,7 +316,7 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           const coreBlock = this.toCoreBlock(message.block)
           if (coreBlock !== null && coreBlock >= 0) {
             const algo = REVERB_ALGORITHM[message.algorithm]
-            if (algo !== undefined && this.kindByJs.get(message.block) === REVERB_KIND) {
+            if (algo !== undefined && this.kindByJs.get(message.block) === this.reverbKind) {
               module._openaxe_set_reverb_algorithm(this.graph, coreBlock, algo)
             }
           }
@@ -427,6 +446,28 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
             out[jsId] = module._openaxe_get_meter(this.graph, coreBlock)
           }
           reply.meters = out
+          reply.ok = true
+          break
+        }
+        case 'gainReductions': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            if (typeof module._openaxe_get_gain_reduction === 'function') {
+              out[jsId] = module._openaxe_get_gain_reduction(this.graph, coreBlock)
+            }
+          }
+          reply.gainReductions = out
+          reply.ok = true
+          break
+        }
+        case 'gateGains': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            if (typeof module._openaxe_get_gate_gain === 'function') {
+              out[jsId] = module._openaxe_get_gate_gain(this.graph, coreBlock)
+            }
+          }
+          reply.gateGains = out
           reply.ok = true
           break
         }

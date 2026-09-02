@@ -23,7 +23,7 @@ const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
 const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
 /** packages/core/include/openaxe/api.h's OpenAxeBlockKind, indexed by web BlockKind. */
-const KIND_TO_CORE: Record<BlockKind, number> = {
+export const KIND_TO_CORE: Record<BlockKind, number> = {
   'noise-gate': 0,
   compressor: 1,
   eq: 2,
@@ -73,6 +73,8 @@ interface WorkletReply {
   error?: string
   info?: RigModelInfo | null
   meters?: Record<string, number>
+  gainReductions?: Record<string, number>
+  gateGains?: Record<string, number>
   /** Core block-kind ids this WASM was built with - see assertCompiledKindsMatchConfig. */
   compiledKinds?: number[]
 }
@@ -129,7 +131,12 @@ export class RigWorkletNode {
       numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBytes },
+      // reverbKind: the worklet needs to recognise reverb blocks to route the
+      // ReverbControl abstraction, and used to carry its own copy of the
+      // ordinal. That copy went stale in #330 (9 vs 8) and silently swallowed
+      // every reverb param write, so KIND_TO_CORE is now the single source and
+      // the worklet is told rather than told twice.
+      processorOptions: { wasmBytes, reverbKind: KIND_TO_CORE.reverb },
     })
     const rig = new RigWorkletNode(node)
     // Deliberately not awaited: this is a diagnostic, and blocking engine
@@ -343,6 +350,18 @@ export class RigWorkletNode {
   async meters(): Promise<Record<string, number>> {
     const reply = await this.request({ type: 'meters' })
     return reply.meters ?? {}
+  }
+
+  /** Gain reduction in dB (≤0) per block id from openaxe_get_gain_reduction. */
+  async gainReductions(): Promise<Record<string, number>> {
+    const reply = await this.request({ type: 'gainReductions' })
+    return (reply as unknown as { gainReductions?: Record<string, number> }).gainReductions ?? {}
+  }
+
+  /** Gate openness 0..1 per block id from openaxe_get_gate_gain. */
+  async gateGains(): Promise<Record<string, number>> {
+    const reply = await this.request({ type: 'gateGains' })
+    return (reply as unknown as { gateGains?: Record<string, number> }).gateGains ?? {}
   }
 
   // ── Teardown ────────────────────────────────────────────────────────────

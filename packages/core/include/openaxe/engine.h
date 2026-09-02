@@ -513,6 +513,8 @@ class AudioEngine {
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
+  float GetGainReduction(BlockId id) const;  // compressor GR in dB (≤0), 0 if unknown/not a compressor. Tier 1.
+  float GetGateGain(BlockId id) const;       // gate openness 0..1 (1 = open), 0 if unknown/not a gate. Tier 1.
 
  private:
   struct BlockState;  // defined in engine.cpp (holds the live-DSP variant)

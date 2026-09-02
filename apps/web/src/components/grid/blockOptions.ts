@@ -197,8 +197,10 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     kind: 'granular-delay',
     label: 'Granular Delay',
     group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
+    // The grain engine is dspark::GranularProcessor; the delay line, feedback,
+    // cross-feed and `character` colouring around it are packages/core.
+    vendor: 'DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'rotary',

@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
 import { Knob, Select } from '@openaxe/ui'
-import type { Block, EffectParams } from '@/engine/blocks/Block'
+import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
-import { useGraphStore } from '@/state/graphStore'
+import { DynamicsMeter } from '@/components/global/DynamicsMeter/DynamicsMeter'
+import type { GraphRig } from '@/engine/GraphRig'
+import type { NativeGraphRig } from '@/native/NativeGraphRig'
+import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
 export interface EffectParamsPanelProps {
   blockId: string
   block: Block
+  rig?: GraphRig | NativeGraphRig | null
 }
 
 function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchema[]]> {
@@ -37,32 +40,11 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * very next unrelated store change (adding some other block, say) would
  * silently revert it back to the store's stale copy.
  */
-export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
-  const [values, setValues] = useState<EffectParams>(() => ({
-    ...block.getParams(),
-    ...useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params,
-  }))
-  // Keep local values in sync when the store changes externally (undo, preset load, MIDI).
-  // Use a stable key (JSON) so unrelated store updates don't retrigger the sync.
-  const storeParamsKey = useGraphStore((s) => {
-    const p = s.blocks.find((b) => b.id === blockId)?.params
-    return p ? JSON.stringify(p) : ''
-  })
-  const storeParams = storeParamsKey ? (JSON.parse(storeParamsKey) as EffectParams) : undefined
-  useEffect(() => {
-    if (storeParams) setValues((prev) => ({ ...prev, ...storeParams }))
-  }, [storeParamsKey])
-  // Also sync when switching blocks (block instance identity changes).
-  useEffect(() => {
-    const latest = useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params
-    setValues({ ...block.getParams(), ...(latest ?? {}) })
-  }, [block, blockId])
+export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPanelProps) {
+  // Shared with EffectDetailsDialog - see useBlockParamValues for why local
+  // state, rather than block.getParams(), drives what is displayed.
+  const { values, setParam } = useBlockParamValues(blockId, block)
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
-
-  const setParam = (key: string, value: number | string) => {
-    useGraphStore.getState().setBlockParams(blockId, { [key]: value })
-    setValues((prev) => ({ ...prev, [key]: value }))
-  }
 
   const renderField = (field: ParamFieldSchema) => {
     if (field.control === 'select') {
@@ -110,6 +92,9 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
     )
   }
 
+  const showDynamicsMeter =
+    rig != null && (block.kind === 'compressor' || block.kind === 'noise-gate')
+
   return (
     <div className={styles.panel}>
       {groupFields(schema).map(([groupName, fields]) => {
@@ -127,10 +112,15 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
             <div className={styles.fields}>
               {selectors.map(renderField)}
               {mainFields.map(renderField)}
+              {showDynamicsMeter && groupName === '' && (
+                <DynamicsMeter rig={rig} blockId={blockId} kind={block.kind} />
+              )}
             </div>
           </div>
         )
       })}
+      {/* If the schema was grouped (e.g. EQ bands), the DynamicsMeter was added to the first group above;
+          for the flat compressor/gate schema (no groups), it is already in that sole group. */}
     </div>
   )
 }

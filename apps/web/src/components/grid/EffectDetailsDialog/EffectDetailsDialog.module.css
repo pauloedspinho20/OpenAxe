@@ -11,13 +11,6 @@
   gap: var(--sp-1);
 }
 
-.header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink-1);
-}
-
 .header p {
   margin: 0;
   font-size: 12px;
@@ -85,4 +78,18 @@
   color: var(--ink-3);
   text-align: center;
   padding: var(--sp-3);
+}
+
+/* Explanatory note under a section title (was an inline style). */
+.sectionNote {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+
+/* Close button row (was an inline style). */
+.footer {
+  display: flex;
+  justify-content: flex-end;
 }

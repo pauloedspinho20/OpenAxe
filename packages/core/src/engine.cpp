@@ -2800,4 +2800,37 @@ float AudioEngine::GetMeter(BlockId id) const {
 // number a UI should surface as "CPU" - not a process-wide figure.
 float AudioEngine::GetCpuLoad() const { return cpu_load_.load(std::memory_order_relaxed); }
 
+// Compressor gain reduction in dB (≤0), 0 if unknown or not a compressor/gate. Tier 1.
+float AudioEngine::GetGainReduction(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state) return 0.0f;
+  return std::visit(
+      [](auto& dsp) -> float {
+        using T = std::decay_t<decltype(dsp)>;
+#if OPENAXE_BLOCK_COMPRESSOR
+        if constexpr (std::is_same_v<T, dsp::Compressor>) return dsp.GetGainReductionDb();
+#endif
+#if OPENAXE_BLOCK_NOISE_GATE
+        if constexpr (std::is_same_v<T, dsp::NoiseGate>) return dsp.GetGainReductionDb();
+#endif
+        return 0.0f;
+      },
+      state->dsp);
+}
+
+// Gate openness 0..1 (1 = open), 0 if unknown or not a gate. Tier 1.
+float AudioEngine::GetGateGain(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state) return 0.0f;
+  return std::visit(
+      [](auto& dsp) -> float {
+        using T = std::decay_t<decltype(dsp)>;
+#if OPENAXE_BLOCK_NOISE_GATE
+        if constexpr (std::is_same_v<T, dsp::NoiseGate>) return dsp.GetGateGain();
+#endif
+        return 0.0f;
+      },
+      state->dsp);
+}
+
 }  // namespace openaxe::engine

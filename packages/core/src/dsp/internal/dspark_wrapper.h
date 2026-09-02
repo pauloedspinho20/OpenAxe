@@ -114,6 +114,28 @@ class DsparkEffect {
     ApplyParam(index, value);
   }
 
+  // Gain reduction in dB (≤0), if the processor exposes it. SFINAE: processors
+  // without getGainReductionDb() simply report 0, so generic wrappers stay
+  // compilable.
+  float GetGainReductionDb() const {
+    if constexpr (requires { impl_->proc.getGainReductionDb(); }) {
+      return impl_->proc.getGainReductionDb();
+    } else {
+      return 0.0f;
+    }
+  }
+
+  // Gate openness 0..1 (1 = fully open), if the processor exposes it.
+  float GetGateGain() const {
+    if constexpr (requires { impl_->proc.getGateGain(); }) {
+      return impl_->proc.getGateGain();
+    } else if constexpr (requires { impl_->proc.getGateOpenAmount(); }) {
+      return impl_->proc.getGateOpenAmount();
+    } else {
+      return 0.0f;
+    }
+  }
+
  private:
   // Push one mirrored value into the DSPark processor via the Traits.
   void ApplyParam(int index, float value) { Traits::Apply(impl_->proc, impl_->params.data(), index, value); }
