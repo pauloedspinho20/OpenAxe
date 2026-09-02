@@ -292,7 +292,10 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
             // abstractions, not core symbols - route them through the core's
             // ReverbControl mapping, exactly as the desktop bridge does.
             const reverbControl = REVERB_CONTROL[message.key]
-            if (reverbControl !== undefined && this.kindByJs.get(message.block) === this.reverbKind) {
+            if (
+              reverbControl !== undefined &&
+              this.kindByJs.get(message.block) === this.reverbKind
+            ) {
               module._openaxe_set_reverb_control(
                 this.graph,
                 coreBlock,
