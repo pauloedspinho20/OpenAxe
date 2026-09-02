@@ -164,6 +164,16 @@ export const REVERB_PARAMS = Object.freeze({
     low_cut: 5,
     high_cut: 6,
   }),
+  spring: Object.freeze({
+    dry_level: 0,
+    decay: 1,
+    high_cut: 2,
+    width: 3,
+    predelay: 4,
+    spin: 5,
+    wander: 6,
+    drive: 7,
+  }),
 })
 
 export const CAB_PARAMS = Object.freeze({ ir_mix: 0 })

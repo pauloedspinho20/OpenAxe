@@ -91,6 +91,8 @@ openaxe::engine::ReverbAlgorithm ToReverbAlgorithm(OpenAxeReverbAlgorithm algori
       return ReverbAlgorithm::kPlate;
     case OPENAXE_REVERB_EARLY_REFLECTIONS:
       return ReverbAlgorithm::kEarlyReflections;
+    case OPENAXE_REVERB_SPRING:
+      return ReverbAlgorithm::kSpring;
   }
   return ReverbAlgorithm::kHall;  // unreachable for a valid enum value
 }

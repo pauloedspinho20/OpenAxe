@@ -49,11 +49,12 @@
       "inPalette": true,
       "cppFile": "delay.cpp"
     },
-    "$comment_reverb": "The four Dragonfly algorithms are separate CMake targets with their own include paths and a C++14 override (see CMakeLists.txt), so this one entry gates the whole DRAGONFLY_ALGOS block rather than a single source file.",
+    "$comment_reverb": "The four Dragonfly algorithms are separate CMake targets with their own include paths and a C++14 override (see CMakeLists.txt), so this one entry gates the whole DRAGONFLY_ALGOS block rather than a single source file. cppFile adds the hand-rolled spring tank (spring_reverb.cpp) to the main core sources; the Dragonfly wrappers stay gated by the cmakeGroup below.",
     "reverb": {
       "enumName": "kReverb",
       "compiled": true,
       "inPalette": true,
+      "cppFile": "spring_reverb.cpp",
       "cmakeGroup": "dragonfly"
     },
     "$comment_hidden_effects": "Compiled today, hidden today. ring-mod aliases badly (no oversampling on the carrier - issue #318) and granular-delay runs only two grain voices with periodic pseudo-jitter (issue #321). Turn inPalette on once those land; turn compiled off to reclaim the WASM bytes in the meantime.",

@@ -96,6 +96,7 @@ enum class ReverbAlgorithm {
   kRoom,
   kPlate,
   kEarlyReflections,
+  kSpring,
 };
 
 // The user-facing reverb controls, as a UI presents them - deliberately not a

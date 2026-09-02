@@ -769,6 +769,7 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
         {"room", OPENAXE_REVERB_ROOM},
         {"plate", OPENAXE_REVERB_PLATE},
         {"earlyReflections", OPENAXE_REVERB_EARLY_REFLECTIONS},
+        {"spring", OPENAXE_REVERB_SPRING},
     };
     const auto algo = MapByName(name, kAlgos, std::size(kAlgos));
     if (!algo) return JsonError("unknown reverb algorithm: " + name);

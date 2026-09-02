@@ -66,6 +66,7 @@ const REVERB_ALGORITHM = {
   room: 1,
   plate: 2,
   'early-reflections': 3,
+  spring: 4,
 }
 
 const BYTES_PER_FLOAT = 4
