@@ -29,7 +29,6 @@
 #define OPENAXE_BLOCK_SPACE_COMPILED 1
 #define OPENAXE_BLOCK_CAB_COMPILED 1
 #define OPENAXE_BLOCK_MIXER_COMPILED 1
-#define OPENAXE_BLOCK_SPLITTER_COMPILED 1
 #define OPENAXE_BLOCK_SEND_1_COMPILED 1
 #define OPENAXE_BLOCK_RETURN_1_COMPILED 1
 #define OPENAXE_BLOCK_SEND_2_COMPILED 1
@@ -63,7 +62,6 @@ inline constexpr bool IsCompiled(graph::BlockKind kind) {
     case graph::BlockKind::kSpace: return true;
     case graph::BlockKind::kCab: return true;
     case graph::BlockKind::kMixer: return true;
-    case graph::BlockKind::kSplitter: return true;
     case graph::BlockKind::kSend1: return true;
     case graph::BlockKind::kReturn1: return true;
     case graph::BlockKind::kSend2: return true;
@@ -89,7 +87,7 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kRingMod: return true;
     case graph::BlockKind::kGranularDelay: return true;
     case graph::BlockKind::kFilter: return true;
-    case graph::BlockKind::kPitchShifter: return true;
+    case graph::BlockKind::kPitchShifter: return false;
     case graph::BlockKind::kRotary: return true;
     case graph::BlockKind::kAmp: return true;
     case graph::BlockKind::kAmpCab: return true;
@@ -98,7 +96,6 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kSpace: return true;
     case graph::BlockKind::kCab: return true;
     case graph::BlockKind::kMixer: return true;
-    case graph::BlockKind::kSplitter: return false;
     case graph::BlockKind::kSend1: return true;
     case graph::BlockKind::kReturn1: return true;
     case graph::BlockKind::kSend2: return true;

@@ -10,7 +10,6 @@ import { resolveGridCell } from '../gridGeometry'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '@/engine/blocks/MixerBlock'
-import { SPLITTER_OUTPUT_COUNT } from '@/engine/blocks/SplitterBlock'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import { blockColorVar } from '../blockColors'
@@ -50,8 +49,11 @@ function portCount(kind: BlockKind): number {
 }
 
 function outputPortCount(kind: BlockKind): number {
+  // A send routes implicitly into its return, so it draws no output jack.
+  // Every other kind has exactly one - the splitter was the only multi-output
+  // kind and it is gone.
   if (kind === 'send-1' || kind === 'send-2') return 0
-  return kind === 'splitter' ? SPLITTER_OUTPUT_COUNT : 1
+  return 1
 }
 
 /** Anything with an optional bypass toggle - the 11 effect kinds and the 5 NAM model kinds have one. */
@@ -339,11 +341,7 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
                   className={`${styles.jack} ${armed ? styles.jackArmed : ''}`}
                   data-jack-id={jackId}
                   data-jack-side="out"
-                  title={
-                    instance.kind === 'splitter'
-                      ? `Output ${port + 1} — tap then tap input, or drag`
-                      : 'Output — tap then tap input, or drag'
-                  }
+                  title="Output — tap then tap input, or drag"
                 />
               </span>
             )

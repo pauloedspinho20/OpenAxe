@@ -33,7 +33,7 @@ export interface BlockOption {
  * exactly (see engine/blocks/Block.ts) so each one browses Tone3000
  * pre-filtered to its own gear type; Cab is grouped there too (it is the
  * amplifier's speaker, even though it loads an IR rather than a NAM capture).
- * "Core" holds the pure-routing blocks - Mixer/Splitter and the Send/Return
+ * "Core" holds the pure-routing blocks - the Mixer and the Send/Return
  * relay pairs (issue #274).
  */
 const ALL_BLOCK_OPTIONS: BlockOption[] = [
@@ -79,7 +79,6 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   { kind: 'mixer', label: 'Mixer', group: 'Core', vendor: 'Native routing (no DSP)' },
-  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' },
   {
     kind: 'send-1',
     label: 'Send 1',

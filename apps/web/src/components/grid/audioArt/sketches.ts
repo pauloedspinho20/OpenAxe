@@ -37,7 +37,6 @@ export type ArtVariant =
   | 'rotary'
   | 'cab'
   | 'mixer'
-  | 'splitter'
 
 function withAlpha(p: p5, colorStr: string, alpha: number) {
   const c = p.color(colorStr)
@@ -254,7 +253,7 @@ function createConeDrawer(): DrawFn {
   }
 }
 
-/** Lines converging (mixer) or diverging (splitter) toward the right edge. */
+/** Lines converging (mixer) toward the right edge. */
 function createFlowLinesDrawer(mode: 'merge' | 'split'): DrawFn {
   let phase = 0
   return (p, ctx) => {
@@ -298,7 +297,6 @@ const ART_VARIANT_KINDS = new Set<string>([
   'rotary',
   'cab',
   'mixer',
-  'splitter',
 ])
 
 /** Maps a grid block kind to its art variant - anything not on the list (incl. no selection) is 'master'. */
@@ -341,8 +339,6 @@ export function createArtDrawer(variant: ArtVariant): DrawFn {
       return createConeDrawer()
     case 'mixer':
       return createFlowLinesDrawer('merge')
-    case 'splitter':
-      return createFlowLinesDrawer('split')
     case 'master':
     default:
       return createRingDrawer()

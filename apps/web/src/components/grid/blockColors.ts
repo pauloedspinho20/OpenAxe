@@ -10,14 +10,7 @@ type PaletteGroup = 'NAM' | 'Core' | 'Effects'
 
 const NAM_KINDS = new Set<BlockKind>(['amp', 'amp-cab', 'cab', 'pedal', 'outboard', 'space'])
 
-const CORE_KINDS = new Set<BlockKind>([
-  'mixer',
-  'splitter',
-  'send-1',
-  'send-2',
-  'return-1',
-  'return-2',
-])
+const CORE_KINDS = new Set<BlockKind>(['mixer', 'send-1', 'send-2', 'return-1', 'return-2'])
 
 function paletteGroupForKind(kind: BlockKind): PaletteGroup {
   if (NAM_KINDS.has(kind)) return 'NAM'

@@ -51,7 +51,6 @@ const char* BlockKindToString(graph::BlockKind kind) {
     case graph::BlockKind::kSpace: return "space";
     case graph::BlockKind::kCab: return "cab";
     case graph::BlockKind::kMixer: return "mixer";
-    case graph::BlockKind::kSplitter: return "splitter";
     case graph::BlockKind::kRingMod: return "ring-mod";
     case graph::BlockKind::kFilter: return "filter";
     case graph::BlockKind::kPitchShifter: return "pitch-shifter";
@@ -83,7 +82,6 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
       {"space", graph::BlockKind::kSpace},
       {"cab", graph::BlockKind::kCab},
       {"mixer", graph::BlockKind::kMixer},
-      {"splitter", graph::BlockKind::kSplitter},
       {"ring-mod", graph::BlockKind::kRingMod},
       {"filter", graph::BlockKind::kFilter},
       {"pitch-shifter", graph::BlockKind::kPitchShifter},
@@ -162,7 +160,7 @@ bool StringToDelayModel(const std::string& text, dsp::Delay::Model& out) {
 // bypass field.
 bool KindHasBypass(graph::BlockKind kind) {
   return kind != graph::BlockKind::kCab && kind != graph::BlockKind::kMixer &&
-         kind != graph::BlockKind::kSplitter && kind != graph::BlockKind::kSend1 &&
+         kind != graph::BlockKind::kSend1 &&
          kind != graph::BlockKind::kReturn1 && kind != graph::BlockKind::kSend2 &&
          kind != graph::BlockKind::kReturn2;
 }

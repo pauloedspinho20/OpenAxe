@@ -16,7 +16,8 @@ constexpr int kHornLevelParam = 2;
 constexpr int kDrumLevelParam = 3;
 constexpr int kMicDistParam = 4;
 constexpr int kCrossoverParam = 5;
-constexpr int kParamCount = 6;
+constexpr int kVelocityParam = 6;
+constexpr int kParamCount = 7;
 const Rotary::ParamInfo kParamInfo[kParamCount] = {
 #include "generated/rotary_params.inc"
 };
@@ -26,6 +27,14 @@ const Rotary::ParamInfo kParamInfo[kParamCount] = {
 // Leslie "slow start" the PR describes, not a per-sample 0.002 step that
 // converges in ~50 ms.
 constexpr float kSpinUpTauS = 0.5f;
+// `velocity` trims the selected mode's rotor rate continuously, as an octave
+// scaler about unity: 0 -> half speed, 0.5 -> exactly the mode's canonical
+// rate, 1 -> double. `speed` stays the discrete Stop / Chorale / Tremolo
+// selector a Leslie actually has, and this is the fine control over the chosen
+// one - so Stop remains stopped at any velocity, and a preset saved before
+// this param existed reads the 0.5 default and sounds unchanged.
+constexpr float kVelocityOctaves = 2.0f;
+
 // Cabinet-colour one-pole cutoff (the "wood" body EQ from the spec).
 constexpr float kColorCutoffHz = 250.0f;
 constexpr float kColorBoost = 0.12f;
@@ -39,6 +48,7 @@ struct Rotary::Impl {
   float drum_level = 0.7f;
   float mic_distance = 0.3f;
   float crossover = 800;
+  float velocity = 0.5f;  // 0.5 = the mode's canonical rate
   float sr = 48000;
   internal::Biquad lp[2], hp[2];
   // delay lines for doppler: horn faster, drum slower, now via VariableDelay (Lagrange3)
@@ -78,6 +88,8 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
   const float drum_level = impl_->drum_level;
   const float mic = impl_->mic_distance;
   const float xo = impl_->crossover;
+  const float velocity = std::clamp(impl_->velocity, 0.0f, 1.0f);
+  const float rate_mult = std::exp2((velocity - 0.5f) * kVelocityOctaves);
 
   // target rates per speed (Hz): horn vs drum
   float target_horn = 0, target_drum = 0;
@@ -91,6 +103,8 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
     target_horn = 6.8f;
     target_drum = 5.4f; // tremolo fast
   }
+  target_horn *= rate_mult;
+  target_drum *= rate_mult;
 
   // acceleration ramp ~1s: one-pole toward the target, coefficient computed
   // once per block (constant within it)
@@ -199,6 +213,7 @@ float Rotary::GetParam(int index) const {
     case kDrumLevelParam: return impl_->drum_level;
     case kMicDistParam: return impl_->mic_distance;
     case kCrossoverParam: return impl_->crossover;
+    case kVelocityParam: return impl_->velocity;
     default: return 0;
   }
 }
@@ -210,6 +225,7 @@ void Rotary::SetParam(int index, float value) {
     case kDrumLevelParam: impl_->drum_level = std::clamp(value, 0.0f, 1.0f); break;
     case kMicDistParam: impl_->mic_distance = std::clamp(value, 0.0f, 1.0f); break;
     case kCrossoverParam: impl_->crossover = std::clamp(value, 400.0f, 1200.0f); break;
+    case kVelocityParam: impl_->velocity = std::clamp(value, 0.0f, 1.0f); break;
     default: break;
   }
 }

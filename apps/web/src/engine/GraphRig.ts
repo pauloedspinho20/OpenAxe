@@ -39,7 +39,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * process() on the audio thread.
  *
  * The web audio path therefore contains no signal routing: no `connect()`
- * between DSP nodes, no mixer/splitter/master GainNodes, no wet/dry staging.
+ * between DSP nodes, no mixer/master GainNodes, no wet/dry staging.
  * The only Web Audio the rig owns is the single worklet node feeding the
  * graph's IN rail from the mic and carrying the graph's OUT rail to the
  * destination. Per-block meters come from `openaxe_get_meter` (polled here)

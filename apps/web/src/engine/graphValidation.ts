@@ -1,6 +1,5 @@
 import { GRID_COLS, IN_RAIL, OUT_RAIL, jackKey, type Jack } from './gridConfig'
 import { MIXER_INPUT_COUNT } from './blocks/MixerBlock'
-import { SPLITTER_OUTPUT_COUNT } from './blocks/SplitterBlock'
 import type { BlockKind } from './blocks/Block'
 
 export type ConnectResult = { ok: true } | { ok: false; reason: string }
@@ -26,8 +25,8 @@ function columnOf(blocks: ReadonlyMap<string, ValidatableBlock>, blockId: string
 /**
  * Highest valid port index for a jack on the given side. Inputs default to
  * a single port 0, except a Mixer's several independent input jacks;
- * outputs default to a single port 0 too, except a Splitter's several
- * independent output jacks.
+ * outputs are always a single port 0, now that the Splitter - the one kind
+ * that had several independent output jacks - has been removed.
  *
  * Send/Return (issue #274) break the "every block has a single port-0 on
  * both sides" default: a Send is input-only (no output jack - its signal
@@ -50,7 +49,9 @@ function maxPortFor(
   if (blockId === IN_RAIL) return 0
   const kind = blocks.get(blockId)?.kind
   if (kind === 'send-1' || kind === 'send-2') return -1
-  return kind === 'splitter' ? SPLITTER_OUTPUT_COUNT - 1 : 0
+  // No kind has a second output port since the splitter was removed.
+  void kind
+  return 0
 }
 
 /**

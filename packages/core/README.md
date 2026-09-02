@@ -39,7 +39,7 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
   `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
   `kChorus`/`kFlanger`/`kPhaser`/`kDelay`, and passthrough
-  for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
+  for `kCab`/`kMixer`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
   `include/openaxe/api.h` + `src/api.cpp`
   expose it as an `extern "C"` surface (int32 ids, not `GraphRig`'s strings —
@@ -175,10 +175,10 @@ Field notes:
   block. Rail jacks serialize as `"-1"`/`"-2"`; `"IN"`/`"OUT"` load equally.
 - **`kind` strings** are the TS union's hyphenated literals
   (`noise-gate`, ..., `delay`, `reverb`, `amp`, `amp-cab`, `pedal`,
-  `outboard`, `space`, `cab`, `mixer`, `splitter`) - block.h's documented
+  `outboard`, `space`, `cab`, `mixer`) - block.h's documented
   future mapping lives in `rig_state.cpp`.
 - **`bypass`** appears only for kinds with a bypass concept (everything except
-  cab/mixer/splitter), mirroring types.ts. **`inputTrim`/`outputTrim`**
+  cab/mixer), mirroring types.ts. **`inputTrim`/`outputTrim`**
   (core extensions, always written) are the per-block I/O staging gains.
 - **`reverbAlgorithm`** (`hall|room|plate|early-reflections`) rides on reverb
   blocks and **`delayModel`** (`digital|analog|tape`) on delay blocks - both
@@ -297,7 +297,7 @@ them like every other mutation.
 Tests: `tests/json_test.cpp` covers the JSON module itself (escapes, number
 round-tripping, malformed input, depth limits); `tests/api_state_test.cpp`
 is issue #119's round-trip proof - a non-trivial rig (amp + cab + effects +
-mixer + splitter) serialized, reloaded into fresh graphs, and asserted
+mixer) serialized, reloaded into fresh graphs, and asserted
 field-by-field PLUS bit-exact audio equivalence through `openaxe_process`;
 `tests/api_state_assets_test.cpp` is issue #120's - a real capture and a real
 IR embedded into a document that restores sample-identically after the source

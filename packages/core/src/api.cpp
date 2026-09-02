@@ -53,8 +53,6 @@ openaxe::graph::BlockKind ToBlockKind(OpenAxeBlockKind kind) {
       return BlockKind::kCab;
     case OPENAXE_BLOCK_MIXER:
       return BlockKind::kMixer;
-    case OPENAXE_BLOCK_SPLITTER:
-      return BlockKind::kSplitter;
     case OPENAXE_BLOCK_RING_MOD:
       return BlockKind::kRingMod;
     case OPENAXE_BLOCK_FILTER:
@@ -719,7 +717,6 @@ constexpr BlockKindName kBlockKindNames[] = {
     {"space", OPENAXE_BLOCK_SPACE},
     {"cab", OPENAXE_BLOCK_CAB},
     {"mixer", OPENAXE_BLOCK_MIXER},
-    {"splitter", OPENAXE_BLOCK_SPLITTER},
     {"send-1", OPENAXE_BLOCK_SEND_1},
     {"return-1", OPENAXE_BLOCK_RETURN_1},
     {"send-2", OPENAXE_BLOCK_SEND_2},

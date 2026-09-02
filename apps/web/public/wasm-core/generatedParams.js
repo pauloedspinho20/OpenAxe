@@ -40,7 +40,7 @@ export const EQ_PARAMS = Object.freeze({
   band3_q: 11,
 })
 
-export const CHORUS_PARAMS = Object.freeze({ rate: 0, depth: 1, delay: 2, feedback: 3 })
+export const CHORUS_PARAMS = Object.freeze({ rate: 0, depth: 1, delay: 2, feedback: 3, stereo: 4 })
 
 export const FLANGER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, delay: 3 })
 
@@ -81,6 +81,7 @@ export const ROTARY_PARAMS = Object.freeze({
   drum_level: 3,
   mic_distance: 4,
   crossover: 5,
+  velocity: 6,
 })
 
 export const DELAY_PARAMS = Object.freeze({
@@ -177,11 +178,4 @@ export const MIXER_PARAMS = Object.freeze({
   in2_pan: 5,
   in3_level: 6,
   in3_pan: 7,
-})
-
-export const SPLITTER_PARAMS = Object.freeze({
-  out0_level: 0,
-  out1_level: 1,
-  out2_level: 2,
-  out3_level: 3,
 })
