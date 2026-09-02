@@ -1,13 +1,12 @@
 #pragma once
 
 // Ported from apps/web/src/engine/blocks/Block.ts's BlockKind union and the
-// MIXER_INPUT_COUNT/SPLITTER_OUTPUT_COUNT constants from MixerBlock.ts/
-// SplitterBlock.ts.
+// MIXER_INPUT_COUNT constant from MixerBlock.ts.
 namespace openaxe::graph {
 
 // Every placeable grid block kind: the 10 synthetic effects, the 5 NAM-model
 // gear kinds (structurally identical, kind only affects UI labeling/gear
-// filtering), plus cab/mixer/splitter. The wire-format string mapping (the TS
+// filtering), plus cab/mixer. The wire-format string mapping (the TS
 // union's hyphenated literals, e.g. "noise-gate") lives in
 // src/serialization/rig_state.cpp - the only place that speaks both this enum
 // and the preset/state JSON dialect (issue #119).
@@ -28,7 +27,6 @@ enum class BlockKind {
   kSpace,
   kCab,
   kMixer,
-  kSplitter,
   kRingMod,
   kFilter,
   kPitchShifter,
@@ -46,7 +44,6 @@ enum class BlockKind {
 };
 
 inline constexpr int kMixerInputCount = 4;
-inline constexpr int kSplitterOutputCount = 4;
 
 // The minimal per-block state the topology layer needs - kind (for port
 // counting) plus row/col (grid position; row is pure UI/layout data, never

@@ -197,10 +197,4 @@ export const PARAM_RANGES = Object.freeze({
     in3_level: { min: 0, max: 1.5 },
     in3_pan: { min: -1, max: 1 },
   }),
-  splitter: Object.freeze({
-    out0_level: { min: 0, max: 1.5 },
-    out1_level: { min: 0, max: 1.5 },
-    out2_level: { min: 0, max: 1.5 },
-    out3_level: { min: 0, max: 1.5 },
-  }),
 })

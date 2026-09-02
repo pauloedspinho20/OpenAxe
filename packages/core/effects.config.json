@@ -88,7 +88,7 @@
       "inPalette": true,
       "cppFile": "rotary.cpp"
     },
-    "$comment_nam_kinds": "The NAM-capture gear kinds and cab/mixer/splitter and the Send/Return relays. No DSP source of their own (nam_amp.cpp and convolver.cpp back several kinds each, and routing lives in engine.cpp), so they are palette-gated only. `outboard` and `splitter` were the other two commented-out palette entries.",
+    "$comment_nam_kinds": "The NAM-capture gear kinds and cab/mixer and the Send/Return relays. No DSP source of their own (nam_amp.cpp and convolver.cpp back several kinds each, and routing lives in engine.cpp), so they are palette-gated only. `outboard` is the remaining commented-out palette entry; `splitter` was removed outright - it was a routing primitive nobody could place, and it was the only kind with more than one output port.",
     "amp": {
       "enumName": "kAmp",
       "compiled": true,
@@ -123,11 +123,6 @@
       "enumName": "kMixer",
       "compiled": true,
       "inPalette": true
-    },
-    "splitter": {
-      "enumName": "kSplitter",
-      "compiled": true,
-      "inPalette": false
     },
     "send-1": {
       "enumName": "kSend1",

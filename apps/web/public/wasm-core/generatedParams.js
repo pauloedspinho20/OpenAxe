@@ -179,10 +179,3 @@ export const MIXER_PARAMS = Object.freeze({
   in3_level: 6,
   in3_pan: 7,
 })
-
-export const SPLITTER_PARAMS = Object.freeze({
-  out0_level: 0,
-  out1_level: 1,
-  out2_level: 2,
-  out3_level: 3,
-})

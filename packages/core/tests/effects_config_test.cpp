@@ -30,7 +30,7 @@ constexpr BlockKind kAllKinds[] = {
     BlockKind::kTremolo,     BlockKind::kDelay,         BlockKind::kReverb,
     BlockKind::kAmp,         BlockKind::kAmpCab,
     BlockKind::kPedal,       BlockKind::kOutboard,      BlockKind::kSpace,
-    BlockKind::kCab,         BlockKind::kMixer,         BlockKind::kSplitter,
+    BlockKind::kCab,         BlockKind::kMixer,
     BlockKind::kRingMod,     BlockKind::kFilter,        BlockKind::kPitchShifter,
     BlockKind::kGranularDelay, BlockKind::kRotary,      BlockKind::kSend1,
     BlockKind::kReturn1,     BlockKind::kSend2,         BlockKind::kReturn2,

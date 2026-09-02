@@ -24,7 +24,7 @@ export interface BlockHighlightProps {
  * shows something about the current selection. A NAM-core block (amp/
  * amp-cab/pedal/outboard/space) shows its Tone3000 model as a showcase card
  * - click it for the full NamModelDetails dialog. Any other selected block
- * (an effect, cab, mixer, or splitter), or no selection at all, shows a
+ * (an effect, cab, or mixer), or no selection at all, shows a
  * p5.js audio-reactive visual driven by that block's own output (or the
  * master output when nothing's selected) - see audioArt/sketches.ts for how
  * each block kind maps to a visual.

@@ -110,11 +110,6 @@ constexpr int kCabParamCount = 1;
 constexpr int kMixerParamsPerInput = 2;
 constexpr int kMixerParamCount = graph::kMixerInputCount * kMixerParamsPerInput;
 
-// Splitter blocks expose a per-output level for each of their
-// kSplitterOutputCount independent output jacks (out{p}_level at index p),
-// applied when an edge routes out of the splitter at that port - the core
-// replacement for the web SplitterBlock's per-output GainNode.
-constexpr int kSplitterParamCount = graph::kSplitterOutputCount;
 
 // ── Engine-level wet/dry mix (hybrid dry/wet, issue #263) ─────────────────
 // The 8 wet-only effects below are 100% wet out of their DSP; the engine owns
@@ -241,7 +236,7 @@ bool IsAmpFamily(graph::BlockKind kind) {
 }
 
 // How many independent input ports a kind exposes. Only the mixer has more
-// than one; a splitter's several *outputs* are edges from its single output, so
+// than one; several *outputs* are edges from a block's single output, so
 // it needs no extra buffers.
 int PortCountFor(graph::BlockKind kind) {
   return kind == graph::BlockKind::kMixer ? graph::kMixerInputCount : 1;
@@ -269,7 +264,7 @@ std::optional<graph::BlockKind> SendReturnPairOf(graph::BlockKind kind) {
 }
 
 // The closed set of DSP objects a block can hold. std::monostate is a block
-// with no DSP at all (cab/mixer/splitter, or an amp with no model loaded yet),
+// with no DSP at all (cab/mixer, or an amp with no model loaded yet),
 // which Process() treats as passthrough. A variant rather than virtual
 // dispatch: every alternative is known here, so RunDsp's std::visit inlines
 // instead of paying an indirect call per block per buffer.
@@ -340,9 +335,6 @@ constexpr dsp::ParamSmoothing kCabSmoothing[] = {
 };
 constexpr dsp::ParamSmoothing kMixerSmoothing[] = {
 #include "dsp/generated/engine_mixer_smoothing.inc"
-};
-constexpr dsp::ParamSmoothing kSplitterSmoothing[] = {
-#include "dsp/generated/engine_splitter_smoothing.inc"
 };
 #if OPENAXE_BLOCK_COMPRESSOR_COMPILED
 constexpr dsp::ParamSmoothing kCompressorSmoothing[] = {
@@ -492,17 +484,6 @@ struct AudioEngine::BlockState {
   // rounds to zero, which would make "sample-accurate smoothing" never settle.
   std::array<double, kMaxParamsPerBlock> smoothed{};
 
-  // Splitter fan-out ramps (issue #122). A splitter's per-output level is
-  // applied where its cable fans out - inside each *consumer's* edge sum -
-  // but the ramp state itself must advance exactly once per buffer no matter
-  // how many branches hang off one output port. So the splitter's own pass
-  // publishes this start-of-buffer snapshot (PublishSplitterRamps), and every
-  // consumer recomputes an identical per-sample gain from it read-only.
-  // Written only by the splitter's Process() iteration, which column ordering
-  // guarantees runs before every consumer reads it.
-  std::array<double, kSplitterParamCount> ramp_from{};    // smoothed[] at buffer start
-  std::array<double, kSplitterParamCount> ramp_target{};  // atomic target, frozen for the buffer
-  std::array<double, kSplitterParamCount> ramp_aux{};     // exponential: per-sample decay; linear: per-sample max step
 
   // Amp-family only: whether the input/output-level "param" should actually
   // be reasserted onto the live NamAmp each Process() call. Without this,
@@ -563,59 +544,6 @@ struct AudioEngine::BlockState {
   std::atomic<float> meter{0.0f};
 };
 
-// Advance a splitter's per-output ramp state by one whole buffer and publish
-// the snapshot its consumers will recompute from (issue #122). The fan-out
-// gain is applied inside each consumer's edge sum, so with N branches off one
-// port the naive approach advances the shared ramp N times per sample period
-// - faster ramps and column-order-dependent gains between parallel paths.
-// Instead: this runs once per buffer in the splitter's own Process()
-// iteration (column order puts it before every consumer), freezing where the
-// ramp started, where it's headed, and the per-sample step; consumers then
-// replay an identical curve read-only. Real-time safe.
-void AudioEngine::PublishSplitterRamps(BlockState& state, int num_frames, double sample_rate) {
-  // Consumers replay the curve one sample at a time, so everything published
-  // here is PER-SAMPLE: aux is the per-sample decay (exponential) or per-sample
-  // max move (linear), and the end-of-buffer advance below applies it
-  // num_frames times.
-  const double dt_sample_s = 1.0 / sample_rate;
-  for (int p = 0; p < kSplitterParamCount; ++p) {
-    const auto& s = state.smoothing[static_cast<size_t>(p)];
-    const double from = state.smoothed[static_cast<size_t>(p)];
-    const double target =
-        state.params[static_cast<size_t>(p)].load(std::memory_order_relaxed);
-    state.ramp_from[static_cast<size_t>(p)] = from;
-    state.ramp_target[static_cast<size_t>(p)] = target;
-    switch (s.mode) {
-      case dsp::SmoothingMode::kNone:
-        // Snaps: consumers just use ramp_target; nothing else to publish.
-        state.ramp_aux[static_cast<size_t>(p)] = 0.0;
-        break;
-      case dsp::SmoothingMode::kExponential: {
-        const double tau = s.time_constant_s > 1e-6f ? s.time_constant_s : 1e-6f;
-        const double base = std::exp(-dt_sample_s / tau);
-        state.ramp_aux[static_cast<size_t>(p)] = base;
-        // End-of-buffer value: applying the one-pole num_frames times.
-        state.smoothed[static_cast<size_t>(p)] = target + (from - target) * std::pow(base, num_frames);
-        break;
-      }
-      case dsp::SmoothingMode::kLinear: {
-        const double range = s.max - s.min;
-        if (!(range > 0.0)) {
-          state.ramp_aux[static_cast<size_t>(p)] = 0.0;
-          state.smoothed[static_cast<size_t>(p)] = target;
-          break;
-        }
-        const double tau = s.time_constant_s > 1e-6f ? s.time_constant_s : 1e-6f;
-        const double max_step = range * (dt_sample_s / tau);
-        state.ramp_aux[static_cast<size_t>(p)] = max_step;
-        const double diff = target - from;
-        const double moved = std::min(std::fabs(diff), max_step * static_cast<double>(num_frames));
-        state.smoothed[static_cast<size_t>(p)] = from + std::copysign(moved, diff);
-        break;
-      }
-    }
-  }
-}
 
 // How many sub-blocks to split the buffer into for the SetParam-style ramp
 // (generic DSP wrappers and the amp tone stack). Pure-passthrough/monostate
@@ -760,10 +688,6 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
       table = kMixerSmoothing;
       count = kMixerParamCount;
       break;
-    case graph::BlockKind::kSplitter:
-      table = kSplitterSmoothing;
-      count = kSplitterParamCount;
-      break;
 #if OPENAXE_BLOCK_REVERB_COMPILED
     case graph::BlockKind::kReverb: {
       if (std::holds_alternative<dsp::DragonflyHallReverb>(state.dsp)) {
@@ -877,16 +801,6 @@ void AudioEngine::SeedSmoothing(BlockState& state) {
   for (int i = 0; i < pc; ++i) {
     state.smoothed[static_cast<size_t>(i)] =
         state.params[static_cast<size_t>(i)].load(std::memory_order_relaxed);
-  }
-  // Splitter fan-out snapshot too, so even the first buffer after AddBlock
-  // replays a settled curve rather than reading a pre-publish zero.
-  if (state.kind == graph::BlockKind::kSplitter) {
-    for (int p = 0; p < kSplitterParamCount; ++p) {
-      const double v = state.smoothed[static_cast<size_t>(p)];
-      state.ramp_from[static_cast<size_t>(p)] = v;
-      state.ramp_target[static_cast<size_t>(p)] = v;
-      state.ramp_aux[static_cast<size_t>(p)] = 0.0;
-    }
   }
 }
 
@@ -1194,7 +1108,7 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
     state->params[kCabMixParam].store(1.0f, std::memory_order_relaxed);
   }
   if (kind == graph::BlockKind::kMixer) {
-    // Mixer and splitter stay std::monostate - neither is a DSP effect kind -
+    // The mixer stays std::monostate - it is not a DSP effect kind -
     // but both now expose per-port level/pan params the engine's Process()
     // applies during routing. Unity level, centre pan by default.
     state->param_count.store(kMixerParamCount, std::memory_order_relaxed);
@@ -1204,13 +1118,7 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
                                                   std::memory_order_relaxed);
     }
   }
-  if (kind == graph::BlockKind::kSplitter) {
-    state->param_count.store(kSplitterParamCount, std::memory_order_relaxed);
-    for (int i = 0; i < kSplitterParamCount; ++i) {
-      state->params[static_cast<size_t>(i)].store(1.0f, std::memory_order_relaxed);
-    }
-  }
-  // kMixer/kSplitter are handled above - they keep std::monostate but now carry
+  // kMixer is handled above - it keeps std::monostate but now carries
   // the per-port level/pan params, unlike the original design where neither was
   // a DSP effect kind and both had param_count 0.
 
@@ -1502,7 +1410,7 @@ void AudioEngine::RunDsp(BlockState& state, int start, int num_frames) {
             }
           }
           // Every other monostate kind (unwrapped effects, Mixer - already summed
-          // into port 0 by the caller - and Splitter) is a plain passthrough.
+          // into port 0 by the caller) is a plain passthrough.
         } else {
           const float* in_ptrs[2] = {&state.input_l[0][static_cast<size_t>(start)],
                                      &state.input_r[0][static_cast<size_t>(start)]};
@@ -1578,60 +1486,12 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
         src_r = source->output_r.data();
       }
       const int port = std::clamp(edge.to_port, 0, ports - 1);
-      if (source && source->kind == graph::BlockKind::kSplitter) {
-        // A splitter's per-output level is a gain applied at fan-out (issue
-        // #122), ramped per-sample so automating a splitter output is
-        // zipper-free. The ramp state itself advanced exactly once this
-        // buffer in the splitter's own iteration (PublishSplitterRamps -
-        // column order guarantees that ran before this line), so every
-        // branch off one port replays an identical curve from the frozen
-        // snapshot; this loop only reads.
-        const int out_port = std::clamp(edge.from_port, 0, kSplitterParamCount - 1);
-        const double s0 = source->ramp_from[static_cast<size_t>(out_port)];
-        const double target = source->ramp_target[static_cast<size_t>(out_port)];
-        const double aux = source->ramp_aux[static_cast<size_t>(out_port)];
-        const dsp::SmoothingMode mode =
-            source->smoothing[static_cast<size_t>(out_port)].mode;
-        // Local replay cursors - recomputed from the snapshot by every
-        // consumer, never shared, hence identical across branches. Matches
-        // RampStep applied i+1 times from s0: g(i) = target + (s0-target)*base^(i+1).
-        double decay = 1.0;  // exponential: base^(i+1)
-        double moved = 0.0;  // linear: distance traversed so far
-        const double delta = s0 - target;  // sign of travel (toward the target)
-        for (int i = 0; i < num_frames; ++i) {
-          double g = target;
-          switch (mode) {
-            case dsp::SmoothingMode::kNone:
-              break;
-            case dsp::SmoothingMode::kExponential:
-              decay *= aux;
-              g = target + delta * decay;
-              break;
-            case dsp::SmoothingMode::kLinear:
-              moved = std::min(moved + aux, std::fabs(delta));
-              g = s0 + std::copysign(moved, -delta);
-              break;
-          }
-          state.input_l[static_cast<size_t>(port)][static_cast<size_t>(i)] +=
-              src_l[i] * static_cast<float>(g);
-          state.input_r[static_cast<size_t>(port)][static_cast<size_t>(i)] +=
-              src_r[i] * static_cast<float>(g);
-        }
-        continue;
-      }
       for (int i = 0; i < num_frames; ++i) {
         state.input_l[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_l[i];
         state.input_r[static_cast<size_t>(port)][static_cast<size_t>(i)] += src_r[i];
       }
     }
 
-    // Splitter fan-out gains are applied in consumers' edge sums above; freeze
-    // this buffer's ramp snapshot first so every consumer replays an identical
-    // curve (issue #122). Runs before the bypass branch - like the fan-out gain
-    // itself, the ramp keeps moving while a splitter is bypassed.
-    if (state.kind == graph::BlockKind::kSplitter) {
-      PublishSplitterRamps(state, num_frames, sample_rate_);
-    }
     if (state.kind == graph::BlockKind::kMixer) {
       // Per-input level and equal-power pan (unity at centre), matching the
       // web MixerBlock's per-input GainNode + StereoPanner and giving both
@@ -1689,7 +1549,7 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       // param would turn into a per-buffer step (zipper noise) - we ramp
       // smoothed[] toward the target and feed the eased value to the DSP.
       //
-      // monostate blocks (cab/mixer/splitter/passthrough) ramp their scalar
+      // monostate blocks (cab/mixer/passthrough) ramp their scalar
       // levels per-sample inside their own loops above / in RunDsp, so they
       // don't sub-block. The SetParam-style wrappers and the amp tone stack
       // ramp per sub-block and re-apply the DSP, keeping reverb tails and
@@ -1879,12 +1739,6 @@ std::optional<ParamDescriptor> AudioEngine::ParamInfoOf(const BlockState& state,
 #include "dsp/generated/engine_mixer_params.inc"
             };
             return kMixerParams[index];
-          }
-          if (state.kind == graph::BlockKind::kSplitter) {
-            static constexpr ParamDescriptor kSplitterParams[kSplitterParamCount] = {
-#include "dsp/generated/engine_splitter_params.inc"
-            };
-            return kSplitterParams[index];
           }
           return std::nullopt;
         } else {

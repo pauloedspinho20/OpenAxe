@@ -30,7 +30,6 @@ export const COMPILED_BLOCK_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>([
   'space',
   'cab',
   'mixer',
-  'splitter',
   'send-1',
   'return-1',
   'send-2',

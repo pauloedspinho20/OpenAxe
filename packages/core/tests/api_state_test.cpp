@@ -1,5 +1,5 @@
 // Issue #119's round-trip test: build a non-trivial rig through the extern
-// "C" ABI (amp + cab + several effects + a mixer + a splitter), serialize it,
+// "C" ABI (amp + cab + several effects + a mixer), serialize it,
 // load the document into a fresh graph, and assert every param (by SYMBOL),
 // edge, trim and bypass matches. Also covers schemaVersion policy,
 // partial-failure tolerance (#64), and loading the web app's existing legacy
@@ -23,18 +23,20 @@ constexpr int32_t kInRail = OPENAXE_IN_RAIL;
 constexpr int32_t kOutRail = OPENAXE_OUT_RAIL;
 
 // The non-trivial rig, built identically on two graphs so their block ids
-// line up for comparison. The splitter fans out to cab/reverb/delay; the
-// compressor branch feeds the mixer's fourth input directly:
+// line up for comparison. The amp fans out to cab/reverb/delay - three edges
+// off its single output port, which is all the removed splitter kind ever was
+// once its
+// per-output levels are gone - and the compressor branch feeds the mixer's
+// fourth input directly:
 //
-//   IN -> noise-gate(0,0) -> amp(0,1) -> splitter(0,2) -+-> cab(0,3) -----+
-//                                                       |-> reverb(1,3) --+|
-//   IN -> compressor(2,0) ------------------------------> delay(2,3) ----+|-> mixer(0,4) -> OUT
-//                                                       \-> delay/ping-pong(3,3)+
+//   IN -> noise-gate(0,0) -> amp(0,1) -+-> cab(0,3) -----+
+//                                      |-> reverb(1,3) --+|
+//   IN -> compressor(2,0) -------------> delay(2,3) ----+|-> mixer(0,4) -> OUT
+//                                      \-> delay/ping-pong(3,3)+
 void BuildRig(OpenAxeGraph* g) {
   const int32_t gate = openaxe_add_block(g, OPENAXE_BLOCK_NOISE_GATE, 0, 0);
   const int32_t comp = openaxe_add_block(g, OPENAXE_BLOCK_COMPRESSOR, 2, 0);
   const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0, 1);
-  const int32_t split = openaxe_add_block(g, OPENAXE_BLOCK_SPLITTER, 0, 2);
   const int32_t cab = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0, 3);
   const int32_t reverb = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 1, 3);
   const int32_t delay = openaxe_add_block(g, OPENAXE_BLOCK_DELAY, 2, 3);
@@ -46,10 +48,9 @@ void BuildRig(OpenAxeGraph* g) {
   OPENAXE_EXPECT(openaxe_connect(g, kInRail, 0, gate, 0) >= 0);
   OPENAXE_EXPECT(openaxe_connect(g, kInRail, 0, comp, 0) >= 0);
   OPENAXE_EXPECT(openaxe_connect(g, gate, 0, amp, 0) >= 0);
-  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, split, 0) >= 0);
-  OPENAXE_EXPECT(openaxe_connect(g, split, 0, cab, 0) >= 0);
-  OPENAXE_EXPECT(openaxe_connect(g, split, 1, reverb, 0) >= 0);
-  OPENAXE_EXPECT(openaxe_connect(g, split, 2, delay, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, cab, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, reverb, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, delay, 0) >= 0);
   OPENAXE_EXPECT(openaxe_connect(g, comp, 0, ppd, 0) >= 0);
   OPENAXE_EXPECT(openaxe_connect(g, cab, 0, mixer, 0) >= 0);
   OPENAXE_EXPECT(openaxe_connect(g, reverb, 0, mixer, 1) >= 0);

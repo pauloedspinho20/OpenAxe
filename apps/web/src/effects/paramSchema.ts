@@ -2,7 +2,6 @@ import type { EffectKind } from './Effect'
 import type { EffectParams } from './Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
-import { SPLITTER_OUTPUT_COUNT } from '../engine/blocks/SplitterBlock'
 import { PARAM_RANGES } from './generatedParamRanges'
 
 interface KnobField {
@@ -1296,17 +1295,6 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
     ]
     return fields
   }).flat(),
-  splitter: Array.from({ length: SPLITTER_OUTPUT_COUNT }, (_, i): KnobField => ({
-    key: `out${i}_level`,
-    description: 'Splitter branch level.',
-    label: 'Level',
-    control: 'knob',
-    ...range('splitter', `out${i}_level`),
-    step: 0.01,
-    defaultValue: 1,
-    formatValue: percent,
-    group: `Out ${i + 1}`,
-  })),
 }
 
 /** Raw Dragonfly reverb params for an algorithm variant, from generated ranges (issue #263 expert mode). */

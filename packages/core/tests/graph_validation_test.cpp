@@ -98,23 +98,9 @@ void TestNonZeroPortOnNonMixerRejected() {
   OPENAXE_EXPECT(!result.ok);
 }
 
-void TestSplitterDistinctPortsAllowed() {
-  BlockMap blocks{{"s", {BlockKind::kSplitter, 0, 0}},
-                  {"a", {BlockKind::kCompressor, 0, 1}},
-                  {"b", {BlockKind::kEq, 0, 1}}};
-  std::vector<EdgeRecord> existing{{J("s", 0), J("a")}};
-  auto result = CanConnect(blocks, existing, J("s", 1), J("b"));
-  OPENAXE_EXPECT(result.ok);
-}
-
-void TestSplitterPortOutOfRangeRejected() {
-  BlockMap blocks{{"s", {BlockKind::kSplitter, 0, 0}}, {"a", {BlockKind::kCompressor, 0, 1}}};
-  auto result = CanConnect(blocks, {}, J("s", 4), J("a"));
-  OPENAXE_EXPECT(!result.ok);
-  OPENAXE_EXPECT(result.reason == RejectReason::kInvalidOutputPort);
-}
-
-void TestNonZeroSourcePortOnNonSplitterRejected() {
+// Nothing has a second output port any more - the splitter was the only kind
+// that did - so any non-zero source port is invalid.
+void TestNonZeroSourcePortRejected() {
   BlockMap blocks{{"a", {BlockKind::kCompressor, 0, 0}}, {"b", {BlockKind::kEq, 0, 1}}};
   auto result = CanConnect(blocks, {}, J("a", 1), J("b"));
   OPENAXE_EXPECT(!result.ok);
@@ -179,9 +165,7 @@ int main() {
   TestMixerDuplicatePortRejected();
   TestMixerPortOutOfRangeRejected();
   TestNonZeroPortOnNonMixerRejected();
-  TestSplitterDistinctPortsAllowed();
-  TestSplitterPortOutOfRangeRejected();
-  TestNonZeroSourcePortOnNonSplitterRejected();
+  TestNonZeroSourcePortRejected();
   TestIsEdgeOrderValidTrueWhenForward();
   TestIsEdgeOrderValidFalseAfterMove();
   TestSendAcceptsInputButNoOutput();
