@@ -713,6 +713,50 @@ void TestModulationEffects() {
   }
 }
 
+// GetGainReduction / GetGateGain (issue #361): the Tier-1 metering getters
+// must report real compressor gain reduction and gate openness, not a
+// constant 0 - they were previously dead because the #if guards named
+// never-defined OPENAXE_BLOCK_* macros (the generated header only defines the
+// *_COMPILED variants), so the if constexpr dispatch compiled out entirely.
+void TestDynamicsMetering() {
+  AudioEngine engine;
+  const BlockId compressor = engine.AddBlock(BlockKind::kCompressor, 0, 0);
+  const BlockId gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 1);
+  const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 2);  // no dynamics DSP
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(compressor, 0, gate, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(gate, 0, cab, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(cab, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Unknown / non-dynamics blocks always report "no metering".
+  OPENAXE_EXPECT(engine.GetGainReduction(9999) == 0.0f);
+  OPENAXE_EXPECT(engine.GetGateGain(9999) == 0.0f);
+  OPENAXE_EXPECT(engine.GetGainReduction(cab) == 0.0f);
+  OPENAXE_EXPECT(engine.GetGateGain(cab) == 0.0f);
+
+  // A hot signal drives the compressor ~13 dB past its -18 dB threshold at
+  // 4:1, so it must report real gain reduction (dB < 0), and the gate (well
+  // above its -40 dB threshold) must sit open: gain ≈ 1, its own GR ≈ 0.
+  for (int i = 0; i < 20; ++i) RunMono(engine, 0.9f);
+  const float comp_gr = engine.GetGainReduction(compressor);
+  const float gate_gr = engine.GetGainReduction(gate);
+  const float gate_open = engine.GetGateGain(gate);
+  OPENAXE_EXPECT(std::isfinite(comp_gr));
+  OPENAXE_EXPECT(comp_gr < -3.0f);
+  OPENAXE_EXPECT(std::isfinite(gate_gr));
+  OPENAXE_EXPECT(gate_gr > -1.0f);  // an open gate applies ~0 dB
+  OPENAXE_EXPECT(gate_open > 0.9f);
+
+  // Silence for well past the gate's default 100 ms release closes it: the
+  // meter must read a closed gate (openness → 0, its GR → deep attenuation).
+  for (int i = 0; i < 400; ++i) RunMono(engine, 0.0f);
+  const float gate_closed = engine.GetGateGain(gate);
+  const float gate_closed_gr = engine.GetGainReduction(gate);
+  OPENAXE_EXPECT(gate_closed < 0.1f);
+  OPENAXE_EXPECT(gate_closed_gr < -20.0f);
+}
+
 // Send/Return pairs (issue #274): a Send N relays its single input into the
 // Return N with no cable between them, even across distant columns. Both are
 // no-param passthrough relays and their meters still report the signal, so a
@@ -861,6 +905,7 @@ int main() {
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
   TestModulationEffects();
+  TestDynamicsMetering();
   TestSendReturnRoutesImplicitlyAcrossColumns();
   TestSendReturnWorksWithReturnLeftOfSend();
   TestSendReturnSecondPairRoutesIndependently();

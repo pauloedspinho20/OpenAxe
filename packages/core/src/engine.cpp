@@ -2666,10 +2666,10 @@ float AudioEngine::GetGainReduction(BlockId id) const {
   return std::visit(
       [](auto& dsp) -> float {
         using T = std::decay_t<decltype(dsp)>;
-#if OPENAXE_BLOCK_COMPRESSOR
+#if OPENAXE_BLOCK_COMPRESSOR_COMPILED
         if constexpr (std::is_same_v<T, dsp::Compressor>) return dsp.GetGainReductionDb();
 #endif
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
         if constexpr (std::is_same_v<T, dsp::NoiseGate>) return dsp.GetGainReductionDb();
 #endif
         return 0.0f;
@@ -2684,7 +2684,7 @@ float AudioEngine::GetGateGain(BlockId id) const {
   return std::visit(
       [](auto& dsp) -> float {
         using T = std::decay_t<decltype(dsp)>;
-#if OPENAXE_BLOCK_NOISE_GATE
+#if OPENAXE_BLOCK_NOISE_GATE_COMPILED
         if constexpr (std::is_same_v<T, dsp::NoiseGate>) return dsp.GetGateGain();
 #endif
         return 0.0f;

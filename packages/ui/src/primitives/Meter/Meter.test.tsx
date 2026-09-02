@@ -1,28 +1,34 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { MediumMeter, Meter, MiniMeter } from './Meter'
+import { levelToPeakDb, MediumMeter, Meter, MiniMeter } from './Meter'
 import styles from './Meter.module.css'
 
+describe('levelToPeakDb', () => {
+  it('formats a level as dBFS, floored at −60', () => {
+    expect(levelToPeakDb(1)).toBe('0.0 dB')
+    expect(levelToPeakDb(0.5)).toBe('−6.0 dB')
+    expect(levelToPeakDb(0.01)).toBe('−40.0 dB')
+    expect(levelToPeakDb(0.00001)).toBe('−60.0 dB')
+  })
+
+  it('reads silence as −∞', () => {
+    expect(levelToPeakDb(0)).toBe('−∞')
+    expect(levelToPeakDb(-1)).toBe('−∞')
+  })
+})
+
 describe('MiniMeter', () => {
-  it('sets the fill width proportional to level', () => {
+  it('clips the gradient fill to the level width', () => {
     const { container } = render(<MiniMeter level={0.5} />)
     const fill = container.querySelector(`.${styles.miniFill}`) as HTMLElement
-    expect(fill.style.width).toBe('50%')
-    expect(fill).toHaveClass(styles.statusGreen)
+    expect(fill).toHaveClass(styles.gradient)
+    expect(fill.style.clipPath).toBe('inset(0 50% 0 0)')
   })
 
   it('clamps level to [0, 1]', () => {
     const { container } = render(<MiniMeter level={2} />)
     const fill = container.querySelector(`.${styles.miniFill}`) as HTMLElement
-    expect(fill.style.width).toBe('100%')
-  })
-
-  it('colors amber/red past the danger thresholds', () => {
-    const { container: amber } = render(<MiniMeter level={0.8} />)
-    expect(amber.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusAmber)
-
-    const { container: red } = render(<MiniMeter level={0.95} />)
-    expect(red.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
+    expect(fill.style.clipPath).toBe('inset(0 0% 0 0)')
   })
 
   it('forwards title for a tooltip', () => {
@@ -30,54 +36,57 @@ describe('MiniMeter', () => {
     expect(container.querySelector(`.${styles.miniWrap}`)).toHaveAttribute('title', '−6 dB')
   })
 
-  it('gainReduction variant always shows red', () => {
-    const { container: low } = render(<MiniMeter level={0.1} variant="gainReduction" />)
-    expect(low.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
-    const { container: mid } = render(<MiniMeter level={0.5} variant="gainReduction" />)
-    expect(mid.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
-    const { container: high } = render(<MiniMeter level={0.95} variant="gainReduction" />)
-    expect(high.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
+  it('gainReduction variant always shows solid red', () => {
+    for (const level of [0.1, 0.5, 0.95]) {
+      const { container } = render(<MiniMeter level={level} variant="gainReduction" />)
+      const fill = container.querySelector(`.${styles.miniFill}`) as HTMLElement
+      expect(fill).toHaveClass(styles.gainReduction)
+      expect(fill).not.toHaveClass(styles.gradient)
+    }
+  })
+
+  it('never renders a peak-dB label', () => {
+    const { container } = render(<MiniMeter level={0.5} valueLabel="−6.0 dB" />)
+    expect(container.querySelector(`.${styles.peakLabel}`)).toBeNull()
   })
 })
 
 describe('MediumMeter', () => {
-  it('sets the fill height proportional to level', () => {
+  it('clips the gradient fill to the level height', () => {
     const { container } = render(<MediumMeter level={0.5} />)
     const fill = container.querySelector(`.${styles.mediumFill}`) as HTMLElement
-    expect(fill.style.height).toBe('50%')
-    expect(fill).toHaveClass(styles.statusGreen)
+    expect(fill).toHaveClass(styles.gradient)
+    expect(fill.style.clipPath).toBe('inset(50% 0 0 0)')
   })
 
   it('clamps level to [0, 1]', () => {
     const { container } = render(<MediumMeter level={2} />)
     const fill = container.querySelector(`.${styles.mediumFill}`) as HTMLElement
-    expect(fill.style.height).toBe('100%')
+    expect(fill.style.clipPath).toBe('inset(0% 0 0 0)')
   })
 
-  it('colors amber/red past the danger thresholds', () => {
-    const { container: amber } = render(<MediumMeter level={0.8} />)
-    expect(amber.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusAmber)
-
-    const { container: red } = render(<MediumMeter level={0.95} />)
-    expect(red.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
+  it('gainReduction variant always shows solid red regardless of level', () => {
+    for (const level of [0.1, 0.5, 0.95]) {
+      const { container } = render(<MediumMeter level={level} variant="gainReduction" />)
+      const fill = container.querySelector(`.${styles.mediumFill}`) as HTMLElement
+      expect(fill).toHaveClass(styles.gainReduction)
+      expect(fill).not.toHaveClass(styles.gradient)
+    }
   })
 
-  it('gainReduction variant always shows red regardless of level', () => {
-    const { container: low } = render(<MediumMeter level={0.1} variant="gainReduction" />)
-    expect(low.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
-    expect(low.querySelector(`.${styles.mediumFill}`)).not.toHaveClass(styles.statusGreen)
-    expect(low.querySelector(`.${styles.mediumFill}`)).not.toHaveClass(styles.statusAmber)
-
-    const { container: mid } = render(<MediumMeter level={0.5} variant="gainReduction" />)
-    expect(mid.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
-
-    const { container: high } = render(<MediumMeter level={0.95} variant="gainReduction" />)
-    expect(high.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
-  })
-
-  it('forwards title for a tooltip', () => {
+  it('forwards title for a tooltip on the group', () => {
     const { container } = render(<MediumMeter level={0.5} title="GR: −6 dB" />)
-    expect(container.querySelector(`.${styles.mediumWrap}`)).toHaveAttribute('title', 'GR: −6 dB')
+    expect(container.querySelector(`.${styles.mediumGroup}`)).toHaveAttribute('title', 'GR: −6 dB')
+  })
+
+  it('renders the peak-dB label above the bar when given', () => {
+    render(<MediumMeter level={0.5} valueLabel="−6.0 dB" />)
+    expect(screen.getByText('−6.0 dB')).toBeInTheDocument()
+  })
+
+  it('renders no peak-dB label when not given', () => {
+    render(<MediumMeter level={0.5} />)
+    expect(screen.queryByText('−6.0 dB')).toBeNull()
   })
 })
 
@@ -101,5 +110,15 @@ describe('Meter', () => {
   it('renders a label when given', () => {
     render(<Meter label="Master" level={0.5} />)
     expect(screen.getByText('Master')).toBeInTheDocument()
+  })
+
+  it('renders the peak-dB label above the segments when given', () => {
+    render(<Meter level={0.5} valueLabel="−6.0 dB" />)
+    expect(screen.getByText('−6.0 dB')).toBeInTheDocument()
+  })
+
+  it('renders no peak-dB label when not given', () => {
+    render(<Meter level={0.5} />)
+    expect(screen.queryByText('−6.0 dB')).toBeNull()
   })
 })
