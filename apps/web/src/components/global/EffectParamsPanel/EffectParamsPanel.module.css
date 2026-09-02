@@ -4,7 +4,6 @@
   flex-wrap: wrap;
   gap: var(--sp-4);
   align-items: center;
-  min-height: 90px;
 }
 
 @media (max-width: var(--mw-md)) {
