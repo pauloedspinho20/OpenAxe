@@ -23,14 +23,14 @@ option(OPENAXE_BUILD_TESTS "Build packages/core unit tests" OFF)
 include("${CMAKE_CURRENT_SOURCE_DIR}/generated/block_sources.cmake")
 
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
-# openaxe::dsp::NamAmp, all 4 Dragonfly reverb wrappers, and the 4
+# openaxe::dsp::NamAmp, all 4 Dragonfly reverb wrappers, the 4
 # DSPark-based dynamics/EQ wrappers (Compressor/Equalizer/NoiseGate/Tremolo)
-# directly - it's the layer that makes those already-wrapped families
-# actually produce audio, so unlike the rest of this file it does NOT
-# degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/DSPARK_DIR below turn out
-# to be uninitialized; linking openaxe_core will fail with undefined
-# symbols in that case. Run `git submodule update --init --recursive` first
-# if that happens.
+# and the DaisySP-based Chorus directly - it's the layer that makes those
+# already-wrapped families actually produce audio, so unlike the rest of this
+# file it does NOT degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/DSPARK_DIR/
+# DAISYSP_DIR below turn out to be uninitialized; linking openaxe_core will
+# fail with undefined symbols in that case. Run `git submodule update --init
+# --recursive` first if that happens.
 add_library(openaxe_core STATIC
   src/core.cpp
   src/graph_validation.cpp
@@ -189,6 +189,39 @@ else()
     "packages/core/third_party/dspark isn't initialized - the Compressor/"
     "Equalizer/NoiseGate/Tremolo wrappers will not build. Run: "
     "git submodule update --init -- packages/core/third_party/dspark")
+endif()
+
+# --- DaisySP-based modulation wrappers (issue #359) ---
+# DaisySP (third_party/daisysp) is the MIT-licensed DSP library from
+# Electro-Smith (the Daisy hardware platform). Unlike DSPark it is NOT
+# header-only: the chorus wrapper needs its own translation unit compiled.
+# Only the MIT part of the repo is used - the separate DaisySP-LGPL tree is
+# deliberately never compiled or included. The wrapper (src/dsp/chorus.cpp)
+# drives daisysp::Chorus through the same openaxe::dsp contract as every
+# other effect; the engine's public ABI is untouched, so this is purely an
+# internal quality swap (issue #359). Include dirs stay PRIVATE: chorus.h
+# only forward-declares the pimpl, so consumers of openaxe_core never need
+# these paths. chorus.cpp needs "Source" (for Effects/chorus.h and
+# Utility/delayline.h) and "Source/Utility" (for its `#include "dsp.h"`).
+set(DAISYSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/daisysp")
+if(EXISTS "${DAISYSP_DIR}/Source/Effects/chorus.h")
+  target_include_directories(openaxe_core PRIVATE
+    "${DAISYSP_DIR}/Source"
+    "${DAISYSP_DIR}/Source/Utility"
+    # The wrapper includes the header as "daisysp/Source/Effects/chorus.h"
+    # (via the third_party root below) rather than the ambiguous
+    # "Effects/chorus.h": dspark also ships an Effects/Chorus.h, and on a
+    # case-insensitive filesystem (macOS) the bare name resolves to whichever
+    # include dir comes first. The prefixed path pins it to DaisySP.
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+  )
+  target_sources(openaxe_core PRIVATE "${DAISYSP_DIR}/Source/Effects/chorus.cpp")
+  set(OPENAXE_HAS_DAISYSP TRUE)
+else()
+  message(WARNING
+    "packages/core/third_party/daisysp isn't initialized - the Chorus "
+    "wrapper will not build. Run: "
+    "git submodule update --init -- packages/core/third_party/daisysp")
 endif()
 
 if(EMSCRIPTEN)

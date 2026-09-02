@@ -250,3 +250,15 @@ if(OPENAXE_HAS_DSPARK)
 else()
   message(WARNING "Skipping compressor_test/equalizer_test/noise_gate_test/tremolo_test - packages/core/third_party/dspark not initialized")
 endif()
+
+# The Chorus wrapper backs onto the vendored DaisySP chorus (issue #359), so
+# it builds and tests only when that submodule is initialized.
+if(OPENAXE_HAS_DAISYSP)
+  if(OPENAXE_BLOCK_CHORUS)
+    add_executable(chorus_test chorus_test.cpp)
+    target_link_libraries(chorus_test PRIVATE openaxe_core)
+    add_test(NAME chorus_test COMMAND chorus_test)
+  endif()
+else()
+  message(WARNING "Skipping chorus_test - packages/core/third_party/daisysp not initialized")
+endif()
