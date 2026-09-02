@@ -102,6 +102,7 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
     // The graph's block count is bounded by the store, but we keep it under a
     // ceiling so the meter map can't grow unbounded if a driver leaks blocks.
     this.maxBlocks = MAX_BLOCKS
+
     // Which OpenAxeBlockKind ordinal means "reverb", handed over by
     // RigWorkletNode rather than duplicated here - see REVERB_KIND_FALLBACK.
     const injectedReverbKind = options?.processorOptions?.reverbKind
@@ -444,6 +445,28 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
             out[jsId] = module._openaxe_get_meter(this.graph, coreBlock)
           }
           reply.meters = out
+          reply.ok = true
+          break
+        }
+        case 'gainReductions': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            if (typeof module._openaxe_get_gain_reduction === 'function') {
+              out[jsId] = module._openaxe_get_gain_reduction(this.graph, coreBlock)
+            }
+          }
+          reply.gainReductions = out
+          reply.ok = true
+          break
+        }
+        case 'gateGains': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            if (typeof module._openaxe_get_gate_gain === 'function') {
+              out[jsId] = module._openaxe_get_gate_gain(this.graph, coreBlock)
+            }
+          }
+          reply.gateGains = out
           reply.ok = true
           break
         }

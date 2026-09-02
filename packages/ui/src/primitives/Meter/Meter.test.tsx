@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Meter, MiniMeter } from './Meter'
+import { MediumMeter, Meter, MiniMeter } from './Meter'
 import styles from './Meter.module.css'
 
 describe('MiniMeter', () => {
@@ -28,6 +28,56 @@ describe('MiniMeter', () => {
   it('forwards title for a tooltip', () => {
     const { container } = render(<MiniMeter level={0.5} title="−6 dB" />)
     expect(container.querySelector(`.${styles.miniWrap}`)).toHaveAttribute('title', '−6 dB')
+  })
+
+  it('gainReduction variant always shows red', () => {
+    const { container: low } = render(<MiniMeter level={0.1} variant="gainReduction" />)
+    expect(low.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
+    const { container: mid } = render(<MiniMeter level={0.5} variant="gainReduction" />)
+    expect(mid.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
+    const { container: high } = render(<MiniMeter level={0.95} variant="gainReduction" />)
+    expect(high.querySelector(`.${styles.miniFill}`)).toHaveClass(styles.statusRed)
+  })
+})
+
+describe('MediumMeter', () => {
+  it('sets the fill height proportional to level', () => {
+    const { container } = render(<MediumMeter level={0.5} />)
+    const fill = container.querySelector(`.${styles.mediumFill}`) as HTMLElement
+    expect(fill.style.height).toBe('50%')
+    expect(fill).toHaveClass(styles.statusGreen)
+  })
+
+  it('clamps level to [0, 1]', () => {
+    const { container } = render(<MediumMeter level={2} />)
+    const fill = container.querySelector(`.${styles.mediumFill}`) as HTMLElement
+    expect(fill.style.height).toBe('100%')
+  })
+
+  it('colors amber/red past the danger thresholds', () => {
+    const { container: amber } = render(<MediumMeter level={0.8} />)
+    expect(amber.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusAmber)
+
+    const { container: red } = render(<MediumMeter level={0.95} />)
+    expect(red.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
+  })
+
+  it('gainReduction variant always shows red regardless of level', () => {
+    const { container: low } = render(<MediumMeter level={0.1} variant="gainReduction" />)
+    expect(low.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
+    expect(low.querySelector(`.${styles.mediumFill}`)).not.toHaveClass(styles.statusGreen)
+    expect(low.querySelector(`.${styles.mediumFill}`)).not.toHaveClass(styles.statusAmber)
+
+    const { container: mid } = render(<MediumMeter level={0.5} variant="gainReduction" />)
+    expect(mid.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
+
+    const { container: high } = render(<MediumMeter level={0.95} variant="gainReduction" />)
+    expect(high.querySelector(`.${styles.mediumFill}`)).toHaveClass(styles.statusRed)
+  })
+
+  it('forwards title for a tooltip', () => {
+    const { container } = render(<MediumMeter level={0.5} title="GR: −6 dB" />)
+    expect(container.querySelector(`.${styles.mediumWrap}`)).toHaveAttribute('title', 'GR: −6 dB')
   })
 })
 

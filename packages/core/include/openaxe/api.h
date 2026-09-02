@@ -334,6 +334,10 @@ int32_t openaxe_is_tuner_muted(OpenAxeGraph* graph);
 float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id);
 // Fraction of real-time budget the last openaxe_process call used.
 float openaxe_get_cpu_load(OpenAxeGraph* graph);
+// Compressor (and gate) gain reduction in dB (≤0, 0 = no reduction), 0 for unknown/non-dynamics blocks. Tier 1.
+float openaxe_get_gain_reduction(OpenAxeGraph* graph, int32_t block_id);
+// Noise-gate openness 0..1 (1 = fully open), 0 for unknown/non-gate blocks. Tier 1.
+float openaxe_get_gate_gain(OpenAxeGraph* graph, int32_t block_id);
 
 // ── Automation slot map (issue #121) ─────────────────────────────────────
 // VST3/AU/CLAP hosts need a fixed, session-stable parameter list; rigs are

@@ -384,6 +384,14 @@ float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id) {
 
 float openaxe_get_cpu_load(OpenAxeGraph* graph) { return graph->engine.GetCpuLoad(); }
 
+float openaxe_get_gain_reduction(OpenAxeGraph* graph, int32_t block_id) {
+  return graph->engine.GetGainReduction(block_id);
+}
+
+float openaxe_get_gate_gain(OpenAxeGraph* graph, int32_t block_id) {
+  return graph->engine.GetGateGain(block_id);
+}
+
 // ── MIDI mapping (issue #124) ─────────────────────────────────────────
 // Thin forwarders onto the MIDI model. Helpers are pure functions; the rest
 // delegates to AudioEngine's MIDI state (see engine.h for the threading

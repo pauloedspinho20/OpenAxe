@@ -1,12 +1,16 @@
 import { Knob, Select } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
+import { DynamicsMeter } from '@/components/global/DynamicsMeter/DynamicsMeter'
+import type { GraphRig } from '@/engine/GraphRig'
+import type { NativeGraphRig } from '@/native/NativeGraphRig'
 import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
 export interface EffectParamsPanelProps {
   blockId: string
   block: Block
+  rig?: GraphRig | NativeGraphRig | null
 }
 
 function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchema[]]> {
@@ -36,7 +40,7 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * very next unrelated store change (adding some other block, say) would
  * silently revert it back to the store's stale copy.
  */
-export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
+export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPanelProps) {
   // Shared with EffectDetailsDialog - see useBlockParamValues for why local
   // state, rather than block.getParams(), drives what is displayed.
   const { values, setParam } = useBlockParamValues(blockId, block)
@@ -88,6 +92,9 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
     )
   }
 
+  const showDynamicsMeter =
+    rig != null && (block.kind === 'compressor' || block.kind === 'noise-gate')
+
   return (
     <div className={styles.panel}>
       {groupFields(schema).map(([groupName, fields]) => {
@@ -105,10 +112,15 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
             <div className={styles.fields}>
               {selectors.map(renderField)}
               {mainFields.map(renderField)}
+              {showDynamicsMeter && groupName === '' && (
+                <DynamicsMeter rig={rig} blockId={blockId} kind={block.kind} />
+              )}
             </div>
           </div>
         )
       })}
+      {/* If the schema was grouped (e.g. EQ bands), the DynamicsMeter was added to the first group above;
+          for the flat compressor/gate schema (no groups), it is already in that sole group. */}
     </div>
   )
 }

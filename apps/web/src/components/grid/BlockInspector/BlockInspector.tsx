@@ -122,7 +122,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
 
           {block && schema.length > 0 && (
             <div className={styles.meterAndParams}>
-              <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} />
+              <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} rig={rig} />
               <div className={styles.buttons}>
                 <HardwareButton
                   icon={<PowerIcon size={14} />}
