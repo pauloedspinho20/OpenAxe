@@ -19,6 +19,8 @@ export interface KnobProps {
   formatValue?: (value: number) => string
   size?: number
   disabled?: boolean
+  /** Human-readable param help — rendered as native tooltip (title) and aria-describedby. */
+  description?: string | undefined
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -57,8 +59,10 @@ export function Knob({
   formatValue,
   size = 56,
   disabled = false,
+  description,
 }: KnobProps) {
   const id = useId()
+  const descId = useId()
   const dragState = useRef<{ startY: number; startValue: number } | null>(null)
   const [dragging, setDragging] = useState(false)
 
@@ -134,7 +138,7 @@ export function Knob({
   }
 
   return (
-    <div className={styles.wrap} style={{ width: size }}>
+    <div className={styles.wrap} style={{ width: size }} title={description}>
       {formatValue && <span className={styles.value}>{formatValue(value)}</span>}
       <svg
         role="slider"
@@ -145,6 +149,7 @@ export function Knob({
         aria-valuenow={value}
         aria-disabled={disabled}
         aria-labelledby={id}
+        aria-describedby={description ? descId : undefined}
         viewBox="0 0 80 80"
         width={size}
         height={size}
@@ -182,6 +187,11 @@ export function Knob({
       <span id={id} className={`label ${styles.label}`}>
         {label}
       </span>
+      {description && (
+        <span id={descId} className={styles.srOnly}>
+          {description}
+        </span>
+      )}
     </div>
   )
 }

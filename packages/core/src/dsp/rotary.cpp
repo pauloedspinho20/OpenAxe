@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "internal/biquad.h"
+#include "internal/variable_delay.h"
 
 namespace openaxe::dsp {
 
@@ -40,9 +41,8 @@ struct Rotary::Impl {
   float crossover = 800;
   float sr = 48000;
   internal::Biquad lp[2], hp[2];
-  // delay lines for doppler: horn faster, drum slower
-  std::vector<float> horn_buf[2], drum_buf[2];
-  int horn_wp = 0, drum_wp = 0, horn_size = 0, drum_size = 0;
+  // delay lines for doppler: horn faster, drum slower, now via VariableDelay (Lagrange3)
+  internal::VariableDelay horn_delay[2], drum_delay[2];
   float horn_phase = 0, drum_phase = 0;
   float cur_horn_speed = 0, cur_drum_speed = 0; // ramped
   float mic_lp[2] = {0, 0};                     // mic-distance one-pole state
@@ -50,15 +50,10 @@ struct Rotary::Impl {
 
   void Resize(float s) {
     sr = s;
-    int hs = int(s * 0.04f) + 512; // 40ms max
-    int ds = int(s * 0.04f) + 512;
     for (int ch = 0; ch < 2; ++ch) {
-      horn_buf[ch].assign(static_cast<size_t>(hs), 0);
-      drum_buf[ch].assign(static_cast<size_t>(ds), 0);
+      horn_delay[ch].Prepare(s, 40.0f);
+      drum_delay[ch].Prepare(s, 40.0f);
     }
-    horn_size = hs;
-    drum_size = ds;
-    horn_wp = drum_wp = 0;
     horn_phase = drum_phase = 0;
     cur_horn_speed = cur_drum_speed = 0;
     mic_lp[0] = mic_lp[1] = 0;
@@ -67,14 +62,6 @@ struct Rotary::Impl {
       lp[ch].Reset();
       hp[ch].Reset();
     }
-  }
-  float ReadLinear(const std::vector<float>& b, float pos, int size) const {
-    int i0 = (int)std::floor(pos);
-    float frac = pos - (float)i0;
-    while (i0 < 0) i0 += size;
-    i0 %= size;
-    int i1 = (i0 + 1) % size;
-    return b[i0] * (1 - frac) + b[i1] * frac;
   }
 };
 
@@ -125,11 +112,12 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
 
     float inL = input[0][i];
     float inR = input[1][i];
-    // drive saturation pre
+    // drive saturation pre - continuous normaliser (no jump at g=2)
     if (drive > 0.001f) {
       const float g = 1 + drive * 3;
-      inL = std::tanh(inL * g) / std::max(1.0f, g * 0.5f);
-      inR = std::tanh(inR * g) / std::max(1.0f, g * 0.5f);
+      const float norm = (g + 1.0f) * 0.5f; // 1 at g=1, 2.5 at g=4, smooth vs max(1,g*0.5)
+      inL = std::tanh(inL * g) / norm;
+      inR = std::tanh(inR * g) / norm;
     }
 
     // crossover split
@@ -139,12 +127,7 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
     const float highR = impl_->hp[1].Process(inR);
 
     // Doppler via modulated delay: horn and drum each have delay line 5-15ms
-    // modulated by sinusoid
-    impl_->horn_buf[0][impl_->horn_wp] = highL;
-    impl_->horn_buf[1][impl_->horn_wp] = highR;
-    impl_->drum_buf[0][impl_->drum_wp] = lowL;
-    impl_->drum_buf[1][impl_->drum_wp] = lowR;
-
+    // modulated by sinusoid, now via VariableDelay (Lagrange3) for better HF
     const float horn_depth_ms = 2.5f; // horn shallower
     const float drum_depth_ms = 4.0f;
     const float horn_base_ms = 6.0f;
@@ -158,17 +141,19 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
     if (impl_->horn_phase >= 6.28318530718f) impl_->horn_phase -= 6.28318530718f;
     if (impl_->drum_phase >= 6.28318530718f) impl_->drum_phase -= 6.28318530718f;
 
-    const float horn_samps =
-        (horn_base_ms + horn_lfo * horn_depth_ms * 0.5f) * sr / 1000.0f;
-    const float drum_samps =
-        (drum_base_ms + drum_lfo * drum_depth_ms * 0.5f) * sr / 1000.0f;
+    const float horn_delay_ms = horn_base_ms + horn_lfo * horn_depth_ms * 0.5f;
+    const float drum_delay_ms = drum_base_ms + drum_lfo * drum_depth_ms * 0.5f;
 
-    const float hrp = (float)impl_->horn_wp - horn_samps;
-    const float drp = (float)impl_->drum_wp - drum_samps;
-    const float horn_outL = impl_->ReadLinear(impl_->horn_buf[0], hrp, impl_->horn_size);
-    const float horn_outR = impl_->ReadLinear(impl_->horn_buf[1], hrp, impl_->horn_size);
-    const float drum_outL = impl_->ReadLinear(impl_->drum_buf[0], drp, impl_->drum_size);
-    const float drum_outR = impl_->ReadLinear(impl_->drum_buf[1], drp, impl_->drum_size);
+    // Write current samples
+    impl_->horn_delay[0].Write(highL);
+    impl_->horn_delay[1].Write(highR);
+    impl_->drum_delay[0].Write(lowL);
+    impl_->drum_delay[1].Write(lowR);
+
+    const float horn_outL = impl_->horn_delay[0].Read(horn_delay_ms, sr);
+    const float horn_outR = impl_->horn_delay[1].Read(horn_delay_ms, sr);
+    const float drum_outL = impl_->drum_delay[0].Read(drum_delay_ms, sr);
+    const float drum_outR = impl_->drum_delay[1].Read(drum_delay_ms, sr);
 
     // tremolo amplitude modulation also (horn/drum rotate produces AM)
     const float horn_ampL = 1.0f + horn_lfo * 0.25f;
@@ -199,9 +184,6 @@ void Rotary::Process(const float* const* input, float* const* output, int num_fr
 
     output[0][i] = outL;
     output[1][i] = outR;
-
-    impl_->horn_wp = (impl_->horn_wp + 1) % impl_->horn_size;
-    impl_->drum_wp = (impl_->drum_wp + 1) % impl_->drum_size;
   }
 }
 

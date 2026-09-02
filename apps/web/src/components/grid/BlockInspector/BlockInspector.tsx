@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { HardwareButton, Knob, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
+import { HardwareButton, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { useEngineVersion } from '../../../state/engineVersion'
@@ -10,74 +10,12 @@ import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
-import { getParamSchema, getReverbRawSchemas } from '../../../effects/paramSchema'
-import type { EffectParams } from '../../../effects/Effect'
+import { EffectDetailsDialog } from '../EffectDetailsDialog/EffectDetailsDialog'
+import { EFFECT_PARAM_SCHEMAS, getParamSchema } from '../../../effects/paramSchema'
 import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
 import type { Gear } from '@/tone3000/types'
-
-function RawReverbPanel({
-  blockId,
-  block,
-  schemas,
-}: {
-  blockId: string
-  block: NonNullable<ReturnType<GraphRig['getBlock']>>
-  schemas: ReturnType<typeof getReverbRawSchemas>
-}) {
-  const [values, setValues] = useState(() => ({
-    ...block.getParams(),
-    ...useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params,
-  }))
-  const storeKey = useGraphStore((s) => {
-    const p = s.blocks.find((b) => b.id === blockId)?.params
-    return p ? JSON.stringify(p) : ''
-  })
-  useEffect(() => {
-    if (!storeKey) return
-    const parsed = JSON.parse(storeKey) as EffectParams
-    setValues((prev) => ({ ...prev, ...parsed }))
-  }, [storeKey])
-  useEffect(() => {
-    const latest = useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params
-    setValues({ ...block.getParams(), ...(latest ?? {}) })
-  }, [block, blockId])
-  const setParam = (key: string, value: number | string) => {
-    useGraphStore.getState().setBlockParams(blockId, { [key]: value })
-    setValues((prev) => ({ ...prev, [key]: value }))
-  }
-  return (
-    <div>
-      <span className="label" style={{ fontSize: 11, opacity: 0.7 }}>
-        Raw params (direct core symbols — bypass the Size/Damping abstraction)
-      </span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-        {schemas.map((field) => {
-          if (field.control === 'select') return null
-          const cur =
-            typeof values[field.key] === 'number'
-              ? (values[field.key] as number)
-              : field.defaultValue
-          return (
-            <Knob
-              key={field.key}
-              label={field.label}
-              value={cur}
-              min={field.min}
-              max={field.max}
-              step={field.step}
-              defaultValue={field.defaultValue}
-              formatValue={field.formatValue}
-              size={36}
-              onChange={(v: number) => setParam(field.key, v)}
-            />
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 export interface BlockInspectorProps {
   rig: GraphRig | null
@@ -104,8 +42,8 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
   const blocks = useGraphStore((s) => s.blocks)
   const instance = blocks.find((b) => b.id === selectedBlockId) ?? null
-  const [reverbExpert, setReverbExpert] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [effectDetailsOpen, setEffectDetailsOpen] = useState(false)
   const openBrowser = useTone3000Browser((s) => s.openBrowser)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -117,13 +55,11 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     if (selectedBlockId && !instance) useSelection.getState().clear()
   }, [selectedBlockId, instance])
 
-  // Reset expert toggle when switching blocks.
   useEffect(() => {
-    if (instance?.id) setReverbExpert(false)
-  }, [instance?.id])
-
-  useEffect(() => {
-    if (instance?.id) setDetailsOpen(false)
+    if (instance?.id) {
+      setDetailsOpen(false)
+      setEffectDetailsOpen(false)
+    }
   }, [instance?.id])
 
   if (!instance) {
@@ -139,7 +75,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const block = rig?.getBlock(instance.id) ?? null
   const blockId = instance.id
   const bypassed = instance.bypass ?? false
-  const isReverb = instance.kind === 'reverb'
   const isIr = instance.kind === 'cab'
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
@@ -147,9 +82,8 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const vendorUrl = BLOCK_KIND_VENDOR_URLS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
-  const reverbAlgorithm = (instance.params.reverbAlgorithm as string) ?? 'hall'
-  const expertSchemas = isReverb && reverbExpert ? getReverbRawSchemas(reverbAlgorithm) : []
   const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
+  const isEffectBlock = instance.kind in EFFECT_PARAM_SCHEMAS
   const loaded = isNamCore ? ((block as AmpBlock | null)?.getLoadedModel?.() ?? null) : null
   const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
@@ -188,12 +122,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
 
           {block && schema.length > 0 && (
             <div className={styles.meterAndParams}>
-              <EffectParamsPanel
-                key={`${instance.id}-${reverbExpert ? 'expert' : 'simple'}`}
-                blockId={instance.id}
-                block={block}
-                rig={rig}
-              />
+              <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} rig={rig} />
               <div className={styles.buttons}>
                 <HardwareButton
                   icon={<PowerIcon size={14} />}
@@ -214,33 +143,16 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                     iconOnly
                   ></HardwareButton>
                 )}
+                {!isNamCore && isEffectBlock && (
+                  <HardwareButton
+                    label="Effect Details"
+                    icon={<MixerIcon size={15} />}
+                    onClick={() => setEffectDetailsOpen(true)}
+                    iconOnly
+                  ></HardwareButton>
+                )}
               </div>
               {block && analyser && <LiveMeter variant="medium" analyser={analyser} />}
-            </div>
-          )}
-          {block && isReverb && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-              <HardwareButton
-                label={reverbExpert ? 'Simple' : 'Expert'}
-                active={reverbExpert}
-                onClick={() => setReverbExpert((v) => !v)}
-                title={reverbExpert ? 'Show simple controls' : 'Show raw Dragonfly params'}
-              />
-              {reverbExpert && expertSchemas.length > 0 && (
-                <span className="label" style={{ fontSize: 11 }}>
-                  {reverbAlgorithm} — {expertSchemas.length} raw params
-                </span>
-              )}
-            </div>
-          )}
-          {block && reverbExpert && expertSchemas.length > 0 && (
-            <div className={styles.meterAndParams} style={{ marginTop: 8 }}>
-              <RawReverbPanel
-                key={`${instance.id}-raw-${reverbAlgorithm}`}
-                blockId={instance.id}
-                block={block}
-                schemas={expertSchemas}
-              />
             </div>
           )}
           {block && schema.length === 0 && !isAssetKind && (
@@ -283,6 +195,15 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
               : null
           }
           audioContext={context}
+        />
+      )}
+      {!isNamCore && isEffectBlock && (
+        <EffectDetailsDialog
+          open={effectDetailsOpen}
+          onClose={() => setEffectDetailsOpen(false)}
+          kind={instance.kind}
+          blockId={blockId}
+          rig={rig}
         />
       )}
     </Panel>

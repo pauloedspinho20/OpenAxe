@@ -1209,6 +1209,22 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   // the per-port level/pan params, unlike the original design where neither was
   // a DSP effect kind and both had param_count 0.
 
+  // New blocks added after the engine has been Reset (the worklet's normal
+  // path: Reset at startup before any blocks exist, then AddBlock) need their
+  // DSP prepared (e.g. Equalizer's dspark::Equalizer::prepare), otherwise
+  // Process reads uninitialised state and produces silence/NaNs — EQ was
+  // silent in the worklet for this reason.
+  if (sample_rate_ > 0.0 && max_block_size_ > 0) {
+    std::visit(
+        [&](auto& d) {
+          using T = std::decay_t<decltype(d)>;
+          if constexpr (!std::is_same_v<T, std::monostate> && !std::is_same_v<T, dsp::NamAmp>) {
+            d.Reset(sample_rate_);
+          }
+        },
+        state->dsp);
+  }
+
   // Seed the smoothing policy + live ramp state from the just-initialised param
   // mirror (issue #122) so the first Process() eases from the current value.
   SeedSmoothing(*state);

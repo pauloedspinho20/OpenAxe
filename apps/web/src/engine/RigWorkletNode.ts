@@ -23,7 +23,7 @@ const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
 const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
 /** packages/core/include/openaxe/api.h's OpenAxeBlockKind, indexed by web BlockKind. */
-const KIND_TO_CORE: Record<BlockKind, number> = {
+export const KIND_TO_CORE: Record<BlockKind, number> = {
   'noise-gate': 0,
   compressor: 1,
   eq: 2,
@@ -131,7 +131,12 @@ export class RigWorkletNode {
       numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBytes },
+      // reverbKind: the worklet needs to recognise reverb blocks to route the
+      // ReverbControl abstraction, and used to carry its own copy of the
+      // ordinal. That copy went stale in #330 (9 vs 8) and silently swallowed
+      // every reverb param write, so KIND_TO_CORE is now the single source and
+      // the worklet is told rather than told twice.
+      processorOptions: { wasmBytes, reverbKind: KIND_TO_CORE.reverb },
     })
     const rig = new RigWorkletNode(node)
     // Deliberately not awaited: this is a diagnostic, and blocking engine
