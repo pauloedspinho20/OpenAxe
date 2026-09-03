@@ -21,6 +21,12 @@ export interface KnobProps {
   disabled?: boolean
   /** Human-readable param help — rendered as native tooltip (title) and aria-describedby. */
   description?: string | undefined
+  /**
+   * Right-click handler for the whole knob (label included) - the web app
+   * uses it to open a MIDI-mapping context menu. Kept as a plain passthrough
+   * so this shared primitive never learns about MIDI stores.
+   */
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -60,6 +66,7 @@ export function Knob({
   size = 56,
   disabled = false,
   description,
+  onContextMenu,
 }: KnobProps) {
   const id = useId()
   const descId = useId()
@@ -138,7 +145,12 @@ export function Knob({
   }
 
   return (
-    <div className={styles.wrap} style={{ width: size }} title={description}>
+    <div
+      className={styles.wrap}
+      style={{ width: size }}
+      title={description}
+      onContextMenu={onContextMenu}
+    >
       {formatValue && <span className={styles.value}>{formatValue(value)}</span>}
       <svg
         role="slider"

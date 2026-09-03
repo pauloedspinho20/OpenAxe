@@ -15,5 +15,12 @@ export { Fader } from './Fader/Fader'
 export type { FaderProps } from './Fader/Fader'
 export { Knob } from './Knob/Knob'
 export type { KnobProps } from './Knob/Knob'
+export { ContextMenu } from './ContextMenu/ContextMenu'
+export type {
+  ContextMenuProps,
+  ContextMenuItem,
+  ContextMenuAnchor,
+} from './ContextMenu/ContextMenu'
+export { clampMenuPosition } from './ContextMenu/position'
 export { Meter, MiniMeter, MediumMeter, levelToPeakDb } from './Meter/Meter'
 export type { MeterProps, MiniMeterProps, MeterVariant } from './Meter/Meter'

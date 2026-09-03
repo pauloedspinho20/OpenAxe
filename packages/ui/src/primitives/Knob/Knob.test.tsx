@@ -114,4 +114,16 @@ describe('Knob', () => {
     fireEvent.keyDown(slider, { key: 'ArrowUp' })
     expect(onChange).not.toHaveBeenCalled()
   })
+
+  it('forwards right-clicks via onContextMenu without changing the value', () => {
+    const onChange = vi.fn()
+    const onContextMenu = vi.fn()
+    render(<Knob label="Drive" value={0.5} onChange={onChange} onContextMenu={onContextMenu} />)
+    fireEvent.contextMenu(screen.getByRole('slider', { name: 'Drive' }), {
+      clientX: 10,
+      clientY: 20,
+    })
+    expect(onContextMenu).toHaveBeenCalledTimes(1)
+    expect(onChange).not.toHaveBeenCalled()
+  })
 })

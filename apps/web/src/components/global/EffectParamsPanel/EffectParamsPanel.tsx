@@ -1,7 +1,9 @@
-import { Knob, Select } from '@openaxe/ui'
+import { useState } from 'react'
+import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
 import { DynamicsMeter } from '@/components/global/DynamicsMeter/DynamicsMeter'
+import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
 import type { GraphRig } from '@/engine/GraphRig'
 import type { NativeGraphRig } from '@/native/NativeGraphRig'
 import { useBlockParamValues } from '@/effects/useBlockParamValues'
@@ -45,6 +47,12 @@ export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPa
   // state, rather than block.getParams(), drives what is displayed.
   const { values, setParam } = useBlockParamValues(blockId, block)
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
+  // Right-click MIDI menu target - one menu per panel, retargeted per knob.
+  const [midiMenu, setMidiMenu] = useState<{
+    anchor: ContextMenuAnchor
+    paramKey: string
+    paramLabel: string
+  } | null>(null)
 
   const renderField = (field: ParamFieldSchema) => {
     if (field.control === 'select') {
@@ -88,6 +96,14 @@ export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPa
         size={50}
         description={field.description}
         onChange={(value) => setParam(field.key, value)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMidiMenu({
+            anchor: { x: e.clientX, y: e.clientY },
+            paramKey: field.key,
+            paramLabel: field.label,
+          })
+        }}
       />
     )
   }
@@ -121,6 +137,15 @@ export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPa
       })}
       {/* If the schema was grouped (e.g. EQ bands), the DynamicsMeter was added to the first group above;
           for the flat compressor/gate schema (no groups), it is already in that sole group. */}
+      <ParamMidiMenu
+        anchor={midiMenu?.anchor ?? null}
+        target={
+          midiMenu
+            ? { blockId, paramKey: midiMenu.paramKey, paramLabel: midiMenu.paramLabel }
+            : null
+        }
+        onClose={() => setMidiMenu(null)}
+      />
     </div>
   )
 }
