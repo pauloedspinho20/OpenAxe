@@ -1918,6 +1918,32 @@ std::optional<dsp::NamModelInfo> AudioEngine::BlockModelInfo(BlockId id) const {
 }
 
 // ── Cab impulse responses ──────────────────────────────────────────────
+namespace {
+
+// Cab IRs ship at wildly different levels - commercial IRs are commonly
+// peak-normalized near 0 dBFS, which still carries ~+20 dB of broadband
+// convolution gain into whatever feeds the cab (issue #365: input wired
+// straight to a cab block clips with the input trim at unity). Installing
+// them verbatim therefore makes the block's loudness a property of the IR
+// file rather than the rig.
+//
+// Level the installed IR to unit energy (sum of squares == 1), which is
+// unity gain for broadband signals, attenuate-only so a quiet IR never gets
+// louder than its file: silent IRs install untouched (scale would divide by
+// zero), and IRs already at or below unit energy are left alone. Tonal
+// signals sitting exactly on a resonance can still exceed unity -
+// convolution gain is frequency-dependent, no scalar fixes that - but the
+// broadband case that clips real rigs is gone. Runs on the control thread at
+// load time, never on the audio thread.
+void NormalizeIrLevel(std::vector<float>& samples) {
+  double energy_squared = 0.0;
+  for (float sample : samples) energy_squared += static_cast<double>(sample) * sample;
+  if (!(energy_squared > 1.0)) return;  // silent, quiet, or NaN: install verbatim
+  const float scale = static_cast<float>(1.0 / std::sqrt(energy_squared));
+  for (float& sample : samples) sample *= scale;
+}
+
+}  // namespace
 
 // Install one IR on both of a cab block's channels. The two convolvers share the
 // same IR data but keep independent tails, since the channels carry different
@@ -1930,7 +1956,18 @@ std::optional<dsp::NamModelInfo> AudioEngine::BlockModelInfo(BlockId id) const {
 void AudioEngine::LoadIr(BlockId id, const float* samples, int length) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kCab) return;
-  for (auto& conv : state->cab) conv.SetImpulseResponse(samples, length);
+  std::vector<float> leveled;
+  const float* installed = samples;
+  int installed_length = length;
+  if (samples != nullptr && length > 0) {
+    // Level what the convolvers hear; the retained source below stays the
+    // caller's original samples so save/restore re-runs this same pipeline.
+    leveled.assign(samples, samples + length);
+    NormalizeIrLevel(leveled);
+    installed = leveled.data();
+    installed_length = static_cast<int>(leveled.size());
+  }
+  for (auto& conv : state->cab) conv.SetImpulseResponse(installed, installed_length);
   if (samples != nullptr && length > 0) {
     state->ir_source_wav =
         dsp::EncodeWavF32(std::vector<float>(samples, samples + length), sample_rate_);
@@ -1958,9 +1995,15 @@ int AudioEngine::LoadIrWav(BlockId id, const uint8_t* bytes, size_t size) {
   const auto decoded = dsp::DecodeWav(bytes, size);
   if (!decoded || decoded->samples.empty()) return 0;
 
-  const std::vector<float> samples =
+  const std::vector<float> decoded_or_resampled =
       sample_rate_ > 0.0 ? dsp::ResampleMono(decoded->samples, decoded->sample_rate, sample_rate_)
                          : decoded->samples;
+  if (decoded_or_resampled.empty()) return 0;
+
+  // Same leveling as LoadIr (issue #365); the retained bytes below stay the
+  // original file so restore re-runs this exact pipeline from them.
+  std::vector<float> samples = decoded_or_resampled;
+  NormalizeIrLevel(samples);
   if (samples.empty()) return 0;
 
   for (auto& conv : state->cab) {

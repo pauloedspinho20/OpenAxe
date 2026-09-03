@@ -150,6 +150,13 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   target_link_libraries(engine_test PRIVATE openaxe_core)
   add_test(NAME engine_test COMMAND engine_test)
 
+  # Cab IR install leveling (issue #365): hot peak-normalized IRs are leveled
+  # to unit energy at load so input->cab stops clipping. Same guard as
+  # engine_test - it drives AudioEngine, which needs all three DSP families.
+  add_executable(cab_ir_level_test cab_ir_level_test.cpp)
+  target_link_libraries(cab_ir_level_test PRIVATE openaxe_core)
+  add_test(NAME cab_ir_level_test COMMAND cab_ir_level_test)
+
   # Golden-audio regression harness (issue #315). Drives AudioEngine over every
   # compiled effect, so it needs the same three families this block guards.
   # WHOLE_ARCHIVE for NAM's self-registering architecture parsers. Reads json.h

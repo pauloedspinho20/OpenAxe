@@ -296,6 +296,12 @@ class AudioEngine {
   // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
   // length <= 0 clears it, which returns the block to passthrough. No-op for
   // every other kind. Tier 2: it allocates and transforms the IR.
+  //
+  // The installed IR is leveled to unit energy when its energy exceeds unity
+  // (attenuate-only, issue #365): peak-normalized commercial IRs otherwise
+  // carry ~+20 dB of broadband convolution gain into the block. Quiet IRs
+  // install verbatim. The retained save/restore source keeps the original
+  // samples; restore re-runs this same leveling.
   void LoadIr(BlockId id, const float* samples, int length);
 
   // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
@@ -303,7 +309,8 @@ class AudioEngine {
   // samples installed, or 0 if the block isn't a cab or the file can't be
   // decoded. This is the entry point for every platform without an
   // AudioContext.decodeAudioData to lean on (desktop, plugin, mobile). Not
-  // real-time safe.
+  // real-time safe. Same unit-energy leveling as LoadIr; the retained bytes
+  // stay the original file.
   int LoadIrWav(BlockId id, const uint8_t* bytes, size_t size);
   void UnloadIr(BlockId id);
   // Length of the IR installed on the block, 0 if none (or not a cab).
