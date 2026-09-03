@@ -25,7 +25,7 @@ namespace dark {
   inline constexpr IColor inkReverse3 = IColor(140, 255, 255, 255);
   inline constexpr IColor shadowAmbient = IColor(128, 0, 0, 0);
   inline constexpr IColor shadowDeep = IColor(179, 0, 0, 0);
-  inline constexpr IColor shadowSoft = IColor(153, 0, 0, 0);
+  inline constexpr IColor shadowSoft = IColor(230, 0, 0, 0);
 } // namespace dark
 namespace light {
   inline constexpr IColor chassis = IColor(255, 231, 226, 214);
