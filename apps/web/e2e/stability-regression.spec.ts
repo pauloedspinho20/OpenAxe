@@ -91,9 +91,12 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove block' }).click()
   await expect(blocks).toHaveCount(0)
 
-  // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
-  // migration - Gate, Compressor, EQ, Tremolo) plus six that already run on
-  // packages/core.
+  // All 10 compiled effect kinds (effects.config.json #313): the four
+  // DSPark-backed ones (issue #22's last migration - Gate, Compressor, EQ,
+  // Tremolo) plus six that already run on packages/core. Filter/ring-mod/
+  // granular-delay/pitch-shifter are compiled out, so they must not appear
+  // here - the palette (PALETTE_BLOCK_KINDS) won't offer them and the
+  // menuitem lookup would time out.
   const FX_KINDS = [
     'Gate',
     'Comp',
@@ -104,7 +107,7 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     'Flanger',
     'Phaser',
     'Delay',
-    'Filter',
+    'Rotary',
   ]
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x
