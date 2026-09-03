@@ -123,8 +123,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
   const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
+#endif
 #if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
 #endif
@@ -138,8 +142,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
+#endif
 #if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
 #endif
@@ -152,8 +160,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
   chain.push_back(ring_mod);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   chain.push_back(filter);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   chain.push_back(pitch);
+#endif
 #if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   chain.push_back(granular);
 #endif
