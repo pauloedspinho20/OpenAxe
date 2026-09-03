@@ -8,5 +8,5 @@ export {
   PlayIcon,
   PauseIcon,
 } from './GeneraIcons'
-export { BlockIcon, RedoIcon, TunerIcon, UndoIcon, type BlockKind } from './BlockIcons'
+export { BlockIcon, RedoIcon, UndoIcon, type BlockKind } from './BlockIcons'
 export { InputIcon, MidiIcon, OutputIcon, PowerIcon, SettingsIcon } from './HeaderIcons'

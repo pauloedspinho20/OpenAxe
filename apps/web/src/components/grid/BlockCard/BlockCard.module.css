@@ -5,7 +5,7 @@
   grid-template-rows: 1fr 1fr 1fr;
   height: 100%;
   min-width: 0;
-  padding: 2px;
+  padding: 2px 2px 6px;
   background: var(--panel-raised);
   border: 1px solid var(--ink-1);
   border-radius: var(--r-lg);
@@ -20,7 +20,7 @@
 
 .bypassed:not(.cardSelected) {
   background: var(--panel);
-  border: 1px solid var(--ink-3);
+  border: 1px solid var(--ink-1);
 }
 
 .bypassed .blockIcon,
@@ -36,6 +36,7 @@
   width: 100%;
   display: flex;
   justify-content: center;
+  padding-top: 18px;
 }
 
 @media (max-width: var(--mw-md)) {
@@ -51,18 +52,18 @@
 .cardSelected.bypassed,
 .cardSelected.bypassed:hover {
   outline: 1px solid var(--ink-1);
-  box-shadow: none;
+  box-shadow: var(--shadow-panel);
 }
 
 .cardSelected:not(.bypassed),
 .cardSelected:not(.bypassed):hover {
   border: 1px solid var(--accent);
   outline: 1px solid var(--accent);
-  box-shadow: none;
+  box-shadow: var(--shadow-panel);
 }
 
-.card:hover .blockIcon,
-.card:hover .blockLabel {
+.card:hover:not(.bypassed) .blockIcon,
+.card:hover:not(.bypassed) .blockLabel {
   color: var(--ink-1);
 }
 
@@ -74,7 +75,8 @@
 }
 
 .header {
-  position: relative;
+  position: absolute;
+  top: 0;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -89,9 +91,22 @@
   text-align: center;
 }
 
+.blockBypassedLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  width: 100%;
+  background-color: var(--ink-1);
+}
+
 .blockLabel {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 1px;
   font-weight: bold;
@@ -102,9 +117,8 @@
 }
 
 .headerActions {
+  position: relative;
   display: flex;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-1);
@@ -139,6 +153,10 @@
 .bypassBtnOn {
   color: var(--led-on);
 }
+.bypassBtn:hover,
+.bypassBtnOn:hover {
+  scale: 1.5;
+}
 
 .removeBtn {
   background: none;
@@ -156,21 +174,20 @@
 
 .menuBtn {
   background: none;
-  border: 1px solid transparent;
+  border: none;
   color: var(--ink-2);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  padding: var(--sp-1);
-  border-radius: 99px;
-  height: 22px;
+  padding: 2px;
+  border-radius: var(--r-lg);
+  height: 20px;
   width: 22px;
 }
 
 .menuBtn:hover {
   color: var(--ink-1);
-  border-color: var(--seam-strong);
-  background: var(--panel);
+  scale: 1.5;
 }
 
 .jacks {

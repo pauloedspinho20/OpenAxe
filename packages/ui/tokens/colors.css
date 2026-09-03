@@ -29,7 +29,7 @@
   /* Shadows */
   --shadow-ambient: rgb(0 0 0 / 50%);
   --shadow-deep: rgb(0 0 0 / 70%);
-  --shadow-soft: rgb(0 0 0 / 60%);
+  --shadow-soft: rgb(0 0 0 / 90%);
 }
 
 /* Aluminum (light) */

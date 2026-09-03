@@ -63,6 +63,7 @@
   text-align: center;
   line-height: 1.2;
   white-space: nowrap;
+  color: var(--ink-1) !important;
 }
 
 .value {

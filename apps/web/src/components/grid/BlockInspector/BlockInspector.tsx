@@ -124,17 +124,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
             <div className={styles.meterAndParams}>
               <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} rig={rig} />
               <div className={styles.buttons}>
-                <HardwareButton
-                  icon={<PowerIcon size={14} />}
-                  active={!bypassed}
-                  iconOnly
-                  onClick={() => {
-                    useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-                    ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-                  }}
-                  label={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-                  aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-                ></HardwareButton>
                 {isNamCore && (
                   <HardwareButton
                     label="Model Details"
@@ -151,6 +140,19 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                     iconOnly
                   ></HardwareButton>
                 )}
+                {block.kind !== 'mixer' && (
+                  <HardwareButton
+                    icon={<PowerIcon size={14} />}
+                    active={!bypassed}
+                    iconOnly
+                    onClick={() => {
+                      useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+                      ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+                    }}
+                    label={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+                    aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+                  ></HardwareButton>
+                )}
               </div>
               {block && analyser && <LiveMeter variant="medium" analyser={analyser} />}
             </div>
@@ -158,7 +160,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
           {block && schema.length === 0 && !isAssetKind && (
             <div className={styles.meterAndParams}>
               <p className={styles.empty}>This block has no editable parameters.</p>
-              {analyser && <LiveMeter variant="mini" analyser={analyser} />}
+              {analyser && <LiveMeter variant="medium" analyser={analyser} />}
             </div>
           )}
         </div>

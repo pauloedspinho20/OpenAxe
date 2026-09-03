@@ -256,25 +256,23 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
     >
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            disabled={!hasBypass}
-            className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
-            onClick={() => {
-              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-            }}
-            title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-            aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-          >
-            ●
-          </button>
-
-          {/*     {analyser && (
-            <div className={styles.meterWrap}>
-              <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />
-            </div>
-          )} */}
+          {!['mixer', 'send-1', 'send-2', 'return-1', 'return-2'].includes(instance.kind) ? (
+            <button
+              type="button"
+              disabled={!hasBypass}
+              className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
+              onClick={() => {
+                useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+                ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+              }}
+              title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+              aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+            >
+              ●
+            </button>
+          ) : (
+            <div />
+          )}
 
           <button
             type="button"
@@ -292,9 +290,13 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
         </div>
       </div>
 
-      <div className={styles.blockIconWrapper}>
-        <BlockIcon kind={instance.kind} size={32} className={styles.blockIcon} />
-      </div>
+      {!bypassed ? (
+        <div className={styles.blockIconWrapper}>
+          <BlockIcon kind={instance.kind} size={32} className={styles.blockIcon} />
+        </div>
+      ) : (
+        <div className={styles.blockBypassedLine}></div>
+      )}
 
       <span className={styles.blockLabel}>{label}</span>
 

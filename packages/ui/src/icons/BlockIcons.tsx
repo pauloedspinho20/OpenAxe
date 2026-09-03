@@ -87,9 +87,9 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
   mixer: (
     <>
       <path d="M5 6v12M12 6v12M19 6v12" />
-      <Dot cx="5" cy="10" />
-      <Dot cx="12" cy="12" />
-      <Dot cx="19" cy="14" />
+      <circle cx="5" cy="8" r={1.6} fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r={1.6} fill="currentColor" stroke="none" />
+      <circle cx="19" cy="16" r={1.6} fill="currentColor" stroke="none" />
     </>
   ),
   splitter: (
@@ -223,16 +223,291 @@ const GLYPHS: Record<BlockKind, ReactNode> = {
 }
 
 export function BlockIcon({ kind, ...rest }: { kind: BlockKind } & IconProps) {
-  return <Icon {...rest}>{GLYPHS[kind]}</Icon>
-}
+  const { size = 12 } = rest
+  if (kind === 'mixer') {
+    return (
+      <svg
+        viewBox="3.4 6 17.2 12"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        xmlns="http://www.w3.org/2000/svg"
+        {...rest}
+      >
+        <path d="M5 5v14m7-14v14m7-14v14" />
+        <circle cx="5" cy="8" r="1.6" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+        <circle cx="19" cy="16" r="1.6" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
 
-/** Tuning-fork glyph used by the tuner block section. */
-export function TunerIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M9 3v7a3 3 0 0 0 6 0V3M9 18h6M12 10v8" />
-    </Icon>
-  )
+  if (kind === 'reverb') {
+    return (
+      <svg
+        fill="currentColor"
+        width={size}
+        height={size}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        {...rest}
+      >
+        <g>
+          <g>
+            <path
+              d="M12,24L1,18.6V5.4L12,0l11,5.4v13.2L12,24z M13,11.6v9.7l8-3.9V7.6L13,11.6z M3,17.4l8,3.9v-9.7l-8-4V17.4z M4.2,6L12,9.9
+			L19.8,6L12,2L4.2,6z"
+            />
+          </g>
+        </g>
+      </svg>
+    )
+  }
+
+  if (kind === 'delay') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <circle cx="4" cy="12" r="4" fill="currentColor" stroke="none" />
+        <circle cx="13.5" cy="12" r="3" fill="currentColor" stroke="none" />
+        <circle cx="21.5" cy="12" r="2" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
+
+  if (kind === 'pedal') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <rect x="3" y="1" width="18" height="22" rx="1.5" />
+        <circle cx="7" cy="5" r="1.8" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="5" r="1.8" fill="currentColor" stroke="none" />
+        <circle cx="17" cy="5" r="1.8" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="18" r="2.2" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
+
+  if (kind === 'amp') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <rect x="1" y="4" width="22" height="16" rx="1.2" />
+        <circle cx="6" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="10" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="14" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="18" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        <path d="M1 14.1h22" />
+      </svg>
+    )
+  }
+
+  if (kind === 'amp-cab') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <rect x="1" y="1" width="22" height="22" rx="1.2" />
+        <circle cx="6" cy="5" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="10" cy="5" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="14" cy="5" r="1.2" fill="currentColor" stroke="none" />
+        <circle cx="18" cy="5" r="1.2" fill="currentColor" stroke="none" />
+        <path d="M1 9.1h22" />
+        <circle cx="7" cy="16" r="4" fill="currentColor" stroke="none" />
+        <circle cx="17" cy="16" r="4" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
+
+  if (kind === 'cab') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <rect x="1" y="1" width="22" height="22" rx="2" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
+
+  if (kind === 'compressor') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        xmlns="http://www.w3.org/2000/svg"
+        {...rest}
+      >
+        <path d="M12 1v22"></path>
+        <path d="M1 4v16l10-8z"></path>
+        <path d="M23 4v16l-10-8z"></path>
+      </svg>
+    )
+  }
+
+  if (['send-1', 'send-2'].includes(kind)) {
+    return (
+      <svg
+        stroke="currentColor"
+        fill="none"
+        strokeWidth="2.1"
+        viewBox="0 0 24 24"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        height={size}
+        width={size}
+        xmlns="http://www.w3.org/2000/svg"
+        {...rest}
+      >
+        <path d="M7 7h10v10M7 17 17 7" />
+      </svg>
+    )
+  }
+
+  if (['return-1', 'return-2'].includes(kind)) {
+    return (
+      <svg
+        stroke="currentColor"
+        fill="none"
+        strokeWidth="2.1"
+        viewBox="0 0 24 24"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        height={size}
+        width={size}
+        xmlns="http://www.w3.org/2000/svg"
+        transform="matrix(-1,1.2246467991473532e-16,-1.2246467991473532e-16,-1,0,0)"
+        {...rest}
+      >
+        <path d="M7 7h10v10M7 17 17 7" />
+      </svg>
+    )
+  }
+
+  if (kind === 'eq') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        height={size}
+        width={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <rect x="1" y="13" width="5.4" height="10" rx="0.1" />
+        <rect x="6.5" y="1" width="5.4" height="22" rx="0.1" />
+        <rect x="11.9" y="4" width="5.4" height="19" rx="0.1" />
+        <rect x="17.3" y="9" width="5.4" height="14" rx="0.1" />
+      </svg>
+    )
+  }
+
+  if (kind === 'noise-gate') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        height={size}
+        width={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        xmlns="http://www.w3.org/2000/svg"
+        transform="rotate(-90)"
+        {...rest}
+      >
+        <path d="M19 2v20L5 12z" />
+      </svg>
+    )
+  }
+
+  if (kind === 'chorus') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        height={size}
+        width={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <path d="M1 13c2-6 4-2 5 0s3 13 7 0 8-16 10 10" />
+      </svg>
+    )
+  }
+
+  return <Icon {...rest}>{GLYPHS[kind]}</Icon>
 }
 
 /** Curved undo arrow — 24x24 stroke 1.5, matches blockIcons tone. */

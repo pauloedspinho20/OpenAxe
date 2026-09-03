@@ -82,7 +82,7 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
   return [
     {
       key: `band${index}_frequency`,
-      label: 'Freq',
+      label: `Freq ${index + 1}`,
       control: 'knob',
       ...range('eq', `band${index}_frequency`),
       step: 10,
@@ -298,7 +298,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       min: 0,
       max: 1,
       step: 0.01,
-      defaultValue: 0.4,
+      defaultValue: 1,
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
@@ -1278,7 +1278,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       {
         key: `in${i}_level`,
         description: 'Mixer input level.',
-        label: 'Level',
+        label: `Level ${i + 1}`,
         control: 'knob',
         ...range('mixer', `in${i}_level`),
         step: 0.01,
@@ -1289,7 +1289,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       {
         key: `in${i}_pan`,
         description: 'Mixer input pan.',
-        label: 'Pan',
+        label: `Pan ${i + 1}`,
         control: 'knob',
         ...range('mixer', `in${i}_pan`),
         step: 0.01,
