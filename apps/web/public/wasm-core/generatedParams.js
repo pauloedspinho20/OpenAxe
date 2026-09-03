@@ -44,7 +44,7 @@ export const CHORUS_PARAMS = Object.freeze({ rate: 0, depth: 1, delay: 2, feedba
 
 export const FLANGER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, delay: 3 })
 
-export const PHASER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, stages: 3 })
+export const PHASER_PARAMS = Object.freeze({ rate: 0, script: 1 })
 
 export const TREMOLO_PARAMS = Object.freeze({ rate: 0, depth: 1, shape: 2, stereo: 3, mode: 4 })
 
