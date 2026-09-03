@@ -507,6 +507,67 @@ export function BlockIcon({ kind, ...rest }: { kind: BlockKind } & IconProps) {
     )
   }
 
+  if (kind === 'phaser') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        height={size}
+        width={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <circle cx="12" cy="12" r="11" />
+        <line x1="12" y1="2" x2="12" y2="22" />
+      </svg>
+    )
+  }
+
+  if (kind === 'tremolo') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        height={size}
+        width={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        xmlns="http://www.w3.org/2000/svg"
+        {...rest}
+      >
+        <path d="m1 12 2-5 2 10L8 7l2 10 3-10 2 10 3-10 2 10 3-10" />
+      </svg>
+    )
+  }
+
+  if (kind === 'ring-mod') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        height={size}
+        width={size}
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...rest}
+      >
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M1 12h22M12 v13" />
+        <circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
+
   return <Icon {...rest}>{GLYPHS[kind]}</Icon>
 }
 
