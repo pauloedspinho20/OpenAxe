@@ -569,6 +569,11 @@ class AudioEngine {
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int start, int num_frames);
+  // Post-IR low-cut/high-cut for cab blocks (issue #373): re-derives the cut
+  // biquads when the params or sample rate changed, then runs the wet signal
+  // through the active stages. See the definition in engine.cpp.
+  static void ApplyCabCuts(BlockState& state, float* out_l, float* out_r, int num_frames,
+                           double sample_rate);
   // Copy the schema-derived smoothing policy + the live ramp state for `state`
   // from its current param mirror (issue #122). Called on the control thread
   // whenever the param surface changes - AddBlock, reverb algorithm switch,

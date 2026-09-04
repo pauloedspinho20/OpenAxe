@@ -71,9 +71,10 @@ void TestUnwrappedKindPassesAudioThrough() {
   OpenAxeGraph* graph = openaxe_graph_create();
 
   const int32_t cab = openaxe_add_block(graph, OPENAXE_BLOCK_CAB, 0, 0);
-  // One param (the IR wet/dry blend); with no IR loaded the block still passes
-  // audio straight through, which is what the rest of this test checks.
-  OPENAXE_EXPECT(openaxe_block_param_count(graph, cab) == 1);
+  // Three params (the IR wet/dry blend plus post-IR low/high cuts, issue
+  // #373); with no IR loaded the block still passes audio straight through,
+  // which is what the rest of this test checks.
+  OPENAXE_EXPECT(openaxe_block_param_count(graph, cab) == 3);
   OPENAXE_EXPECT(openaxe_block_ir_length(graph, cab) == 0);
   OPENAXE_EXPECT(openaxe_connect(graph, OPENAXE_IN_RAIL, 0, cab, 0) >= 0);
   OPENAXE_EXPECT(openaxe_connect(graph, cab, 0, OPENAXE_OUT_RAIL, 0) >= 0);
@@ -103,8 +104,9 @@ void TestEndToEndDsparkRig() {
   const int32_t tremolo = openaxe_add_block(graph, OPENAXE_BLOCK_TREMOLO, 0, 3);
 
   OPENAXE_EXPECT(openaxe_block_param_count(graph, compressor) == 8);
-  // eq / gate / tremolo now have an extra engine mix (hybrid dry/wet, #263)
-  OPENAXE_EXPECT(openaxe_block_param_count(graph, eq) == 13);
+  // eq / gate / tremolo now have an extra engine mix (hybrid dry/wet, #263);
+  // eq additionally carries the post-band low/high cuts (issue #373)
+  OPENAXE_EXPECT(openaxe_block_param_count(graph, eq) == 15);
   OPENAXE_EXPECT(openaxe_block_param_count(graph, gate) == 7);
   OPENAXE_EXPECT(openaxe_block_param_count(graph, tremolo) == 6);
 
