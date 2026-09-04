@@ -24,8 +24,8 @@
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
 // Four DSP families are wrapped anywhere in this codebase yet: NamAmp
-// (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
-// algorithms (all back the single kReverb kind - algorithm choice is a
+// (backs the 5 structurally-identical "gear" kinds), the 4 permissive reverb
+// algorithms (issue #372; all back the single kReverb kind - algorithm choice is a
 // per-block setting this layer owns, see SetReverbAlgorithm), the
 // hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay),
 // and the DSPark-based dynamics/EQ wrappers (kCompressor/
@@ -100,7 +100,7 @@ enum class ReverbAlgorithm {
 };
 
 // The user-facing reverb controls, as a UI presents them - deliberately not a
-// 1:1 view of any single algorithm's param table. Dragonfly's four algorithms
+// 1:1 view of any single algorithm's param table. The four algorithms
 // expose overlapping but differently-named and differently-shaped controls
 // (Hall's pre-delay is `delay`, Room's is `predelay`, Early Reflections has
 // none; damping is `high_cut` on Hall/Plate/ER but `in_high_cut` on Room),

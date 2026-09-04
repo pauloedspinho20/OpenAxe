@@ -49,13 +49,13 @@
       "inPalette": true,
       "cppFile": "delay.cpp"
     },
-    "$comment_reverb": "The four Dragonfly algorithms are separate CMake targets with their own include paths and a C++14 override (see CMakeLists.txt), so this one entry gates the whole DRAGONFLY_ALGOS block rather than a single source file. cppFile adds the hand-rolled spring tank (spring_reverb.cpp) to the main core sources; the Dragonfly wrappers stay gated by the cmakeGroup below.",
+    "$comment_reverb": "The four algorithmic reverbs (hall/room/plate/early-reflections, issue #372) are hand-written permissive DSP with no third-party dependency, compiled straight into openaxe_core (see CMakeLists.txt) - so this one entry gates the whole REVERB_ALGOS group rather than a single source file. cppFile adds the spring tank (spring_reverb.cpp) to the main core sources; the four algorithmic wrappers stay gated by the cmakeGroup below.",
     "reverb": {
       "enumName": "kReverb",
       "compiled": true,
       "inPalette": true,
       "cppFile": "spring_reverb.cpp",
-      "cmakeGroup": "dragonfly"
+      "cmakeGroup": "reverb-algos"
     },
     "$comment_hidden_effects": "Both were hidden pending the defects in issues #318 and #319 being fixed, and both now are. ring-mod runs its carrier multiply and drive stage at 4x through dspark::Oversampling - residual aliasing measures -68.9 dB against a 16x reference, where the base-rate version sat at -9.2 dBc. granular-delay is off the two-alternating-voice design onto dspark::GranularProcessor with genuinely random jitter, allocates nothing on the audio thread, and no longer defaults to a grain overlap below 1 (which had left 37 percent of its output samples at hard zero). Both are in the palette as of that work.",
     "ring-mod": {

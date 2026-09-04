@@ -122,15 +122,9 @@ const submodules = [
     ],
   },
   {
-    name: 'dragonfly-reverb',
-    sentinel: 'packages/core/third_party/dragonfly-reverb/plugins',
-    args: ['submodule', 'update', '--init', '--', 'packages/core/third_party/dragonfly-reverb'],
-  },
-  {
-    name: "dragonfly's dpf",
-    sentinel: 'packages/core/third_party/dragonfly-reverb/dpf/Makefile',
-    args: ['submodule', 'update', '--init', '--depth', '1', '--', 'dpf'],
-    cwd: join(root, 'packages/core/third_party/dragonfly-reverb'),
+    name: 'daisysp (chorus DSP)',
+    sentinel: 'packages/core/third_party/daisysp/Source/Effects/chorus.h',
+    args: ['submodule', 'update', '--init', '--', 'packages/core/third_party/daisysp'],
   },
 ]
 

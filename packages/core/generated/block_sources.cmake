@@ -24,9 +24,10 @@ set(OPENAXE_BLOCK_SOURCES
   src/dsp/rotary.cpp
 )
 
-# The four Dragonfly algorithms are separate targets with their own include
-# paths and a C++14 override, so the reverb kind gates the whole group.
-set(OPENAXE_DRAGONFLY_ENABLED ON)
+# The four algorithmic reverbs (hall/room/plate/early-reflections, issue #372)
+# compile straight into openaxe_core (plain C++20 sources, no third-party
+# dependency), so the reverb kind gates the whole group.
+set(OPENAXE_REVERB_ALGOS_ENABLED ON)
 
 # One flag per kind, mirroring enabled_blocks.h's macros - tests/CMakeLists.txt
 # gates each effect's test target on its own flag.

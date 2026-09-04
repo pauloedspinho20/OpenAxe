@@ -20,23 +20,25 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   model loading, sample-rate-aware reset, real-time process, input/output
   level calibration (dBu), loudness, and slim-size quality control as a
   clean C++ class (`openaxe::dsp::NamAmp`).
-- **All four Dragonfly Reverb algorithms** (`include/openaxe/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
-  - matching `src/dsp/*.cpp`) — wrap each of Dragonfly's `DragonflyReverbDSP`
-    classes (freeverb3-based), exposing their full parameter surfaces:
-    `DragonflyHallReverb` (18 params: dry/early/late levels, size, width,
-    predelay, diffuse, low/high cut+crossover+multiplier, spin, wander, decay,
-    early send, modulation), `DragonflyRoomReverb` (17 params, its own
+- **All four algorithmic reverbs** (`include/openaxe/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
+  - matching `src/dsp/*.cpp`) — permissive-licensed clean-room DSP (issue
+    #372 replaced the former Dragonfly Reverb/GPLv3 wrappers, keeping the
+    same class names and parameter surfaces): `DragonflyHallReverb`
+    (18 params: dry/early/late levels, size, width, predelay, diffuse,
+    low/high cut+crossover+multiplier, spin, wander, decay, early send,
+    modulation), `DragonflyRoomReverb` (17 params, its own
     size/damping/boost controls), `DragonflyPlateReverb` (9 params, including
-    an algorithm selector across its 3 internal plate models), and
+    an algorithm voicing switch), and
     `DragonflyEarlyReflections` (7 params, no late-reverb tail — just the
-    discrete early-reflection pattern). Stereo. Replaces the app's current
-    basic Freeverb effect with a full modulated, frequency-dependent-decay
-    reverb suite.
+    discrete early-reflection cluster). Stereo. The file/class names keep
+    their `dragonfly_*` spelling for param-schema/preset stability, but no
+    Dragonfly/DPF/freeverb3 code remains — the Pro link set contains no
+    GPL/LGPL translation unit.
 - **Real-time audio engine + full `extern "C"` API** (issue #14's follow-up
   PR): `include/openaxe/engine.h` + `src/engine.cpp` add
   `openaxe::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
-  4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
+  4 permissive reverb algorithms for `kReverb`, one of the 4 DSPark effects for
   `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
   `kChorus`/`kFlanger`/`kPhaser`/`kDelay`, and passthrough
   for `kCab`/`kMixer`, which aren't DSP effect kinds), pre-allocated
@@ -115,9 +117,9 @@ boosting and cutting its own region while leaving the others alone, holding at
 one of that algorithm's parameters to their min/max and process a real
 stereo impulse through it, asserting a genuine non-silent, finite reverb
 tail comes out. `dragonfly_all_algorithms_test` constructs and processes
-audio through all four algorithms in one executable - the actual regression
-test for the symbol-isolation fix described below (linking any two would
-have failed with duplicate symbols before that fix). `compressor_test`/`equalizer_test`/`noise_gate_test`/
+audio through all four algorithms in one executable (retained from the old
+symbol-isolation regression test — each algorithm is now its own clean-room
+TU, so the duplicate-symbol hazard it guarded no longer exists). `compressor_test`/`equalizer_test`/`noise_gate_test`/
 `tremolo_test` do the same parameter-sweep + real-audio pattern for the four
 DSPark wrappers (a loud sine comes out measurably compressed/gated/modulated,
 a band boost measurably louder than a cut, silence measurably crushed), and
@@ -321,26 +323,26 @@ binding documents.
 All added as git submodules under `third_party/`, and all wired into the
 build — every one backs a real effect kind:
 
-| Path               | Upstream                                                                                | License | Wired into the build?                                             |
-| ------------------ | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------- |
-| `nam-core`         | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                                 |
-| `dragonfly-reverb` | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)   | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above                   |
-| `dspark`           | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above       |
-| `daisysp`          | [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)                     | MIT     | **Yes** — Chorus (its `Source/Effects/chorus.{h,cpp}`), see above |
+| Path       | Upstream                                                                                | License | Wired into the build?                                             |
+| ---------- | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------- |
+| `nam-core` | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                                 |
+| `dspark`   | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above       |
+| `daisysp`  | [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)                     | MIT     | **Yes** — Chorus (its `Source/Effects/chorus.{h,cpp}`), see above |
 
-Two of these libraries additionally vendor their own nested submodules —
+The reverb algorithms (hall/room/plate/early-reflections/spring) are
+hand-written and vendor nothing (issue #372 removed the former
+`dragonfly-reverb` GPLv3 submodule and its nested `dpf`, so the Pro link
+set contains no GPL/LGPL translation unit).
+
+Only one of these libraries vendors its own nested submodules —
 after cloning this repo, run:
 
 ```bash
 git submodule update --init --recursive -- packages/core/third_party/nam-core
-git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
 ```
 
 `nam-core`'s nested submodules are Eigen (`gitlab.com/libeigen/eigen`) and
-`AudioDSPTools`. `dragonfly-reverb`'s is `dpf` (DISTRHO Plugin Framework) —
-only two of its header-only utilities are actually used
-(`DistrhoPlugin.hpp` for a couple of macros, `extra/ScopedDenormalDisable.hpp`),
-never its actual plugin runtime.
+`AudioDSPTools`.
 
 `signalsmith-dsp`, `analog-tape-model`, and `lsp-plugins` were vendored
 early on for effect kinds that were never built (tape delay character,
@@ -421,9 +423,8 @@ Re-blessing is documented in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#changing-
 
 **Native (macOS, this environment): verified, not just authored.** CMake
 4.4.2 configures, builds, and runs the full CTest suite, including the real
-NAM model load-and-process test, all four Dragonfly Reverb algorithms' real
-impulse-response tests, and the combined-binary symbol-isolation regression
-test, against Debug builds:
+NAM model load-and-process test, all four permissive reverb algorithms' real
+impulse-response tests, and the joint all-algorithms test, against Debug builds:
 
 ```bash
 cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
@@ -462,42 +463,15 @@ semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>` (CMake
 3.24+, portable across GNU/Apple/MSVC linkers) — see `tests/CMakeLists.txt`
 for the pattern `nam_amp_test` uses.
 
-**Dragonfly Reverb needed four fixes only discoverable by actually trying
-to build it:**
-
-1. The underlying freeverb3 library (`common/freeverb/`) uses dynamic
-   exception specifications (`throw(std::bad_alloc)`) removed in C++17.
-   It (and anything that includes its headers, including each wrapper's
-   own `.cpp`) must compile at C++14 - hence each algorithm gets its own
-   `dragonfly_<algo>_reverb_vendor` CMake target with `CXX_STANDARD 14`,
-   linked into the C++20 `openaxe_core` target. Mixing standards across
-   translation units in one binary is fine; only same-TU consistency
-   matters.
-2. freeverb3 needs `-DLIBFV3_FLOAT` defined (it picks its internal sample
-   type - float/double/long double - via one of four macros; Dragonfly's
-   own Makefile always builds with the float variant).
-3. `common/freeverb/*.cpp` is **not** a safe glob target - it also contains
-   files (`blockDelay.cpp`, `compmodel.cpp`, etc.) used only by Dragonfly's
-   other reverb algorithms, which need the external FFTW library. Every
-   algorithm here only needs the same specific 17 files (16 freeverb3 + one
-   more) listed in each `plugins/dragonfly-*-reverb/Makefile`'s
-   `FILES_COMMON` (identical list across all four plugins) - each wrapper
-   `#include`s them by name rather than globbing.
-4. **All four algorithms define an identically-named `DragonflyReverbDSP`
-   class** (and depend on identically-named freeverb3 classes like
-   `fv3::zrev2_f`). Linking any two into the same final binary is a
-   duplicate-symbol conflict. The fix: each wrapper `.cpp` compiles its own
-   freeverb3 sources + its own `DSP.cpp` entirely inside one anonymous
-   namespace, in one translation unit (see `dragonfly_hall_reverb.cpp`'s
-   header comment for why a _partial_ wrap - just `DSP.cpp`, leaving
-   freeverb3 externally linked - was tried first and rejected: it compiles,
-   but produces a silent linkage _mismatch_ rather than a clean error).
-   Because the real class is now invisible outside its own `.cpp`, the
-   public header can't forward-declare it the normal way - each header
-   uses an opaque `void*` instead of `std::unique_ptr<DragonflyReverbDSP>`.
-   `dragonfly_all_algorithms_test` is the regression test proving this:
-   before the fix, linking it (which uses all four wrapper classes) failed
-   with duplicate symbols; after, it passes.
+**Reverb history (issue #372): builds before it wrapped Dragonfly Reverb
+(GPLv3/freeverb3), which needed four build fixes — a C++14 override per
+algorithm (dynamic exception specifications), `-DLIBFV3_FLOAT`, an explicit
+17-file source list per algorithm (no glob: the rest needs FFTW), and one
+anonymous namespace per wrapper (all four algorithms defined an
+identically-named `DragonflyReverbDSP` class). #372 replaced all four with
+hand-written permissive DSP behind the same class names and parameter
+surfaces, deleted the submodule, and kept `dragonfly_all_algorithms_test`
+as the joint smoke test.**
 
 ## Build targets (native verified; others authored, not yet buildable here)
 

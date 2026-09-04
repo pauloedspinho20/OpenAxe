@@ -78,7 +78,7 @@
 namespace openaxe::engine {
 namespace {
 
-// Largest ParamCount() among the wrapped DSP families (DragonflyHallReverb's
+// Largest ParamCount() among the wrapped DSP families (the hall reverb's
 // 18) - every block gets a fixed-size atomic param array this big regardless
 // of kind, so BlockState never needs to resize a container of atomics
 // (std::atomic isn't move/copy-constructible, so a resizable one is awkward
@@ -326,7 +326,7 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp
 // param surface changes (AddBlock / reverb algorithm switch / model load).
 //
 // kNone params snap to their target each block (discrete/enum/selector params,
-// and the Dragonfly reverbs, which already smooth internally - double-smoothing
+// and the algorithmic reverbs, which already smooth internally - double-smoothing
 // those would just waste the ramp). kExponential/kLinear params ramp toward the
 // target the host/UI wrote into the atomic mirror.
 constexpr dsp::ParamSmoothing kAmpSmoothing[] = {
@@ -400,7 +400,7 @@ constexpr dsp::ParamSmoothing kDragonflyEarlyReflectionsSmoothing[] = {
 #endif
 #if OPENAXE_BLOCK_REVERB_COMPILED
 // The hand-rolled spring tank smooths no params internally (unlike the
-// Dragonfly algorithms), so it carries engine-side exponential smoothing -
+// spring tank, unlike the algorithmic reverbs), so it carries engine-side exponential smoothing -
 // see param_schema.json's reverb/spring variant.
 constexpr dsp::ParamSmoothing kSpringReverbSmoothing[] = {
 #include "dsp/generated/spring_reverb_smoothing.inc"
@@ -438,7 +438,7 @@ constexpr dsp::ParamSmoothing kRotarySmoothing[] = {
 // the atomic param mirror Process() applies from, and its pre-allocated
 // scratch buffers. Kept as a heap-allocated, never-moved object (owned via
 // unique_ptr in block_states_) specifically so DspVariant's alternatives
-// (NamAmp, DragonflyHallReverb, ...) never need to be move/copy-constructed
+// (NamAmp, the reverb algorithms, ...) never need to be move/copy-constructed
 // - both delete their copy ops and neither declares a move op, so a variant
 // holding them can only ever be constructed in place (emplace), never moved.
 struct AudioEngine::BlockState {
@@ -2450,7 +2450,7 @@ void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float valu
   SetParam(id, index, std::clamp(scaled, min, max));
 }
 
-// Swap which Dragonfly algorithm backs a reverb block. This *replaces* the DSP
+// Swap which reverb algorithm backs a block. This *replaces* the DSP
 // object, so it allocates and is Tier 2 (must not run concurrently with
 // Process()) - algorithm choice is a deliberate user action, not automation.
 // The new object is re-prepared at the engine's current sample rate and its own
@@ -2560,7 +2560,7 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
 
 // ── Per-block state readers for serialization (issue #119) ──────────────
 
-// Which Dragonfly algorithm currently backs a reverb block. The choice isn't
+// Which reverb algorithm currently backs a block. The choice isn't
 // stored as a field - it IS which alternative the DSP variant holds - so the
 // getter recovers it from there. kHall for anything else (the default every
 // new reverb block starts on).

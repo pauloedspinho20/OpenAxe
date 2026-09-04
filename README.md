@@ -17,7 +17,7 @@ per-target status of that split, the migration order, and the latency budget).
 | Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 4×10 grid, cabled left-to-right                                                                                                         |
 | Audio (web)      | AudioWorklet + WASM — the same C++ core as native, compiled via Emscripten (#22 shipped)                                                                                                 |
 | Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                                                                  |
-| Shared DSP core  | **C++** — wraps Dragonfly Reverb, DSPark, NeuralAmpModelerCore (pedals/outboard gear also modeled as NAM captures, not a separate engine)                                                |
+| Shared DSP core  | **C++** — hand-written permissive reverb/DSP + DSPark, NeuralAmpModelerCore (pedals/outboard gear also modeled as NAM captures, not a separate engine)                                   |
 | State management | [Zustand](https://github.com/pmndrs/zustand)                                                                                                                                             |
 | CSS              | CSS Modules + CSS custom properties (two hardware-inspired finishes: Carbon / Aluminum)                                                                                                  |
 | Persistence      | IndexedDB (web) / filesystem (desktop/mobile)                                                                                                                                            |
@@ -37,7 +37,7 @@ per-target status of that split, the migration order, and the latency budget).
 
 ### Why these choices
 
-- **C++ for DSP core** — All 3 vendored DSP libraries are C++ (Dragonfly, DSPark, NAMCore). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
+- **C++ for DSP core** — All vendored DSP libraries are C++ (DSPark, NAMCore, DaisySP). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
 - **Desktop: C++ + webview.h** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. JUCE `audio_devices` after RtAudio CoreAudio crash (see `apps/desktop/CMakeLists.txt`). webview.h ships no menu bar, so `src/mac_menu.mm` installs the standard App/Edit/Window menus — without an Edit menu macOS gives you no ⌘C/⌘V in text fields (#300 H1).
 - **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. Editor is the same React SPA as web/desktop via `IWebViewControl` + loopback HTTP + `window.openAxe` bridge (no IGraphics fork).
 - **Mobile: Native shells** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
@@ -76,23 +76,23 @@ frameworks, so they can't be compiled standalone into a portable core (the
 reasoning is recorded per-file, e.g. `dsp/chorus.h`). Reverb, amp modelling and
 cab IR are the exceptions — they wrap vendored libraries.
 
-| Effect          | Implementation                                                           |
-| --------------- | ------------------------------------------------------------------------ |
-| Noise Gate      | `noise_gate.h`                                                           |
-| Compressor      | `compressor.h`                                                           |
-| Parametric EQ   | `equalizer.h`                                                            |
-| Chorus          | `chorus.h`                                                               |
-| Flanger         | `flanger.h`                                                              |
-| Phaser          | `phaser.h`                                                               |
-| Tremolo         | `tremolo.h` — stereo + harmonic modes (#268)                             |
-| Ring Mod        | `ring_mod.h` — sine carrier, diode/transformer saturation (#268)         |
-| Filter          | `filter.h` — Wah / Envelope / 4-pole Moog-style ladder (#268)            |
-| Pitch Shifter   | `pitch_shifter.h` — Whammy (±12 st) + Detune (#268)                      |
-| Granular Delay  | `granular_delay.h` — 2 Hann grains, freeze/hold, per-grain ±12 st (#268) |
-| Rotary          | `rotary.h` — mda/Faust Leslie: horn/drum, mic distance, drive (#268)     |
-| Delay           | `delay.h` — digital / analog / tape models                               |
-| Ping-Pong Delay | `ping_pong_delay.h`                                                      |
-| Reverb          | Dragonfly Reverb (GPLv3) — hall / room / plate / early reflections       |
+| Effect          | Implementation                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| Noise Gate      | `noise_gate.h`                                                                           |
+| Compressor      | `compressor.h`                                                                           |
+| Parametric EQ   | `equalizer.h`                                                                            |
+| Chorus          | `chorus.h`                                                                               |
+| Flanger         | `flanger.h`                                                                              |
+| Phaser          | `phaser.h`                                                                               |
+| Tremolo         | `tremolo.h` — stereo + harmonic modes (#268)                                             |
+| Ring Mod        | `ring_mod.h` — sine carrier, diode/transformer saturation (#268)                         |
+| Filter          | `filter.h` — Wah / Envelope / 4-pole Moog-style ladder (#268)                            |
+| Pitch Shifter   | `pitch_shifter.h` — Whammy (±12 st) + Detune (#268)                                      |
+| Granular Delay  | `granular_delay.h` — 2 Hann grains, freeze/hold, per-grain ±12 st (#268)                 |
+| Rotary          | `rotary.h` — mda/Faust Leslie: horn/drum, mic distance, drive (#268)                     |
+| Delay           | `delay.h` — digital / analog / tape models                                               |
+| Ping-Pong Delay | `ping_pong_delay.h`                                                                      |
+| Reverb          | Permissive clean-room DSP (#372) — hall / room / plate / early reflections + spring tank |
 
 Vendored libraries and their licences: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
 
@@ -135,10 +135,10 @@ OpenAxe/
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
-│   ├── core/                  # C++ DSP library — graph engine, NAM, Dragonfly Reverb done (#14)
+│   ├── core/                  # C++ DSP library — graph engine, NAM, permissive reverb done (#14, #372)
 │   │   ├── include/openaxe/    # Graph engine, dsp/ wrappers, extern "C" lifecycle API
 │   │   ├── src/                   # Implementation + tests/ (CTest, all passing)
-│   │   └── third_party/           # Dragonfly (wired), NAMCore (wired), DSPark (wired)
+│   │   └── third_party/           # NAMCore (wired), DSPark (wired), DaisySP (wired)
 │   ├── vst3/                   # VST3 + standalone plugin (iPlug2 + packages/core, WHOLE_ARCHIVE) — live/beta (#16), see packages/vst3/README.md
 │   ├── defaults/               # Factory presets/scenes shared by every front end
 │   └── ui/                     # Shared React component library + design tokens
@@ -231,7 +231,7 @@ Not part of pnpm/Turborepo — CMake/CTest:
 node scripts/setup.mjs --submodules-only
 # or manually:
 git submodule update --init --recursive -- packages/core/third_party/nam-core
-git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+git submodule update --init -- packages/core/third_party/dspark packages/core/third_party/daisysp
 
 cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build packages/core/build
@@ -240,7 +240,7 @@ ctest --test-dir packages/core/build --output-on-failure
 
 VS Code: `C++: Init submodules` → `C++: Configure` → `C++: Build` → `C++: Test` (each depends on previous).
 
-See [packages/core/README.md](./packages/core/README.md) for what's implemented (graph engine, NAM inference, all 4 Dragonfly Reverb algorithms), vendored-library licensing, and gotchas.
+See [packages/core/README.md](./packages/core/README.md) for what's implemented (graph engine, NAM inference, all 4 permissive reverb algorithms + spring tank), vendored-library licensing, and gotchas.
 
 #### WASM build (manual, Emscripten)
 

@@ -1,7 +1,8 @@
-// Real end-to-end test: constructs the actual Dragonfly Early Reflections
-// DSP, sweeps every exposed parameter, and processes a real stereo impulse
-// through it, checking for a genuine (non-silent, finite) tail. Only built
-// if OPENAXE_HAS_DRAGONFLY (see tests/CMakeLists.txt).
+// Real end-to-end test: constructs the actual permissive early-reflections
+// DSP (issue #372's clean-room replacement for Dragonfly), sweeps every
+// exposed parameter, and processes a real stereo impulse through it,
+// checking for a genuine (non-silent, finite) tail. Only built if
+// OPENAXE_HAS_REVERB_ALGOS (see tests/CMakeLists.txt).
 #include "openaxe/dsp/dragonfly_early_reflections.h"
 
 #include <cmath>

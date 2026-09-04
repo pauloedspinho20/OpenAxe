@@ -547,8 +547,8 @@ function renderBlocksCmake(config) {
     .map(([, e]) => `  src/dsp/${e.cppFile}`)
     .join('\n')
   const omitted = entries.filter(([, e]) => !e.compiled).map(([kind]) => kind)
-  const dragonfly = entries.find(([, e]) => e.cmakeGroup === 'dragonfly')
-  const dragonflyOn = dragonfly ? dragonfly[1].compiled : false
+  const reverbAlgos = entries.find(([, e]) => e.cmakeGroup === 'reverb-algos')
+  const reverbAlgosOn = reverbAlgos ? reverbAlgos[1].compiled : false
   // Per-kind flags so tests/CMakeLists.txt can skip a compiled-out effect's
   // test target - it would otherwise fail to link against a DSP that is no
   // longer in the archive.
@@ -564,9 +564,10 @@ set(OPENAXE_BLOCK_SOURCES
 ${sources}
 )
 
-# The four Dragonfly algorithms are separate targets with their own include
-# paths and a C++14 override, so the reverb kind gates the whole group.
-set(OPENAXE_DRAGONFLY_ENABLED ${dragonflyOn ? 'ON' : 'OFF'})
+# The four algorithmic reverbs (hall/room/plate/early-reflections, issue #372)
+# compile straight into openaxe_core (plain C++20 sources, no third-party
+# dependency), so the reverb kind gates the whole group.
+set(OPENAXE_REVERB_ALGOS_ENABLED ${reverbAlgosOn ? 'ON' : 'OFF'})
 
 # One flag per kind, mirroring enabled_blocks.h's macros - tests/CMakeLists.txt
 # gates each effect's test target on its own flag.

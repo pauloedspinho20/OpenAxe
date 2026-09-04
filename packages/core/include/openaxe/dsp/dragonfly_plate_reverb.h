@@ -1,21 +1,15 @@
 #pragma once
 
-// Note: this file (and dragonfly_plate_reverb.cpp) is compiled at C++14 -
-// see CMakeLists.txt - so it avoids the C++17 nested-namespace shorthand
-// used elsewhere in this codebase.
+#include <memory>
+
 namespace openaxe {
 namespace dsp {
 
-// Wraps Dragonfly Reverb's plate-style algorithm, exposing its
-// 9-parameter surface: dry/wet levels, algorithm choice (0/1/2, selecting
-// between the vendored NRev/NRevB/strev plate models), width, predelay,
-// decay, low/high cut, and dampen frequency.
-//
-// See dragonfly_hall_reverb.h for why this uses an opaque `void*` rather
-// than a forward-declared DragonflyReverbDSP*: Dragonfly's four reverb
-// algorithms all define an identically-named DragonflyReverbDSP class,
-// each made anonymous-namespace-private to its own .cpp to avoid a
-// duplicate-symbol conflict if two were ever linked into the same binary.
+// Permissive-licensed clean-room plate reverb (issue #372): dense short
+// combs + 3 allpasses per channel, voiced bright like a steel plate, with
+// the 9-parameter surface (dry/wet, algorithm voicing 0/1/2, width,
+// predelay, decay, low/high cut, dampen). Stereo only. Real-time safe after
+// Reset(); Reset is the only allocating method; Mute() silences tails.
 class DragonflyPlateReverb {
  public:
   struct ParamInfo {
@@ -41,7 +35,8 @@ class DragonflyPlateReverb {
   void SetParam(int index, float value);
 
  private:
-  void* dsp_;  // owning pointer to an (anonymous namespace)::DragonflyReverbDSP*
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace dsp

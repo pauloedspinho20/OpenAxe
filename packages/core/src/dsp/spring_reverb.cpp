@@ -73,18 +73,23 @@ inline float FlushDenormal(float v) { return std::fabs(v) < kDenormalFloor ? 0.0
 //   - a one-pole damping lowpass *in the feedback path* (springs are lossy;
 //     highs must die faster than lows, which only happens if the damping is
 //     inside the loop), and
-//   - an allpass dispersion stage (a spring's round-trip time is
-//     frequency-dependent, which smears a transient into the "boing").
+//   - a *pair* of cascaded allpass dispersion stages (issue #372's premium
+//     upgrade: a spring's round-trip time is frequency-dependent, and two
+//     detuned stages smear a transient into the "boing"/chirp far better
+//     than one - the second stage runs at 0.61x the first's coefficient so
+//     the pair chirps instead of ringing one pitch).
 struct SpringLine {
   internal::VariableDelay line;
   float damp_state = 0.0f;
   float allpass_state = 0.0f;
+  float allpass_state2 = 0.0f;
 
   void Prepare(float sample_rate) { line.Prepare(sample_rate, kMaxSpringMs); }
   void Reset() {
     line.Reset();
     damp_state = 0.0f;
     allpass_state = 0.0f;
+    allpass_state2 = 0.0f;
   }
 
   // Advance one sample and return the dispersed tap. `input` is expected to be
@@ -93,16 +98,20 @@ struct SpringLine {
   float Process(float input, float delay_samps, float damp_coeff, float disp_coeff,
                 float fb_gain) {
     const float tap = line.ReadSamples(delay_samps);
-    // First-order allpass dispersion: y = -a*x + x1 + a*y1 via one state
-    // sample. Unit gain, phase-dispersing - the spring's "boing".
+    // First-order allpass dispersion, twice cascaded: y = -a*x + x1 + a*y1
+    // per stage, unit gain, phase-dispersing - the spring's "boing". The
+    // second stage is detuned (0.61x) so the pair smears rather than rings.
     const float disp = -disp_coeff * tap + allpass_state;
     allpass_state = FlushDenormal(tap + disp_coeff * disp);
+    constexpr float kSecondStageRatio = 0.61f;
+    const float disp2 = -disp_coeff * kSecondStageRatio * disp + allpass_state2;
+    allpass_state2 = FlushDenormal(disp + disp_coeff * kSecondStageRatio * disp2);
     // Damping sits inside the loop, so each turn loses more high end than low
     // and the tail darkens as it decays. The one-pole is DC-unity, so it does
     // not change the low-frequency RT60 that `fb_gain` sets.
-    damp_state = FlushDenormal(damp_state + damp_coeff * (disp - damp_state));
+    damp_state = FlushDenormal(damp_state + damp_coeff * (disp2 - damp_state));
     line.Write(input + damp_state * fb_gain);
-    return disp;
+    return disp2;
   }
 };
 
@@ -173,7 +182,10 @@ void SpringReverb::Process(const float* const* input, float* const* output, int 
 
   const float damp_cutoff = std::clamp(impl_->high_cut, 1000.0f, 16000.0f);
   const float damp_coeff = 1.0f - std::exp(-6.28318530718f * damp_cutoff / sr);
-  const float disp_coeff = 0.6f;
+  // Tension: longer dwells run higher dispersion, so a 10 s tank chirps harder
+  // than a 0.5 s one - the premium "boing" gradient (issue #372). The range
+  // 0.52-0.68 keeps both allpass stages stable (|a| < 1) at every decay.
+  const float disp_coeff = 0.52f + 0.16f * (std::clamp(impl_->decay, 0.1f, 10.0f) / 10.0f);
 
   const float width = std::clamp(impl_->width, 50.0f, 150.0f) / 100.0f;
   const float decay = std::max(impl_->decay, 0.1f);
@@ -181,7 +193,6 @@ void SpringReverb::Process(const float* const* input, float* const* output, int 
   const float predelay_samps = std::max(impl_->predelay, 0.0f) * sr / 1000.0f;
   const float drive = std::clamp(impl_->drive, 0.0f, 1.0f);
   const float drive_gain = 1.0f + drive * 3.0f;
-  const float drive_norm = std::tanh(drive_gain);
 
   const float spin_hz = std::clamp(impl_->spin, 0.0f, 10.0f);
   const float wander_samps = std::clamp(impl_->wander, 0.0f, 40.0f) * 0.5f * sr / 1000.0f;
@@ -230,9 +241,14 @@ void SpringReverb::Process(const float* const* input, float* const* output, int 
               : in;
 
       // Input-drive saturation, normalised so the knob changes character
-      // rather than level.
-      const float x =
-          drive > 0.001f ? std::tanh(delayed * drive_gain) / drive_norm : delayed;
+      // rather than level. Asymmetric (a touch of second harmonic) for the
+      // transducer "crunch" a real tank has at high levels (issue #372):
+      // positive half saturates a little earlier than the negative half.
+      const float tanh_norm = std::tanh(drive_gain);
+      const float x = drive > 0.001f
+                          ? (std::tanh(delayed * drive_gain) + 0.15f * drive * delayed * delayed) /
+                                (tanh_norm + 0.15f * drive)
+                          : delayed;
 
       const float lfo = ch == 0 ? lfo_l : lfo_r;
 

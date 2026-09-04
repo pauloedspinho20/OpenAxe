@@ -1,7 +1,3 @@
-[submodule "packages/core/third_party/dragonfly-reverb"]
-	path = packages/core/third_party/dragonfly-reverb
-	url = https://github.com/michaelwillis/dragonfly-reverb.git
-	shallow = true
 [submodule "packages/core/third_party/nam-core"]
 	path = packages/core/third_party/nam-core
 	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
