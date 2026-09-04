@@ -73,7 +73,7 @@ describe('applyPreset', () => {
   beforeEach(() => {
     getCachedAssetMock.mockReset()
     useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
-    useSelection.setState({ selectedBlockId: null })
+    useSelection.setState({ selectedBlockId: null, selectionSource: null })
     useCurrentPresetStore.setState({ saved: null })
     __clearPresetSelectionMemoryForTests()
   })

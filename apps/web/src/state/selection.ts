@@ -4,6 +4,14 @@ import { useCurrentPresetStore } from './currentPresetStore'
 
 interface SelectionState {
   selectedBlockId: string | null
+  /**
+   * Whether the current selection came from an explicit user tap (`'user'`)
+   * or is just the preset-open default (`'preset'`). Mobile tap-to-move
+   * (see GridEditor's handleEmptyCellClick) must only arm on `'user'` —
+   * a preset default always leaves empty-cell taps opening the add menu,
+   * otherwise placing blocks on mobile becomes unreachable (e2e #370).
+   */
+  selectionSource: 'user' | 'preset' | null
   select: (id: string) => void
   clear: () => void
 }
@@ -71,7 +79,7 @@ export function applyPresetSelection(
   edges: readonly SelectableEdge[],
 ): void {
   const next = resolvePresetSelection(presetId, blocks, edges)
-  useSelection.setState({ selectedBlockId: next })
+  useSelection.setState({ selectedBlockId: next, selectionSource: next ? 'preset' : null })
 }
 
 /** Test-only: drop the whole per-preset memory map. */
@@ -82,12 +90,13 @@ export function __clearPresetSelectionMemoryForTests(): void {
 /** Which block's full parameters/options are shown in the BlockInspector panel. */
 export const useSelection = create<SelectionState>()((set) => ({
   selectedBlockId: null,
+  selectionSource: null,
   select: (id) => {
-    set({ selectedBlockId: id })
+    set({ selectedBlockId: id, selectionSource: 'user' })
     // Remember explicit user picks per preset so revisiting the preset
     // restores them; default selections from preset opens bypass this.
     const presetId = useCurrentPresetStore.getState().saved?.id
     if (presetId) lastSelectedByPreset.set(presetId, id)
   },
-  clear: () => set({ selectedBlockId: null }),
+  clear: () => set({ selectedBlockId: null, selectionSource: null }),
 }))

@@ -75,6 +75,7 @@ export function GridEditor({
   const [tunerOpen, setTunerOpen] = useState(false)
   const isMobile = useIsMobile(720)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
+  const selectionSource = useSelection((s) => s.selectionSource)
 
   // Two-tap + confirm cabling (mobile)
   const [pendingJackId, setPendingJackId] = useState<string | null>(null)
@@ -198,9 +199,12 @@ export function GridEditor({
     clearPending()
   }
 
-  // Tap empty cell to move selected block (mobile alternative to drag)
+  // Tap empty cell to move selected block (mobile alternative to drag).
+  // Only an explicit user selection arms the move — a preset-open default
+  // must leave empty-cell taps opening the add menu, or placing blocks on
+  // mobile becomes unreachable.
   const handleEmptyCellClick = (row: number, col: number) => {
-    if (isMobile && selectedBlockId) {
+    if (isMobile && selectedBlockId && selectionSource === 'user') {
       const selected = blocks.find((b) => b.id === selectedBlockId)
       if (selected && (selected.row !== row || selected.col !== col)) {
         const occupied = blocks.some(

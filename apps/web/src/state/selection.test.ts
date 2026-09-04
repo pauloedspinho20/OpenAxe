@@ -17,7 +17,7 @@ const e = (from: string, to: string) => ({
 
 describe('preset selection', () => {
   beforeEach(() => {
-    useSelection.setState({ selectedBlockId: null })
+    useSelection.setState({ selectedBlockId: null, selectionSource: null })
     useCurrentPresetStore.setState({ saved: null })
     __clearPresetSelectionMemoryForTests()
   })
@@ -42,12 +42,21 @@ describe('preset selection', () => {
   it('applyPresetSelection defaults to the input-first block on a fresh open', () => {
     applyPresetSelection('p1', [b('a', 0, 0), b('c', 0, 2)], [e('IN', 'a'), e('a', 'c')])
     expect(useSelection.getState().selectedBlockId).toBe('a')
+    // A preset default must not arm mobile tap-to-move (e2e #370): only an
+    // explicit user pick does, so empty-cell taps keep opening the add menu.
+    expect(useSelection.getState().selectionSource).toBe('preset')
+  })
+
+  it('explicit select marks the source as user', () => {
+    useSelection.getState().select('c')
+    expect(useSelection.getState().selectionSource).toBe('user')
   })
 
   it('applyPresetSelection clears the selection for an empty preset', () => {
-    useSelection.setState({ selectedBlockId: 'stale' })
+    useSelection.setState({ selectedBlockId: 'stale', selectionSource: 'user' })
     applyPresetSelection('p1', [], [])
     expect(useSelection.getState().selectedBlockId).toBeNull()
+    expect(useSelection.getState().selectionSource).toBeNull()
   })
 
   it('remembers the last explicit pick per preset and restores it on reopen', () => {
