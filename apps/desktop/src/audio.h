@@ -10,53 +10,58 @@
 
 #include "openaxe/api.h"
 
-// Forward-declared rather than #include <juce_audio_devices/...>: JUCE's own
-// CMake support compiles a linked module's sources directly into whichever
-// target links it (see the PRIVATE-linking note on openaxe_desktop_lib in
-// CMakeLists.txt), so anything that just #includes this header - the tests -
-// must not also need JUCE's own headers/include paths, only these type names
-// behind a unique_ptr (fine without a complete type - see audio.cpp, which
-// does include the real header, for every actual use).
-namespace juce {
-class AudioIODeviceType;
-class AudioIODevice;
-}  // namespace juce
+// Forward-declared rather than #including miniaudio.h: the single-header
+// backend lives in third_party/miniaudio, and anything that just #includes
+// this header - the tests - must not need its full definition, only these
+// type names behind a unique_ptr (fine without a complete type - see
+// audio.cpp, which defines MINIAUDIO_IMPLEMENTATION and includes the real
+// header, for every actual use). Only ma_context/ma_device are named here:
+// both are tagged structs in miniaudio.h (`typedef struct ma_context
+// ma_context`), so a plain struct forward works. The other miniaudio types
+// used in audio.cpp (ma_device_info, ma_device_id, ma_device_notification)
+// are anonymous typedefs with no tag and cannot be forward-declared, so they
+// never appear in this header.
+struct ma_context;
+struct ma_device;
 
 // The desktop shell's audio I/O layer (issue #15 M1): a thin wrapper over
-// JUCE's juce_audio_devices module that opens a low-latency full-duplex
-// stream and drives the shared C++ DSP core's openaxe_graph directly from
-// the real-time callback - same process, zero IPC, no Web Audio anywhere in
-// the path.
+// miniaudio (public domain / MIT-0, single header, no dependencies) that
+// opens a low-latency full-duplex stream and drives the shared C++ DSP
+// core's openaxe_graph directly from the real-time callback - same process,
+// zero IPC, no Web Audio anywhere in the path.
 //
-// Previously wrapped RtAudio; swapped out after a reproducible RtAudio
+// Previously wrapped JUCE's juce_audio_devices, then RtAudio before that.
+// JUCE modules are AGPLv3-or-commercial, so any closed-source Pro desktop
+// binary using them needs a paid JUCE licence; miniaudio removes the last
+// copyleft component from the desktop shell (issue #374). The RtAudio
 // CoreAudio-backend crash (garbage input pointer during its internal duplex
-// bridging - see Open()'s comment). juce_audio_devices ships its own
-// from-scratch per-platform backends, independent of RtAudio's source.
+// bridging) does not apply: miniaudio ships its own from-scratch
+// per-platform backends with basic duplex drift compensation between
+// independently-clocked capture/render devices.
 //
-// Platform backends, selected at compile time (see the ctor):
+// Platform backends, selected at context init (see the ctor):
 //   macOS   CoreAudio
-//   Windows WASAPI (shared mode); ASIO is a future opt-in
-//   Linux   ALSA; JACK is a future opt-in
+//   Windows WASAPI (shared mode; exclusive is a future opt-in)
+//   Linux   ALSA + PulseAudio + JACK (same order miniaudio probes)
 //
-// Real-time thread priority is handled by the backend itself, same as it was
-// under RtAudio.
+// Real-time thread priority is handled by the backend itself.
 
 namespace openaxe_desktop {
 
 // Mirrors the web app's IODevice (apps/web/src/state/ioStore.ts): an id and a
-// label per endpoint. JUCE identifies devices by name string, not a stable
-// numeric id, so the id here is a hash of the name (see HashDeviceId in
-// audio.cpp) - stable within a session and, incidentally, across relaunches,
-// but the JS layer already treats device ids as ephemeral/not persisted
-// across sessions (see ioStore.ts), so that's not a requirement.
+// label per endpoint. miniaudio identifies devices by ma_device_id struct,
+// but the id here is a hash of the name (see HashDeviceId in audio.cpp) -
+// stable within a session and, incidentally, across relaunches, but the JS
+// layer already treats device ids as ephemeral/not persisted across sessions
+// (see ioStore.ts), so that's not a requirement.
 struct AudioDeviceInfo {
-  unsigned int id = 0;      // hash of the JUCE device name - see HashDeviceId
+  unsigned int id = 0;  // hash of the device name - see HashDeviceId
   std::string name;
   bool is_default = false;
   int input_channels = 0;
   int output_channels = 0;
   unsigned int preferred_sample_rate = 0;
-  std::string api;          // e.g. "CoreAudio", "WASAPI", "JACK", "ALSA"
+  std::string api;  // e.g. "CoreAudio", "WASAPI", "ALSA", "PulseAudio", "JACK"
   // Directions the device provides. ListDevices() enumerates the union of
   // every backend-reported name and records which directions each has, so a
   // true duplex device sets both, while an interface exposed under separate
@@ -70,7 +75,7 @@ struct AudioDeviceInfo {
 // DSP-in-callback wiring is directly unit-testable without hardware (tests
 // call RtProcessCallback with fake buffers).
 struct RtCallbackState {
-  OpenAxeGraph* graph = nullptr;         // owned by the app; guarded by graph_ready
+  OpenAxeGraph* graph = nullptr;  // owned by the app; guarded by graph_ready
   std::atomic<bool> graph_ready{false};
   // Pause flag set by the control thread while it mutates the graph (topology
   // edits, NAM model loads, algorithm swaps). The audio callback, on observing
@@ -119,7 +124,7 @@ struct RtCallbackState {
   // the audio thread only reads when di_playing is true, so no lock is
   // taken on the real-time path. Loads happen while stopped, so the
   // audio thread never sees a torn write.
-  std::vector<float> di_buffer;           // mono, graph sample rate
+  std::vector<float> di_buffer;  // mono, graph sample rate
   std::atomic<size_t> di_pos{0};
   std::atomic<bool> di_playing{false};
   std::atomic<bool> di_loop{true};
@@ -160,8 +165,7 @@ TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_fram
 // The real-time audio callback. Runs on the audio thread: allocates nothing,
 // only calls openaxe_process(). If no graph is attached yet it writes
 // silence to the output. Backend-agnostic (plain buffer pointers), called
-// from AudioIO::Callback's audioDeviceIOCallbackWithContext override in
-// audio.cpp.
+// from AudioIO's miniaudio data callback in audio.cpp.
 int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_frames,
                       void* user_data);
 
@@ -178,8 +182,8 @@ class AudioIO {
   // appear under one shared name for both directions (true duplex) or under
   // separate input/output names; both show up. Open() accepts an input
   // endpoint and an output endpoint that need not be the same device (see
-  // Open()'s createDevice(output_name, input_name) call - the old RtAudio
-  // CoreAudio crash doing this, issue #53, no longer applies). Never throws.
+  // Open()'s duplex init - the old RtAudio CoreAudio crash doing this, issue
+  // #53, does not apply to miniaudio's own CoreAudio backend). Never throws.
   std::vector<AudioDeviceInfo> ListDevices() const;
 
   // Open a full-duplex stream. input_device/output_device are the ids
@@ -193,13 +197,14 @@ class AudioIO {
   // - buffer_frames is the block size to request; the backend may adjust it
   //   (read BufferFrames() afterwards for what it actually granted).
   // - buffer_frames == kLowestLatencyBuffer (0) asks the backend for the
-  //   smallest block the device supports (the minimum entry from
-  //   AudioIODevice::getAvailableBufferSizes()). That is the lowest
-  //   achievable round-trip, but a heavy NAM model can overrun a very small
-  //   block, so it stays an explicit opt-in rather than the default.
+  //   smallest block the device supports (64 frames - the minimum practical
+  //   duplex period). That is the lowest achievable round-trip, but a heavy
+  //   NAM model can overrun a very small block, so it stays an explicit
+  //   opt-in rather than the default.
   // - sample_rate falls back to the device's preferred rate when the
   //   requested one isn't in its supported list, which both avoids an open
-  //   failure and keeps the OS from resampling underneath us.
+  //   failure and keeps the OS from resampling underneath us (miniaudio
+  //   resamples in-app when the two sides disagree).
   static constexpr unsigned int kLowestLatencyBuffer = 0;
   bool Open(unsigned int input_device, unsigned int output_device, double sample_rate,
             unsigned int buffer_frames);
@@ -268,55 +273,67 @@ class AudioIO {
   long StreamLatencyFrames() const;
 
  private:
-  // Adapts juce::AudioIODeviceCallback (which AudioIO can't publicly inherit
-  // without leaking JUCE types into this header) to RtProcessCallback, and
-  // forwards device errors to HandleStreamError. Defined in audio.cpp.
-  class Callback;
+  // miniaudio data callback trampoline: deinterleaves the backend's
+  // interleaved f32 frames into per-channel pointers, forwards to
+  // RtProcessCallback, then interleaves the result back. Defined in audio.cpp.
+  static void DataCallback(struct ma_device* p_device, void* p_output, const void* p_input,
+                           unsigned int frame_count);
+  // miniaudio notification callback trampoline: forwards reroute /
+  // interruption events to HandleStreamError. Never stops/closes the stream
+  // itself - only records the error for TakeStreamError to pick up later.
+  // Takes void so this header never needs ma_device_notification (an
+  // anonymous typedef in miniaudio.h that cannot be forward-declared).
+  static void NotificationCallback(const void* p_notification);
 
-  // Registered on the device (device_->start(callback_.get())); JUCE invokes
-  // it from whichever internal thread noticed the problem - not necessarily
-  // the audio thread, and not synchronized with io_mutex_. Never opens/
-  // closes/starts/stops the stream itself - only records the error for
-  // TakeStreamError to pick up later from a normal caller thread. JUCE gives
-  // no error-severity type to filter on (unlike RtAudio's RTAUDIO_WARNING),
-  // so every call is treated as a real error.
+  // Recorded on the device (notification callback); miniaudio invokes it from
+  // whichever internal thread noticed the problem - not necessarily the audio
+  // thread, and not synchronized with io_mutex_. Never opens/closes/starts/
+  // stops the stream itself - only records the error for TakeStreamError to
+  // pick up later from a normal caller thread. Only reroute/interruption
+  // notifications are treated as real errors (an explicit Stop() also fires a
+  // stopped notification, which is not an error).
   void HandleStreamError(const std::string& text);
 
-  // Hashes a JUCE device name into the stable-within-a-session numeric id
+  // Hashes a device name into the stable-within-a-session numeric id
   // AudioDeviceInfo::id/Open() use (see audio.h's top comment). Pure
   // function, defined in audio.cpp.
   static unsigned int HashDeviceId(const std::string& name);
 
   // Resolves an id (from ListDevices() or the kDefaultDevice sentinel) back
-  // to the JUCE device name it came from, by freshly re-scanning type_ -
-  // never relies on a cached id->name table, so it can't go stale between a
+  // to the device name it came from, by freshly re-enumerating - never
+  // relies on a cached id->name table, so it can't go stale between a
   // ListDevices() call and the Open() that follows it. Returns false (name
   // untouched) if no currently-present device matches.
   bool ResolveDeviceName(unsigned int id, bool input, std::string* name) const;
 
-  // The platform's default device type (CoreAudio/WASAPI/ALSA), constructed
-  // once in the ctor. Mutable so ListDevices()/ResolveDeviceName can stay
-  // const even though scanForDevices()/createDevice() aren't const in JUCE.
-  mutable std::unique_ptr<juce::AudioIODeviceType> type_;
+  // The miniaudio context (selected backends per platform, constructed once
+  // in the ctor). Mutable so ListDevices()/ResolveDeviceName can stay const
+  // even though enumeration isn't const. Null when context init failed -
+  // every method degrades to empty/false rather than crashing.
+  std::unique_ptr<struct ma_context> context_;
+  bool context_ok_ = false;
 
   // Serializes stream control (Open/Close/Start/Stop) and BeginSuspend's
   // stop() against queries, since the webview thread and the control thread
   // both call into this object. Never taken by the audio callback.
   mutable std::mutex io_mutex_;
 
-  // Declared BEFORE device_/callback_ so it is destroyed LAST. The audio
-  // callback and the webview bridge both reach into this struct by reference;
-  // its lifetime must outlive both the JUCE audio thread (owned by device_)
-  // and the Callback that carries a RtCallbackState&. Destroying it first (its
-  // old position, after those members) freed the tap/in_scratch vectors while
-  // a still-referencing thread could touch them - the exit-time heap
+  // Declared BEFORE device_ so it is destroyed LAST. The audio callback and
+  // the webview bridge both reach into this struct by reference; its lifetime
+  // must outlive both the miniaudio audio thread (owned by device_) and any
+  // in-flight callback. Destroying it first freed the tap/in_scratch vectors
+  // while a still-referencing thread could touch them - the exit-time heap
   // corruption (free_list_checksum_botch) / use-after-free in the bridge.
   RtCallbackState state_;
 
   // Created fresh by Open(), destroyed by Close(). Mutable for the same
-  // reason as type_ (StreamLatencyFrames() etc. stay const).
-  mutable std::unique_ptr<juce::AudioIODevice> device_;
-  std::unique_ptr<Callback> callback_;
+  // reason as context_ (StreamLatencyFrames() etc. stay const). The
+  // deinterleave scratch (ma_in_/ma_out_) is sized by Open() on a non-audio
+  // thread so the data callback never allocates; the callback processes in
+  // chunks if a backend ever hands it more frames than the scratch holds.
+  mutable std::unique_ptr<struct ma_device> device_;
+  mutable std::vector<float> ma_in_[2];
+  mutable std::vector<float> ma_out_[2];
 
   unsigned int input_device_id_ = 0;
   unsigned int output_device_id_ = 0;
@@ -326,7 +343,7 @@ class AudioIO {
 
   // Separate from io_mutex_ - HandleStreamError must never risk blocking on
   // a lock an Open()/Close() call already holds while tearing the stream
-  // down, since JUCE may invoke it from within that same teardown.
+  // down, since miniaudio may invoke it from within that same teardown.
   mutable std::mutex error_mutex_;
   bool has_pending_stream_error_ = false;
   std::string pending_stream_error_;

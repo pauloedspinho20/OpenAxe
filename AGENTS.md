@@ -22,7 +22,7 @@ pnpm + Turborepo workspace (`apps/*`, `packages/*`):
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/core`            | The C++20 DSP/graph engine — the single source of truth for signal routing, params, model/IR loading. Its own CMake/CTest build, separate from the JS toolchain (see below).            |
 | `apps/web`                 | The live product: Vite + React SPA, AudioWorklet + WASM (built from `packages/core`, committed under `apps/web/public/wasm-core/`).                                                     |
-| `apps/desktop`             | Native shell (C++ + `webview.h` + JUCE `audio_devices`) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                              |
+| `apps/desktop`             | Native shell (C++ + `webview.h` + miniaudio) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                                         |
 | `packages/ui`              | Shared React component/design-system library, consumed by `apps/web` and the desktop webview. Has its own Vitest config (`packages/ui/vite.config.ts`).                                 |
 | `packages/vst3`            | VST3 + standalone plugin (iPlug2 + `packages/core`, `WHOLE_ARCHIVE`) — scaffold builds and scans (issue #125); CLAP/AU later.                                                           |
 | `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/OpenAxe/issues/17), [#16](https://github.com/pauloedspinho20/OpenAxe/issues/16). |
@@ -125,11 +125,12 @@ rebuild, CMake reconfigure, etc.) to take effect.
   (IndexedDB persistence, WASM DSP); Tone3000 is the one exception (a
   network service with no audio meaning — a model-library client, not
   infrastructure this app depends on to function).
-- **Desktop is C++ + `webview.h` + JUCE `audio_devices`, not Electron** — the
+- **Desktop is C++ + `webview.h` + miniaudio, not Electron** — the
   React UI runs in a native system webview in the same process as the audio
-  engine; JUCE was adopted after RtAudio's CoreAudio backend had a
-  reproducible crash bridging independently-clocked duplex devices (see
-  `apps/desktop/CMakeLists.txt`'s comment on the migration).
+  engine; miniaudio replaced JUCE (itself adopted after RtAudio's CoreAudio
+  backend had a reproducible crash bridging independently-clocked duplex
+  devices - issue #374; see `apps/desktop/CMakeLists.txt`'s comment on the
+  migration).
 - **`strict-peer-dependencies=true`** (`.npmrc`) — a real unmet peer fails
   `pnpm install` outright rather than warning. If a routine dependency bump
   suddenly fails install with an unrelated-looking peer error, it's likely a

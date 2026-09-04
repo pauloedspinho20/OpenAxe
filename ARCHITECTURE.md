@@ -22,7 +22,7 @@ the DSP does.
 │ Presentation      apps/web (React) · desktop webview · VST3 editor ·     │
 │                   iOS/Android views — all sharing packages/ui tokens     │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ Integration       Web Audio worklet · JUCE audio_devices + window.openAxe bridge  │
+│ Integration       Web Audio worklet · miniaudio + window.openAxe bridge  │
 │                   · iPlug2 processor · JNI / AVAudioEngine               │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ Engine ABI        packages/core/include/openaxe/api.h — extern "C",   │
@@ -47,7 +47,7 @@ meters, and CPU load.
 
 ### What a front end is still allowed to own
 
-- Device and host integration: Web Audio graph plumbing, JUCE audio_devices streams, the
+- Device and host integration: Web Audio graph plumbing, miniaudio streams, the
   plugin's process callback.
 - Persistence _mechanism_: IndexedDB in the browser, a shared on-disk store
   for the desktop app and the plugins, host state chunks for a plugin's rig.
@@ -137,7 +137,7 @@ layer.
 
 | Target  | What sets latency                                                                           | Lowest available                                                                                                                                                                                                                              |
 | ------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop | JUCE audio_devices block size + the device's own buffering                                  | `bufferFrames: 0` asks the device for its smallest block; default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                                                            |
+| Desktop | miniaudio block size + the device's own buffering                                           | `bufferFrames: 0` asks the device for its smallest block; default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                                                            |
 | Web     | The 128-frame AudioWorklet render quantum, plus the context's `baseLatency`/`outputLatency` | Fixed by the platform. `latencyHint: 'interactive'` is what the app requests; chaining worklet nodes adds **no** extra latency (they all run inside one quantum), so the win from step 2 above is CPU and behaviour parity, not milliseconds. |
 | VST3    | The host's block size                                                                       | Nothing to add: report zero latency and process in place.                                                                                                                                                                                     |
 
@@ -249,7 +249,7 @@ picture form — added during the OpenAxe rebrand (issue #151).
 flowchart TB
     subgraph shells["Presentation + integration (four shells)"]
         WEB["apps/web<br/>React SPA<br/>AudioWorklet + WASM"]
-        DESK["apps/desktop<br/>C++ webview shell<br/>JUCE audio_devices"]
+        DESK["apps/desktop<br/>C++ webview shell<br/>miniaudio"]
         VST["packages/vst3<br/>plugin editor + processor"]
         MOBILE["apps/ios · apps/android<br/>SwiftUI / Compose"]
     end
