@@ -126,11 +126,17 @@ constexpr int kMixerParamCount = graph::kMixerInputCount * kMixerParamsPerInput;
 
 
 // ── Engine-level wet/dry mix (hybrid dry/wet, issue #263) ─────────────────
-// The 8 wet-only effects below are 100% wet out of their DSP; the engine owns
-// a single 0..1 mix that blends dry input with wet output post-DSP. Compressor,
+// The effects below are 100% wet out of their DSP; the engine owns a single
+// 0..1 mix that blends dry input with wet output post-DSP. Compressor,
 // reverb and cab keep their native mix params and are excluded. Stored as the
 // last param index for the kind, so ParamInfo/GetParam/SetParam see it as a
 // regular param and automation/presets persist it without engine-specific API.
+//
+// One global linear crossfade dipped ~6dB at 50% for every decorrelated
+// effect (issue #383), so the blend law is picked per family by signal
+// correlation (see MixLawFor): sample-aligned inserts stay linear (0.5+0.5
+// sums back to unity), decorrelated replacements use equal-power, and
+// tails/voices over dry stay additive with kill-dry at the top end.
 inline bool NeedsEngineMix(graph::BlockKind kind) {
   switch (kind) {
 #if OPENAXE_BLOCK_NOISE_GATE_COMPILED
@@ -218,6 +224,58 @@ inline int DspParamCountFor(graph::BlockKind kind) {
 inline int EngineMixIndexFor(graph::BlockKind kind) {
   return DspParamCountFor(kind);  // mix is appended after the DSP's table
 }
+// Per-family blend law for the engine mix (issue #383): the law is a property
+// of the DSP's wet signal, so it is a pure function of kind - no param, no
+// ABI/schema change, and the WASM worklet needs no update.
+enum class EngineMixLaw {
+  // Wet is sample-aligned dry (gate/eq/filter/tremolo): linear sums back to
+  // unity at every position, so no compensation is correct.
+  kLinear,
+  // Wet is decorrelated but the block replaces dry (ring-mod/rotary):
+  // sin/cos keeps perceived loudness flat instead of dipping at 50%.
+  kEqualPower,
+  // Wet is a tail/voice layered over dry (chorus/flanger/phaser/delay/
+  // pitch-shifter/granular-delay): dry stays at unity while mix adds wet.
+  // Dry mutes at the top end so 100% remains kill-dry (vibrato / FX-send /
+  // whammy), preserving existing 100% patches.
+  kAdditiveKillDry,
+};
+inline EngineMixLaw MixLawFor(graph::BlockKind kind) {
+  switch (kind) {
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
+    case graph::BlockKind::kRingMod:
+#endif
+#if OPENAXE_BLOCK_ROTARY_COMPILED
+    case graph::BlockKind::kRotary:
+#endif
+      return EngineMixLaw::kEqualPower;
+#if OPENAXE_BLOCK_CHORUS_COMPILED
+    case graph::BlockKind::kChorus:
+#endif
+#if OPENAXE_BLOCK_FLANGER_COMPILED
+    case graph::BlockKind::kFlanger:
+#endif
+#if OPENAXE_BLOCK_PHASER_COMPILED
+    case graph::BlockKind::kPhaser:
+#endif
+#if OPENAXE_BLOCK_DELAY_COMPILED
+    case graph::BlockKind::kDelay:
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
+    case graph::BlockKind::kPitchShifter:
+#endif
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
+    case graph::BlockKind::kGranularDelay:
+#endif
+      return EngineMixLaw::kAdditiveKillDry;
+    default:
+      return EngineMixLaw::kLinear;
+  }
+}
+// Smoothed-mix threshold where the additive law mutes dry (kill-dry at 100%).
+// The ramp makes the handoff continuous; the mix==1 fast path in Process()
+// keeps exact-full-wet identical for every law.
+constexpr double kAdditiveKillDryThreshold = 0.999;
 constexpr dsp::ParamSmoothing kEngineMixSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f};
 constexpr ParamDescriptor kEngineMixDescriptor{"Mix", "mix", 0.0f, 1.0f, "x"};
 constexpr dsp::ParamSmoothing kEngineLevelSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.5f};
@@ -1684,11 +1742,12 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
           }
           ApplyRealtimeParams(state);
           RunDsp(state, start, len);
-          // Engine-level wet/dry mix (hybrid dry/wet, issue #263): blend dry
-          // input with wet DSP output per sub-block using the smoothed mix for
-          // this slice. Bypass already dominates above, so this only runs on
-          // the wet path. Fully wet (mix==1) is the common case and keeps the
-          // fast path; fully dry copies input.
+          // Engine-level wet/dry mix (hybrid dry/wet, issue #263; per-family
+          // laws, issue #383): blend dry input with wet DSP output per
+          // sub-block using the smoothed mix for this slice. Bypass already
+          // dominates above, so this only runs on the wet path. Fully wet
+          // (mix==1) is the common case and keeps the fast path - pure DSP
+          // output, identical for every law; fully dry copies input.
           if (NeedsEngineMix(state.kind)) {
             const int mixIdx = EngineMixIndexFor(state.kind);
             const double mix = std::clamp(state.smoothed[static_cast<size_t>(mixIdx)], 0.0, 1.0);
@@ -1699,8 +1758,25 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
                 std::copy_n(&state.input_r[0][static_cast<size_t>(start)], len,
                             &state.output_r[static_cast<size_t>(start)]);
               } else {
-                const float dryGain = 1.0f - static_cast<float>(mix);
-                const float wetGain = static_cast<float>(mix);
+                float dryGain = 0.0f;
+                float wetGain = 0.0f;
+                switch (MixLawFor(state.kind)) {
+                  case EngineMixLaw::kEqualPower: {
+                    const double angle = mix * 1.5707963267948966;  // mix * pi/2
+                    dryGain = static_cast<float>(std::cos(angle));
+                    wetGain = static_cast<float>(std::sin(angle));
+                    break;
+                  }
+                  case EngineMixLaw::kAdditiveKillDry:
+                    dryGain = (mix >= kAdditiveKillDryThreshold) ? 0.0f : 1.0f;
+                    wetGain = static_cast<float>(mix);
+                    break;
+                  case EngineMixLaw::kLinear:
+                  default:
+                    dryGain = 1.0f - static_cast<float>(mix);
+                    wetGain = static_cast<float>(mix);
+                    break;
+                }
                 for (int i = 0; i < len; ++i) {
                   const int idx = start + i;
                   state.output_l[static_cast<size_t>(idx)] =
