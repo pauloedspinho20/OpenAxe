@@ -64,13 +64,13 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     group: 'Neural Amp Modeler',
     vendor: 'Web Audio ConvolverNode (native)',
   },
-  {
+  /*   {
     kind: 'space',
     label: 'Space',
     group: 'Neural Amp Modeler',
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
-  },
+  }, */
   {
     kind: 'outboard',
     label: 'Outboard',
@@ -104,6 +104,20 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Native routing (no DSP)',
   },
   {
+    kind: 'delay',
+    label: 'Delay',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
+  },
+  {
+    kind: 'reverb',
+    label: 'Reverb',
+    group: 'Effects',
+    vendor: 'Dragonfly Reverb',
+    vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
+  },
+  {
     kind: 'noise-gate',
     label: 'Gate',
     group: 'Effects',
@@ -120,7 +134,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
   {
     kind: 'eq',
     label: 'EQ',
-    group: 'Effects',
+    group: 'Core',
     vendor: 'DSPark',
     vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
@@ -157,20 +171,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  {
-    kind: 'delay',
-    label: 'Delay',
-    group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
-  {
-    kind: 'reverb',
-    label: 'Reverb',
-    group: 'Effects',
-    vendor: 'Dragonfly Reverb',
-    vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
-  },
+
   {
     kind: 'ring-mod',
     label: 'Ring Mod',
@@ -192,7 +193,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  {
+  /*  {
     kind: 'granular-delay',
     label: 'Granular Delay',
     group: 'Effects',
@@ -200,7 +201,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     // cross-feed and `character` colouring around it are packages/core.
     vendor: 'DSPark',
     vendorUrl: 'https://github.com/CristianMoresi/DSPark',
-  },
+  }, */
   {
     kind: 'rotary',
     label: 'Rotary',

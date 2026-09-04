@@ -30,6 +30,27 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
 
+  // Hermetic update check (see src/hooks/useUpdateCheck.ts): the hook fetches
+  // api.github.com + the landing fallback on every fresh load. In CI the API
+  // has no releases (404) and the fallback is CORS-blocked, and browsers log
+  // failed fetches as console errors no matter how carefully the hook catches
+  // them — which trips the zero-console-error assertion below. Fulfill with a
+  // tag older than the app version so the hook resolves to "no update" and
+  // never attempts the fallback.
+  await page.route(
+    'https://api.github.com/repos/pauloedspinho20/OpenAxe/releases/latest',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tag_name: 'v0.0.0',
+          html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.0.0',
+          published_at: null,
+        }),
+      }),
+  )
+
   await page.goto('/')
   // Start from a clean slate: the grid/presets persist to IndexedDB (see
   // src/storage/db.ts), so a prior test run's saved blocks/presets would
@@ -91,9 +112,12 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   await page.getByRole('button', { name: 'Remove block' }).click()
   await expect(blocks).toHaveCount(0)
 
-  // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
-  // migration - Gate, Compressor, EQ, Tremolo) plus six that already run on
-  // packages/core.
+  // All 10 compiled effect kinds (effects.config.json #313): the four
+  // DSPark-backed ones (issue #22's last migration - Gate, Compressor, EQ,
+  // Tremolo) plus six that already run on packages/core. Filter/ring-mod/
+  // granular-delay/pitch-shifter are compiled out, so they must not appear
+  // here - the palette (PALETTE_BLOCK_KINDS) won't offer them and the
+  // menuitem lookup would time out.
   const FX_KINDS = [
     'Gate',
     'Comp',
@@ -104,7 +128,7 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     'Flanger',
     'Phaser',
     'Delay',
-    'Filter',
+    'Rotary',
   ]
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x
