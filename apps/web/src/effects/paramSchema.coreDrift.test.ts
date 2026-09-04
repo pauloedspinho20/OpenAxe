@@ -136,13 +136,17 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     expect(SYMBOL_KINDS.length).toBe(Object.keys(coreEffects).length - EXCLUDED_KINDS.length)
   })
 
-  it("the cab's IR mix knob matches the core's ir_mix param", () => {
-    // The UI key is camelCase (`irMix`) where the core symbol is snake_case
-    // (`ir_mix`) - the bridge aliases it, the same way it does `slimSize`. The
-    // range has to agree either way.
-    const core = coreParamsFor('cab').get('ir_mix')
+  it.each([
+    ['irMix', 'ir_mix'],
+    ['lowCut', 'low_cut'],
+    ['highCut', 'high_cut'],
+  ])("the cab's %s knob matches the core's %s param", (key, symbol) => {
+    // The UI keys are camelCase (`irMix`) where the core symbols are
+    // snake_case (`ir_mix`) - the bridge aliases them, the same way it does
+    // `slimSize`. The ranges have to agree either way.
+    const core = coreParamsFor('cab').get(symbol)
     expect(core).toBeDefined()
-    const web = (BLOCK_PARAM_SCHEMAS.cab ?? []).find((field) => field.key === 'irMix')
+    const web = (BLOCK_PARAM_SCHEMAS.cab ?? []).find((field) => field.key === key)
     expect(web?.control).toBe('knob')
     if (web?.control === 'knob') {
       expect({ min: web.min, max: web.max }).toEqual({ min: core!.min, max: core!.max })

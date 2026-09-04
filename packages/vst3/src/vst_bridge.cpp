@@ -37,6 +37,8 @@ std::string JsonError(const std::string& msg) { return (json{{"ok", false}, {"er
 const char* CoreSymbolAliasFor(const std::string& key) {
   if (key == "slimSize") return "slim_size";
   if (key == "irMix") return "ir_mix";
+  if (key == "lowCut") return "low_cut";
+  if (key == "highCut") return "high_cut";
   return nullptr;
 }
 

@@ -299,6 +299,28 @@
             "mode": "exponential",
             "timeConstant": 0.03
           }
+        },
+        {
+          "symbol": "low_cut",
+          "label": "Low Cut",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "high_cut",
+          "label": "High Cut",
+          "min": 2000,
+          "max": 20000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
         }
       ]
     },
@@ -1723,9 +1745,31 @@
             "mode": "exponential",
             "timeConstant": 0.03
           }
+        },
+        {
+          "symbol": "low_cut",
+          "label": "Low Cut",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "high_cut",
+          "label": "High Cut",
+          "min": 2000,
+          "max": 20000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
         }
       ],
-      "comment": "Cab blocks are IR convolution (dsp/convolver.cpp) with a wet/dry blend. Like the amp table these params live in engine.cpp rather than a DSP wrapper, hence the synthetic generated fragment name (engine_cab_params.inc). The web UI calls this knob irMix; the bridge maps that camelCase key onto this symbol."
+      "comment": "Cab blocks are IR convolution (dsp/convolver.cpp) with a wet/dry blend plus post-IR low-cut (HPF) and high-cut (LPF) biquads (issue #373). Like the amp table these params live in engine.cpp rather than a DSP wrapper, hence the synthetic generated fragment name (engine_cab_params.inc). The web UI calls these knobs irMix/lowCut/highCut; the bridge maps those camelCase keys onto these symbols."
     },
     "mixer": {
       "cppFile": "engine_mixer.cpp",

@@ -50,6 +50,18 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
         }),
       }),
   )
+  // Belt-and-braces: if the primary mock ever misses (or the API path
+  // changes), the hook falls through to the landing fallback
+  // (useUpdateCheck.ts), which in CI 403s / is CORS-blocked from localhost
+  // and trips the same zero-console-error assertion (run 33829263762).
+  // Fulfill it hermetically too so no real network can leak console errors.
+  await page.route('https://pauloedspinho20.github.io/OpenAxe/releases-data.json', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ releases: [] }),
+    }),
+  )
 
   await page.goto('/')
   // Start from a clean slate: the grid/presets persist to IndexedDB (see
