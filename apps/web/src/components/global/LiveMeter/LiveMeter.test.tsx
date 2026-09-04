@@ -55,6 +55,11 @@ describe('LiveMeter', () => {
     expect(analyser.getByteTimeDomainData).toHaveBeenCalled()
   })
 
+  it('renders the medium caption below the bar for the medium variant', () => {
+    render(<LiveMeter analyser={null} variant="medium" label="IN" />)
+    expect(screen.getByText('IN')).toBeInTheDocument()
+  })
+
   it('does not schedule a frame when there is no analyser', () => {
     render(<LiveMeter analyser={null} />)
     expect(rafCb).toBeNull()

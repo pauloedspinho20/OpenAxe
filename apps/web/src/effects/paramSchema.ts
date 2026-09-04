@@ -64,6 +64,19 @@ function range(kind: RangeKind, symbol: string): SymbolRange {
 }
 
 const dB = (value: number) => `${value.toFixed(0)}dB`
+/**
+ * A linear I/O trim gain (0..1.5) rendered as dB: 1 → "0.0dB" (unity),
+ * 1.5 → "+3.5dB", 0.5 → "−6.0dB", 0 → "−∞dB". Positive boosts carry an
+ * explicit "+" so boost vs. cut reads at a glance; the minus is the same
+ * U+2212 the meter peak readouts use.
+ */
+const trimDb = (value: number) => {
+  if (value <= 0) return '−∞dB'
+  const db = 20 * Math.log10(value)
+  if (db === 0) return '0.0dB'
+  const sign = db > 0 ? '+' : ''
+  return `${sign}${db.toFixed(1).replace('-', '−')}dB`
+}
 const percent = (value: number) => `${Math.round(value * 100)}%`
 const hz = (value: number) =>
   value >= 1000 ? `${(value / 1000).toFixed(1)}kHz` : `${Math.round(value)}Hz`
@@ -1241,7 +1254,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     max: 1.5,
     step: 0.01,
     defaultValue: 1,
-    formatValue: percent,
+    formatValue: trimDb,
     group: 'I/O',
     description: 'Block input trim into model/effect.',
   },
@@ -1253,7 +1266,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     max: 1.5,
     step: 0.01,
     defaultValue: 1,
-    formatValue: percent,
+    formatValue: trimDb,
     group: 'I/O',
     description: 'Block output trim to next block.',
   },
