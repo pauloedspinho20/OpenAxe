@@ -9,6 +9,7 @@ on:
       - '**.md'
       - 'docs/**'
       - 'apps/landing/**'
+      - 'storybook-static/**'
       - '.github/workflows/pages.yml'
       - '.github/workflows/release.yml'
       - '.github/workflows/auto-release.yml'
@@ -28,6 +29,10 @@ jobs:
   # Separate from build-and-test because it needs the C++ toolchain and the DSP
   # submodules, which the web job has no use for.
   core-tests:
+    # Draft PRs pay nothing: reviewers mark ready-for-review when CI signal
+    # is actually wanted (issue #379). Skipped checks never satisfy branch
+    # protection, which is correct — drafts can't merge anyway.
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -72,19 +77,12 @@ jobs:
   # browsers or the full test suite. Split from unit/e2e so these run in
   # parallel and a prettier typo doesn't wait for Playwright (47s+100s).
   checks:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-js
 
       - name: Param schema drift check
         run: node scripts/gen-param-schema.mjs --check
@@ -129,43 +127,45 @@ jobs:
       - name: Typecheck & build
         run: pnpm build
 
+      # Built once here, downloaded by e2e below instead of a second
+      # `pnpm build` (issue #379, plan option C). Artifacts can't cross
+      # workflows, so the native workflows still build the UI once each on
+      # their own runners — the macOS ×10 saving there comes from the
+      # Linux-only PR legs (desktop.yml / plugin.yml), not from sharing.
+      - name: Upload web dist (shared with e2e)
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 2
+
   unit:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     needs: checks
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-js
 
       - name: Test
         run: pnpm test:run
 
   e2e:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     needs: checks
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/setup-js
 
-      - uses: actions/setup-node@v7
+      - name: Download web dist (built once in checks)
+        uses: actions/download-artifact@v7
         with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck & build (for E2E)
-        run: pnpm build
+          name: web-dist
+          path: apps/web/dist
 
       - name: Cache Playwright browsers
         id: playwright-cache
@@ -192,6 +192,10 @@ jobs:
         run: pnpm --filter @openaxe/web exec playwright test --project=chromium-desktop --project=chromium-mobile
 
       - name: Build Storybook
+        # Extended split (issue #379, plan option B): Storybook is a build
+        # check, not PR signal — it runs on merge to main/dev, where a
+        # failure still blocks the release flow without taxing every push.
+        if: github.event_name != 'pull_request'
         run: pnpm build-storybook
 
       - name: Upload Playwright report
