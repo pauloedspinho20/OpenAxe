@@ -67,6 +67,7 @@
   flex-direction: row;
   gap: var(--sp-4);
   align-items: flex-end;
+  min-height: 82px;
 }
 
 @media (max-width: var(--mw-sm)) {

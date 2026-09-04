@@ -7,6 +7,7 @@ import { useTone3000Library } from '../../../tone3000/library'
 import type { GraphRig } from '../../../engine/GraphRig'
 import { NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
+import type { CabBlock } from '../../../engine/blocks/CabBlock'
 import { EffectParamsPanel } from '@/components/global/EffectParamsPanel/EffectParamsPanel'
 import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
@@ -84,13 +85,17 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
   const isEffectBlock = instance.kind in EFFECT_PARAM_SCHEMAS
-  const loaded = isNamCore ? ((block as AmpBlock | null)?.getLoadedModel?.() ?? null) : null
+  const loaded = isNamCore
+    ? ((block as AmpBlock | null)?.getLoadedModel?.() ?? null)
+    : isIr
+      ? ((block as CabBlock | null)?.getLoadedIr?.() ?? null)
+      : null
   const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
 
-  const panelLabel = isNamCore ? loaded?.name : label
-  const panelLabelUrl = isNamCore ? libraryEntry?.creator : vendor
-  const panelUrl = isNamCore ? libraryEntry?.sourceUrl : vendorUrl
+  const panelLabel = isAssetKind ? loaded?.name : label
+  const panelLabelUrl = isAssetKind ? libraryEntry?.creator : vendor
+  const panelUrl = isAssetKind ? libraryEntry?.sourceUrl : vendorUrl
 
   return (
     <Panel
@@ -99,7 +104,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
       {...(panelLabelUrl !== undefined && { labelUrl: panelLabelUrl })}
       {...(panelUrl !== undefined && { url: panelUrl })}
       corner={
-        isNamCore && (
+        isAssetKind && (
           <div className={styles.screenRow}>
             <HardwareButton
               onClick={() =>
@@ -124,20 +129,9 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
             <div className={styles.meterAndParams}>
               <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} rig={rig} />
               <div className={styles.buttons}>
-                <HardwareButton
-                  icon={<PowerIcon size={14} />}
-                  active={!bypassed}
-                  iconOnly
-                  onClick={() => {
-                    useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-                    ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-                  }}
-                  label={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-                  aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-                ></HardwareButton>
-                {isNamCore && (
+                {isAssetKind && (
                   <HardwareButton
-                    label="Model Details"
+                    label={isIr ? 'IR Details' : 'Model Details'}
                     icon={<MixerIcon size={15} />}
                     onClick={() => setDetailsOpen(true)}
                     iconOnly
@@ -151,6 +145,19 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                     iconOnly
                   ></HardwareButton>
                 )}
+                {block.kind !== 'mixer' && (
+                  <HardwareButton
+                    icon={<PowerIcon size={14} />}
+                    active={!bypassed}
+                    iconOnly
+                    onClick={() => {
+                      useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+                      ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+                    }}
+                    label={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+                    aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+                  ></HardwareButton>
+                )}
               </div>
               {block && analyser && <LiveMeter variant="medium" analyser={analyser} />}
             </div>
@@ -158,19 +165,19 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
           {block && schema.length === 0 && !isAssetKind && (
             <div className={styles.meterAndParams}>
               <p className={styles.empty}>This block has no editable parameters.</p>
-              {analyser && <LiveMeter variant="mini" analyser={analyser} />}
+              {analyser && <LiveMeter variant="medium" analyser={analyser} />}
             </div>
           )}
         </div>
       </div>
-      {isNamCore && (
+      {isAssetKind && (
         <NamModelDetails
           open={detailsOpen}
           onClose={() => setDetailsOpen(false)}
           kindLabel={label}
           loadedName={loaded?.name ?? null}
           entry={libraryEntry}
-          slot="model"
+          slot={isIr ? 'ir' : 'model'}
           blockId={blockId}
           loadTarget={
             block

@@ -9,7 +9,7 @@
   background: var(--chassis);
 }
 
-.panel {
+.heroWrapper {
   width: min(440px, 100%);
   display: flex;
   flex-direction: column;

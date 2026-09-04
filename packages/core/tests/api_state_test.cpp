@@ -566,8 +566,9 @@ int main() {
     const int32_t needed = openaxe_serialize_state(g, nullptr, 0);
     std::vector<char> buf(static_cast<size_t>(needed));
     openaxe_serialize_state(g, buf.data(), needed);
-    // ring-mod and granular-delay can be compiled out (#313), in which case
-    // add_block refused them above and they are legitimately absent.
+    // ring-mod, granular-delay, filter and pitch-shifter can be compiled
+    // out (#313), in which case add_block refused them above and they are
+    // legitimately absent.
     if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kRingMod)) {
       OPENAXE_EXPECT(std::strstr(buf.data(), "\"ring-mod\"") != nullptr);
     }
@@ -575,8 +576,12 @@ int main() {
       OPENAXE_EXPECT(std::strstr(buf.data(), "\"granular-delay\"") != nullptr);
     }
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"rotary\"") != nullptr);
-    OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
-    OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
+    if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kPitchShifter)) {
+      OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
+    }
+    if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kFilter)) {
+      OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
+    }
 
     OpenAxeGraph* r = openaxe_graph_create();
     OPENAXE_EXPECT(openaxe_load_state(r, buf.data()) == OPENAXE_LOAD_STATE_OK);

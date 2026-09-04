@@ -2,11 +2,12 @@
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   border: none;
-  background: var(--led-hot);
+  background: var(--panel);
+  border: 2px solid var(--ink-1);
   padding: 0;
   cursor: pointer;
   z-index: 2;
@@ -27,5 +28,5 @@
 }
 
 .badge:hover {
-  background: #ff6a57;
+  background: var(--block-color);
 }
