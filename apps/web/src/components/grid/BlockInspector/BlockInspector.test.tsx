@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BlockInspector } from './BlockInspector'
 import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
@@ -21,6 +21,14 @@ describe('BlockInspector', () => {
   beforeEach(() => {
     useSelection.getState().clear()
     useGraphStore.getState().loadGraph([], [], 1, false)
+    // LiveMeter drives itself off requestAnimationFrame; a no-op stub keeps
+    // the meter pair rendering without running its loop.
+    vi.stubGlobal('requestAnimationFrame', () => 1)
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it("shows the selected block's own params, not a previously selected block's stale ones", () => {
@@ -63,5 +71,28 @@ describe('BlockInspector', () => {
     useSelection.getState().select('reverb-1')
     rerender(<BlockInspector rig={rig} context={null} />)
     expect(screen.getByRole('slider', { name: 'Size' })).toHaveAttribute('aria-valuenow', '0.84')
+  })
+
+  it('shows an IN and an OUT meter for the selected block', () => {
+    const delayBlock: BlockInstance = { id: 'delay-1', kind: 'delay', row: 0, col: 0, params: {} }
+    useGraphStore.getState().loadGraph([delayBlock], [], 1, false)
+
+    const stubAnalyser = () =>
+      ({ fftSize: 8, getByteTimeDomainData: vi.fn() }) as unknown as AnalyserNode
+    // Stable references: the inspector re-renders when the block identity
+    // changes, so a per-call factory here would re-render forever.
+    const block = fakeEffectBlock('delay', {})
+    const outAnalyser = stubAnalyser()
+    const inAnalyser = stubAnalyser()
+    const rig = {
+      getBlock: (id: string) => (id === 'delay-1' ? block : null),
+      getBlockAnalyser: () => outAnalyser,
+      getBlockInputAnalyser: () => inAnalyser,
+    } as unknown as GraphRig
+
+    useSelection.getState().select('delay-1')
+    render(<BlockInspector rig={rig} context={null} />)
+    expect(screen.getByText('IN')).toBeInTheDocument()
+    expect(screen.getByText('OUT')).toBeInTheDocument()
   })
 })

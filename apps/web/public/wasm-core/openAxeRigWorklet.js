@@ -451,6 +451,21 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        case 'inputMeters': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            // typeof-guard: a wasm binary predating the input-meter ABI
+            // (see openaxe_get_input_meter) has no such export - report
+            // nothing rather than throwing on the audio thread. A rebuild
+            // (scripts/build-core-wasm.sh) lights the meters up.
+            if (typeof module._openaxe_get_input_meter === 'function') {
+              out[jsId] = module._openaxe_get_input_meter(this.graph, coreBlock)
+            }
+          }
+          reply.inputMeters = out
+          reply.ok = true
+          break
+        }
         case 'gainReductions': {
           const out = {}
           for (const [jsId, coreBlock] of this.blockByJs) {

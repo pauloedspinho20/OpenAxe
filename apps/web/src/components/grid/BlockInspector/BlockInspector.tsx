@@ -17,6 +17,7 @@ import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '.
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
 import type { Gear } from '@/tone3000/types'
+import { DynamicsMeter } from '@/components/global/DynamicsMeter/DynamicsMeter'
 
 export interface BlockInspectorProps {
   rig: GraphRig | null
@@ -30,7 +31,7 @@ interface MaybeBypassable {
 
 /**
  * The full editing surface for whichever block is selected in the grid -
- * asset loading (Amp/Cab), bypass, a level meter, and every tunable
+ * asset loading (Amp/Cab), bypass, IN/OUT level meters, and every tunable
  * parameter. BlockCard itself only shows basic info (kind, a small bypass
  * dot, a one-line status); this is where the detail actually lives, so
  * cards stay small and legible at grid scale.
@@ -83,6 +84,10 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const vendorUrl = BLOCK_KIND_VENDOR_URLS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
+  // Post-input-trim tap for the IN meter - the same facade shape as the
+  // output analyser above, fed by the core's per-block input peak. Optional
+  // call: rig mocks in tests may only stub the output tap.
+  const inputAnalyser = rig?.getBlockInputAnalyser?.(instance.id) ?? null
   const isNamCore = NAM_MODEL_KINDS.has(instance.kind)
   const isEffectBlock = instance.kind in EFFECT_PARAM_SCHEMAS
   const loaded = isNamCore
@@ -96,6 +101,9 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const panelLabel = isAssetKind ? loaded?.name : label
   const panelLabelUrl = isAssetKind ? libraryEntry?.creator : vendor
   const panelUrl = isAssetKind ? libraryEntry?.sourceUrl : vendorUrl
+
+  const showDynamicsMeter =
+    block != null && rig != null && (block.kind === 'compressor' || block.kind === 'noise-gate')
 
   return (
     <Panel
@@ -127,7 +135,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
 
           {block && schema.length > 0 && (
             <div className={styles.meterAndParams}>
-              <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} rig={rig} />
+              <EffectParamsPanel key={instance.id} blockId={instance.id} block={block} />
               <div className={styles.buttons}>
                 {isAssetKind && (
                   <HardwareButton
@@ -159,13 +167,26 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
                   ></HardwareButton>
                 )}
               </div>
-              {block && analyser && <LiveMeter variant="medium" analyser={analyser} />}
+              {block && (analyser || inputAnalyser) && (
+                <div className={styles.meters}>
+                  {showDynamicsMeter && (
+                    <DynamicsMeter rig={rig} blockId={blockId} kind={block.kind} />
+                  )}
+                  <LiveMeter variant="medium" label="IN" analyser={inputAnalyser} />
+                  <LiveMeter variant="medium" label="OUT" analyser={analyser} />
+                </div>
+              )}
             </div>
           )}
           {block && schema.length === 0 && !isAssetKind && (
             <div className={styles.meterAndParams}>
               <p className={styles.empty}>This block has no editable parameters.</p>
-              {analyser && <LiveMeter variant="medium" analyser={analyser} />}
+              {(analyser || inputAnalyser) && (
+                <div className={styles.meters}>
+                  <LiveMeter variant="medium" label="IN" analyser={inputAnalyser} />
+                  <LiveMeter variant="medium" label="OUT" analyser={analyser} />
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -65,9 +65,18 @@
   display: flex;
   width: 100%;
   flex-direction: row;
+  gap: var(--sp-5);
+  align-items: center;
+  min-height: 82px;
+}
+
+/* The inspector's per-block IN/OUT meter pair - two medium bars side by side. */
+.meters {
+  display: flex;
+  flex-direction: row;
   gap: var(--sp-4);
   align-items: flex-end;
-  min-height: 82px;
+  flex-shrink: 0;
 }
 
 @media (max-width: var(--mw-sm)) {

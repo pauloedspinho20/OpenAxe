@@ -579,6 +579,10 @@ struct AudioEngine::BlockState {
   std::vector<float> output_r;
 
   std::atomic<float> meter{0.0f};
+  // Post-input-trim peak over the last Process() call: what the block's DSP
+  // actually saw. Stored alongside `meter` (the post-output-trim peak) so a
+  // UI can show per-block IN/OUT levels for gain staging.
+  std::atomic<float> input_meter{0.0f};
 };
 
 
@@ -1629,6 +1633,19 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
         state.input_l[0][static_cast<size_t>(i)] *= in_trim;
         state.input_r[0][static_cast<size_t>(i)] *= in_trim;
       }
+    }
+
+    // Post-input-trim peak: what the DSP (or the bypass copy below) actually
+    // receives. Measured here, after the mixer fold + input trim above, so
+    // the Input knob moves this meter and the Output knob moves the output
+    // one - each trim owns its meter.
+    {
+      float in_peak = 0.0f;
+      for (int i = 0; i < num_frames; ++i) {
+        in_peak = std::max({in_peak, std::fabs(state.input_l[0][static_cast<size_t>(i)]),
+                            std::fabs(state.input_r[0][static_cast<size_t>(i)])});
+      }
+      state.input_meter.store(in_peak, std::memory_order_relaxed);
     }
 
     if (state.bypassed.load(std::memory_order_relaxed)) {
@@ -2773,6 +2790,14 @@ bool AudioEngine::IsTunerMuted() const { return tuner_muted_.load(std::memory_or
 float AudioEngine::GetMeter(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->meter.load(std::memory_order_relaxed) : 0.0f;
+}
+
+// Post-input-trim peak over the last Process() call - the level the block's
+// DSP actually received - 0 for unknown ids. Pairs with GetMeter (the
+// post-output-trim peak) for per-block IN/OUT gain-staging meters.
+float AudioEngine::GetInputMeter(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  return state ? state->input_meter.load(std::memory_order_relaxed) : 0.0f;
 }
 
 // What fraction of one buffer's real-time budget the last Process() call used

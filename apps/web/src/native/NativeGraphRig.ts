@@ -36,7 +36,9 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
   private readonly blocks = new Map<string, { block: NativeBlock; row: number; col: number }>()
   private readonly edges = new Map<string, { from: Jack; to: Jack }>()
   private readonly analysers = new Map<string, NativeAnalyser>()
+  private readonly inputAnalysers = new Map<string, NativeAnalyser>()
   private readonly peaks = new Map<string, number>()
+  private readonly inputPeaks = new Map<string, number>()
   private readonly gainReductions = new Map<string, number>()
   private readonly gateGains = new Map<string, number>()
   private disposed = false
@@ -99,7 +101,9 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     this.blocks.clear()
     this.edges.clear()
     this.analysers.clear()
+    this.inputAnalysers.clear()
     this.peaks.clear()
+    this.inputPeaks.clear()
     this.gainReductions.clear()
     this.gateGains.clear()
 
@@ -275,9 +279,34 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     return cached
   }
 
+  /**
+   * A live meter tap for this block's input (post input trim) - the IN half
+   * of the inspector's IN/OUT pair, fed by the native bridge's per-block
+   * input peak (updateInputMeter). Null for an unknown block.
+   */
+  getBlockInputAnalyser(id: string): NativeAnalyser | null {
+    const entry = this.blocks.get(id)
+    if (!entry) return null
+    let cached = this.inputAnalysers.get(id)
+    if (!cached) {
+      cached = new NativeAnalyser({
+        fftSize: 256,
+        sampleRate: 48000,
+        read: peakSineSource(256, 48000, () => this.inputPeaks.get(id) ?? 0),
+      })
+      this.inputAnalysers.set(id, cached)
+    }
+    return cached
+  }
+
   /** Drive a block's facade meter to a peak level (0..1). Safe to call often. */
   updateMeter(id: string, peak: number): void {
     this.peaks.set(id, peak)
+  }
+
+  /** Drive a block's input-meter facade to a peak level (0..1). Safe to call often. */
+  updateInputMeter(id: string, peak: number): void {
+    this.inputPeaks.set(id, peak)
   }
 
   getGainReduction(id: string): number {
@@ -322,7 +351,9 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
       blockIds.map((id) => this.bridge.removeBlock({ blockId: id }).catch(() => undefined)),
     )
     this.analysers.clear()
+    this.inputAnalysers.clear()
     this.peaks.clear()
+    this.inputPeaks.clear()
     this.gainReductions.clear()
     this.gateGains.clear()
     this.blocks.clear()

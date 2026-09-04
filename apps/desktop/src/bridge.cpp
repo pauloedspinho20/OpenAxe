@@ -1054,7 +1054,9 @@ std::string StudioBridge::HandleMeters(const std::string&) {
   json out = json::array();
   Call([&] {
     for (const auto& [js_id, rec] : blocks_) {
-      out.push_back({{"id", js_id}, {"value", openaxe_get_meter(graph_, rec.core_id)}});
+      out.push_back({{"id", js_id},
+                     {"value", openaxe_get_meter(graph_, rec.core_id)},
+                     {"input", openaxe_get_input_meter(graph_, rec.core_id)}});
     }
   });
   return out.dump();
