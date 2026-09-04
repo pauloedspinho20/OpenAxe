@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { levelToPeakDb, MediumMeter, Meter, MiniMeter } from './Meter'
+import { levelToPeakDb, MediumMeter, Meter, MiniMeter, StereoMeter } from './Meter'
 import styles from './Meter.module.css'
 
 describe('levelToPeakDb', () => {
@@ -130,5 +130,57 @@ describe('Meter', () => {
   it('renders no peak-dB label when not given', () => {
     render(<Meter level={0.5} />)
     expect(screen.queryByText('−6.0 dB')).toBeNull()
+  })
+})
+
+describe('StereoMeter', () => {
+  it('renders two 12-segment slim columns with L/R captions', () => {
+    const { container } = render(<StereoMeter levelL={0.5} levelR={0.5} />)
+    expect(container.querySelectorAll(`.${styles.slimSegment}`)).toHaveLength(24)
+    expect(screen.getByText('L')).toBeInTheDocument()
+    expect(screen.getByText('R')).toBeInTheDocument()
+  })
+
+  it('lights each side independently', () => {
+    const { container } = render(<StereoMeter levelL={0.5} levelR={0} />)
+    const columns = container.querySelectorAll(`.${styles.slimCol}`)
+    expect(columns).toHaveLength(2)
+    expect(columns[0]!.querySelectorAll(`.${styles.slimSegment}.${styles.lit}`)).toHaveLength(6)
+    expect(columns[1]!.querySelectorAll(`.${styles.slimSegment}.${styles.lit}`)).toHaveLength(0)
+  })
+
+  it('clamps each level to [0, 1]', () => {
+    const { container } = render(<StereoMeter levelL={2} levelR={-1} />)
+    const columns = container.querySelectorAll(`.${styles.slimCol}`)
+    expect(columns[0]!.querySelectorAll(`.${styles.slimSegment}.${styles.lit}`)).toHaveLength(12)
+    expect(columns[1]!.querySelectorAll(`.${styles.slimSegment}.${styles.lit}`)).toHaveLength(0)
+  })
+
+  it('renders per-side peak-dB labels and the group label', () => {
+    render(
+      <StereoMeter
+        levelL={0.5}
+        levelR={0.25}
+        valueLabelL="−6.0"
+        valueLabelR="−12.0"
+        label="Output"
+      />,
+    )
+    expect(screen.getByText('−6.0')).toBeInTheDocument()
+    expect(screen.getByText('−12.0')).toBeInTheDocument()
+    expect(screen.getByText('Output')).toBeInTheDocument()
+  })
+
+  it('renders no peak labels when not given', () => {
+    const { container } = render(<StereoMeter levelL={0.5} levelR={0.5} />)
+    expect(container.querySelectorAll(`.${styles.peakLabel}`)).toHaveLength(0)
+  })
+
+  it('forwards title for a tooltip', () => {
+    const { container } = render(<StereoMeter levelL={0.5} levelR={0.5} title="Output level" />)
+    expect(container.querySelector(`.${styles.stereoWrap}`)).toHaveAttribute(
+      'title',
+      'Output level',
+    )
   })
 })

@@ -23,8 +23,14 @@ export interface AudioEngineState {
   rig: GraphRig | null
   context: AudioContext | null
   analyser: AnalyserNode | null
+  /** Per-channel taps of the rig output for the stereo rail meter (issue #385). */
+  analyserL: AnalyserNode | null
+  analyserR: AnalyserNode | null
   /** Taps the raw input (post-trim, pre-graph) for the tuner - never touches the signal path itself. */
   tunerAnalyser: AnalyserNode | null
+  /** Per-channel taps of the trimmed input for the stereo rail meter (issue #385). */
+  tunerAnalyserL: AnalyserNode | null
+  tunerAnalyserR: AnalyserNode | null
   micGranted: boolean
   /** True once the user chose "Continue without sound" - cleared the moment
    * a mic connects successfully, whether that's this initial no-sound skip
@@ -52,7 +58,11 @@ const IDLE_STATE: AudioEngineState = {
   rig: null,
   context: null,
   analyser: null,
+  analyserL: null,
+  analyserR: null,
   tunerAnalyser: null,
+  tunerAnalyserL: null,
+  tunerAnalyserR: null,
   micGranted: false,
   noSound: false,
   diPlaying: false,
@@ -88,6 +98,11 @@ export function useWebAudioEngine() {
   const channelRouterRef = useRef<AudioNode[]>([])
   const trimRef = useRef<GainNode | null>(null)
   const tunerAnalyserRef = useRef<AnalyserNode | null>(null)
+  // Stereo meter taps (issue #385): fixed splitters fanning the trimmed input
+  // and the rig output out to per-channel analysers. Created once on power-on;
+  // each (re)connect fans the fresh trim/gain node into the tuner splitter.
+  const tunerSplitterRef = useRef<ChannelSplitterNode | null>(null)
+  const outputSplitterRef = useRef<ChannelSplitterNode | null>(null)
   const connectingRef = useRef(false)
   // ── DI audition ───────────────────────────────────────────────────────
   const diSourceRef = useRef<AudioBufferSourceNode | null>(null)
@@ -206,6 +221,8 @@ export function useWebAudioEngine() {
       // `trim`, entirely separate from the graph it feeds into, so tuning
       // never touches (or is touched by) whatever's on the grid.
       if (tunerAnalyserRef.current) trim.connect(tunerAnalyserRef.current)
+      // Per-channel fan-out for the stereo input meter (issue #385).
+      if (tunerSplitterRef.current) trim.connect(tunerSplitterRef.current)
 
       const micGranted = true
       // A successful connection always means we're no longer in a deliberate
@@ -260,6 +277,11 @@ export function useWebAudioEngine() {
       if (tunerAnalyserRef.current) {
         try {
           trimRef.current.connect(tunerAnalyserRef.current)
+        } catch {}
+      }
+      if (tunerSplitterRef.current) {
+        try {
+          trimRef.current.connect(tunerSplitterRef.current)
         } catch {}
       }
     }
@@ -318,6 +340,7 @@ export function useWebAudioEngine() {
         } catch {}
         rig.connectInput(gain)
         if (tunerAnalyserRef.current) gain.connect(tunerAnalyserRef.current)
+        if (tunerSplitterRef.current) gain.connect(tunerSplitterRef.current)
 
         diSourceRef.current = source
         diGainRef.current = gain
@@ -340,6 +363,11 @@ export function useWebAudioEngine() {
           if (tunerAnalyserRef.current) {
             try {
               trimRef.current.connect(tunerAnalyserRef.current)
+            } catch {}
+          }
+          if (tunerSplitterRef.current) {
+            try {
+              trimRef.current.connect(tunerSplitterRef.current)
             } catch {}
           }
         }
@@ -430,11 +458,38 @@ export function useWebAudioEngine() {
         rig.outputNode.connect(analyser)
         analyser.connect(context.destination)
 
+        // Per-channel output taps for the stereo rail meter (issue #385): a
+        // parallel fan-out beside the mono analyser above, so each side reads
+        // its real channel instead of a mono mix.
+        const outputSplitter = new ChannelSplitterNode(context, { numberOfOutputs: 2 })
+        rig.outputNode.connect(outputSplitter)
+        const analyserL = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
+        const analyserR = new AnalyserNode(context, { fftSize: 256, smoothingTimeConstant: 0.6 })
+        outputSplitter.connect(analyserL, 0)
+        outputSplitter.connect(analyserR, 1)
+        outputSplitterRef.current = outputSplitter
+
         // Large fftSize: the tuner's autocorrelation needs a wide enough
         // time-domain window to resolve low frequencies (a 5-string bass's
         // low B is ~31Hz, needing >1500 samples per cycle at 48kHz).
         const tunerAnalyser = new AnalyserNode(context, { fftSize: 4096, smoothingTimeConstant: 0 })
         tunerAnalyserRef.current = tunerAnalyser
+
+        // Per-channel input taps for the stereo rail meter (issue #385): the
+        // trim/gain node fans into this splitter on every (re)connect, so the
+        // pair reads post-trim L/R exactly like the mono tuner tap does.
+        const tunerSplitter = new ChannelSplitterNode(context, { numberOfOutputs: 2 })
+        const tunerAnalyserL = new AnalyserNode(context, {
+          fftSize: 256,
+          smoothingTimeConstant: 0.6,
+        })
+        const tunerAnalyserR = new AnalyserNode(context, {
+          fftSize: 256,
+          smoothingTimeConstant: 0.6,
+        })
+        tunerSplitter.connect(tunerAnalyserL, 0)
+        tunerSplitter.connect(tunerAnalyserR, 1)
+        tunerSplitterRef.current = tunerSplitter
 
         const noSound = opts?.noSound ?? false
         setState((s) => ({
@@ -444,7 +499,11 @@ export function useWebAudioEngine() {
           rig,
           context,
           analyser,
+          analyserL,
+          analyserR,
           tunerAnalyser,
+          tunerAnalyserL,
+          tunerAnalyserR,
           micGranted: false,
           noSound,
           diPlaying: false,
@@ -478,15 +537,33 @@ export function useWebAudioEngine() {
     unbindRef.current = null
     teardownMic()
     state.analyser?.disconnect()
+    state.analyserL?.disconnect()
+    state.analyserR?.disconnect()
     state.tunerAnalyser?.disconnect()
+    state.tunerAnalyserL?.disconnect()
+    state.tunerAnalyserR?.disconnect()
     tunerAnalyserRef.current = null
+    tunerSplitterRef.current?.disconnect()
+    tunerSplitterRef.current = null
+    outputSplitterRef.current?.disconnect()
+    outputSplitterRef.current = null
     await state.rig?.dispose()
     await state.context?.close()
     contextRef.current = null
     rigRef.current = null
     diBufferCache.current.clear()
     setState(IDLE_STATE)
-  }, [state.rig, state.context, state.analyser, state.tunerAnalyser, stopDI])
+  }, [
+    state.rig,
+    state.context,
+    state.analyser,
+    state.analyserL,
+    state.analyserR,
+    state.tunerAnalyser,
+    state.tunerAnalyserL,
+    state.tunerAnalyserR,
+    stopDI,
+  ])
 
   return { ...state, powerOn, powerOff, playDI, stopDI }
 }
