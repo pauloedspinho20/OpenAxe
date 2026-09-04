@@ -1,8 +1,9 @@
 # Plugin CI — VST3 / CLAP / AUv2 (issue #136, extends #54 release flow).
 # Three formats × three platforms is nine artifacts, and macOS additionally
 # needs universal binaries + notarization. This workflow is the heaviest
-# in the repo — tag pushes always run it; PRs run it without signing/
-# packaging (see `if:` guards). Confirm cost before broadening triggers.
+# in the repo — tag pushes always run it; PRs run a Linux-only build+test leg
+# without signing/packaging (see `gate` + `if:` guards, issue #379).
+# Confirm cost before broadening triggers.
 name: Plugin Build
 
 on:
@@ -16,6 +17,10 @@ on:
       - packages/core/**
       - packages/ui/tokens/**
       - .github/workflows/plugin.yml
+  # Weekly full matrix (Sunday 03:30 UTC) — see desktop.yml for why weekly,
+  # not nightly, on a billed-minutes quota.
+  schedule:
+    - cron: '30 3 * * 0'
 
 concurrency:
   group: plugin-${{ github.ref }}
@@ -25,26 +30,33 @@ permissions:
   contents: write
 
 jobs:
+  # Full 3-OS matrix everywhere except plain PRs (Linux-only unless the
+  # reviewer adds the `full-ci` label). Same pattern as desktop.yml.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      full: ${{ steps.set.outputs.full }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ] || \
+             [ "${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}" = "true" ]; then
+            echo 'matrix=[{"os":"macos-14","cmake_preset":"Release","artifact_glob":"packages/vst3/build/*.vst3","extra_artifacts":"packages/vst3/build/*.component packages/vst3/build/*.clap","cpack_generator":"productbuild"},{"os":"windows-latest","cmake_preset":"Release","artifact_glob":"packages/vst3/build/**/*.vst3","extra_artifacts":"packages/vst3/build/**/*.clap","cpack_generator":"WIX"},{"os":"ubuntu-24.04","cmake_preset":"Release","artifact_glob":"packages/vst3/build/*.vst3","extra_artifacts":"packages/vst3/build/*.clap","cpack_generator":"DEB"}]' >> "$GITHUB_OUTPUT"
+            echo 'full=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix=[{"os":"ubuntu-24.04","cmake_preset":"Release","artifact_glob":"packages/vst3/build/*.vst3","extra_artifacts":"packages/vst3/build/*.clap","cpack_generator":"DEB"}]' >> "$GITHUB_OUTPUT"
+            echo 'full=false' >> "$GITHUB_OUTPUT"
+          fi
+
   plugin:
+    needs: gate
+    # Draft PRs pay nothing (issue #379); ready-for-review is the signal.
+    if: github.event.pull_request.draft != true
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'pull_request' }}
       matrix:
-        include:
-          - os: macos-14
-            cmake_preset: Release
-            artifact_glob: 'packages/vst3/build/*.vst3'
-            extra_artifacts: 'packages/vst3/build/*.component packages/vst3/build/*.clap'
-            cpack_generator: productbuild
-          - os: windows-latest
-            cmake_preset: Release
-            artifact_glob: 'packages/vst3/build/**/*.vst3'
-            extra_artifacts: 'packages/vst3/build/**/*.clap'
-            cpack_generator: WIX
-          - os: ubuntu-24.04
-            cmake_preset: Release
-            artifact_glob: 'packages/vst3/build/*.vst3'
-            extra_artifacts: 'packages/vst3/build/*.clap'
-            cpack_generator: DEB
+        include: ${{ fromJSON(needs.gate.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -89,17 +101,7 @@ jobs:
           ccache --set-config=max_size=600M 2>$null || true
           ccache -z 2>$null || true
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install workspace
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-js
 
       - name: Build web UI (for plugin webview)
         run: pnpm build
@@ -219,9 +221,12 @@ jobs:
           Write-Host "Authenticode signing would run here (signtool sign /f /tmp/certificate.p12 /p $env:WINDOWS_CERTIFICATE_PASSWORD packages/vst3/build/**/*.vst3)"
           Write-Host "::warning::Windows signing is stubbed — configure signtool with your certificate"
 
-      # ── Installers / packaging ────────────────────────────────────────────
+      # ── Installers / packaging — full runs only (issue #379). The PR leg
+      # proves compile+tests; CPack, bundle zips and uploads ride the runs
+      # that can actually ship (merge/tag/schedule/full-ci).
 
       - name: Package plugin (CPack)
+        if: needs.gate.outputs.full == 'true'
         # CPack for plugin is defined in packages/vst3/CMakeLists.txt
         # generators: productbuild (macOS .pkg → /Library/Audio/Plug-Ins/*),
         # WIX (Windows .msi → Program Files\Common Files\VST3), DEB+TGZ (Linux)
@@ -248,7 +253,7 @@ jobs:
           ls -lh packages/vst3/build/*.pkg packages/vst3/build/*.msi packages/vst3/build/*.deb packages/vst3/build/*.zip packages/vst3/build/*.tar.gz 2>/dev/null || true
 
       - name: Create fallback artifacts (debug build-tree + bundles zip)
-        if: always()
+        if: needs.gate.outputs.full == 'true' && always()
         shell: bash
         continue-on-error: true
         run: |
@@ -271,6 +276,7 @@ jobs:
           ls -lh openaxe-plugin-build-tree-* openaxe-plugin-bundles-* 2>/dev/null || ls -lh packages/vst3/build/*.vst3 packages/vst3/build/**/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
 
       - name: Upload VST3 artifact
+        if: needs.gate.outputs.full == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-vst3
@@ -278,7 +284,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload extra artifacts (CLAP/AU on macOS)
-        if: matrix.extra_artifacts != ''
+        if: needs.gate.outputs.full == 'true' && matrix.extra_artifacts != ''
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-extra
@@ -286,7 +292,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload installers
-        if: always()
+        if: needs.gate.outputs.full == 'true' && always()
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-installers
@@ -301,7 +307,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload debug build-tree (CI triage only — not installable, see #292)
-        if: always()
+        if: needs.gate.outputs.full == 'true' && always()
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-debug-build-tree
