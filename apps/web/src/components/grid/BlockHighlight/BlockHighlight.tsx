@@ -6,6 +6,7 @@ import { useTone3000Library } from '../../../tone3000/library'
 import { NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { AmpBlock } from '../../../engine/blocks/AmpBlock'
+import type { CabBlock } from '../../../engine/blocks/CabBlock'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import { AudioReactiveArt } from '../audioArt/AudioReactiveArt'
 import { toArtVariant } from '../audioArt/sketches'
@@ -22,9 +23,10 @@ export interface BlockHighlightProps {
 /**
  * Sits between BlockPalette and BlockInspector: a single box that always
  * shows something about the current selection. A NAM-core block (amp/
- * amp-cab/pedal/outboard/space) shows its Tone3000 model as a showcase card
- * - click it for the full NamModelDetails dialog. Any other selected block
- * (an effect, cab, or mixer), or no selection at all, shows a
+ * amp-cab/pedal/outboard/space) shows its Tone3000 model as a showcase card,
+ * and a cab block shows its loaded IR the same way - click either for the
+ * full NamModelDetails dialog. Any other selected block (an effect or
+ * mixer), or no selection at all, shows a
  * p5.js audio-reactive visual driven by that block's own output (or the
  * master output when nothing's selected) - see audioArt/sketches.ts for how
  * each block kind maps to a visual.
@@ -40,12 +42,17 @@ export function BlockHighlight({ rig, analyser }: BlockHighlightProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const instance = selectedBlockId ? (blocks.find((b) => b.id === selectedBlockId) ?? null) : null
-  const isNamCore = instance ? NAM_MODEL_KINDS.has(instance.kind) : false
+  const isIr = instance?.kind === 'cab'
+  const isAssetKind = instance
+    ? NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
+    : false
   const block = instance ? (rig?.getBlock(instance.id) ?? null) : null
   const kindLabel = instance ? BLOCK_KIND_LABELS[instance.kind] : 'Master Output'
 
-  if (instance && isNamCore) {
-    const loaded = (block as AmpBlock | null)?.getLoadedModel?.() ?? null
+  if (instance && isAssetKind) {
+    const loaded = isIr
+      ? ((block as CabBlock | null)?.getLoadedIr?.() ?? null)
+      : ((block as AmpBlock | null)?.getLoadedModel?.() ?? null)
     const libraryEntry = loaded ? (libraryEntries.find((e) => e.id === loaded.id) ?? null) : null
     const hasImage = Boolean(libraryEntry?.imageUrl)
 
@@ -71,7 +78,7 @@ export function BlockHighlight({ rig, analyser }: BlockHighlightProps) {
         ) : (
           <div className={styles.namEmpty}>
             <span className="label">{kindLabel}</span>
-            <span className={styles.emptyText}>No model loaded</span>
+            <span className={styles.emptyText}>{isIr ? 'No IR loaded' : 'No model loaded'}</span>
           </div>
         )}
 
@@ -81,7 +88,7 @@ export function BlockHighlight({ rig, analyser }: BlockHighlightProps) {
           kindLabel={kindLabel}
           loadedName={loaded?.name ?? null}
           entry={libraryEntry}
-          slot={NAM_MODEL_KINDS.has(instance.kind) ? 'model' : 'ir'}
+          slot={isIr ? 'ir' : 'model'}
           blockId={instance.id}
           loadTarget={
             block
