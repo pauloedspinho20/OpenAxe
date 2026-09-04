@@ -30,6 +30,27 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
 
+  // Hermetic update check (see src/hooks/useUpdateCheck.ts): the hook fetches
+  // api.github.com + the landing fallback on every fresh load. In CI the API
+  // has no releases (404) and the fallback is CORS-blocked, and browsers log
+  // failed fetches as console errors no matter how carefully the hook catches
+  // them — which trips the zero-console-error assertion below. Fulfill with a
+  // tag older than the app version so the hook resolves to "no update" and
+  // never attempts the fallback.
+  await page.route(
+    'https://api.github.com/repos/pauloedspinho20/OpenAxe/releases/latest',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tag_name: 'v0.0.0',
+          html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.0.0',
+          published_at: null,
+        }),
+      }),
+  )
+
   await page.goto('/')
   // Start from a clean slate: the grid/presets persist to IndexedDB (see
   // src/storage/db.ts), so a prior test run's saved blocks/presets would
