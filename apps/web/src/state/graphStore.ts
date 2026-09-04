@@ -207,10 +207,30 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
   },
 
   removeBlock: (id) => {
-    set((state) => ({
-      blocks: state.blocks.filter((b) => b.id !== id),
-      edges: state.edges.filter((e) => e.from.blockId !== id && e.to.blockId !== id),
-    }))
+    const state = get()
+    if (!state.blocks.some((b) => b.id === id)) return
+    // Splice the chain back together: every outgoing cable (deleted -> next)
+    // is re-anchored to an incoming source (prev -> deleted), validated like
+    // any hand-drawn cable. Single-in/single-out is the common case (one new
+    // cable); a fan-out (one in, many out) re-anchors each branch to the same
+    // source; many-in (a Mixer) can only feed a single-input target once, so
+    // the first valid source wins and the rest are dropped. A side with no
+    // cables (chain end, Send/Return half-jack) splices nothing.
+    const incoming = state.edges.filter((e) => e.to.blockId === id)
+    const outgoing = state.edges.filter((e) => e.from.blockId === id)
+    const blocks = state.blocks.filter((b) => b.id !== id)
+    const remaining = state.edges.filter((e) => e.from.blockId !== id && e.to.blockId !== id)
+    const validatable = toValidatable(blocks)
+    const next: EdgeInstance[] = [...remaining]
+    for (const out of outgoing) {
+      for (const inn of incoming) {
+        if (canConnect(validatable, next, inn.from, out.to).ok) {
+          next.push({ id: newEdgeId(), from: inn.from, to: out.to })
+          break
+        }
+      }
+    }
+    set({ blocks, edges: next })
   },
 
   moveBlock: (id, row, col) => {
