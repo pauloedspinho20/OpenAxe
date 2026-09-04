@@ -38,9 +38,9 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   PR): `include/openaxe/engine.h` + `src/engine.cpp` add
   `openaxe::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
-  4 permissive reverb algorithms for `kReverb`, one of the 4 DSPark effects for
-  `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
-  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`, and passthrough
+  4 permissive reverb algorithms for `kReverb`, one of the 5 DSPark effects for
+  `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`/`kPhaser`, hand-written wrappers for
+  `kFlanger`/`kDelay`, DaisySP's chorus for `kChorus`, and passthrough
   for `kCab`/`kMixer`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
   `include/openaxe/api.h` + `src/api.cpp`
@@ -69,6 +69,16 @@ wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
   equal wet/dry mix and pan/gain scaling are stripped in the wrapper so the
   engine's own `mix` knob owns the blend; `stereo` sweeps the right channel's
   LFO at a slightly higher rate for drift-based width, or collapses to mono.
+- **Phaser** (`include/openaxe/dsp/phaser.h` + `src/dsp/phaser.cpp`) — wraps
+  `dspark::Phaser` through the same `DsparkEffect` adapter as the Compressor,
+  voiced as an MXR Phase 90 (issue #317): the EVH pedal's circuit with its
+  Script/Block switch, replacing a hand-rolled 4-param implementation
+  (rate/depth/feedback/stages). 2 params: rate (the pedal's Speed knob,
+  0.1–8 Hz, default 0.5) and script (the Script switch, default Script voice
+  on). Stages (4), triangle LFO, 200 Hz–2.8 kHz sweep, mono sweep and wet-only
+  output are fixed in `Configure()` — fewer knobs on purpose, the way the
+  pedal has one. The engine's own `mix` knob (default 0.5 for `kPhaser`)
+  owns the blend.
 - **Convolver** (`include/openaxe/dsp/convolver.h` + `src/dsp/convolver.cpp`)
   — cabinet/room impulse-response convolution, the DSP behind a Cab block.
   Partitioned convolution in the standard two-part form: a direct time-domain FIR
@@ -323,11 +333,11 @@ binding documents.
 All added as git submodules under `third_party/`, and all wired into the
 build — every one backs a real effect kind:
 
-| Path       | Upstream                                                                                | License | Wired into the build?                                             |
-| ---------- | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------- |
-| `nam-core` | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                                 |
-| `dspark`   | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above       |
-| `daisysp`  | [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)                     | MIT     | **Yes** — Chorus (its `Source/Effects/chorus.{h,cpp}`), see above |
+| Path       | Upstream                                                                                | License | Wired into the build?                                              |
+| ---------- | --------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------ |
+| `nam-core` | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                                  |
+| `dspark`   | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo/Phaser, see above |
+| `daisysp`  | [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)                     | MIT     | **Yes** — Chorus (its `Source/Effects/chorus.{h,cpp}`), see above  |
 
 The reverb algorithms (hall/room/plate/early-reflections/spring) are
 hand-written and vendor nothing (issue #372 removed the former

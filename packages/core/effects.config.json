@@ -60,26 +60,26 @@
     "$comment_hidden_effects": "Both were hidden pending the defects in issues #318 and #319 being fixed, and both now are. ring-mod runs its carrier multiply and drive stage at 4x through dspark::Oversampling - residual aliasing measures -68.9 dB against a 16x reference, where the base-rate version sat at -9.2 dBc. granular-delay is off the two-alternating-voice design onto dspark::GranularProcessor with genuinely random jitter, allocates nothing on the audio thread, and no longer defaults to a grain overlap below 1 (which had left 37 percent of its output samples at hard zero). Both are in the palette as of that work.",
     "ring-mod": {
       "enumName": "kRingMod",
-      "compiled": true,
-      "inPalette": true,
+      "compiled": false,
+      "inPalette": false,
       "cppFile": "ring_mod.cpp"
     },
     "granular-delay": {
       "enumName": "kGranularDelay",
-      "compiled": true,
-      "inPalette": true,
+      "compiled": false,
+      "inPalette": false,
       "cppFile": "granular_delay.cpp"
     },
     "filter": {
       "enumName": "kFilter",
-      "compiled": true,
-      "inPalette": true,
+      "compiled": false,
+      "inPalette": false,
       "cppFile": "filter.cpp"
     },
     "$comment_pitch_shifter": "Out of the palette for now. Issue #320 is still open: formant preservation would mean dspark::PitchShifter and 2 x fftSize of latency (4096 samples / 85 ms at the default) against this implementation's ~4, and issue #268 had already rejected 40 ms. Left compiled so a preset that references the kind still loads instead of going through the unsupported-block channel.",
     "pitch-shifter": {
       "enumName": "kPitchShifter",
-      "compiled": true,
+      "compiled": false,
       "inPalette": false,
       "cppFile": "pitch_shifter.cpp"
     },

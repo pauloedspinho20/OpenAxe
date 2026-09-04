@@ -159,6 +159,13 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_HAS_DSPARK)
   target_link_libraries(cab_ir_level_test PRIVATE openaxe_core)
   add_test(NAME cab_ir_level_test COMMAND cab_ir_level_test)
 
+  # Cab post-IR low/high cuts (issue #373): param surface, bit-identical
+  # defaults, stopband attenuation, and a truly dry dry-path. Same guard as
+  # engine_test - it drives AudioEngine, which needs all three DSP families.
+  add_executable(cab_cuts_test cab_cuts_test.cpp)
+  target_link_libraries(cab_cuts_test PRIVATE openaxe_core)
+  add_test(NAME cab_cuts_test COMMAND cab_cuts_test)
+
   # Golden-audio regression harness (issue #315). Drives AudioEngine over every
   # compiled effect, so it needs the same three families this block guards.
   # WHOLE_ARCHIVE for NAM's self-registering architecture parsers. Reads json.h
@@ -256,8 +263,17 @@ if(OPENAXE_HAS_DSPARK)
     target_link_libraries(tremolo_test PRIVATE openaxe_core)
     add_test(NAME tremolo_test COMMAND tremolo_test)
   endif()
+
+  # The Phaser wrapper backs onto dspark::Phaser voiced as an MXR Phase 90
+  # (issue #317), so like the other DSPark wrappers it builds only when that
+  # submodule is initialized - and only when the kind is compiled in.
+  if(OPENAXE_BLOCK_PHASER)
+    add_executable(phaser_test phaser_test.cpp)
+    target_link_libraries(phaser_test PRIVATE openaxe_core)
+    add_test(NAME phaser_test COMMAND phaser_test)
+  endif()
 else()
-  message(WARNING "Skipping compressor_test/equalizer_test/noise_gate_test/tremolo_test - packages/core/third_party/dspark not initialized")
+  message(WARNING "Skipping compressor_test/equalizer_test/noise_gate_test/tremolo_test/phaser_test - packages/core/third_party/dspark not initialized")
 endif()
 
 # The Chorus wrapper backs onto the vendored DaisySP chorus (issue #359), so

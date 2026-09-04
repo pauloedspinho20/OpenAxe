@@ -299,6 +299,28 @@
             "mode": "exponential",
             "timeConstant": 0.03
           }
+        },
+        {
+          "symbol": "low_cut",
+          "label": "Low Cut",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "high_cut",
+          "label": "High Cut",
+          "min": 2000,
+          "max": 20000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
         }
       ]
     },
@@ -415,9 +437,9 @@
       "params": [
         {
           "symbol": "rate",
-          "label": "Rate",
+          "label": "Speed",
           "min": 0.1,
-          "max": 5,
+          "max": 8,
           "unit": "Hz",
           "smoothing": {
             "mode": "exponential",
@@ -425,32 +447,10 @@
           }
         },
         {
-          "symbol": "depth",
-          "label": "Depth",
-          "min": 0.1,
-          "max": 1,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "feedback",
-          "label": "Feedback",
+          "symbol": "script",
+          "label": "Voice",
           "min": 0,
-          "max": 0.9,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "stages",
-          "label": "Stages",
-          "min": 2,
-          "max": 8,
+          "max": 1,
           "unit": "",
           "smoothing": {
             "mode": "none",
@@ -1723,9 +1723,31 @@
             "mode": "exponential",
             "timeConstant": 0.03
           }
+        },
+        {
+          "symbol": "low_cut",
+          "label": "Low Cut",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "high_cut",
+          "label": "High Cut",
+          "min": 2000,
+          "max": 20000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
         }
       ],
-      "comment": "Cab blocks are IR convolution (dsp/convolver.cpp) with a wet/dry blend. Like the amp table these params live in engine.cpp rather than a DSP wrapper, hence the synthetic generated fragment name (engine_cab_params.inc). The web UI calls this knob irMix; the bridge maps that camelCase key onto this symbol."
+      "comment": "Cab blocks are IR convolution (dsp/convolver.cpp) with a wet/dry blend plus post-IR low-cut (HPF) and high-cut (LPF) biquads (issue #373). Like the amp table these params live in engine.cpp rather than a DSP wrapper, hence the synthetic generated fragment name (engine_cab_params.inc). The web UI calls these knobs irMix/lowCut/highCut; the bridge maps those camelCase keys onto these symbols."
     },
     "mixer": {
       "cppFile": "engine_mixer.cpp",

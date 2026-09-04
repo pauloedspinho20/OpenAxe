@@ -1,6 +1,12 @@
 # Unsigned dev artifacts for the native desktop app (issue #15 M4): build the
 # React UI + C++ shell on each OS and upload the platform package. Signing /
 # notarization is deliberately deferred - these are development artifacts.
+#
+# COST (issue #379 — private repo, Actions minutes billed, macOS ×10): the
+# full 3-OS matrix runs only on merge/tag/schedule/dispatch or a `full-ci`
+# labelled PR. Plain PRs run a single Linux build leg (no CPack, no uploads);
+# Linux catches ~95% of native breakage and the OS-specific remainder is
+# covered pre-merge via `full-ci`, weekly, and the tag builds that ship.
 name: Desktop Build
 
 on:
@@ -25,23 +31,47 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/desktop.yml'
+  # Weekly full matrix (Sunday 03:00 UTC). Nightly would bankrupt the Free
+  # quota (~900 billed min/night); weekly (~400/mo) is the affordable
+  # backstop alongside merge/tag builds.
+  schedule:
+    - cron: '0 3 * * 0'
 
 concurrency:
   group: desktop-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Decides the build matrix: full 3-OS everywhere except plain PRs, which
+  # get Linux-only unless the reviewer adds the `full-ci` label.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      full: ${{ steps.set.outputs.full }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ] || \
+             [ "${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}" = "true" ]; then
+            echo 'matrix=[{"os":"macos-14","artifact":"dmg"},{"os":"windows-latest","artifact":"zip"},{"os":"ubuntu-24.04","artifact":"deb"}]' >> "$GITHUB_OUTPUT"
+            echo 'full=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix=[{"os":"ubuntu-24.04","artifact":"deb"}]' >> "$GITHUB_OUTPUT"
+            echo 'full=false' >> "$GITHUB_OUTPUT"
+          fi
+
   desktop:
+    needs: gate
+    # Draft PRs pay nothing (issue #379); ready-for-review is the signal.
+    # On non-PR events github.event.pull_request is null, and null != true.
+    if: github.event.pull_request.draft != true
     strategy:
-      fail-fast: false
+      # Fail fast on PRs (cheap signal); completeness only matters for the
+      # full runs that feed releases.
+      fail-fast: ${{ github.event_name == 'pull_request' }}
       matrix:
-        include:
-          - os: macos-14
-            artifact: dmg
-          - os: windows-latest
-            artifact: zip
-          - os: ubuntu-24.04
-            artifact: deb
+        include: ${{ fromJSON(needs.gate.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -87,19 +117,19 @@ jobs:
           ccache --set-config=max_size=400M 2>$null || true
           ccache -z 2>$null || true
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/setup-js
 
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install workspace
-        run: pnpm install --frozen-lockfile
+      # PR leg: compile + link check only. No CPack, no uploads — nothing here
+      # ships, and the full runs already prove packaging (issue #379).
+      - name: Build desktop app (PR leg)
+        if: needs.gate.outputs.full != 'true'
+        env:
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+        run: pnpm --filter @openaxe/desktop build
 
       - name: Package desktop app
+        if: needs.gate.outputs.full == 'true'
         env:
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
           CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -111,6 +141,7 @@ jobs:
         run: ccache -s 2>/dev/null || true
 
       - name: Upload artifact
+        if: needs.gate.outputs.full == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-desktop-${{ matrix.os }}

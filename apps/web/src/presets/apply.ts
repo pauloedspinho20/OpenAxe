@@ -1,5 +1,6 @@
 import type { UseBoundStore, StoreApi } from 'zustand'
 import type { GraphState } from '../state/graphStore'
+import { applyPresetSelection } from '../state/selection'
 import { getCachedAsset } from '../engine/assetCache'
 import { NAM_MODEL_KINDS } from '../engine/blocks/blockRegistry'
 import type { Preset, PresetBlockData, PresetBlock, PresetRig } from './types'
@@ -140,6 +141,10 @@ export async function applyPreset(
     preset.masterLevel,
     preset.masterMuted,
   )
+
+  // Opening a preset selects the input-first block by default (even on a cold
+  // boot), or the last explicitly-selected block when revisiting mid-session.
+  applyPresetSelection(preset.id, preset.blocks, preset.edges)
 
   return { missingAssets }
 }

@@ -64,6 +64,19 @@ function range(kind: RangeKind, symbol: string): SymbolRange {
 }
 
 const dB = (value: number) => `${value.toFixed(0)}dB`
+/**
+ * A linear I/O trim gain (0..1.5) rendered as dB: 1 → "0.0dB" (unity),
+ * 1.5 → "+3.5dB", 0.5 → "−6.0dB", 0 → "−∞dB". Positive boosts carry an
+ * explicit "+" so boost vs. cut reads at a glance; the minus is the same
+ * U+2212 the meter peak readouts use.
+ */
+const trimDb = (value: number) => {
+  if (value <= 0) return '−∞dB'
+  const db = 20 * Math.log10(value)
+  if (db === 0) return '0.0dB'
+  const sign = db > 0 ? '+' : ''
+  return `${sign}${db.toFixed(1).replace('-', '−')}dB`
+}
 const percent = (value: number) => `${Math.round(value * 100)}%`
 const hz = (value: number) =>
   value >= 1000 ? `${(value / 1000).toFixed(1)}kHz` : `${Math.round(value)}Hz`
@@ -82,7 +95,7 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
   return [
     {
       key: `band${index}_frequency`,
-      label: 'Freq',
+      label: `Freq ${index + 1}`,
       control: 'knob',
       ...range('eq', `band${index}_frequency`),
       step: 10,
@@ -258,6 +271,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: dB,
       description: 'Output gain to make up for level lost to compression.',
     },
+
+    {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      ...range('compressor', 'mix'),
+      step: 0.01,
+      defaultValue: 1,
+      formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
     {
       // character is a select in the UI, but a plain numeric param core-side
       // (0..3) - see range('compressor', 'character') if a range is ever
@@ -273,17 +297,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'varimu', label: 'Varimu' },
       ],
       defaultValue: 'clean',
-      primary: true,
-    },
-    {
-      key: 'mix',
-      label: 'Mix',
-      control: 'knob',
-      ...range('compressor', 'mix'),
-      step: 0.01,
-      defaultValue: 1,
-      formatValue: percent,
-      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   eq: [
@@ -292,13 +305,35 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     ...eqBand(2, 2000),
     ...eqBand(3, 6000),
     {
+      key: 'low_cut',
+      label: 'Low Cut',
+      control: 'knob',
+      ...range('eq', 'low_cut'),
+      step: 5,
+      defaultValue: 20,
+      formatValue: hz,
+      group: 'Cuts',
+      description: 'High-pass filter after the bands. Trims boom without spending a band.',
+    },
+    {
+      key: 'high_cut',
+      label: 'High Cut',
+      control: 'knob',
+      ...range('eq', 'high_cut'),
+      step: 50,
+      defaultValue: 20000,
+      formatValue: hz,
+      group: 'Cuts',
+      description: 'Low-pass filter after the bands. Trims fizz without spending a band.',
+    },
+    {
       key: 'mix',
       label: 'Mix',
       control: 'knob',
       min: 0,
       max: 1,
       step: 0.01,
-      defaultValue: 0.4,
+      defaultValue: 1,
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
@@ -345,6 +380,17 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       description: 'Regeneration around the effect. Adds thickness or resonance.',
     },
     {
+      key: 'mix',
+      label: 'Mix',
+      control: 'knob',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.4,
+      formatValue: percent,
+      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
+    {
       // Named values, not '0'/'1': stringParamMaps.ts already owns
       // `stereo` -> { mono: 0, stereo: 1 } for tremolo, so both block facades
       // send the same number and web/desktop can't drift.
@@ -358,17 +404,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 'stereo',
       description:
         'Stereo offsets the two channels\u2019 LFOs by a quarter cycle for width. Mono sweeps them together, which survives a later mono sum instead of partly cancelling.',
-    },
-    {
-      key: 'mix',
-      label: 'Mix',
-      control: 'knob',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      defaultValue: 0.4,
-      formatValue: percent,
-      description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
   ],
   flanger: [
@@ -427,43 +462,26 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   phaser: [
     {
       key: 'rate',
-      label: 'Rate',
+      label: 'Speed',
       control: 'knob',
       ...range('phaser', 'rate'),
       step: 0.05,
-      defaultValue: 0.2,
+      defaultValue: 0.5,
       formatValue: hz,
-      description: 'LFO rate. Controls speed of modulation.',
+      description:
+        'The pedal\u2019s Speed knob. Slow for the EVH swirl, fast for Leslie-like warble.',
     },
     {
-      key: 'depth',
-      label: 'Depth',
-      control: 'knob',
-      ...range('phaser', 'depth'),
-      step: 0.01,
-      defaultValue: 0.6,
-      formatValue: percent,
-      description: 'How much of the sweep range the notches travel. Wider = broader swoosh.',
-    },
-    {
-      key: 'feedback',
-      label: 'Feedback',
-      control: 'knob',
-      ...range('phaser', 'feedback'),
-      step: 0.01,
-      defaultValue: 0.35,
-      formatValue: percent,
-      description: 'Regeneration around the effect. Adds thickness or resonance.',
-    },
-    {
-      key: 'stages',
-      label: 'Stages',
-      control: 'knob',
-      ...range('phaser', 'stages'),
-      step: 1,
-      defaultValue: 4,
-      formatValue: plain,
-      description: 'Number of phase stages. More = more notches, deeper effect.',
+      key: 'script',
+      label: 'Voice',
+      control: 'select',
+      options: [
+        { value: 'script', label: 'Script' },
+        { value: 'block', label: 'Block' },
+      ],
+      defaultValue: 'script',
+      description:
+        'The EVH pedal\u2019s Script switch. Script is the vintage voice - light regeneration, soft chewy sweep. Block is hotter feedback for sharper, more resonant peaks.',
     },
     {
       key: 'mix',
@@ -511,11 +529,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'square', label: 'Square' },
       ],
       defaultValue: 'sine',
-      primary: true,
     },
     {
       key: 'stereo',
-      label: 'Stereo',
+      label: 'Mode',
       control: 'select',
       options: [
         { value: 'mono', label: 'Mono' },
@@ -526,7 +543,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     },
     {
       key: 'mode',
-      label: 'Mode',
+      label: 'Type',
       control: 'select',
       options: [
         { value: 'normal', label: 'Normal' },
@@ -582,19 +599,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   ],
   filter: [
     {
-      key: 'type',
-      label: 'Type',
-      control: 'select',
-      options: [
-        { value: 'wah', label: 'Wah' },
-        { value: 'envelope', label: 'Envelope' },
-        { value: 'ladder', label: 'Ladder' },
-      ],
-      defaultValue: 'wah',
-      primary: true,
-      description: 'Filter type: Wah=bandpass sweep, Envelope=follower, Ladder=4-pole resonant.',
-    },
-    {
       key: 'frequency',
       label: 'Frequency',
       control: 'knob',
@@ -634,18 +638,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Sensitivity to picking dynamics. Higher = more reactive.',
     },
-    {
-      key: 'mode',
-      label: 'Drive Mode',
-      control: 'select',
-      options: [
-        { value: 'pedal', label: 'Pedal' },
-        { value: 'env', label: 'Env' },
-        { value: 'lfo', label: 'LFO' },
-      ],
-      defaultValue: 'pedal',
-      description: 'Mode selector for this block.',
-    },
+
     {
       key: 'lfo_rate',
       label: 'LFO Rate',
@@ -666,6 +659,30 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.5,
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
+    {
+      key: 'mode',
+      label: 'Mode',
+      control: 'select',
+      options: [
+        { value: 'pedal', label: 'Pedal' },
+        { value: 'env', label: 'Env' },
+        { value: 'lfo', label: 'LFO' },
+      ],
+      defaultValue: 'pedal',
+      description: 'Mode selector for this block.',
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      control: 'select',
+      options: [
+        { value: 'wah', label: 'Wah' },
+        { value: 'envelope', label: 'Envelope' },
+        { value: 'ladder', label: 'Ladder' },
+      ],
+      defaultValue: 'wah',
+      description: 'Filter type: Wah=bandpass sweep, Envelope=follower, Ladder=4-pole resonant.',
     },
   ],
   'pitch-shifter': [
@@ -819,20 +836,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   ],
   rotary: [
     {
-      key: 'speed',
-      label: 'Speed',
-      control: 'select',
-      options: [
-        { value: 'stop', label: 'Stop' },
-        { value: 'chorale', label: 'Chorale' },
-        { value: 'tremolo', label: 'Tremolo' },
-      ],
-      defaultValue: 'chorale',
-      primary: true,
-      description:
-        'Speed selector, like a type: Stop=braked, Chorale=slow, Tremolo=fast, with ramped acceleration.',
-    },
-    {
       key: 'drive',
       label: 'Drive',
       control: 'knob',
@@ -904,25 +907,23 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
+    {
+      key: 'speed',
+      label: 'Type',
+      control: 'select',
+      options: [
+        { value: 'stop', label: 'Stop' },
+        { value: 'chorale', label: 'Chorale' },
+        { value: 'tremolo', label: 'Tremolo' },
+      ],
+      defaultValue: 'chorale',
+      description:
+        'Speed selector, like a type: Stop=braked, Chorale=slow, Tremolo=fast, with ramped acceleration.',
+    },
   ],
   // 3 character models: Digital (clean), Analog (BBD-style filtering +
   // saturation), Tape (Analog + wow/flutter pitch modulation).
   delay: [
-    {
-      // model is a select in the UI, backed by a plain numeric param
-      // core-side (0..2, see range('delay', 'model')) - same situation as
-      // compressor.character/tremolo.shape.
-      key: 'model',
-      label: 'Model',
-      control: 'select',
-      options: [
-        { value: 'digital', label: 'Digital' },
-        { value: 'analog', label: 'Analog' },
-        { value: 'tape', label: 'Tape' },
-      ],
-      defaultValue: 'digital',
-      primary: true,
-    },
     {
       key: 'time',
       label: 'Time',
@@ -975,19 +976,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       visible: (v) => v.model === 'tape',
       description: 'Tape wow rate. Speed of wobble.',
     },
-    {
-      // stereo_mode is a select in the UI over a plain numeric core param
-      // (0 = Stereo, 1 = Ping-Pong), like model above. It is deliberately
-      // independent of model, so any character can ping-pong (#314).
-      key: 'stereo_mode',
-      label: 'Stereo',
-      control: 'select',
-      options: [
-        { value: 'stereo', label: 'Stereo' },
-        { value: 'ping-pong', label: 'Ping-Pong' },
-      ],
-      defaultValue: 'stereo',
-    },
+
     {
       key: 'width',
       label: 'Width',
@@ -1021,6 +1010,34 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Output level trim after the effect.',
     },
+
+    {
+      // model is a select in the UI, backed by a plain numeric param
+      // core-side (0..2, see range('delay', 'model')) - same situation as
+      // compressor.character/tremolo.shape.
+      key: 'model',
+      label: 'Model',
+      control: 'select',
+      options: [
+        { value: 'digital', label: 'Digital' },
+        { value: 'analog', label: 'Analog' },
+        { value: 'tape', label: 'Tape' },
+      ],
+      defaultValue: 'digital',
+    },
+    {
+      // stereo_mode is a select in the UI over a plain numeric core param
+      // (0 = Stereo, 1 = Ping-Pong), like model above. It is deliberately
+      // independent of model, so any character can ping-pong (#314).
+      key: 'stereo_mode',
+      label: 'Mode',
+      control: 'select',
+      options: [
+        { value: 'stereo', label: 'Stereo' },
+        { value: 'ping-pong', label: 'Ping-Pong' },
+      ],
+      defaultValue: 'stereo',
+    },
   ],
   // Four permissive reverb algorithms (packages/core, issue #372): Hall, Room, Plate,
   // Early Reflections. Each algorithm exposes a different subset of the
@@ -1037,22 +1054,6 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
   // `predelay` both back this one `predelay` knob) - see
   // packages/core/param_schema.json's reverb.comment and reverb.derived.
   reverb: [
-    {
-      key: 'reverbAlgorithm',
-      label: 'Algorithm',
-      control: 'select',
-      options: [
-        { value: 'hall', label: 'Hall' },
-        { value: 'room', label: 'Room' },
-        { value: 'plate', label: 'Plate' },
-        { value: 'early-reflections', label: 'Early Reflections' },
-        { value: 'spring', label: 'Spring' },
-      ],
-      defaultValue: 'hall',
-      primary: true,
-      description:
-        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only, Spring=boingy tank.',
-    },
     {
       key: 'roomSize',
       label: 'Size',
@@ -1152,6 +1153,21 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percentRaw,
       description: 'Dry signal preserved. 0 lets engine handle blend.',
     },
+    {
+      key: 'reverbAlgorithm',
+      label: 'Algorithm',
+      control: 'select',
+      options: [
+        { value: 'hall', label: 'Hall' },
+        { value: 'room', label: 'Room' },
+        { value: 'plate', label: 'Plate' },
+        { value: 'early-reflections', label: 'Early Reflections' },
+        { value: 'spring', label: 'Spring' },
+      ],
+      defaultValue: 'hall',
+      description:
+        'Reverb character: Hall=large diffuse, Room=tighter, Plate=dense, Early=reflections only, Spring=boingy tank.',
+    },
   ],
 }
 
@@ -1221,7 +1237,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     max: 1.5,
     step: 0.01,
     defaultValue: 1,
-    formatValue: percent,
+    formatValue: trimDb,
     group: 'I/O',
     description: 'Block input trim into model/effect.',
   },
@@ -1233,7 +1249,7 @@ const IN_OUT_LEVEL_FIELDS: KnobField[] = [
     max: 1.5,
     step: 0.01,
     defaultValue: 1,
-    formatValue: percent,
+    formatValue: trimDb,
     group: 'I/O',
     description: 'Block output trim to next block.',
   },
@@ -1272,6 +1288,28 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       defaultValue: 1,
       formatValue: percent,
     },
+    {
+      // Post-IR high-pass (lowCut -> low_cut) and low-pass (highCut ->
+      // high_cut) shaping the wet signal before the dry blend (issue #373).
+      key: 'lowCut',
+      label: 'Low Cut',
+      control: 'knob',
+      ...range('cab', 'low_cut'),
+      step: 5,
+      defaultValue: 20,
+      formatValue: hz,
+      description: 'High-pass on the IR output. Trims boom and handling noise.',
+    },
+    {
+      key: 'highCut',
+      label: 'High Cut',
+      control: 'knob',
+      ...range('cab', 'high_cut'),
+      step: 50,
+      defaultValue: 20000,
+      formatValue: hz,
+      description: 'Low-pass on the IR output. Trims fizz and harsh highs.',
+    },
     ...IN_OUT_LEVEL_FIELDS,
   ],
   mixer: Array.from({ length: MIXER_INPUT_COUNT }, (_, i) => {
@@ -1280,7 +1318,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       {
         key: `in${i}_level`,
         description: 'Mixer input level.',
-        label: 'Level',
+        label: `Level ${i + 1}`,
         control: 'knob',
         ...range('mixer', `in${i}_level`),
         step: 0.01,
@@ -1291,7 +1329,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
       {
         key: `in${i}_pan`,
         description: 'Mixer input pan.',
-        label: 'Pan',
+        label: `Pan ${i + 1}`,
         control: 'knob',
         ...range('mixer', `in${i}_pan`),
         step: 0.01,
