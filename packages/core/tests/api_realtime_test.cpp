@@ -270,7 +270,10 @@ void TestCabIrConvolutionOverAbi() {
   openaxe_reset(graph, 48000.0, 128);
 
   // A two-tap IR: unity plus a half-strength echo 64 samples later. Easy to read
-  // in the output, and it spans a partition boundary.
+  // in the output, and it spans a partition boundary. Its energy is sqrt(1.25),
+  // so install leveling (issue #365, attenuate-only unit-energy) scales both
+  // taps by 1/sqrt(1.25) ~= 0.8944 - the assertions below pin the leveled
+  // values, not the raw file taps.
   std::vector<float> ir(65, 0.0f);
   ir[0] = 1.0f;
   ir[64] = 0.5f;
@@ -287,9 +290,9 @@ void TestCabIrConvolutionOverAbi() {
   };
 
   const auto wet = render(1.0f);
-  OPENAXE_EXPECT(std::fabs(wet[0] - 1.0f) < 1e-4f);    // dry tap, no latency
-  OPENAXE_EXPECT(std::fabs(wet[64] - 0.5f) < 1e-4f);   // the echo, on time
-  OPENAXE_EXPECT(std::fabs(wet[32]) < 1e-4f);          // nothing in between
+  OPENAXE_EXPECT(std::fabs(wet[0] - 0.8944f) < 1e-3f);    // dry tap, no latency (leveled)
+  OPENAXE_EXPECT(std::fabs(wet[64] - 0.4472f) < 1e-3f);   // the echo, on time (leveled)
+  OPENAXE_EXPECT(std::fabs(wet[32]) < 1e-4f);             // nothing in between
 
   // Mix at 0 is fully dry: the impulse survives, the echo doesn't. The cab's
   // ir_mix is smoothed (exponential, 30 ms per the schema) per issue #122, so settle a few
@@ -304,7 +307,7 @@ void TestCabIrConvolutionOverAbi() {
   openaxe_set_param(graph, cab, 0, 0.5f);
   for (int i = 0; i < 200; ++i) render(1.0f);
   const auto half = render(1.0f);
-  OPENAXE_EXPECT(std::fabs(half[64] - 0.25f) < 1e-4f);
+  OPENAXE_EXPECT(std::fabs(half[64] - 0.2236f) < 1e-3f);
 
   // Unloading returns the block to passthrough.
   openaxe_unload_ir(graph, cab);
