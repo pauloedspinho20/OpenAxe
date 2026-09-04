@@ -134,6 +134,13 @@ if(UNIX AND NOT APPLE)
   # miniaudio Linux backends (ALSA/Pulse/JACK): pthreads, libm, dlopen.
   target_link_libraries(openaxe_desktop_lib PRIVATE pthread m dl)
 endif()
+if(WIN32)
+  # miniaudio.h pulls in windows.h, whose function-like min/max macros break
+  # std::min/std::max on MSVC (error C2589 in audio.cpp). JUCE's CMake setup
+  # used to define NOMINMAX for us; now we do it ourselves (audio.cpp has a
+  # matching #define guard as belt-and-braces).
+  target_compile_definitions(openaxe_desktop_lib PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 if(APPLE)
   # miniaudio CoreAudio backend frameworks.
   target_link_libraries(openaxe_desktop_lib PRIVATE "-framework CoreAudio" "-framework AudioToolbox")

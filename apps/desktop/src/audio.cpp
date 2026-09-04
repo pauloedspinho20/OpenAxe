@@ -1,5 +1,16 @@
 #include "audio.h"
 
+// On Windows, windows.h (pulled in by miniaudio.h) defines function-like
+// min/max macros that break std::min/std::max on MSVC (error C2589). JUCE's
+// CMake setup defined NOMINMAX for us; now we define it ourselves before
+// anything can include windows.h. The CMake WIN32 compile definition below
+// is the primary guard - this covers any other include path.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 
