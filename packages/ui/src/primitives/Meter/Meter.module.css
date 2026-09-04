@@ -104,6 +104,19 @@
   white-space: nowrap;
 }
 
+/* Caption below a vertical meter (e.g. the inspector's IN/OUT pair). */
+.meterLabel {
+  position: absolute;
+  bottom: -12px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
 @media (max-width: var(--mw-md)) {
   .segment {
     width: 18px;

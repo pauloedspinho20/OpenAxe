@@ -15,6 +15,7 @@ export const EFFECT_KINDS = new Set<BlockKind>([
   'pitch-shifter',
   'granular-delay',
   'rotary',
+  'cab',
 ])
 
 /** Every gear kind that's a NAM model capture rather than an IR - see CabBlock/AmpBlock's doc comments. */

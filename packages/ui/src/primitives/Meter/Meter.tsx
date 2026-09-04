@@ -16,7 +16,7 @@ const PEAK_FLOOR_DB = -60
 export function levelToPeakDb(level: number): string {
   if (level <= 0) return '−∞'
   const floored = Math.max(20 * Math.log10(level), PEAK_FLOOR_DB)
-  return `${floored.toFixed(1).replace('-', '−')} dB`
+  return `${floored.toFixed(1).replace('-', '−')}`
 }
 
 export type MeterVariant = 'level' | 'gainReduction'
@@ -29,6 +29,8 @@ export interface MiniMeterProps {
   variant?: MeterVariant
   /** Optional value readout (e.g. a peak in dB, or a live gain-reduction value) rendered above a vertical meter. MiniMeter ignores it. */
   valueLabel?: string
+  /** Optional caption rendered below a vertical meter (e.g. "IN"/"OUT"). MiniMeter ignores it. */
+  label?: string
 }
 
 /** A single-bar meter for tight spaces (e.g. a grid block card). The bar shows a fixed green→amber→red gradient, revealed by the level. */
@@ -46,7 +48,13 @@ export function MiniMeter({ level, title, variant = 'level' }: MiniMeterProps) {
 }
 
 /** A single-bar medium meter for tight spaces (e.g. the Block Inspector). The bar shows a fixed green→amber→red gradient, revealed by the level. */
-export function MediumMeter({ level, title, variant = 'level', valueLabel }: MiniMeterProps) {
+export function MediumMeter({
+  level,
+  title,
+  variant = 'level',
+  valueLabel,
+  label,
+}: MiniMeterProps) {
   const clamped = Math.min(1, Math.max(0, level))
   const gainReduction = variant === 'gainReduction'
   return (
@@ -58,6 +66,7 @@ export function MediumMeter({ level, title, variant = 'level', valueLabel }: Min
           style={{ clipPath: `inset(${(1 - clamped) * 100}% 0 0 0)` }}
         />
       </span>
+      {label !== undefined && <span className={styles.meterLabel}>{label}</span>}
     </span>
   )
 }

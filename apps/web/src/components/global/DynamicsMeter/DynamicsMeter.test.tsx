@@ -100,13 +100,13 @@ describe('DynamicsMeter', () => {
     expect(fillClipPath(container)).toBe('inset(70% 0 0 0)')
   })
 
-  it('renders no GR/Gate text label under the meter', () => {
+  it('renders a GR caption under the meter', () => {
     const rig = makeRig()
     const { container } = render(
       <DynamicsMeter rig={rig as never} blockId="c1" kind="compressor" />,
     )
     tick()
-    expect(container.textContent).not.toContain('GR')
+    expect(container.textContent).toContain('GR')
     expect(container.textContent).not.toContain('Gate')
   })
 
@@ -117,7 +117,7 @@ describe('DynamicsMeter', () => {
       <DynamicsMeter rig={rig as never} blockId="c1" kind="compressor" />,
     )
     tick()
-    expect(valueLabel(container)).toBe('−6.2 dB')
+    expect(valueLabel(container)).toBe('−6.2')
   })
 
   it('labels the gate with the attenuation: 0 dB when open, deep when closed', () => {
@@ -135,7 +135,7 @@ describe('DynamicsMeter', () => {
       <DynamicsMeter rig={closed as never} blockId="g1" kind="noise-gate" />,
     )
     tick()
-    expect(valueLabel(closedC)).toBe('−100.0 dB')
+    expect(valueLabel(closedC)).toBe('−100.0')
   })
 
   it('holds the peak gain reduction on the label for 1 second', () => {
@@ -147,16 +147,16 @@ describe('DynamicsMeter', () => {
       <DynamicsMeter rig={rig as never} blockId="c1" kind="compressor" />,
     )
     tick() // t=0: -12 dB enters the window
-    expect(valueLabel(container)).toBe('−12.0 dB')
+    expect(valueLabel(container)).toBe('−12.0')
 
     ;(rig.getGainReduction as ReturnType<typeof vi.fn>).mockReturnValue(-2)
     now = 500
     tick() // t=500: shallower now, but -12 is still inside the trailing 1 s
-    expect(valueLabel(container)).toBe('−12.0 dB')
+    expect(valueLabel(container)).toBe('−12.0')
 
     now = 1500
     tick() // t=1500: the t=0 sample aged out, so the peak rolls back to -2
-    expect(valueLabel(container)).toBe('−2.0 dB')
+    expect(valueLabel(container)).toBe('−2.0')
 
     nowSpy.mockRestore()
   })

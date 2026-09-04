@@ -67,6 +67,7 @@ export function LiveMeter({ label, analyser, variant = 'segments' }: LiveMeterPr
       <MediumMeter
         level={level}
         title={label}
+        {...(label !== undefined ? { label } : {})}
         {...(valueLabel !== undefined ? { valueLabel } : {})}
       />
     )

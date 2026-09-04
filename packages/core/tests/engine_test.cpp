@@ -123,8 +123,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
   const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
+#endif
 #if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
 #endif
@@ -138,8 +142,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
+#endif
 #if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
 #endif
@@ -152,8 +160,12 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
 #if OPENAXE_BLOCK_RING_MOD_COMPILED
   chain.push_back(ring_mod);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   chain.push_back(filter);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   chain.push_back(pitch);
+#endif
 #if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   chain.push_back(granular);
 #endif
@@ -887,6 +899,35 @@ void TestSendReturnInSameColumnStillRoutes() {
   for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
 }
 
+// The input meter reports the post-input-trim peak - what the block's DSP
+// actually received - while the output meter reports the post-output-trim
+// peak, so the inspector's IN/OUT pair shows gain staging through the block.
+void TestInputMeterTracksPostTrimInput() {
+  AudioEngine engine;
+  const BlockId first = engine.AddBlock(BlockKind::kCab, 0, 0);  // pure passthrough
+  const BlockId second = engine.AddBlock(BlockKind::kCab, 0, 1);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, first, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(first, 0, second, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(second, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Unknown blocks read 0 on both meters.
+  OPENAXE_EXPECT(engine.GetInputMeter(9999) == 0.0f);
+  OPENAXE_EXPECT(engine.GetMeter(9999) == 0.0f);
+
+  // Unity trims: the second block's input is the first block's output.
+  RunMono(engine, 0.5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetInputMeter(second) - 0.5f) < 1e-5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetMeter(second) - 0.5f) < 1e-5f);
+
+  // The input trim moves the IN meter; the output trim moves the OUT meter.
+  engine.SetInputTrim(second, 0.5f);
+  engine.SetOutputTrim(second, 0.5f);
+  RunMono(engine, 0.5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetInputMeter(second) - 0.25f) < 1e-5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetMeter(second) - 0.125f) < 1e-5f);
+}
+
 }  // namespace
 
 int main() {
@@ -912,6 +953,7 @@ int main() {
   TestUnpairedSendAndReturnSilent();
   TestSendReturnCycleIsBrokenNotDeadlocked();
   TestSendReturnInSameColumnStillRoutes();
+  TestInputMeterTracksPostTrimInput();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }
