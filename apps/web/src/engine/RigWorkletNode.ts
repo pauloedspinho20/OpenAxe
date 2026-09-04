@@ -66,6 +66,27 @@ export interface RigModelInfo {
 
 export type RigConnectResult = { ok: true } | { ok: false; reason: string }
 
+/**
+ * The narrow worklet surface a block facade (RigBlock) drives. RigWorkletNode
+ * implements it for the live rig; StagedRig adapts it with `stage: true`
+ * baked into every message so the same RigBlock code builds the staged rig
+ * (issue #367). Staged param writes bypass the rAF coalescing buffer
+ * deliberately: preset builds are one-shot (no knob-drag stream to collapse),
+ * and sharing the buffer would collide live/staged writes for the same
+ * block id.
+ */
+export interface RigBlockPort {
+  setParam(blockId: string, key: string, value: number): void
+  setBypass(blockId: string, bypassed: boolean): void
+  setReverbAlgorithm(blockId: string, algorithm: string): void
+  setTrim(blockId: string, input?: number, output?: number): void
+  loadModel(blockId: string, json: string, slimSize?: number): Promise<RigModelInfo>
+  unloadModel(blockId: string): Promise<void>
+  setSlimSize(blockId: string, slimSize: number): Promise<void>
+  loadIr(blockId: string, samples: Float32Array): Promise<void>
+  unloadIr(blockId: string): Promise<void>
+}
+
 interface WorkletReply {
   id: number
   ok: boolean
@@ -76,6 +97,10 @@ interface WorkletReply {
   gateGains?: Record<string, number>
   /** Core block-kind ids this WASM was built with - see assertCompiledKindsMatchConfig. */
   compiledKinds?: number[]
+  /** stageCommit answered "a switch is already in flight" - the caller retries. */
+  busy?: boolean
+  /** switchActive answer: a fade or tail drain is in flight. */
+  active?: boolean
 }
 
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
@@ -341,6 +366,120 @@ export class RigWorkletNode {
 
   async unloadIr(blockId: string): Promise<void> {
     await this.request({ type: 'unloadIr', block: blockId })
+  }
+
+  // ── Gapless staged switching (issue #367) ─────────────────────────────
+  // The staged graph is built with the same messages as the live rig plus
+  // `stage: true`, then made live by stageCommit's crossfade. Staged param
+  // writes skip the rAF coalescing buffer (see RigBlockPort).
+
+  /** Open a staged graph for the next rig. Throws when the WASM is too old. */
+  async stageBegin(): Promise<void> {
+    const reply = await this.request({ type: 'stageBegin' })
+    if (!reply.ok) throw new Error(reply.error ?? 'stageBegin failed')
+  }
+
+  /**
+   * Crossfade the staged rig live. Returns 'committed', or 'busy' when a
+   * previous switch is still fading/draining (the staged graph is kept -
+   * retry). Throws on any other failure.
+   */
+  async stageCommit(fadeMs: number, drainMs: number): Promise<'committed' | 'busy'> {
+    const reply = await this.request({ type: 'stageCommit', fadeMs, drainMs })
+    if (reply.ok) return 'committed'
+    if (reply.busy) return 'busy'
+    throw new Error(reply.error ?? 'stageCommit failed')
+  }
+
+  /** Abandon the staged graph, if any. Never throws. */
+  async stageDiscard(): Promise<void> {
+    await this.request({ type: 'stageDiscard' }).catch(() => {})
+  }
+
+  /** True while a fade or tail drain is in flight. */
+  async switchActive(): Promise<boolean> {
+    const reply = await this.request({ type: 'switchActive' }).catch(() => null)
+    return reply?.ok === true && reply.active === true
+  }
+
+  addBlockStaged(id: string, kind: BlockKind, row: number, col: number): Promise<void> {
+    return this.request({
+      type: 'addBlock',
+      block: id,
+      kind: KIND_TO_CORE[kind],
+      row,
+      col,
+      stage: true,
+    }).then((r) => {
+      if (!r.ok) throw new Error(r.error ?? 'addBlock (staged) failed')
+    })
+  }
+
+  async connectStaged(
+    from: { blockId: string; port: number },
+    to: { blockId: string; port: number },
+    id: string,
+  ): Promise<RigConnectResult> {
+    const reply = await this.request({
+      type: 'connect',
+      fromId: from.blockId,
+      fromPort: from.port,
+      toId: to.blockId,
+      toPort: to.port,
+      edgeId: id,
+      stage: true,
+    })
+    return reply.ok ? { ok: true } : { ok: false, reason: reply.error ?? 'connection rejected' }
+  }
+
+  setParamStaged(blockId: string, key: string, value: number): void {
+    this.send({ type: 'setParam', block: blockId, key, value, stage: true })
+  }
+
+  setBypassStaged(blockId: string, bypassed: boolean): void {
+    this.send({ type: 'setBypass', block: blockId, bypassed, stage: true })
+  }
+
+  setReverbAlgorithmStaged(blockId: string, algorithm: string): void {
+    this.send({ type: 'setReverbAlgorithm', block: blockId, algorithm, stage: true })
+  }
+
+  setTrimStaged(blockId: string, input?: number, output?: number): void {
+    this.send({ type: 'setTrim', block: blockId, input, output, stage: true })
+  }
+
+  async loadModelStaged(blockId: string, json: string, slimSize?: number): Promise<RigModelInfo> {
+    const bytes = new TextEncoder().encode(json)
+    const reply = await this.request(
+      {
+        type: 'loadModel',
+        block: blockId,
+        bytes: bytes.buffer,
+        byteLength: bytes.byteLength,
+        ...(slimSize === undefined ? {} : { slimSize }),
+        stage: true,
+      },
+      [bytes.buffer],
+    )
+    if (!reply.ok || !reply.info)
+      throw new Error(reply.error ?? 'the core could not load this model')
+    return reply.info
+  }
+
+  async unloadModelStaged(blockId: string): Promise<void> {
+    await this.request({ type: 'unloadModel', block: blockId, stage: true })
+  }
+
+  async setSlimSizeStaged(blockId: string, slimSize: number): Promise<void> {
+    await this.request({ type: 'setSlimSize', block: blockId, value: slimSize, stage: true })
+  }
+
+  async loadIrStaged(blockId: string, samples: Float32Array): Promise<void> {
+    await this.request({ type: 'loadIr', block: blockId, samples, stage: true }, [samples.buffer])
+  }
+
+  async unloadIrStaged(blockId: string): Promise<void> {
+    await this.request({ type: 'unloadIr', block: blockId, stage: true })
   }
 
   // ── Meters ──────────────────────────────────────────────────────────────

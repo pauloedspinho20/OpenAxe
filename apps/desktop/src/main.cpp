@@ -350,6 +350,10 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "openAxe.loadDIWav", &openaxe_desktop::StudioBridge::HandleLoadDIWav);
     Bind(w, bridge, "openAxe.playDI", &openaxe_desktop::StudioBridge::HandlePlayDI);
     Bind(w, bridge, "openAxe.stopDI", &openaxe_desktop::StudioBridge::HandleStopDI);
+    Bind(w, bridge, "openAxe.stageBegin", &openaxe_desktop::StudioBridge::HandleStageBegin);
+    Bind(w, bridge, "openAxe.stageCommit", &openaxe_desktop::StudioBridge::HandleStageCommit);
+    Bind(w, bridge, "openAxe.stageDiscard", &openaxe_desktop::StudioBridge::HandleStageDiscard);
+    Bind(w, bridge, "openAxe.switchActive", &openaxe_desktop::StudioBridge::HandleSwitchActive);
     Bind(w, bridge, "openAxe.setInputGain", &openaxe_desktop::StudioBridge::HandleSetInputGain);
     Bind(w, bridge, "openAxe.setMasterLevel", &openaxe_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "openAxe.setMasterMuted", &openaxe_desktop::StudioBridge::HandleSetMasterMuted);

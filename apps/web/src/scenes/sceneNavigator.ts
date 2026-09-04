@@ -38,7 +38,8 @@
  */
 import { applyPreset, type MissingAsset } from '../presets/apply'
 import { getPreset } from '../presets/presetStore'
-import type { PresetRig } from '../presets/types'
+import type { Preset, PresetRig } from '../presets/types'
+import { preloadPresets } from '../engine/modelPreloader'
 import { useCurrentPresetStore } from '../state/currentPresetStore'
 import { useGraphStore } from '../state/graphStore'
 import { toast } from '@openaxe/ui'
@@ -110,6 +111,30 @@ async function clearGrid(): Promise<void> {
   useGraphStore.getState().loadGraph([], [], masterLevel, masterMuted)
 }
 
+/**
+ * Best-effort prefetch of the current scene's sibling slots after a switch
+ * (issue #367): their models become resident in the preloader so the NEXT
+ * switch finds them without an IndexedDB read or decode. Never throws and
+ * never blocks the switch that triggered it.
+ */
+async function prefetchSceneSiblings(scene: number, excludeSlot: number): Promise<void> {
+  try {
+    const sceneData = useSceneStore.getState().scenes[scene]
+    if (!sceneData) return
+    const bank = usePresetBankStore.getState()
+    const presets: Array<Preset | null> = []
+    for (let s = 0; s < sceneData.slots.length; s++) {
+      if (s === excludeSlot) continue
+      const bankSlot = sceneData.slots[s]
+      const presetId = bankSlot != null ? (bank.slots[bankSlot] ?? null) : null
+      presets.push(presetId ? await getPreset(presetId) : null)
+    }
+    await preloadPresets(presets)
+  } catch {
+    // A miss just parses on demand at switch time.
+  }
+}
+
 async function applySlot(scene: number, slot: number, mySeq: number): Promise<SceneNavResult> {
   if (mySeq !== seq) return { ok: false, reason: 'superseded', scene, slot, presetId: null }
 
@@ -157,6 +182,8 @@ async function applySlot(scene: number, slot: number, mySeq: number): Promise<Sc
         { description: 'The scene loaded, but those assets are missing locally.' },
       )
     }
+    // Prefetch siblings for the next switch - deliberately not awaited.
+    void prefetchSceneSiblings(scene, slot)
     return { ok: true, scene, slot, presetId, missingAssets: result.missingAssets }
   } catch (err) {
     toast.error(err instanceof Error ? err.message : String(err))

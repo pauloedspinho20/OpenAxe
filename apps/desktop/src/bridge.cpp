@@ -97,6 +97,10 @@ StudioBridge::~StudioBridge() {
   }
   queue_cv_.notify_all();
   if (control_thread_.joinable()) control_thread_.join();
+  if (staged_ != nullptr) {
+    openaxe_graph_destroy(staged_);
+    staged_ = nullptr;
+  }
   openaxe_graph_destroy(graph_);
 }
 
@@ -197,23 +201,80 @@ std::string StudioBridge::GenEdgeId() {
 }
 
 void StudioBridge::DropEdgesTouching(const std::string& block_id) {
+  DropEdgesTouchingOn(block_id, edges_, edge_ids_, edge_ids_rev_);
+}
+
+void StudioBridge::DropEdgesTouchingOn(const std::string& block_id,
+                                       std::map<std::string, EdgeRecord>& edges,
+                                       std::map<std::string, int32_t>& edge_ids,
+                                       std::map<int32_t, std::string>& edge_ids_rev) {
   // Called after core RemoveBlock already dropped the edges; this only cleans
   // up the bridge's own bookkeeping. Iterate a snapshot: erasing while
   // iterating would invalidate the map iterator.
   std::vector<std::string> doomed;
-  for (const auto& [edge_id, edge] : edges_) {
+  for (const auto& [edge_id, edge] : edges) {
     const bool from_matches = edge.from_id.is_string() && edge.from_id.get<std::string>() == block_id;
     const bool to_matches = edge.to_id.is_string() && edge.to_id.get<std::string>() == block_id;
     if (from_matches || to_matches) doomed.push_back(edge_id);
   }
   for (const std::string& edge_id : doomed) {
-    const auto it = edge_ids_.find(edge_id);
-    if (it != edge_ids_.end()) {
-      edge_ids_rev_.erase(it->second);
-      edge_ids_.erase(it);
+    const auto it = edge_ids.find(edge_id);
+    if (it != edge_ids.end()) {
+      edge_ids_rev.erase(it->second);
+      edge_ids.erase(it);
     }
-    edges_.erase(edge_id);
+    edges.erase(edge_id);
   }
+}
+
+// ── Staged-switching targets (issue #367) ────────────────────────────────
+
+MutationTarget StudioBridge::LiveTarget() {
+  MutationTarget target;
+  target.graph = graph_;
+  target.blocks = &blocks_;
+  target.edges = &edges_;
+  target.edge_ids = &edge_ids_;
+  target.edge_ids_rev = &edge_ids_rev_;
+  target.staged = false;
+  return target;
+}
+
+void StudioBridge::MutateOn(const MutationTarget& target, const std::function<void()>& mutation,
+                            bool reset_after) {
+  if (!target.staged) {
+    Mutate(mutation, reset_after);
+    return;
+  }
+  // Staged engine: no suspend handshake (it is never processed before its
+  // commit) and no stream restart dance - just run it on the control thread
+  // and reset the staged graph directly.
+  mutation();
+  if (reset_after) openaxe_reset(target.graph, graph_sample_rate_, graph_block_);
+}
+
+bool StudioBridge::StagedTarget(MutationTarget* out) {
+  if (staged_ == nullptr) return false;
+  out->graph = staged_;
+  out->blocks = &staged_blocks_;
+  out->edges = &staged_edges_;
+  out->edge_ids = &staged_edge_ids_;
+  out->edge_ids_rev = &staged_edge_ids_rev_;
+  out->staged = true;
+  return true;
+}
+
+// Resolves a staged-capable handler's target from its "stage" flag: the live
+// target, the staged target, or an error string when staging was requested
+// but no staged graph is open. Must run on the control thread (reads the
+// bookkeeping maps).
+std::string StudioBridge::ResolveTarget(bool stage, MutationTarget* out) {
+  if (!stage) {
+    *out = LiveTarget();
+    return "";
+  }
+  if (!StagedTarget(out)) return "no staged graph - call stageBegin first";
+  return "";
 }
 
 // ── Handlers ────────────────────────────────────────────────────────────
@@ -329,6 +390,7 @@ std::string StudioBridge::HandleAddBlock(const std::string& req) {
     const int col = o.value("col", 0);
     std::string js_id = o.value("id", "");
     if (js_id.empty()) js_id = GenBlockId();
+    const bool stage = o.value("stage", false);
 
     const auto core_kind = WebToCoreKind(kind);
     if (!core_kind) return JsonError("unknown block kind: " + kind);
@@ -336,17 +398,20 @@ std::string StudioBridge::HandleAddBlock(const std::string& req) {
     std::string error;
     json out;
     Call([&] {
-      if (blocks_.count(js_id)) {
+      MutationTarget target;
+      if (!(error = ResolveTarget(stage, &target)).empty()) return;
+      if (target.blocks->count(js_id)) {
         error = "block id already exists: " + js_id;
         return;
       }
       int32_t core_id = -1;
-      Mutate([&] { core_id = openaxe_add_block(graph_, *core_kind, row, col); }, true);
+      MutateOn(target,
+               [&] { core_id = openaxe_add_block(target.graph, *core_kind, row, col); }, true);
       if (core_id < 0) {
         error = "failed to add block";
         return;
       }
-      blocks_[js_id] = BlockRecord{core_id, kind, row, col};
+      (*target.blocks)[js_id] = BlockRecord{core_id, kind, row, col};
       out = json{{"ok", true}, {"id", js_id}};
     });
     return error.empty() ? out.dump() : JsonError(error);
@@ -360,12 +425,15 @@ std::string StudioBridge::HandleRemoveBlock(const std::string& req) {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
+    const bool stage = o.value("stage", false);
     Call([&] {
-      auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
-      Mutate([&] { openaxe_remove_block(graph_, it->second.core_id); }, true);
-      DropEdgesTouching(js_id);
-      blocks_.erase(it);
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
+      MutateOn(target, [&] { openaxe_remove_block(target.graph, it->second.core_id); }, true);
+      DropEdgesTouchingOn(js_id, *target.edges, *target.edge_ids, *target.edge_ids_rev);
+      target.blocks->erase(it);
     });
     return (json{{"ok", true}}).dump();
   } catch (...) {
@@ -380,14 +448,18 @@ std::string StudioBridge::HandleMoveBlock(const std::string& req) {
     const std::string js_id = o.value("blockId", "");
     const int row = o.value("row", 0);
     const int col = o.value("col", 0);
+    const bool stage = o.value("stage", false);
     Call([&] {
-      auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
       // Move only re-sorts execution order (AudioEngine::MoveBlock calls
       // RecomputeRouting, not Reset), so it needs no reallocation and must
       // not suspend/reset the audio thread - doing so made every param
       // change reset the whole engine (issue #62).
-      Mutate([&] { openaxe_move_block(graph_, it->second.core_id, row, col); }, false);
+      MutateOn(target, [&] { openaxe_move_block(target.graph, it->second.core_id, row, col); },
+               false);
       it->second.row = row;
       it->second.col = col;
     });
@@ -405,29 +477,37 @@ std::string StudioBridge::HandleConnect(const std::string& req) {
     if (js_edge_id.empty()) js_edge_id = GenEdgeId();
     const int from_port = o.value("fromPort", 0);
     const int to_port = o.value("toPort", 0);
+    const bool stage = o.value("stage", false);
 
     std::string error;
     json out;
     Call([&] {
-      if (edges_.count(js_edge_id)) {
+      MutationTarget target;
+      if (!(error = ResolveTarget(stage, &target)).empty()) return;
+      if (target.edges->count(js_edge_id)) {
         error = "edge id already exists: " + js_edge_id;
         return;
       }
-      const int32_t from = ResolveCoreId(o.at("fromId"), blocks_);
-      const int32_t to = ResolveCoreId(o.at("toId"), blocks_);
+      const int32_t from = ResolveCoreId(o.at("fromId"), *target.blocks);
+      const int32_t to = ResolveCoreId(o.at("toId"), *target.blocks);
       if (from == kUnknownBlock || to == kUnknownBlock) {
         error = "unknown block in edge";
         return;
       }
       int32_t core_edge = -1;
-      Mutate([&] { core_edge = openaxe_connect(graph_, from, from_port, to, to_port); }, true);
+      MutateOn(target,
+               [&] {
+                 core_edge = openaxe_connect(target.graph, from, from_port, to, to_port);
+               },
+               true);
       if (core_edge < 0) {
         error = "connection rejected";
         return;
       }
-      edges_[js_edge_id] = EdgeRecord{o.at("fromId"), from_port, o.at("toId"), to_port};
-      edge_ids_[js_edge_id] = core_edge;
-      edge_ids_rev_[core_edge] = js_edge_id;
+      (*target.edges)[js_edge_id] =
+          EdgeRecord{o.at("fromId"), from_port, o.at("toId"), to_port};
+      (*target.edge_ids)[js_edge_id] = core_edge;
+      (*target.edge_ids_rev)[core_edge] = js_edge_id;
       out = json{{"ok", true}, {"id", js_edge_id}};
     });
     return error.empty() ? out.dump() : JsonError(error);
@@ -441,13 +521,16 @@ std::string StudioBridge::HandleDisconnect(const std::string& req) {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_edge_id = o.value("edgeId", "");
+    const bool stage = o.value("stage", false);
     Call([&] {
-      const auto it = edge_ids_.find(js_edge_id);
-      if (it == edge_ids_.end()) return;
-      Mutate([&] { openaxe_disconnect(graph_, it->second); }, true);
-      edge_ids_rev_.erase(it->second);
-      edge_ids_.erase(it);
-      edges_.erase(js_edge_id);
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.edge_ids->find(js_edge_id);
+      if (it == target.edge_ids->end()) return;
+      MutateOn(target, [&] { openaxe_disconnect(target.graph, it->second); }, true);
+      target.edge_ids_rev->erase(it->second);
+      target.edge_ids->erase(it);
+      target.edges->erase(js_edge_id);
     });
     return (json{{"ok", true}}).dump();
   } catch (...) {
@@ -513,6 +596,7 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
     const std::string js_id = o.value("blockId", "");
     const json& key = o.at("key");
     const float value = o.value("value", 0.0f);
+    const bool stage = o.value("stage", false);
 
     // Reverb blocks: route the UI's control names through the core mapping
     // first. Before this, none of them resolved (the UI's camelCase names
@@ -523,57 +607,92 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
       if (control >= 0) {
         bool is_reverb = false;
         int32_t reverb_core_id = kUnknownBlock;
+        OpenAxeGraph* reverb_graph = nullptr;
         Call([&] {
-          const auto it = blocks_.find(js_id);
-          if (it == blocks_.end()) return;
+          MutationTarget target;
+          if (!ResolveTarget(stage, &target).empty()) return;
+          const auto it = target.blocks->find(js_id);
+          if (it == target.blocks->end()) return;
           reverb_core_id = it->second.core_id;
+          reverb_graph = target.graph;
           is_reverb = it->second.kind == "reverb";
         });
-        if (reverb_core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+        if (reverb_core_id == kUnknownBlock)
+          return JsonError(stage ? "no staged graph - call stageBegin first"
+                                 : "unknown block: " + js_id);
         if (is_reverb) {
-          openaxe_set_reverb_control(
-              graph_, reverb_core_id, static_cast<OpenAxeReverbControl>(control), value);
+          if (stage) {
+            // Staged engine: write on the control thread (it is never
+            // processed before its commit, so no suspend needed).
+            Call([&] {
+              MutationTarget target;
+              if (!ResolveTarget(true, &target).empty()) return;
+              const auto it = target.blocks->find(js_id);
+              if (it == target.blocks->end()) return;
+              openaxe_set_reverb_control(target.graph, it->second.core_id,
+                                         static_cast<OpenAxeReverbControl>(control), value);
+            });
+          } else {
+            openaxe_set_reverb_control(
+                reverb_graph, reverb_core_id, static_cast<OpenAxeReverbControl>(control), value);
+          }
           return (json{{"ok", true}}).dump();
         }
       }
     }
 
     int32_t core_id = kUnknownBlock;
+    OpenAxeGraph* target_graph = nullptr;
     int32_t index = -1;
     bool slim_size = false;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
       core_id = it->second.core_id;
-      index = ResolveParamIndex(key, core_id, graph_, blocks_, js_id);
+      target_graph = target.graph;
+      index = ResolveParamIndex(key, core_id, target.graph, *target.blocks, js_id);
       if (index >= 0) {
         const char* name = nullptr;
         const char* sym = nullptr;
         const char* unit = nullptr;
         float min = 0, max = 0;
-        if (openaxe_block_param_info(graph_, core_id, index, &name, &sym, &min, &max, &unit) &&
+        if (openaxe_block_param_info(target.graph, core_id, index, &name, &sym, &min, &max,
+                                     &unit) &&
             sym && std::strcmp(sym, "slim_size") == 0) {
           slim_size = true;
         }
       }
     });
-    if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+    if (core_id == kUnknownBlock)
+      return JsonError(stage ? "no staged graph - call stageBegin first" : "unknown block: " + js_id);
     if (index < 0) return JsonError("unknown param key");
-    if (slim_size) {
+    if (slim_size || stage) {
       // openaxe_set_param forwards the Amp-family slim-size param
       // synchronously into NAMCore, which may reallocate (issue #211) - it is
       // Tier 2, not the lock-free atomic write the rest of the param surface
       // is. Called straight from the webview thread it would race an in-flight
       // openaxe_process on the audio thread, so route it through the
       // control thread's suspend handshake like every other structural
-      // mutation.
+      // mutation. Staged writes always take this path (no suspend - the
+      // staged engine is never processed before its commit).
+      OpenAxeGraph* graph = target_graph;
       Call([&] {
-        Mutate([&] { openaxe_set_param(graph_, core_id, index, value); },
-               /*reset_after=*/false);
+        MutationTarget target;
+        if (!ResolveTarget(stage, &target).empty()) return;
+        const auto it = target.blocks->find(js_id);
+        if (it == target.blocks->end()) return;
+        if (stage) {
+          openaxe_set_param(target.graph, it->second.core_id, index, value);
+        } else {
+          Mutate([&] { openaxe_set_param(graph, core_id, index, value); },
+                 /*reset_after=*/false);
+        }
       });
     } else {
       // openaxe_set_param is lock-free and thread-safe (see api.h).
-      openaxe_set_param(graph_, core_id, index, value);
+      openaxe_set_param(target_graph, core_id, index, value);
     }
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -587,17 +706,22 @@ std::string StudioBridge::HandleGetParam(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const json& key = o.at("key");
+    const bool stage = o.value("stage", false);
 
     int32_t core_id = kUnknownBlock;
+    OpenAxeGraph* target_graph = nullptr;
     int32_t index = -1;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
       core_id = it->second.core_id;
-      index = ResolveParamIndex(key, core_id, graph_, blocks_, js_id);
+      target_graph = target.graph;
+      index = ResolveParamIndex(key, core_id, target.graph, *target.blocks, js_id);
     });
     if (core_id == kUnknownBlock || index < 0) return JsonError("unknown block or param");
-    return (json{{"ok", true}, {"value", openaxe_get_param(graph_, core_id, index)}}).dump();
+    return (json{{"ok", true}, {"value", openaxe_get_param(target_graph, core_id, index)}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("getParam: ") + e.what());
   }
@@ -608,20 +732,23 @@ std::string StudioBridge::HandleBlockInfo(const std::string& req) {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
+    const bool stage = o.value("stage", false);
 
     json out;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
       const BlockRecord& rec = it->second;
-      const int32_t count = openaxe_block_param_count(graph_, rec.core_id);
+      const int32_t count = openaxe_block_param_count(target.graph, rec.core_id);
       json params = json::array();
       for (int32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
         const char* symbol = nullptr;
         const char* unit = nullptr;
         float min = 0, max = 0;
-        if (openaxe_block_param_info(graph_, rec.core_id, i, &name, &symbol, &min, &max,
+        if (openaxe_block_param_info(target.graph, rec.core_id, i, &name, &symbol, &min, &max,
                                         &unit)) {
           params.push_back({{"index", i},
                             {"name", name ? name : ""},
@@ -629,7 +756,7 @@ std::string StudioBridge::HandleBlockInfo(const std::string& req) {
                             {"min", min},
                             {"max", max},
                             {"unit", unit ? unit : ""},
-                            {"value", openaxe_get_param(graph_, rec.core_id, i)}});
+                            {"value", openaxe_get_param(target.graph, rec.core_id, i)}});
         }
       }
       out = json{{"ok", true},
@@ -637,10 +764,10 @@ std::string StudioBridge::HandleBlockInfo(const std::string& req) {
                  {"kind", rec.kind},
                  {"row", rec.row},
                  {"col", rec.col},
-                 {"hasModel", openaxe_block_has_model(graph_, rec.core_id) != 0},
+                 {"hasModel", openaxe_block_has_model(target.graph, rec.core_id) != 0},
                  {"paramCount", count},
                  {"params", params},
-                 {"meter", openaxe_get_meter(graph_, rec.core_id)}};
+                 {"meter", openaxe_get_meter(target.graph, rec.core_id)}};
     });
     return out.empty() ? JsonError("unknown block: " + js_id) : out.dump();
   } catch (const std::exception& e) {
@@ -676,13 +803,19 @@ std::string StudioBridge::HandleLoadModel(const std::string& req) {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
+    const bool stage = o.value("stage", false);
 
     int32_t core_id = kUnknownBlock;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it != blocks_.end()) core_id = it->second.core_id;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it != target.blocks->end()) core_id = it->second.core_id;
     });
-    if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+    if (core_id == kUnknownBlock)
+      return JsonError(stage ? "no staged graph - call stageBegin first" : "unknown block: " + js_id);
+
+    // Native modal picker (Win32 / AppleScript / zenity-kdialog). Runs on the
 
     // Native modal picker (Win32 / AppleScript / zenity-kdialog). Runs on the
     // webview thread like any modal dialog; an empty result means cancelled.
@@ -700,8 +833,13 @@ std::string StudioBridge::HandleLoadModel(const std::string& req) {
 
     int result = -1;
     Call([&] {
-      Mutate([&] { result = static_cast<int>(openaxe_load_nam_model(graph_, core_id, path.c_str())); },
-             /*reset_after=*/false);
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      MutateOn(target,
+               [&] {
+                 result = static_cast<int>(openaxe_load_nam_model(target.graph, core_id, path.c_str()));
+               },
+               /*reset_after=*/false);
     });
     return (json{{"ok", result == 0}, {"result", result}}).dump();
   } catch (const std::exception& e) {
@@ -715,24 +853,31 @@ std::string StudioBridge::HandleLoadModelJson(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const std::string content = o.value("json", "");
+    const bool stage = o.value("stage", false);
     if (content.size() > kMaxNamModelJsonBytes)
       return JsonError("loadModelJson: file too large (max 32 MB)");
 
     int32_t core_id = kUnknownBlock;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it != blocks_.end()) core_id = it->second.core_id;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it != target.blocks->end()) core_id = it->second.core_id;
     });
-    if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+    if (core_id == kUnknownBlock)
+      return JsonError(stage ? "no staged graph - call stageBegin first" : "unknown block: " + js_id);
 
     int result = -1;
     Call([&] {
-      Mutate([&] {
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      MutateOn(target, [&] {
         // Straight into the core from memory. This used to stage `content` in a
         // temp file because the core could only load by path; it now has a JSON
         // entry point (the one the web app's WASM build needs, since a browser
         // has no filesystem), so the round-trip through disk is gone.
-        result = static_cast<int>(openaxe_load_nam_model_json(graph_, core_id, content.c_str()));
+        result =
+            static_cast<int>(openaxe_load_nam_model_json(target.graph, core_id, content.c_str()));
       }, /*reset_after=*/false);
     });
     return (json{{"ok", result == 0}, {"result", result}}).dump();
@@ -746,10 +891,13 @@ std::string StudioBridge::HandleUnloadModel(const std::string& req) {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
+    const bool stage = o.value("stage", false);
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
-      Mutate([&] { openaxe_unload_nam_model(graph_, it->second.core_id); },
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
+      MutateOn(target, [&] { openaxe_unload_nam_model(target.graph, it->second.core_id); },
              /*reset_after=*/false);
     });
     return (json{{"ok", true}}).dump();
@@ -780,11 +928,15 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
     };
     const auto algo = MapByName(name, kAlgos, std::size(kAlgos));
     if (!algo) return JsonError("unknown reverb algorithm: " + name);
+    const bool stage = o.value("stage", false);
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
-      Mutate([&] { openaxe_set_reverb_algorithm(graph_, it->second.core_id, *algo); },
-             /*reset_after=*/false);
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
+      MutateOn(target,
+               [&] { openaxe_set_reverb_algorithm(target.graph, it->second.core_id, *algo); },
+               /*reset_after=*/false);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -805,10 +957,13 @@ std::string StudioBridge::HandleSetDelayModel(const std::string& req) {
     };
     const auto model = MapByName(name, kModels, std::size(kModels));
     if (!model) return JsonError("unknown delay model: " + name);
+    const bool stage = o.value("stage", false);
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
-      Mutate([&] { openaxe_set_delay_model(graph_, it->second.core_id, *model); },
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
+      MutateOn(target, [&] { openaxe_set_delay_model(target.graph, it->second.core_id, *model); },
              /*reset_after=*/false);
     });
     return (json{{"ok", true}}).dump();
@@ -823,12 +978,16 @@ std::string StudioBridge::HandleSetBypass(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const bool bypassed = o.value("bypassed", false);
+    const bool stage = o.value("stage", false);
     // Real-time-safe atomic - no Mutate()/suspend handshake needed, only the
-    // Call() to safely resolve js_id against blocks_ (control-thread only).
+    // Call() to safely resolve js_id (control-thread bookkeeping). Staged
+    // writes land on the never-processed staged engine - equally safe.
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
-      openaxe_set_bypass(graph_, it->second.core_id, bypassed ? 1 : 0);
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
+      openaxe_set_bypass(target.graph, it->second.core_id, bypassed ? 1 : 0);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -851,15 +1010,18 @@ std::string StudioBridge::HandleSetBlockTrim(const std::string& req) {
     const bool has_output = o.contains("output") && o["output"].is_number();
     const float input = has_input ? o["input"].get<float>() : 1.0f;
     const float output = has_output ? o["output"].get<float>() : 1.0f;
+    const bool stage = o.value("stage", false);
     bool found = false;
     // Real-time-safe atomics - no Mutate()/suspend handshake needed, only the
-    // Call() to resolve js_id against blocks_ (control-thread only).
+    // Call() to resolve js_id (control-thread bookkeeping).
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
       found = true;
-      if (has_input) openaxe_set_block_input_trim(graph_, it->second.core_id, input);
-      if (has_output) openaxe_set_block_output_trim(graph_, it->second.core_id, output);
+      if (has_input) openaxe_set_block_input_trim(target.graph, it->second.core_id, input);
+      if (has_output) openaxe_set_block_output_trim(target.graph, it->second.core_id, output);
     });
     if (!found) return JsonError("setBlockTrim: unknown block " + js_id);
     return (json{{"ok", true}}).dump();
@@ -906,6 +1068,7 @@ std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
     const std::string encoded = o.value("wavBase64", "");
+    const bool stage = o.value("stage", false);
     if (encoded.empty()) return JsonError("loadIrWav: no wav data");
 
     const std::vector<uint8_t> bytes = DecodeBase64(encoded);
@@ -920,16 +1083,21 @@ std::string StudioBridge::HandleLoadIrWav(const std::string& req) {
 
     int32_t core_id = kUnknownBlock;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it != blocks_.end()) core_id = it->second.core_id;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it != target.blocks->end()) core_id = it->second.core_id;
     });
-    if (core_id == kUnknownBlock) return JsonError("unknown block: " + js_id);
+    if (core_id == kUnknownBlock)
+      return JsonError(stage ? "no staged graph - call stageBegin first" : "unknown block: " + js_id);
 
     int frames = 0;
     Call([&] {
-      Mutate([&] {
-        frames = static_cast<int>(
-            openaxe_load_ir_wav(graph_, core_id, bytes.data(), static_cast<int32_t>(bytes.size())));
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      MutateOn(target, [&] {
+        frames = static_cast<int>(openaxe_load_ir_wav(target.graph, core_id, bytes.data(),
+                                                      static_cast<int32_t>(bytes.size())));
       }, /*reset_after=*/false);
     });
     if (frames == 0) return JsonError("loadIrWav: the core could not decode this file");
@@ -945,17 +1113,124 @@ std::string StudioBridge::HandleUnloadIr(const std::string& req) {
     const json args = ParseArgs(req);
     const json& o = args.empty() ? json::object() : args[0];
     const std::string js_id = o.value("blockId", "");
+    const bool stage = o.value("stage", false);
     bool found = false;
     Call([&] {
-      const auto it = blocks_.find(js_id);
-      if (it == blocks_.end()) return;
+      MutationTarget target;
+      if (!ResolveTarget(stage, &target).empty()) return;
+      const auto it = target.blocks->find(js_id);
+      if (it == target.blocks->end()) return;
       found = true;
-      Mutate([&] { openaxe_unload_ir(graph_, it->second.core_id); }, /*reset_after=*/false);
+      MutateOn(target, [&] { openaxe_unload_ir(target.graph, it->second.core_id); },
+             /*reset_after=*/false);
     });
     if (!found) return JsonError("unloadIr: unknown block " + js_id);
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("unloadIr: ") + e.what());
+  }
+}
+
+// ── Gapless staged switching (issue #367) ────────────────────────────────
+// stageBegin opens a second core graph the UI builds the next rig into (every
+// mutation handler above accepts "stage": true); stageCommit crossfades it
+// live via openaxe_staged_graph_commit - lock-free with respect to the audio
+// thread, so unlike every other structural mutation it needs NO suspend
+// handshake; the model-parse cost still runs on the control thread, but audio
+// keeps playing through the live graph meanwhile.
+
+std::string StudioBridge::HandleStageBegin(const std::string&) {
+  try {
+    std::string error;
+    Call([&] {
+      if (staged_ != nullptr) {
+        openaxe_graph_destroy(staged_);
+        staged_ = nullptr;
+      }
+      staged_blocks_.clear();
+      staged_edges_.clear();
+      staged_edge_ids_.clear();
+      staged_edge_ids_rev_.clear();
+      staged_ = openaxe_staged_graph_create(graph_);
+      if (staged_ == nullptr) {
+        error = "stageBegin: the core refused a staged graph";
+        return;
+      }
+      openaxe_reset(staged_, graph_sample_rate_, graph_block_);
+    });
+    return error.empty() ? (json{{"ok", true}}).dump() : JsonError(error);
+  } catch (const std::exception& e) {
+    return JsonError(std::string("stageBegin: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleStageCommit(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const int fade_ms = o.value("fadeMs", 25);
+    const int drain_ms = o.value("drainMs", 500);
+    // 1 committed, -1 busy (retry), 0 rejected (staged kept for retry/discard).
+    int rc = 0;
+    std::string error;
+    Call([&] {
+      if (staged_ == nullptr) {
+        error = "no staged graph - call stageBegin first";
+        return;
+      }
+      rc = openaxe_staged_graph_commit(graph_, staged_, fade_ms, drain_ms);
+      if (rc == 1) {
+        // The commit consumed the staged handle: the live core graph IS the
+        // staged engine now, so adopt the staged bookkeeping wholesale.
+        blocks_ = std::move(staged_blocks_);
+        edges_ = std::move(staged_edges_);
+        edge_ids_ = std::move(staged_edge_ids_);
+        edge_ids_rev_ = std::move(staged_edge_ids_rev_);
+        staged_blocks_.clear();
+        staged_edges_.clear();
+        staged_edge_ids_.clear();
+        staged_edge_ids_rev_.clear();
+        staged_ = nullptr;
+      }
+    });
+    if (!error.empty()) return JsonError(error);
+    if (rc == 1) return (json{{"ok", true}}).dump();
+    if (rc == -1)
+      return (json{{"ok", false}, {"busy", true},
+                   {"error", "a previous switch is still fading/draining - retry"}})
+          .dump();
+    return JsonError("stageCommit: the core rejected this staged commit");
+  } catch (const std::exception& e) {
+    return JsonError(std::string("stageCommit: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleStageDiscard(const std::string&) {
+  try {
+    Call([&] {
+      if (staged_ != nullptr) {
+        openaxe_graph_destroy(staged_);
+        staged_ = nullptr;
+      }
+      staged_blocks_.clear();
+      staged_edges_.clear();
+      staged_edge_ids_.clear();
+      staged_edge_ids_rev_.clear();
+    });
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("stageDiscard: ") + e.what());
+  }
+}
+
+std::string StudioBridge::HandleSwitchActive(const std::string&) {
+  try {
+    // openaxe_switch_active only reads the commit atomics - safe straight
+    // from the webview thread like the meters.
+    const bool active = openaxe_switch_active(graph_) != 0;
+    return (json{{"ok", true}, {"active", active}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("switchActive: ") + e.what());
   }
 }
 
