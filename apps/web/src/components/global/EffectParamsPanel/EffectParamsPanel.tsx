@@ -1,16 +1,16 @@
-import { Knob, Select } from '@openaxe/ui'
+import { useState } from 'react'
+import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
-import { DynamicsMeter } from '@/components/global/DynamicsMeter/DynamicsMeter'
-import type { GraphRig } from '@/engine/GraphRig'
-import type { NativeGraphRig } from '@/native/NativeGraphRig'
+import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
+import { actionKey } from '@/midi/actions'
+import { useMidiStore } from '@/state/midiStore'
 import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
 export interface EffectParamsPanelProps {
   blockId: string
   block: Block
-  rig?: GraphRig | NativeGraphRig | null
 }
 
 function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchema[]]> {
@@ -40,11 +40,21 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * very next unrelated store change (adding some other block, say) would
  * silently revert it back to the store's stale copy.
  */
-export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPanelProps) {
+export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   // Shared with EffectDetailsDialog - see useBlockParamValues for why local
   // state, rather than block.getParams(), drives what is displayed.
   const { values, setParam } = useBlockParamValues(blockId, block)
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
+  // Right-click MIDI menu target - one menu per panel, retargeted per knob.
+  const [midiMenu, setMidiMenu] = useState<{
+    anchor: ContextMenuAnchor
+    paramKey: string
+    paramLabel: string
+  } | null>(null)
+  // The knob currently armed for MIDI learn glows accent (see Knob's
+  // `highlighted`) - subscribing to just the key keeps every other knob
+  // from re-rendering while learn is armed elsewhere.
+  const learningKey = useMidiStore((s) => s.learning?.actionKey)
 
   const renderField = (field: ParamFieldSchema) => {
     if (field.control === 'select') {
@@ -88,13 +98,18 @@ export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPa
         size={50}
         description={field.description}
         onChange={(value) => setParam(field.key, value)}
+        highlighted={learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMidiMenu({
+            anchor: { x: e.clientX, y: e.clientY },
+            paramKey: field.key,
+            paramLabel: field.label,
+          })
+        }}
       />
     )
   }
-
-  const showDynamicsMeter =
-    rig != null && (block.kind === 'compressor' || block.kind === 'noise-gate')
-
   return (
     <div className={styles.panel}>
       {groupFields(schema).map(([groupName, fields]) => {
@@ -112,15 +127,21 @@ export function EffectParamsPanel({ blockId, block, rig = null }: EffectParamsPa
             <div className={styles.fields}>
               {selectors.map(renderField)}
               {mainFields.map(renderField)}
-              {showDynamicsMeter && groupName === '' && (
-                <DynamicsMeter rig={rig} blockId={blockId} kind={block.kind} />
-              )}
             </div>
           </div>
         )
       })}
       {/* If the schema was grouped (e.g. EQ bands), the DynamicsMeter was added to the first group above;
           for the flat compressor/gate schema (no groups), it is already in that sole group. */}
+      <ParamMidiMenu
+        anchor={midiMenu?.anchor ?? null}
+        target={
+          midiMenu
+            ? { blockId, paramKey: midiMenu.paramKey, paramLabel: midiMenu.paramLabel }
+            : null
+        }
+        onClose={() => setMidiMenu(null)}
+      />
     </div>
   )
 }

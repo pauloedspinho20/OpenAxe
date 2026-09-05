@@ -549,6 +549,8 @@ std::string StudioBridge::HandleDisconnect(const std::string& req) {
 const char* CoreSymbolAliasFor(const std::string& key) {
   if (key == "slimSize") return "slim_size";
   if (key == "irMix") return "ir_mix";
+  if (key == "lowCut") return "low_cut";
+  if (key == "highCut") return "high_cut";
   return nullptr;
 }
 
@@ -1327,7 +1329,9 @@ std::string StudioBridge::HandleMeters(const std::string&) {
   json out = json::array();
   Call([&] {
     for (const auto& [js_id, rec] : blocks_) {
-      out.push_back({{"id", js_id}, {"value", openaxe_get_meter(graph_, rec.core_id)}});
+      out.push_back({{"id", js_id},
+                     {"value", openaxe_get_meter(graph_, rec.core_id)},
+                     {"input", openaxe_get_input_meter(graph_, rec.core_id)}});
     }
   });
   return out.dump();

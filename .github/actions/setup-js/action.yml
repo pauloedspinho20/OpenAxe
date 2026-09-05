@@ -1,0 +1,19 @@
+# Shared JS toolchain setup (issue #379, CI cost plan option C): pnpm + Node 22
+# + frozen install. Used by ci.yml, pages.yml, desktop.yml and plugin.yml so
+# the install wiring is tuned in exactly one place.
+name: setup-js
+description: Install pnpm, Node 22 (with pnpm cache) and workspace dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 22
+        cache: pnpm
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash

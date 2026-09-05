@@ -143,7 +143,7 @@ std::vector<Case> BuildCases() {
   add("flanger/default", BlockKind::kFlanger,
       {{"rate", 0.4f}, {"depth", 2.0f}, {"feedback", 0.5f}, {"delay", 1.0f}, {"mix", 1.0f}});
   add("phaser/default", BlockKind::kPhaser,
-      {{"rate", 0.5f}, {"depth", 0.8f}, {"feedback", 0.3f}, {"mix", 1.0f}});
+      {{"rate", 0.5f}, {"script", 1.0f}, {"mix", 1.0f}});
   add("tremolo/sine", BlockKind::kTremolo,
       {{"rate", 4.0f}, {"depth", 0.7f}, {"shape", 0.0f}, {"mix", 1.0f}});
   add("tremolo/square-harmonic", BlockKind::kTremolo,

@@ -296,6 +296,12 @@ class AudioEngine {
   // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
   // length <= 0 clears it, which returns the block to passthrough. No-op for
   // every other kind. Tier 2: it allocates and transforms the IR.
+  //
+  // The installed IR is leveled to unit energy when its energy exceeds unity
+  // (attenuate-only, issue #365): peak-normalized commercial IRs otherwise
+  // carry ~+20 dB of broadband convolution gain into the block. Quiet IRs
+  // install verbatim. The retained save/restore source keeps the original
+  // samples; restore re-runs this same leveling.
   void LoadIr(BlockId id, const float* samples, int length);
 
   // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
@@ -303,7 +309,8 @@ class AudioEngine {
   // samples installed, or 0 if the block isn't a cab or the file can't be
   // decoded. This is the entry point for every platform without an
   // AudioContext.decodeAudioData to lean on (desktop, plugin, mobile). Not
-  // real-time safe.
+  // real-time safe. Same unit-energy leveling as LoadIr; the retained bytes
+  // stay the original file.
   int LoadIrWav(BlockId id, const uint8_t* bytes, size_t size);
   void UnloadIr(BlockId id);
   // Length of the IR installed on the block, 0 if none (or not a cab).
@@ -533,7 +540,8 @@ class AudioEngine {
   void ImportSessionStateFrom(const AudioEngine& other);
 
   // ── Metering ──────────────────────────────────────────────────────────
-  float GetMeter(BlockId id) const;  // peak |sample| over the last Process() call, 0 if unknown
+  float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
+  float GetInputMeter(BlockId id) const;  // peak |sample| at the block's input (post input trim), 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
   float GetGainReduction(BlockId id) const;  // compressor GR in dB (≤0), 0 if unknown/not a compressor. Tier 1.
   float GetGateGain(BlockId id) const;       // gate openness 0..1 (1 = open), 0 if unknown/not a gate. Tier 1.
@@ -584,6 +592,11 @@ class AudioEngine {
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int start, int num_frames);
+  // Post-IR low-cut/high-cut for cab blocks (issue #373): re-derives the cut
+  // biquads when the params or sample rate changed, then runs the wet signal
+  // through the active stages. See the definition in engine.cpp.
+  static void ApplyCabCuts(BlockState& state, float* out_l, float* out_r, int num_frames,
+                           double sample_rate);
   // Copy the schema-derived smoothing policy + the live ramp state for `state`
   // from its current param mirror (issue #122). Called on the control thread
   // whenever the param surface changes - AddBlock, reverb algorithm switch,

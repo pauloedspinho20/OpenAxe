@@ -189,11 +189,13 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
   /** Resolve a param symbol to its core index for a block, or -1 if unknown. */
   paramIndex(module, graph, coreBlock, symbol) {
     // A handful of the UI's param keys are camelCase where the core's symbol is
-    // snake_case (issue #41) - the amp's slim-size and the cab's IR mix kept
-    // their camelCase keys, so translate here to match the desktop bridge's
-    // CoreSymbolAliasFor.
+    // snake_case (issue #41) - the amp's slim-size and the cab's IR mix and
+    // post-IR cuts kept their camelCase keys, so translate here to match the
+    // desktop bridge's CoreSymbolAliasFor.
     if (symbol === 'slimSize') symbol = 'slim_size'
     else if (symbol === 'irMix') symbol = 'ir_mix'
+    else if (symbol === 'lowCut') symbol = 'low_cut'
+    else if (symbol === 'highCut') symbol = 'high_cut'
     const count = module._openaxe_block_param_count(graph, coreBlock)
     for (let i = 0; i < count; i++) {
       const namePtr = module._malloc(4)
@@ -501,6 +503,21 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
             out[jsId] = module._openaxe_get_meter(this.graph, coreBlock)
           }
           reply.meters = out
+          reply.ok = true
+          break
+        }
+        case 'inputMeters': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            // typeof-guard: a wasm binary predating the input-meter ABI
+            // (see openaxe_get_input_meter) has no such export - report
+            // nothing rather than throwing on the audio thread. A rebuild
+            // (scripts/build-core-wasm.sh) lights the meters up.
+            if (typeof module._openaxe_get_input_meter === 'function') {
+              out[jsId] = module._openaxe_get_input_meter(this.graph, coreBlock)
+            }
+          }
+          reply.inputMeters = out
           reply.ok = true
           break
         }

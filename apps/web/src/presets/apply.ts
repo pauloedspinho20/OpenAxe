@@ -1,5 +1,6 @@
 import type { UseBoundStore, StoreApi } from 'zustand'
 import type { GraphState } from '../state/graphStore'
+import { applyPresetSelection } from '../state/selection'
 import { getCachedAsset } from '../engine/assetCache'
 import { cacheModelText, getPreloadedModelText } from '../engine/modelPreloader'
 import { NAM_MODEL_KINDS } from '../engine/blocks/blockRegistry'
@@ -176,6 +177,9 @@ async function applyPresetStaged(
     await staged.commit()
     rig.adoptStage(staged)
     syncStore(store, preset)
+    // Same selection behavior as the legacy path: input-first block on open,
+    // last explicitly-selected block when revisiting.
+    applyPresetSelection(preset.id, preset.blocks, preset.edges)
     return { missingAssets }
   } catch (err) {
     await staged.discard()
@@ -235,6 +239,10 @@ async function applyPresetLegacy(
   }
 
   syncStore(store, preset)
+
+  // Opening a preset selects the input-first block by default (even on a cold
+  // boot), or the last explicitly-selected block when revisiting mid-session.
+  applyPresetSelection(preset.id, preset.blocks, preset.edges)
 
   return { missingAssets }
 }

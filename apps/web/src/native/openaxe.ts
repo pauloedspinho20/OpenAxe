@@ -257,7 +257,7 @@ export interface OpenAxeBridge {
   playDI(args: { loop?: boolean }): Promise<OpenAxeOk>
   stopDI(): Promise<OpenAxeOk>
 
-  meters(): Promise<Array<{ id: string; value: number }>>
+  meters(): Promise<Array<{ id: string; value: number; input?: number }>>
   cpuLoad(): Promise<number>
   getTap(args: { side: 'in' | 'out'; frames?: number }): Promise<OpenAxeTap>
   /** Reports (and clears) a pending RtAudio stream-level error - e.g. a

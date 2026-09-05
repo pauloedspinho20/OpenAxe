@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGraphStore } from '../state/graphStore'
+import { __clearPresetSelectionMemoryForTests, useSelection } from '../state/selection'
+import { useCurrentPresetStore } from '../state/currentPresetStore'
 import type { Preset, PresetBlock, PresetRig, StageCapableRig, StagedPresetRig } from './types'
 
 const { getCachedAssetMock } = vi.hoisted(() => ({ getCachedAssetMock: vi.fn() }))
@@ -71,6 +73,9 @@ describe('applyPreset', () => {
   beforeEach(() => {
     getCachedAssetMock.mockReset()
     useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
+    useSelection.setState({ selectedBlockId: null, selectionSource: null })
+    useCurrentPresetStore.setState({ saved: null })
+    __clearPresetSelectionMemoryForTests()
   })
 
   it('clears every existing block on the rig before rebuilding', async () => {
@@ -251,6 +256,49 @@ describe('applyPreset', () => {
     // The store sync must still run even when one asset fails.
     expect(useGraphStore.getState().blocks).toHaveLength(1)
   })
+
+  it('selects the input-first block when opening a preset', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      id: 'p1',
+      blocks: [
+        { id: 'a', kind: 'compressor', row: 0, col: 0, params: {} },
+        { id: 'c', kind: 'eq', row: 0, col: 2, params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'a', port: 0 } },
+        { id: 'e2', from: { blockId: 'a', port: 0 }, to: { blockId: 'c', port: 0 } },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(useSelection.getState().selectedBlockId).toBe('a')
+  })
+
+  it('restores the last explicitly-selected block when reopening a preset', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      id: 'p1',
+      blocks: [
+        { id: 'a', kind: 'compressor', row: 0, col: 0, params: {} },
+        { id: 'c', kind: 'eq', row: 0, col: 2, params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'a', port: 0 } },
+        { id: 'e2', from: { blockId: 'a', port: 0 }, to: { blockId: 'c', port: 0 } },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+    expect(useSelection.getState().selectedBlockId).toBe('a')
+
+    useCurrentPresetStore.setState({ saved: preset })
+    useSelection.getState().select('c')
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+    expect(useSelection.getState().selectedBlockId).toBe('c')
+  })
 })
 
 function createMockStagedRig(): StageCapableRig & {
@@ -299,6 +347,9 @@ describe('applyPreset (staged)', () => {
   beforeEach(() => {
     getCachedAssetMock.mockReset()
     useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
+    useSelection.setState({ selectedBlockId: null, selectionSource: null })
+    useCurrentPresetStore.setState({ saved: null })
+    __clearPresetSelectionMemoryForTests()
   })
 
   it('builds on the staged graph and adopts it without touching the live rig', async () => {
@@ -386,5 +437,25 @@ describe('applyPreset (staged)', () => {
 
     expect(rig.removeBlock).toHaveBeenCalledWith('old1')
     expect(useGraphStore.getState().blocks).toHaveLength(1)
+  })
+
+  it('selects the input-first block on the staged path too', async () => {
+    const rig = createMockStagedRig()
+    const preset = emptyPreset({
+      id: 'p1',
+      blocks: [
+        { id: 'a', kind: 'compressor', row: 0, col: 0, params: {} },
+        { id: 'c', kind: 'eq', row: 0, col: 2, params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'a', port: 0 } },
+        { id: 'e2', from: { blockId: 'a', port: 0 }, to: { blockId: 'c', port: 0 } },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.adoptStage).toHaveBeenCalled()
+    expect(useSelection.getState().selectedBlockId).toBe('a')
   })
 })

@@ -16,7 +16,8 @@ vi.mock('../scenes/sceneNavigator', () => ({
   },
 }))
 
-const { executeMidiAction } = await import('./dispatch')
+const { executeMidiAction, executeMidiParamAction } = await import('./dispatch')
+const { useGraphStore } = await import('../state/graphStore')
 
 describe('executeMidiAction', () => {
   it('calls goToSlot for a slot action', () => {
@@ -34,5 +35,23 @@ describe('executeMidiAction', () => {
     expect(nextSceneMock).toHaveBeenCalledWith({ source: 'midi' })
     executeMidiAction({ kind: 'prevScene' })
     expect(prevSceneMock).toHaveBeenCalledWith({ source: 'midi' })
+  })
+})
+
+describe('executeMidiParamAction', () => {
+  it('writes the CC value through to the mapped param', () => {
+    useGraphStore.setState({
+      blocks: [{ id: 'b1', kind: 'chorus', row: 0, col: 0, params: {} }],
+      edges: [],
+    })
+    expect(executeMidiParamAction('b1', 'mix', 127)).toBe(true)
+    expect(useGraphStore.getState().blocks.find((b) => b.id === 'b1')?.params).toEqual({
+      mix: 1,
+    })
+  })
+
+  it('returns false for an orphaned target instead of throwing', () => {
+    useGraphStore.setState({ blocks: [], edges: [] })
+    expect(executeMidiParamAction('gone', 'mix', 64)).toBe(false)
   })
 })

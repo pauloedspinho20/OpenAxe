@@ -141,7 +141,8 @@ void TestSymbolMappedParamRoundTripAllEffectKinds() {
        {"threshold", "ratio", "attack", "release", "knee", "makeup_gain", "character", "mix"}},
       {"eq",
        {"band0_frequency", "band0_gain", "band0_q", "band1_frequency", "band1_gain", "band1_q",
-        "band2_frequency", "band2_gain", "band2_q", "band3_frequency", "band3_gain", "band3_q"}},
+        "band2_frequency", "band2_gain", "band2_q", "band3_frequency", "band3_gain", "band3_q",
+        "low_cut", "high_cut"}},
       {"chorus", {"rate", "depth", "delay", "feedback"}},
       {"flanger", {"rate", "depth", "delay", "feedback"}},
       {"phaser", {"rate", "depth", "feedback", "stages"}},
@@ -842,6 +843,19 @@ void TestLoadIrWav() {
   // The mix knob reaches the core through its camelCase UI key.
   r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"c1","key":"irMix","value":0.75}])")));
   CHECK(r["ok"] == true);
+
+  // So do the post-IR cuts (issue #373): camelCase UI keys onto snake_case
+  // core symbols, verified by reading back through the core symbols.
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"c1","key":"lowCut","value":120.0}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"c1","key":"low_cut"}])")));
+  CHECK(r["ok"] == true);
+  CHECK(std::fabs(r["value"].get<double>() - 120.0) < 1e-6);
+  r = Parse(bridge.HandleSetParam(Arr(R"([{"blockId":"c1","key":"highCut","value":8000.0}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandleGetParam(Arr(R"([{"blockId":"c1","key":"high_cut"}])")));
+  CHECK(r["ok"] == true);
+  CHECK(std::fabs(r["value"].get<double>() - 8000.0) < 1e-6);
 
   r = Parse(bridge.HandleUnloadIr(Arr(R"([{"blockId":"c1"}])")));
   CHECK(r["ok"] == true);

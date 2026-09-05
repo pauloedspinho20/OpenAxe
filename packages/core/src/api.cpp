@@ -469,6 +469,11 @@ float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id) {
   return LiveEngine(graph)->GetMeter(block_id);
 }
 
+// Post-input-trim peak over the block's last processed buffer, 0 for unknown ids.
+float openaxe_get_input_meter(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetInputMeter(block_id);
+}
+
 float openaxe_get_cpu_load(OpenAxeGraph* graph) { return LiveEngine(graph)->GetCpuLoad(); }
 
 float openaxe_get_gain_reduction(OpenAxeGraph* graph, int32_t block_id) {

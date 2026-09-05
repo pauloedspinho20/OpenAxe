@@ -14,3 +14,5 @@
     {"Band 4 Freq", "band3_frequency", 20.0f, 20000.0f, "Hz"},
     {"Band 4 Gain", "band3_gain", -15.0f, 15.0f, "dB"},
     {"Band 4 Q", "band3_q", 0.1f, 10.0f, "x"},
+    {"Low Cut", "low_cut", 20.0f, 1000.0f, "Hz"},
+    {"High Cut", "high_cut", 2000.0f, 20000.0f, "Hz"},

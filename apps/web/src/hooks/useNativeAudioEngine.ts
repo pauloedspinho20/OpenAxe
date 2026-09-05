@@ -262,7 +262,10 @@ export function useNativeAudioEngine() {
       void bridge
         .meters()
         .then((meters) => {
-          for (const m of meters) rig.updateMeter(m.id, m.value)
+          for (const m of meters) {
+            rig.updateMeter(m.id, m.value)
+            if (typeof m.input === 'number') rig.updateInputMeter(m.id, m.input)
+          }
         })
         .catch(() => {})
     }

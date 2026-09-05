@@ -43,7 +43,8 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * between DSP nodes, no mixer/master GainNodes, no wet/dry staging.
  * The only Web Audio the rig owns is the single worklet node feeding the
  * graph's IN rail from the mic and carrying the graph's OUT rail to the
- * destination. Per-block meters come from `openaxe_get_meter` (polled here)
+ * destination. Per-block meters come from `openaxe_get_meter` (output) and
+ * `openaxe_get_input_meter` (post-trim input), polled here and each
  * presented through a Web-Audio-free `NativeAnalyser` facade fed a sine scaled
  * to each block's real peak - identical to the desktop path.
  */
@@ -53,7 +54,9 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
   private readonly blocks = new Map<string, { block: RigBlock; row: number; col: number }>()
   private readonly edges = new Map<string, Edge>()
   private readonly analysers = new Map<string, NativeAnalyser>()
+  private readonly inputAnalysers = new Map<string, NativeAnalyser>()
   private readonly peaks = new Map<string, number>()
+  private readonly inputPeaks = new Map<string, number>()
   private readonly gainReductions = new Map<string, number>()
   private readonly gateGains = new Map<string, number>()
   private inputSource: AudioNode | null = null
@@ -95,6 +98,12 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
           for (const [id, peak] of Object.entries(meters)) this.peaks.set(id, peak)
         })
         .catch(() => {})
+      void this.worklet
+        .inputMeters()
+        .then((meters) => {
+          for (const [id, peak] of Object.entries(meters)) this.inputPeaks.set(id, peak)
+        })
+        .catch(() => {})
       const w = this.worklet as unknown as {
         gainReductions?: () => Promise<Record<string, number>>
         gateGains?: () => Promise<Record<string, number>>
@@ -134,7 +143,9 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
       if (edge.from.blockId === id || edge.to.blockId === id) this.edges.delete(edgeId)
     }
     this.analysers.delete(id)
+    this.inputAnalysers.delete(id)
     this.peaks.delete(id)
+    this.inputPeaks.delete(id)
     this.gainReductions.delete(id)
     this.gateGains.delete(id)
     this.blocks.delete(id)
@@ -161,6 +172,11 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
   /** Drive a block's meter facade to a peak level (0..1). Safe to call often. */
   updateMeter(id: string, peak: number): void {
     this.peaks.set(id, peak)
+  }
+
+  /** Drive a block's input-meter facade to a peak level (0..1). Safe to call often. */
+  updateInputMeter(id: string, peak: number): void {
+    this.inputPeaks.set(id, peak)
   }
 
   /** Current gain reduction in dB (≤0) for a block, 0 if unknown/not a dynamics block. */
@@ -201,6 +217,27 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
         read: peakSineSource(256, this.context.sampleRate, () => this.peaks.get(id) ?? 0),
       })
       this.analysers.set(id, cached)
+    }
+    return cached as unknown as AnalyserNode
+  }
+
+  /**
+   * A live meter tap for this block's input (post input trim) - the IN half
+   * of the inspector's IN/OUT pair. Same NativeAnalyser facade as
+   * getBlockAnalyser, fed by the core's input peak
+   * (`openaxe_get_input_meter`). Null for an unknown block.
+   */
+  getBlockInputAnalyser(id: string): AnalyserNode | null {
+    const entry = this.blocks.get(id)
+    if (!entry) return null
+    let cached = this.inputAnalysers.get(id)
+    if (!cached) {
+      cached = new NativeAnalyser({
+        fftSize: 256,
+        sampleRate: this.context.sampleRate,
+        read: peakSineSource(256, this.context.sampleRate, () => this.inputPeaks.get(id) ?? 0),
+      })
+      this.inputAnalysers.set(id, cached)
     }
     return cached as unknown as AnalyserNode
   }
@@ -330,7 +367,9 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
       if (!seen.has(id)) {
         this.blocks.delete(id)
         this.analysers.delete(id)
+        this.inputAnalysers.delete(id)
         this.peaks.delete(id)
+        this.inputPeaks.delete(id)
         this.gainReductions.delete(id)
         this.gateGains.delete(id)
       }
@@ -350,7 +389,9 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
     this.edges.clear()
     this.blocks.clear()
     this.analysers.clear()
+    this.inputAnalysers.clear()
     this.peaks.clear()
+    this.inputPeaks.clear()
     this.gainReductions.clear()
     this.gateGains.clear()
     await this.worklet.dispose()

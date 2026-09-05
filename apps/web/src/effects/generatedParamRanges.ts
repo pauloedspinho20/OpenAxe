@@ -44,6 +44,8 @@ export const PARAM_RANGES = Object.freeze({
     band3_frequency: { min: 20, max: 20000 },
     band3_gain: { min: -15, max: 15 },
     band3_q: { min: 0.1, max: 10 },
+    low_cut: { min: 20, max: 1000 },
+    high_cut: { min: 2000, max: 20000 },
   }),
   chorus: Object.freeze({
     rate: { min: 0.1, max: 10 },
@@ -58,12 +60,7 @@ export const PARAM_RANGES = Object.freeze({
     feedback: { min: 0, max: 0.9 },
     delay: { min: 0.1, max: 3 },
   }),
-  phaser: Object.freeze({
-    rate: { min: 0.1, max: 5 },
-    depth: { min: 0.1, max: 1 },
-    feedback: { min: 0, max: 0.9 },
-    stages: { min: 2, max: 8 },
-  }),
+  phaser: Object.freeze({ rate: { min: 0.1, max: 8 }, script: { min: 0, max: 1 } }),
   tremolo: Object.freeze({
     rate: { min: 0.1, max: 20 },
     depth: { min: 0, max: 1 },
@@ -196,7 +193,11 @@ export const PARAM_RANGES = Object.freeze({
       drive: { min: 0, max: 1 },
     }),
   }),
-  cab: Object.freeze({ ir_mix: { min: 0, max: 1 } }),
+  cab: Object.freeze({
+    ir_mix: { min: 0, max: 1 },
+    low_cut: { min: 20, max: 1000 },
+    high_cut: { min: 2000, max: 20000 },
+  }),
   mixer: Object.freeze({
     in0_level: { min: 0, max: 1.5 },
     in0_pan: { min: -1, max: 1 },

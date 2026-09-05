@@ -42,6 +42,7 @@ import type { Preset, PresetRig } from '../presets/types'
 import { preloadPresets } from '../engine/modelPreloader'
 import { useCurrentPresetStore } from '../state/currentPresetStore'
 import { useGraphStore } from '../state/graphStore'
+import { useSelection } from '../state/selection'
 import { toast } from '@openaxe/ui'
 import { usePresetBankStore } from '../state/presetBankStore'
 import { useSceneStore } from '../state/sceneStore'
@@ -109,6 +110,7 @@ async function clearGrid(): Promise<void> {
   }
   const { masterLevel, masterMuted } = useGraphStore.getState()
   useGraphStore.getState().loadGraph([], [], masterLevel, masterMuted)
+  useSelection.getState().clear()
 }
 
 /**

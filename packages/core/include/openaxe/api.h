@@ -373,6 +373,10 @@ int32_t openaxe_is_tuner_muted(OpenAxeGraph* graph);
 
 // Peak |sample| over the last openaxe_process call, 0 for an unknown block.
 float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id);
+// Post-input-trim peak over the last openaxe_process call - what the block's
+// DSP actually received - 0 for an unknown block. Pairs with
+// openaxe_get_meter for per-block IN/OUT gain-staging meters.
+float openaxe_get_input_meter(OpenAxeGraph* graph, int32_t block_id);
 // Fraction of real-time budget the last openaxe_process call used.
 float openaxe_get_cpu_load(OpenAxeGraph* graph);
 // Compressor (and gate) gain reduction in dB (≤0, 0 = no reduction), 0 for unknown/non-dynamics blocks. Tier 1.

@@ -4,3 +4,5 @@
 // <base>_params.inc fragment, so engine.cpp can #include both into parallel
 // arrays. See openaxe/dsp/smoothing.h for the struct and the ramp math.
     {openaxe::dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f},
+    {openaxe::dsp::SmoothingMode::kNone, 0.0f, 20.0f, 1000.0f},
+    {openaxe::dsp::SmoothingMode::kNone, 0.0f, 2000.0f, 20000.0f},

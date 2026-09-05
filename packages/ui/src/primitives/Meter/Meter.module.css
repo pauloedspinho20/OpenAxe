@@ -36,6 +36,11 @@
   box-shadow: 0 0 4px var(--meter-glow-red);
 }
 
+/* Single-bar meters: the fill spans the whole track with a fixed
+ * green→amber→red gradient (or a solid red for gainReduction), and the level
+ * reveals it by clipping away the unlit portion - a low level shows green,
+ * a hot level shows all three colours. This is the classic VU look, as opposed
+ * to recolouring the whole bar at the amber/red thresholds. */
 .miniWrap,
 .mediumWrap {
   display: inline-block;
@@ -46,15 +51,23 @@
 
 .miniFill,
 .mediumFill {
-  display: flex;
+  display: block;
+  width: 100%;
   height: 100%;
-  transition:
-    width 0.05s linear,
-    height 0.05s linear;
+  transition: clip-path 0.05s linear;
 }
 
-.mediumFill {
-  flex-direction: column-reverse;
+.miniFill.gradient {
+  background: linear-gradient(to right, var(--led-on) 0%, var(--led-warn) 75%, var(--led-hot) 92%);
+}
+
+.mediumFill.gradient {
+  background: linear-gradient(to top, var(--led-on) 0%, var(--led-warn) 75%, var(--led-hot) 92%);
+}
+
+.miniFill.gainReduction,
+.mediumFill.gainReduction {
+  background: var(--led-hot);
 }
 
 .miniWrap {
@@ -64,23 +77,44 @@
 }
 
 .mediumWrap {
-  height: 70px;
-  width: 10px;
+  height: 72px;
+  width: 12px;
   border-radius: var(--r-sm);
-  rotate: 180deg;
 }
 
-.miniFill.statusGreen,
-.mediumFill.statusGreen {
-  background: var(--led-on);
+.mediumGroup {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
 }
-.miniFill.statusAmber,
-.mediumFill.statusAmber {
-  background: var(--led-warn);
+
+.mediumGroup .peakLabel {
+  position: absolute;
+  top: -12px;
 }
-.miniFill.statusRed,
-.mediumFill.statusRed {
-  background: var(--led-hot);
+
+.peakLabel {
+  font-size: 6px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Caption below a vertical meter (e.g. the inspector's IN/OUT pair). */
+.meterLabel {
+  position: absolute;
+  bottom: -12px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-3);
+  white-space: nowrap;
 }
 
 @media (max-width: var(--mw-md)) {
