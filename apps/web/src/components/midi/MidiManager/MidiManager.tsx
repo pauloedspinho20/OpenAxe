@@ -5,6 +5,9 @@ import { armLearn, requestMidiAccess } from '../../../midi/midiAccess'
 import { actionKey, actionLabel, type MidiAction } from '../../../midi/actions'
 import { formatMidiMatch, messageMatches } from '../../../midi/message'
 import { SCENE_COUNT, SLOTS_PER_SCENE } from '../../../scenes/types'
+import { getParamSchema } from '../../../effects/paramSchema'
+import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
+import { BLOCK_KIND_LABELS } from '../../grid/blockOptions'
 import { Dialog, HardwareButton, Select } from '@openaxe/ui'
 import styles from './MidiManager.module.css'
 
@@ -12,6 +15,27 @@ export function MidiManager() {
   const open = useMidiManager((s) => s.open)
   if (!open) return null
   return <MidiManagerBody />
+}
+
+/**
+ * Display label for a knob mapping: "Delay · Feedback". Falls back to the
+ * raw param key when the schema has no label for it, and names the orphan
+ * when the block is gone (the row's Clear button still removes it).
+ */
+function paramRowLabel(
+  action: Extract<MidiAction, { kind: 'param' }>,
+  blocks: BlockInstance[],
+): string {
+  const block = blocks.find((b) => b.id === action.blockId)
+  if (!block) return `Removed block · ${action.paramKey}`
+  const blockLabel = BLOCK_KIND_LABELS[block.kind] ?? block.kind
+  let fieldLabel: string | undefined
+  try {
+    fieldLabel = getParamSchema(block.kind).find((f) => f.key === action.paramKey)?.label
+  } catch {
+    fieldLabel = undefined
+  }
+  return `${blockLabel} · ${fieldLabel ?? action.paramKey}`
 }
 
 function MappingRow({ action, label }: { action: MidiAction; label?: string }) {
@@ -63,6 +87,7 @@ function MidiManagerBody() {
   const selectInput = useMidiStore((s) => s.selectInput)
   const lastMessage = useMidiStore((s) => s.lastMessage)
   const mappings = useMidiStore((s) => s.mappings)
+  const blocks = useGraphStore((s) => s.blocks)
   const [jumpSceneInput, setJumpSceneInput] = useState('1')
 
   useEffect(() => {
@@ -77,6 +102,7 @@ function MidiManagerBody() {
   const sceneMappings = mappings
     .flatMap((m) => (m.action.kind === 'scene' ? [{ ...m, scene: m.action.scene }] : []))
     .sort((a, b) => a.scene - b.scene)
+  const paramMappings = mappings.filter((m) => m.action.kind === 'param')
 
   return (
     <Dialog
@@ -162,6 +188,21 @@ function MidiManagerBody() {
               <MappingRow key={m.id} action={m.action} />
             ))}
           </div>
+
+          {paramMappings.length > 0 && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Parameter Mappings</span>
+              {paramMappings.map((m) =>
+                m.action.kind === 'param' ? (
+                  <MappingRow
+                    key={m.id}
+                    action={m.action}
+                    label={paramRowLabel(m.action, blocks)}
+                  />
+                ) : null,
+              )}
+            </div>
+          )}
         </>
       )}
 
