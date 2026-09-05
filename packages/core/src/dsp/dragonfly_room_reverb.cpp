@@ -183,6 +183,10 @@ void DragonflyRoomReverb::Process(const float* const* input, float* const* outpu
     comb_base[i] = kCombMs[i] * size_scale * sr / 1000.0f;
     fb_target[i] = std::pow(10.0f, -3.0f * t / decay);
   }
+  float allpass_base[kAllpasses];
+  for (int a = 0; a < kAllpasses; ++a) {
+    allpass_base[a] = kAllpassMs[a] * (0.7f + 0.6f * size_scale) * sr / 1000.0f;
+  }
 
   for (int n = 0; n < num_frames; ++n) {
     float wet_ch[2] = {0.0f, 0.0f};
@@ -214,8 +218,7 @@ void DragonflyRoomReverb::Process(const float* const* input, float* const* outpu
       for (int i = 0; i < kCombs; ++i) {
         st.smooth_fb[i] += smooth_a * (fb_target[i] - st.smooth_fb[i]);
         Comb& c = st.combs[ch][i];
-        const float wob = std::min(wander_samps * (0.3f + 0.7f * (i & 1)), comb_base[i] * 0.2f) * lfo_v;
-        const float tap = c.line.ReadSamples(std::max(comb_base[i] + wob, 4.0f));
+        const float tap = c.line.ReadSamples(comb_base[i]);
         st.smooth_damp += smooth_a * (late_lp_t - st.smooth_damp);
         c.damp = FlushDenormal(c.damp + st.smooth_damp * (tap - c.damp));
         c.line.Write(late_in + st.smooth_fb[i] * c.damp);
@@ -224,10 +227,16 @@ void DragonflyRoomReverb::Process(const float* const* input, float* const* outpu
       late *= 0.25f;
       st.boost[ch] = FlushDenormal(st.boost[ch] + boost_t * (late - st.boost[ch]));
       late += boost_g * st.boost[ch];
+      // spin/wander wobble the diffusing allpasses, not the resonant combs:
+      // an allpass's flat magnitude response and much lower feedback gain
+      // (allpass_g, well below the combs' near-unity RT60 gain) means the
+      // same excursion reads as diffusion/movement instead of a Doppler
+      // pitch-bend that the comb feedback loop would reinforce every pass.
       for (int a = 0; a < kAllpasses; ++a) {
         Allpass& ap = st.allpasses[ch][a];
-        const float d = kAllpassMs[a] * (0.7f + 0.6f * size_scale) * sr / 1000.0f;
-        const float tap = ap.line.ReadSamples(std::max(d, 4.0f));
+        const float d = allpass_base[a];
+        const float wob = std::min(wander_samps * (0.3f + 0.7f * (a & 1)), d * 0.05f) * lfo_v;
+        const float tap = ap.line.ReadSamples(std::max(d + wob, 4.0f));
         const float y = -allpass_g * late + tap;
         ap.line.Write(late + allpass_g * y);
         late = y;
