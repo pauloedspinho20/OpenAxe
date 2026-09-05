@@ -23,9 +23,14 @@
 // directly and reinstalls through an arch-correct pnpm.
 
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  declaredPnpmVersion,
+  mismatchedNativeBindings,
+  wantedPlatform,
+} from './lib/native-bindings.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const argv = process.argv.slice(2)
@@ -83,18 +88,6 @@ if (!pnpmVersion) {
 console.log(`  pnpm    ${pnpmVersion}`)
 const cmake = submodulesOnly ? '' : (capture('cmake', ['--version']).split('\n')[0] ?? '')
 console.log(`  cmake   ${cmake || 'not found (C++ steps will be skipped)'}`)
-
-/** The pnpm version package.json pins, for the repair path and error hints. */
-function declaredPnpmVersion() {
-  try {
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-    return String(pkg.packageManager ?? 'pnpm@latest')
-      .split('@')
-      .pop()
-  } catch {
-    return 'latest'
-  }
-}
 
 // ── 2. Submodules ────────────────────────────────────────────────────────
 //
@@ -154,51 +147,18 @@ if (skipSubmodules) {
 }
 
 // ── 3. Dependencies ──────────────────────────────────────────────────────
-
-/**
- * Packages that ship one native binary per platform as optional dependencies.
- * pnpm installs only the ones matching its own process's platform/arch, so a
- * mismatch here is exactly the Rosetta-pnpm failure described at the top.
- * Keys are the prefix a virtual-store directory name starts with.
- */
-const NATIVE_FAMILIES = [
-  '@rolldown+binding-',
-  '@oxlint+binding-',
-  '@oxc-parser+binding-',
-  '@oxc-resolver+binding-',
-  'lightningcss-',
-]
-const PLATFORM_TOKEN = /(darwin|linux|win32)-(x64|arm64|ia32|arm)/
-
-/**
- * Returns the families whose installed binaries are all for the wrong
- * platform/arch (an empty array means the install is usable). Reads directory
- * names in the virtual store rather than importing anything, so it costs
- * nothing and reports every broken family at once instead of the first.
- */
-function mismatchedNativeBindings() {
-  const storeDir = join(root, 'node_modules/.pnpm')
-  if (!existsSync(storeDir)) return []
-  const entries = readdirSync(storeDir)
-  const wanted = `${process.platform}-${process.arch}`
-  const broken = []
-  for (const family of NATIVE_FAMILIES) {
-    const installed = entries.filter((e) => e.startsWith(family) && PLATFORM_TOKEN.test(e))
-    if (installed.length === 0) continue // family not used on this platform at all
-    if (!installed.some((e) => e.includes(wanted))) {
-      broken.push({ family, installed: installed.map((e) => e.replace(/@\d[\d.]*$/, '')) })
-    }
-  }
-  return broken
-}
+//
+// The wrong-arch detection lives in scripts/lib/native-bindings.mjs (shared
+// with the postinstall check-native-bindings.mjs); this section is the repair
+// half: reinstall through an arch-correct pnpm.
 
 heading('Dependencies')
 if (submodulesOnly) skip('--submodules-only')
 if (!submodulesOnly && !run('pnpm', ['install'])) fail('pnpm install failed.')
 
-let broken = submodulesOnly ? [] : mismatchedNativeBindings()
+let broken = submodulesOnly ? [] : mismatchedNativeBindings(root)
 if (broken.length > 0) {
-  const wanted = `${process.platform}-${process.arch}`
+  const wanted = wantedPlatform()
   warn(`pnpm installed native binaries for the wrong architecture (this Node is ${wanted}):`)
   for (const { family, installed } of broken)
     console.log(`        ${family}* -> ${installed.join(', ')}`)
@@ -206,7 +166,7 @@ if (broken.length > 0) {
   warn('your PATH is running under emulation. Reinstalling through npm, which')
   warn('runs pnpm on this Node instead:')
 
-  const version = declaredPnpmVersion()
+  const version = declaredPnpmVersion(root)
   if (!run('npm', ['exec', '--yes', `pnpm@${version}`, '--', 'install'])) {
     fail(
       'the architecture-corrected reinstall failed.',
@@ -216,7 +176,7 @@ if (broken.length > 0) {
     )
   }
 
-  broken = mismatchedNativeBindings()
+  broken = mismatchedNativeBindings(root)
   if (broken.length > 0) {
     fail(
       'native binaries are still wrong after the corrected reinstall.',

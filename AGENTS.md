@@ -103,6 +103,14 @@ Each has a `--fix`/write mode (`sync-version.mjs`'s is the no-flag default,
 not `--fix`); a fix still requires re-running the relevant build (wasm
 rebuild, CMake reconfigure, etc.) to take effect.
 
+- `node scripts/check-native-bindings.mjs` — install hygiene, not drift: fails
+  fast when a Rosetta x86_64 pnpm installed wrong-arch native bindings
+  (`rolldown`/`oxlint`/…; issue #387). Runs automatically as root postinstall
+  on every `pnpm install`; repair with `--fix` (delegates to
+  `setup.mjs --web-only --skip-submodules`). If you add a dependency that
+  ships per-platform native binaries, register its virtual-store prefix in
+  `scripts/lib/native-bindings.mjs`.
+
 ## Env vars
 
 | Var                     | Where                             | Purpose                                                                                                                                                                                           |
