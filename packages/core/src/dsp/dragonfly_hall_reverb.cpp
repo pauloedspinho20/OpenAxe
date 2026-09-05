@@ -27,6 +27,7 @@
 // engine applies no double smoothing.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>

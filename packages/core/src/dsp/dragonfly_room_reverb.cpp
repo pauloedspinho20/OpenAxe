@@ -12,6 +12,7 @@
 // a millisecond excursion.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>

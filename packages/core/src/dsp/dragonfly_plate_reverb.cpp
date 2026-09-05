@@ -10,6 +10,7 @@
 // 1 = warm, 2 = dark/tape-ish). `early_level` is the wet level.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>

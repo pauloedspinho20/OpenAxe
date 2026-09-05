@@ -12,6 +12,7 @@
 // pre-allocates the longest reachable tap.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>
