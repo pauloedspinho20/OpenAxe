@@ -19,3 +19,6 @@ export const Default: Story = { args: { value: 0.5, label: 'GAIN' } }
 export const MinValue: Story = { args: { value: 0, label: 'LEVEL' } }
 export const MaxValue: Story = { args: { value: 1, label: 'DRIVE' } }
 export const NoLabel: Story = { args: { value: 0.7, label: '' } }
+export const Highlighted: Story = {
+  args: { value: 0.5, label: 'GAIN', highlighted: true },
+}

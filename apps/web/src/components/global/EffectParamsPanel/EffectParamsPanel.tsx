@@ -3,6 +3,8 @@ import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
 import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
+import { actionKey } from '@/midi/actions'
+import { useMidiStore } from '@/state/midiStore'
 import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
@@ -49,6 +51,10 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
     paramKey: string
     paramLabel: string
   } | null>(null)
+  // The knob currently armed for MIDI learn glows accent (see Knob's
+  // `highlighted`) - subscribing to just the key keeps every other knob
+  // from re-rendering while learn is armed elsewhere.
+  const learningKey = useMidiStore((s) => s.learning?.actionKey)
 
   const renderField = (field: ParamFieldSchema) => {
     if (field.control === 'select') {
@@ -92,6 +98,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         size={50}
         description={field.description}
         onChange={(value) => setParam(field.key, value)}
+        highlighted={learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })}
         onContextMenu={(e) => {
           e.preventDefault()
           setMidiMenu({

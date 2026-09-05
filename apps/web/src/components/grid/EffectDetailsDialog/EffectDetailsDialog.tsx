@@ -8,6 +8,8 @@ import {
   type ParamFieldSchema,
 } from '../../../effects/paramSchema'
 import { useBlockParamValues } from '../../../effects/useBlockParamValues'
+import { actionKey } from '../../../midi/actions'
+import { useMidiStore } from '../../../state/midiStore'
 import { useGraphStore } from '../../../state/graphStore'
 import { ParamMidiMenu } from '../../midi/ParamMidiMenu/ParamMidiMenu'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
@@ -137,6 +139,9 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
     })
   }
 
+  // The knob armed for MIDI learn glows accent (see Knob's `highlighted`).
+  const learningKey = useMidiStore((s) => s.learning?.actionKey)
+
   const renderField = (field: ParamFieldSchema, size = 52, mappable = true) => {
     const description = field.description ?? RAW_DESCRIPTIONS[field.key]
     if (field.control === 'select') {
@@ -176,6 +181,11 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
           size={size}
           description={description}
           onChange={(v) => setParam(field.key, v)}
+          highlighted={
+            mappable &&
+            blockId !== null &&
+            learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })
+          }
           {...(mappable && blockId ? { onContextMenu: openMidiMenu(field) } : {})}
         />
         {description && <span className={styles.desc}>{description}</span>}

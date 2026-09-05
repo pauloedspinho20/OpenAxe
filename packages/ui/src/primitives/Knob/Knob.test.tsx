@@ -126,4 +126,18 @@ describe('Knob', () => {
     expect(onContextMenu).toHaveBeenCalledTimes(1)
     expect(onChange).not.toHaveBeenCalled()
   })
+
+  it('tints the base with an accent wash when highlighted', () => {
+    const { container, rerender } = render(<Knob label="Drive" value={0.5} onChange={() => {}} />)
+    const slider = screen.getByRole('slider', { name: 'Drive' })
+    expect(slider.getAttribute('class')).not.toMatch(/highlighted/)
+    expect(container.querySelectorAll('circle')).toHaveLength(1)
+
+    rerender(<Knob label="Drive" value={0.5} onChange={() => {}} highlighted />)
+    expect(screen.getByRole('slider', { name: 'Drive' }).getAttribute('class')).toMatch(
+      /highlighted/,
+    )
+    // Body circle plus the accent wash overlay.
+    expect(container.querySelectorAll('circle')).toHaveLength(2)
+  })
 })
