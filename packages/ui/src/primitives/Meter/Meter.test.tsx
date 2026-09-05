@@ -5,10 +5,10 @@ import styles from './Meter.module.css'
 
 describe('levelToPeakDb', () => {
   it('formats a level as dBFS, floored at −60', () => {
-    expect(levelToPeakDb(1)).toBe('0.0 dB')
-    expect(levelToPeakDb(0.5)).toBe('−6.0 dB')
-    expect(levelToPeakDb(0.01)).toBe('−40.0 dB')
-    expect(levelToPeakDb(0.00001)).toBe('−60.0 dB')
+    expect(levelToPeakDb(1)).toBe('0.0')
+    expect(levelToPeakDb(0.5)).toBe('−6.0')
+    expect(levelToPeakDb(0.01)).toBe('−40.0')
+    expect(levelToPeakDb(0.00001)).toBe('−60.0')
   })
 
   it('reads silence as −∞', () => {
@@ -87,6 +87,16 @@ describe('MediumMeter', () => {
   it('renders no peak-dB label when not given', () => {
     render(<MediumMeter level={0.5} />)
     expect(screen.queryByText('−6.0 dB')).toBeNull()
+  })
+
+  it('renders the caption below the bar when given', () => {
+    render(<MediumMeter level={0.5} label="IN" />)
+    expect(screen.getByText('IN')).toBeInTheDocument()
+  })
+
+  it('renders no caption when not given', () => {
+    const { container } = render(<MediumMeter level={0.5} />)
+    expect(container.querySelector(`.${styles.meterLabel}`)).toBeNull()
   })
 })
 

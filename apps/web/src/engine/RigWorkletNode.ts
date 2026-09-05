@@ -72,6 +72,7 @@ interface WorkletReply {
   error?: string
   info?: RigModelInfo | null
   meters?: Record<string, number>
+  inputMeters?: Record<string, number>
   gainReductions?: Record<string, number>
   gateGains?: Record<string, number>
   /** Core block-kind ids this WASM was built with - see assertCompiledKindsMatchConfig. */
@@ -349,6 +350,12 @@ export class RigWorkletNode {
   async meters(): Promise<Record<string, number>> {
     const reply = await this.request({ type: 'meters' })
     return reply.meters ?? {}
+  }
+
+  /** Post-input-trim peak per block id (openaxe_get_input_meter). */
+  async inputMeters(): Promise<Record<string, number>> {
+    const reply = await this.request({ type: 'inputMeters' })
+    return reply.inputMeters ?? {}
   }
 
   /** Gain reduction in dB (≤0) per block id from openaxe_get_gain_reduction. */

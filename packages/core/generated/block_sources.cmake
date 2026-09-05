@@ -5,7 +5,7 @@
 # its source omitted here entirely - it is never handed to the compiler, which
 # is the whole point of the config.
 #
-# Omitted by effects.config.json: (none)
+# Omitted by effects.config.json: ring-mod, granular-delay, filter, pitch-shifter
 
 set(OPENAXE_BLOCK_SOURCES
   src/dsp/noise_gate.cpp
@@ -17,10 +17,6 @@ set(OPENAXE_BLOCK_SOURCES
   src/dsp/tremolo.cpp
   src/dsp/delay.cpp
   src/dsp/spring_reverb.cpp
-  src/dsp/ring_mod.cpp
-  src/dsp/granular_delay.cpp
-  src/dsp/filter.cpp
-  src/dsp/pitch_shifter.cpp
   src/dsp/rotary.cpp
 )
 
@@ -39,10 +35,10 @@ set(OPENAXE_BLOCK_PHASER ON)
 set(OPENAXE_BLOCK_TREMOLO ON)
 set(OPENAXE_BLOCK_DELAY ON)
 set(OPENAXE_BLOCK_REVERB ON)
-set(OPENAXE_BLOCK_RING_MOD ON)
-set(OPENAXE_BLOCK_GRANULAR_DELAY ON)
-set(OPENAXE_BLOCK_FILTER ON)
-set(OPENAXE_BLOCK_PITCH_SHIFTER ON)
+set(OPENAXE_BLOCK_RING_MOD OFF)
+set(OPENAXE_BLOCK_GRANULAR_DELAY OFF)
+set(OPENAXE_BLOCK_FILTER OFF)
+set(OPENAXE_BLOCK_PITCH_SHIFTER OFF)
 set(OPENAXE_BLOCK_ROTARY ON)
 set(OPENAXE_BLOCK_AMP ON)
 set(OPENAXE_BLOCK_AMP_CAB ON)

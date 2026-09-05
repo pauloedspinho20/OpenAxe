@@ -17,10 +17,10 @@
 #define OPENAXE_BLOCK_TREMOLO_COMPILED 1
 #define OPENAXE_BLOCK_DELAY_COMPILED 1
 #define OPENAXE_BLOCK_REVERB_COMPILED 1
-#define OPENAXE_BLOCK_RING_MOD_COMPILED 1
-#define OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED 1
-#define OPENAXE_BLOCK_FILTER_COMPILED 1
-#define OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED 1
+#define OPENAXE_BLOCK_RING_MOD_COMPILED 0
+#define OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED 0
+#define OPENAXE_BLOCK_FILTER_COMPILED 0
+#define OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED 0
 #define OPENAXE_BLOCK_ROTARY_COMPILED 1
 #define OPENAXE_BLOCK_AMP_COMPILED 1
 #define OPENAXE_BLOCK_AMP_CAB_COMPILED 1
@@ -50,10 +50,10 @@ inline constexpr bool IsCompiled(graph::BlockKind kind) {
     case graph::BlockKind::kTremolo: return true;
     case graph::BlockKind::kDelay: return true;
     case graph::BlockKind::kReverb: return true;
-    case graph::BlockKind::kRingMod: return true;
-    case graph::BlockKind::kGranularDelay: return true;
-    case graph::BlockKind::kFilter: return true;
-    case graph::BlockKind::kPitchShifter: return true;
+    case graph::BlockKind::kRingMod: return false;
+    case graph::BlockKind::kGranularDelay: return false;
+    case graph::BlockKind::kFilter: return false;
+    case graph::BlockKind::kPitchShifter: return false;
     case graph::BlockKind::kRotary: return true;
     case graph::BlockKind::kAmp: return true;
     case graph::BlockKind::kAmpCab: return true;
@@ -84,9 +84,9 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kTremolo: return true;
     case graph::BlockKind::kDelay: return true;
     case graph::BlockKind::kReverb: return true;
-    case graph::BlockKind::kRingMod: return true;
-    case graph::BlockKind::kGranularDelay: return true;
-    case graph::BlockKind::kFilter: return true;
+    case graph::BlockKind::kRingMod: return false;
+    case graph::BlockKind::kGranularDelay: return false;
+    case graph::BlockKind::kFilter: return false;
     case graph::BlockKind::kPitchShifter: return false;
     case graph::BlockKind::kRotary: return true;
     case graph::BlockKind::kAmp: return true;
