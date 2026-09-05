@@ -13,6 +13,12 @@
 // Usage:
 //   node scripts/check-native-bindings.mjs        # exit 1 + remedy when broken
 //   node scripts/check-native-bindings.mjs --fix  # repair via setup.mjs (web-only, no submodules)
+//
+// OPENAXE_SKIP_BINDING_CHECK=1 bypasses the check (exit 0). Only setup.mjs
+// sets it, for its own internal `pnpm install`: that install is immediately
+// followed by the wrong-arch detection + corrected reinstall, so gating it
+// would deadlock the repair it exists to enable. Never set it yourself to
+// silence a failure - the install is genuinely broken without the repair.
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +30,11 @@ import {
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIX = process.argv.includes('--fix')
+
+if (process.env.OPENAXE_SKIP_BINDING_CHECK) {
+  console.log('check-native-bindings: skipped via OPENAXE_SKIP_BINDING_CHECK.')
+  process.exit(0)
+}
 
 if (FIX) {
   const result = spawnSync('node', ['scripts/setup.mjs', '--web-only', '--skip-submodules'], {

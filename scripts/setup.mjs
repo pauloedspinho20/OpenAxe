@@ -154,7 +154,12 @@ if (skipSubmodules) {
 
 heading('Dependencies')
 if (submodulesOnly) skip('--submodules-only')
-if (!submodulesOnly && !run('pnpm', ['install'])) fail('pnpm install failed.')
+// The postinstall check-native-bindings.mjs is bypassed for this install via
+// OPENAXE_SKIP_BINDING_CHECK: a wrong-arch result here is the expected input
+// to the repair below, and gating this step would deadlock it. The corrected
+// reinstall runs without the bypass, so its postinstall validates the fix.
+const installEnv = { ...process.env, OPENAXE_SKIP_BINDING_CHECK: '1' }
+if (!submodulesOnly && !run('pnpm', ['install'], { env: installEnv })) fail('pnpm install failed.')
 
 let broken = submodulesOnly ? [] : mismatchedNativeBindings(root)
 if (broken.length > 0) {
