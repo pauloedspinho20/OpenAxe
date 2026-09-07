@@ -23,6 +23,12 @@
   transition: background-color 0.05s linear;
 }
 
+.peakLabels {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+}
+
 /* Slim stereo pair: two narrow segmented columns side by side (L/R) in
  * roughly the footprint of one large meter, for the grid input/output rails. */
 .stereoWrap {
@@ -36,7 +42,10 @@
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 6px;
+  box-shadow: var(--shadow-recessed);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  gap: var(--sp-1);
 }
 
 .slimCol {
@@ -50,14 +59,11 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: var(--sp-2);
   background: var(--panel-recessed);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-recessed);
 }
 
 .slimSegment {
-  width: 10px;
+  width: 16px;
   height: 6px;
   border-radius: 2px;
   background: var(--meter-off);
@@ -66,17 +72,6 @@
 
 /* Per-side caption (L/R) below each slim column. */
 .slimCaption {
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-/* Group label (e.g. "Output") below the pair. */
-.stereoGroupLabel {
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.08em;

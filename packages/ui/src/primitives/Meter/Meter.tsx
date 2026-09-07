@@ -119,19 +119,21 @@ export function StereoMeter({
 }: StereoMeterProps) {
   return (
     <div className={styles.stereoWrap} title={title}>
+      <div className={styles.peakLabels}>
+        {valueLabelL !== undefined && <span className={styles.peakLabel}>{valueLabelL}</span>}
+        {valueLabelR !== undefined && <span className={styles.peakLabel}>{valueLabelR}</span>}
+      </div>
       <div className={styles.stereoPair}>
         <div className={styles.slimCol}>
-          {valueLabelL !== undefined && <span className={styles.peakLabel}>{valueLabelL}</span>}
           <div className={styles.slimSegments}>{renderSegments(levelL, true)}</div>
           <span className={styles.slimCaption}>L</span>
         </div>
         <div className={styles.slimCol}>
-          {valueLabelR !== undefined && <span className={styles.peakLabel}>{valueLabelR}</span>}
           <div className={styles.slimSegments}>{renderSegments(levelR, true)}</div>
           <span className={styles.slimCaption}>R</span>
         </div>
       </div>
-      {label && <span className={styles.stereoGroupLabel}>{label}</span>}
+      {label && <span className="label">{label}</span>}
     </div>
   )
 }
