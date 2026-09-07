@@ -115,6 +115,21 @@ function run(command, args, options = {}) {
   return result.status === 0
 }
 
+/** ccache ships in CI (apt/brew) but is optional locally — wiring it as the
+ *  compiler launcher when it isn't installed fails the build outright. When
+ *  absent we pass an explicit empty launcher instead of omitting the flag:
+ *  a build dir configured by an earlier ccache run keeps the stale value in
+ *  CMakeCache.txt otherwise. */
+function hasCcache() {
+  return spawnSync('ccache', ['--version'], { stdio: 'ignore' }).status === 0
+}
+
+function ccacheHint() {
+  console.log(
+    '  hint  ccache not on PATH — building uncached (CI installs it; `brew install ccache` speeds up local rebuilds)',
+  )
+}
+
 function stage(name, title, fn) {
   const started = Date.now()
   console.log(`\n[${++stepNo}] ${title}\n${'-'.repeat(60)}`)
@@ -172,11 +187,17 @@ function main() {
       return ok
     },
 
-    // ci.yml core-tests: Release + ccache launcher, Ninja when available.
+    // ci.yml core-tests: Release + ccache launcher when available, Ninja when available.
     core: () => {
       try {
         const probe = spawnSync('ninja', ['--version'], { stdio: 'ignore' })
         const generator = probe.status === 0 ? ['-G', 'Ninja'] : []
+        let launcher = ['-DCMAKE_CXX_COMPILER_LAUNCHER=']
+        if (hasCcache()) {
+          launcher = ['-DCMAKE_CXX_COMPILER_LAUNCHER=ccache']
+        } else {
+          ccacheHint()
+        }
         return (
           run('cmake', [
             '-S',
@@ -186,7 +207,7 @@ function main() {
             ...generator,
             '-DCMAKE_BUILD_TYPE=Release',
             '-DOPENAXE_BUILD_TESTS=ON',
-            '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+            ...launcher,
           ]) &&
           run('cmake', ['--build', 'packages/core/build', '-j']) &&
           run('ctest', ['--test-dir', 'packages/core/build', '--output-on-failure', '-j2'])
@@ -197,19 +218,27 @@ function main() {
     },
 
     // desktop.yml PR leg: compile + link only, no CPack/uploads.
-    desktop: () =>
-      run('pnpm', ['--filter', '@openaxe/desktop', 'build'], {
-        env: {
-          ...process.env,
-          CMAKE_CXX_COMPILER_LAUNCHER: 'ccache',
-          CMAKE_C_COMPILER_LAUNCHER: 'ccache',
-        },
-      }),
+    desktop: () => {
+      const env = { ...process.env }
+      if (hasCcache()) {
+        env.CMAKE_CXX_COMPILER_LAUNCHER = 'ccache'
+        env.CMAKE_C_COMPILER_LAUNCHER = 'ccache'
+      } else {
+        ccacheHint()
+      }
+      return run('pnpm', ['--filter', '@openaxe/desktop', 'build'], { env })
+    },
 
     // plugin.yml PR leg: web UI already built by the `build` stage; configure
     // Release, build, run non-validator tests, then validators as warn-only
     // (each SKIPs when its host tool is absent — CI's `|| true` step).
     plugin: () => {
+      let launchers = ['-DCMAKE_CXX_COMPILER_LAUNCHER=', '-DCMAKE_C_COMPILER_LAUNCHER=']
+      if (hasCcache()) {
+        launchers = ['-DCMAKE_CXX_COMPILER_LAUNCHER=ccache', '-DCMAKE_C_COMPILER_LAUNCHER=ccache']
+      } else {
+        ccacheHint()
+      }
       const configured = run('cmake', [
         '-S',
         'packages/vst3',
@@ -217,8 +246,7 @@ function main() {
         'packages/vst3/build',
         '-DCMAKE_BUILD_TYPE=Release',
         '-DOPENAXE_BUILD_TESTS=OFF',
-        '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
-        '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
+        ...launchers,
       ])
       if (!configured) return false
       if (!run('cmake', ['--build', 'packages/vst3/build', '--config', 'Release', '-j']))
