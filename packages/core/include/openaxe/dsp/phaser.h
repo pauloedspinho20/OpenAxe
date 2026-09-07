@@ -2,53 +2,51 @@
 
 #include <memory>
 
+#include "openaxe/dsp/dspark_param.h"
+
 namespace openaxe::dsp {
 
-// Classic feedback phaser: a cascade of first-order all-pass filters whose
-// center frequency is swept by a sine LFO, creating the signature moving-
-// notch effect. Feedback wraps the last stage's output back to the input;
-// higher feedback deepens the notches toward resonant peaks. Stereo via
-// 90° phase-offset LFOs per channel.
+// MXR Phase 90 voice (the EVH pedal is the same circuit plus a Script/Block
+// switch): a 4-stage cascaded-allpass phaser with a single Speed knob,
+// backed by dspark::Phaser<float> (packages/core/third_party/dspark) through
+// the shared DsparkEffect adapter (src/dsp/internal/dspark_wrapper.h) - the
+// same shape as compressor.cpp. The pedal values are fixed in Configure()
+// (see src/dsp/phaser.cpp): 4 stages, triangle LFO, 200 Hz-2.8 kHz sweep at
+// full depth, mono (both channels share one LFO, the way a mono pedal sits
+// in a stereo rig), tanh-saturated feedback, wet-only output.
 //
-// This is a from-scratch C++ implementation (see chorus.h's doc comment
-// for why BYOD/LSP modulation code can't be compiled standalone). The core
-// DSP — bilinear-transform all-pass coefficient computation, Direct Form I
-// recursion, and exponential LFO-to-frequency mapping — is textbook and
-// identical in every phaser implementation.
-//
-// The frequency sweep uses exponential interpolation from 150 Hz to
-// 3000 Hz driven by a unipolar LFO (0.5 + 0.5*sin(phase)), so the sweep
-// always stays within stable, positive frequency bounds regardless of depth
-// setting. This avoids the |a| > 1 instability that occurs at negative
-// frequencies in the all-pass coefficient formula:
-//
-//   a = (1 − tan(π·f/fs)) / (1 + tan(π·f/fs))
-//
-// where |a| > 1 for f < 0, placing the pole outside the unit circle.
+// This replaced a hand-rolled 4-param implementation (rate/depth/feedback/
+// stages, issue #317). The migration is a voicing change, not an
+// optimisation: measured Release cost was 0.216% of real time (issue #317's
+// comment), a rounding error next to NAM inference, and dspark::Phaser
+// computes its allpass coefficient per sample too - just with fastExp/fastTan
+// approximations. What the migration buys is the pedal behaviour: an even
+// triangle sweep over a fixed guitar-mid band with two feedback voices,
+// instead of a sine sweep whose `depth` knob parked the notches in the low
+// mids. dspark::Phaser's centre/range/waveform/spread setters exist but are
+// deliberately NOT params - a studio phaser with six sweep knobs is a
+// different effect from a Phase 90, and fewer knobs here sound better.
 //
 // Parameters:
-//   - Rate: 0.1–5 Hz, default 0.3 — LFO speed
-//   - Depth: 0.1–1.0, default 0.7 — sweep range ratio (controls how much of
-//     the 150–3000 Hz spectrum the LFO covers; at 1.0, full range)
-//   - Feedback: 0–0.9, default 0.5 — regeneration (higher → more resonant)
-//   - Stages: 2–8, default 4 — number of all-pass stages (each adds one
-//     notch; classic 4-stage phaser = 2 notches in stereo summed to mono)
+//   - Rate: 0.1-8 Hz, default 0.5 - the pedal's Speed knob (symbol kept as
+//     `rate` so presets saved with the old surface keep their speed)
+//   - Script: 0-1, default 1 - the EVH pedal's Script switch. 1 (Script) is
+//     the vintage voice, light regeneration for a soft, chewy sweep; 0
+//     (Block) is the modern voice, hotter feedback for sharper peaks.
+//     Discrete on the pedal (>= 0.5 reads as Script); crossing the threshold
+//     morphs rather than clicks (feedback is smoothed inside dspark).
 //
-// All all-pass stages within a channel share the same instantaneous LFO
-// frequency (classic single-LFO topology); changing the stage count resets
-// all internal state to zero to avoid glitching from the size change.
+// The fixed sweep (200 Hz-2.8 kHz at full depth) and both feedback points
+// (Script 0.3, Block 0.6) are voicing choices pinned by phaser_test.cpp and
+// the golden harness - see src/dsp/phaser.cpp for the reasoning.
 //
 // Like every other DSP wrapper in this codebase, this outputs the 100%-wet
-// (all-passed) signal. BaseEffect handles dry/wet blend.
+// (all-passed) signal. BaseEffect handles dry/wet blend (the engine appends
+// its own `mix`, defaulting to 0.5 for kPhaser - the classic 50/50 pedal
+// blend); the processor's internal mixer stays at 1.0.
 class Phaser {
  public:
-  struct ParamInfo {
-    const char* name;
-    const char* symbol;
-    float min_value;
-    float max_value;
-    const char* unit;
-  };
+  using ParamInfo = DsparkParamInfo;
 
   Phaser();
   ~Phaser();

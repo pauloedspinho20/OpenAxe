@@ -60,12 +60,7 @@ export const PARAM_RANGES = Object.freeze({
     feedback: { min: 0, max: 0.9 },
     delay: { min: 0.1, max: 3 },
   }),
-  phaser: Object.freeze({
-    rate: { min: 0.1, max: 5 },
-    depth: { min: 0.1, max: 1 },
-    feedback: { min: 0, max: 0.9 },
-    stages: { min: 2, max: 8 },
-  }),
+  phaser: Object.freeze({ rate: { min: 0.1, max: 8 }, script: { min: 0, max: 1 } }),
   tremolo: Object.freeze({
     rate: { min: 0.1, max: 20 },
     depth: { min: 0, max: 1 },

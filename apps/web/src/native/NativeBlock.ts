@@ -226,4 +226,35 @@ export class NativeBlock implements PresetBlock {
     this.loadedIr = null
     void this.bridge.unloadIr({ blockId: this.id })
   }
+
+  /**
+   * Cache transfer for NativeGraphRig.adoptStage (issue #367): snapshot
+   * carries the already-live values, restore replays them onto a fresh live
+   * facade WITHOUT touching the bridge (the commit already made them live).
+   */
+  snapshotBlockState(): {
+    params: EffectParams
+    bypassed: boolean
+    loadedModel: { id: string; name: string } | null
+    loadedIr: { id: string; name: string } | null
+  } {
+    return {
+      params: { ...this.params },
+      bypassed: this.bypassed,
+      loadedModel: this.loadedModel ? { ...this.loadedModel } : null,
+      loadedIr: this.loadedIr ? { ...this.loadedIr } : null,
+    }
+  }
+
+  restoreBlockState(snapshot: {
+    params: EffectParams
+    bypassed: boolean
+    loadedModel: { id: string; name: string } | null
+    loadedIr: { id: string; name: string } | null
+  }): void {
+    this.params = { ...snapshot.params }
+    this.bypassed = snapshot.bypassed
+    this.loadedModel = snapshot.loadedModel ? { ...snapshot.loadedModel } : null
+    this.loadedIr = snapshot.loadedIr ? { ...snapshot.loadedIr } : null
+  }
 }

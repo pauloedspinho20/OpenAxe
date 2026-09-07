@@ -1,4 +1,5 @@
-import { Dialog, HardwareButton, Knob, Select } from '@openaxe/ui'
+import { useState, type MouseEvent } from 'react'
+import { Dialog, HardwareButton, Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import {
@@ -7,7 +8,10 @@ import {
   type ParamFieldSchema,
 } from '../../../effects/paramSchema'
 import { useBlockParamValues } from '../../../effects/useBlockParamValues'
+import { actionKey } from '../../../midi/actions'
+import { useMidiStore } from '../../../state/midiStore'
 import { useGraphStore } from '../../../state/graphStore'
+import { ParamMidiMenu } from '../../midi/ParamMidiMenu/ParamMidiMenu'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import styles from './EffectDetailsDialog.module.css'
 
@@ -117,7 +121,28 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
       )
     : []
 
-  const renderField = (field: ParamFieldSchema, size = 52) => {
+  // Right-click MIDI menu target - one menu per dialog, retargeted per knob.
+  // Only schema knobs are mappable: the raw core symbols below have no
+  // getParamSchema entry, so midiValueToParam couldn't resolve their range.
+  const [midiMenu, setMidiMenu] = useState<{
+    anchor: ContextMenuAnchor
+    paramKey: string
+    paramLabel: string
+  } | null>(null)
+
+  const openMidiMenu = (field: ParamFieldSchema) => (e: MouseEvent) => {
+    e.preventDefault()
+    setMidiMenu({
+      anchor: { x: e.clientX, y: e.clientY },
+      paramKey: field.key,
+      paramLabel: field.label,
+    })
+  }
+
+  // The knob armed for MIDI learn glows accent (see Knob's `highlighted`).
+  const learningKey = useMidiStore((s) => s.learning?.actionKey)
+
+  const renderField = (field: ParamFieldSchema, size = 52, mappable = true) => {
     const description = field.description ?? RAW_DESCRIPTIONS[field.key]
     if (field.control === 'select') {
       const current =
@@ -156,6 +181,12 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
           size={size}
           description={description}
           onChange={(v) => setParam(field.key, v)}
+          highlighted={
+            mappable &&
+            blockId !== null &&
+            learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })
+          }
+          {...(mappable && blockId ? { onContextMenu: openMidiMenu(field) } : {})}
         />
         {description && <span className={styles.desc}>{description}</span>}
       </div>
@@ -195,7 +226,9 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
                   ones the Size / Damping / Width / Pre-delay knobs already drive are deliberately
                   not repeated here.
                 </p>
-                <div className={styles.fields}>{rawSchemas.map((f) => renderField(f, 44))}</div>
+                <div className={styles.fields}>
+                  {rawSchemas.map((f) => renderField(f, 44, false))}
+                </div>
               </div>
             )}
           </>
@@ -205,6 +238,15 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
           <HardwareButton label="Close" onClick={onClose} />
         </div>
       </div>
+      <ParamMidiMenu
+        anchor={midiMenu?.anchor ?? null}
+        target={
+          midiMenu && blockId
+            ? { blockId, paramKey: midiMenu.paramKey, paramLabel: midiMenu.paramLabel }
+            : null
+        }
+        onClose={() => setMidiMenu(null)}
+      />
     </Dialog>
   )
 }

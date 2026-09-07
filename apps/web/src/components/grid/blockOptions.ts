@@ -156,8 +156,12 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     kind: 'phaser',
     label: 'Phaser',
     group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
+    // Voiced as an MXR Phase 90 (issue #317): dspark::Phaser fixed to 4
+    // stages, triangle LFO, 200 Hz-2.8 kHz sweep, mono, with the EVH
+    // pedal's Script/Block feedback voices. Two knobs on purpose - the
+    // fixed voicing is the sound.
+    vendor: 'DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'tremolo',

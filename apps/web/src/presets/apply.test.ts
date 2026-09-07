@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGraphStore } from '../state/graphStore'
-import type { Preset, PresetBlock, PresetRig } from './types'
+import { __clearPresetSelectionMemoryForTests, useSelection } from '../state/selection'
+import { useCurrentPresetStore } from '../state/currentPresetStore'
+import type { Preset, PresetBlock, PresetRig, StageCapableRig, StagedPresetRig } from './types'
 
 const { getCachedAssetMock } = vi.hoisted(() => ({ getCachedAssetMock: vi.fn() }))
 vi.mock('../engine/assetCache', () => ({ getCachedAsset: getCachedAssetMock }))
@@ -71,6 +73,9 @@ describe('applyPreset', () => {
   beforeEach(() => {
     getCachedAssetMock.mockReset()
     useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
+    useSelection.setState({ selectedBlockId: null, selectionSource: null })
+    useCurrentPresetStore.setState({ saved: null })
+    __clearPresetSelectionMemoryForTests()
   })
 
   it('clears every existing block on the rig before rebuilding', async () => {
@@ -250,5 +255,207 @@ describe('applyPreset', () => {
     expect(result.missingAssets).toEqual([{ blockId: 'amp1', kind: 'model', id: 'm1', name: 'M1' }])
     // The store sync must still run even when one asset fails.
     expect(useGraphStore.getState().blocks).toHaveLength(1)
+  })
+
+  it('selects the input-first block when opening a preset', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      id: 'p1',
+      blocks: [
+        { id: 'a', kind: 'compressor', row: 0, col: 0, params: {} },
+        { id: 'c', kind: 'eq', row: 0, col: 2, params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'a', port: 0 } },
+        { id: 'e2', from: { blockId: 'a', port: 0 }, to: { blockId: 'c', port: 0 } },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(useSelection.getState().selectedBlockId).toBe('a')
+  })
+
+  it('restores the last explicitly-selected block when reopening a preset', async () => {
+    const rig = createMockRig()
+    const preset = emptyPreset({
+      id: 'p1',
+      blocks: [
+        { id: 'a', kind: 'compressor', row: 0, col: 0, params: {} },
+        { id: 'c', kind: 'eq', row: 0, col: 2, params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'a', port: 0 } },
+        { id: 'e2', from: { blockId: 'a', port: 0 }, to: { blockId: 'c', port: 0 } },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+    expect(useSelection.getState().selectedBlockId).toBe('a')
+
+    useCurrentPresetStore.setState({ saved: preset })
+    useSelection.getState().select('c')
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+    expect(useSelection.getState().selectedBlockId).toBe('c')
+  })
+})
+
+function createMockStagedRig(): StageCapableRig & {
+  staged: StagedPresetRig & { blocks: Record<string, PresetBlock> }
+  liveBlocks: Record<string, PresetBlock>
+} {
+  const liveBlocks: Record<string, PresetBlock> = { old1: createMockBlock() }
+  const stagedBlocks: Record<string, PresetBlock> = {}
+  const staged: StagedPresetRig & { blocks: Record<string, PresetBlock> } = {
+    blocks: stagedBlocks,
+    getBlock: (id) => stagedBlocks[id] ?? null,
+    addBlock: vi.fn(async (kind, _row, _col, id) => {
+      stagedBlocks[id] = createMockBlock({ kind })
+      return id
+    }),
+    connectAndWait: vi.fn(async () => ({ ok: true })),
+    commit: vi.fn(async () => {}),
+    discard: vi.fn(async () => {}),
+    takeEntries: vi.fn(() => ({ blocks: new Map(), edges: new Map() })),
+  }
+  const rig: StageCapableRig & {
+    staged: StagedPresetRig & { blocks: Record<string, PresetBlock> }
+    liveBlocks: Record<string, PresetBlock>
+  } = {
+    staged,
+    liveBlocks,
+    listBlockIds: () => Object.keys(liveBlocks),
+    getBlock: (id) => liveBlocks[id] ?? null,
+    addBlock: vi.fn(async (kind, _row, _col, id) => {
+      const blockId = id ?? `${kind}-generated`
+      liveBlocks[blockId] = createMockBlock({ kind })
+      return blockId
+    }),
+    removeBlock: vi.fn(async (id) => {
+      delete liveBlocks[id]
+    }),
+    listEdgeIds: () => [],
+    connect: vi.fn(() => ({ ok: true })),
+    beginStage: vi.fn(async () => staged),
+    adoptStage: vi.fn(),
+  }
+  return rig
+}
+
+describe('applyPreset (staged)', () => {
+  beforeEach(() => {
+    getCachedAssetMock.mockReset()
+    useGraphStore.setState({ blocks: [], edges: [], masterLevel: 1, masterMuted: false })
+    useSelection.setState({ selectedBlockId: null, selectionSource: null })
+    useCurrentPresetStore.setState({ saved: null })
+    __clearPresetSelectionMemoryForTests()
+  })
+
+  it('builds on the staged graph and adopts it without touching the live rig', async () => {
+    const rig = createMockStagedRig()
+    const preset = emptyPreset({
+      blocks: [{ id: 'b1', kind: 'compressor', row: 1, col: 2, params: { drive: 0.8 } }],
+      edges: [{ id: 'e1', from: { blockId: 'b1', port: 0 }, to: { blockId: 'b1', port: 0 } }],
+    })
+
+    const result = await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.beginStage).toHaveBeenCalled()
+    // The live rig is never torn down on the staged path.
+    expect(rig.removeBlock).not.toHaveBeenCalled()
+    expect(rig.addBlock).not.toHaveBeenCalled()
+    expect(rig.staged.addBlock).toHaveBeenCalledWith('compressor', 1, 2, 'b1')
+    expect(rig.staged.blocks.b1?.setParams).toHaveBeenCalledWith({ drive: 0.8 })
+    expect(rig.staged.connectAndWait).toHaveBeenCalledWith(
+      { blockId: 'b1', port: 0 },
+      { blockId: 'b1', port: 0 },
+      'e1',
+    )
+    expect(rig.staged.commit).toHaveBeenCalled()
+    expect(rig.adoptStage).toHaveBeenCalledWith(rig.staged)
+    expect(result.missingAssets).toEqual([])
+    // The store still syncs to the new graph.
+    expect(useGraphStore.getState().blocks).toEqual([
+      { id: 'b1', kind: 'compressor', row: 1, col: 2, params: { drive: 0.8 } },
+    ])
+  })
+
+  it('prefers the preloader over the asset cache for model text', async () => {
+    const { cacheModelText } = await import('../engine/modelPreloader')
+    cacheModelText('model-1', '{"preloaded":true}')
+    const rig = createMockStagedRig()
+    const preset = emptyPreset({
+      blocks: [
+        {
+          id: 'amp1',
+          kind: 'amp',
+          row: 0,
+          col: 0,
+          params: {},
+          modelId: 'model-1',
+          modelName: 'Deluxe',
+        },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(getCachedAssetMock).not.toHaveBeenCalled()
+    expect(rig.staged.blocks.amp1?.loadModel).toHaveBeenCalledWith(
+      '{"preloaded":true}',
+      undefined,
+      { id: 'model-1', name: 'Deluxe' },
+    )
+  })
+
+  it('discards the stage and falls back to rebuild when commit fails', async () => {
+    const rig = createMockStagedRig()
+    vi.mocked(rig.staged.commit).mockRejectedValueOnce(new Error('commit exploded'))
+    const preset = emptyPreset({
+      blocks: [{ id: 'b1', kind: 'compressor', row: 0, col: 0, params: {} }],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.staged.discard).toHaveBeenCalled()
+    expect(rig.adoptStage).not.toHaveBeenCalled()
+    // Legacy fallback rebuilt the live rig instead.
+    expect(rig.removeBlock).toHaveBeenCalledWith('old1')
+    expect(rig.addBlock).toHaveBeenCalledWith('compressor', 0, 0, 'b1')
+    expect(useGraphStore.getState().blocks).toHaveLength(1)
+  })
+
+  it('falls back to rebuild when staging is unsupported (old WASM)', async () => {
+    const rig = createMockStagedRig()
+    vi.mocked(rig.beginStage).mockRejectedValueOnce(new Error('unsupported'))
+    const preset = emptyPreset({
+      blocks: [{ id: 'b1', kind: 'compressor', row: 0, col: 0, params: {} }],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.removeBlock).toHaveBeenCalledWith('old1')
+    expect(useGraphStore.getState().blocks).toHaveLength(1)
+  })
+
+  it('selects the input-first block on the staged path too', async () => {
+    const rig = createMockStagedRig()
+    const preset = emptyPreset({
+      id: 'p1',
+      blocks: [
+        { id: 'a', kind: 'compressor', row: 0, col: 0, params: {} },
+        { id: 'c', kind: 'eq', row: 0, col: 2, params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: { blockId: 'IN', port: 0 }, to: { blockId: 'a', port: 0 } },
+        { id: 'e2', from: { blockId: 'a', port: 0 }, to: { blockId: 'c', port: 0 } },
+      ],
+    })
+
+    await applyPreset(createMockContext(), preset, rig, useGraphStore)
+
+    expect(rig.adoptStage).toHaveBeenCalled()
+    expect(useSelection.getState().selectedBlockId).toBe('a')
   })
 })

@@ -21,6 +21,18 @@ export interface KnobProps {
   disabled?: boolean
   /** Human-readable param help — rendered as native tooltip (title) and aria-describedby. */
   description?: string | undefined
+  /**
+   * Right-click handler for the whole knob (label included) - the web app
+   * uses it to open a MIDI-mapping context menu. Kept as a plain passthrough
+   * so this shared primitive never learns about MIDI stores.
+   */
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>
+  /**
+   * Tints the knob base with the accent color - the web app sets it while
+   * this param is armed for MIDI learn, so the listening knob is visible
+   * across the panel. Purely presentational.
+   */
+  highlighted?: boolean
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -60,6 +72,8 @@ export function Knob({
   size = 56,
   disabled = false,
   description,
+  onContextMenu,
+  highlighted = false,
 }: KnobProps) {
   const id = useId()
   const descId = useId()
@@ -138,7 +152,12 @@ export function Knob({
   }
 
   return (
-    <div className={styles.wrap} style={{ width: size }} title={description}>
+    <div
+      className={styles.wrap}
+      style={{ width: size }}
+      title={description}
+      onContextMenu={onContextMenu}
+    >
       {formatValue && <span className={styles.value}>{formatValue(value)}</span>}
       <svg
         role="slider"
@@ -153,7 +172,7 @@ export function Knob({
         viewBox="0 0 80 80"
         width={size}
         height={size}
-        className={`${styles.knob} ${dragging ? styles.dragging : ''} ${disabled ? styles.disabled : ''}`}
+        className={`${styles.knob} ${dragging ? styles.dragging : ''} ${disabled ? styles.disabled : ''} ${highlighted ? styles.highlighted : ''}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -176,6 +195,9 @@ export function Knob({
           r={RADIUS - 8}
           fill={`url(#${id}-body)`}
         />
+        {highlighted && (
+          <circle className={styles.accentWash} cx={CENTER} cy={CENTER} r={RADIUS - 8} />
+        )}
         <line
           className={styles.pointer}
           x1={polarPoint(angle, 8).x}

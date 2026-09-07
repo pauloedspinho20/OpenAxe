@@ -2319,6 +2319,43 @@ std::vector<AudioEngine::AutomationSlotSnapshot> AudioEngine::ListBoundAutomatio
   return out;
 }
 
+// ── Session-state carryover for gapless switching (issue #367) ──────────
+
+void AudioEngine::ImportSessionStateFrom(const AudioEngine& other) {
+  master_level_.store(other.master_level_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  master_muted_.store(other.master_muted_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  tuner_muted_.store(other.tuner_muted_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+
+  // Wholesale copy, then unbind slots whose block is missing here or is a
+  // different kind. other.FindBlock is an unguarded map read of an engine
+  // Process() may be running on concurrently - safe: the map itself is only
+  // mutated under other's Tier-2 protocol (so no writer exists during
+  // other's Process()), and kind is immutable after AddBlock.
+  automation_slots_ = other.automation_slots_;
+  for (int slot = 1; slot < kAutomationSlotCount; ++slot) {
+    auto& s = automation_slots_[slot];
+    if (!s.bound) continue;
+    const BlockState* mine = FindBlock(s.block);
+    const BlockState* theirs = other.FindBlock(s.block);
+    if (!mine || !theirs || mine->kind != theirs->kind) {
+      s.bound = false;  // lane memory (mirror/dirty) survives, like Unbind
+      s.block = -1;
+    } else {
+      // Re-assert remembered lanes onto the new target through its own
+      // ranges - the same carry-the-lane semantics as BindAutomationSlot.
+      ApplySlotMirror(s);
+    }
+  }
+
+  ClearMidiMappings();
+  for (const auto& mapping : other.ListMidiMappings()) {
+    AddMidiMapping(mapping.match, mapping.action);
+  }
+  if (const auto target = other.MidiLearnTarget()) {
+    ArmMidiLearn(*target);
+  }
+}
+
 // ── MIDI mapping (issue #124) ──────────────────────────────────────────
 
 std::vector<midi::MidiMapping> AudioEngine::ListMidiMappings() const {
