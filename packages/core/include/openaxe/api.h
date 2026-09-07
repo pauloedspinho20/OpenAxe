@@ -171,6 +171,46 @@ void openaxe_reset(OpenAxeGraph* graph, double sample_rate, int32_t max_block_si
 void openaxe_process(OpenAxeGraph* graph, const float* const* input, int32_t input_channels,
                          float* const* output, int32_t output_channels, int32_t num_frames);
 
+// ── Gapless staged switching (issue #367) ───────────────────────────────
+// A/B rig switching without silence gaps, clicks, or audio-thread stalls:
+//
+//   1. openaxe_staged_graph_create(parent) returns a second graph handle.
+//      Build the next rig into it with the ordinary entry points above
+//      (add blocks, set params, load models/IRs, connect, reset, even
+//      openaxe_load_state) - they resolve to the staged engine, which is
+//      never processed before the commit, so staging needs no audio
+//      suspension and needs no Tier-2 exclusion against openaxe_process on
+//      the parent (it must still be serialized against other control-thread
+//      calls, like every Tier-2 call). NULL when parent is null.
+//   2. openaxe_staged_graph_commit(parent, staged, fade_ms, drain_ms) makes
+//      the staged rig live: the next openaxe_process buffer picks it up and
+//      crossfades old->new (equal-power, fade_ms, clamped 0..500) while the
+//      old rig's input fades to silence, then keeps the old rig rendering
+//      silent-input tails under the new rig for drain_ms (clamped 0..5000)
+//      before retiring it - reverb/delay tails ring out instead of cutting.
+//      Session-level state (master bus, tuner mute, automation slots, MIDI
+//      mappings) carries over; block params/bypass/trims do not (the staged
+//      preset defines its own rig). The commit itself is lock-free with
+//      respect to openaxe_process (a single atomic publish).
+//      Returns 1 on success, 0 when rejected (null/foreign handle, staged
+//      never reset, or sample-rate/block-size mismatch between staged and
+//      parent - reset the staged handle with the parent's values), -1 when
+//      busy (a previous switch is still fading/draining - retry).
+//      On success the staged handle is CONSUMED (deleted) - do not touch it
+//      again. On 0/-1 the caller still owns it: destroy it to abandon the
+//      stage, or fix up / retry and commit again.
+//   3. openaxe_switch_active(parent) reports 1 while a fade or tail drain is
+//      in flight, else 0.
+//
+// Destroying a staged handle without committing (openaxe_graph_destroy)
+// abandons the stage and leaves the parent untouched. openaxe_reset on the
+// parent abandons any in-flight switch. openaxe_process on a staged handle
+// runs its engine standalone (harmless, pointless) - process the parent.
+OpenAxeGraph* openaxe_staged_graph_create(OpenAxeGraph* parent);
+int32_t openaxe_staged_graph_commit(OpenAxeGraph* parent, OpenAxeGraph* staged, int32_t fade_ms,
+                                    int32_t drain_ms);
+int32_t openaxe_switch_active(OpenAxeGraph* graph);
+
 // ── Params (generic across every block kind; Tier 1, lock-free) ────────
 // param_count/param_info read the block's atomic count and live DSP table:
 // they are safe from any thread for the count itself (issue #211), and the

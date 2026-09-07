@@ -198,6 +198,14 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   target_compile_definitions(api_realtime_test PRIVATE
     NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
   add_test(NAME api_realtime_test COMMAND api_realtime_test)
+
+  # Gapless staged switching (issue #367): drives the C ABI (commit, fade,
+  # drain, session carryover, validation/busy, concurrency). Needs the full
+  # engine (delay block for the staged rigs); plain link is enough (no NAM
+  # model loads, so no whole-archive parser requirement).
+  add_executable(rig_switch_test rig_switch_test.cpp)
+  target_link_libraries(rig_switch_test PRIVATE openaxe_core)
+  add_test(NAME rig_switch_test COMMAND rig_switch_test)
 else()
   message(WARNING "Skipping engine_test/api_realtime_test - nam-core and dragonfly-reverb submodules must both be initialized")
 endif()
