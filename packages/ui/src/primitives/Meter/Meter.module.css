@@ -23,15 +23,76 @@
   transition: background-color 0.05s linear;
 }
 
-.segment.lit.statusGreen {
+.peakLabels {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+}
+
+/* Slim stereo pair: two narrow segmented columns side by side (L/R) in
+ * roughly the footprint of one large meter, for the grid input/output rails. */
+.stereoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.stereoPair {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  box-shadow: var(--shadow-recessed);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  gap: var(--sp-1);
+}
+
+.slimCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.slimSegments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-recessed);
+}
+
+.slimSegment {
+  width: 16px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--meter-off);
+  transition: background-color 0.05s linear;
+}
+
+/* Per-side caption (L/R) below each slim column. */
+.slimCaption {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.segment.lit.statusGreen,
+.slimSegment.lit.statusGreen {
   background: var(--led-on);
   box-shadow: 0 0 4px var(--meter-glow-green);
 }
-.segment.lit.statusAmber {
+.segment.lit.statusAmber,
+.slimSegment.lit.statusAmber {
   background: var(--led-warn);
   box-shadow: 0 0 4px var(--meter-glow-amber);
 }
-.segment.lit.statusRed {
+.segment.lit.statusRed,
+.slimSegment.lit.statusRed {
   background: var(--led-hot);
   box-shadow: 0 0 4px var(--meter-glow-red);
 }
@@ -120,6 +181,10 @@
 @media (max-width: var(--mw-md)) {
   .segment {
     width: 18px;
+    height: 4px;
+  }
+  .slimSegment {
+    width: 9px;
     height: 4px;
   }
 }

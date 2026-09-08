@@ -7,10 +7,12 @@ import {
   type ConnectResult as ValidatableConnectResult,
   type ValidatableBlock,
 } from '../engine/graphValidation'
-import type { PresetRig } from '../presets/types'
+import type { PresetRig, StageCapableRig, StagedPresetRig } from '../presets/types'
+import type { StagedBlockSnapshot, StagedEdgeSnapshot } from '../presets/types'
 import { NativeAnalyser, peakSineSource } from './NativeAnalyser'
 import { NativeBlock } from './NativeBlock'
-import type { OpenAxeBridge } from './openaxe'
+import { type OpenAxeBridge, stagedBridgeView } from './openaxe'
+import { STAGE_COMMIT_DRAIN_MS, STAGE_COMMIT_FADE_MS } from '../engine/StagedRig'
 
 export type ConnectResult = { ok: true; id: string } | { ok: false; reason: string }
 
@@ -31,7 +33,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * `NativeAnalyser` (fed a sine scaled to the block's real native meter peak by
  * the native engine, so the existing meter widgets animate from true levels).
  */
-export class NativeGraphRig implements GraphRigControls, PresetRig {
+export class NativeGraphRig implements GraphRigControls, PresetRig, StageCapableRig {
   private readonly bridge: OpenAxeBridge
   private readonly blocks = new Map<string, { block: NativeBlock; row: number; col: number }>()
   private readonly edges = new Map<string, { from: Jack; to: Jack }>()
@@ -330,6 +332,53 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     return map
   }
 
+  // ── Gapless staged switching (issue #367) ───────────────────────────
+
+  /**
+   * Open a staged graph on the native core for the next rig. The staged build
+   * drives the same bridge with `stage: true` (see stagedBridgeView), so
+   * NativeBlock facades work unchanged; commit crossfades it live with no
+   * suspend handshake. Throws when the shell predates staged switching - the
+   * caller falls back to teardown-and-rebuild.
+   */
+  async beginStage(): Promise<StagedPresetRig> {
+    const result = await this.bridge.stageBegin().catch(() => null)
+    if (!result || !result.ok) throw new Error('staged switching unsupported by this shell')
+    return new NativeStagedRig(this.bridge)
+  }
+
+  /**
+   * Take over a successfully committed staged rig: the live core graph IS the
+   * staged engine now, so the bookkeeping swaps wholesale and the facades are
+   * rebuilt with their already-live state carried over silently.
+   */
+  adoptStage(staged: StagedPresetRig): void {
+    const { blocks, edges } = staged.takeEntries()
+    const seen = new Set<string>()
+    for (const [id, entry] of blocks) {
+      seen.add(id)
+      const snapshot = entry.block.snapshotBlockState?.()
+      const live = new NativeBlock(this.bridge, id, entry.kind)
+      if (snapshot) live.restoreBlockState?.(snapshot)
+      this.blocks.set(id, { block: live, row: entry.row, col: entry.col })
+    }
+    for (const id of [...this.blocks.keys()]) {
+      if (!seen.has(id)) {
+        this.blocks.delete(id)
+        this.analysers.delete(id)
+        this.inputAnalysers.delete(id)
+        this.peaks.delete(id)
+        this.inputPeaks.delete(id)
+        this.gainReductions.delete(id)
+        this.gateGains.delete(id)
+      }
+    }
+    this.edges.clear()
+    for (const [id, edge] of edges) {
+      this.edges.set(id, { from: edge.from, to: edge.to })
+    }
+  }
+
   // ── Teardown ────────────────────────────────────────────────────────────
 
   async dispose(): Promise<void> {
@@ -358,5 +407,110 @@ export class NativeGraphRig implements GraphRigControls, PresetRig {
     this.gateGains.clear()
     this.blocks.clear()
     this.edges.clear()
+  }
+}
+
+/** How long commit retries while a previous switch is still draining. */
+const NATIVE_COMMIT_BUSY_TIMEOUT_MS = 3000
+const NATIVE_COMMIT_BUSY_POLL_MS = 25
+
+/**
+ * Builder for the next rig on the native core's staged graph (issue #367).
+ * Drives the same bridge through stagedBridgeView so NativeBlock facades work
+ * unchanged, then crossfades it live with commit(). Mirrors StagedRig on the
+ * web path; a failed build must discard() so the staged graph never leaks.
+ */
+class NativeStagedRig implements StagedPresetRig {
+  private readonly staged: OpenAxeBridge
+  private readonly blocks = new Map<
+    string,
+    { block: NativeBlock; kind: BlockKind; row: number; col: number }
+  >()
+  private readonly edges = new Map<string, { from: Jack; to: Jack }>()
+  private settled = false
+
+  constructor(bridge: OpenAxeBridge) {
+    this.staged = stagedBridgeView(bridge)
+  }
+
+  async addBlock(kind: BlockKind, row: number, col: number, id: string): Promise<string> {
+    this.assertOpen()
+    const result = await this.staged.addBlock({ kind, row, col, id })
+    if (!result.ok) throw new Error(result.error ?? 'addBlock (staged) failed')
+    this.blocks.set(id, { block: new NativeBlock(this.staged, id, kind), kind, row, col })
+    return id
+  }
+
+  getBlock(id: string): NativeBlock | null {
+    return this.blocks.get(id)?.block ?? null
+  }
+
+  /**
+   * Connect two staged blocks, validated locally first (same rules as the
+   * live rig) and awaited against the core so a rejection is known before
+   * the commit.
+   */
+  async connectAndWait(
+    from: Jack,
+    to: Jack,
+    id: string,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    this.assertOpen()
+    const blocks = new Map<string, ValidatableBlock>()
+    for (const [blockId, entry] of this.blocks) {
+      blocks.set(blockId, { id: blockId, kind: entry.kind, col: entry.col })
+    }
+    const valid = canConnect(blocks, this.edges.values(), from, to)
+    if (!valid.ok) return valid
+    const reply = await this.staged.connect({
+      fromId: from.blockId === IN_RAIL ? -1 : from.blockId === OUT_RAIL ? -2 : from.blockId,
+      fromPort: from.port,
+      toId: to.blockId === IN_RAIL ? -1 : to.blockId === OUT_RAIL ? -2 : to.blockId,
+      toPort: to.port,
+      id,
+    })
+    if (!reply.ok) return { ok: false, reason: reply.error ?? 'connection rejected' }
+    this.edges.set(id, { from, to })
+    return { ok: true }
+  }
+
+  async commit(): Promise<void> {
+    this.assertOpen()
+    const deadline = Date.now() + NATIVE_COMMIT_BUSY_TIMEOUT_MS
+    for (;;) {
+      const result = await this.staged.stageCommit({
+        fadeMs: STAGE_COMMIT_FADE_MS,
+        drainMs: STAGE_COMMIT_DRAIN_MS,
+      })
+      if (result.ok) {
+        this.settled = true
+        return
+      }
+      if (!result.busy || Date.now() >= deadline) {
+        throw new Error(result.error ?? 'stageCommit failed')
+      }
+      await new Promise((resolve) => setTimeout(resolve, NATIVE_COMMIT_BUSY_POLL_MS))
+    }
+  }
+
+  async discard(): Promise<void> {
+    if (this.settled) return
+    this.settled = true
+    await this.staged.stageDiscard().catch(() => {})
+  }
+
+  takeEntries(): {
+    blocks: Map<string, StagedBlockSnapshot>
+    edges: Map<string, StagedEdgeSnapshot>
+  } {
+    if (!this.settled) throw new Error('takeEntries before a successful commit')
+    return {
+      blocks: new Map<string, StagedBlockSnapshot>(this.blocks),
+      edges: new Map<string, StagedEdgeSnapshot>(this.edges),
+    }
+  }
+
+  private assertOpen(): void {
+    if (this.settled) throw new Error('staged rig already settled')
   }
 }

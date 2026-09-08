@@ -53,6 +53,28 @@
   stroke-width: 1;
 }
 
+/*
+ * Highlighted knobs (e.g. the param currently armed for MIDI learn): the
+ * base takes the accent color via a translucent wash over the grey gradient
+ * - the baked highlight/shadow depth shows through instead of being
+ * replaced by a flat fill - plus an accent ring and glow.
+ */
+.highlighted .body {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 5px var(--accent-dim));
+}
+
+.accentWash {
+  fill: var(--accent);
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.highlighted .pointer {
+  stroke: var(--accent-ink);
+}
+
 .pointer {
   stroke: var(--screen-white);
   stroke-width: 2.5;

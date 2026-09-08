@@ -812,6 +812,40 @@
         "clear": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "CI: local (mac)",
+      "type": "shell",
+      "command": "pnpm ci:local",
+      "detail": "Full local CI on macOS: drift + lint + build + unit + e2e + core + desktop + plugin PR legs (scripts/ci-local.mjs)",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
+    },
+    {
+      "label": "CI: local (linux docker)",
+      "type": "shell",
+      "command": "pnpm ci:local:linux",
+      "detail": "Full local CI in ubuntu-24.04 Docker (CI runner parity) — first run builds the image; ccache/browsers cached in volumes",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
+    },
+    {
+      "label": "CI: local (all — mac + linux docker)",
+      "detail": "macOS leg then the Linux Docker leg, in order",
+      "dependsOrder": "sequence",
+      "dependsOn": ["CI: local (mac)", "CI: local (linux docker)"],
+      "group": "test",
+      "problemMatcher": []
     }
   ]
 }

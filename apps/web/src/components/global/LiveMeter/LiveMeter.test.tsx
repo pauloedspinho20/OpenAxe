@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
-import { LiveMeter } from './LiveMeter'
+import { LiveMeter, LiveStereoMeter } from './LiveMeter'
 
 function makeAnalyser(fftSize = 8): AnalyserNode {
   return {
@@ -63,5 +63,52 @@ describe('LiveMeter', () => {
   it('does not schedule a frame when there is no analyser', () => {
     render(<LiveMeter analyser={null} />)
     expect(rafCb).toBeNull()
+  })
+})
+
+describe('LiveStereoMeter', () => {
+  let rafCb: FrameRequestCallback | null = null
+
+  beforeEach(() => {
+    rafCb = null
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      rafCb = cb
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+  })
+
+  afterEach(() => {
+    rafCb = null
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('renders the L/R pair with a group label and no frame when both sides are null', () => {
+    render(<LiveStereoMeter analyserL={null} analyserR={null} label="Output" />)
+    expect(screen.getByText('L')).toBeInTheDocument()
+    expect(screen.getByText('R')).toBeInTheDocument()
+    expect(screen.getByText('Output')).toBeInTheDocument()
+    expect(rafCb).toBeNull()
+  })
+
+  it('reads both analysers each animation frame when present', () => {
+    const analyserL = makeAnalyser()
+    const analyserR = makeAnalyser()
+    render(<LiveStereoMeter analyserL={analyserL} analyserR={analyserR} />)
+    expect(rafCb).not.toBeNull()
+    act(() => rafCb!(0))
+    expect(analyserL.getByteTimeDomainData).toHaveBeenCalled()
+    expect(analyserR.getByteTimeDomainData).toHaveBeenCalled()
+  })
+
+  it('reads the present side when only one analyser is given', () => {
+    const analyserL = makeAnalyser()
+    render(<LiveStereoMeter analyserL={analyserL} analyserR={null} />)
+    expect(rafCb).not.toBeNull()
+    act(() => rafCb!(0))
+    expect(analyserL.getByteTimeDomainData).toHaveBeenCalled()
+    expect(screen.getByText('L')).toBeInTheDocument()
+    expect(screen.getByText('R')).toBeInTheDocument()
   })
 })

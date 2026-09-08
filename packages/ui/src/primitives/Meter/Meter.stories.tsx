@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react'
-import { MediumMeter, Meter, MiniMeter } from './Meter'
+import { MediumMeter, Meter, MiniMeter, StereoMeter } from './Meter'
 
 const meta = {
   title: 'Primitives/Meter',
@@ -78,4 +78,32 @@ export const GainReductionRange: StoryObj<typeof MediumMeter> = {
       <MediumMeter level={1} variant="gainReduction" title="−20 dB GR" />
     </div>
   ),
+}
+
+export const StereoSilence: StoryObj<typeof StereoMeter> = {
+  render: (args) => <StereoMeter {...args} />,
+  args: { levelL: 0, levelR: 0, label: 'OUTPUT' },
+}
+
+export const StereoBalanced: StoryObj<typeof StereoMeter> = {
+  render: (args) => <StereoMeter {...args} />,
+  args: { levelL: 0.5, levelR: 0.5, valueLabelL: '−6.0', valueLabelR: '−6.0', label: 'OUTPUT' },
+}
+
+export const StereoUnbalanced: StoryObj<typeof StereoMeter> = {
+  render: (args) => <StereoMeter {...args} />,
+  args: { levelL: 0.8, levelR: 0.2, valueLabelL: '−2.0', valueLabelR: '−14.0', label: 'OUTPUT' },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The reason the output rail is always stereo: a hard-panned or one-sided signal is visible instead of hiding behind a mono mix.',
+      },
+    },
+  },
+}
+
+export const StereoClipping: StoryObj<typeof StereoMeter> = {
+  render: (args) => <StereoMeter {...args} />,
+  args: { levelL: 0.95, levelR: 0.95, valueLabelL: '0.0', valueLabelR: '0.0', label: 'OUTPUT' },
 }

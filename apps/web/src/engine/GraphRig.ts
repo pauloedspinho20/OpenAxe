@@ -9,8 +9,9 @@ import {
 import type { GraphRigControls } from './bindGraphRig'
 import { RigWorkletNode } from './RigWorkletNode'
 import { RigBlock } from './RigBlock'
+import { StagedRig } from './StagedRig'
 import { NativeAnalyser, peakSineSource } from '../native/NativeAnalyser'
-import type { PresetRig } from '../presets/types'
+import type { PresetRig, StageCapableRig, StagedPresetRig } from '../presets/types'
 
 export { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, type Jack } from './gridConfig'
 
@@ -47,7 +48,7 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * presented through a Web-Audio-free `NativeAnalyser` facade fed a sine scaled
  * to each block's real peak - identical to the desktop path.
  */
-export class GraphRig implements GraphRigControls, PresetRig {
+export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
   private readonly worklet: RigWorkletNode
   private readonly context: AudioContext
   private readonly blocks = new Map<string, { block: RigBlock; row: number; col: number }>()
@@ -331,6 +332,52 @@ export class GraphRig implements GraphRigControls, PresetRig {
 
   setTunerMuted(muted: boolean): void {
     this.worklet.setTunerMuted(muted)
+  }
+
+  // ── Gapless staged switching (issue #367) ───────────────────────────
+
+  /**
+   * Open a staged graph for the next rig. Built with StagedRig (same block
+   * ids, same preset data), made live by StagedRig.commit's crossfade, then
+   * handed back here via adoptStage. Throws when the WASM predates staged
+   * switching - the caller falls back to teardown-and-rebuild.
+   */
+  async beginStage(): Promise<StagedPresetRig> {
+    return StagedRig.begin(this.worklet)
+  }
+
+  /**
+   * Take over a successfully committed staged rig: the live core graph IS
+   * the staged engine now, so the bookkeeping swaps wholesale. Live facades
+   * are rebuilt around the same js ids (the staged ones still point at the
+   * consumed staged graph) with their already-live state carried over
+   * silently; meter/analyser caches for vanished ids are pruned.
+   */
+  adoptStage(staged: StagedPresetRig): void {
+    const { blocks, edges } = staged.takeEntries()
+    const seen = new Set<string>()
+    for (const [id, entry] of blocks) {
+      seen.add(id)
+      const snapshot = entry.block.snapshotBlockState?.()
+      const live = new RigBlock(this.worklet, id, entry.kind)
+      if (snapshot) live.restoreBlockState?.(snapshot)
+      this.blocks.set(id, { block: live, row: entry.row, col: entry.col })
+    }
+    for (const id of [...this.blocks.keys()]) {
+      if (!seen.has(id)) {
+        this.blocks.delete(id)
+        this.analysers.delete(id)
+        this.inputAnalysers.delete(id)
+        this.peaks.delete(id)
+        this.inputPeaks.delete(id)
+        this.gainReductions.delete(id)
+        this.gateGains.delete(id)
+      }
+    }
+    this.edges.clear()
+    for (const [id, edge] of edges) {
+      this.edges.set(id, { from: edge.from, to: edge.to })
+    }
   }
 
   async dispose(): Promise<void> {

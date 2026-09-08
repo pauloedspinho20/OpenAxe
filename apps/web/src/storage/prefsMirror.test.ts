@@ -123,7 +123,7 @@ describe('prefs mirror', () => {
     vi.mocked(getOpenAxe).mockReturnValue(bridge as never)
     await installPrefsMirror()
 
-    // The patch is on Storage.prototype, which sessionStorage shares.
+    // The patch is on localStorage's prototype, which sessionStorage shares.
     sessionStorage.setItem('ephemeral', 'x')
     expect(bridge.storagePut).not.toHaveBeenCalled()
     expect(sessionStorage.getItem('ephemeral')).toBe('x')
