@@ -601,7 +601,9 @@ void TestModulationEffects() {
     float maxWet=0; for(float v: outWet) maxWet=std::max(maxWet, std::fabs(v));
     std::printf("chorus wet %f\n", maxWet);
     OPENAXE_EXPECT(maxWet > 0.05f);
-    int mixIdx = 4; // chorus has 4 dsp params, mix at 4
+    int mixIdx = eng.ParamCount(id) - 1;  // engine mix is appended after the DSP table
+    const auto mixInfo = eng.ParamInfo(id, mixIdx);
+    OPENAXE_EXPECT(mixInfo.has_value() && mixInfo->symbol == std::string("mix"));
     eng.SetParam(id, mixIdx, 0.0f);
     for(int i=0;i<200;i++) RunMono(eng, 0.3f);
     auto outDry = RunMono(eng, 0.3f);
@@ -722,6 +724,198 @@ void TestModulationEffects() {
     auto out = RunMono(eng, 0.3f);
     float max=0; for(float v: out) max=std::max(max, std::fabs(v));
     OPENAXE_EXPECT(max > 0.05f);
+  }
+}
+
+// Issue #383: the engine mix is one blend per family, picked by signal
+// correlation - not one global linear crossfade. DC stimuli give exact,
+// DSP-state-independent predictions per law, so each assertion below fails
+// under the old linear law for its (non-linear) family and under a wrong
+// family mapping.
+namespace {
+float MeanOfLastMonoBlock(AudioEngine& engine, float value, int settle_blocks) {
+  SettleMono(engine, value, settle_blocks);
+  const auto out = RunMono(engine, value);
+  float mean = 0.0f;
+  for (float s : out) mean += s;
+  return mean / static_cast<float>(out.size());
+}
+float PeakOfMonoRun(AudioEngine& engine, float value, int blocks) {
+  float peak = 0.0f;
+  for (int i = 0; i < blocks; ++i)
+    for (float s : RunMono(engine, value)) peak = std::max(peak, std::fabs(s));
+  return peak;
+}
+// The engine mix is appended after the DSP table (and delay appends a level
+// after that), so locate it by symbol instead of hardcoding an index.
+int EngineMixIndex(AudioEngine& engine, BlockId id) {
+  for (int i = 0; i < engine.ParamCount(id); ++i) {
+    const auto info = engine.ParamInfo(id, i);
+    if (info.has_value() && info->symbol == std::string("mix")) return i;
+  }
+  return -1;
+}
+}  // namespace
+
+void TestEngineMixLaws() {
+  // Linear (noise gate; DC 0.5 sits far above the -40 dB default threshold so
+  // the gate is open and wet == dry): 50% must sum back to exactly dry.
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kNoiseGate, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 300) - 0.5f) < 1e-3f);
+
+    eng.SetParam(id, kMix, 0.5f);
+    const float half = MeanOfLastMonoBlock(eng, 0.5f, 300);
+    std::printf("gate linear 50%% %f\n", half);
+    OPENAXE_EXPECT(std::fabs(half - 0.5f) < 1e-3f);  // additive would read 0.75
+
+    eng.SetParam(id, kMix, 1.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 300) - 0.5f) < 0.02f);
+  }
+
+  // Equal-power, exact when the DSP is available (ring-mod; drive=0 so wet is
+  // a pure 400 Hz multiply of dry): with DC dry the 50% peak is
+  // cos(45°)*dry + sin(45°)*wet-peak, not the linear half+half. Compiled out
+  // of some configs (effects.config.json) - the stopped-rotor test below
+  // covers the law in every build.
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kRingMod, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+    constexpr int kDrive = 1;
+    eng.SetParam(id, kDrive, 0.0f);
+
+    eng.SetParam(id, kMix, 1.0f);
+    SettleMono(eng, 0.5f, 300);
+    const float wetPeak = PeakOfMonoRun(eng, 0.5f, 60);
+    std::printf("ringmod wet peak %f\n", wetPeak);
+    OPENAXE_EXPECT(std::fabs(wetPeak - 0.5f) < 0.03f);
+
+    eng.SetParam(id, kMix, 0.5f);
+    SettleMono(eng, 0.5f, 300);
+    const float midPeak = PeakOfMonoRun(eng, 0.5f, 60);
+    const float predicted = 0.70710678f * 0.5f + 0.70710678f * wetPeak;
+    std::printf("ringmod eq-power 50%% peak %f (predicted %f)\n", midPeak, predicted);
+    OPENAXE_EXPECT(std::fabs(midPeak - predicted) < 0.03f);
+    OPENAXE_EXPECT(midPeak > 0.6f);  // linear would peak at 0.5
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 300) - 0.5f) < 1e-3f);
+  }
+#endif
+
+  // Equal-power, always compiled (rotary with speed=Stop: the frozen rotor is
+  // a static filter, so wet of DC is a constant and the 50% mean is exactly
+  // cos(45°)*dry + sin(45°)*wet - the same prediction as above, through the
+  // decorrelated-replacement family member every build ships).
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kRotary, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+    int speedIdx = -1;
+    for (int i = 0; i < eng.ParamCount(id); ++i) {
+      const auto info = eng.ParamInfo(id, i);
+      if (info.has_value() && info->symbol == std::string("speed")) speedIdx = i;
+    }
+    OPENAXE_EXPECT(speedIdx >= 0);
+    eng.SetParam(id, speedIdx, 0.0f);  // Stop: rotor frozen from the first block
+
+    eng.SetParam(id, kMix, 1.0f);
+    SettleMono(eng, 0.5f, 400);
+    const auto wetOut = RunMono(eng, 0.5f);
+    float wetMean = 0.0f, wetMax = -1e30f, wetMin = 1e30f;
+    for (float s : wetOut) {
+      wetMean += s;
+      wetMax = std::max(wetMax, s);
+      wetMin = std::min(wetMin, s);
+    }
+    wetMean /= static_cast<float>(wetOut.size());
+    std::printf("rotary stopped wet %f (spread %f)\n", wetMean, wetMax - wetMin);
+    OPENAXE_EXPECT(wetMax - wetMin < 0.01f);  // static rotor: wet must be constant
+
+    eng.SetParam(id, kMix, 0.5f);
+    const float mid = MeanOfLastMonoBlock(eng, 0.5f, 400);
+    const float predicted = 0.70710678f * 0.5f + 0.70710678f * wetMean;
+    std::printf("rotary eq-power 50%% %f (predicted %f)\n", mid, predicted);
+    OPENAXE_EXPECT(std::fabs(mid - predicted) < 0.02f);
+    // Linear would read 0.5*(0.5+wet), additive 0.5+0.5*wet: both miss the
+    // equal-power prediction by >0.05 for any wet in [-0.5, 0.5].
+    OPENAXE_EXPECT(std::fabs(mid - 0.5f * (0.5f + wetMean)) > 0.05f);
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 400) - 0.5f) < 1e-3f);
+  }
+
+  // Additive with kill-dry (delay; digital model + zero feedback so wet is a
+  // pure delayed tap): dry stays at unity, 50% == dry + 0.5*wet, and 100%
+  // kills dry.
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kDelay, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+    constexpr int kTime = 0, kFeedback = 1;
+    eng.SetParam(id, kTime, 50.0f);
+    eng.SetParam(id, kFeedback, 0.0f);
+
+    eng.SetParam(id, kMix, 1.0f);
+    const float wet = MeanOfLastMonoBlock(eng, 0.4f, 300);  // also fills the 50 ms line
+    std::printf("delay wet DC %f\n", wet);
+    OPENAXE_EXPECT(std::fabs(wet - 0.4f) < 0.03f);
+
+    eng.SetParam(id, kMix, 0.5f);
+    const float half = MeanOfLastMonoBlock(eng, 0.4f, 300);
+    std::printf("delay additive 50%% %f (predicted %f)\n", half, 0.4f + 0.5f * wet);
+    OPENAXE_EXPECT(std::fabs(half - (0.4f + 0.5f * wet)) < 0.02f);
+    OPENAXE_EXPECT(half > 0.5f);  // linear would read ~0.4 (dry thinned)
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.4f, 300) - 0.4f) < 1e-3f);
+
+    // Kill-dry handoff: 50% -> 100% must stay finite and converge to wet,
+    // with no burst from the >=0.999 dry mute. Settle first so the ramp
+    // transient doesn't pollute the converged assertion, and bound the peak
+    // across the whole sweep (dry 0.4 + wet 0.4 can never legitimately exceed
+    // ~0.8, so anything near/above 1.0 is a handoff burst).
+    eng.SetParam(id, kMix, 0.5f);
+    SettleMono(eng, 0.4f, 300);
+    eng.SetParam(id, kMix, 1.0f);
+    bool finite = true;
+    float sweepPeak = 0.0f;
+    for (int i = 0; i < 300; ++i) {
+      for (float s : RunMono(eng, 0.4f)) {
+        if (!std::isfinite(s)) finite = false;
+        sweepPeak = std::max(sweepPeak, std::fabs(s));
+      }
+    }
+    const auto killTail = RunMono(eng, 0.4f);
+    float killMean = 0.0f;
+    for (float s : killTail) killMean += s;
+    killMean /= static_cast<float>(killTail.size());
+    std::printf("delay kill-dry 100%% %f sweepPeak %f (wet %f)\n", killMean, sweepPeak, wet);
+    OPENAXE_EXPECT(finite);
+    OPENAXE_EXPECT(sweepPeak < 1.0f);
+    OPENAXE_EXPECT(std::fabs(killMean - wet) < 0.03f);
   }
 }
 
@@ -946,6 +1140,7 @@ int main() {
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
   TestModulationEffects();
+  TestEngineMixLaws();
   TestDynamicsMetering();
   TestSendReturnRoutesImplicitlyAcrossColumns();
   TestSendReturnWorksWithReturnLeftOfSend();
