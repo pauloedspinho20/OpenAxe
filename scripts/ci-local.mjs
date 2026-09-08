@@ -169,6 +169,21 @@ function main() {
     unit: () => run('pnpm', ['test:run']),
 
     e2e: () => {
+      // Browsers live in a named volume (see run-linux-ci.sh), not the image,
+      // so versions keep following pnpm-lock.yaml. Install is idempotent and
+      // must run here — not in the script's pre-step — because it needs the
+      // workspace's node_modules, which only exist after the setup stage.
+      const browsers =
+        run('pnpm', [
+          '--filter',
+          '@openaxe/web',
+          'exec',
+          'playwright',
+          'install',
+          '--with-deps',
+          'chromium',
+        ]) || false
+      if (!browsers) return false
       if (opts.e2eFull) return run('pnpm', ['test:e2e'])
       const ok = run('pnpm', [
         '--filter',
@@ -190,6 +205,10 @@ function main() {
     // ci.yml core-tests: Release + ccache launcher when available, Ninja when available.
     core: () => {
       try {
+        // The setup stage leaves a Debug/default-generator tree here for
+        // local dev; this stage fully specifies its own flags, so start
+        // clean instead of inheriting a clashing generator or build type.
+        run('rm', ['-rf', 'packages/core/build'])
         const probe = spawnSync('ninja', ['--version'], { stdio: 'ignore' })
         const generator = probe.status === 0 ? ['-G', 'Ninja'] : []
         let launcher = ['-DCMAKE_CXX_COMPILER_LAUNCHER=']
