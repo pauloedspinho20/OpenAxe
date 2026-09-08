@@ -81,32 +81,78 @@ export interface MeterProps {
 
 /** A segmented VU-style level meter. Presentational - the caller supplies the level. */
 export function Meter({ label, level, valueLabel }: MeterProps) {
-  const clamped = Math.min(1, Math.max(0, level))
-  const litCount = Math.round(clamped * SEGMENT_COUNT)
-
   return (
     <div className={styles.wrap}>
       {valueLabel !== undefined && <span className={styles.peakLabel}>{valueLabel}</span>}
-      <div className={styles.segments}>
-        {Array.from({ length: SEGMENT_COUNT }, (_, i) => {
-          const index = SEGMENT_COUNT - 1 - i
-          const threshold = (index + 1) / SEGMENT_COUNT
-          const lit = index < litCount
-          const color =
-            threshold > RED_FROM
-              ? 'statusRed'
-              : threshold > AMBER_FROM
-                ? 'statusAmber'
-                : 'statusGreen'
-          return (
-            <span
-              key={index}
-              className={`${styles.segment} ${lit ? styles.lit : ''} ${styles[color]}`}
-            />
-          )
-        })}
+      <div className={styles.segments}>{renderSegments(level)}</div>
+      {label && <span className="label">{label}</span>}
+    </div>
+  )
+}
+
+export interface StereoMeterProps {
+  /** Group label rendered below the pair (e.g. "Output"). Each side always shows its own L/R caption. */
+  label?: string
+  /** Left signal level in [0, 1], 1 = clipping. */
+  levelL: number
+  /** Right signal level in [0, 1], 1 = clipping. */
+  levelR: number
+  /** Optional peak readouts rendered above each side. */
+  valueLabelL?: string
+  valueLabelR?: string
+  title?: string | undefined
+}
+
+/**
+ * A slim stereo variant of the segmented VU meter: two narrow 12-segment
+ * columns side by side (L/R), fitting roughly the width of one large `Meter`
+ * so a rail can show true per-channel levels without growing. Presentational -
+ * the caller supplies both levels.
+ */
+export function StereoMeter({
+  label,
+  levelL,
+  levelR,
+  valueLabelL,
+  valueLabelR,
+  title,
+}: StereoMeterProps) {
+  return (
+    <div className={styles.stereoWrap} title={title}>
+      <div className={styles.peakLabels}>
+        {valueLabelL !== undefined && <span className={styles.peakLabel}>{valueLabelL}</span>}
+        {valueLabelR !== undefined && <span className={styles.peakLabel}>{valueLabelR}</span>}
+      </div>
+      <div className={styles.stereoPair}>
+        <div className={styles.slimCol}>
+          <div className={styles.slimSegments}>{renderSegments(levelL, true)}</div>
+          <span className={styles.slimCaption}>L</span>
+        </div>
+        <div className={styles.slimCol}>
+          <div className={styles.slimSegments}>{renderSegments(levelR, true)}</div>
+          <span className={styles.slimCaption}>R</span>
+        </div>
       </div>
       {label && <span className="label">{label}</span>}
     </div>
   )
+}
+
+/** The 12 VU segments for a level in [0, 1]; slim renders the narrow stereo-column style. */
+function renderSegments(level: number, slim = false) {
+  const clamped = Math.min(1, Math.max(0, level))
+  const litCount = Math.round(clamped * SEGMENT_COUNT)
+  return Array.from({ length: SEGMENT_COUNT }, (_, i) => {
+    const index = SEGMENT_COUNT - 1 - i
+    const threshold = (index + 1) / SEGMENT_COUNT
+    const lit = index < litCount
+    const color =
+      threshold > RED_FROM ? 'statusRed' : threshold > AMBER_FROM ? 'statusAmber' : 'statusGreen'
+    return (
+      <span
+        key={index}
+        className={`${slim ? styles.slimSegment : styles.segment} ${lit ? styles.lit : ''} ${styles[color]}`}
+      />
+    )
+  })
 }

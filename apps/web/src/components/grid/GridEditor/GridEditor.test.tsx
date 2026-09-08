@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { GridEditor } from './GridEditor'
 import { useGraphStore } from '../../../state/graphStore'
+import { useIOStore } from '../../../state/ioStore'
 import { getShellKind } from '../../../native/openaxe'
 
 vi.mock('../../../native/openaxe', () => ({
@@ -13,16 +14,17 @@ vi.mock('../../../native/openaxe', () => ({
 describe('components/GridEditor', () => {
   beforeEach(() => {
     useGraphStore.setState({ blocks: [], edges: [], masterMuted: false })
+    useIOStore.setState({ inputChannel: 'l' })
     vi.mocked(getShellKind).mockReturnValue('web')
   })
   afterEach(() => {
+    useIOStore.setState({ inputChannel: 'l' })
     vi.restoreAllMocks()
   })
 
   const baseProps = {
     rig: null,
     tunerAnalyser: null,
-    analyser: null,
     outputSelectionSupported: false,
     context: null,
     engine: {
@@ -100,6 +102,33 @@ describe('components/GridEditor', () => {
       render(<GridEditor {...baseProps} />)
       expect(screen.getByRole('button', { name: 'INPUT' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'OUTPUT' })).toBeInTheDocument()
+    })
+  })
+
+  describe('the IN/OUT rail meters (issue #385)', () => {
+    it('always shows the output rail as a stereo L/R pair', () => {
+      render(<GridEditor {...baseProps} />)
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      // One stereo pair on the output rail only (input is mono 'l' here).
+      expect(screen.getAllByText('L')).toHaveLength(1)
+      expect(screen.getAllByText('R')).toHaveLength(1)
+    })
+
+    it('shows the input rail as mono unless a stereo input channel is in use', () => {
+      render(<GridEditor {...baseProps} />)
+      expect(screen.getByText('Input')).toBeInTheDocument()
+      // Only the output pair contributes L/R captions.
+      expect(screen.getAllByText('L')).toHaveLength(1)
+    })
+
+    it('shows the input rail as a stereo L/R pair for a stereo input channel', () => {
+      useIOStore.setState({ inputChannel: 'stereo' })
+      render(<GridEditor {...baseProps} />)
+      expect(screen.getByText('Input')).toBeInTheDocument()
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      // Input pair + output pair.
+      expect(screen.getAllByText('L')).toHaveLength(2)
+      expect(screen.getAllByText('R')).toHaveLength(2)
     })
   })
 })

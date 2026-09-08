@@ -22,5 +22,5 @@ export type {
   ContextMenuAnchor,
 } from './ContextMenu/ContextMenu'
 export { clampMenuPosition } from './ContextMenu/position'
-export { Meter, MiniMeter, MediumMeter, levelToPeakDb } from './Meter/Meter'
-export type { MeterProps, MiniMeterProps, MeterVariant } from './Meter/Meter'
+export { Meter, MiniMeter, MediumMeter, StereoMeter, levelToPeakDb } from './Meter/Meter'
+export type { MeterProps, MiniMeterProps, MeterVariant, StereoMeterProps } from './Meter/Meter'
