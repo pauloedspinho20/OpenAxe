@@ -32,8 +32,10 @@
 // exactly like CI's `|| true` step.
 
 import { spawnSync } from 'node:child_process'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { cleanStaleCmakeCache } from './cmake-cache.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -258,6 +260,9 @@ function main() {
       } else {
         ccacheHint()
       }
+      // Same tree is mounted at /work under Docker — drop a cache written
+      // by the other environment instead of failing on the path mismatch.
+      cleanStaleCmakeCache(join(root, 'packages/vst3'), join(root, 'packages/vst3/build'))
       const configured = run('cmake', [
         '-S',
         'packages/vst3',

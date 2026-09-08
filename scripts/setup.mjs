@@ -27,6 +27,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { cleanStaleCmakeCache } from './cmake-cache.mjs'
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const argv = process.argv.slice(2)
 const webOnly = argv.includes('--web-only')
@@ -262,6 +264,11 @@ if (submodulesOnly) {
     ],
   ]
   for (const [name, args] of configures) {
+    // The Docker runner mounts this same tree at /work, so a cache written
+    // there (or vice versa) must be dropped before reconfiguring.
+    const buildFlag = args[args.indexOf('-B') + 1]
+    const sourceFlag = args[args.indexOf('-S') + 1]
+    cleanStaleCmakeCache(join(root, sourceFlag), join(root, buildFlag))
     if (!run('cmake', args)) fail(`cmake could not configure ${name}.`)
     ok(name)
   }
