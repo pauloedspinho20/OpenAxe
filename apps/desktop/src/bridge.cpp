@@ -1249,6 +1249,23 @@ std::string StudioBridge::HandleSetInputGain(const std::string& req) {
   }
 }
 
+std::string StudioBridge::HandleSetInputChannel(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    // Straight to AudioIO like the input gain above: a lone atomic the audio
+    // callback reads, so no suspend handshake is needed. An unknown mode
+    // degrades to stereo passthrough rather than failing (see
+    // InputChannelModeFromName). The UI store stays the authority here -
+    // unlike the plugin this shell has no per-project state chunk, so the
+    // open reply deliberately does NOT echo a mode back for the UI to adopt.
+    audio_.SetInputChannelMode(o.value("mode", ""));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setInputChannel: ") + e.what());
+  }
+}
+
 std::string StudioBridge::HandleSetMasterLevel(const std::string& req) {
   try {
     const json args = ParseArgs(req);

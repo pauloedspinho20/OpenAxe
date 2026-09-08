@@ -132,6 +132,32 @@ double FallbackRate(double want, const ma_device_info& info) {
 }
 }  // namespace
 
+// Maps the UI's ioStore strings to a routing mode. Unknown names (including
+// "") degrade to kStereo: passthrough is the safe answer when the two sides
+// ever disagree about which modes exist.
+InputChannelMode InputChannelModeFromName(const std::string& name) {
+  if (name == "l") return InputChannelMode::kLeft;
+  if (name == "r") return InputChannelMode::kRight;
+  if (name == "sum") return InputChannelMode::kSum;
+  return InputChannelMode::kStereo;
+}
+
+namespace {
+const char* InputChannelModeToName(InputChannelMode mode) {
+  switch (mode) {
+    case InputChannelMode::kLeft:
+      return "l";
+    case InputChannelMode::kRight:
+      return "r";
+    case InputChannelMode::kSum:
+      return "sum";
+    case InputChannelMode::kStereo:
+    default:
+      return "stereo";
+  }
+}
+}  // namespace
+
 TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_frames) {
   const unsigned int cap = RtCallbackState::kTapCapacity;
   const auto& src = input ? state.tap_in : state.tap_out;
@@ -199,6 +225,49 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   const float* in_ptrs[2] = {in_l, in_r};
   float* out_ptrs[2] = {out_l, out_r};
 
+  // Input channel routing (the web UI's ioStore.inputChannel, default Ch 1):
+  // a guitar is one cable on a stereo pair, so reduce the live input to the
+  // selected mono source here rather than running the rig on a half-silent
+  // pair. The graph then runs with input_channels == 1, which the core
+  // duplicates to both internal channels - centered stereo out, exactly like
+  // the web's mono router node and the VST3's RouteInput. kStereo keeps the
+  // old untouched passthrough. Skipped for DI audition (already a mono
+  // buffer, handled below) and when the scratch isn't sized for this block -
+  // that falls back to passthrough rather than allocating on this thread.
+  int eff_in_ch = in_ch;
+  if (!state->di_playing.load(std::memory_order_relaxed) && in_l && in_ch >= 2) {
+    const auto mode = static_cast<InputChannelMode>(
+        state->input_channel_mode.load(std::memory_order_relaxed));
+    if (mode != InputChannelMode::kStereo && state->in_scratch[0].size() >= n_frames) {
+      float* mono = state->in_scratch[0].data();
+      switch (mode) {
+        case InputChannelMode::kRight:
+          if (in_r) {
+            for (unsigned int i = 0; i < n_frames; ++i) mono[i] = in_r[i];
+          } else {
+            for (unsigned int i = 0; i < n_frames; ++i) mono[i] = 0.0f;
+          }
+          break;
+        case InputChannelMode::kSum:
+          // Average, not add: summing two correlated sources gains +6dB into
+          // clipping, and both the web's mono down-mix and the plugin's
+          // RouteInput halve here too.
+          for (unsigned int i = 0; i < n_frames; ++i)
+            mono[i] = (in_l[i] + (in_r ? in_r[i] : 0.0f)) * 0.5f;
+          break;
+        case InputChannelMode::kLeft:
+        default:
+          for (unsigned int i = 0; i < n_frames; ++i) mono[i] = in_l[i];
+          break;
+      }
+      in_ptrs[0] = mono;
+      in_ptrs[1] = nullptr;
+      in_l = mono;
+      in_r = nullptr;
+      eff_in_ch = 1;
+    }
+  }
+
   // DI audition (issue #273): when active, replaces live input with the
   // looping DI buffer, still through input_gain and the graph/tap.
   const float gain = state->input_gain.load(std::memory_order_relaxed);
@@ -254,20 +323,26 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
     in_l = in_ptrs[0];
   }
 
+  // The monitor tap mirrors what the rig processes: post-routing, post-TRIM,
+  // post-DI (all of the above rewrite in_ptrs). A routed-mono input reads
+  // back on both tap channels (like the web's up-mixed mono trim output), so
+  // input meters and the tuner agree with the graph.
+  const float* tap_in[2] = {in_ptrs[0], in_ptrs[1] ? in_ptrs[1] : in_ptrs[0]};
+
   // Suspended (graph mutation in progress): write silence and signal the
   // control thread that this callback observed the pause.
   if (state->suspend.load(std::memory_order_acquire)) {
     state->suspended_callbacks.fetch_add(1, std::memory_order_release);
     if (out_l) std::memset(out_l, 0, static_cast<size_t>(n_frames) * sizeof(float));
     if (out_r) std::memset(out_r, 0, static_cast<size_t>(n_frames) * sizeof(float));
-    CaptureTap(*state, in_ptrs, out_ptrs, n_frames);
+    CaptureTap(*state, tap_in, out_ptrs, n_frames);
     return 0;
   }
 
   if (state->graph_ready.load(std::memory_order_acquire) && state->graph && n_frames > 0 &&
       out_l) {
     if (in_l) {
-      openaxe_process(state->graph, in_ptrs, in_ch, out_ptrs, out_ch,
+      openaxe_process(state->graph, in_ptrs, eff_in_ch, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     } else {
       // Output-only stream: feed silence into the graph.
@@ -278,7 +353,7 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
     std::memset(out_l, 0, static_cast<size_t>(n_frames) * sizeof(float));
     if (out_r) std::memset(out_r, 0, static_cast<size_t>(n_frames) * sizeof(float));
   }
-  CaptureTap(*state, in_ptrs, out_ptrs, n_frames);
+  CaptureTap(*state, tap_in, out_ptrs, n_frames);
   return 0;
 }
 
@@ -736,6 +811,18 @@ void AudioIO::SetInputGain(float gain) {
 }
 
 float AudioIO::InputGain() const { return state_.input_gain.load(std::memory_order_relaxed); }
+
+void AudioIO::SetInputChannelMode(const std::string& mode) {
+  // Like the input gain above: a lone atomic the audio callback reads, so
+  // this is safe to call while the stream is running, no suspend needed.
+  state_.input_channel_mode.store(static_cast<int>(InputChannelModeFromName(mode)),
+                                  std::memory_order_relaxed);
+}
+
+std::string AudioIO::InputChannelModeName() const {
+  return InputChannelModeToName(static_cast<InputChannelMode>(
+      state_.input_channel_mode.load(std::memory_order_relaxed)));
+}
 
 void AudioIO::SetDIBuffer(const std::vector<float>& samples) {
   // Called with di_playing==false, so the audio thread isn't reading.

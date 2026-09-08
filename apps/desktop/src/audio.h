@@ -71,6 +71,32 @@ struct AudioDeviceInfo {
   bool is_output = true;
 };
 
+// Which of the input device's channels actually feed the rig.
+//
+// A guitar is one cable on a stereo pair: it arrives on one side while the
+// other side is silence (or a second instrument), so feeding the pair through
+// untouched runs the rig on a half-silent signal - one-sided output that is
+// not what the player wants and not what the web app does either.
+//
+// These mirror the web's modes exactly (see buildChannelRouter in
+// apps/web/src/hooks/useAudioEngine.ts) and the VST3's InputChannelMode (see
+// packages/vst3/src/input_routing.h), so the same ioStore choice means the
+// same thing in a browser tab, in a DAW, and in this shell:
+//
+//   kStereo — pass the input through untouched.
+//   kLeft   — channel 1 only, as mono.
+//   kRight  — channel 2 only, as mono.
+//   kSum    — both channels averaged to mono.
+//
+// "As mono" means one channel handed to openaxe_process, which the core
+// duplicates to both of its internal channels - centered stereo out.
+enum class InputChannelMode { kStereo = 0, kLeft = 1, kRight = 2, kSum = 3 };
+
+// Maps the UI's ioStore strings ('stereo' | 'l' | 'r' | 'sum') to a mode. An
+// unknown name degrades to kStereo: passthrough is the safe answer when the
+// two sides ever disagree about which modes exist.
+InputChannelMode InputChannelModeFromName(const std::string& name);
+
 // The audio callback state + handler. A free function + plain struct so the
 // DSP-in-callback wiring is directly unit-testable without hardware (tests
 // call RtProcessCallback with fake buffers).
@@ -104,6 +130,15 @@ struct RtCallbackState {
   // out of bounds).
   int input_channels = 2;
   int output_channels = 2;
+
+  // Input channel routing (the web UI's ioStore.inputChannel, default 'l').
+  // The callback reduces the live input to the selected mono source before
+  // the graph (see RtProcessCallback), so a guitar on channel 1 of a stereo
+  // interface comes out centered rather than left-only.
+  //
+  // Atomic because the UI thread writes it while the audio thread reads it;
+  // the callback never takes a lock for it - a lone relaxed load per block.
+  std::atomic<int> input_channel_mode{static_cast<int>(InputChannelMode::kLeft)};
 
   // Input TRIM (the web UI's ioStore.inputGain), 1 = unity. The web engine
   // applies this with a GainNode between the input source and the rig; the
@@ -189,9 +224,10 @@ class AudioIO {
   // Open a full-duplex stream. input_device/output_device are the ids
   // ListDevices() returned (see AudioDeviceInfo::id); pass 0xFFFFFFFF
   // (kDefaultDeviceId) for the platform default input/output - Open()
-  // resolves it to the actual default device before opening. Channels are
-  // fixed at 2 in / 2 out for now (the M3 UI's channel-routing modes land
-  // with the bridge). Returns false on failure (see LastError).
+  // resolves it to the actual default device before opening. Up to 2 input
+  // channels are opened (the rig is stereo internally); which of them feed
+  // the rig is SetInputChannelMode's job, below. Returns false on failure
+  // (see LastError).
   //
   // Latency:
   // - buffer_frames is the block size to request; the backend may adjust it
@@ -224,6 +260,17 @@ class AudioIO {
   // it's a single atomic store, no suspend handshake needed.
   void SetInputGain(float gain);
   float InputGain() const;
+
+  // Input channel routing: which of the device's input channels feed the rig
+  // ('stereo' | 'l' | 'r' | 'sum' - the ioStore strings the UI persists).
+  // Mirrors the web's buildChannelRouter and the VST3's setInputChannel, so
+  // the same picker means the same thing everywhere. Safe to call from any
+  // thread at any time, including while the stream is running - like the
+  // input gain it's a single atomic store, no suspend handshake needed. An
+  // unknown mode degrades to stereo passthrough (see InputChannelModeFromName).
+  void SetInputChannelMode(const std::string& mode);
+  // The active routing as an ioStore string, for diagnostics.
+  std::string InputChannelModeName() const;
 
   // DI audition (issue #273): replaces live input with a looping buffer
   // when active, still through input_gain and the graph.

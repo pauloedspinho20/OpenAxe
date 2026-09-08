@@ -45,6 +45,9 @@ void TestCallbackPassthrough() {
   openaxe_desktop::RtCallbackState state;
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
+  // Untouched stereo passthrough (the non-default routing mode).
+  state.input_channel_mode.store(static_cast<int>(openaxe_desktop::InputChannelMode::kStereo),
+                                 std::memory_order_relaxed);
 
   float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
   for (int i = 0; i < kFrames; ++i) {
@@ -85,6 +88,9 @@ void TestCallbackAppliesInputGain() {
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
   state.input_gain.store(kGain, std::memory_order_relaxed);
+  // Per-channel expectations below need the untouched stereo passthrough.
+  state.input_channel_mode.store(static_cast<int>(openaxe_desktop::InputChannelMode::kStereo),
+                                 std::memory_order_relaxed);
 
   float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
   for (int i = 0; i < kFrames; ++i) {
@@ -190,6 +196,9 @@ void TestTapConcurrentReadWrite() {
   for (auto& ch : state.tap_out) ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
   state.graph = graph;
   state.graph_ready.store(true, std::memory_order_release);
+  // The r == 2*l tap invariant below needs the untouched stereo passthrough.
+  state.input_channel_mode.store(static_cast<int>(openaxe_desktop::InputChannelMode::kStereo),
+                                 std::memory_order_relaxed);
 
   std::atomic<bool> stop{false};
   std::atomic<bool> reader_failed{false};
@@ -391,6 +400,165 @@ void TestOpenAcceptsSplitDevices() {
   io.Close();
 }
 
+// The ioStore strings map to routing modes exactly like the web's
+// buildChannelRouter and the VST3's InputChannelModeFromName. Unknown names
+// degrade to stereo passthrough rather than silence.
+void TestInputChannelModeFromName() {
+  using openaxe_desktop::InputChannelMode;
+  using openaxe_desktop::InputChannelModeFromName;
+  CHECK(InputChannelModeFromName("l") == InputChannelMode::kLeft);
+  CHECK(InputChannelModeFromName("r") == InputChannelMode::kRight);
+  CHECK(InputChannelModeFromName("sum") == InputChannelMode::kSum);
+  CHECK(InputChannelModeFromName("stereo") == InputChannelMode::kStereo);
+  CHECK(InputChannelModeFromName("") == InputChannelMode::kStereo);
+  CHECK(InputChannelModeFromName("bogus") == InputChannelMode::kStereo);
+}
+
+// Input channel routing: a guitar is one cable on a stereo pair, so the
+// desktop reduces stereo live input to the selected mono source before the
+// graph - the core then duplicates it to centered stereo out. kStereo keeps
+// the untouched passthrough. The monitor tap mirrors the routed signal on
+// both channels, so meters/tuner agree with what the rig processes.
+void TestCallbackInputChannelRouting() {
+  using openaxe_desktop::InputChannelMode;
+  constexpr double kRate = 48000.0;
+  constexpr int kFrames = 64;
+  constexpr int kBlock = 512;
+
+  auto run_mode = [&](InputChannelMode mode, int in_ch, float* in_bufs[2], float* out_bufs[2],
+                      openaxe_desktop::TapFrame* tap) {
+    OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
+    openaxe_desktop::RtCallbackState state;
+    for (auto& ch : state.tap_in)
+      ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
+    for (auto& ch : state.tap_out)
+      ch.assign(openaxe_desktop::RtCallbackState::kTapCapacity, 0.0f);
+    for (auto& ch : state.in_scratch) ch.assign(kBlock, 0.0f);
+    state.graph = graph;
+    state.graph_ready.store(true, std::memory_order_release);
+    state.input_channels = in_ch;
+    state.output_channels = 2;
+    state.input_channel_mode.store(static_cast<int>(mode), std::memory_order_relaxed);
+
+    openaxe_desktop::RtProcessCallback(out_bufs, in_bufs, kFrames, &state);
+    if (tap) *tap = openaxe_desktop::ReadTap(state, /*input=*/true, kFrames);
+
+    openaxe_graph_destroy(graph);
+  };
+
+  // Default mode is Ch 1 (mirrors the web's inputChannel 'l'): stereo in
+  // comes out dual-mono from channel 0 - the reported "mono in, mono out"
+  // case now lands centered instead of left-only.
+  {
+    float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+    for (int i = 0; i < kFrames; ++i) {
+      in0[i] = 0.5f;
+      in1[i] = -0.25f;
+      out0[i] = out1[i] = 0.0f;
+    }
+    float* in[2] = {in0, in1};
+    float* out[2] = {out0, out1};
+    openaxe_desktop::RtCallbackState fresh;  // assert the shipped default
+    CHECK(fresh.input_channel_mode.load() == static_cast<int>(InputChannelMode::kLeft));
+    openaxe_desktop::TapFrame tap;
+    run_mode(InputChannelMode::kLeft, 2, in, out, &tap);
+    for (int i = 0; i < kFrames; ++i) {
+      CHECK(out0[i] == 0.5f);
+      CHECK(out1[i] == 0.5f);
+      CHECK(in0[i] == 0.5f);  // backend buffers never written, only scratch
+      CHECK(in1[i] == -0.25f);
+    }
+    CHECK(tap.frames == static_cast<unsigned int>(kFrames));
+    for (unsigned int i = 0; i < tap.frames; ++i) {
+      CHECK(tap.l[i] == 0.5f);
+      CHECK(tap.r[i] == 0.5f);
+    }
+  }
+
+  // Ch 2 takes channel 1 as mono.
+  {
+    float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+    for (int i = 0; i < kFrames; ++i) {
+      in0[i] = 0.5f;
+      in1[i] = -0.25f;
+      out0[i] = out1[i] = 0.0f;
+    }
+    float* in[2] = {in0, in1};
+    float* out[2] = {out0, out1};
+    run_mode(InputChannelMode::kRight, 2, in, out, nullptr);
+    for (int i = 0; i < kFrames; ++i) {
+      CHECK(out0[i] == -0.25f);
+      CHECK(out1[i] == -0.25f);
+    }
+  }
+
+  // Ch 1+2 averages (halved, matching the web down-mix and the plugin).
+  {
+    float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+    for (int i = 0; i < kFrames; ++i) {
+      in0[i] = 0.5f;
+      in1[i] = -0.25f;
+      out0[i] = out1[i] = 0.0f;
+    }
+    float* in[2] = {in0, in1};
+    float* out[2] = {out0, out1};
+    run_mode(InputChannelMode::kSum, 2, in, out, nullptr);
+    for (int i = 0; i < kFrames; ++i) {
+      CHECK(out0[i] == 0.125f);
+      CHECK(out1[i] == 0.125f);
+    }
+  }
+
+  // Stereo keeps the untouched passthrough.
+  {
+    float in0[kFrames], in1[kFrames], out0[kFrames], out1[kFrames];
+    for (int i = 0; i < kFrames; ++i) {
+      in0[i] = 0.5f;
+      in1[i] = -0.25f;
+      out0[i] = out1[i] = 0.0f;
+    }
+    float* in[2] = {in0, in1};
+    float* out[2] = {out0, out1};
+    run_mode(InputChannelMode::kStereo, 2, in, out, nullptr);
+    for (int i = 0; i < kFrames; ++i) {
+      CHECK(out0[i] == 0.5f);
+      CHECK(out1[i] == -0.25f);
+    }
+  }
+
+  // A genuinely mono source is already mono: routing is a no-op whatever the
+  // mode, and the core duplicates it to both outputs.
+  {
+    float in0[kFrames], out0[kFrames], out1[kFrames];
+    for (int i = 0; i < kFrames; ++i) {
+      in0[i] = 0.5f;
+      out0[i] = out1[i] = 0.0f;
+    }
+    float* in[2] = {in0, nullptr};
+    float* out[2] = {out0, out1};
+    run_mode(InputChannelMode::kRight, 1, in, out, nullptr);
+    for (int i = 0; i < kFrames; ++i) {
+      CHECK(out0[i] == 0.5f);
+      CHECK(out1[i] == 0.5f);
+    }
+  }
+}
+
+// SetInputChannelMode round-trips through AudioIO (safe headless - it only
+// touches the routing atomic), including the unknown-mode fallback.
+void TestAudioIOInputChannelMode() {
+  openaxe_desktop::AudioIO io;
+  CHECK(io.InputChannelModeName() == "l");  // shipped default mirrors the web
+  io.SetInputChannelMode("r");
+  CHECK(io.InputChannelModeName() == "r");
+  io.SetInputChannelMode("sum");
+  CHECK(io.InputChannelModeName() == "sum");
+  io.SetInputChannelMode("stereo");
+  CHECK(io.InputChannelModeName() == "stereo");
+  io.SetInputChannelMode("bogus");
+  CHECK(io.InputChannelModeName() == "stereo");
+}
+
 }  // namespace
 
 int main() {
@@ -404,6 +572,9 @@ int main() {
   TestDeviceEnumeration();
   TestOpenStartStop();
   TestOpenAcceptsSplitDevices();
+  TestInputChannelModeFromName();
+  TestCallbackInputChannelRouting();
+  TestAudioIOInputChannelMode();
 
   if (g_failures > 0) {
     std::fprintf(stderr, "%d failure(s)\n", g_failures);
