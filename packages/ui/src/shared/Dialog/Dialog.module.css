@@ -49,28 +49,6 @@
   font-weight: 600;
 }
 
-.close {
-  width: 24px;
-  height: 24px;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--ink-3);
-  background: none;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0;
-}
-
-.close:hover {
-  color: var(--led-hot);
-  border-color: var(--led-hot);
-}
-
 .body {
   overflow-y: auto;
   overscroll-behavior: contain;

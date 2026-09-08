@@ -120,7 +120,7 @@
           <img src="/icons/openaxe-32.png" alt="" width="28" height="28" aria-hidden="true" />
           OPEN<span>AXE</span>
           <span class="ver" id="landing-version" aria-label="version v0.2.3">v0.2.3</span>
-          <span class="beta" aria-label="beta">BETA</span>
+          <span class="ox-badge ox-badge-accent" aria-label="beta">BETA</span>
         </a>
         <nav class="nav" aria-label="Primary">
           <a href="#features">Features</a>
@@ -130,8 +130,7 @@
           <a href="https://github.com/pauloedspinho20/OpenAxe" rel="noopener">GitHub</a>
           <button
             id="theme-toggle"
-            class="btn btn-ghost"
-            style="padding: 6px 10px; font-size: 12px"
+            class="ox-btn ox-btn-ghost ox-btn-sm"
             type="button"
             aria-label="Toggle Carbon / Aluminum finish"
           >
@@ -157,15 +156,17 @@
             </p>
             <div class="hero-ctas">
               <a
-                class="btn btn-primary"
+                class="ox-btn ox-btn-primary"
                 data-web-app
                 href="https://openaxe.pages.dev"
                 rel="noopener"
                 >↗ Open web app — no install</a
               >
-              <a id="download-cta" class="btn btn-ghost" href="#download">⬇ Download desktop</a>
+              <a id="download-cta" class="ox-btn ox-btn-ghost" href="#download"
+                >⬇ Download desktop</a
+              >
               <a
-                class="btn btn-ghost"
+                class="ox-btn ox-btn-ghost"
                 href="https://github.com/pauloedspinho20/OpenAxe"
                 rel="noopener"
                 >☆ Star on GitHub</a
@@ -186,8 +187,9 @@
 <span class="dim"> Effects:</span> Dragonfly Reverb · DSPark · BYOD · Airwindows</pre>
             </div>
             <div class="bar">
-              <span class="pill"
-                ><i aria-hidden="true"></i> Engine: openaxe_core — zero added latency</span
+              <span class="ox-badge ox-badge-live"
+                ><i class="dot dot-live" aria-hidden="true"></i> Engine: openaxe_core — zero added
+                latency</span
               >
               <span class="muted">48 kHz · 128 frames</span>
             </div>
@@ -205,8 +207,8 @@
             so web, desktop, and VST behave identically.
           </p>
           <div class="grid3">
-            <article class="card">
-              <h3>AMP — NAM captures</h3>
+            <article class="ox-card">
+              <h3 class="ox-card-title">AMP — NAM captures</h3>
               <p>
                 Any <code>.nam</code> — amps, pedals, outboard. Same <code>NamAmp</code> inference
                 everywhere (WASM worklet on web, direct C++ on desktop/VST).
@@ -217,8 +219,8 @@
                 <li>Tone3000 catalog integration</li>
               </ul>
             </article>
-            <article class="card">
-              <h3>Effects — 10, best-in-class</h3>
+            <article class="ox-card">
+              <h3 class="ox-card-title">Effects — 10, best-in-class</h3>
               <p>
                 Gate · Compressor · EQ · Chorus · Flanger · Phaser · Tremolo · Delay · Ping-Pong ·
                 Reverb (Dragonfly hall/room/plate/early).
@@ -229,8 +231,8 @@
                 <li>Metering from core (peak per block)</li>
               </ul>
             </article>
-            <article class="card">
-              <h3>Cab — IR convolution</h3>
+            <article class="ox-card">
+              <h3 class="ox-card-title">Cab — IR convolution</h3>
               <p>
                 Zero-latency partitioned convolver + <code>wav.cpp</code> decode/resample. Hand the
                 core bytes — no Web Audio decode on native.
@@ -255,27 +257,27 @@
             sound.
           </p>
           <div class="platforms" role="list">
-            <div class="platform" role="listitem">
-              <span class="status status-live">Live</span>
+            <div class="ox-card platform" role="listitem">
+              <span class="ox-badge ox-badge-live">Live</span>
               <h3>Web</h3>
               <p>Vite + React + AudioWorklet + WASM. ~15 ms round-trip. PWA offline planned.</p>
             </div>
-            <div class="platform" role="listitem">
-              <span class="status status-live">Live</span>
+            <div class="ox-card platform" role="listitem">
+              <span class="ox-badge ox-badge-live">Live</span>
               <h3>Desktop</h3>
               <p>
                 C++ + webview.h + JUCE audio_devices. &lt;5 ms. Reuses web UI, calls core directly.
               </p>
             </div>
-            <div class="platform" role="listitem">
-              <span class="status status-beta">Beta</span>
+            <div class="ox-card platform" role="listitem">
+              <span class="ox-badge ox-badge-beta">Beta</span>
               <h3>VST3 / CLAP / AU</h3>
               <p>
                 iPlug2 + <code>packages/core</code> (WHOLE_ARCHIVE). Zero latency to report to host.
               </p>
             </div>
-            <div class="platform" role="listitem">
-              <span class="status status-planned">Planned</span>
+            <div class="ox-card platform" role="listitem">
+              <span class="ox-badge ox-badge-planned">Planned</span>
               <h3>iOS / Android</h3>
               <p>SwiftUI / Compose + C++ via ObjC++ / JNI. Direct audio, no JS bridge.</p>
             </div>
@@ -313,8 +315,8 @@
               >
             </div>
 
-            <aside class="card" aria-label="Quick links">
-              <h3>Quick links</h3>
+            <aside class="ox-card" aria-label="Quick links">
+              <h3 class="ox-card-title">Quick links</h3>
               <ul>
                 <li>
                   <a data-web-app href="https://openaxe.pages.dev" rel="noopener">↗ Open web app</a>
@@ -351,8 +353,8 @@
             BYOD, Airwindows, ChowPhaser. iPlug2 is MIT.
           </p>
           <div class="grid3">
-            <article class="card">
-              <h3>Contribute</h3>
+            <article class="ox-card">
+              <h3 class="ox-card-title">Contribute</h3>
               <p>
                 Start with <code>AGENTS.md</code> → <code>CONTRIBUTING.md</code> →
                 <code>ARCHITECTURE.md</code>.
@@ -368,8 +370,8 @@
                 >
               </p>
             </article>
-            <article class="card">
-              <h3>Design system</h3>
+            <article class="ox-card">
+              <h3 class="ox-card-title">Design system</h3>
               <p>
                 Tokens in <code>design-tokens.json</code> generate CSS + C++ <code>tokens.h</code>.
                 Primitives: Knob · Fader · Led · Meter · Toggle · Panel.
@@ -381,8 +383,8 @@
                 · Storybook
               </p>
             </article>
-            <article class="card">
-              <h3>Cite &amp; sponsor</h3>
+            <article class="ox-card">
+              <h3 class="ox-card-title">Cite &amp; sponsor</h3>
               <p>
                 <code>CITATION.cff</code> for academic use. Sponsor via <code>FUNDING.yml</code>.
               </p>
