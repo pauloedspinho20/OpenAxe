@@ -41,6 +41,8 @@
     "test": "turbo run test",
     "test:run": "turbo run test:run",
     "test:e2e": "turbo run test:e2e",
+    "ci:local": "node scripts/ci-local.mjs",
+    "ci:local:linux": "bash docker/ci-linux/run-linux-ci.sh",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "prepare": "husky"

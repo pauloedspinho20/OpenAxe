@@ -1,8 +1,14 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { executeMidiActionMock } = vi.hoisted(() => ({ executeMidiActionMock: vi.fn() }))
-vi.mock('./dispatch', () => ({ executeMidiAction: executeMidiActionMock }))
+const { executeMidiActionMock, executeMidiParamActionMock } = vi.hoisted(() => ({
+  executeMidiActionMock: vi.fn(),
+  executeMidiParamActionMock: vi.fn(),
+}))
+vi.mock('./dispatch', () => ({
+  executeMidiAction: executeMidiActionMock,
+  executeMidiParamAction: executeMidiParamActionMock,
+}))
 
 const { useMidiStore } = await import('../state/midiStore')
 const { useMidiManager } = await import('../state/midiManager')
@@ -29,6 +35,7 @@ describe('midiAccess', () => {
 
   beforeEach(async () => {
     executeMidiActionMock.mockClear()
+    executeMidiParamActionMock.mockClear()
     useMidiStore.setState({
       supported: false,
       permission: 'unknown',
@@ -144,6 +151,43 @@ describe('midiAccess', () => {
     fakeAccess.inputs.set('in-2', fakeInputs[1]!)
     fakeAccess.onstatechange?.()
     expect(useMidiStore.getState().inputs).toHaveLength(2)
+  })
+
+  it('routes every CC value (not just the trigger edge) to a mapped param', () => {
+    useMidiStore.setState({
+      mappings: [
+        {
+          id: 'm1',
+          match: { type: 'cc', channel: 0, number: 20 },
+          action: { kind: 'param', blockId: 'b1', paramKey: 'mix' },
+        },
+      ],
+    })
+    // A low CC value would never pass the discrete trigger-edge gate.
+    fireMessage(fakeInputs[0]!, 0xb0, 20, 10)
+    expect(executeMidiParamActionMock).toHaveBeenCalledWith('b1', 'mix', 10)
+    expect(executeMidiActionMock).not.toHaveBeenCalled()
+  })
+
+  it('a param learn captures a low CC value without dispatching', () => {
+    useMidiStore.getState().startLearn({ kind: 'param', blockId: 'b1', paramKey: 'mix' })
+    fireMessage(fakeInputs[0]!, 0xb0, 20, 0)
+
+    expect(useMidiStore.getState().learning).toBeNull()
+    expect(useMidiStore.getState().mappings[0]?.match).toEqual({
+      type: 'cc',
+      channel: 0,
+      number: 20,
+    })
+    expect(executeMidiParamActionMock).not.toHaveBeenCalled()
+  })
+
+  it('a param learn ignores notes and PCs (only CC can drive a knob)', () => {
+    useMidiStore.getState().startLearn({ kind: 'param', blockId: 'b1', paramKey: 'mix' })
+    fireMessage(fakeInputs[0]!, 0x90, 60, 100)
+    fireMessage(fakeInputs[0]!, 0xc0, 3)
+    expect(useMidiStore.getState().learning).not.toBeNull()
+    expect(useMidiStore.getState().mappings).toHaveLength(0)
   })
 })
 

@@ -437,9 +437,9 @@
       "params": [
         {
           "symbol": "rate",
-          "label": "Rate",
+          "label": "Speed",
           "min": 0.1,
-          "max": 5,
+          "max": 8,
           "unit": "Hz",
           "smoothing": {
             "mode": "exponential",
@@ -447,32 +447,10 @@
           }
         },
         {
-          "symbol": "depth",
-          "label": "Depth",
-          "min": 0.1,
-          "max": 1,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "feedback",
-          "label": "Feedback",
+          "symbol": "script",
+          "label": "Voice",
           "min": 0,
-          "max": 0.9,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "stages",
-          "label": "Stages",
-          "min": 2,
-          "max": 8,
+          "max": 1,
           "unit": "",
           "smoothing": {
             "mode": "none",

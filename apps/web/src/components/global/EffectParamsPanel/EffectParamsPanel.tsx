@@ -1,6 +1,10 @@
-import { Knob, Select } from '@openaxe/ui'
+import { useState } from 'react'
+import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
+import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
+import { actionKey } from '@/midi/actions'
+import { useMidiStore } from '@/state/midiStore'
 import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
@@ -41,6 +45,16 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   // state, rather than block.getParams(), drives what is displayed.
   const { values, setParam } = useBlockParamValues(blockId, block)
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
+  // Right-click MIDI menu target - one menu per panel, retargeted per knob.
+  const [midiMenu, setMidiMenu] = useState<{
+    anchor: ContextMenuAnchor
+    paramKey: string
+    paramLabel: string
+  } | null>(null)
+  // The knob currently armed for MIDI learn glows accent (see Knob's
+  // `highlighted`) - subscribing to just the key keeps every other knob
+  // from re-rendering while learn is armed elsewhere.
+  const learningKey = useMidiStore((s) => s.learning?.actionKey)
 
   const renderField = (field: ParamFieldSchema) => {
     if (field.control === 'select') {
@@ -84,6 +98,15 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         size={50}
         description={field.description}
         onChange={(value) => setParam(field.key, value)}
+        highlighted={learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMidiMenu({
+            anchor: { x: e.clientX, y: e.clientY },
+            paramKey: field.key,
+            paramLabel: field.label,
+          })
+        }}
       />
     )
   }
@@ -110,6 +133,15 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
       })}
       {/* If the schema was grouped (e.g. EQ bands), the DynamicsMeter was added to the first group above;
           for the flat compressor/gate schema (no groups), it is already in that sole group. */}
+      <ParamMidiMenu
+        anchor={midiMenu?.anchor ?? null}
+        target={
+          midiMenu
+            ? { blockId, paramKey: midiMenu.paramKey, paramLabel: midiMenu.paramLabel }
+            : null
+        }
+        onClose={() => setMidiMenu(null)}
+      />
     </div>
   )
 }
