@@ -6,7 +6,7 @@
  * React seam (config load + auto-connect on mount).
  */
 import { actionKey } from './actions'
-import { executeMidiAction } from './dispatch'
+import { executeMidiAction, executeMidiParamAction } from './dispatch'
 import { isTriggerEdge, messageMatches, parseMidiMessage } from './message'
 import { useMidiManager } from '../state/midiManager'
 import { useMidiStore } from '../state/midiStore'
@@ -97,11 +97,19 @@ useMidiStore.subscribe((state, prev) => {
 function handleMessage(event: MIDIMessageEvent): void {
   const message = parseMidiMessage(event.data)
   if (!message) return
-  if (!isTriggerEdge(message)) return
   useMidiStore.getState().setLastMessage(message)
 
   const learning = useMidiStore.getState().learning
   if (learning) {
+    // Param targets learn CC only - a note or PC has no value to sweep a
+    // knob with, so binding one would create a dead mapping. Param learns
+    // also skip the trigger-edge gate: a CC resting below 64 is still a
+    // perfectly good knob binding.
+    if (learning.action.kind === 'param') {
+      if (message.type !== 'cc') return
+    } else if (!isTriggerEdge(message)) {
+      return
+    }
     // Never also dispatch the action a message just got bound to.
     useMidiStore.getState().completeLearn({
       type: message.type,
@@ -116,7 +124,15 @@ function handleMessage(event: MIDIMessageEvent): void {
 
   const mappings = useMidiStore.getState().mappings
   const hit = mappings.find((m) => messageMatches(message, m.match))
-  if (hit) executeMidiAction(hit.action)
+  if (!hit) return
+  if (hit.action.kind === 'param') {
+    // Continuous: every CC value moves the knob, not just the trigger edge.
+    if (message.type !== 'cc') return
+    executeMidiParamAction(hit.action.blockId, hit.action.paramKey, message.value)
+    return
+  }
+  if (!isTriggerEdge(message)) return
+  executeMidiAction(hit.action)
 }
 
 /** Arms Learn for `action`, auto-cancelling (keyed, so a stale timer can't cancel a newer learn) after 15s. */

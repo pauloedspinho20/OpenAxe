@@ -92,4 +92,50 @@ describe('BlockCard', () => {
     fireEvent.pointerUp(card, { clientX: 10, clientY: 10, pointerId: 1, bubbles: true })
     expect(spy).toHaveBeenCalledWith('b1')
   })
+
+  it('opens a context menu on right-click with bypass and remove entries', () => {
+    render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Reverb block/ }), {
+      clientX: 50,
+      clientY: 60,
+    })
+    expect(screen.getByRole('menu', { name: 'Reverb actions' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Bypass block' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Disconnect all cables' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Remove block' })).toBeInTheDocument()
+  })
+
+  it('right-click selects the block without opening the action sheet', () => {
+    const select = vi.spyOn(useSelection.getState(), 'select')
+    const onOpenMenu = vi.fn()
+    render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} onOpenMenu={onOpenMenu} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Reverb block/ }), {
+      clientX: 50,
+      clientY: 60,
+    })
+    expect(select).toHaveBeenCalledWith('b1')
+    expect(onOpenMenu).not.toHaveBeenCalled()
+  })
+
+  it('removes the block from the context menu', () => {
+    const spy = vi.spyOn(useGraphStore.getState(), 'removeBlock')
+    render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Reverb block/ }), {
+      clientX: 50,
+      clientY: 60,
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove block' }))
+    expect(spy).toHaveBeenCalledWith('b1')
+  })
+
+  it('opens the action sheet from the context menu More actions entry', () => {
+    const onOpenMenu = vi.fn()
+    render(<BlockCard instance={inst({ kind: 'reverb' })} rig={null} onOpenMenu={onOpenMenu} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Reverb block/ }), {
+      clientX: 50,
+      clientY: 60,
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'More actions…' }))
+    expect(onOpenMenu).toHaveBeenCalledTimes(1)
+  })
 })

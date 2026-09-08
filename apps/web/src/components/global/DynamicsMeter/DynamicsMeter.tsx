@@ -14,10 +14,10 @@ function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v))
 }
 
-/** Format a dB value (≤0) for the label above the meter: −6.2 dB, 0.0 dB. */
+/** Format a dB value (≤0) for the label above the meter: −6.2, 0.0 dB. */
 function dbLabel(db: number): string {
   if (db >= -0.05) return '0.0 dB'
-  return `${db.toFixed(1).replace('-', '−')} dB`
+  return `${db.toFixed(1).replace('-', '−')}`
 }
 
 export interface DynamicsMeterProps {
@@ -111,6 +111,7 @@ export function DynamicsMeter({ rig, blockId, kind }: DynamicsMeterProps) {
     <MediumMeter
       level={level}
       variant="gainReduction"
+      label="GR"
       title={title}
       {...(valueLabel !== undefined ? { valueLabel } : {})}
     />

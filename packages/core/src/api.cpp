@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "openaxe/engine.h"
 #include "openaxe/generated/enabled_blocks.h"
 #include "openaxe/midi.h"
+#include "openaxe/rig_switch.h"
 #include "serialization/rig_state.h"
 
 namespace {
@@ -111,18 +113,52 @@ OpenAxeLoadResult ToLoadResult(std::optional<openaxe::dsp::NamLoadError> error) 
 }  // namespace
 
 struct OpenAxeGraph {
-  openaxe::engine::AudioEngine engine;
+  // Live-engine ownership lives in the switcher (issue #367): the current
+  // engine rotates on commit, and retired engines park in its freelist for
+  // reuse rather than being freed where another thread might still hold the
+  // pointer - see rig_switch.cpp's ownership comment. Every call below that
+  // used to touch a by-value engine now resolves through LiveEngine().
+  std::unique_ptr<openaxe::switcher::RigSwitch> switch_;
+  // Staged handles only (see openaxe_staged_graph_create): the engine under
+  // construction, consumed by openaxe_staged_graph_commit. Null on parents.
+  std::unique_ptr<openaxe::engine::AudioEngine> engine;
   // The missing-asset list (#120) from the most recent load_state, kept for
   // the query ABI below. Control-thread data like everything else here.
   std::vector<std::string> missing_assets;
   // Likewise the unsupported-kind list (#313) - kinds the document named that
   // this build cannot place.
   std::vector<std::string> unsupported_blocks;
+  // Non-null on staged handles: the parent this handle stages for. Commit
+  // verifies it, so a foreign handle can never be smuggled in.
+  OpenAxeGraph* staged_parent = nullptr;
+  // Sample rate / max block size from the last openaxe_reset on THIS handle,
+  // plus whether openaxe_reset was ever called on it. Commit requires parent
+  // and staged to agree - the fade mixes their outputs sample-wise, so a
+  // rate/size mismatch (or a staged engine that was never reset, whose
+  // blocks have no buffers) would be wrong, not just degraded.
+  double sample_rate = 48000.0;
+  int max_block_size = 0;
+  bool did_reset = false;
 };
+
+// Resolves the engine an API call targets: a staged handle's engine under
+// construction (stable, owned by the handle), or the parent's current live
+// engine (atomic load - always dereferenceable, see rig_switch.cpp).
+// Every Tier-1 call routes through here so param/meter/mute writes land on
+// the engine that is actually rendering - including right after a commit.
+openaxe::engine::AudioEngine* LiveEngine(OpenAxeGraph* graph) {
+  if (graph->engine) return graph->engine.get();  // staged handle
+  return graph->switch_->Current();
+}
 
 extern "C" {
 
-OpenAxeGraph* openaxe_graph_create(void) { return new OpenAxeGraph(); }
+OpenAxeGraph* openaxe_graph_create(void) {
+  auto* graph = new (std::nothrow) OpenAxeGraph();
+  if (!graph) return nullptr;
+  graph->switch_ = std::make_unique<openaxe::switcher::RigSwitch>();
+  return graph;
+}
 
 void openaxe_graph_destroy(OpenAxeGraph* graph) { delete graph; }
 
@@ -137,38 +173,87 @@ void openaxe_graph_destroy(OpenAxeGraph* graph) { delete graph; }
 // no DSP for `kind` (effects.config.json's compiled:false; ask
 // openaxe_block_kind_compiled first, or just don't offer the kind).
 int32_t openaxe_add_block(OpenAxeGraph* graph, OpenAxeBlockKind kind, int32_t row, int32_t col) {
-  return graph->engine.AddBlock(ToBlockKind(kind), row, col);
+  return LiveEngine(graph)->AddBlock(ToBlockKind(kind), row, col);
 }
 
 // Removes the block and every edge touching it. Unknown ids are a no-op.
 void openaxe_remove_block(OpenAxeGraph* graph, int32_t block_id) {
-  graph->engine.RemoveBlock(block_id);
+  LiveEngine(graph)->RemoveBlock(block_id);
 }
 
 // Moves a block; a move that would make an existing cable run right-to-left
 // silently drops that cable (query the edges afterwards to resync a UI).
 void openaxe_move_block(OpenAxeGraph* graph, int32_t block_id, int32_t row, int32_t col) {
-  graph->engine.MoveBlock(block_id, row, col);
+  LiveEngine(graph)->MoveBlock(block_id, row, col);
 }
 
 int32_t openaxe_connect(OpenAxeGraph* graph, int32_t from_block, int32_t from_port,
                             int32_t to_block, int32_t to_port) {
-  const auto outcome = graph->engine.Connect(from_block, from_port, to_block, to_port);
+  const auto outcome = LiveEngine(graph)->Connect(from_block, from_port, to_block, to_port);
   return outcome.ok ? outcome.id : -1;
 }
 
-void openaxe_disconnect(OpenAxeGraph* graph, int32_t edge_id) { graph->engine.Disconnect(edge_id); }
+void openaxe_disconnect(OpenAxeGraph* graph, int32_t edge_id) { LiveEngine(graph)->Disconnect(edge_id); }
 
 // ── Lifecycle / processing ─────────────────────────────────────────────
 // Arms the whole graph for a sample rate and maximum block size. Allocates;
-// call before the first openaxe_process and after any change to either.
+// call before the first openaxe_process and after any change to either. On
+// the parent handle this also abandons any in-flight switch (pending commit
+// and draining engine park in the freelist) - Tier-2 context required, like
+// every other structural call.
 void openaxe_reset(OpenAxeGraph* graph, double sample_rate, int32_t max_block_size) {
-  graph->engine.Reset(sample_rate, max_block_size);
+  graph->sample_rate = sample_rate;
+  graph->max_block_size = max_block_size;
+  graph->did_reset = true;
+  if (graph->switch_) graph->switch_->Clear();
+  LiveEngine(graph)->Reset(sample_rate, max_block_size);
 }
 
 void openaxe_process(OpenAxeGraph* graph, const float* const* input, int32_t input_channels,
                          float* const* output, int32_t output_channels, int32_t num_frames) {
-  graph->engine.Process(input, input_channels, output, output_channels, num_frames);
+  if (graph->switch_) {
+    graph->switch_->Process(input, input_channels, output, output_channels, num_frames);
+  } else {
+    LiveEngine(graph)->Process(input, input_channels, output, output_channels, num_frames);
+  }
+}
+
+// ── Gapless staged switching (issue #367) ───────────────────────────────
+// See api.h for the contract. The staged build reuses every existing entry
+// point above (add/remove/connect, params, model/IR loads, reset,
+// load_state) - they resolve to the staged engine through LiveEngine().
+
+OpenAxeGraph* openaxe_staged_graph_create(OpenAxeGraph* parent) {
+  if (!parent || !parent->switch_) return nullptr;
+  auto* staged = new (std::nothrow) OpenAxeGraph();
+  if (!staged) return nullptr;
+  staged->engine = parent->switch_->TakeStagedEngine();
+  staged->staged_parent = parent;
+  staged->sample_rate = parent->sample_rate;
+  staged->max_block_size = parent->max_block_size;
+  return staged;
+}
+
+int32_t openaxe_staged_graph_commit(OpenAxeGraph* parent, OpenAxeGraph* staged, int32_t fade_ms,
+                                    int32_t drain_ms) {
+  // 1 = committed (the staged handle is consumed - do not touch it again);
+  // 0 = rejected, staged still yours (null/foreign/unreset/rate mismatch);
+  // -1 = busy, a switch is already in flight (staged still yours - retry).
+  if (!parent || !staged || !staged->engine || staged->staged_parent != parent) return 0;
+  if (!parent->switch_) return 0;  // cannot commit onto a staged handle
+  if (!staged->did_reset || staged->max_block_size <= 0) return 0;
+  if (staged->sample_rate != parent->sample_rate) return 0;
+  if (staged->max_block_size != parent->max_block_size) return 0;
+  if (!parent->switch_->Commit(staged->engine, parent->sample_rate, parent->max_block_size,
+                               fade_ms, drain_ms)) {
+    return -1;
+  }
+  delete staged;
+  return 1;
+}
+
+int32_t openaxe_switch_active(OpenAxeGraph* graph) {
+  return (graph && graph->switch_ && graph->switch_->Active()) ? 1 : 0;
 }
 
 // ── Params ──────────────────────────────────────────────────────────────
@@ -176,13 +261,13 @@ void openaxe_process(OpenAxeGraph* graph, const float* const* input, int32_t inp
 // slimmable NAM model adds a param, and each reverb algorithm has its own
 // table, so re-read this after either.
 int32_t openaxe_block_param_count(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.ParamCount(block_id);
+  return LiveEngine(graph)->ParamCount(block_id);
 }
 
 int32_t openaxe_block_param_info(OpenAxeGraph* graph, int32_t block_id, int32_t index,
                                      const char** out_name, const char** out_symbol, float* out_min,
                                      float* out_max, const char** out_unit) {
-  const auto info = graph->engine.ParamInfo(block_id, index);
+  const auto info = LiveEngine(graph)->ParamInfo(block_id, index);
   if (!info) return 0;
   if (out_name) *out_name = info->name;
   if (out_symbol) *out_symbol = info->symbol;
@@ -197,59 +282,59 @@ int32_t openaxe_block_param_info(OpenAxeGraph* graph, int32_t block_id, int32_t 
 // exception being the amp family's slim-size param, which reallocates inside
 // NAMCore (see AudioEngine::SetParam).
 float openaxe_get_param(OpenAxeGraph* graph, int32_t block_id, int32_t index) {
-  return graph->engine.GetParam(block_id, index);
+  return LiveEngine(graph)->GetParam(block_id, index);
 }
 
 // Writes one param (see the note on openaxe_get_param above).
 void openaxe_set_param(OpenAxeGraph* graph, int32_t block_id, int32_t index, float value) {
-  graph->engine.SetParam(block_id, index, value);
+  LiveEngine(graph)->SetParam(block_id, index, value);
 }
 
 OpenAxeLoadResult openaxe_load_nam_model(OpenAxeGraph* graph, int32_t block_id,
                                                const char* file_path) {
-  return ToLoadResult(graph->engine.LoadNamModel(block_id, file_path));
+  return ToLoadResult(LiveEngine(graph)->LoadNamModel(block_id, file_path));
 }
 
 // Loads from the model's JSON content instead of a path - see api.h.
 OpenAxeLoadResult openaxe_load_nam_model_json(OpenAxeGraph* graph, int32_t block_id,
                                                    const char* json) {
   if (!json) return OPENAXE_LOAD_INVALID_FORMAT;
-  return ToLoadResult(graph->engine.LoadNamModelJson(block_id, json));
+  return ToLoadResult(LiveEngine(graph)->LoadNamModelJson(block_id, json));
 }
 
 // Drops the block's model (it becomes a passthrough). Frees; suspend audio.
 void openaxe_unload_nam_model(OpenAxeGraph* graph, int32_t block_id) {
-  graph->engine.UnloadNamModel(block_id);
+  LiveEngine(graph)->UnloadNamModel(block_id);
 }
 
 // 1 if an amp-family block currently has a capture loaded, else 0.
 int32_t openaxe_block_has_model(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.BlockHasModel(block_id) ? 1 : 0;
+  return LiveEngine(graph)->BlockHasModel(block_id) ? 1 : 0;
 }
 
 void openaxe_set_reverb_algorithm(OpenAxeGraph* graph, int32_t block_id,
                                       OpenAxeReverbAlgorithm algorithm) {
-  graph->engine.SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
+  LiveEngine(graph)->SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
 }
 
 // Installs / clears / reports a cab block's impulse response - see api.h.
 void openaxe_load_ir(OpenAxeGraph* graph, int32_t block_id, const float* samples,
                         int32_t frames) {
-  graph->engine.LoadIr(block_id, samples, frames);
+  LiveEngine(graph)->LoadIr(block_id, samples, frames);
 }
 
 int32_t openaxe_load_ir_wav(OpenAxeGraph* graph, int32_t block_id, const uint8_t* bytes,
                                int32_t size) {
   if (!bytes || size <= 0) return 0;
-  return graph->engine.LoadIrWav(block_id, bytes, static_cast<size_t>(size));
+  return LiveEngine(graph)->LoadIrWav(block_id, bytes, static_cast<size_t>(size));
 }
 
 void openaxe_unload_ir(OpenAxeGraph* graph, int32_t block_id) {
-  graph->engine.UnloadIr(block_id);
+  LiveEngine(graph)->UnloadIr(block_id);
 }
 
 int32_t openaxe_block_ir_length(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.IrLength(block_id);
+  return LiveEngine(graph)->IrLength(block_id);
 }
 
 void openaxe_set_reverb_control(OpenAxeGraph* graph, int32_t block_id,
@@ -267,7 +352,7 @@ void openaxe_set_reverb_control(OpenAxeGraph* graph, int32_t block_id,
     case OPENAXE_REVERB_DRY_LEVEL: mapped = ReverbControl::kDryLevel; break;
     default: return;
   }
-  graph->engine.SetReverbControl(block_id, mapped, value);
+  LiveEngine(graph)->SetReverbControl(block_id, mapped, value);
 }
 
 void openaxe_set_delay_model(OpenAxeGraph* graph, int32_t block_id,
@@ -279,7 +364,7 @@ void openaxe_set_delay_model(OpenAxeGraph* graph, int32_t block_id,
     case OPENAXE_DELAY_ANALOG:  m = Delay::Model::kAnalog; break;
     case OPENAXE_DELAY_TAPE:    m = Delay::Model::kTape; break;
   }
-  graph->engine.SetDelayModel(block_id, m);
+  LiveEngine(graph)->SetDelayModel(block_id, m);
 }
 
 // Metadata of the block's loaded capture; every out-param is optional. See
@@ -289,7 +374,7 @@ int32_t openaxe_block_model_info(OpenAxeGraph* graph, int32_t block_id, double* 
                                     int32_t* out_has_input_level, double* out_input_level_dbu,
                                     int32_t* out_has_output_level, double* out_output_level_dbu,
                                     int32_t* out_is_slimmable, int32_t* out_slim_breakpoint_count) {
-  const auto info = graph->engine.BlockModelInfo(block_id);
+  const auto info = LiveEngine(graph)->BlockModelInfo(block_id);
   if (!info) return 0;
   if (out_sample_rate) *out_sample_rate = info->sample_rate;
   if (out_has_loudness) *out_has_loudness = info->has_loudness ? 1 : 0;
@@ -309,7 +394,7 @@ int32_t openaxe_block_model_info(OpenAxeGraph* graph, int32_t block_id, double* 
 // many were written.
 int32_t openaxe_block_model_slim_breakpoints(OpenAxeGraph* graph, int32_t block_id,
                                                 double* out_values, int32_t max_count) {
-  const auto info = graph->engine.BlockModelInfo(block_id);
+  const auto info = LiveEngine(graph)->BlockModelInfo(block_id);
   if (!info || !out_values || max_count <= 0) return 0;
   const int32_t count =
       std::min(static_cast<int32_t>(info->slim_size_breakpoints.size()), max_count);
@@ -321,77 +406,82 @@ int32_t openaxe_block_model_slim_breakpoints(OpenAxeGraph* graph, int32_t block_
 // Everything below is lock-free and callable from any thread, including
 // concurrently with openaxe_process.
 void openaxe_set_bypass(OpenAxeGraph* graph, int32_t block_id, int32_t bypassed) {
-  graph->engine.SetBypass(block_id, bypassed != 0);
+  LiveEngine(graph)->SetBypass(block_id, bypassed != 0);
 }
 
 // 1 while the block is bypassed, else 0.
 int32_t openaxe_is_bypassed(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.IsBypassed(block_id) ? 1 : 0;
+  return LiveEngine(graph)->IsBypassed(block_id) ? 1 : 0;
 }
 
 // Input-side trim, applied to the block's summed input. 1.0 = unity.
 void openaxe_set_block_input_trim(OpenAxeGraph* graph, int32_t block_id, float gain) {
-  graph->engine.SetInputTrim(block_id, gain);
+  LiveEngine(graph)->SetInputTrim(block_id, gain);
 }
 
 // The per-block I/O trims - see api.h for why these are not the amp family's
 // input_level/output_level params.
 float openaxe_get_block_input_trim(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.GetInputTrim(block_id);
+  return LiveEngine(graph)->GetInputTrim(block_id);
 }
 
 // Output-side trim, applied after the block's DSP (or its bypass copy).
 void openaxe_set_block_output_trim(OpenAxeGraph* graph, int32_t block_id, float gain) {
-  graph->engine.SetOutputTrim(block_id, gain);
+  LiveEngine(graph)->SetOutputTrim(block_id, gain);
 }
 
 // Current output trim, 1.0 for unknown blocks.
 float openaxe_get_block_output_trim(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.GetOutputTrim(block_id);
+  return LiveEngine(graph)->GetOutputTrim(block_id);
 }
 
 // The output bus: level, master mute, and the independent tuner mute.
 void openaxe_set_master_level(OpenAxeGraph* graph, float level) {
-  graph->engine.SetMasterLevel(level);
+  LiveEngine(graph)->SetMasterLevel(level);
 }
 
-float openaxe_get_master_level(OpenAxeGraph* graph) { return graph->engine.GetMasterLevel(); }
+float openaxe_get_master_level(OpenAxeGraph* graph) { return LiveEngine(graph)->GetMasterLevel(); }
 
 // Master mute; independent of the tuner mute below.
 void openaxe_set_master_muted(OpenAxeGraph* graph, int32_t muted) {
-  graph->engine.SetMasterMuted(muted != 0);
+  LiveEngine(graph)->SetMasterMuted(muted != 0);
 }
 
 // 1 while the master mute is engaged, else 0.
 int32_t openaxe_is_master_muted(OpenAxeGraph* graph) {
-  return graph->engine.IsMasterMuted() ? 1 : 0;
+  return LiveEngine(graph)->IsMasterMuted() ? 1 : 0;
 }
 
 // Tuner mute - a second mute source, so a tuner overlay can silence the
 // output without disturbing the user's master mute.
 void openaxe_set_tuner_muted(OpenAxeGraph* graph, int32_t muted) {
-  graph->engine.SetTunerMuted(muted != 0);
+  LiveEngine(graph)->SetTunerMuted(muted != 0);
 }
 
 // 1 while the tuner mute is engaged, else 0.
 int32_t openaxe_is_tuner_muted(OpenAxeGraph* graph) {
-  return graph->engine.IsTunerMuted() ? 1 : 0;
+  return LiveEngine(graph)->IsTunerMuted() ? 1 : 0;
 }
 
 // ── Metering ────────────────────────────────────────────────────────────
 // Peak |sample| over the block's last processed buffer, 0 for unknown ids.
 float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.GetMeter(block_id);
+  return LiveEngine(graph)->GetMeter(block_id);
 }
 
-float openaxe_get_cpu_load(OpenAxeGraph* graph) { return graph->engine.GetCpuLoad(); }
+// Post-input-trim peak over the block's last processed buffer, 0 for unknown ids.
+float openaxe_get_input_meter(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetInputMeter(block_id);
+}
+
+float openaxe_get_cpu_load(OpenAxeGraph* graph) { return LiveEngine(graph)->GetCpuLoad(); }
 
 float openaxe_get_gain_reduction(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.GetGainReduction(block_id);
+  return LiveEngine(graph)->GetGainReduction(block_id);
 }
 
 float openaxe_get_gate_gain(OpenAxeGraph* graph, int32_t block_id) {
-  return graph->engine.GetGateGain(block_id);
+  return LiveEngine(graph)->GetGateGain(block_id);
 }
 
 // ── MIDI mapping (issue #124) ─────────────────────────────────────────
@@ -439,7 +529,7 @@ OpenAxeMidiActionKind FromMidiActionKind(openaxe::midi::ActionKind k) {
 }  // namespace
 
 int32_t openaxe_midi_mapping_count(OpenAxeGraph* graph) {
-  return static_cast<int32_t>(graph->engine.MidiMappingCount());
+  return static_cast<int32_t>(LiveEngine(graph)->MidiMappingCount());
 }
 
 int32_t openaxe_midi_get_mapping(OpenAxeGraph* graph, int32_t index,
@@ -447,7 +537,7 @@ int32_t openaxe_midi_get_mapping(OpenAxeGraph* graph, int32_t index,
                                     int32_t* out_channel, int32_t* out_number,
                                     OpenAxeMidiActionKind* out_kind,
                                     int32_t* out_slot, int32_t* out_scene) {
-  const auto m = graph->engine.MidiMappingAt(static_cast<size_t>(index));
+  const auto m = LiveEngine(graph)->MidiMappingAt(static_cast<size_t>(index));
   if (!m) return 0;
   if (out_type) *out_type = FromMidiMessageType(m->match.type);
   if (out_channel) *out_channel = m->match.channel;
@@ -468,14 +558,14 @@ int32_t openaxe_midi_add_mapping(OpenAxeGraph* graph,
   action.kind = ToMidiActionKind(kind);
   action.slot = slot;
   action.scene = scene;
-  return graph->engine.AddMidiMapping(match, action) ? 1 : 0;
+  return LiveEngine(graph)->AddMidiMapping(match, action) ? 1 : 0;
 }
 
 int32_t openaxe_midi_remove_mapping(OpenAxeGraph* graph, int32_t index) {
-  return graph->engine.RemoveMidiMapping(static_cast<size_t>(index)) ? 1 : 0;
+  return LiveEngine(graph)->RemoveMidiMapping(static_cast<size_t>(index)) ? 1 : 0;
 }
 
-void openaxe_midi_clear_mappings(OpenAxeGraph* graph) { graph->engine.ClearMidiMappings(); }
+void openaxe_midi_clear_mappings(OpenAxeGraph* graph) { LiveEngine(graph)->ClearMidiMappings(); }
 
 int32_t openaxe_midi_arm_learn(OpenAxeGraph* graph, OpenAxeMidiActionKind kind,
                                   int32_t slot, int32_t scene) {
@@ -483,19 +573,19 @@ int32_t openaxe_midi_arm_learn(OpenAxeGraph* graph, OpenAxeMidiActionKind kind,
   action.kind = ToMidiActionKind(kind);
   action.slot = slot;
   action.scene = scene;
-  return graph->engine.ArmMidiLearn(action) ? 1 : 0;
+  return LiveEngine(graph)->ArmMidiLearn(action) ? 1 : 0;
 }
 
-void openaxe_midi_cancel_learn(OpenAxeGraph* graph) { graph->engine.CancelMidiLearn(); }
+void openaxe_midi_cancel_learn(OpenAxeGraph* graph) { LiveEngine(graph)->CancelMidiLearn(); }
 
 int32_t openaxe_midi_is_learning(OpenAxeGraph* graph) {
-  return graph->engine.IsMidiLearning() ? 1 : 0;
+  return LiveEngine(graph)->IsMidiLearning() ? 1 : 0;
 }
 
 int32_t openaxe_midi_get_learn_target(OpenAxeGraph* graph,
                                          OpenAxeMidiActionKind* out_kind,
                                          int32_t* out_slot, int32_t* out_scene) {
-  const auto target = graph->engine.MidiLearnTarget();
+  const auto target = LiveEngine(graph)->MidiLearnTarget();
   if (!target) return 0;
   if (out_kind) *out_kind = FromMidiActionKind(target->kind);
   if (out_slot) *out_slot = target->slot;
@@ -541,7 +631,7 @@ int32_t openaxe_midi_handle_message(OpenAxeGraph* graph,
                                        int32_t* out_match_channel,
                                        int32_t* out_match_number) {
   if (!data || size <= 0) return 0;
-  const auto result = graph->engine.HandleMidiMessage(data, static_cast<size_t>(size), sample_offset);
+  const auto result = LiveEngine(graph)->HandleMidiMessage(data, static_cast<size_t>(size), sample_offset);
   if (result.kind == openaxe::engine::AudioEngine::MidiHandleResult::kNone) return 0;
   if (result.action) {
     if (out_kind) *out_kind = FromMidiActionKind(result.action->kind);
@@ -562,26 +652,26 @@ int32_t openaxe_midi_handle_message(OpenAxeGraph* graph,
 
 int32_t openaxe_bind_automation_slot(OpenAxeGraph* graph, int32_t slot,
                                         int32_t block_id) {
-  return graph->engine.BindAutomationSlot(slot, block_id) ? 1 : 0;
+  return LiveEngine(graph)->BindAutomationSlot(slot, block_id) ? 1 : 0;
 }
 
 int32_t openaxe_unbind_automation_slot(OpenAxeGraph* graph, int32_t slot) {
-  return graph->engine.UnbindAutomationSlot(slot) ? 1 : 0;
+  return LiveEngine(graph)->UnbindAutomationSlot(slot) ? 1 : 0;
 }
 
 int32_t openaxe_automation_slot_block(OpenAxeGraph* graph, int32_t slot) {
-  return graph->engine.AutomationSlotBlock(slot);
+  return LiveEngine(graph)->AutomationSlotBlock(slot);
 }
 
 int32_t openaxe_automation_slot_param_count(OpenAxeGraph* graph, int32_t slot) {
-  return graph->engine.AutomationSlotParamCount(slot);
+  return LiveEngine(graph)->AutomationSlotParamCount(slot);
 }
 
 int32_t openaxe_automation_slot_param_info(OpenAxeGraph* graph, int32_t slot,
                                               int32_t entry, const char** out_name,
                                               const char** out_symbol, float* out_min,
                                               float* out_max, const char** out_unit) {
-  const auto info = graph->engine.AutomationParamInfo(slot, entry);
+  const auto info = LiveEngine(graph)->AutomationParamInfo(slot, entry);
   if (!info) return 0;
   if (out_name != nullptr) *out_name = info->name;
   if (out_symbol != nullptr) *out_symbol = info->symbol;
@@ -593,12 +683,12 @@ int32_t openaxe_automation_slot_param_info(OpenAxeGraph* graph, int32_t slot,
 
 void openaxe_set_automation_param_normalized(OpenAxeGraph* graph, int32_t slot,
                                                 int32_t entry, float normalized) {
-  graph->engine.SetAutomationParamNormalized(slot, entry, normalized);
+  LiveEngine(graph)->SetAutomationParamNormalized(slot, entry, normalized);
 }
 
 float openaxe_get_automation_param_normalized(OpenAxeGraph* graph, int32_t slot,
                                                  int32_t entry) {
-  return graph->engine.GetAutomationParamNormalized(slot, entry);
+  return LiveEngine(graph)->GetAutomationParamNormalized(slot, entry);
 }
 
 // ── Rig state (de)serialization (issue #119) ────────────────────────────
@@ -615,7 +705,7 @@ int32_t openaxe_serialize_state(OpenAxeGraph* graph, char* out_json, int32_t cap
 int32_t openaxe_serialize_state_ex(OpenAxeGraph* graph, int32_t embed_assets,
                                       char* out_json, int32_t capacity) {
   const std::string document =
-      openaxe::state::SerializeState(graph->engine, embed_assets != 0);
+      openaxe::state::SerializeState(*LiveEngine(graph), embed_assets != 0);
   const int32_t required = static_cast<int32_t>(document.size()) + 1;  // + NUL
   if (out_json == nullptr) return required;
   if (capacity < required) return -1;
@@ -624,7 +714,7 @@ int32_t openaxe_serialize_state_ex(OpenAxeGraph* graph, int32_t embed_assets,
 }
 
 OpenAxeLoadStateResult openaxe_load_state(OpenAxeGraph* graph, const char* json) {
-  const auto outcome = openaxe::state::LoadState(graph->engine, json);
+  const auto outcome = openaxe::state::LoadState(*LiveEngine(graph), json);
   // Publish the missing-asset list (#120) for the query ABI below - replaced
   // wholesale on every load, hard failures included (they restore nothing).
   graph->missing_assets = std::move(outcome.missing_assets);

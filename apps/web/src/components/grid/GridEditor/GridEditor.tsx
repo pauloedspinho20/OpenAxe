@@ -17,7 +17,7 @@ import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import { jackElementId, parseJackElementId } from '../jackId'
 import { HardwareButton, Knob, toast } from '@openaxe/ui'
-import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
+import { LiveMeter, LiveStereoMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BlockInspector } from '../BlockInspector/BlockInspector'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { Tuner } from '@/components/Tuner/Tuner'
@@ -30,7 +30,12 @@ import styles from './GridEditor.module.css'
 export interface GridEditorProps {
   rig: GraphRig | null
   tunerAnalyser: AnalyserNode | null
-  analyser: AnalyserNode | null
+  /** Per-channel taps for the stereo rail meters (issue #385). Optional so
+   * existing call sites keep compiling; a null side reads as silence. */
+  tunerAnalyserL?: AnalyserNode | null
+  tunerAnalyserR?: AnalyserNode | null
+  analyserL?: AnalyserNode | null
+  analyserR?: AnalyserNode | null
   outputSelectionSupported: boolean
   context: AudioContext | null
   engine: AudioEngineState & AudioEngineActions
@@ -52,7 +57,10 @@ function useIsMobile(breakpoint = 720) {
 export function GridEditor({
   rig,
   tunerAnalyser,
-  analyser,
+  tunerAnalyserL = null,
+  tunerAnalyserR = null,
+  analyserL = null,
+  analyserR = null,
   outputSelectionSupported,
   context,
   engine,
@@ -65,6 +73,9 @@ export function GridEditor({
   const setMasterMuted = useGraphStore((s) => s.setMasterMuted)
   const inputGain = useIOStore((s) => s.inputGain)
   const setInputGain = useIOStore((s) => s.setInputGain)
+  // The output rail is always stereo; the input rail only when a stereo
+  // input channel feeds the rig (issue #385).
+  const isStereoInput = useIOStore((s) => s.inputChannel) === 'stereo'
   const [addMenuCell, setAddMenuCell] = useState<{ row: number; col: number } | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
   const [blockDrag, setBlockDrag] = useState<BlockDragInfo | null>(null)
@@ -75,6 +86,7 @@ export function GridEditor({
   const [tunerOpen, setTunerOpen] = useState(false)
   const isMobile = useIsMobile(720)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
+  const selectionSource = useSelection((s) => s.selectionSource)
 
   // Two-tap + confirm cabling (mobile)
   const [pendingJackId, setPendingJackId] = useState<string | null>(null)
@@ -198,9 +210,12 @@ export function GridEditor({
     clearPending()
   }
 
-  // Tap empty cell to move selected block (mobile alternative to drag)
+  // Tap empty cell to move selected block (mobile alternative to drag).
+  // Only an explicit user selection arms the move — a preset-open default
+  // must leave empty-cell taps opening the add menu, or placing blocks on
+  // mobile becomes unreachable.
   const handleEmptyCellClick = (row: number, col: number) => {
-    if (isMobile && selectedBlockId) {
+    if (isMobile && selectedBlockId && selectionSource === 'user') {
       const selected = blocks.find((b) => b.id === selectedBlockId)
       if (selected && (selected.row !== row || selected.col !== col)) {
         const occupied = blocks.some(
@@ -349,7 +364,11 @@ export function GridEditor({
             formatValue={(v) => `${Math.round(v * 100)}%`}
             size={46}
           />
-          <LiveMeter label="Input" analyser={tunerAnalyser} />
+          {isStereoInput ? (
+            <LiveStereoMeter label="Input" analyserL={tunerAnalyserL} analyserR={tunerAnalyserR} />
+          ) : (
+            <LiveMeter label="Input" analyser={tunerAnalyser} />
+          )}
           <span className={`${styles.railJackWrap} ${styles.railJackWrapRight}`}>
             <span
               className={`${styles.railJack} ${pendingJackId === jackElementId(IN_RAIL, 'out', 0) ? styles.railJackArmed : ''}`}
@@ -393,7 +412,7 @@ export function GridEditor({
             size={46}
           />
 
-          <LiveMeter label="Output" analyser={analyser} />
+          <LiveStereoMeter label="Output" analyserL={analyserL} analyserR={analyserR} />
 
           <span className={`${styles.railJackWrap} ${styles.railJackWrapLeft}`}>
             <span

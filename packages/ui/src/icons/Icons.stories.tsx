@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react'
-import { BlockIcon, MidiIcon, PowerIcon, SettingsIcon, TunerIcon } from './index'
+import { BlockIcon, MidiIcon, PowerIcon, SettingsIcon } from './index'
 import type { BlockKind } from './BlockIcons'
 
 const blockKinds: BlockKind[] = [
@@ -49,10 +49,6 @@ export const Header: StoryObj = {
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
         <PowerIcon size={24} />
         <small>Power</small>
-      </span>
-      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-        <TunerIcon size={24} />
-        <small>Tuner</small>
       </span>
     </div>
   ),

@@ -22,6 +22,16 @@ target_compile_definitions(bridge_test PRIVATE
 )
 add_test(NAME bridge COMMAND bridge_test)
 
+# Gapless staged switching (issue #367) through the bridge's Handle*
+# interface: staged lifecycle, bookkeeping adoption, discard, busy, and
+# error paths. No audio hardware needed (staging never suspends audio).
+add_executable(bridge_stage_test bridge_stage_test.cpp)
+target_include_directories(bridge_stage_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(bridge_stage_test PRIVATE
+  openaxe_desktop_lib
+)
+add_test(NAME bridge_stage COMMAND bridge_stage_test)
+
 # ThreadSanitizer build for the threading stress tests (issue #211's acceptance
 # criterion: mutate-during-process must pass under TSan). Instruments the core,
 # the desktop lib, and the test binaries - NOT miniaudio/webview (a TSan build

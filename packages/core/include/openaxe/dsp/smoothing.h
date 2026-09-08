@@ -7,7 +7,7 @@ namespace openaxe::dsp {
 
 // Per-param smoothing policy for the real-time path (issue #122). A param is
 // either left as-is (kNone - discrete/enum/selector params, and any wrapped
-// DSP that already smooths internally, e.g. the Dragonfly reverbs, so we don't
+// DSP that already smooths internally, e.g. the algorithmic reverbs, so we don't
 // double-smooth), or ramped toward its target with a linear slew rate or an
 // exponential one-pole. The engine owns the ramp state and applies it on the
 // audio thread; this struct is the schema-derived, runtime-immutable policy.

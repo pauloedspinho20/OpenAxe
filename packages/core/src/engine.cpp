@@ -22,6 +22,7 @@
 #include "openaxe/dsp/chorus.h"
 #endif
 #include "openaxe/dsp/convolver.h"
+#include "dsp/internal/biquad.h"
 #if OPENAXE_BLOCK_COMPRESSOR_COMPILED
 #include "openaxe/dsp/compressor.h"
 #endif
@@ -78,7 +79,7 @@
 namespace openaxe::engine {
 namespace {
 
-// Largest ParamCount() among the wrapped DSP families (DragonflyHallReverb's
+// Largest ParamCount() among the wrapped DSP families (the hall reverb's
 // 18) - every block gets a fixed-size atomic param array this big regardless
 // of kind, so BlockState never needs to resize a container of atomics
 // (std::atomic isn't move/copy-constructible, so a resizable one is awkward
@@ -98,11 +99,23 @@ constexpr int kAmpToneBandCount = 4;
 // (openaxe_block_model_info reports it), not of the param surface.
 constexpr int kAmpParamCount = 7;
 
-// Cab blocks: a single wet/dry blend over the convolved signal. 1 = fully wet
-// (the IR alone), which is what a cabinet normally wants and what the web app's
-// ConvolverNode wiring defaulted to.
+// Cab blocks: a wet/dry blend over the convolved signal, plus post-IR
+// low-cut (HPF) and high-cut (LPF) biquads shaping the wet signal (issue
+// #373). The blend starts fully wet (the IR alone), which is what a cabinet
+// normally wants and what the web app's ConvolverNode wiring defaulted to.
 constexpr int kCabMixParam = 0;
-constexpr int kCabParamCount = 1;
+constexpr int kCabLowCutParam = 1;
+constexpr int kCabHighCutParam = 2;
+constexpr int kCabParamCount = 3;
+// Transparent cut defaults: the schema range extremes, so a fresh block (and
+// every preset saved before the cuts existed) skips both stages outright and
+// is bit-identical to the pre-cut convolver. Keep in sync with
+// param_schema.json's cab low_cut min / high_cut max.
+constexpr float kCabLowCutDefaultHz = 20.0f;
+constexpr float kCabHighCutDefaultHz = 20000.0f;
+// Butterworth second-order cuts (12 dB/oct), matching internal::Biquad's
+// cookbook Q convention.
+constexpr float kCabCutQ = 0.707f;
 
 // Mixer blocks expose per-input level and stereo pan for each of their
 // kMixerInputCount independent input jacks (interleaved: in{p}_level at p*2,
@@ -113,11 +126,17 @@ constexpr int kMixerParamCount = graph::kMixerInputCount * kMixerParamsPerInput;
 
 
 // ── Engine-level wet/dry mix (hybrid dry/wet, issue #263) ─────────────────
-// The 8 wet-only effects below are 100% wet out of their DSP; the engine owns
-// a single 0..1 mix that blends dry input with wet output post-DSP. Compressor,
+// The effects below are 100% wet out of their DSP; the engine owns a single
+// 0..1 mix that blends dry input with wet output post-DSP. Compressor,
 // reverb and cab keep their native mix params and are excluded. Stored as the
 // last param index for the kind, so ParamInfo/GetParam/SetParam see it as a
 // regular param and automation/presets persist it without engine-specific API.
+//
+// One global linear crossfade dipped ~6dB at 50% for every decorrelated
+// effect (issue #383), so the blend law is picked per family by signal
+// correlation (see MixLawFor): sample-aligned inserts stay linear (0.5+0.5
+// sums back to unity), decorrelated replacements use equal-power, and
+// tails/voices over dry stay additive with kill-dry at the top end.
 inline bool NeedsEngineMix(graph::BlockKind kind) {
   switch (kind) {
 #if OPENAXE_BLOCK_NOISE_GATE_COMPILED
@@ -205,6 +224,58 @@ inline int DspParamCountFor(graph::BlockKind kind) {
 inline int EngineMixIndexFor(graph::BlockKind kind) {
   return DspParamCountFor(kind);  // mix is appended after the DSP's table
 }
+// Per-family blend law for the engine mix (issue #383): the law is a property
+// of the DSP's wet signal, so it is a pure function of kind - no param, no
+// ABI/schema change, and the WASM worklet needs no update.
+enum class EngineMixLaw {
+  // Wet is sample-aligned dry (gate/eq/filter/tremolo): linear sums back to
+  // unity at every position, so no compensation is correct.
+  kLinear,
+  // Wet is decorrelated but the block replaces dry (ring-mod/rotary):
+  // sin/cos keeps perceived loudness flat instead of dipping at 50%.
+  kEqualPower,
+  // Wet is a tail/voice layered over dry (chorus/flanger/phaser/delay/
+  // pitch-shifter/granular-delay): dry stays at unity while mix adds wet.
+  // Dry mutes at the top end so 100% remains kill-dry (vibrato / FX-send /
+  // whammy), preserving existing 100% patches.
+  kAdditiveKillDry,
+};
+inline EngineMixLaw MixLawFor(graph::BlockKind kind) {
+  switch (kind) {
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
+    case graph::BlockKind::kRingMod:
+#endif
+#if OPENAXE_BLOCK_ROTARY_COMPILED
+    case graph::BlockKind::kRotary:
+#endif
+      return EngineMixLaw::kEqualPower;
+#if OPENAXE_BLOCK_CHORUS_COMPILED
+    case graph::BlockKind::kChorus:
+#endif
+#if OPENAXE_BLOCK_FLANGER_COMPILED
+    case graph::BlockKind::kFlanger:
+#endif
+#if OPENAXE_BLOCK_PHASER_COMPILED
+    case graph::BlockKind::kPhaser:
+#endif
+#if OPENAXE_BLOCK_DELAY_COMPILED
+    case graph::BlockKind::kDelay:
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
+    case graph::BlockKind::kPitchShifter:
+#endif
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
+    case graph::BlockKind::kGranularDelay:
+#endif
+      return EngineMixLaw::kAdditiveKillDry;
+    default:
+      return EngineMixLaw::kLinear;
+  }
+}
+// Smoothed-mix threshold where the additive law mutes dry (kill-dry at 100%).
+// The ramp makes the handoff continuous; the mix==1 fast path in Process()
+// keeps exact-full-wet identical for every law.
+constexpr double kAdditiveKillDryThreshold = 0.999;
 constexpr dsp::ParamSmoothing kEngineMixSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.0f};
 constexpr ParamDescriptor kEngineMixDescriptor{"Mix", "mix", 0.0f, 1.0f, "x"};
 constexpr dsp::ParamSmoothing kEngineLevelSmoothing{dsp::SmoothingMode::kExponential, 0.03f, 0.0f, 1.5f};
@@ -326,7 +397,7 @@ using DspVariant = std::variant<std::monostate, dsp::NamAmp
 // param surface changes (AddBlock / reverb algorithm switch / model load).
 //
 // kNone params snap to their target each block (discrete/enum/selector params,
-// and the Dragonfly reverbs, which already smooth internally - double-smoothing
+// and the algorithmic reverbs, which already smooth internally - double-smoothing
 // those would just waste the ramp). kExponential/kLinear params ramp toward the
 // target the host/UI wrote into the atomic mirror.
 constexpr dsp::ParamSmoothing kAmpSmoothing[] = {
@@ -400,7 +471,7 @@ constexpr dsp::ParamSmoothing kDragonflyEarlyReflectionsSmoothing[] = {
 #endif
 #if OPENAXE_BLOCK_REVERB_COMPILED
 // The hand-rolled spring tank smooths no params internally (unlike the
-// Dragonfly algorithms), so it carries engine-side exponential smoothing -
+// spring tank, unlike the algorithmic reverbs), so it carries engine-side exponential smoothing -
 // see param_schema.json's reverb/spring variant.
 constexpr dsp::ParamSmoothing kSpringReverbSmoothing[] = {
 #include "dsp/generated/spring_reverb_smoothing.inc"
@@ -438,7 +509,7 @@ constexpr dsp::ParamSmoothing kRotarySmoothing[] = {
 // the atomic param mirror Process() applies from, and its pre-allocated
 // scratch buffers. Kept as a heap-allocated, never-moved object (owned via
 // unique_ptr in block_states_) specifically so DspVariant's alternatives
-// (NamAmp, DragonflyHallReverb, ...) never need to be move/copy-constructed
+// (NamAmp, the reverb algorithms, ...) never need to be move/copy-constructed
 // - both delete their copy ops and neither declares a move op, so a variant
 // holding them can only ever be constructed in place (emplace), never moved.
 struct AudioEngine::BlockState {
@@ -528,6 +599,20 @@ struct AudioEngine::BlockState {
   // cab is convolution plus a dry blend, not a single DSP object.
   std::array<dsp::Convolver, 2> cab;
 
+  // Cab blocks only: post-IR low-cut (HPF) + high-cut (LPF), one biquad pair
+  // per channel (issue #373). Coeffs re-derive from params[kCabLowCutParam /
+  // kCabHighCutParam] on the audio thread when they change (see ApplyCabCuts);
+  // the *_applied mirrors plus the sample rate let the audio thread detect
+  // that without extra synchronization - the control thread never writes
+  // these fields, so the audio thread's lazy updates can't race (issue #211).
+  // At the schema defaults both stages are skipped outright, so a fresh block
+  // is bit-identical to the pre-cut path.
+  std::array<dsp::internal::Biquad, 2> cab_hp;
+  std::array<dsp::internal::Biquad, 2> cab_lp;
+  float cab_low_cut_applied = kCabLowCutDefaultHz;
+  float cab_high_cut_applied = kCabHighCutDefaultHz;
+  double cab_cuts_sample_rate = 0.0;
+
   // ── Asset-source retention (issue #120) ────────────────────────────────
   // What a saved rig needs so it can carry its own assets. The IR keeps its
   // original WAV bytes (a synthesized one when the caller installed raw
@@ -552,6 +637,10 @@ struct AudioEngine::BlockState {
   std::vector<float> output_r;
 
   std::atomic<float> meter{0.0f};
+  // Post-input-trim peak over the last Process() call: what the block's DSP
+  // actually saw. Stored alongside `meter` (the post-output-trim peak) so a
+  // UI can show per-block IN/OUT levels for gain staging.
+  std::atomic<float> input_meter{0.0f};
 };
 
 
@@ -1114,10 +1203,13 @@ BlockId AudioEngine::AddBlock(graph::BlockKind kind, int row, int col) {
   }
   if (kind == graph::BlockKind::kCab) {
     // Cab stays std::monostate - its DSP is the pair of convolvers above, not a
-    // DspVariant alternative - but it does have a param, and its blend starts
-    // fully wet so loading an IR is immediately audible.
+    // DspVariant alternative - but it does have params, and its blend starts
+    // fully wet so loading an IR is immediately audible. The cuts start at
+    // their transparent defaults (see kCabLowCutDefaultHz).
     state->param_count.store(kCabParamCount, std::memory_order_relaxed);
     state->params[kCabMixParam].store(1.0f, std::memory_order_relaxed);
+    state->params[kCabLowCutParam].store(kCabLowCutDefaultHz, std::memory_order_relaxed);
+    state->params[kCabHighCutParam].store(kCabHighCutDefaultHz, std::memory_order_relaxed);
   }
   if (kind == graph::BlockKind::kMixer) {
     // The mixer stays std::monostate - it is not a DSP effect kind -
@@ -1285,8 +1377,11 @@ void AudioEngine::Reset(double sample_rate, int max_block_size) {
     if (IsAmpFamily(state->kind)) state->tone.Reset(sample_rate);
     if (state->kind == graph::BlockKind::kCab) {
       // The IR itself is rate-independent data the caller supplied; only the
-      // tail state has to go.
+      // tail state has to go. The cut biquads hold previous samples the same
+      // way, so their histories go too (coeffs re-derive lazily on mismatch).
       for (auto& conv : state->cab) conv.ResetState();
+      for (auto& hp : state->cab_hp) hp.Reset();
+      for (auto& lp : state->cab_lp) lp.Reset();
     }
     std::visit(
         [&](auto& d) {
@@ -1356,6 +1451,48 @@ void AudioEngine::ApplyRealtimeParams(BlockState& state) {
       state.dsp);
 }
 
+// Re-derive a cab block's post-IR cut coeffs when the params or the sample
+// rate changed, then run the wet signal through the active stages (issue
+// #373). The cuts shape the wet (convolved) signal only, before the dry
+// blend - so ir_mix < 1 keeps a truly dry direct path, and with no IR loaded
+// the block stays a pure passthrough. Real-time safe: pure arithmetic, no
+// allocation; the coefficient recompute runs at most once per buffer, only
+// when a target moved. Cut frequencies snap like the EQ band frequencies
+// (kNone smoothing in param_schema.json) rather than ramping.
+void AudioEngine::ApplyCabCuts(AudioEngine::BlockState& state, float* out_l, float* out_r,
+                                int num_frames, double sample_rate) {
+  const float low_cut =
+      state.params[static_cast<size_t>(kCabLowCutParam)].load(std::memory_order_relaxed);
+  const float high_cut =
+      state.params[static_cast<size_t>(kCabHighCutParam)].load(std::memory_order_relaxed);
+  if (low_cut != state.cab_low_cut_applied || high_cut != state.cab_high_cut_applied ||
+      sample_rate != state.cab_cuts_sample_rate) {
+    const float sr = static_cast<float>(sample_rate);
+    for (int ch = 0; ch < 2; ++ch) {
+      state.cab_hp[static_cast<size_t>(ch)].SetHighpass(low_cut, kCabCutQ, sr);
+      state.cab_lp[static_cast<size_t>(ch)].SetLowpass(high_cut, kCabCutQ, sr);
+    }
+    state.cab_low_cut_applied = low_cut;
+    state.cab_high_cut_applied = high_cut;
+    state.cab_cuts_sample_rate = sample_rate;
+  }
+  // Skipped outright at the defaults (not run as "almost transparent"
+  // biquads), which is what keeps untouched blocks bit-identical.
+  const bool hp_active = low_cut > kCabLowCutDefaultHz;
+  const bool lp_active = high_cut < kCabHighCutDefaultHz;
+  if (!hp_active && !lp_active) return;
+  for (int i = 0; i < num_frames; ++i) {
+    if (hp_active) {
+      out_l[i] = state.cab_hp[0].Process(out_l[i]);
+      out_r[i] = state.cab_hp[1].Process(out_r[i]);
+    }
+    if (lp_active) {
+      out_l[i] = state.cab_lp[0].Process(out_l[i]);
+      out_r[i] = state.cab_lp[1].Process(out_r[i]);
+    }
+  }
+}
+
 // Run one block's DSP over the [start, start+num_frames) slice of its buffers
 // into its output buffers. The std::visit inlines to a switch over the
 // variant's alternatives - no virtual dispatch on the audio path. Real-time
@@ -1398,6 +1535,10 @@ void AudioEngine::RunDsp(BlockState& state, int start, int num_frames) {
             // fully-wet common case skips the per-sample blend entirely.
             state.cab[0].Process(&state.output_l[static_cast<size_t>(start)], num_frames);
             state.cab[1].Process(&state.output_r[static_cast<size_t>(start)], num_frames);
+            // Post-IR cuts (issue #373) shape the wet signal before the dry
+            // blend below, so ir_mix < 1 keeps a truly dry direct path.
+            ApplyCabCuts(state, &state.output_l[static_cast<size_t>(start)],
+                         &state.output_r[static_cast<size_t>(start)], num_frames, sample_rate_);
             double& smoothed_mix = state.smoothed[kCabMixParam];
             const float target =
                 state.params[kCabMixParam].load(std::memory_order_relaxed);
@@ -1552,6 +1693,19 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       }
     }
 
+    // Post-input-trim peak: what the DSP (or the bypass copy below) actually
+    // receives. Measured here, after the mixer fold + input trim above, so
+    // the Input knob moves this meter and the Output knob moves the output
+    // one - each trim owns its meter.
+    {
+      float in_peak = 0.0f;
+      for (int i = 0; i < num_frames; ++i) {
+        in_peak = std::max({in_peak, std::fabs(state.input_l[0][static_cast<size_t>(i)]),
+                            std::fabs(state.input_r[0][static_cast<size_t>(i)])});
+      }
+      state.input_meter.store(in_peak, std::memory_order_relaxed);
+    }
+
     if (state.bypassed.load(std::memory_order_relaxed)) {
       std::copy_n(state.input_l[0].data(), num_frames, state.output_l.data());
       std::copy_n(state.input_r[0].data(), num_frames, state.output_r.data());
@@ -1588,11 +1742,12 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
           }
           ApplyRealtimeParams(state);
           RunDsp(state, start, len);
-          // Engine-level wet/dry mix (hybrid dry/wet, issue #263): blend dry
-          // input with wet DSP output per sub-block using the smoothed mix for
-          // this slice. Bypass already dominates above, so this only runs on
-          // the wet path. Fully wet (mix==1) is the common case and keeps the
-          // fast path; fully dry copies input.
+          // Engine-level wet/dry mix (hybrid dry/wet, issue #263; per-family
+          // laws, issue #383): blend dry input with wet DSP output per
+          // sub-block using the smoothed mix for this slice. Bypass already
+          // dominates above, so this only runs on the wet path. Fully wet
+          // (mix==1) is the common case and keeps the fast path - pure DSP
+          // output, identical for every law; fully dry copies input.
           if (NeedsEngineMix(state.kind)) {
             const int mixIdx = EngineMixIndexFor(state.kind);
             const double mix = std::clamp(state.smoothed[static_cast<size_t>(mixIdx)], 0.0, 1.0);
@@ -1603,8 +1758,25 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
                 std::copy_n(&state.input_r[0][static_cast<size_t>(start)], len,
                             &state.output_r[static_cast<size_t>(start)]);
               } else {
-                const float dryGain = 1.0f - static_cast<float>(mix);
-                const float wetGain = static_cast<float>(mix);
+                float dryGain = 0.0f;
+                float wetGain = 0.0f;
+                switch (MixLawFor(state.kind)) {
+                  case EngineMixLaw::kEqualPower: {
+                    const double angle = mix * 1.5707963267948966;  // mix * pi/2
+                    dryGain = static_cast<float>(std::cos(angle));
+                    wetGain = static_cast<float>(std::sin(angle));
+                    break;
+                  }
+                  case EngineMixLaw::kAdditiveKillDry:
+                    dryGain = (mix >= kAdditiveKillDryThreshold) ? 0.0f : 1.0f;
+                    wetGain = static_cast<float>(mix);
+                    break;
+                  case EngineMixLaw::kLinear:
+                  default:
+                    dryGain = 1.0f - static_cast<float>(mix);
+                    wetGain = static_cast<float>(mix);
+                    break;
+                }
                 for (int i = 0; i < len; ++i) {
                   const int idx = start + i;
                   state.output_l[static_cast<size_t>(idx)] =
@@ -2223,6 +2395,43 @@ std::vector<AudioEngine::AutomationSlotSnapshot> AudioEngine::ListBoundAutomatio
   return out;
 }
 
+// ── Session-state carryover for gapless switching (issue #367) ──────────
+
+void AudioEngine::ImportSessionStateFrom(const AudioEngine& other) {
+  master_level_.store(other.master_level_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  master_muted_.store(other.master_muted_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  tuner_muted_.store(other.tuner_muted_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+
+  // Wholesale copy, then unbind slots whose block is missing here or is a
+  // different kind. other.FindBlock is an unguarded map read of an engine
+  // Process() may be running on concurrently - safe: the map itself is only
+  // mutated under other's Tier-2 protocol (so no writer exists during
+  // other's Process()), and kind is immutable after AddBlock.
+  automation_slots_ = other.automation_slots_;
+  for (int slot = 1; slot < kAutomationSlotCount; ++slot) {
+    auto& s = automation_slots_[slot];
+    if (!s.bound) continue;
+    const BlockState* mine = FindBlock(s.block);
+    const BlockState* theirs = other.FindBlock(s.block);
+    if (!mine || !theirs || mine->kind != theirs->kind) {
+      s.bound = false;  // lane memory (mirror/dirty) survives, like Unbind
+      s.block = -1;
+    } else {
+      // Re-assert remembered lanes onto the new target through its own
+      // ranges - the same carry-the-lane semantics as BindAutomationSlot.
+      ApplySlotMirror(s);
+    }
+  }
+
+  ClearMidiMappings();
+  for (const auto& mapping : other.ListMidiMappings()) {
+    AddMidiMapping(mapping.match, mapping.action);
+  }
+  if (const auto target = other.MidiLearnTarget()) {
+    ArmMidiLearn(*target);
+  }
+}
+
 // ── MIDI mapping (issue #124) ──────────────────────────────────────────
 
 std::vector<midi::MidiMapping> AudioEngine::ListMidiMappings() const {
@@ -2450,7 +2659,7 @@ void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float valu
   SetParam(id, index, std::clamp(scaled, min, max));
 }
 
-// Swap which Dragonfly algorithm backs a reverb block. This *replaces* the DSP
+// Swap which reverb algorithm backs a block. This *replaces* the DSP
 // object, so it allocates and is Tier 2 (must not run concurrently with
 // Process()) - algorithm choice is a deliberate user action, not automation.
 // The new object is re-prepared at the engine's current sample rate and its own
@@ -2460,6 +2669,10 @@ void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float valu
 void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
+  // Redundant resend (the UI replays the full param object, algorithm
+  // included, on every knob turn): rebuilding would wipe the ringing tail
+  // and reseed every param to defaults, so it must be a no-op.
+  if (GetReverbAlgorithm(id) == algorithm) return;
 
   switch (algorithm) {
     case ReverbAlgorithm::kHall:
@@ -2560,7 +2773,7 @@ void AudioEngine::SetDelayModel(BlockId id, dsp::Delay::Model model) {
 
 // ── Per-block state readers for serialization (issue #119) ──────────────
 
-// Which Dragonfly algorithm currently backs a reverb block. The choice isn't
+// Which reverb algorithm currently backs a block. The choice isn't
 // stored as a field - it IS which alternative the DSP variant holds - so the
 // getter recovers it from there. kHall for anything else (the default every
 // new reverb block starts on).
@@ -2575,6 +2788,9 @@ ReverbAlgorithm AudioEngine::GetReverbAlgorithm(BlockId id) const {
   }
   if (std::holds_alternative<dsp::DragonflyEarlyReflections>(state->dsp)) {
     return ReverbAlgorithm::kEarlyReflections;
+  }
+  if (std::holds_alternative<dsp::SpringReverb>(state->dsp)) {
+    return ReverbAlgorithm::kSpring;
   }
   return ReverbAlgorithm::kHall;  // includes the kHall case above
 }
@@ -2694,6 +2910,14 @@ bool AudioEngine::IsTunerMuted() const { return tuner_muted_.load(std::memory_or
 float AudioEngine::GetMeter(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->meter.load(std::memory_order_relaxed) : 0.0f;
+}
+
+// Post-input-trim peak over the last Process() call - the level the block's
+// DSP actually received - 0 for unknown ids. Pairs with GetMeter (the
+// post-output-trim peak) for per-block IN/OUT gain-staging meters.
+float AudioEngine::GetInputMeter(BlockId id) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  return state ? state->input_meter.load(std::memory_order_relaxed) : 0.0f;
 }
 
 // What fraction of one buffer's real-time budget the last Process() call used

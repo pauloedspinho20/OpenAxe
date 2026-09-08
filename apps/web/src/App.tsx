@@ -267,7 +267,10 @@ function App() {
         <GridEditor
           rig={engine.rig}
           tunerAnalyser={engine.tunerAnalyser}
-          analyser={engine.analyser}
+          tunerAnalyserL={engine.tunerAnalyserL}
+          tunerAnalyserR={engine.tunerAnalyserR}
+          analyserL={engine.analyserL}
+          analyserR={engine.analyserR}
           outputSelectionSupported={outputSelectionSupported}
           context={engine.context}
           engine={engine}

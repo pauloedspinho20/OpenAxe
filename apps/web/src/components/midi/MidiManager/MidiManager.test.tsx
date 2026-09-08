@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MidiManager } from './MidiManager'
 import { useMidiManager } from '../../../state/midiManager'
 import { useMidiStore } from '../../../state/midiStore'
+import { useGraphStore } from '../../../state/graphStore'
 import * as midiAccess from '../../../midi/midiAccess'
 
 function openManager(state: Partial<ReturnType<typeof useMidiStore.getState>> = {}) {
@@ -107,5 +108,45 @@ describe('MidiManager', () => {
     render(<MidiManager />)
     fireEvent.click(screen.getByRole('button', { name: 'Reset all mappings' }))
     expect(resetSpy).toHaveBeenCalled()
+  })
+
+  it('lists knob mappings in a parameter section with block and param names', () => {
+    act(() => {
+      useGraphStore.setState({
+        blocks: [{ id: 'b1', kind: 'delay', row: 0, col: 0, params: {} }],
+        edges: [],
+      })
+    })
+    openManager({
+      mappings: [
+        {
+          id: 'm1',
+          action: { kind: 'param', blockId: 'b1', paramKey: 'feedback' },
+          match: { type: 'cc', channel: 0, number: 20 },
+        },
+      ],
+    })
+    render(<MidiManager />)
+    expect(screen.getByText('Parameter Mappings')).toBeInTheDocument()
+    // delay.feedback resolves to the schema label, not the raw key.
+    expect(screen.getByText('CC 20 (ch 1)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Clear Delay.*Feedback/ })).toBeInTheDocument()
+    act(() => useGraphStore.setState({ blocks: [], edges: [] }))
+  })
+
+  it('names orphaned knob mappings whose block is gone', () => {
+    act(() => useGraphStore.setState({ blocks: [], edges: [] }))
+    openManager({
+      mappings: [
+        {
+          id: 'm1',
+          action: { kind: 'param', blockId: 'gone', paramKey: 'mix' },
+          match: { type: 'cc', channel: 0, number: 20 },
+        },
+      ],
+    })
+    render(<MidiManager />)
+    expect(screen.getByText('Parameter Mappings')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Clear Removed block/ })).toBeInTheDocument()
   })
 })

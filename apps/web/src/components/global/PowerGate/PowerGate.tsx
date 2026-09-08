@@ -77,7 +77,7 @@ export function PowerGate({
       : 'TONE3000 - Not connected'
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
-      <div className={styles.panel}>
+      <div className={styles.heroWrapper}>
         <Wordmark variant="hero" version={pkg.version} />
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}

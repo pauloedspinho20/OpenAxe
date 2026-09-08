@@ -24,8 +24,8 @@
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
 // Four DSP families are wrapped anywhere in this codebase yet: NamAmp
-// (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
-// algorithms (all back the single kReverb kind - algorithm choice is a
+// (backs the 5 structurally-identical "gear" kinds), the 4 permissive reverb
+// algorithms (issue #372; all back the single kReverb kind - algorithm choice is a
 // per-block setting this layer owns, see SetReverbAlgorithm), the
 // hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay),
 // and the DSPark-based dynamics/EQ wrappers (kCompressor/
@@ -100,7 +100,7 @@ enum class ReverbAlgorithm {
 };
 
 // The user-facing reverb controls, as a UI presents them - deliberately not a
-// 1:1 view of any single algorithm's param table. Dragonfly's four algorithms
+// 1:1 view of any single algorithm's param table. The four algorithms
 // expose overlapping but differently-named and differently-shaped controls
 // (Hall's pre-delay is `delay`, Room's is `predelay`, Early Reflections has
 // none; damping is `high_cut` on Hall/Plate/ER but `in_high_cut` on Room),
@@ -517,8 +517,31 @@ class AudioEngine {
   MidiHandleResult HandleMidiMessage(const uint8_t* data, size_t size,
                                      int32_t sample_offset = 0);
 
+  // ── Session-state carryover for gapless switching (issue #367) ──────
+  // Copies session-level (non-preset) state from `other` into this engine:
+  // the master bus (level/mutes), the tuner mute, the automation-slot pool
+  // (bindings + remembered lane values), and the MIDI mappings + learn
+  // target. Block params, bypass, trims and assets are deliberately NOT
+  // copied - the staged preset defines its own rig; only the session around
+  // it carries over.
+  //
+  // A slot binding carries over only when this engine has a block with the
+  // same id AND the same kind (the deterministic builders front ends use
+  // assign the same ids to the same topology, so same-topology switches keep
+  // their host automation intact). Otherwise the slot keeps its remembered
+  // lane values but unbinds - the host sees its usual unbound placeholder,
+  // and rebinding later still carries the lane's position (mirroring
+  // Unbind's survive-the-mirror semantics).
+  //
+  // Safe to call while `other` is being processed: the master fields are
+  // atomics, MIDI is read under the shared lock, and Process() never touches
+  // the automation pool. Control-thread only on `this` (the staged engine is
+  // never processed before its commit).
+  void ImportSessionStateFrom(const AudioEngine& other);
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
+  float GetInputMeter(BlockId id) const;  // peak |sample| at the block's input (post input trim), 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
   float GetGainReduction(BlockId id) const;  // compressor GR in dB (≤0), 0 if unknown/not a compressor. Tier 1.
   float GetGateGain(BlockId id) const;       // gate openness 0..1 (1 = open), 0 if unknown/not a gate. Tier 1.
@@ -569,6 +592,11 @@ class AudioEngine {
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int start, int num_frames);
+  // Post-IR low-cut/high-cut for cab blocks (issue #373): re-derives the cut
+  // biquads when the params or sample rate changed, then runs the wet signal
+  // through the active stages. See the definition in engine.cpp.
+  static void ApplyCabCuts(BlockState& state, float* out_l, float* out_r, int num_frames,
+                           double sample_rate);
   // Copy the schema-derived smoothing policy + the live ramp state for `state`
   // from its current param mirror (issue #122). Called on the control thread
   // whenever the param surface changes - AddBlock, reverb algorithm switch,

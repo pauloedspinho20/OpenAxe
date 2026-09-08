@@ -17,26 +17,28 @@ option(OPENAXE_BUILD_TESTS "Build packages/core unit tests" OFF)
 # the source of truth; this file is generated from it by
 # `node scripts/gen-param-schema.mjs --target=effects` and defines
 # OPENAXE_BLOCK_SOURCES (the per-kind DSP sources, omitting anything marked
-# compiled:false) and OPENAXE_DRAGONFLY_ENABLED. A disabled kind's .cpp is
+# compiled:false) and OPENAXE_REVERB_ALGOS_ENABLED. A disabled kind's .cpp is
 # never listed here, so it is never handed to the compiler - the matching
 # `#if OPENAXE_BLOCK_*` guards in src/engine.cpp remove its call sites.
 include("${CMAKE_CURRENT_SOURCE_DIR}/generated/block_sources.cmake")
 
 # src/engine.cpp (issue #14's real-time extern "C" ABI) instantiates
-# openaxe::dsp::NamAmp, all 4 Dragonfly reverb wrappers, the 4
+# openaxe::dsp::NamAmp, all 4 permissive reverb algorithms (issue #372), the 4
 # DSPark-based dynamics/EQ wrappers (Compressor/Equalizer/NoiseGate/Tremolo)
 # and the DaisySP-based Chorus directly - it's the layer that makes those
 # already-wrapped families actually produce audio, so unlike the rest of this
-# file it does NOT degrade gracefully if NAM_CORE_DIR/DRAGONFLY_DIR/DSPARK_DIR/
+# file it does NOT degrade gracefully if NAM_CORE_DIR/DSPARK_DIR/
 # DAISYSP_DIR below turn out to be uninitialized; linking openaxe_core will
 # fail with undefined symbols in that case. Run `git submodule update --init
-# --recursive` first if that happens.
+# --recursive` first if that happens. The reverb algorithms themselves need
+# no submodule (hand-written, no third-party dependency).
 add_library(openaxe_core STATIC
   src/core.cpp
   src/graph_validation.cpp
   src/graph_rig.cpp
   src/engine.cpp
   src/api.cpp
+  src/rig_switch.cpp
   src/serialization/json.cpp
   src/serialization/rig_state.cpp
   src/serialization/sha256.cpp
@@ -87,89 +89,27 @@ else()
     "--recursive -- packages/core/third_party/nam-core")
 endif()
 
-# --- Dragonfly Reverb wrappers (issue #14) ---
-# Each reverb algorithm (hall/room/plate/early-reflections) lives in its own
-# self-contained DSP.{hpp,cpp} under plugins/<name>/, separate from the DPF
-# plugin/UI scaffolding - only that gets compiled, not DPF itself. Three
-# wrinkles this works around, all inside each wrapper's own .cpp (e.g.
-# src/dsp/dragonfly_hall_reverb.cpp) rather than here:
-#  1. The underlying freeverb3 library (common/freeverb/) uses dynamic
-#     exception specifications removed in C++17, so it (and DSP.cpp, and
-#     this wrapper's own .cpp, which all transitively include those
-#     headers) must compile at C++14 - each algorithm gets its own target
-#     with a CXX_STANDARD override, linked into the C++20 openaxe_core
-#     target (mixing standards across TUs in one binary is fine; only
-#     same-TU consistency matters).
-#  2. DSP.cpp includes two small DPF header-only utilities
-#     (DistrhoPlugin.hpp, extra/ScopedDenormalDisable.hpp) despite never
-#     using DPF's actual plugin machinery, so Dragonfly's own nested `dpf`
-#     submodule needs initializing too (see README.md).
-#  3. All four algorithms define an identically-named DragonflyReverbDSP
-#     class (and depend on identically-named freeverb3 classes), which
-#     would be a duplicate-symbol conflict the moment two of them were
-#     ever linked into the same final binary. Each wrapper .cpp compiles
-#     freeverb3 + its own DSP.cpp inside an anonymous namespace (see the
-#     wrapper source for why it must be *all* of freeverb3 together, not
-#     just DSP.cpp) - so each algorithm's target here is just that one
-#     self-contained wrapper source file, nothing else to list.
-set(DRAGONFLY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dragonfly-reverb")
-if(NOT OPENAXE_DRAGONFLY_ENABLED)
-  # effects.config.json has reverb compiled:false - skip all four algorithm
-  # targets. engine.cpp's OPENAXE_BLOCK_REVERB guards drop the call sites.
+# --- Permissive reverb algorithms (issue #372) ---
+# The four algorithmic reverbs (hall/room/plate/early-reflections) are
+# hand-written clean-room DSP with no third-party dependency - the former
+# Dragonfly Reverb (GPLv3) wrappers were replaced in #372, keeping the same
+# class names and 18/17/9/7-parameter surfaces so the engine, bridges,
+# presets and automation map see zero API change. They compile as plain
+# C++20 sources straight into openaxe_core (the spring tank already arrives
+# via OPENAXE_BLOCK_SOURCES); no C++14 override, no vendor targets, no DPF.
+if(NOT OPENAXE_REVERB_ALGOS_ENABLED)
+  # effects.config.json has reverb compiled:false - skip the four algorithm
+  # sources. engine.cpp's OPENAXE_BLOCK_REVERB guards drop the call sites.
   message(STATUS "openaxe_core: reverb disabled by effects.config.json - "
-                 "not building the Dragonfly algorithms")
-elseif(EXISTS "${DRAGONFLY_DIR}/plugins/dragonfly-hall-reverb/DSP.cpp"
-   AND EXISTS "${DRAGONFLY_DIR}/dpf/distrho/DistrhoPlugin.hpp")
-  set(OPENAXE_HAS_DRAGONFLY TRUE)
-
-  # (plugin subdirectory name, wrapper source/target base name) pairs.
-  set(DRAGONFLY_ALGOS
-    "dragonfly-hall-reverb:dragonfly_hall_reverb"
-    "dragonfly-room-reverb:dragonfly_room_reverb"
-    "dragonfly-plate-reverb:dragonfly_plate_reverb"
-    "dragonfly-early-reflections:dragonfly_early_reflections"
-  )
-  foreach(algo ${DRAGONFLY_ALGOS})
-    string(REPLACE ":" ";" algo_parts ${algo})
-    list(GET algo_parts 0 plugin_dir)
-    list(GET algo_parts 1 wrapper_name)
-
-    add_library(${wrapper_name}_vendor STATIC "src/dsp/${wrapper_name}.cpp")
-    target_include_directories(${wrapper_name}_vendor PRIVATE
-      "${DRAGONFLY_DIR}/common"
-      "${DRAGONFLY_DIR}/common/freeverb"
-      "${DRAGONFLY_DIR}/plugins/${plugin_dir}"
-      "${DRAGONFLY_DIR}/dpf/distrho"
-      "${DRAGONFLY_DIR}/dpf/distrho/extra"
-      "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    )
-    set_target_properties(${wrapper_name}_vendor PROPERTIES
-      CXX_STANDARD 14
-      CXX_STANDARD_REQUIRED ON
-    )
-    # freeverb3 picks its internal sample type (float/double/long double)
-    # via one of these macros - Dragonfly's own Makefile always builds
-    # with LIBFV3_FLOAT.
-    target_compile_definitions(${wrapper_name}_vendor PRIVATE LIBFV3_FLOAT)
-    # freeverb3's headers declare several inline/internal-linkage member
-    # functions (slot_::alloc, biquad_::setLPF_RBJ, revbase_::getSampleRate,
-    # ...) in the *_t.hpp shims that are only ever used via the template
-    # specializations defined in the matching .cpp - Clang's
-    # -Wundefined-internal fires on every one of them. They're a known
-    # artifact of freeverb3's header layout in third-party vendored code,
-    # have no runtime effect, and are out of our control, so silence the
-    # warning for these targets rather than patching the subtree.
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(${wrapper_name}_vendor PRIVATE -Wno-undefined-internal)
-    endif()
-    target_link_libraries(openaxe_core PRIVATE ${wrapper_name}_vendor)
-  endforeach()
+                 "not building the algorithmic reverbs")
 else()
-  message(WARNING
-    "packages/core/third_party/dragonfly-reverb's dpf submodule isn't "
-    "initialized - the Dragonfly Reverb wrappers will not build. Run: "
-    "git -C packages/core/third_party/dragonfly-reverb submodule update "
-    "--init --depth 1 -- dpf")
+  target_sources(openaxe_core PRIVATE
+    src/dsp/dragonfly_hall_reverb.cpp
+    src/dsp/dragonfly_room_reverb.cpp
+    src/dsp/dragonfly_plate_reverb.cpp
+    src/dsp/dragonfly_early_reflections.cpp
+  )
+  set(OPENAXE_HAS_REVERB_ALGOS TRUE)
 endif()
 
 # --- DSPark-based dynamics/EQ wrappers (issue #22) ---
@@ -276,7 +216,7 @@ if(EMSCRIPTEN)
     # referenced in apps/web against this list - run in CI, and standalone
     # with `--fix` to add any it finds missing (a wasm rebuild is still
     # required after - see scripts/build-core-wasm.sh).
-"SHELL:-s EXPORTED_FUNCTIONS=['_openaxe_graph_create','_openaxe_graph_destroy','_openaxe_add_block','_openaxe_remove_block','_openaxe_move_block','_openaxe_connect','_openaxe_disconnect','_openaxe_reset','_openaxe_process','_openaxe_set_param','_openaxe_block_param_count','_openaxe_block_param_info','_openaxe_load_nam_model_json','_openaxe_unload_nam_model','_openaxe_block_has_model','_openaxe_block_model_info','_openaxe_block_model_slim_breakpoints','_openaxe_load_ir','_openaxe_unload_ir','_openaxe_block_ir_length','_openaxe_set_reverb_algorithm','_openaxe_set_reverb_control','_openaxe_set_delay_model','_openaxe_set_bypass','_openaxe_set_block_input_trim','_openaxe_set_block_output_trim','_openaxe_set_master_level','_openaxe_set_master_muted','_openaxe_set_tuner_muted','_openaxe_get_meter','_openaxe_get_gain_reduction','_openaxe_get_gate_gain','_openaxe_detect_pitch','_openaxe_frequency_to_note','_openaxe_midi_mapping_count','_openaxe_midi_get_mapping','_openaxe_midi_add_mapping','_openaxe_midi_remove_mapping','_openaxe_midi_clear_mappings','_openaxe_midi_arm_learn','_openaxe_midi_cancel_learn','_openaxe_midi_is_learning','_openaxe_midi_get_learn_target','_openaxe_midi_parse_message','_openaxe_midi_is_trigger_edge','_openaxe_midi_message_matches','_openaxe_midi_handle_message','_openaxe_serialize_state','_openaxe_serialize_state_ex','_openaxe_load_state','_openaxe_state_missing_asset_count','_openaxe_state_missing_asset','_openaxe_state_unsupported_block_count','_openaxe_state_unsupported_block','_openaxe_block_kind_compiled','_openaxe_compute_fingerprint','_malloc','_free']"
+ "SHELL:-s EXPORTED_FUNCTIONS=['_openaxe_graph_create','_openaxe_graph_destroy','_openaxe_add_block','_openaxe_remove_block','_openaxe_move_block','_openaxe_connect','_openaxe_disconnect','_openaxe_reset','_openaxe_process','_openaxe_staged_graph_create','_openaxe_staged_graph_commit','_openaxe_switch_active','_openaxe_set_param','_openaxe_block_param_count','_openaxe_block_param_info','_openaxe_load_nam_model_json','_openaxe_unload_nam_model','_openaxe_block_has_model','_openaxe_block_model_info','_openaxe_block_model_slim_breakpoints','_openaxe_load_ir','_openaxe_unload_ir','_openaxe_block_ir_length','_openaxe_set_reverb_algorithm','_openaxe_set_reverb_control','_openaxe_set_delay_model','_openaxe_set_bypass','_openaxe_set_block_input_trim','_openaxe_set_block_output_trim','_openaxe_set_master_level','_openaxe_set_master_muted','_openaxe_set_tuner_muted','_openaxe_get_meter','_openaxe_get_input_meter','_openaxe_get_gain_reduction','_openaxe_get_gate_gain','_openaxe_detect_pitch','_openaxe_frequency_to_note','_openaxe_midi_mapping_count','_openaxe_midi_get_mapping','_openaxe_midi_add_mapping','_openaxe_midi_remove_mapping','_openaxe_midi_clear_mappings','_openaxe_midi_arm_learn','_openaxe_midi_cancel_learn','_openaxe_midi_is_learning','_openaxe_midi_get_learn_target','_openaxe_midi_parse_message','_openaxe_midi_is_trigger_edge','_openaxe_midi_message_matches','_openaxe_midi_handle_message','_openaxe_serialize_state','_openaxe_serialize_state_ex','_openaxe_load_state','_openaxe_state_missing_asset_count','_openaxe_state_missing_asset','_openaxe_state_unsupported_block_count','_openaxe_state_unsupported_block','_openaxe_block_kind_compiled','_openaxe_compute_fingerprint','_malloc','_free']"
     # HEAPU8/HEAPF64/HEAP32 are for the amp worklet: it writes a model's JSON
     # into WASM memory as UTF-8 bytes and reads openaxe_block_model_info's
     # double/int32 out-params back out.

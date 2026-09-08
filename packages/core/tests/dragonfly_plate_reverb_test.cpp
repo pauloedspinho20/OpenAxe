@@ -1,7 +1,8 @@
-// Real end-to-end test: constructs the actual Dragonfly Plate Reverb DSP,
-// sweeps every exposed parameter, and processes a real stereo impulse
-// through it, checking for a genuine (non-silent, finite) reverb tail. Only
-// built if OPENAXE_HAS_DRAGONFLY (see tests/CMakeLists.txt).
+// Real end-to-end test: constructs the actual permissive plate reverb DSP
+// (issue #372's clean-room replacement for Dragonfly), sweeps every exposed
+// parameter, and processes a real stereo impulse through it, checking for a
+// genuine (non-silent, finite) reverb tail. Only built if
+// OPENAXE_HAS_REVERB_ALGOS (see tests/CMakeLists.txt).
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
 
 #include <cmath>

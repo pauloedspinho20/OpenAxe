@@ -9,8 +9,9 @@ import {
 import type { GraphRigControls } from './bindGraphRig'
 import { RigWorkletNode } from './RigWorkletNode'
 import { RigBlock } from './RigBlock'
+import { StagedRig } from './StagedRig'
 import { NativeAnalyser, peakSineSource } from '../native/NativeAnalyser'
-import type { PresetRig } from '../presets/types'
+import type { PresetRig, StageCapableRig, StagedPresetRig } from '../presets/types'
 
 export { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, type Jack } from './gridConfig'
 
@@ -42,17 +43,20 @@ export type ConnectResult = { ok: true; id: string } | { ok: false; reason: stri
  * between DSP nodes, no mixer/master GainNodes, no wet/dry staging.
  * The only Web Audio the rig owns is the single worklet node feeding the
  * graph's IN rail from the mic and carrying the graph's OUT rail to the
- * destination. Per-block meters come from `openaxe_get_meter` (polled here)
+ * destination. Per-block meters come from `openaxe_get_meter` (output) and
+ * `openaxe_get_input_meter` (post-trim input), polled here and each
  * presented through a Web-Audio-free `NativeAnalyser` facade fed a sine scaled
  * to each block's real peak - identical to the desktop path.
  */
-export class GraphRig implements GraphRigControls, PresetRig {
+export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
   private readonly worklet: RigWorkletNode
   private readonly context: AudioContext
   private readonly blocks = new Map<string, { block: RigBlock; row: number; col: number }>()
   private readonly edges = new Map<string, Edge>()
   private readonly analysers = new Map<string, NativeAnalyser>()
+  private readonly inputAnalysers = new Map<string, NativeAnalyser>()
   private readonly peaks = new Map<string, number>()
+  private readonly inputPeaks = new Map<string, number>()
   private readonly gainReductions = new Map<string, number>()
   private readonly gateGains = new Map<string, number>()
   private inputSource: AudioNode | null = null
@@ -94,6 +98,12 @@ export class GraphRig implements GraphRigControls, PresetRig {
           for (const [id, peak] of Object.entries(meters)) this.peaks.set(id, peak)
         })
         .catch(() => {})
+      void this.worklet
+        .inputMeters()
+        .then((meters) => {
+          for (const [id, peak] of Object.entries(meters)) this.inputPeaks.set(id, peak)
+        })
+        .catch(() => {})
       const w = this.worklet as unknown as {
         gainReductions?: () => Promise<Record<string, number>>
         gateGains?: () => Promise<Record<string, number>>
@@ -133,7 +143,9 @@ export class GraphRig implements GraphRigControls, PresetRig {
       if (edge.from.blockId === id || edge.to.blockId === id) this.edges.delete(edgeId)
     }
     this.analysers.delete(id)
+    this.inputAnalysers.delete(id)
     this.peaks.delete(id)
+    this.inputPeaks.delete(id)
     this.gainReductions.delete(id)
     this.gateGains.delete(id)
     this.blocks.delete(id)
@@ -160,6 +172,11 @@ export class GraphRig implements GraphRigControls, PresetRig {
   /** Drive a block's meter facade to a peak level (0..1). Safe to call often. */
   updateMeter(id: string, peak: number): void {
     this.peaks.set(id, peak)
+  }
+
+  /** Drive a block's input-meter facade to a peak level (0..1). Safe to call often. */
+  updateInputMeter(id: string, peak: number): void {
+    this.inputPeaks.set(id, peak)
   }
 
   /** Current gain reduction in dB (≤0) for a block, 0 if unknown/not a dynamics block. */
@@ -200,6 +217,27 @@ export class GraphRig implements GraphRigControls, PresetRig {
         read: peakSineSource(256, this.context.sampleRate, () => this.peaks.get(id) ?? 0),
       })
       this.analysers.set(id, cached)
+    }
+    return cached as unknown as AnalyserNode
+  }
+
+  /**
+   * A live meter tap for this block's input (post input trim) - the IN half
+   * of the inspector's IN/OUT pair. Same NativeAnalyser facade as
+   * getBlockAnalyser, fed by the core's input peak
+   * (`openaxe_get_input_meter`). Null for an unknown block.
+   */
+  getBlockInputAnalyser(id: string): AnalyserNode | null {
+    const entry = this.blocks.get(id)
+    if (!entry) return null
+    let cached = this.inputAnalysers.get(id)
+    if (!cached) {
+      cached = new NativeAnalyser({
+        fftSize: 256,
+        sampleRate: this.context.sampleRate,
+        read: peakSineSource(256, this.context.sampleRate, () => this.inputPeaks.get(id) ?? 0),
+      })
+      this.inputAnalysers.set(id, cached)
     }
     return cached as unknown as AnalyserNode
   }
@@ -296,6 +334,52 @@ export class GraphRig implements GraphRigControls, PresetRig {
     this.worklet.setTunerMuted(muted)
   }
 
+  // ── Gapless staged switching (issue #367) ───────────────────────────
+
+  /**
+   * Open a staged graph for the next rig. Built with StagedRig (same block
+   * ids, same preset data), made live by StagedRig.commit's crossfade, then
+   * handed back here via adoptStage. Throws when the WASM predates staged
+   * switching - the caller falls back to teardown-and-rebuild.
+   */
+  async beginStage(): Promise<StagedPresetRig> {
+    return StagedRig.begin(this.worklet)
+  }
+
+  /**
+   * Take over a successfully committed staged rig: the live core graph IS
+   * the staged engine now, so the bookkeeping swaps wholesale. Live facades
+   * are rebuilt around the same js ids (the staged ones still point at the
+   * consumed staged graph) with their already-live state carried over
+   * silently; meter/analyser caches for vanished ids are pruned.
+   */
+  adoptStage(staged: StagedPresetRig): void {
+    const { blocks, edges } = staged.takeEntries()
+    const seen = new Set<string>()
+    for (const [id, entry] of blocks) {
+      seen.add(id)
+      const snapshot = entry.block.snapshotBlockState?.()
+      const live = new RigBlock(this.worklet, id, entry.kind)
+      if (snapshot) live.restoreBlockState?.(snapshot)
+      this.blocks.set(id, { block: live, row: entry.row, col: entry.col })
+    }
+    for (const id of [...this.blocks.keys()]) {
+      if (!seen.has(id)) {
+        this.blocks.delete(id)
+        this.analysers.delete(id)
+        this.inputAnalysers.delete(id)
+        this.peaks.delete(id)
+        this.inputPeaks.delete(id)
+        this.gainReductions.delete(id)
+        this.gateGains.delete(id)
+      }
+    }
+    this.edges.clear()
+    for (const [id, edge] of edges) {
+      this.edges.set(id, { from: edge.from, to: edge.to })
+    }
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
@@ -305,7 +389,9 @@ export class GraphRig implements GraphRigControls, PresetRig {
     this.edges.clear()
     this.blocks.clear()
     this.analysers.clear()
+    this.inputAnalysers.clear()
     this.peaks.clear()
+    this.inputPeaks.clear()
     this.gainReductions.clear()
     this.gateGains.clear()
     await this.worklet.dispose()

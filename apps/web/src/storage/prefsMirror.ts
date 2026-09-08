@@ -68,8 +68,16 @@ let installed = false
  * The pristine Storage methods, captured before the first patch. Kept so the
  * patch can be undone exactly - re-patching an already-patched prototype
  * would nest the wrappers and mirror each write once per install.
+ *
+ * The prototype is taken from the actual `localStorage` object rather than
+ * the global `Storage` binding: the two are not the same in every
+ * environment (newer Node test shims stand in a non-Storage object that
+ * vitest's jsdom never replaces), and patching the binding silently misses
+ * those. In a real webview they coincide, so production behaviour is
+ * unchanged.
  */
 let originals: {
+  proto: Storage
   setItem: Storage['setItem']
   removeItem: Storage['removeItem']
   clear: Storage['clear']
@@ -78,9 +86,9 @@ let originals: {
 /** Test-only: undo the patch and forget it was installed. */
 export function __resetPrefsMirrorForTests(): void {
   if (originals) {
-    Storage.prototype.setItem = originals.setItem
-    Storage.prototype.removeItem = originals.removeItem
-    Storage.prototype.clear = originals.clear
+    originals.proto.setItem = originals.setItem
+    originals.proto.removeItem = originals.removeItem
+    originals.proto.clear = originals.clear
     originals = null
   }
   installed = false
@@ -127,8 +135,9 @@ export async function installPrefsMirror(): Promise<void> {
   // 2. Mirror writes. Patching the prototype rather than replacing
   //    window.localStorage keeps every existing call site working untouched;
   //    the `this` check keeps sessionStorage out of it.
-  const proto = Storage.prototype
+  const proto: Storage = Object.getPrototypeOf(localStorage)
   originals = {
+    proto,
     setItem: proto.setItem,
     removeItem: proto.removeItem,
     clear: proto.clear,

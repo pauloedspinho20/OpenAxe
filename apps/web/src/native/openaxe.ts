@@ -164,39 +164,88 @@ export interface OpenAxeBridge {
   start(): Promise<OpenAxeOk>
   stop(): Promise<OpenAxeOk>
 
-  addBlock(args: { kind: string; row: number; col: number; id?: string }): Promise<OpenAxeIdResult>
-  removeBlock(args: { blockId: string }): Promise<OpenAxeOk>
-  moveBlock(args: { blockId: string; row: number; col: number }): Promise<OpenAxeOk>
+  addBlock(args: {
+    kind: string
+    row: number
+    col: number
+    id?: string
+    stage?: boolean
+  }): Promise<OpenAxeIdResult>
+  removeBlock(args: { blockId: string; stage?: boolean }): Promise<OpenAxeOk>
+  moveBlock(args: {
+    blockId: string
+    row: number
+    col: number
+    stage?: boolean
+  }): Promise<OpenAxeOk>
   connect(args: {
     fromId: number | string
     fromPort?: number
     toId: number | string
     toPort?: number
     id?: string
+    stage?: boolean
   }): Promise<OpenAxeIdResult>
-  disconnect(args: { edgeId: string }): Promise<OpenAxeOk>
-  setParam(args: { blockId: string; key: number | string; value: number }): Promise<OpenAxeOk>
-  getParam(args: { blockId: string; key: number | string }): Promise<OpenAxeGetParamResult>
-  blockInfo(args: { blockId: string }): Promise<OpenAxeBlockInfo>
+  disconnect(args: { edgeId: string; stage?: boolean }): Promise<OpenAxeOk>
+  setParam(args: {
+    blockId: string
+    key: number | string
+    value: number
+    stage?: boolean
+  }): Promise<OpenAxeOk>
+  getParam(args: {
+    blockId: string
+    key: number | string
+    stage?: boolean
+  }): Promise<OpenAxeGetParamResult>
+  blockInfo(args: { blockId: string; stage?: boolean }): Promise<OpenAxeBlockInfo>
   listBlocks(): Promise<OpenAxeBlockRecord[]>
   listEdges(): Promise<OpenAxeEdgeRecord[]>
 
-  loadModel(args: { blockId: string }): Promise<OpenAxeLoadModelResult>
-  loadModelJson(args: { blockId: string; json: string }): Promise<OpenAxeLoadModelResult>
-  unloadModel(args: { blockId: string }): Promise<OpenAxeOk>
-  setReverbAlgorithm(args: { blockId: string; algorithm: string }): Promise<OpenAxeOk>
-  setDelayModel(args: { blockId: string; model: string }): Promise<OpenAxeOk>
+  loadModel(args: { blockId: string; stage?: boolean }): Promise<OpenAxeLoadModelResult>
+  loadModelJson(args: {
+    blockId: string
+    json: string
+    stage?: boolean
+  }): Promise<OpenAxeLoadModelResult>
+  unloadModel(args: { blockId: string; stage?: boolean }): Promise<OpenAxeOk>
+  setReverbAlgorithm(args: {
+    blockId: string
+    algorithm: string
+    stage?: boolean
+  }): Promise<OpenAxeOk>
+  setDelayModel(args: { blockId: string; model: string; stage?: boolean }): Promise<OpenAxeOk>
 
-  setBypass(args: { blockId: string; bypassed: boolean }): Promise<OpenAxeOk>
+  setBypass(args: { blockId: string; bypassed: boolean; stage?: boolean }): Promise<OpenAxeOk>
   /** Per-block Input/Output trim (1 = unity). Omitted keys are left alone.
    * Not the same thing as the Amp family's `input_level`/`output_level`
    * params, which carry the loaded NAM model's dBu calibration. */
-  setBlockTrim(args: { blockId: string; input?: number; output?: number }): Promise<OpenAxeOk>
+  setBlockTrim(args: {
+    blockId: string
+    input?: number
+    output?: number
+    stage?: boolean
+  }): Promise<OpenAxeOk>
   /** Install a cab IR from the bytes of a WAV file, base64-encoded (binary can't
    * cross the webview bridge). The core decodes and resamples it and reports how
    * many samples it installed. */
-  loadIrWav(args: { blockId: string; wavBase64: string }): Promise<OpenAxeOk & { frames?: number }>
-  unloadIr(args: { blockId: string }): Promise<OpenAxeOk>
+  loadIrWav(args: {
+    blockId: string
+    wavBase64: string
+    stage?: boolean
+  }): Promise<OpenAxeOk & { frames?: number }>
+  unloadIr(args: { blockId: string; stage?: boolean }): Promise<OpenAxeOk>
+  /**
+   * Gapless staged switching (issue #367). stageBegin opens a second core
+   * graph (built with the same calls plus `stage: true`); stageCommit
+   * crossfades it live (returns `busy: true` while a previous switch is still
+   * draining - retry); stageDiscard abandons it; switchActive reports a fade
+   * or tail drain in flight.
+   */
+  stageBegin(): Promise<OpenAxeOk>
+  stageCommit(args: { fadeMs?: number; drainMs?: number }): Promise<OpenAxeOk & { busy?: boolean }>
+  stageDiscard(): Promise<OpenAxeOk>
+  switchActive(): Promise<OpenAxeOk & { active?: boolean }>
   /** Input TRIM applied before the graph and the monitor taps, 1 = unity -
    * the native counterpart of the web engine's input GainNode. */
   setInputGain(args: { gain: number }): Promise<OpenAxeOk>
@@ -208,7 +257,7 @@ export interface OpenAxeBridge {
   playDI(args: { loop?: boolean }): Promise<OpenAxeOk>
   stopDI(): Promise<OpenAxeOk>
 
-  meters(): Promise<Array<{ id: string; value: number }>>
+  meters(): Promise<Array<{ id: string; value: number; input?: number }>>
   cpuLoad(): Promise<number>
   getTap(args: { side: 'in' | 'out'; frames?: number }): Promise<OpenAxeTap>
   /** Reports (and clears) a pending RtAudio stream-level error - e.g. a
@@ -305,13 +354,13 @@ class NativeBridge implements OpenAxeBridge {
   stop() {
     return this.call<OpenAxeOk>('stop')
   }
-  addBlock(args: { kind: string; row: number; col: number; id?: string }) {
+  addBlock(args: { kind: string; row: number; col: number; id?: string; stage?: boolean }) {
     return this.call<OpenAxeIdResult>('addBlock', args)
   }
-  removeBlock(args: { blockId: string }) {
+  removeBlock(args: { blockId: string; stage?: boolean }) {
     return this.call<OpenAxeOk>('removeBlock', args)
   }
-  moveBlock(args: { blockId: string; row: number; col: number }) {
+  moveBlock(args: { blockId: string; row: number; col: number; stage?: boolean }) {
     return this.call<OpenAxeOk>('moveBlock', args)
   }
   connect(args: {
@@ -320,19 +369,20 @@ class NativeBridge implements OpenAxeBridge {
     toId: number | string
     toPort?: number
     id?: string
+    stage?: boolean
   }) {
     return this.call<OpenAxeIdResult>('connect', args)
   }
-  disconnect(args: { edgeId: string }) {
+  disconnect(args: { edgeId: string; stage?: boolean }) {
     return this.call<OpenAxeOk>('disconnect', args)
   }
-  setParam(args: { blockId: string; key: number | string; value: number }) {
+  setParam(args: { blockId: string; key: number | string; value: number; stage?: boolean }) {
     return this.call<OpenAxeOk>('setParam', args)
   }
-  getParam(args: { blockId: string; key: number | string }) {
+  getParam(args: { blockId: string; key: number | string; stage?: boolean }) {
     return this.call<OpenAxeGetParamResult>('getParam', args)
   }
-  blockInfo(args: { blockId: string }) {
+  blockInfo(args: { blockId: string; stage?: boolean }) {
     return this.call<OpenAxeBlockInfo>('blockInfo', args)
   }
   listBlocks() {
@@ -341,32 +391,44 @@ class NativeBridge implements OpenAxeBridge {
   listEdges() {
     return this.call<OpenAxeEdgeRecord[]>('listEdges')
   }
-  loadModel(args: { blockId: string }) {
+  loadModel(args: { blockId: string; stage?: boolean }) {
     return this.call<OpenAxeLoadModelResult>('loadModel', args)
   }
-  loadModelJson(args: { blockId: string; json: string }) {
+  loadModelJson(args: { blockId: string; json: string; stage?: boolean }) {
     return this.call<OpenAxeLoadModelResult>('loadModelJson', args)
   }
-  unloadModel(args: { blockId: string }) {
+  unloadModel(args: { blockId: string; stage?: boolean }) {
     return this.call<OpenAxeOk>('unloadModel', args)
   }
-  setReverbAlgorithm(args: { blockId: string; algorithm: string }) {
+  setReverbAlgorithm(args: { blockId: string; algorithm: string; stage?: boolean }) {
     return this.call<OpenAxeOk>('setReverbAlgorithm', args)
   }
-  setDelayModel(args: { blockId: string; model: string }) {
+  setDelayModel(args: { blockId: string; model: string; stage?: boolean }) {
     return this.call<OpenAxeOk>('setDelayModel', args)
   }
-  setBypass(args: { blockId: string; bypassed: boolean }) {
+  setBypass(args: { blockId: string; bypassed: boolean; stage?: boolean }) {
     return this.call<OpenAxeOk>('setBypass', args)
   }
-  setBlockTrim(args: { blockId: string; input?: number; output?: number }) {
+  setBlockTrim(args: { blockId: string; input?: number; output?: number; stage?: boolean }) {
     return this.call<OpenAxeOk>('setBlockTrim', args)
   }
-  loadIrWav(args: { blockId: string; wavBase64: string }) {
+  loadIrWav(args: { blockId: string; wavBase64: string; stage?: boolean }) {
     return this.call<OpenAxeOk & { frames?: number }>('loadIrWav', args)
   }
-  unloadIr(args: { blockId: string }) {
+  unloadIr(args: { blockId: string; stage?: boolean }) {
     return this.call<OpenAxeOk>('unloadIr', args)
+  }
+  stageBegin() {
+    return this.call<OpenAxeOk>('stageBegin')
+  }
+  stageCommit(args: { fadeMs?: number; drainMs?: number }) {
+    return this.call<OpenAxeOk & { busy?: boolean }>('stageCommit', args)
+  }
+  stageDiscard() {
+    return this.call<OpenAxeOk>('stageDiscard')
+  }
+  switchActive() {
+    return this.call<OpenAxeOk & { active?: boolean }>('switchActive')
   }
   setInputGain(args: { gain: number }) {
     return this.call<OpenAxeOk>('setInputGain', args)
@@ -458,6 +520,29 @@ class NativeBridge implements OpenAxeBridge {
   assetClear() {
     return this.call<OpenAxeOk>('assetClear')
   }
+}
+
+/**
+ * A view of an OpenAxeBridge that targets the staged graph under
+ * construction (issue #367): every call carrying an args object gets
+ * `stage: true` merged in, so the same NativeBlock code that drives the live
+ * graph builds the staged one. Argless calls (meters, stage lifecycle, ...)
+ * pass through untouched.
+ */
+export function stagedBridgeView(bridge: OpenAxeBridge): OpenAxeBridge {
+  return new Proxy(bridge, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver) as unknown
+      if (typeof value !== 'function') return value
+      return (args?: Record<string, unknown>) => {
+        const fn = value as (a?: Record<string, unknown>) => unknown
+        if (args !== null && typeof args === 'object') {
+          return fn.call(target, { ...args, stage: true })
+        }
+        return fn.call(target, args)
+      }
+    },
+  }) as OpenAxeBridge
 }
 
 /**

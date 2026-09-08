@@ -22,7 +22,10 @@ namespace openaxe::dsp {
 //     time depends on frequency, which is what smears a transient into the
 //     characteristic metallic "boing" rather than a clean echo).
 // Each spring's input is scaled by sqrt(1 - feedback^2), so lengthening the
-// decay does not also raise the level.
+// decay does not also raise the level. Since issue #372 each spring carries
+// *two* cascaded detuned allpass stages (tension rises with dwell, so long
+// tanks chirp harder) and the drive stage is asymmetric for the transducer
+// "crunch" - the premium upgrade over the original single-allpass tank.
 //
 // The two channels run separate tanks - the right one's springs stretched by
 // ~3% and its modulation LFO a quarter cycle behind - and tap them with

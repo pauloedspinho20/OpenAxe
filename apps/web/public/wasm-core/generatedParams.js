@@ -38,13 +38,15 @@ export const EQ_PARAMS = Object.freeze({
   band3_frequency: 9,
   band3_gain: 10,
   band3_q: 11,
+  low_cut: 12,
+  high_cut: 13,
 })
 
 export const CHORUS_PARAMS = Object.freeze({ rate: 0, depth: 1, delay: 2, feedback: 3, stereo: 4 })
 
 export const FLANGER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, delay: 3 })
 
-export const PHASER_PARAMS = Object.freeze({ rate: 0, depth: 1, feedback: 2, stages: 3 })
+export const PHASER_PARAMS = Object.freeze({ rate: 0, script: 1 })
 
 export const TREMOLO_PARAMS = Object.freeze({ rate: 0, depth: 1, shape: 2, stereo: 3, mode: 4 })
 
@@ -177,7 +179,7 @@ export const REVERB_PARAMS = Object.freeze({
   }),
 })
 
-export const CAB_PARAMS = Object.freeze({ ir_mix: 0 })
+export const CAB_PARAMS = Object.freeze({ ir_mix: 0, low_cut: 1, high_cut: 2 })
 
 export const MIXER_PARAMS = Object.freeze({
   in0_level: 0,

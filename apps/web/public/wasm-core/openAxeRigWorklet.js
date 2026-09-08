@@ -98,6 +98,14 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
     this.blockByJs = new Map()
     this.kindByJs = new Map()
     this.edgeByJs = new Map()
+    // Staged graph under construction (issue #367): built by stageBegin into
+    // a second core graph, made live by stageCommit's crossfade. Parallel id
+    // maps so the staged build never touches the live rig's bookkeeping; on
+    // a successful commit the live maps are replaced by these wholesale.
+    this.staged = null
+    this.stagedBlockByJs = new Map()
+    this.stagedKindByJs = new Map()
+    this.stagedEdgeByJs = new Map()
     // Last reported peak per js block id, read by the meter poll.
     this.meters = new Map()
     // The graph's block count is bounded by the store, but we keep it under a
@@ -144,22 +152,51 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
   }
 
   /** Map a store block id or rail string to a core int id, or null. */
-  toCoreBlock(js) {
+  toCoreBlock(js, blocks) {
     if (js === 'IN') return IN_RAIL
     if (js === 'OUT') return OUT_RAIL
-    const id = this.blockByJs.get(js)
+    const id = (blocks ?? this.blockByJs).get(js)
     return id === undefined ? null : id
   }
 
+  /**
+   * Resolve which graph a message targets: the live graph, or the staged
+   * graph under construction when `stage: true` (issue #367). Returns null
+   * (filling reply.error) when a staged target is requested but no staged
+   * graph exists - the caller must stageBegin first.
+   */
+  graphContext(message, reply) {
+    if (!message.stage) {
+      return {
+        graph: this.graph,
+        blocks: this.blockByJs,
+        kinds: this.kindByJs,
+        edges: this.edgeByJs,
+      }
+    }
+    if (this.staged === null || this.disposed) {
+      reply.error = 'no staged graph - call stageBegin first'
+      return null
+    }
+    return {
+      graph: this.staged,
+      blocks: this.stagedBlockByJs,
+      kinds: this.stagedKindByJs,
+      edges: this.stagedEdgeByJs,
+    }
+  }
+
   /** Resolve a param symbol to its core index for a block, or -1 if unknown. */
-  paramIndex(module, coreBlock, symbol) {
+  paramIndex(module, graph, coreBlock, symbol) {
     // A handful of the UI's param keys are camelCase where the core's symbol is
-    // snake_case (issue #41) - the amp's slim-size and the cab's IR mix kept
-    // their camelCase keys, so translate here to match the desktop bridge's
-    // CoreSymbolAliasFor.
+    // snake_case (issue #41) - the amp's slim-size and the cab's IR mix and
+    // post-IR cuts kept their camelCase keys, so translate here to match the
+    // desktop bridge's CoreSymbolAliasFor.
     if (symbol === 'slimSize') symbol = 'slim_size'
     else if (symbol === 'irMix') symbol = 'ir_mix'
-    const count = module._openaxe_block_param_count(this.graph, coreBlock)
+    else if (symbol === 'lowCut') symbol = 'low_cut'
+    else if (symbol === 'highCut') symbol = 'high_cut'
+    const count = module._openaxe_block_param_count(graph, coreBlock)
     for (let i = 0; i < count; i++) {
       const namePtr = module._malloc(4)
       const symbolPtr = module._malloc(4)
@@ -169,7 +206,7 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
       let found = false
       try {
         const ok = module._openaxe_block_param_info(
-          this.graph,
+          graph,
           coreBlock,
           i,
           namePtr,
@@ -216,54 +253,62 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
     try {
       switch (message.type) {
         case 'addBlock': {
-          if (this.blockByJs.has(message.block)) {
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          if (ctx.blocks.has(message.block)) {
             reply.ok = true
             break
           }
-          if (this.blockByJs.size >= this.maxBlocks) {
+          if (ctx.blocks.size >= this.maxBlocks) {
             reply.error = 'block limit reached'
             break
           }
           const coreBlock = module._openaxe_add_block(
-            this.graph,
+            ctx.graph,
             message.kind,
             message.row,
             message.col,
           )
-          this.blockByJs.set(message.block, coreBlock)
-          this.kindByJs.set(message.block, message.kind)
-          this.meters.set(message.block, 0)
+          ctx.blocks.set(message.block, coreBlock)
+          ctx.kinds.set(message.block, message.kind)
+          if (!message.stage) this.meters.set(message.block, 0)
           reply.ok = true
           break
         }
         case 'removeBlock': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._openaxe_remove_block(this.graph, coreBlock)
+            module._openaxe_remove_block(ctx.graph, coreBlock)
           }
-          this.blockByJs.delete(message.block)
-          this.kindByJs.delete(message.block)
-          this.meters.delete(message.block)
+          ctx.blocks.delete(message.block)
+          ctx.kinds.delete(message.block)
+          if (!message.stage) this.meters.delete(message.block)
           reply.ok = true
           break
         }
         case 'moveBlock': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._openaxe_move_block(this.graph, coreBlock, message.row, message.col)
+            module._openaxe_move_block(ctx.graph, coreBlock, message.row, message.col)
           }
           reply.ok = true
           break
         }
         case 'connect': {
-          const from = this.toCoreBlock(message.fromId)
-          const to = this.toCoreBlock(message.toId)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const from = this.toCoreBlock(message.fromId, ctx.blocks)
+          const to = this.toCoreBlock(message.toId, ctx.blocks)
           if (from === null || to === null) {
             reply.error = 'unknown block'
             break
           }
           const edgeId = module._openaxe_connect(
-            this.graph,
+            ctx.graph,
             from,
             message.fromPort,
             to,
@@ -273,72 +318,74 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
             reply.error = 'connection rejected by the core'
             break
           }
-          this.edgeByJs.set(message.edgeId, edgeId)
+          ctx.edges.set(message.edgeId, edgeId)
           reply.ok = true
           break
         }
         case 'disconnect': {
-          const coreEdge = this.edgeByJs.get(message.edgeId)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreEdge = ctx.edges.get(message.edgeId)
           if (coreEdge !== undefined) {
-            module._openaxe_disconnect(this.graph, coreEdge)
-            this.edgeByJs.delete(message.edgeId)
+            module._openaxe_disconnect(ctx.graph, coreEdge)
+            ctx.edges.delete(message.edgeId)
           }
           reply.ok = true
           break
         }
         case 'setParam': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
             // Reverb blocks: the UI's control names (roomSize/damping/width/
             // predelay/spin/wander/earlySend/dryLevel) are per-algorithm
             // abstractions, not core symbols - route them through the core's
             // ReverbControl mapping, exactly as the desktop bridge does.
             const reverbControl = REVERB_CONTROL[message.key]
-            if (
-              reverbControl !== undefined &&
-              this.kindByJs.get(message.block) === this.reverbKind
-            ) {
-              module._openaxe_set_reverb_control(
-                this.graph,
-                coreBlock,
-                reverbControl,
-                message.value,
-              )
+            if (reverbControl !== undefined && ctx.kinds.get(message.block) === this.reverbKind) {
+              module._openaxe_set_reverb_control(ctx.graph, coreBlock, reverbControl, message.value)
             } else {
-              const index = this.paramIndex(module, coreBlock, message.key)
-              if (index >= 0) module._openaxe_set_param(this.graph, coreBlock, index, message.value)
+              const index = this.paramIndex(module, ctx.graph, coreBlock, message.key)
+              if (index >= 0) module._openaxe_set_param(ctx.graph, coreBlock, index, message.value)
             }
           }
           if (reply) reply.ok = true
           break
         }
         case 'setReverbAlgorithm': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
             const algo = REVERB_ALGORITHM[message.algorithm]
-            if (algo !== undefined && this.kindByJs.get(message.block) === this.reverbKind) {
-              module._openaxe_set_reverb_algorithm(this.graph, coreBlock, algo)
+            if (algo !== undefined && ctx.kinds.get(message.block) === this.reverbKind) {
+              module._openaxe_set_reverb_algorithm(ctx.graph, coreBlock, algo)
             }
           }
           if (reply) reply.ok = true
           break
         }
         case 'setBypass': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._openaxe_set_bypass(this.graph, coreBlock, message.bypassed ? 1 : 0)
+            module._openaxe_set_bypass(ctx.graph, coreBlock, message.bypassed ? 1 : 0)
           }
           if (reply) reply.ok = true
           break
         }
         case 'setTrim': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
             if (typeof message.input === 'number') {
-              module._openaxe_set_block_input_trim(this.graph, coreBlock, message.input)
+              module._openaxe_set_block_input_trim(ctx.graph, coreBlock, message.input)
             }
             if (typeof message.output === 'number') {
-              module._openaxe_set_block_output_trim(this.graph, coreBlock, message.output)
+              module._openaxe_set_block_output_trim(ctx.graph, coreBlock, message.output)
             }
           }
           if (reply) reply.ok = true
@@ -357,44 +404,52 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           if (reply) reply.ok = true
           break
         case 'loadModel': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock === null || coreBlock < 0) {
             reply.error = 'unknown block'
             break
           }
           const bytes = new Uint8Array(message.bytes, 0, message.byteLength)
-          const ok = this.loadModelJson(module, coreBlock, bytes)
+          const ok = this.loadModelJson(module, ctx.graph, coreBlock, bytes)
           if (!ok) {
             reply.error = 'the core rejected this model file'
             break
           }
           if (typeof message.slimSize === 'number') {
-            const slim = this.paramIndex(module, coreBlock, 'slim_size')
-            if (slim >= 0) module._openaxe_set_param(this.graph, coreBlock, slim, message.slimSize)
+            const slim = this.paramIndex(module, ctx.graph, coreBlock, 'slim_size')
+            if (slim >= 0) module._openaxe_set_param(ctx.graph, coreBlock, slim, message.slimSize)
           }
-          reply.info = this.readModelInfo(module, coreBlock)
+          reply.info = this.readModelInfo(module, ctx.graph, coreBlock)
           reply.ok = true
           break
         }
         case 'unloadModel': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._openaxe_unload_nam_model(this.graph, coreBlock)
+            module._openaxe_unload_nam_model(ctx.graph, coreBlock)
           }
           reply.ok = true
           break
         }
         case 'setSlimSize': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
-            const slim = this.paramIndex(module, coreBlock, 'slim_size')
-            if (slim >= 0) module._openaxe_set_param(this.graph, coreBlock, slim, message.value)
+            const slim = this.paramIndex(module, ctx.graph, coreBlock, 'slim_size')
+            if (slim >= 0) module._openaxe_set_param(ctx.graph, coreBlock, slim, message.value)
           }
           reply.ok = true
           break
         }
         case 'loadIr': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock === null || coreBlock < 0) {
             reply.error = 'unknown block'
             break
@@ -406,13 +461,13 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           // disposable immediately.
           const samples = message.samples
           if (!samples || samples.length === 0) {
-            module._openaxe_load_ir(this.graph, coreBlock, 0, 0)
+            module._openaxe_load_ir(ctx.graph, coreBlock, 0, 0)
             break
           }
           const ptr = module._malloc(samples.length * BYTES_PER_FLOAT)
           try {
             module.HEAPF32.set(samples, ptr >> 2)
-            module._openaxe_load_ir(this.graph, coreBlock, ptr, samples.length)
+            module._openaxe_load_ir(ctx.graph, coreBlock, ptr, samples.length)
           } finally {
             module._free(ptr)
           }
@@ -420,9 +475,11 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           break
         }
         case 'unloadIr': {
-          const coreBlock = this.toCoreBlock(message.block)
+          const ctx = this.graphContext(message, reply)
+          if (!ctx) break
+          const coreBlock = this.toCoreBlock(message.block, ctx.blocks)
           if (coreBlock !== null && coreBlock >= 0) {
-            module._openaxe_unload_ir(this.graph, coreBlock)
+            module._openaxe_unload_ir(ctx.graph, coreBlock)
           }
           reply.ok = true
           break
@@ -449,6 +506,21 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        case 'inputMeters': {
+          const out = {}
+          for (const [jsId, coreBlock] of this.blockByJs) {
+            // typeof-guard: a wasm binary predating the input-meter ABI
+            // (see openaxe_get_input_meter) has no such export - report
+            // nothing rather than throwing on the audio thread. A rebuild
+            // (scripts/build-core-wasm.sh) lights the meters up.
+            if (typeof module._openaxe_get_input_meter === 'function') {
+              out[jsId] = module._openaxe_get_input_meter(this.graph, coreBlock)
+            }
+          }
+          reply.inputMeters = out
+          reply.ok = true
+          break
+        }
         case 'gainReductions': {
           const out = {}
           for (const [jsId, coreBlock] of this.blockByJs) {
@@ -471,8 +543,84 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        // ── Gapless staged switching (issue #367) ─────────────────────
+        // stageBegin opens a second core graph the TS side builds the next
+        // rig into (every message above accepts `stage: true`); stageCommit
+        // crossfades it live per openaxe_staged_graph_commit. A stale cached
+        // WASM without those symbols reports unsupported so the TS side can
+        // fall back to the teardown-and-rebuild path.
+        case 'stageBegin': {
+          if (typeof module._openaxe_staged_graph_create !== 'function') {
+            reply.error = 'staged switching unsupported by this WASM build'
+            break
+          }
+          if (this.staged !== null) module._openaxe_graph_destroy(this.staged)
+          this.staged = module._openaxe_staged_graph_create(this.graph)
+          this.stagedBlockByJs = new Map()
+          this.stagedKindByJs = new Map()
+          this.stagedEdgeByJs = new Map()
+          module._openaxe_reset(this.staged, sampleRate, FRAMES)
+          reply.ok = true
+          break
+        }
+        case 'stageCommit': {
+          if (this.staged === null) {
+            reply.error = 'no staged graph - call stageBegin first'
+            break
+          }
+          // 1 committed, 0 rejected, -1 busy (a previous switch still
+          // fading/draining) - see openaxe_staged_graph_commit.
+          const rc = module._openaxe_staged_graph_commit(
+            this.graph,
+            this.staged,
+            message.fadeMs ?? 25,
+            message.drainMs ?? 500,
+          )
+          if (rc === 1) {
+            // Adopt the staged id maps: the live graph IS the staged engine
+            // now (same js ids, new core ids). The commit consumed the staged
+            // handle, so just drop our reference to it.
+            this.blockByJs = this.stagedBlockByJs
+            this.kindByJs = this.stagedKindByJs
+            this.edgeByJs = this.stagedEdgeByJs
+            this.meters = new Map([...this.blockByJs.keys()].map((id) => [id, 0]))
+            this.staged = null
+            this.stagedBlockByJs = new Map()
+            this.stagedKindByJs = new Map()
+            this.stagedEdgeByJs = new Map()
+            reply.ok = true
+          } else if (rc === -1) {
+            reply.busy = true
+            reply.error = 'a previous switch is still fading/draining - retry'
+          } else {
+            reply.error = 'the core rejected this staged commit'
+          }
+          break
+        }
+        case 'stageDiscard': {
+          if (this.staged !== null) {
+            module._openaxe_graph_destroy(this.staged)
+            this.staged = null
+            this.stagedBlockByJs = new Map()
+            this.stagedKindByJs = new Map()
+            this.stagedEdgeByJs = new Map()
+          }
+          reply.ok = true
+          break
+        }
+        case 'switchActive': {
+          reply.active =
+            typeof module._openaxe_switch_active === 'function' &&
+            module._openaxe_switch_active(this.graph) === 1
+          reply.ok = true
+          break
+        }
         case 'dispose': {
           module._openaxe_graph_destroy(this.graph)
+          if (this.staged !== null) {
+            module._openaxe_graph_destroy(this.staged)
+            this.staged = null
+          }
           this.graph = null
           this.disposed = true
           reply.ok = true
@@ -493,25 +641,25 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
    * AudioWorkletGlobalScope has no TextEncoder, and this keeps that pass off the
    * audio thread.
    */
-  loadModelJson(module, coreBlock, bytes) {
+  loadModelJson(module, graph, coreBlock, bytes) {
     const ptr = module._malloc(bytes.length + 1)
     try {
       module.HEAPU8.set(bytes, ptr)
       module.HEAPU8[ptr + bytes.length] = 0
       // 0 is OPENAXE_LOAD_OK.
-      return module._openaxe_load_nam_model_json(this.graph, coreBlock, ptr) === 0
+      return module._openaxe_load_nam_model_json(graph, coreBlock, ptr) === 0
     } finally {
       module._free(ptr)
     }
   }
 
   /** Read a loaded capture's metadata out of the core (see NamModelInfo). */
-  readModelInfo(module, coreBlock) {
+  readModelInfo(module, graph, coreBlock) {
     const doubles = module._malloc(4 * 8)
     const ints = module._malloc(5 * 4)
     try {
       const ok = module._openaxe_block_model_info(
-        this.graph,
+        graph,
         coreBlock,
         doubles,
         ints,
@@ -542,7 +690,7 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
         const values = module._malloc(count * 8)
         try {
           const written = module._openaxe_block_model_slim_breakpoints(
-            this.graph,
+            graph,
             coreBlock,
             values,
             count,

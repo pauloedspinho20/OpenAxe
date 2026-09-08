@@ -221,3 +221,8 @@ public domain / MIT-0 — no copyleft, no paid licence tier for closed-source
 use. It replaced JUCE's `juce_audio_devices` (AGPLv3-or-commercial, issue
 #374) and, before that, the RtAudio backend the early issues/README text
 referenced.
+
+The DSP itself is no longer a licensing constraint: since #372 the reverb
+algorithms (the last GPL-infecting DSP, formerly Dragonfly Reverb) are
+hand-written permissive code with no third-party dependency, so this shell
+carries no GPL-bound dependency.
