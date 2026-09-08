@@ -285,20 +285,36 @@ void TestMuteSilences() {
   OPENAXE_EXPECT(Peak(out_r) < 1e-6f);
 }
 
-// dry_level is the algorithm's own blend (reverb is excluded from the engine
-// mix), so 100% must be exactly the input back.
-void TestDryLevelPassesInputThrough() {
-  SpringReverb r;
-  ConfigureWet(r, 2.0f, 20.0f, 1.0f, 10.0f, 100.0f);
-  r.SetParam(kDryLevel, 100.0f);
-  constexpr int kFrames = 8192;
-  const auto in = Tone(kFrames, 440.0f, 0.5f);
-  std::vector<float> out_l, out_r;
-  RenderBlocks(r, in, in, out_l, out_r, 128);
-  float max_diff = 0.0f;
-  for (int i = 0; i < kFrames; ++i)
-    max_diff = std::max(max_diff, std::fabs(out_l[static_cast<size_t>(i)] - in[static_cast<size_t>(i)]));
-  OPENAXE_EXPECT(max_diff < 1e-6f);
+// dry_level preserves dry signal alongside the tank, like the rest of the
+// reverb family (hall/room/plate/ER all run dry*in + full wet) - it must
+// never duck the effect itself. The old crossfade made Dry=100% (the
+// default) come out as pure dry with no audible reverb at all.
+void TestDryLevelKeepsWetAudible() {
+  // Dry at full: dry passes through AND the tank rings on top of it.
+  {
+    SpringReverb r;
+    ConfigureWet(r, 2.0f, 0.0f, 0.0f, 0.0f, 100.0f);
+    r.SetParam(kDryLevel, 100.0f);
+    constexpr int kFrames = 48000;
+    const auto in = Impulse(kFrames);
+    std::vector<float> out_l, out_r;
+    RenderBlocks(r, in, in, out_l, out_r, 128);
+    // Dry passes: the impulse itself comes straight through.
+    OPENAXE_EXPECT(std::fabs(out_l[0] - 1.0f) < 1e-6f);
+    // Wet present: the tank rings after the impulse is long gone.
+    OPENAXE_EXPECT(Peak(out_l, 4800) > 1e-4f);
+  }
+  // Dry at zero: no dry bleed, tank only.
+  {
+    SpringReverb r;
+    ConfigureWet(r, 2.0f, 0.0f, 0.0f, 0.0f, 100.0f);
+    constexpr int kFrames = 8192;
+    const auto in = Impulse(kFrames);
+    std::vector<float> out_l, out_r;
+    RenderBlocks(r, in, in, out_l, out_r, 128);
+    OPENAXE_EXPECT(std::fabs(out_l[0]) < 1e-6f);
+    OPENAXE_EXPECT(Peak(out_l) > 1e-4f);
+  }
 }
 
 }  // namespace
@@ -314,7 +330,7 @@ int main() {
   TestDampingIsInsideTheFeedbackLoop();
   TestOutputStaysBelowUnityGain();
   TestMuteSilences();
-  TestDryLevelPassesInputThrough();
+  TestDryLevelKeepsWetAudible();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

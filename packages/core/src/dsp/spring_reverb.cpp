@@ -178,7 +178,10 @@ void SpringReverb::Process(const float* const* input, float* const* output, int 
   const float sr = impl_->sr;
 
   const float dry = std::clamp(impl_->dry_level, 0.0f, 100.0f) / 100.0f;
-  const float wet = 1.0f - dry;
+  // Additive like the rest of the reverb family (hall/room/plate/ER all run
+  // dry*in + full wet): the Dry knob preserves dry signal alongside the tank,
+  // it must never duck the effect itself. A crossfade here made Dry=100%
+  // (the default) come out as pure dry with no audible reverb at all.
 
   const float damp_cutoff = std::clamp(impl_->high_cut, 1000.0f, 16000.0f);
   const float damp_coeff = 1.0f - std::exp(-6.28318530718f * damp_cutoff / sr);
@@ -268,7 +271,7 @@ void SpringReverb::Process(const float* const* input, float* const* output, int 
         out += tap * ((s % 2 == 0) ? w_even[ch] : w_odd[ch]);
       }
 
-      output[ch][i] = dry * in + wet * out * weight_norm;
+      output[ch][i] = dry * in + out * weight_norm;
     }
 
     impl_->lfo_phase += lfo_step;
