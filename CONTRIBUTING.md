@@ -47,7 +47,7 @@ pnpm dev:all                        # both, parallel
 pnpm install
 # C++ submodules (selective, fast — not full --recursive):
 git submodule update --init --recursive -- packages/core/third_party/nam-core
-git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+git submodule update --init -- packages/core/third_party/dspark packages/core/third_party/daisysp
 # Optional Emscripten: bash scripts/build-core-wasm.sh (needs emsdk on PATH)
 ```
 

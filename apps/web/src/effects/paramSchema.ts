@@ -82,8 +82,8 @@ const hz = (value: number) =>
   value >= 1000 ? `${(value / 1000).toFixed(1)}kHz` : `${Math.round(value)}Hz`
 const ratio = (value: number) => `${value.toFixed(1)}:1`
 const plain = (value: number) => value.toFixed(2)
-// Dragonfly Reverb's width/predelay/spin/wander/earlySend params (see
-// DragonflyReverb.ts) are already in their display unit, unlike `ms`/
+// The reverb's width/predelay/spin/wander/earlySend params (see
+// getReverbRawSchemas below) are already in their display unit, unlike `ms`/
 // `percent` above (which convert from seconds/a 0-1 fraction) - these three
 // just format the raw value, no conversion.
 const msRaw = (value: number) => `${Math.round(value)}ms`
@@ -1039,7 +1039,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 'stereo',
     },
   ],
-  // Four Dragonfly Reverb algorithms (packages/core): Hall, Room, Plate,
+  // Four permissive reverb algorithms (packages/core, issue #372): Hall, Room, Plate,
   // Early Reflections. Each algorithm exposes a different subset of the
   // 7 user-facing knobs — roomSize/damping (Freeverb-compatible) and width
   // are universal; predelay/spin/wander/earlySend vary by algorithm. Per-
@@ -1342,7 +1342,7 @@ export const BLOCK_PARAM_SCHEMAS: Partial<Record<BlockKind, ParamFieldSchema[]>>
   }).flat(),
 }
 
-/** Raw Dragonfly reverb params for an algorithm variant, from generated ranges (issue #263 expert mode). */
+/** Raw reverb params for an algorithm variant, from generated ranges (issue #263 expert mode). */
 export function getReverbRawSchemas(algorithm: string): ParamFieldSchema[] {
   const variant = (
     PARAM_RANGES.reverb as Record<string, Record<string, { min: number; max: number }>>

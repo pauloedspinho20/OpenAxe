@@ -215,3 +215,8 @@ distributed under the GPL (or a paid JUCE licence for closed-source use); this
 project ships under GPLv3, so the GPL flavour applies. Note this in particular
 against `README.md`'s "Why these choices", which still argues _against_ JUCE on
 licensing grounds — that rationale predates the switch and should be revised.
+
+The DSP itself is no longer a licensing constraint: since #372 the reverb
+algorithms (the last GPL-infecting DSP, formerly Dragonfly Reverb) are
+hand-written permissive code with no third-party dependency, so only JUCE
+keeps this shell GPL-bound.

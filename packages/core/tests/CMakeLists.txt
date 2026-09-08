@@ -79,8 +79,9 @@ add_test(NAME json_test COMMAND json_test)
 
 if(OPENAXE_HAS_NAM_CORE)
   # Rig-state round-trip (issue #119) drives the full engine - amp-family
-  # blocks, Dragonfly reverb and DSPark effects all get instantiated - so it
-  # needs every DSP family present, like engine_test below. WHOLE_ARCHIVE for
+  # blocks, the permissive reverb algorithms (issue #372) and DSPark effects
+  # all get instantiated - so it needs every DSP family present, like
+  # engine_test below. WHOLE_ARCHIVE for
   # the same reason nam_amp_test does: NAMCore's architecture parsers
   # self-register via static initializers nothing else references directly.
   add_executable(api_state_test api_state_test.cpp)
@@ -88,7 +89,7 @@ if(OPENAXE_HAS_NAM_CORE)
   add_test(NAME api_state_test COMMAND api_state_test)
 endif()
 
-if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
+if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_HAS_DSPARK)
   # Embedded-asset state round-trip (issue #120): a rig with a real NAM model
   # and a real IR serialized with embed_assets=1 must restore bit-identically
   # into a fresh graph whose source files are gone. Same linking story as
@@ -102,10 +103,10 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
     NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
   add_test(NAME api_state_assets_test COMMAND api_state_assets_test)
 else()
-  message(WARNING "Skipping api_state_assets_test - nam-core/dragonfly/dspark submodules must all be initialized")
+  message(WARNING "Skipping api_state_assets_test - nam-core/dspark submodules must all be initialized (reverb algorithms need no submodule since #372)")
 endif()
 
-if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
+if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_HAS_DSPARK)
   # Automation slot map (issue #121): binds slots to real blocks of several
   # kinds (compressor/delay/tremolo wrappers), so like api_state_assets_test
   # it needs every DSP family present. WHOLE_ARCHIVE for NAMCore's
@@ -116,7 +117,7 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   target_link_libraries(api_automation_slots_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
   add_test(NAME api_automation_slots_test COMMAND api_automation_slots_test)
 else()
-  message(WARNING "Skipping api_automation_slots_test - nam-core/dragonfly/dspark submodules must all be initialized")
+  message(WARNING "Skipping api_automation_slots_test - nam-core/dspark submodules must all be initialized (reverb algorithms need no submodule since #372)")
 endif()
 
 add_executable(api_midi_test api_midi_test.cpp)
@@ -140,9 +141,10 @@ else()
   message(WARNING "Skipping nam_amp_test - packages/core/third_party/nam-core not initialized")
 endif()
 
-if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
+if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_HAS_DSPARK)
   # engine.cpp (issue #14's real-time ABI) instantiates NamAmp, all 4
-  # Dragonfly wrappers, and the 4 DSPark-based wrappers unconditionally - see
+  # permissive reverb algorithms (issue #372), and the 4 DSPark-based
+  # wrappers unconditionally - see
   # CMakeLists.txt's comment on openaxe_core - so anything that links it
   # needs all three families present, unlike the single-DSP-family tests
   # above.
@@ -207,10 +209,10 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_DRAGONFLY AND OPENAXE_HAS_DSPARK)
   target_link_libraries(rig_switch_test PRIVATE openaxe_core)
   add_test(NAME rig_switch_test COMMAND rig_switch_test)
 else()
-  message(WARNING "Skipping engine_test/api_realtime_test - nam-core and dragonfly-reverb submodules must both be initialized")
+  message(WARNING "Skipping engine_test/api_realtime_test - nam-core submodule must be initialized (reverb algorithms need no submodule since #372)")
 endif()
 
-if(OPENAXE_HAS_DRAGONFLY AND OPENAXE_BLOCK_REVERB)
+if(OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_BLOCK_REVERB)
   add_executable(dragonfly_hall_reverb_test dragonfly_hall_reverb_test.cpp)
   target_link_libraries(dragonfly_hall_reverb_test PRIVATE openaxe_core)
   add_test(NAME dragonfly_hall_reverb_test COMMAND dragonfly_hall_reverb_test)
@@ -234,10 +236,10 @@ if(OPENAXE_HAS_DRAGONFLY AND OPENAXE_BLOCK_REVERB)
   target_link_libraries(dragonfly_all_algorithms_test PRIVATE openaxe_core)
   add_test(NAME dragonfly_all_algorithms_test COMMAND dragonfly_all_algorithms_test)
 else()
-  message(WARNING "Skipping Dragonfly Reverb tests - dragonfly-reverb's dpf submodule not initialized")
+  message(WARNING "Skipping permissive reverb tests - reverb is compiled out (effects.config.json)")
 endif()
 
-# The hand-rolled spring tank is plain C++ (no Dragonfly/DPF machinery), so it
+# The hand-rolled spring tank is plain C++ (no third-party machinery), so it
 # only needs the reverb kind to be compiled.
 if(OPENAXE_BLOCK_REVERB)
   add_executable(spring_reverb_test spring_reverb_test.cpp)

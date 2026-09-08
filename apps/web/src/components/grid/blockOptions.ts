@@ -114,8 +114,8 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     kind: 'reverb',
     label: 'Reverb',
     group: 'Effects',
-    vendor: 'Dragonfly Reverb',
-    vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
   {
     kind: 'noise-gate',
@@ -175,7 +175,6 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-
   {
     kind: 'ring-mod',
     label: 'Ring Mod',

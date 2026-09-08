@@ -9,9 +9,9 @@ so the editor has branding ready for JUCE/iPlug2 resource embedding on day one
 ## Prerequisites
 
 ```bash
-# Core submodules (NAM, Dragonfly, DSPark) — same as packages/core/README.md
+# Core submodules (NAM, DSPark, DaisySP) — same as packages/core/README.md
 git submodule update --init --recursive -- packages/core/third_party/nam-core
-git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+git submodule update --init -- packages/core/third_party/dspark packages/core/third_party/daisysp
 # Or all at once:
 git submodule update --init --recursive
 ```

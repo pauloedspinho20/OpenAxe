@@ -110,6 +110,51 @@ void TestReverbDefaultsToHallThenSwitchesAlgorithm() {
   OPENAXE_EXPECT(spring_decay.has_value() && spring_decay->symbol == std::string("decay"));
 }
 
+// Issue #392: every reverb algorithm must read back what was written -
+// GetReverbAlgorithm recovers the choice from the DSP variant, so a missing
+// branch silently downgrades to Hall (Spring did exactly this).
+void TestReverbAlgorithmGetRoundTripsAllFive() {
+  AudioEngine engine;
+  const BlockId reverb = engine.AddBlock(BlockKind::kReverb, 0, 0);
+  OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == ReverbAlgorithm::kHall);
+  for (ReverbAlgorithm algo : {ReverbAlgorithm::kHall, ReverbAlgorithm::kRoom,
+                               ReverbAlgorithm::kPlate,
+                               ReverbAlgorithm::kEarlyReflections,
+                               ReverbAlgorithm::kSpring}) {
+    engine.SetReverbAlgorithm(reverb, algo);
+    OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == algo);
+  }
+}
+
+// Re-selecting the already-active algorithm is a no-op: the web and desktop
+// facades replay the whole param object (algorithm included) on every knob
+// turn, so rebuilding here would wipe the ringing tail and reseed every
+// param to defaults on each edit - the cracks + effect/volume drops.
+void TestRedundantSetReverbAlgorithmKeepsTailAndParams() {
+  AudioEngine engine;
+  const BlockId reverb = engine.AddBlock(BlockKind::kReverb, 0, 0);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, reverb, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(reverb, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+  const auto paramBySymbol = [&](const char* symbol) {
+    for (int i = 0; i < engine.ParamCount(reverb); ++i) {
+      const auto info = engine.ParamInfo(reverb, i);
+      if (info && info->symbol && std::strcmp(info->symbol, symbol) == 0) {
+        return engine.GetParam(reverb, i);
+      }
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+  };
+
+  // Dial decay off-default, then redundantly "switch" to the active algo.
+  engine.SetReverbControl(reverb, ReverbControl::kRoomSize, 0.97f);
+  OPENAXE_EXPECT(std::fabs(paramBySymbol("decay") - 10.0f) < 1e-3f);
+  engine.SetReverbAlgorithm(reverb, ReverbAlgorithm::kHall);
+  // Params untouched (a rebuild would reseed decay to its 2.5 s default).
+  OPENAXE_EXPECT(std::fabs(paramBySymbol("decay") - 10.0f) < 1e-3f);
+  OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == ReverbAlgorithm::kHall);
+}
+
 void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   AudioEngine engine;
   const BlockId compressor = engine.AddBlock(BlockKind::kCompressor, 0, 0);
@@ -1131,6 +1176,8 @@ int main() {
   TestFanOutAndMixerFanInRouting();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
+  TestReverbAlgorithmGetRoundTripsAllFive();
+  TestRedundantSetReverbAlgorithmKeepsTailAndParams();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();
   TestUnknownBlockIsSafeNoOp();
   TestBypassSkipsDspAndPassesInputThrough();

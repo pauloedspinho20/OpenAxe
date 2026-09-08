@@ -27,6 +27,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { cleanStaleCmakeCache } from './cmake-cache.mjs'
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const argv = process.argv.slice(2)
 const webOnly = argv.includes('--web-only')
@@ -122,15 +124,9 @@ const submodules = [
     ],
   },
   {
-    name: 'dragonfly-reverb',
-    sentinel: 'packages/core/third_party/dragonfly-reverb/plugins',
-    args: ['submodule', 'update', '--init', '--', 'packages/core/third_party/dragonfly-reverb'],
-  },
-  {
-    name: "dragonfly's dpf",
-    sentinel: 'packages/core/third_party/dragonfly-reverb/dpf/Makefile',
-    args: ['submodule', 'update', '--init', '--depth', '1', '--', 'dpf'],
-    cwd: join(root, 'packages/core/third_party/dragonfly-reverb'),
+    name: 'daisysp (chorus DSP)',
+    sentinel: 'packages/core/third_party/daisysp/Source/Effects/chorus.h',
+    args: ['submodule', 'update', '--init', '--', 'packages/core/third_party/daisysp'],
   },
 ]
 
@@ -268,6 +264,11 @@ if (submodulesOnly) {
     ],
   ]
   for (const [name, args] of configures) {
+    // The Docker runner mounts this same tree at /work, so a cache written
+    // there (or vice versa) must be dropped before reconfiguring.
+    const buildFlag = args[args.indexOf('-B') + 1]
+    const sourceFlag = args[args.indexOf('-S') + 1]
+    cleanStaleCmakeCache(join(root, sourceFlag), join(root, buildFlag))
     if (!run('cmake', args)) fail(`cmake could not configure ${name}.`)
     ok(name)
   }

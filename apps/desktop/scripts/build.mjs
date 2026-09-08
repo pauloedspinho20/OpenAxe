@@ -15,6 +15,8 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { cleanStaleCmakeCache } from '../../../scripts/cmake-cache.mjs'
+
 const root = dirname(dirname(fileURLToPath(import.meta.url))) // apps/desktop
 const repoRoot = dirname(dirname(root)) // monorepo root
 const buildDir = join(root, 'build')
@@ -49,6 +51,9 @@ export function run(debug, skipUi = false) {
   if (!existsSync(buildDir)) mkdirSync(buildDir, { recursive: true })
 
   console.log(`[nam/desktop] configuring CMake (${buildType})...`)
+  // The Linux Docker runner mounts this same tree at /work — drop a cache
+  // written there (or vice versa) instead of failing on the path mismatch.
+  cleanStaleCmakeCache(root, buildDir)
   execFileSync('cmake', ['-S', root, '-B', buildDir, `-DCMAKE_BUILD_TYPE=${buildType}`], {
     stdio: 'inherit',
   })

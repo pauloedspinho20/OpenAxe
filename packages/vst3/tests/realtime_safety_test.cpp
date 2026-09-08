@@ -6,7 +6,7 @@
 //     the callback hot so violations surface.
 //  2) Fallback allocator hook: override global operator new/delete and count
 //     any heap allocation while g_check_rt is set. C DSP that mallocs would
-//     escape this hook, but the core's hot path is C++ (NAM/Dragonfly/DSPark)
+//     escape this hook, but the core's hot path is C++ (NAM/permissive-reverb/DSPark)
 //     and the plugin's own ProcessBlock never mallocs — so a new-count of
 //     zero is the right invariant. A TSan build separately catches races.
 
