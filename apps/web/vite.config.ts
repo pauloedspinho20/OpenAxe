@@ -37,6 +37,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // Heavy jsdom suites (e.g. PresetManager's 512-slot bank grid) exceed the
+    // 5s default under parallel load and flake intermittently (issue #420 —
+    // reproduced with `vitest run --maxWorkers=16` on an 8-core box).
+    testTimeout: 10_000,
+    // Keep CPU contention bounded so suite time measures the tests, not how
+    // oversubscribed the machine is.
+    maxWorkers: 4,
     exclude: ['**/node_modules/**', '**/e2e/**', '**/*.stories.*', '**/.claude/**'],
     coverage: {
       provider: 'v8',
