@@ -57,6 +57,17 @@ describe('components/SettingsDialog', () => {
     // next one and quietly changes which branch renders.
     vi.mocked(getShellKind).mockReturnValue('web')
     vi.mocked(shellOwnsAudioDevice).mockReturnValue(false)
+    // The guard reads the io store — reset it so device fixtures never leak
+    // between tests.
+    useIOStore.setState({
+      inputDeviceId: '',
+      outputDeviceId: '',
+      inputDevices: [],
+      outputDevices: [],
+      micRiskAckDeviceId: null,
+      micRiskAckLabel: null,
+      micError: null,
+    })
   })
   afterEach(() => vi.restoreAllMocks())
 
@@ -131,6 +142,31 @@ describe('components/SettingsDialog', () => {
       // useNativeAudioEngine watches this and pushes it over the bridge; the
       // store is the single place both the plugin and the web read it from.
       expect(useIOStore.getState().inputChannel).toBe('r')
+    })
+
+    it('warns about a built-in mic and acknowledges through the checkbox (issue #422)', () => {
+      useIOStore.setState({
+        inputDeviceId: 'mic',
+        inputDevices: [{ deviceId: 'mic', label: 'MacBook Pro Microphone', groupId: 'g' }],
+        outputDevices: [{ deviceId: 'spk', label: 'MacBook Pro Speakers', groupId: 'g' }],
+      })
+      renderDialog()
+      expect(screen.getByText(/looks like a built-in microphone/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('checkbox', { name: /use it anyway/ }))
+      expect(useIOStore.getState().micRiskAckDeviceId).toBe('mic')
+      expect(screen.queryByText(/looks like a built-in microphone/)).toBeNull()
+    })
+
+    it('notes the restart requirement on desktop while the engine runs', () => {
+      vi.mocked(shellOwnsAudioDevice).mockReturnValue(true)
+      useIOStore.setState({
+        inputDeviceId: 'mic',
+        inputDevices: [{ deviceId: 'mic', label: 'Built-in Microphone', groupId: 'g' }],
+        outputDevices: [],
+      })
+      renderDialog({ status: 'ready' })
+      expect(screen.getByText(/looks like a built-in microphone/)).toBeInTheDocument()
+      expect(screen.getByText(/takes effect when the audio engine restarts/i)).toBeInTheDocument()
     })
   })
 

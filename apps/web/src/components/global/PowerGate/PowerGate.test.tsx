@@ -46,6 +46,9 @@ describe('PowerGate', () => {
       outputDeviceId: '',
       inputDevices: [],
       outputDevices: [],
+      micRiskAckDeviceId: null,
+      micRiskAckLabel: null,
+      micError: null,
     })
   })
 
@@ -107,7 +110,7 @@ describe('PowerGate', () => {
   it('updates the input device selection', () => {
     const setInputDevice = vi.spyOn(useIOStore.getState(), 'setInputDevice')
     useIOStore.setState({
-      inputDevices: [{ deviceId: 'd1', label: 'Mic', groupId: 'grp' }],
+      inputDevices: [{ deviceId: 'd1', label: 'Scarlett 2i4 USB', groupId: 'grp' }],
       outputDevices: [],
     })
     render(<PowerGate {...baseProps} />)
@@ -198,5 +201,82 @@ describe('PowerGate', () => {
     render(<PowerGate {...baseProps} />)
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss update notification' }))
     expect(dismiss).toHaveBeenCalled()
+  })
+
+  describe('internal-mic feedback guard (issue #422)', () => {
+    const builtinMic = { deviceId: 'mic', label: 'MacBook Pro Microphone', groupId: 'g' }
+    const speakers = { deviceId: 'spk', label: 'MacBook Pro Speakers', groupId: 'g' }
+
+    it('gates POWER ON behind the acknowledgement for a built-in mic', () => {
+      const onPowerOn = vi.fn()
+      useIOStore.setState({
+        inputDeviceId: 'mic',
+        inputDevices: [builtinMic],
+        outputDevices: [speakers],
+      })
+      render(<PowerGate {...baseProps} onPowerOn={onPowerOn} />)
+
+      expect(screen.getByText(/looks like a built-in microphone/)).toBeInTheDocument()
+      expect(screen.getByText(/play a DI take from the Input dialog/)).toBeInTheDocument()
+      const power = screen.getByRole('button', { name: 'POWER ON' })
+      expect(power).toBeDisabled()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /use it anyway/ }))
+      expect(screen.queryByText(/looks like a built-in microphone/)).toBeNull()
+      expect(screen.getByRole('button', { name: 'POWER ON' })).toBeEnabled()
+      expect(useIOStore.getState().micRiskAckDeviceId).toBe('mic')
+
+      fireEvent.click(screen.getByRole('button', { name: 'POWER ON' }))
+      expect(onPowerOn).toHaveBeenCalledWith()
+    })
+
+    it('offers powering on without the mic as the safe path', () => {
+      const onPowerOn = vi.fn()
+      useIOStore.setState({
+        inputDeviceId: 'mic',
+        inputDevices: [builtinMic],
+        outputDevices: [speakers],
+      })
+      render(<PowerGate {...baseProps} onPowerOn={onPowerOn} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Continue without mic' }))
+      expect(onPowerOn).toHaveBeenCalledWith({ noSound: true })
+    })
+
+    it('warns gently when device names are still hidden (pre-permission)', () => {
+      useIOStore.setState({
+        inputDeviceId: '',
+        inputDevices: [{ deviceId: 'a', label: '', groupId: '' }],
+        outputDevices: [],
+      })
+      render(<PowerGate {...baseProps} />)
+      expect(screen.getByText(/see device names/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'POWER ON' })).toBeDisabled()
+    })
+
+    it('stays quiet for a real interface', () => {
+      useIOStore.setState({
+        inputDeviceId: 'usb',
+        inputDevices: [{ deviceId: 'usb', label: 'Scarlett 2i4 USB', groupId: 's' }],
+        outputDevices: [{ deviceId: 'out', label: 'Scarlett 2i4 USB', groupId: 's' }],
+      })
+      render(<PowerGate {...baseProps} />)
+      expect(screen.queryByText(/built-in microphone/)).toBeNull()
+      expect(screen.queryByRole('checkbox', { name: /use it anyway/ })).toBeNull()
+      expect(screen.getByRole('button', { name: 'POWER ON' })).toBeEnabled()
+    })
+
+    it('re-arms when the input changes after an acknowledgement', () => {
+      useIOStore.setState({
+        inputDeviceId: 'mic',
+        inputDevices: [builtinMic],
+        outputDevices: [speakers],
+      })
+      render(<PowerGate {...baseProps} />)
+      fireEvent.click(screen.getByRole('checkbox', { name: /use it anyway/ }))
+      expect(screen.getByRole('button', { name: 'POWER ON' })).toBeEnabled()
+
+      fireEvent.change(screen.getByLabelText('Input device'), { target: { value: '' } })
+      expect(screen.getByRole('button', { name: 'POWER ON' })).toBeDisabled()
+    })
   })
 })

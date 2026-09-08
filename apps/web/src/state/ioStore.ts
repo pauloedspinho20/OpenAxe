@@ -14,6 +14,7 @@
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { resolveSelectedInputLabel } from '../audio/detectRiskyInput'
 
 export type LatencyHint = 'interactive' | 'balanced' | 'playback'
 
@@ -33,6 +34,17 @@ export interface IOState {
   inputChannel: InputChannelMode
   latencyHint: LatencyHint
   micError: string | null
+  /**
+   * Feedback-guard acknowledgement (issue #422), session-scoped and never
+   * persisted: which input selection the user explicitly accepted the
+   * built-in-mic feedback risk for, as an (inputDeviceId, label) snapshot.
+   * Matching is per-device — switching input, or labels resolving after mic
+   * permission is granted, invalidates the snapshot and re-arms the guard.
+   * Device ids are ephemeral across sessions anyway, so persisting this would
+   * be both useless and wrong (a stale ack silently blessing a new device).
+   */
+  micRiskAckDeviceId: string | null
+  micRiskAckLabel: string | null
   /** Ephemeral (not persisted) — populated by useAudioIO on mount and on devicechange. */
   inputDevices: IODevice[]
   outputDevices: IODevice[]
@@ -45,6 +57,12 @@ export interface IOActions {
   setInputChannel: (mode: InputChannelMode) => void
   setLatencyHint: (hint: LatencyHint) => void
   setMicError: (error: string | null) => void
+  /**
+   * Record (`true`) or revoke (`false`) the feedback-risk acknowledgement for
+   * the *current* input selection. Recording snapshots the selection, so a
+   * later device change re-arms the guard instead of inheriting consent.
+   */
+  setMicRiskAcknowledged: (acknowledged: boolean) => void
   /** Populate the device lists from a MediaDevices.enumerateDevices() result. */
   setDeviceLists: (inputs: IODevice[], outputs: IODevice[]) => void
 }
@@ -58,13 +76,15 @@ const IDLE: IOState = {
   inputChannel: 'l',
   latencyHint: 'interactive',
   micError: null,
+  micRiskAckDeviceId: null,
+  micRiskAckLabel: null,
   inputDevices: [],
   outputDevices: [],
 }
 
 export const useIOStore = create<IOStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...IDLE,
 
       setInputDevice: (inputDeviceId) => set({ inputDeviceId, micError: null }),
@@ -73,6 +93,15 @@ export const useIOStore = create<IOStore>()(
       setInputChannel: (inputChannel) => set({ inputChannel }),
       setLatencyHint: (latencyHint) => set({ latencyHint }),
       setMicError: (micError) => set({ micError }),
+      setMicRiskAcknowledged: (acknowledged) =>
+        set(
+          acknowledged
+            ? {
+                micRiskAckDeviceId: get().inputDeviceId,
+                micRiskAckLabel: resolveSelectedInputLabel(get().inputDeviceId, get().inputDevices),
+              }
+            : { micRiskAckDeviceId: null, micRiskAckLabel: null },
+        ),
       setDeviceLists: (inputDevices, outputDevices) => set({ inputDevices, outputDevices }),
     }),
     {

@@ -1,5 +1,11 @@
 import { useEffect } from 'react'
 import { useIOStore, type InputChannelMode } from '../../../state/ioStore'
+import {
+  classifyInputRisk,
+  isMicRiskAcknowledged,
+  resolveSelectedInputLabel,
+} from '../../../audio/detectRiskyInput'
+import { MicFeedbackGuard } from '../../audio/MicFeedbackGuard/MicFeedbackGuard'
 import { useDIAuditionStore } from '../../../state/diAuditionStore'
 import { DI_SAMPLES } from '../../../diSamples'
 import type { AudioEngineState, AudioEngineActions } from '../../../hooks/useAudioEngine'
@@ -48,6 +54,22 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
   const effectiveSelected = selectedId ?? diSampleId ?? 'guitar-clean'
   const canPlay = engineReady && !!effectiveSelected && !!playDI && !!stopDI
 
+  // Same feedback guard as the power gate (issue #422): switching to a
+  // built-in mic while live must not open a hot mic unacknowledged — the web
+  // engine refuses to connect it (see useAudioEngine) until the box is ticked,
+  // and the DI takes below stay the recommended path either way.
+  const inputRisk = isPluginShell
+    ? ('safe' as const)
+    : classifyInputRisk(io.inputDeviceId, io.inputDevices, io.outputDevices)
+  const selectedInputLabel = resolveSelectedInputLabel(io.inputDeviceId, io.inputDevices)
+  const micRiskAcked = isMicRiskAcknowledged(
+    io.inputDeviceId,
+    selectedInputLabel,
+    io.micRiskAckDeviceId,
+    io.micRiskAckLabel,
+  )
+  const needsMicAck = inputRisk !== 'safe' && !micRiskAcked
+
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value || null
     setSelectedId(id as typeof selectedId)
@@ -80,6 +102,15 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
             </option>
           ))}
         </SelectField>
+      )}
+      {needsMicAck && (
+        <MicFeedbackGuard
+          id="input-dialog"
+          risk={inputRisk}
+          acknowledged={false}
+          onAcknowledge={(v) => io.setMicRiskAcknowledged(v)}
+          diHint="dialog"
+        />
       )}
 
       <SelectField

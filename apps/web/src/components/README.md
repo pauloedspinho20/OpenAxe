@@ -124,6 +124,17 @@ real bug caught during manual testing, not a hypothetical: the first version awa
 environment) never answers left the whole engine stuck at `'starting'` forever with no feedback.
 Now the rig is usable immediately regardless of what the mic prompt does.
 
+**Built-in-mic feedback guard (issue #422).** A laptop's internal mic + speakers
+loop the rig's output back into its input, which howls and can damage hearing /
+speakers. `src/audio/detectRiskyInput.ts` classifies the selected input as
+`safe` / `risky` / `unknown` (empty pre-permission labels are `unknown`, never
+`safe`); the shared `MicFeedbackGuard` (warning + DI recommendation +
+informed-consent checkbox) renders on every input picker (PowerGate,
+InputDeviceDialog, SettingsDialog); the ack is a session-scoped per-device
+snapshot in `ioStore`, and both engines enforce it (`connectMic` / native
+`openAndStart` + recovery refuse an unacknowledged risky mic, the web engine
+also tears down a live mic whose labels resolve to internal after permission).
+
 ## Verified manually
 
 Full power-on flow traced end-to-end in a live browser session: `AudioContext` → `NamEngine.attach`

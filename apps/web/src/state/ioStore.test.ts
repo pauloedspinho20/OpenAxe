@@ -9,6 +9,8 @@ const RESET = {
   inputChannel: 'l' as const,
   latencyHint: 'interactive' as const,
   micError: null,
+  micRiskAckDeviceId: null as string | null,
+  micRiskAckLabel: null as string | null,
   inputDevices: [],
   outputDevices: [],
 }
@@ -89,6 +91,27 @@ describe('ioStore', () => {
     expect(useIOStore.getState().outputDevices).toEqual(outputs)
   })
 
+  it('setMicRiskAcknowledged snapshots the current selection, and revokes cleanly', () => {
+    useIOStore
+      .getState()
+      .setDeviceLists([{ deviceId: 'mic', label: 'Built-in Microphone', groupId: 'g' }], [])
+    useIOStore.getState().setInputDevice('mic')
+    expect(useIOStore.getState().micRiskAckDeviceId).toBeNull()
+
+    useIOStore.getState().setMicRiskAcknowledged(true)
+    expect(useIOStore.getState().micRiskAckDeviceId).toBe('mic')
+    expect(useIOStore.getState().micRiskAckLabel).toBe('Built-in Microphone')
+
+    // Switching input does not clear the old snapshot — matching is
+    // per-device, so the new selection simply doesn't match and re-arms.
+    useIOStore.getState().setInputDevice('')
+    expect(useIOStore.getState().micRiskAckDeviceId).toBe('mic')
+
+    useIOStore.getState().setMicRiskAcknowledged(false)
+    expect(useIOStore.getState().micRiskAckDeviceId).toBeNull()
+    expect(useIOStore.getState().micRiskAckLabel).toBeNull()
+  })
+
   it('partialize keeps device selections, gain, and latencyHint, but not the ephemeral lists', () => {
     // Set both persisted and non-persisted fields.
     useIOStore.getState().setInputDevice('some-mic')
@@ -117,5 +140,9 @@ describe('ioStore', () => {
     expect(parsed.state.inputDevices).toBeUndefined()
     expect(parsed.state.outputDevices).toBeUndefined()
     expect(parsed.state.micError).toBeUndefined()
+    // The ack is session-scoped: a stale ack must never bless a new session's
+    // (ephemeral-id) device.
+    expect(parsed.state.micRiskAckDeviceId).toBeUndefined()
+    expect(parsed.state.micRiskAckLabel).toBeUndefined()
   })
 })
