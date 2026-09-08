@@ -2669,6 +2669,10 @@ void AudioEngine::SetReverbControl(BlockId id, ReverbControl control, float valu
 void AudioEngine::SetReverbAlgorithm(BlockId id, ReverbAlgorithm algorithm) {
   BlockState* state = FindBlock(id);
   if (!state || state->kind != graph::BlockKind::kReverb) return;
+  // Redundant resend (the UI replays the full param object, algorithm
+  // included, on every knob turn): rebuilding would wipe the ringing tail
+  // and reseed every param to defaults, so it must be a no-op.
+  if (GetReverbAlgorithm(id) == algorithm) return;
 
   switch (algorithm) {
     case ReverbAlgorithm::kHall:
