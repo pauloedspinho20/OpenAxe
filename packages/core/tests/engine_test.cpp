@@ -110,6 +110,22 @@ void TestReverbDefaultsToHallThenSwitchesAlgorithm() {
   OPENAXE_EXPECT(spring_decay.has_value() && spring_decay->symbol == std::string("decay"));
 }
 
+// Issue #392: every reverb algorithm must read back what was written -
+// GetReverbAlgorithm recovers the choice from the DSP variant, so a missing
+// branch silently downgrades to Hall (Spring did exactly this).
+void TestReverbAlgorithmGetRoundTripsAllFive() {
+  AudioEngine engine;
+  const BlockId reverb = engine.AddBlock(BlockKind::kReverb, 0, 0);
+  OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == ReverbAlgorithm::kHall);
+  for (ReverbAlgorithm algo : {ReverbAlgorithm::kHall, ReverbAlgorithm::kRoom,
+                               ReverbAlgorithm::kPlate,
+                               ReverbAlgorithm::kEarlyReflections,
+                               ReverbAlgorithm::kSpring}) {
+    engine.SetReverbAlgorithm(reverb, algo);
+    OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == algo);
+  }
+}
+
 void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   AudioEngine engine;
   const BlockId compressor = engine.AddBlock(BlockKind::kCompressor, 0, 0);
@@ -1131,6 +1147,7 @@ int main() {
   TestFanOutAndMixerFanInRouting();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
+  TestReverbAlgorithmGetRoundTripsAllFive();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();
   TestUnknownBlockIsSafeNoOp();
   TestBypassSkipsDspAndPassesInputThrough();

@@ -2785,6 +2785,9 @@ ReverbAlgorithm AudioEngine::GetReverbAlgorithm(BlockId id) const {
   if (std::holds_alternative<dsp::DragonflyEarlyReflections>(state->dsp)) {
     return ReverbAlgorithm::kEarlyReflections;
   }
+  if (std::holds_alternative<dsp::SpringReverb>(state->dsp)) {
+    return ReverbAlgorithm::kSpring;
+  }
   return ReverbAlgorithm::kHall;  // includes the kHall case above
 }
 

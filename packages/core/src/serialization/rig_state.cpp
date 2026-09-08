@@ -113,6 +113,7 @@ const char* ReverbAlgorithmToString(engine::ReverbAlgorithm algorithm) {
     case engine::ReverbAlgorithm::kRoom: return "room";
     case engine::ReverbAlgorithm::kPlate: return "plate";
     case engine::ReverbAlgorithm::kEarlyReflections: return "early-reflections";
+    case engine::ReverbAlgorithm::kSpring: return "spring";
   }
   return "hall";  // unreachable for a valid enum value
 }
@@ -126,6 +127,8 @@ bool StringToReverbAlgorithm(const std::string& text, engine::ReverbAlgorithm& o
     out = engine::ReverbAlgorithm::kPlate;
   } else if (text == "early-reflections") {
     out = engine::ReverbAlgorithm::kEarlyReflections;
+  } else if (text == "spring") {
+    out = engine::ReverbAlgorithm::kSpring;
   } else {
     return false;
   }

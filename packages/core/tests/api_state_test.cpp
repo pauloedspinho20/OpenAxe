@@ -634,6 +634,45 @@ int main() {
     openaxe_graph_destroy(g);
   }
 
+  // ── Spring reverb survives save/load round-trips (issue #392) ─────────
+  // GetReverbAlgorithm + the rig_state string table each missed the Spring
+  // case, so a Spring block saved as Hall and reloaded as Hall. The "drive"
+  // symbol exists only on the spring tank (hall has 18 params, no drive),
+  // so its presence on the reloaded block proves the algorithm survived.
+  {
+    OpenAxeGraph* g = openaxe_graph_create();
+    const int32_t verb = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 0, 0);
+    openaxe_set_reverb_algorithm(g, verb, OPENAXE_REVERB_SPRING);
+    openaxe_set_reverb_control(g, verb, OPENAXE_REVERB_ROOM_SIZE, 0.6f);
+    openaxe_set_reverb_control(g, verb, OPENAXE_REVERB_DRY_LEVEL, 25.0f);
+
+    const int32_t needed = openaxe_serialize_state(g, nullptr, 0);
+    std::vector<char> buf(static_cast<size_t>(needed));
+    openaxe_serialize_state(g, buf.data(), needed);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"reverbAlgorithm\": \"spring\"") != nullptr);
+
+    OpenAxeGraph* r = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(r, buf.data()) == OPENAXE_LOAD_STATE_OK);
+    // Spring tank surface restored, not Hall's: drive present, 8 params.
+    OPENAXE_EXPECT(!std::isnan(GetParamBySymbol(r, 0, "drive")));
+    OPENAXE_EXPECT(openaxe_block_param_count(r, 0) ==
+                   openaxe_block_param_count(g, verb));
+    OPENAXE_EXPECT(GetParamBySymbol(r, 0, "dry_level") ==
+                   GetParamBySymbol(g, verb, "dry_level"));
+
+    // And a hand-written document naming "spring" loads as Spring too.
+    OpenAxeGraph* h = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(h, R"({"schemaVersion": 1,
+             "blocks": [{ "id": "v", "kind": "reverb", "row": 0, "col": 0,
+                          "params": { "reverbAlgorithm": "spring" } }],
+             "edges": [], "masterLevel": 1.0, "masterMuted": false})") ==
+                   OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(!std::isnan(GetParamBySymbol(h, 0, "drive")));
+    openaxe_graph_destroy(h);
+    openaxe_graph_destroy(r);
+    openaxe_graph_destroy(g);
+  }
+
   openaxe_graph_destroy(source);
   openaxe_graph_destroy(restored);
   openaxe_graph_destroy(clean);
