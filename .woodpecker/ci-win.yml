@@ -9,7 +9,7 @@ labels:
   platform: windows/arm64
 
 when:
-  - event: [push, pull_request]
+  - event: [push, pull_request, manual]
     branch: [dev, main, feat/427-woodpecker-ci]
 
 steps:
