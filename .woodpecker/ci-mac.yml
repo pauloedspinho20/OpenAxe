@@ -1,8 +1,7 @@
 # macOS CI — runs on the local Mac agent (Local backend, tools run natively).
 # Mirrors the GitHub PR legs via scripts/ci-local.mjs (see that file for stage docs).
 # One step per stage so logs/timeouts stay granular in the Woodpecker UI.
-# NOTE: `image: local` is a linter-required placeholder — the Local backend
-# ignores it and runs commands natively on the host.
+# NOTE: `image` selects the shell for the Local backend (bash/sh/zsh/pwsh/…).
 
 labels:
   platform: darwin/arm64
@@ -13,38 +12,38 @@ when:
 
 steps:
   setup:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=setup
   drift:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=drift --skip-setup
   lint:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=lint --skip-setup
   build:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=build --skip-setup
   unit:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=unit --skip-setup
   e2e:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=e2e --skip-setup
   core:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=core --skip-setup
   desktop:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=desktop --skip-setup
   plugin:
-    image: local
+    image: bash
     commands:
       - node scripts/ci-local.mjs --stage=plugin --skip-setup

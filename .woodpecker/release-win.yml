@@ -1,7 +1,6 @@
 # Release (Windows leg) — SKELETON, mirrors release-mac.yml.
 # Tag push v* → zip/msi + Win plugin bundles → rclone to R2.
-# NOTE: `image: local` is a linter-required placeholder — the Local backend
-# ignores it and runs commands natively on the host.
+# NOTE: `image` selects the shell for the Local backend (powershell on Win11).
 
 labels:
   platform: windows/arm64
@@ -12,15 +11,15 @@ when:
 
 steps:
   guard:
-    image: local
+    image: powershell
     commands:
       - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
   package:
-    image: local
+    image: powershell
     commands:
       - 'echo "TODO Phase 3/4: zip/msi + Windows VST3/CLAP"'
   upload:
-    image: local
+    image: powershell
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
     commands:
       - 'echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"'
