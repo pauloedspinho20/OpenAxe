@@ -82,6 +82,14 @@ const char* BackendApiName(ma_backend backend) {
 // means "any channel count supported" - treat as stereo-capable (2). Zero
 // entries (no detailed info) also means unknown: assume stereo-capable so the
 // device still opens rather than being skipped.
+//
+// NOTE: miniaudio reports one nativeDataFormats list per device, shared across
+// both directions, so this is a best-effort upper bound rather than a
+// per-direction probe (JUCE used to create each device to ask). A rare duplex
+// interface advertising 2ch-out / 1ch-in under one info is reported as 2-in;
+// Open() then requests 2 capture channels and miniaudio clamps or resamples in
+// the callback, so this stays cosmetic (device-list display) rather than a
+// hard failure.
 int MaxChannelsOf(const ma_device_info& info) {
   if (info.nativeDataFormatCount == 0) return 2;
   int max_ch = 0;
@@ -370,13 +378,37 @@ void AudioIO::DataCallback(struct ma_device* p_device, void* p_output, const voi
   RtCallbackState& state = self->state_;
   const int in_ch = state.input_channels;
   const int out_ch = state.output_channels;
-
   const float* in_interleaved = static_cast<const float*>(p_input);
   float* out_interleaved = static_cast<float*>(p_output);
 
+  // Stream-level error (device unplugged / rerouted / interrupted - see
+  // HandleStreamError): RtProcessCallback refuses to touch buffers whose shape
+  // may have changed underneath it, so it would leave the scratch holding the
+  // previous callback's output. Write silence here instead of replaying that
+  // stale audio until the JS layer tears the stream down.
+  if (state.stream_error.load(std::memory_order_acquire)) {
+    if (out_interleaved && out_ch >= 1) {
+      std::memset(out_interleaved, 0,
+                  static_cast<size_t>(frame_count) * static_cast<size_t>(out_ch) *
+                      sizeof(float));
+    }
+    return;
+  }
+
   unsigned int done = 0;
   while (done < frame_count) {
-    const unsigned int cap = kMaScratchCap;
+    // Cap the chunk so it always fits BOTH scratch pools: the interleave
+    // buffers (ma_in_/ma_out_, sized >= kMaScratchCap by the ctor/Open) and
+    // in_scratch, which RtProcessCallback's routing/DI/TRIM read and which
+    // SetGraph sizes from the *requested* block. A backend's native period can
+    // exceed that (e.g. WASAPI-shared mode has a ~10ms floor), and when a
+    // chunk outgrew in_scratch the routing/DI/TRIM guards silently degraded to
+    // passthrough - the mono input picker, TRIM and DI audition would all drop.
+    // Chunking to in_scratch here keeps those paths live on real hardware.
+    unsigned int cap = kMaScratchCap;
+    if (!state.in_scratch[0].empty()) {
+      cap = std::min(cap, static_cast<unsigned int>(state.in_scratch[0].size()));
+    }
     unsigned int n = std::min(cap, frame_count - done);
     // Scratch is sized in Open(); if a unit test drives the state without
     // Open (no scratch), fall back to silence rather than allocate here.
@@ -389,7 +421,7 @@ void AudioIO::DataCallback(struct ma_device* p_device, void* p_output, const voi
       // suspend / stream-error semantics stay identical (it handles null
       // buffers as silence).
       float* null_out[2] = {nullptr, nullptr};
-      RtProcessCallback(null_out, nullptr, 0, &state);
+      RtProcessCallback(null_out, nullptr, n, &state);
       done += n;
       continue;
     }
@@ -436,6 +468,11 @@ void AudioIO::NotificationCallback(const void* p_notification_void) {
   auto* self = static_cast<AudioIO*>(p_notification->pDevice->pUserData);
   if (!self) return;
   switch (p_notification->type) {
+    // miniaudio keeps the device's configured sample rate / format across a
+    // reroute (it resamples the new hardware to them), so the graph - reset at
+    // Open()'s rate - stays valid; only the error is surfaced here, never a
+    // stop/close from this callback (the JS layer tears down via TakeStreamError
+    // and reopens).
     case ma_device_notification_type_rerouted:
       self->HandleStreamError("audio device rerouted (unplugged or default changed)");
       break;
@@ -711,13 +748,11 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
 
   // Prefer a rate the device actually runs at: opening at an unsupported rate
   // either fails outright or makes the OS resample around us, which costs
-  // both latency and fidelity for no benefit. When the two sides disagree,
-  // the output side wins and miniaudio resamples the input in-app.
-  double rate = FallbackRate(sample_rate, *out_info);
-  if (!SupportsRate(*in_info, rate) && !SupportsRate(*in_info, sample_rate)) {
-    // Input can't run at the output's rate either - keep the output's rate
-    // (miniaudio resamples the capture side internally).
-  }
+  // both latency and fidelity for no benefit. When the two sides disagree the
+  // output side wins and miniaudio resamples the capture side in-app - even
+  // when the input can't run at the chosen rate at all, the output's rate is
+  // kept rather than failing the open.
+  const double rate = FallbackRate(sample_rate, *out_info);
 
   // buffer_frames == 0 means "as small as this device allows" - opt-in,
   // since a heavy NAM model can overrun a block that small (see the header).
@@ -794,9 +829,14 @@ bool AudioIO::IsRunning() const {
 void AudioIO::SetGraph(OpenAxeGraph* graph, double sample_rate, unsigned int max_block_size) {
   InitTap(state_);  // non-audio thread, so the audio thread never allocates
   // Same reasoning for the TRIM scratch buffers (see RtCallbackState::
-  // in_scratch). Sized generously: a backend may hand the callback a slightly
-  // larger block than the one it granted, and the callback will not allocate.
-  for (auto& ch : state_.in_scratch) ch.assign(std::max(max_block_size, 1u) * 2, 0.0f);
+  // in_scratch). Sized generously: a backend may hand the callback a larger
+  // block than the requested period (see DataCallback), so cover the full
+  // interleave chunk cap too - the mono-routing/DI/TRIM guards inside
+  // RtProcessCallback must never fail on a real chunk, or mono routing
+  // silently degrades to stereo passthrough (a guitar on input 1 then comes
+  // out left-heavy instead of centered).
+  const unsigned int scratch = std::max(std::max(max_block_size, 1u) * 2, kMaScratchCap);
+  for (auto& ch : state_.in_scratch) ch.assign(scratch, 0.0f);
   // openaxe_reset is documented not real-time safe - this must be called
   // from a non-audio thread before Start(). Rebuild the graph while the
   // stream is stopped (or before it starts), then publish the pointer via

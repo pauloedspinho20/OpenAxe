@@ -329,7 +329,8 @@ void TestDeviceEnumeration() {
 // independently. This test previously reproduced a RtAudio CoreAudio-backend
 // crash (garbage input pointer on the very first callback(s) during its
 // internal duplex bridging) on this exact single-device setup - it's now the
-// regression test for the swap to JUCE's own from-scratch CoreAudio backend.
+// regression test for the swap to miniaudio's own from-scratch CoreAudio
+// backend.
 void TestOpenStartStop() {
   openaxe_desktop::AudioIO io;
   const std::vector<openaxe_desktop::AudioDeviceInfo> devices = io.ListDevices();
@@ -390,10 +391,10 @@ void TestOpenAcceptsSplitDevices() {
   const unsigned int a = devices[0].id;
   const unsigned int b = devices[1].id;
   // Open() no longer refuses different input/output endpoints outright - it
-  // lets JUCE bridge them (needed for interfaces like the FM3 that CoreAudio
-  // exposes under separate input/output names). It may still fail for genuine
-  // hardware reasons, but the old "must be the same audio device" rejection is
-  // gone, so that specific error must never appear.
+  // lets miniaudio's duplex device bridge them (needed for interfaces like the
+  // FM3 that CoreAudio exposes under separate input/output names). It may still
+  // fail for genuine hardware reasons, but the old "must be the same audio
+  // device" rejection is gone, so that specific error must never appear.
   io.Open(a, b, 48000.0, 128);
   const std::string err = io.LastError();
   CHECK(err.find("must be the same audio device") == std::string::npos);
@@ -426,7 +427,7 @@ void TestCallbackInputChannelRouting() {
   constexpr int kBlock = 512;
 
   auto run_mode = [&](InputChannelMode mode, int in_ch, float* in_bufs[2], float* out_bufs[2],
-                      openaxe_desktop::TapFrame* tap) {
+                      openaxe_desktop::TapFrame* tap, int frames = kFrames) {
     OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
     openaxe_desktop::RtCallbackState state;
     for (auto& ch : state.tap_in)
@@ -440,8 +441,8 @@ void TestCallbackInputChannelRouting() {
     state.output_channels = 2;
     state.input_channel_mode.store(static_cast<int>(mode), std::memory_order_relaxed);
 
-    openaxe_desktop::RtProcessCallback(out_bufs, in_bufs, kFrames, &state);
-    if (tap) *tap = openaxe_desktop::ReadTap(state, /*input=*/true, kFrames);
+    openaxe_desktop::RtProcessCallback(out_bufs, in_bufs, frames, &state);
+    if (tap) *tap = openaxe_desktop::ReadTap(state, /*input=*/true, frames);
 
     openaxe_graph_destroy(graph);
   };
@@ -538,6 +539,27 @@ void TestCallbackInputChannelRouting() {
     float* out[2] = {out0, out1};
     run_mode(InputChannelMode::kRight, 1, in, out, nullptr);
     for (int i = 0; i < kFrames; ++i) {
+      CHECK(out0[i] == 0.5f);
+      CHECK(out1[i] == 0.5f);
+    }
+  }
+
+  // Routing must still apply when the callback block exactly fills the
+  // in_scratch capacity - the boundary the DataCallback chunk cap guarantees
+  // (native periods larger than the requested block used to silently degrade
+  // the routing/DI/TRIM guards to passthrough).
+  {
+    constexpr int kScratchFull = kBlock;  // in_scratch is sized kBlock above
+    float in0[kScratchFull], in1[kScratchFull], out0[kScratchFull], out1[kScratchFull];
+    for (int i = 0; i < kScratchFull; ++i) {
+      in0[i] = 0.5f;
+      in1[i] = -0.25f;
+      out0[i] = out1[i] = 0.0f;
+    }
+    float* in[2] = {in0, in1};
+    float* out[2] = {out0, out1};
+    run_mode(InputChannelMode::kLeft, 2, in, out, nullptr, kScratchFull);
+    for (int i = 0; i < kScratchFull; ++i) {
       CHECK(out0[i] == 0.5f);
       CHECK(out1[i] == 0.5f);
     }

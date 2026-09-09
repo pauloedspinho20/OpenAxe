@@ -300,10 +300,10 @@ std::string StudioBridge::HandleListDevices(const std::string&) {
 }
 
 std::string StudioBridge::HandleGetConfig(const std::string&) {
-  // latencyFrames is RtAudio's reported device round-trip (input + output
-  // buffering), -1 when the backend can't report it or nothing is open; the ms
-  // figure is derived from it so the UI can show real measured latency rather
-  // than an estimate from the block size alone.
+  // latencyFrames is miniaudio's reported device round-trip (capture +
+  // playback internal periods), -1 when the backend can't report it or nothing
+  // is open; the ms figure is derived from it so the UI can show real measured
+  // latency rather than an estimate from the block size alone.
   const long latency_frames = audio_.IsOpen() ? audio_.StreamLatencyFrames() : -1;
   const double rate = audio_.SampleRate();
   json out = {{"ok", true},
@@ -329,7 +329,9 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     const double sample_rate = o.value("sampleRate", 48000.0);
     // 0 asks the device for the smallest block it supports (lowest possible
     // round-trip); anything else is a requested block size the backend may
-    // still adjust. The reply reports what was actually granted.
+    // still adjust. The reply reports what the stream will use: the requested
+    // period, which miniaudio buffers to in-app when the device's native
+    // period differs (the measured round-trip is latencyFrames/latencyMs).
     const unsigned int buffer_frames = o.value("bufferFrames", 128u);
 
     // Reopening while a previous stream is still live (device switch, or the
@@ -679,6 +681,10 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
       // control thread's suspend handshake like every other structural
       // mutation. Staged writes always take this path (no suspend - the
       // staged engine is never processed before its commit).
+      //
+      // A redundant resend (the UI replays the full params object on every
+      // knob move, slim included) must not suspend: skip the mutation when the
+      // live value is already what was asked for.
       OpenAxeGraph* graph = target_graph;
       Call([&] {
         MutationTarget target;
@@ -688,6 +694,7 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
         if (stage) {
           openaxe_set_param(target.graph, it->second.core_id, index, value);
         } else {
+          if (openaxe_get_param(graph, core_id, index) == value) return;
           Mutate([&] { openaxe_set_param(graph, core_id, index, value); },
                  /*reset_after=*/false);
         }
@@ -936,9 +943,17 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
       if (!ResolveTarget(stage, &target).empty()) return;
       const auto it = target.blocks->find(js_id);
       if (it == target.blocks->end()) return;
+      // Redundant resend: the UI replays each block's full params object on
+      // every knob move, so setReverbAlgorithm arrives on every drag even
+      // when the algorithm never changed. The core no-ops the swap itself,
+      // but the suspend handshake here would still fire - a silent dropout on
+      // every knob move. Track the last-applied value and skip the mutation
+      // (and its suspend) entirely when it hasn't changed.
+      if (it->second.reverb_algorithm == static_cast<int32_t>(*algo)) return;
       MutateOn(target,
                [&] { openaxe_set_reverb_algorithm(target.graph, it->second.core_id, *algo); },
                /*reset_after=*/false);
+      it->second.reverb_algorithm = static_cast<int32_t>(*algo);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -965,8 +980,13 @@ std::string StudioBridge::HandleSetDelayModel(const std::string& req) {
       if (!ResolveTarget(stage, &target).empty()) return;
       const auto it = target.blocks->find(js_id);
       if (it == target.blocks->end()) return;
+      // Same redundant-resend guard as setReverbAlgorithm: skip the mutation
+      // (and its suspend handshake) when the model didn't change, instead of
+      // dropping a silent silence-gap on every knob move.
+      if (it->second.delay_model == static_cast<int32_t>(*model)) return;
       MutateOn(target, [&] { openaxe_set_delay_model(target.graph, it->second.core_id, *model); },
              /*reset_after=*/false);
+      it->second.delay_model = static_cast<int32_t>(*model);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
