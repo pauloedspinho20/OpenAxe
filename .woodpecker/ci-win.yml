@@ -2,6 +2,8 @@
 # PROVISIONAL subset: pure-JS stages + core (CMake/VS Build Tools) first.
 # desktop/plugin legs get added once this file is green (issue #427 Phase 4).
 # Requires on the VM: git, Node 22, pnpm 10.16.1, CMake, VS Build Tools.
+# NOTE: `image: local` is a linter-required placeholder — the Local backend
+# ignores it and runs commands natively on the host.
 
 labels:
   platform: windows/arm64
@@ -12,20 +14,26 @@ when:
 
 steps:
   setup:
+    image: local
     commands:
       - node scripts/ci-local.mjs --stage=setup
   drift:
+    image: local
     commands:
       - node scripts/ci-local.mjs --stage=drift --skip-setup
   lint:
+    image: local
     commands:
       - node scripts/ci-local.mjs --stage=lint --skip-setup
   build:
+    image: local
     commands:
       - node scripts/ci-local.mjs --stage=build --skip-setup
   unit:
+    image: local
     commands:
       - node scripts/ci-local.mjs --stage=unit --skip-setup
   core:
+    image: local
     commands:
       - node scripts/ci-local.mjs --stage=core --skip-setup
