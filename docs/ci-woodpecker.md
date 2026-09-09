@@ -20,14 +20,16 @@ https://smee.io/<id> --target http://localhost:8000/api/hook`) even
 
 ## Layout
 
-| Path                                 | What                                                                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `.woodpecker/ci-mac.yml`             | macOS agent, Local backend — full `ci-local.mjs` incl. e2e                                                            |
-| `.woodpecker/ci-linux.yml`           | Docker agent, `openaxe-ci-linux` image — no e2e (browsers install at run time, see `docker/ci-linux/run-linux-ci.sh`) |
-| `.woodpecker/ci-win.yml`             | UTM Win11 ARM agent, Local backend — provisional subset (JS stages + core); desktop/plugin join when green            |
-| `.woodpecker/release-*.yml`          | **Skeletons** — tag guard + TODOs until R2 secrets land (Phase 3)                                                     |
-| `woodpecker/docker-compose.yml`      | server (SQLite volume `woodpecker-data`)                                                                              |
-| `woodpecker/agent-{mac,linux,win}.*` | the three agents                                                                                                      |
+| Path                                                        | What                                                                                                                               |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `.woodpecker/ci-mac.yml`                                    | macOS agent, Local backend — full `ci-local.mjs` incl. e2e                                                                         |
+| `.woodpecker/ci-linux.yml`                                  | Docker agent, `openaxe-ci-linux` image — no e2e (browsers install at run time, see `docker/ci-linux/run-linux-ci.sh`)              |
+| `.woodpecker/ci-win.yml`                                    | UTM Win11 ARM agent, Local backend — provisional subset (JS stages + core); desktop/plugin join when green                         |
+| `.woodpecker/release-{mac,linux,win}.yml`                   | tag guard → setup → desktop CPack → plugin bundles → `r2-upload.mjs`                                                               |
+| `.woodpecker/release-publish.yml`                           | polls R2 (`--expect=macos,linux`; +windows when UTM live) → sha256sums + manifest → landing rebuild (`--source=r2`) → Pages deploy |
+| `scripts/{r2-upload,r2-publish,collect-plugin-bundles}.mjs` | release tooling; `fetch-releases.mjs --source=r2` reads the R2 manifest                                                            |
+| `woodpecker/docker-compose.yml`                             | server (SQLite volume `woodpecker-data`)                                                                                           |
+| `woodpecker/agent-{mac,linux,win}.*`                        | the three agents                                                                                                                   |
 
 ## First run
 

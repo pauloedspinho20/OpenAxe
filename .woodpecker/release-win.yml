@@ -1,5 +1,6 @@
-# Release (Windows leg) — SKELETON, mirrors release-mac.yml.
-# Tag push v* → zip/msi + Win plugin bundles → rclone to R2.
+# Release (Windows leg) — tag push v* → guard → zip + plugin bundles → R2.
+# Runs on the UTM Win11 ARM agent (powershell shell). Prereqs on the VM:
+# git, Node 22, pnpm 10.16.1, CMake, VS Build Tools, rclone.
 # NOTE: `image` selects the shell for the Local backend (powershell on Win11).
 
 labels:
@@ -14,12 +15,23 @@ steps:
     image: powershell
     commands:
       - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
-  package:
+  setup:
     image: powershell
     commands:
-      - 'echo "TODO Phase 3/4: zip/msi + Windows VST3/CLAP"'
+      - node scripts/ci-local.mjs --stage=setup
+  desktop:
+    image: powershell
+    commands:
+      - pnpm --filter @openaxe/desktop package
+  plugin:
+    image: powershell
+    commands:
+      - node scripts/ci-local.mjs --stage=plugin --skip-setup
+      - node scripts/collect-plugin-bundles.mjs --platform=windows
   upload:
     image: powershell
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
+    environment:
+      R2_PUBLIC_URL: https://pub-800f414cbfe9422e9faaa00ed34d2821.r2.dev
     commands:
-      - 'echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"'
+      - node scripts/r2-upload.mjs "apps/desktop/build/openaxe-desktop-*.zip" "packages/vst3/build/openaxe-plugin-bundles-*.zip"

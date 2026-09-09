@@ -1,9 +1,6 @@
-# Release (macOS leg) — SKELETON, Phase 3 completes when R2 tokens land.
-# Tag push v* → tag==VERSION guard → CPack dmg + plugin bundles → rclone to R2.
-# The Linux/Windows legs (release-linux.yml, release-win.yml) mirror this file
-# with their own artifacts; release-publish.yml (mac agent) polls R2 for all
-# three legs, then writes sha256sums.txt + manifest.json and triggers Pages.
+# Release (macOS leg) — tag push v* → guard → dmg + plugin bundles → R2.
 # NOTE: `image` selects the shell for the Local backend (bash/sh/zsh/pwsh/…).
+# Secrets (r2_*) are Woodpecker user secrets; R2_PUBLIC_URL is public by design.
 
 labels:
   platform: darwin/arm64
@@ -17,12 +14,23 @@ steps:
     image: bash
     commands:
       - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
-  package:
+  setup:
     image: bash
     commands:
-      - 'echo "TODO Phase 3: CPack dmg + universal VST3/CLAP/AU (see apps/desktop + packages/vst3)"'
+      - node scripts/ci-local.mjs --stage=setup
+  desktop:
+    image: bash
+    commands:
+      - pnpm --filter @openaxe/desktop package
+  plugin:
+    image: bash
+    commands:
+      - node scripts/ci-local.mjs --stage=plugin --skip-setup
+      - node scripts/collect-plugin-bundles.mjs --platform=macos
   upload:
     image: bash
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
+    environment:
+      R2_PUBLIC_URL: https://pub-800f414cbfe9422e9faaa00ed34d2821.r2.dev
     commands:
-      - 'echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"'
+      - node scripts/r2-upload.mjs "apps/desktop/build/openaxe-desktop-*.dmg" "packages/vst3/build/openaxe-plugin-bundles-*.zip"
