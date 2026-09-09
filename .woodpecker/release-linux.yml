@@ -18,9 +18,9 @@ steps:
   package:
     image: openaxe-ci-linux:latest
     commands:
-      - echo "TODO Phase 3: CPack deb + Linux VST3/CLAP"
+      - 'echo "TODO Phase 3: CPack deb + Linux VST3/CLAP"'
   upload:
     image: openaxe-ci-linux:latest
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
     commands:
-      - echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"
+      - 'echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"'

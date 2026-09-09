@@ -23,9 +23,9 @@ steps:
   package:
     image: local
     commands:
-      - echo "TODO Phase 3: CPack dmg + universal VST3/CLAP/AU (see apps/desktop + packages/vst3)"
+      - 'echo "TODO Phase 3: CPack dmg + universal VST3/CLAP/AU (see apps/desktop + packages/vst3)"'
   upload:
     image: local
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
     commands:
-      - echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"
+      - 'echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"'
