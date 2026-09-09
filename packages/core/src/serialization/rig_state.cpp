@@ -51,7 +51,6 @@ const char* BlockKindToString(graph::BlockKind kind) {
     case graph::BlockKind::kSpace: return "space";
     case graph::BlockKind::kCab: return "cab";
     case graph::BlockKind::kMixer: return "mixer";
-    case graph::BlockKind::kSplitter: return "splitter";
     case graph::BlockKind::kRingMod: return "ring-mod";
     case graph::BlockKind::kFilter: return "filter";
     case graph::BlockKind::kPitchShifter: return "pitch-shifter";
@@ -83,7 +82,6 @@ bool StringToBlockKind(const std::string& text, graph::BlockKind& out) {
       {"space", graph::BlockKind::kSpace},
       {"cab", graph::BlockKind::kCab},
       {"mixer", graph::BlockKind::kMixer},
-      {"splitter", graph::BlockKind::kSplitter},
       {"ring-mod", graph::BlockKind::kRingMod},
       {"filter", graph::BlockKind::kFilter},
       {"pitch-shifter", graph::BlockKind::kPitchShifter},
@@ -115,6 +113,7 @@ const char* ReverbAlgorithmToString(engine::ReverbAlgorithm algorithm) {
     case engine::ReverbAlgorithm::kRoom: return "room";
     case engine::ReverbAlgorithm::kPlate: return "plate";
     case engine::ReverbAlgorithm::kEarlyReflections: return "early-reflections";
+    case engine::ReverbAlgorithm::kSpring: return "spring";
   }
   return "hall";  // unreachable for a valid enum value
 }
@@ -128,6 +127,8 @@ bool StringToReverbAlgorithm(const std::string& text, engine::ReverbAlgorithm& o
     out = engine::ReverbAlgorithm::kPlate;
   } else if (text == "early-reflections") {
     out = engine::ReverbAlgorithm::kEarlyReflections;
+  } else if (text == "spring") {
+    out = engine::ReverbAlgorithm::kSpring;
   } else {
     return false;
   }
@@ -162,7 +163,7 @@ bool StringToDelayModel(const std::string& text, dsp::Delay::Model& out) {
 // bypass field.
 bool KindHasBypass(graph::BlockKind kind) {
   return kind != graph::BlockKind::kCab && kind != graph::BlockKind::kMixer &&
-         kind != graph::BlockKind::kSplitter && kind != graph::BlockKind::kSend1 &&
+         kind != graph::BlockKind::kSend1 &&
          kind != graph::BlockKind::kReturn1 && kind != graph::BlockKind::kSend2 &&
          kind != graph::BlockKind::kReturn2;
 }
@@ -379,7 +380,7 @@ std::string SerializeState(const AudioEngine& engine, bool embed_assets) {
 namespace {
 
 // The legacy param keys existing web presets use that are NOT core symbols -
-// resolved exactly as RigBlock.ts + namStudioRigWorklet.js resolve them today:
+// resolved exactly as RigBlock.ts + openAxeRigWorklet.js resolve them today:
 // input_level/output_level mean the per-block I/O trims everywhere, and a
 // reverb block's roomSize/damping/... route through ReverbControl.
 struct ReverbControlKey {

@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for effect-param names/symbols/ranges across the web app, packages/core's DSP wrappers, and the WASM AudioWorkletProcessors (issue #51). Generated C++ .inc fragments and the JS index-map module are produced from this file by scripts/gen-param-schema.mjs - never hand-edit the generated output. Canonical symbol casing is snake_case, matching packages/core's existing GetParamInfo() tables (those were kept as-is; the web side was renamed to match - see issue #41). Scope: only the 10 effect kinds with real DSP backing in packages/core today, plus the 3 real params (input_level/output_level/slim_size) shared by the 5 NAM-model block kinds (amp/amp-cab/pedal/outboard/space). The amp tone stack (bass/mid/treble/presence), cab's irMix, and mixer/splitter have no packages/core DSP behind them yet and are intentionally NOT in this schema - see issue #51's discussion.",
+  "$comment": "Single source of truth for effect-param names/symbols/ranges across the web app, packages/core's DSP wrappers, and the WASM AudioWorkletProcessors (issue #51). Generated C++ .inc fragments and the JS index-map module are produced from this file by scripts/gen-param-schema.mjs - never hand-edit the generated output. Canonical symbol casing is snake_case, matching packages/core's existing GetParamInfo() tables (those were kept as-is; the web side was renamed to match - see issue #41). Scope: only the 10 effect kinds with real DSP backing in packages/core today, plus the 3 real params (input_level/output_level/slim_size) shared by the 5 NAM-model block kinds (amp/amp-cab/pedal/outboard/space). The amp tone stack (bass/mid/treble/presence), cab's irMix, and the mixer have no packages/core DSP behind them yet and are intentionally NOT in this schema - see issue #51's discussion.",
   "effects": {
     "compressor": {
       "cppFile": "compressor.cpp",
@@ -299,6 +299,28 @@
             "mode": "exponential",
             "timeConstant": 0.03
           }
+        },
+        {
+          "symbol": "low_cut",
+          "label": "Low Cut",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "high_cut",
+          "label": "High Cut",
+          "min": 2000,
+          "max": 20000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
         }
       ]
     },
@@ -347,6 +369,16 @@
           "smoothing": {
             "mode": "exponential",
             "timeConstant": 0.02
+          }
+        },
+        {
+          "symbol": "stereo",
+          "label": "Stereo",
+          "min": 0,
+          "max": 1,
+          "unit": "",
+          "smoothing": {
+            "mode": "none"
           }
         }
       ]
@@ -405,9 +437,9 @@
       "params": [
         {
           "symbol": "rate",
-          "label": "Rate",
+          "label": "Speed",
           "min": 0.1,
-          "max": 5,
+          "max": 8,
           "unit": "Hz",
           "smoothing": {
             "mode": "exponential",
@@ -415,32 +447,10 @@
           }
         },
         {
-          "symbol": "depth",
-          "label": "Depth",
-          "min": 0.1,
-          "max": 1,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "feedback",
-          "label": "Feedback",
+          "symbol": "script",
+          "label": "Voice",
           "min": 0,
-          "max": 0.9,
-          "unit": "%",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.02
-          }
-        },
-        {
-          "symbol": "stages",
-          "label": "Stages",
-          "min": 2,
-          "max": 8,
+          "max": 1,
           "unit": "",
           "smoothing": {
             "mode": "none",
@@ -828,6 +838,17 @@
             "mode": "exponential",
             "timeConstant": 0.02
           }
+        },
+        {
+          "symbol": "velocity",
+          "label": "Velocity",
+          "min": 0,
+          "max": 1,
+          "unit": "x",
+          "smoothing": {
+            "mode": "exponential",
+            "timeConstant": 0.05
+          }
         }
       ]
     },
@@ -1006,10 +1027,10 @@
           }
         }
       ],
-      "comment": "The 7-entry table engine.cpp bolts onto NamAmp (which has no GetParamInfo of its own) - shared by amp/amp-cab/pedal/outboard/space. input_level/output_level are the loaded capture's own dBu calibration, not user levels (a UI's Input/Output knobs are block trims - see nam_studio_set_block_input_trim); slim_size only does anything for a slimmable capture; bass/mid/treble/presence are the 4-band tone stack the engine runs after the model (dsp/tone_stack.cpp), which the web app used to implement with its own Web Audio biquads. Generated fragment name is synthetic (engine_amp_params.inc) since these params live inside engine.cpp itself, not a dedicated DSP wrapper file."
+      "comment": "The 7-entry table engine.cpp bolts onto NamAmp (which has no GetParamInfo of its own) - shared by amp/amp-cab/pedal/outboard/space. input_level/output_level are the loaded capture's own dBu calibration, not user levels (a UI's Input/Output knobs are block trims - see openaxe_set_block_input_trim); slim_size only does anything for a slimmable capture; bass/mid/treble/presence are the 4-band tone stack the engine runs after the model (dsp/tone_stack.cpp), which the web app used to implement with its own Web Audio biquads. Generated fragment name is synthetic (engine_amp_params.inc) since these params live inside engine.cpp itself, not a dedicated DSP wrapper file."
     },
     "reverb": {
-      "comment": "Algorithm choice is a structural block-level swap (nam_studio_set_reverb_algorithm), not a generic param - see paramSchema.ts's reverbAlgorithm field. roomSize/damping are web-only UI abstractions computed via per-algorithm formulas in dragonflyReverbWorklet.js into decay/high_cut; they have no 1:1 core symbol and are listed under derived, not variants.",
+      "comment": "Algorithm choice is a structural block-level swap (openaxe_set_reverb_algorithm), not a generic param - see paramSchema.ts's reverbAlgorithm field. roomSize/damping are web-only UI abstractions computed via per-algorithm formulas in the web reverb worklet into decay/high_cut; they have no 1:1 core symbol and are listed under derived, not variants.",
       "variants": {
         "hall": {
           "cppFile": "dragonfly_hall_reverb.cpp",
@@ -1591,6 +1612,100 @@
               }
             }
           ]
+        },
+        "spring": {
+          "cppFile": "spring_reverb.cpp",
+          "comment": "Hand-rolled spring tank (src/dsp/spring_reverb.cpp, premium dual-allpass upgrade in #372). Unlike the algorithmic reverbs it smooths no params internally, so every param carries engine-side exponential smoothing to keep knob moves zipper-free.",
+          "params": [
+            {
+              "symbol": "dry_level",
+              "label": "Dry Level",
+              "min": 0,
+              "max": 100,
+              "unit": "%",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.03
+              }
+            },
+            {
+              "symbol": "decay",
+              "label": "Decay",
+              "min": 0.1,
+              "max": 10,
+              "unit": "s",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.1
+              }
+            },
+            {
+              "symbol": "high_cut",
+              "label": "High Cut",
+              "min": 1000,
+              "max": 16000,
+              "unit": "Hz",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.05
+              }
+            },
+            {
+              "symbol": "width",
+              "label": "Width",
+              "min": 50,
+              "max": 150,
+              "unit": "%",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.03
+              }
+            },
+            {
+              "symbol": "predelay",
+              "label": "Pre-Delay",
+              "min": 0,
+              "max": 100,
+              "unit": "ms",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.02
+              }
+            },
+            {
+              "symbol": "spin",
+              "label": "Spin",
+              "min": 0,
+              "max": 10,
+              "unit": "Hz",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.05
+              }
+            },
+            {
+              "symbol": "wander",
+              "label": "Wander",
+              "min": 0,
+              "max": 40,
+              "unit": "ms",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.05
+              }
+            },
+            {
+              "symbol": "drive",
+              "label": "Drive",
+              "min": 0,
+              "max": 1,
+              "unit": "x",
+              "smoothing": {
+                "mode": "exponential",
+                "timeConstant": 0.02
+              }
+            }
+          ]
         }
       },
       "derived": ["roomSize", "damping"]
@@ -1608,9 +1723,31 @@
             "mode": "exponential",
             "timeConstant": 0.03
           }
+        },
+        {
+          "symbol": "low_cut",
+          "label": "Low Cut",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
+        },
+        {
+          "symbol": "high_cut",
+          "label": "High Cut",
+          "min": 2000,
+          "max": 20000,
+          "unit": "Hz",
+          "smoothing": {
+            "mode": "none",
+            "timeConstant": 0
+          }
         }
       ],
-      "comment": "Cab blocks are IR convolution (dsp/convolver.cpp) with a wet/dry blend. Like the amp table these params live in engine.cpp rather than a DSP wrapper, hence the synthetic generated fragment name (engine_cab_params.inc). The web UI calls this knob irMix; the bridge maps that camelCase key onto this symbol."
+      "comment": "Cab blocks are IR convolution (dsp/convolver.cpp) with a wet/dry blend plus post-IR low-cut (HPF) and high-cut (LPF) biquads (issue #373). Like the amp table these params live in engine.cpp rather than a DSP wrapper, hence the synthetic generated fragment name (engine_cab_params.inc). The web UI calls these knobs irMix/lowCut/highCut; the bridge maps those camelCase keys onto these symbols."
     },
     "mixer": {
       "cppFile": "engine_mixer.cpp",
@@ -1705,56 +1842,6 @@
         }
       ],
       "comment": "Mixer blocks (dsp lives in engine.cpp Process(), not a DSP wrapper). Per-input level and stereo pan, applied to each of the kMixerInputCount independent input jacks before they're summed into port 0 - the core replacement for the web's per-input GainNode + StereoPanner. Symbols match the web MixerBlock's in{i}_level/in{i}_pan param keys so the UI and the desktop bridge forward them unchanged."
-    },
-    "splitter": {
-      "cppFile": "engine_splitter.cpp",
-      "params": [
-        {
-          "symbol": "out0_level",
-          "label": "Out 1 Level",
-          "min": 0,
-          "max": 1.5,
-          "unit": "x",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.03
-          }
-        },
-        {
-          "symbol": "out1_level",
-          "label": "Out 2 Level",
-          "min": 0,
-          "max": 1.5,
-          "unit": "x",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.03
-          }
-        },
-        {
-          "symbol": "out2_level",
-          "label": "Out 3 Level",
-          "min": 0,
-          "max": 1.5,
-          "unit": "x",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.03
-          }
-        },
-        {
-          "symbol": "out3_level",
-          "label": "Out 4 Level",
-          "min": 0,
-          "max": 1.5,
-          "unit": "x",
-          "smoothing": {
-            "mode": "exponential",
-            "timeConstant": 0.03
-          }
-        }
-      ],
-      "comment": "Splitter blocks (dsp lives in engine.cpp Process(), not a DSP wrapper). Per-output level, applied to each of the kSplitterOutputCount independent output jacks when routing an edge out of the splitter at that port - the core replacement for the web's per-output GainNode. Symbols match the web SplitterBlock's out{i}_level param keys."
     }
   },
   "pluginAutomation": {

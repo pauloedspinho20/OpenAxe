@@ -117,21 +117,27 @@ describe('PresetManager', () => {
     expect(usePresetBankStore.getState().slots[0]).toBe(presets[0]!.id)
   })
 
-  it('saving into an occupied slot asks for confirmation before overwriting', async () => {
-    await savePreset(makePreset('p1', 'Clean'))
-    usePresetBankStore.getState().setSlot(2, 'p1')
-    act(() => usePresetManager.setState({ open: true }))
-    render(<PresetManager rig={fakeRig} context={null} />)
-    await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
-      timeout: 5000,
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Save current rig into slot 3' }))
-    expect(screen.getByText(/already holds "Clean"/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Overwrite' }))
-    await waitFor(() => expect(screen.queryByText(/already holds "Clean"/)).toBeNull(), {
-      timeout: 5000,
-    })
-  })
+  // Renders the full 512-slot bank grid; on a loaded CI runner the first
+  // paint can exceed vitest's 5s default (run 33901076663), so allow headroom.
+  it(
+    'saving into an occupied slot asks for confirmation before overwriting',
+    { timeout: 20_000 },
+    async () => {
+      await savePreset(makePreset('p1', 'Clean'))
+      usePresetBankStore.getState().setSlot(2, 'p1')
+      act(() => usePresetManager.setState({ open: true }))
+      render(<PresetManager rig={fakeRig} context={null} />)
+      await waitFor(() => expect(screen.getByText('Clean')).toBeInTheDocument(), {
+        timeout: 5000,
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Save current rig into slot 3' }))
+      expect(screen.getByText(/already holds "Clean"/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Overwrite' }))
+      await waitFor(() => expect(screen.queryByText(/already holds "Clean"/)).toBeNull(), {
+        timeout: 5000,
+      })
+    },
+  )
 
   it('deletes an unplaced preset only after confirmation', async () => {
     await savePreset(makePreset('p1', 'Clean'))

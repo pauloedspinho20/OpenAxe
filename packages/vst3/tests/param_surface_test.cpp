@@ -66,7 +66,7 @@ void TestGroups() {
 }
 
 void TestDisplayAndSlimRouting() {
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   // Master slot display should work even with no blocks bound — it resolves
   // to the fixed master descriptors (level at norm 0.5 -> 0.75x).
   const std::string disp = openaxe_vst3::params::DisplayForSlotEntry(g, 0, 0, 0.5f);
@@ -79,8 +79,8 @@ void TestDisplayAndSlimRouting() {
   CHECK(unbound == "—");
 
   // Bind a real block to slot 1 and verify display resolves live.
-  int32_t comp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_COMPRESSOR, 0, 0);
-  nam_studio_bind_automation_slot(g, 1, comp);
+  int32_t comp = openaxe_add_block(g, OPENAXE_BLOCK_COMPRESSOR, 0, 0);
+  openaxe_bind_automation_slot(g, 1, comp);
   const std::string compDisp = openaxe_vst3::params::DisplayForSlotEntry(g, 1, 0, 0.5f);
   CHECK(compDisp != "—");
   CHECK(compDisp.find("dB") != std::string::npos || compDisp.find("x") != std::string::npos || compDisp.find("%") != std::string::npos);
@@ -90,16 +90,16 @@ void TestDisplayAndSlimRouting() {
   CHECK(openaxe_vst3::params::HostParamWrite(g, 2, 0.5f, needs) && !needs);
   // For an unbound slot, write still succeeds (remembered value update).
   CHECK(openaxe_vst3::params::HostParamWrite(g, openaxe_vst3::params::SlotEntryToHostId(5, 0), 0.25f, needs) && !needs);
-  CHECK(std::fabs(nam_studio_get_automation_param_normalized(g, 5, 0) - 0.25f) < 1e-6);
+  CHECK(std::fabs(openaxe_get_automation_param_normalized(g, 5, 0) - 0.25f) < 1e-6);
 
   // Amp slim_size is the Tier-2 special case. Bind an amp to slot 2 and drive
   // its slim_size entry — HostParamWrite must signal needs_suspend.
-  NamStudioGraph* g2 = nam_studio_graph_create();
-  int32_t amp = nam_studio_add_block(g2, NAM_STUDIO_BLOCK_AMP, 0, 0);
+  OpenAxeGraph* g2 = openaxe_graph_create();
+  int32_t amp = openaxe_add_block(g2, OPENAXE_BLOCK_AMP, 0, 0);
   // Amp param table: input_level=0, output_level=1, slim_size=2 (see param_schema)
-  const int32_t ampCount = nam_studio_block_param_count(g2, amp);
+  const int32_t ampCount = openaxe_block_param_count(g2, amp);
   CHECK(ampCount >= 3);
-  nam_studio_bind_automation_slot(g2, 2, amp);
+  openaxe_bind_automation_slot(g2, 2, amp);
   const int slimHostId = openaxe_vst3::params::SlotEntryToHostId(2, 2);
   bool needs2=false;
   // Before the fix this mistakenly went lock-free; now it must route via suspend
@@ -107,8 +107,8 @@ void TestDisplayAndSlimRouting() {
   CHECK(!ok && needs2);
   std::printf("  slim_size write correctly signals needs_suspend\n");
 
-  nam_studio_graph_destroy(g);
-  nam_studio_graph_destroy(g2);
+  openaxe_graph_destroy(g);
+  openaxe_graph_destroy(g2);
 }
 
 } // namespace
@@ -121,20 +121,20 @@ void TestDisplayAndSlimRouting() {
 // exactly this, and it is where a mistake would be silent — a wrong id would
 // automate somebody else's parameter.
 static void TestBlockToHostParamResolution() {
-  auto* g = nam_studio_graph_create();
-  nam_studio_reset(g, 48000, 512);
+  auto* g = openaxe_graph_create();
+  openaxe_reset(g, 48000, 512);
 
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0, 1);
-  const int32_t rev = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 1, 3);
-  const int32_t unbound = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 2, 5);
-  nam_studio_bind_automation_slot(g, 1, amp);
-  nam_studio_bind_automation_slot(g, 2, rev);
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0, 1);
+  const int32_t rev = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 1, 3);
+  const int32_t unbound = openaxe_add_block(g, OPENAXE_BLOCK_DELAY, 2, 5);
+  openaxe_bind_automation_slot(g, 1, amp);
+  openaxe_bind_automation_slot(g, 2, rev);
 
   // The scan NotifyHostParamChangedFromUI does: find the slot holding a block.
   auto slot_for = [&](int32_t block) {
     for (int slot = openaxe::automation::kFirstBlockSlot;
          slot < openaxe::automation::kSlotCount; ++slot) {
-      if (nam_studio_automation_slot_block(g, slot) == block) return slot;
+      if (openaxe_automation_slot_block(g, slot) == block) return slot;
     }
     return -1;
   };
@@ -164,7 +164,7 @@ static void TestBlockToHostParamResolution() {
           openaxe::automation::kMasterParamCount);
   }
 
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  block -> host param resolution: ok\n");
 }
 

@@ -24,9 +24,10 @@
 }
 
 .wrap {
+  height: 386px;
   position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-2);
   background: var(--panel);
@@ -37,6 +38,7 @@
 }
 
 .rail {
+  height: 100%;
   position: relative;
   z-index: 1;
   flex-shrink: 0;
@@ -68,9 +70,17 @@
   left: -7px;
 }
 
+@media (max-width: var(--mw-xl)) {
+  .wrap {
+    height: 342px;
+    gap: var(--sp-2);
+  }
+}
+
 /* === Mobile: vertical signal flow (IN top, grid, OUT bottom), no horizontal scroll === */
 @media (max-width: var(--mw-md)) {
   .wrap {
+    height: initial;
     flex-direction: column;
     overflow: visible;
     overflow-x: visible;
@@ -80,7 +90,6 @@
 
   .rail {
     flex-direction: row;
-    flex-wrap: wrap;
     width: 100%;
     min-width: 0;
     min-height: auto;
@@ -128,14 +137,14 @@
   inset: 0;
   border-radius: 50%;
   background: var(--panel);
-  border: 2px solid var(--accent-dim);
+  border: 2px solid var(--ink-1);
   cursor: crosshair;
   touch-action: none;
 }
 
-.railJack:hover {
+/* .railJack:hover {
   border-color: var(--accent);
-}
+} */
 
 .grid {
   justify-content: center;
@@ -143,10 +152,10 @@
   z-index: 1;
   display: grid;
   grid-template-rows: repeat(4, minmax(80px, 80px));
-  grid-auto-columns: minmax(80px, 80px);
+  grid-template-columns: repeat(10, minmax(80px, 80px));
   gap: var(--sp-4);
   flex: 1;
-  padding: var(--sp-2) 0;
+  /*   padding: var(--sp-2) 0; */
   /*
    * No min-width: 0 here on purpose - that would let flexbox squeeze this
    * item's own box below its 10 columns' actual minimum width, and CSS Grid
@@ -157,11 +166,33 @@
    */
 }
 
+@media (max-width: var(--mw-xl)) {
+  .grid {
+    grid-template-rows: repeat(4, minmax(70px, 70px));
+    grid-template-columns: repeat(10, minmax(70px, 70px));
+  }
+}
+
+@media (max-width: var(--mw-xl)) {
+  .grid {
+    grid-template-rows: repeat(4, minmax(60px, 60px));
+    grid-template-columns: repeat(10, minmax(60px, 60px));
+    gap: var(--sp-3);
+  }
+}
+
+@media (max-width: var(--mw-lg)) {
+  .grid {
+    grid-template-rows: repeat(4, minmax(60px, 60px));
+    grid-template-columns: repeat(10, minmax(60px, 60px));
+    gap: var(--sp-2);
+  }
+}
+
 @media (max-width: var(--mw-md)) {
   .grid {
     flex: none;
     width: 100%;
-    /* 4 across (original ROWS), 10 down (original COLS) — fits 390px without x-scroll */
     grid-template-rows: repeat(10, minmax(80px, 80px));
     grid-template-columns: repeat(4, minmax(80px, 80px));
     grid-auto-columns: unset;
@@ -171,22 +202,19 @@
   }
 }
 
-/* @media (max-width: var(--mw-sm)) {
+@media (max-width: var(--mw-sm)) {
   .grid {
-    grid-template-rows: repeat(10, minmax(48px, auto));
-    grid-template-columns: repeat(4, minmax(48px, 1fr));
-    gap: var(--sp-1);
+    grid-template-rows: repeat(10, minmax(70px, 70px));
+    grid-template-columns: repeat(4, minmax(70px, 70px));
   }
-} */
+}
 
-/* Keep labels readable at ≤380px — don't shrink below 64px effective col */
-/* @media (max-width: 380px) {
+@media (max-width: var(--mw-xs)) {
   .grid {
-    grid-template-rows: repeat(10, minmax(44px, auto));
-    grid-template-columns: repeat(4, minmax(44px, 1fr));
-    gap: var(--sp-1);
+    grid-template-rows: repeat(10, minmax(65px, 65px));
+    grid-template-columns: repeat(4, minmax(65px, 65px));
   }
-} */
+}
 
 .cell {
   min-width: 0;
@@ -200,7 +228,7 @@
   align-items: center;
   justify-content: center;
   background: none;
-  border: 1px dashed var(--seam-strong);
+  border: 1px dashed var(--ink-3);
   border-radius: var(--r-lg);
   color: var(--ink-3);
   font-size: 20px;
@@ -234,7 +262,7 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-1);
+  padding: 2px;
   background: var(--screen-bg);
   border: 1px solid var(--seam-strong);
   border-radius: var(--r-md);
@@ -249,7 +277,7 @@
 }
 
 .tunerLive {
-  width: 60px;
+  width: 50px;
   min-width: 0;
 }
 
@@ -278,10 +306,10 @@
 }
 
 .railJackArmed {
-  border-color: var(--accent) !important;
+  border-color: var(--ink-1) !important;
   box-shadow:
-    0 0 0 2px var(--accent),
-    0 0 8px var(--accent);
+    0 0 0 2px var(--ink-1),
+    0 0 8px var(--ink-1);
 }
 
 /* Mobile: keep labels readable — don't shrink below usable */

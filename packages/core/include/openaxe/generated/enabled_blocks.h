@@ -8,32 +8,31 @@
 
 #include "openaxe/block.h"
 
-#define OPENAXE_BLOCK_NOISE_GATE 1
-#define OPENAXE_BLOCK_COMPRESSOR 1
-#define OPENAXE_BLOCK_EQ 1
-#define OPENAXE_BLOCK_CHORUS 1
-#define OPENAXE_BLOCK_FLANGER 1
-#define OPENAXE_BLOCK_PHASER 1
-#define OPENAXE_BLOCK_TREMOLO 1
-#define OPENAXE_BLOCK_DELAY 1
-#define OPENAXE_BLOCK_REVERB 1
-#define OPENAXE_BLOCK_RING_MOD 1
-#define OPENAXE_BLOCK_GRANULAR_DELAY 1
-#define OPENAXE_BLOCK_FILTER 1
-#define OPENAXE_BLOCK_PITCH_SHIFTER 1
-#define OPENAXE_BLOCK_ROTARY 1
-#define OPENAXE_BLOCK_AMP 1
-#define OPENAXE_BLOCK_AMP_CAB 1
-#define OPENAXE_BLOCK_PEDAL 1
-#define OPENAXE_BLOCK_OUTBOARD 1
-#define OPENAXE_BLOCK_SPACE 1
-#define OPENAXE_BLOCK_CAB 1
-#define OPENAXE_BLOCK_MIXER 1
-#define OPENAXE_BLOCK_SPLITTER 1
-#define OPENAXE_BLOCK_SEND_1 1
-#define OPENAXE_BLOCK_RETURN_1 1
-#define OPENAXE_BLOCK_SEND_2 1
-#define OPENAXE_BLOCK_RETURN_2 1
+#define OPENAXE_BLOCK_NOISE_GATE_COMPILED 1
+#define OPENAXE_BLOCK_COMPRESSOR_COMPILED 1
+#define OPENAXE_BLOCK_EQ_COMPILED 1
+#define OPENAXE_BLOCK_CHORUS_COMPILED 1
+#define OPENAXE_BLOCK_FLANGER_COMPILED 1
+#define OPENAXE_BLOCK_PHASER_COMPILED 1
+#define OPENAXE_BLOCK_TREMOLO_COMPILED 1
+#define OPENAXE_BLOCK_DELAY_COMPILED 1
+#define OPENAXE_BLOCK_REVERB_COMPILED 1
+#define OPENAXE_BLOCK_RING_MOD_COMPILED 0
+#define OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED 0
+#define OPENAXE_BLOCK_FILTER_COMPILED 0
+#define OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED 0
+#define OPENAXE_BLOCK_ROTARY_COMPILED 1
+#define OPENAXE_BLOCK_AMP_COMPILED 1
+#define OPENAXE_BLOCK_AMP_CAB_COMPILED 1
+#define OPENAXE_BLOCK_PEDAL_COMPILED 1
+#define OPENAXE_BLOCK_OUTBOARD_COMPILED 1
+#define OPENAXE_BLOCK_SPACE_COMPILED 1
+#define OPENAXE_BLOCK_CAB_COMPILED 1
+#define OPENAXE_BLOCK_MIXER_COMPILED 1
+#define OPENAXE_BLOCK_SEND_1_COMPILED 1
+#define OPENAXE_BLOCK_RETURN_1_COMPILED 1
+#define OPENAXE_BLOCK_SEND_2_COMPILED 1
+#define OPENAXE_BLOCK_RETURN_2_COMPILED 1
 
 namespace openaxe::blocks {
 
@@ -51,10 +50,10 @@ inline constexpr bool IsCompiled(graph::BlockKind kind) {
     case graph::BlockKind::kTremolo: return true;
     case graph::BlockKind::kDelay: return true;
     case graph::BlockKind::kReverb: return true;
-    case graph::BlockKind::kRingMod: return true;
-    case graph::BlockKind::kGranularDelay: return true;
-    case graph::BlockKind::kFilter: return true;
-    case graph::BlockKind::kPitchShifter: return true;
+    case graph::BlockKind::kRingMod: return false;
+    case graph::BlockKind::kGranularDelay: return false;
+    case graph::BlockKind::kFilter: return false;
+    case graph::BlockKind::kPitchShifter: return false;
     case graph::BlockKind::kRotary: return true;
     case graph::BlockKind::kAmp: return true;
     case graph::BlockKind::kAmpCab: return true;
@@ -63,7 +62,6 @@ inline constexpr bool IsCompiled(graph::BlockKind kind) {
     case graph::BlockKind::kSpace: return true;
     case graph::BlockKind::kCab: return true;
     case graph::BlockKind::kMixer: return true;
-    case graph::BlockKind::kSplitter: return true;
     case graph::BlockKind::kSend1: return true;
     case graph::BlockKind::kReturn1: return true;
     case graph::BlockKind::kSend2: return true;
@@ -88,8 +86,8 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kReverb: return true;
     case graph::BlockKind::kRingMod: return false;
     case graph::BlockKind::kGranularDelay: return false;
-    case graph::BlockKind::kFilter: return true;
-    case graph::BlockKind::kPitchShifter: return true;
+    case graph::BlockKind::kFilter: return false;
+    case graph::BlockKind::kPitchShifter: return false;
     case graph::BlockKind::kRotary: return true;
     case graph::BlockKind::kAmp: return true;
     case graph::BlockKind::kAmpCab: return true;
@@ -98,7 +96,6 @@ inline constexpr bool IsInPalette(graph::BlockKind kind) {
     case graph::BlockKind::kSpace: return true;
     case graph::BlockKind::kCab: return true;
     case graph::BlockKind::kMixer: return true;
-    case graph::BlockKind::kSplitter: return false;
     case graph::BlockKind::kSend1: return true;
     case graph::BlockKind::kReturn1: return true;
     case graph::BlockKind::kSend2: return true;

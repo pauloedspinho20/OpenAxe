@@ -27,7 +27,7 @@
 //     loads, reverb/delay algorithm swaps, and the post-Open reset.
 //     Handlers Call() into it so these serialize against each other and never
 //     run on the audio thread.
-//   - audio (real-time) thread: only ever nam_studio_process. Before touching
+//   - audio (real-time) thread: only ever openaxe_process. Before touching
 //     the graph the control thread raises the suspend flag and waits for the
 //     audio callback to observe it (see AudioIO::BeginSuspend), so a mutation
 //     can never race an in-flight process.
@@ -49,6 +49,13 @@ struct BlockRecord {
   std::string kind;  // web BlockKind string ("delay", "amp", "mixer", ...)
   int row = 0;
   int col = 0;
+  // Bridge-level memo of the last-applied structural selector, so a redundant
+  // resend (the UI replays each block's full params object on every knob move)
+  // can be skipped WITHOUT the suspend handshake that would otherwise run on
+  // every no-op. -1 = unknown/not yet set (first set always applies). Only
+  // these two selectors carry one; every other param is a lock-free atomic.
+  int32_t reverb_algorithm = -1;
+  int32_t delay_model = -1;
 };
 
 struct EdgeRecord {
@@ -56,6 +63,21 @@ struct EdgeRecord {
   int from_port = 0;
   nlohmann::json to_id;
   int to_port = 0;
+};
+
+// Which graph a staged-capable handler targets (issue #367): the live graph
+// and its bookkeeping, or the staged graph under construction plus its own
+// maps. Handlers read the request's "stage" flag and resolve through
+// MutationTargetFor(); staged mutations skip the suspend handshake entirely
+// (the staged engine is never processed before its commit) and only the
+// lock-free openaxe_staged_graph_commit touches the live graph.
+struct MutationTarget {
+  OpenAxeGraph* graph = nullptr;
+  std::map<std::string, BlockRecord>* blocks = nullptr;
+  std::map<std::string, EdgeRecord>* edges = nullptr;
+  std::map<std::string, int32_t>* edge_ids = nullptr;    // js edge id -> core edge id
+  std::map<int32_t, std::string>* edge_ids_rev = nullptr;
+  bool staged = false;
 };
 
 // issue #71: only loopback http(s) origins may host the UI while the privileged
@@ -111,6 +133,7 @@ class StudioBridge {
   std::string HandleLoadIrWav(const std::string& req);
   std::string HandleUnloadIr(const std::string& req);
   std::string HandleSetInputGain(const std::string& req);
+  std::string HandleSetInputChannel(const std::string& req);
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);
@@ -118,6 +141,12 @@ class StudioBridge {
   std::string HandleLoadDIWav(const std::string& req);
   std::string HandlePlayDI(const std::string& req);
   std::string HandleStopDI(const std::string& req);
+
+  // Gapless staged switching (issue #367) - see MutationTarget above.
+  std::string HandleStageBegin(const std::string& req);
+  std::string HandleStageCommit(const std::string& req);
+  std::string HandleStageDiscard(const std::string& req);
+  std::string HandleSwitchActive(const std::string& req);
 
   // Small secret store (issue #146) backing the Tone3000 refresh token so it
   // survives an app restart - see secure_storage.h. Independent of the
@@ -140,15 +169,43 @@ class StudioBridge {
   // reset the graph (topology ops need it; model loads self-reset). This is
   // how every graph-affecting bridge call reaches the core.
   void Mutate(const std::function<void()>& mutation, bool reset_after);
+  // Same, but against a MutationTarget: live targets suspend exactly like
+  // Mutate; staged targets run unsuspended (the staged engine is never
+  // processed before its commit, so there is nothing to suspend) and reset
+  // the staged graph directly instead.
+  void MutateOn(const MutationTarget& target, const std::function<void()>& mutation,
+                bool reset_after);
+  // Live-graph target (blocks_/edges_/... + graph_).
+  MutationTarget LiveTarget();
+  // Fills *out with the staged-graph target; false when no staged graph is
+  // open (the caller reports "call stageBegin first").
+  bool StagedTarget(MutationTarget* out);
+  // Resolves a staged-capable handler's target from its "stage" request flag.
+  // Returns "" on success or an error string (no staged graph open). Control
+  // thread only (reads the bookkeeping maps).
+  std::string ResolveTarget(bool stage, MutationTarget* out);
 
   // Id/position bookkeeping (control-thread only) ------------------------
   std::string GenBlockId();
   std::string GenEdgeId();
   void DropEdgesTouching(const std::string& block_id);
+  void DropEdgesTouchingOn(const std::string& block_id, std::map<std::string, EdgeRecord>& edges,
+                           std::map<std::string, int32_t>& edge_ids,
+                           std::map<int32_t, std::string>& edge_ids_rev);
 
   // State -----------------------------------------------------------------
   AudioIO audio_;
-  NamStudioGraph* graph_ = nullptr;
+  OpenAxeGraph* graph_ = nullptr;
+  // Staged graph under construction (issue #367) plus its own bookkeeping.
+  // Only ever touched on the control thread, like the live maps. A
+  // successful StageCommit adopts these maps into the live ones and clears
+  // the handle (the core consumes it); the destructor destroys an
+  // abandoned one.
+  OpenAxeGraph* staged_ = nullptr;
+  std::map<std::string, BlockRecord> staged_blocks_;
+  std::map<std::string, EdgeRecord> staged_edges_;
+  std::map<std::string, int32_t> staged_edge_ids_;
+  std::map<int32_t, std::string> staged_edge_ids_rev_;
 
   std::thread control_thread_;
   std::mutex queue_mutex_;

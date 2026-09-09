@@ -96,7 +96,7 @@ void NamAmp::AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& co
   // Snapshot the model's own metadata. `input_level`/`output_level` are the
   // capture's dBu calibration figures, not user gain: the engine seeds its amp
   // params from them, and a UI's Input/Output knobs go to the block trims
-  // instead (see nam_studio_set_block_input_trim).
+  // instead (see openaxe_set_block_input_trim).
   info_ = NamModelInfo{};
   info_.version = config.version;
   info_.sample_rate = dsp_->GetExpectedSampleRate();

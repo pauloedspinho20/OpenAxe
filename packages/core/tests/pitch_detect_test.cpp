@@ -67,7 +67,7 @@ void TestReturnsNullForSilence() {
   auto result = DetectPitch(buf.data(), static_cast<int32_t>(buf.size()), kSampleRate);
   OPENAXE_EXPECT(!result.has_value());
   // ABI-level: Hz == 0 for silence.
-  OPENAXE_EXPECT(nam_studio_detect_pitch(buf.data(), static_cast<int32_t>(buf.size()), kSampleRate) == 0.0f);
+  OPENAXE_EXPECT(openaxe_detect_pitch(buf.data(), static_cast<int32_t>(buf.size()), kSampleRate) == 0.0f);
 }
 
 void TestReturnsNullForWhiteNoise() {
@@ -106,34 +106,34 @@ void TestSweepGuitarBassRange() {
 
 void TestAbiReturnsHzOrZero() {
   auto buf = SineBuffer(440.0, 4096);
-  float hz = nam_studio_detect_pitch(buf.data(), static_cast<int32_t>(buf.size()), kSampleRate);
+  float hz = openaxe_detect_pitch(buf.data(), static_cast<int32_t>(buf.size()), kSampleRate);
   OPENAXE_EXPECT(std::fabs(hz - 440.0f) / 440.0f < 0.01f);
 
   std::vector<float> silence(2048, 0.0f);
-  OPENAXE_EXPECT(nam_studio_detect_pitch(silence.data(), static_cast<int32_t>(silence.size()), kSampleRate) == 0.0f);
-  OPENAXE_EXPECT(nam_studio_detect_pitch(nullptr, 0, kSampleRate) == 0.0f);
-  OPENAXE_EXPECT(nam_studio_detect_pitch(buf.data(), 0, kSampleRate) == 0.0f);
-  OPENAXE_EXPECT(nam_studio_detect_pitch(buf.data(), static_cast<int32_t>(buf.size()), 0.0) == 0.0f);
+  OPENAXE_EXPECT(openaxe_detect_pitch(silence.data(), static_cast<int32_t>(silence.size()), kSampleRate) == 0.0f);
+  OPENAXE_EXPECT(openaxe_detect_pitch(nullptr, 0, kSampleRate) == 0.0f);
+  OPENAXE_EXPECT(openaxe_detect_pitch(buf.data(), 0, kSampleRate) == 0.0f);
+  OPENAXE_EXPECT(openaxe_detect_pitch(buf.data(), static_cast<int32_t>(buf.size()), 0.0) == 0.0f);
 }
 
 void TestAbiFrequencyToNote() {
   const char* name = nullptr;
   int32_t octave = -99;
   int32_t cents = -99;
-  OPENAXE_EXPECT(nam_studio_frequency_to_note(440.0f, 440.0, &name, &octave, &cents) == 1);
+  OPENAXE_EXPECT(openaxe_frequency_to_note(440.0f, 440.0, &name, &octave, &cents) == 1);
   OPENAXE_EXPECT(name != nullptr);
   OPENAXE_EXPECT(std::string(name) == "A");
   OPENAXE_EXPECT(octave == 4);
   OPENAXE_EXPECT(cents == 0);
 
   // E2 ~82.41Hz
-  OPENAXE_EXPECT(nam_studio_frequency_to_note(82.41f, 440.0, &name, &octave, &cents) == 1);
+  OPENAXE_EXPECT(openaxe_frequency_to_note(82.41f, 440.0, &name, &octave, &cents) == 1);
   OPENAXE_EXPECT(std::string(name) == "E");
   OPENAXE_EXPECT(octave == 2);
 
   // 0 Hz is invalid
-  OPENAXE_EXPECT(nam_studio_frequency_to_note(0.0f, 440.0, &name, &octave, &cents) == 0);
-  OPENAXE_EXPECT(nam_studio_frequency_to_note(-5.0f, 440.0, &name, &octave, &cents) == 0);
+  OPENAXE_EXPECT(openaxe_frequency_to_note(0.0f, 440.0, &name, &octave, &cents) == 0);
+  OPENAXE_EXPECT(openaxe_frequency_to_note(-5.0f, 440.0, &name, &octave, &cents) == 0);
 
   // C++ API parity
   auto note = FrequencyToNote(440.0f, 440.0);

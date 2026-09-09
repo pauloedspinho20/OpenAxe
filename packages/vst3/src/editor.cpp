@@ -98,13 +98,13 @@ std::string SizeToStateJson(EditorSize sz, const std::string& base_json) {
   return out;
 }
 
-float GetMeter(NamStudioGraph* graph, int32_t block_id) {
+float GetMeter(OpenAxeGraph* graph, int32_t block_id) {
   if (!graph || block_id < 0) return 0.0f;
-  return nam_studio_get_meter(graph, block_id);
+  return openaxe_get_meter(graph, block_id);
 }
-float GetCpuLoad(NamStudioGraph* graph) {
+float GetCpuLoad(OpenAxeGraph* graph) {
   if (!graph) return 0.0f;
-  return nam_studio_get_cpu_load(graph);
+  return openaxe_get_cpu_load(graph);
 }
 
 const char* BundledFontName() { return "JetBrainsMono-Regular.ttf"; }
@@ -112,14 +112,14 @@ const char* BundledFontLicenseName() { return "JetBrainsMono-OFL.txt"; }
 
 // ── Editor shim ────────────────────────────────────────────────────────
 struct Editor::Impl {
-  NamStudioGraph* graph = nullptr;
+  OpenAxeGraph* graph = nullptr;
   EditorSize size = DefaultSize();
   Theme theme = DefaultTheme();
   bool open = false;
   void* parent = nullptr;
 };
 
-Editor::Editor(NamStudioGraph* graph) : impl_(new Impl()) { impl_->graph = graph; }
+Editor::Editor(OpenAxeGraph* graph) : impl_(new Impl()) { impl_->graph = graph; }
 Editor::~Editor() { delete impl_; }
 
 void Editor::Open(void* parent_window_handle) {

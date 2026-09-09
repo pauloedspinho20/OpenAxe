@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Verifies every WASM ABI symbol (_nam_studio_*, _malloc, _free) referenced
+// Verifies every WASM ABI symbol (_openaxe_*, _malloc, _free) referenced
 // by web/worklet source is present in packages/core/CMakeLists.txt's
 // hand-maintained EXPORTED_FUNCTIONS list (issue #70).
 //
 // Emscripten silently makes an unexported symbol `undefined` on the JS
 // Module object - calling it throws a TypeError at runtime, not at wasm
 // build time - so a missing export can't be caught by the wasm build
-// itself. This instead greps the actual source for every `_nam_studio_*`
+// itself. This instead greps the actual source for every `_openaxe_*`
 // identifier the web app calls and diffs that against what's exported,
 // the same drift-check shape as check-grid-dims.mjs (issue #61).
 //
@@ -43,7 +43,7 @@ function collectFiles(dir, out) {
 
 const files = SCAN_DIRS.flatMap((dir) => collectFiles(dir, []))
 
-const SYMBOL_RE = /\b(_nam_studio_[a-zA-Z0-9_]+|_malloc|_free)\b/g
+const SYMBOL_RE = /\b(_openaxe_[a-zA-Z0-9_]+|_malloc|_free)\b/g
 const used = new Set()
 for (const file of files) {
   const source = readFileSync(file, 'utf8')

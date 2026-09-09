@@ -41,7 +41,7 @@ function ensureWorkletRegistered(context: BaseAudioContext): Promise<void> {
 function fetchWasmBytes(context: BaseAudioContext): Promise<ArrayBuffer> {
   let promise = wasmBytesByContext.get(context)
   if (!promise) {
-    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    promise = fetch('/wasm-core/openaxe_core.wasm').then((response) => response.arrayBuffer())
     wasmBytesByContext.set(context, promise)
   }
   return promise

@@ -63,7 +63,7 @@ describe('prefs mirror', () => {
   it('hydrates localStorage from the shared store before anything reads it', async () => {
     const bridge = makeFakeBridge({
       'openaxe-theme': 'light',
-      'nam-web-studio:factory-setup-dismissed': '1',
+      'openaxe:factory-setup-dismissed': '1',
     })
     vi.mocked(getOpenAxe).mockReturnValue(bridge as never)
 
@@ -72,7 +72,7 @@ describe('prefs mirror', () => {
 
     // This is the actual reported symptom: the factory pack looked
     // uninstalled every launch because this flag started out empty.
-    expect(localStorage.getItem('nam-web-studio:factory-setup-dismissed')).toBe('1')
+    expect(localStorage.getItem('openaxe:factory-setup-dismissed')).toBe('1')
     expect(localStorage.getItem('openaxe-theme')).toBe('light')
   })
 
@@ -123,7 +123,7 @@ describe('prefs mirror', () => {
     vi.mocked(getOpenAxe).mockReturnValue(bridge as never)
     await installPrefsMirror()
 
-    // The patch is on Storage.prototype, which sessionStorage shares.
+    // The patch is on localStorage's prototype, which sessionStorage shares.
     sessionStorage.setItem('ephemeral', 'x')
     expect(bridge.storagePut).not.toHaveBeenCalled()
     expect(sessionStorage.getItem('ephemeral')).toBe('x')

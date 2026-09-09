@@ -15,6 +15,7 @@ import { test, expect } from '@playwright/test'
  */
 test('builds a full FX chain, toggles every bypass, and tears it down without errors', async ({
   page,
+  context,
 }) => {
   // Heaviest test in the suite: it sequentially builds 10 WASM-backed effect
   // blocks, each of which compiles/instantiates an AudioWorklet + fetches the
@@ -23,6 +24,14 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // "+" button can move mid-click), so give it a real budget. It passes in
   // ~6s in isolation; this is headroom, not a per-test norm.
   test.setTimeout(180_000)
+  // Scene applies are async end to end and only *start* once the engine is
+  // ready: useSceneEngine fires reloadActive when status becomes 'ready'
+  // (== the "Power off" button flips visible), then applyPreset reads the
+  // preset from IndexedDB, tears down + rebuilds the worklet, and loadGraph
+  // renders the blocks. The initial 3-block wait and the slot-8 switch below
+  // race that apply, so give them the same generous budget this heavy test
+  // already runs under.
+  const SCENE_LOAD_TIMEOUT = 90_000
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
   page.on('pageerror', (err) => pageErrors.push(err.message))
@@ -30,29 +39,56 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
 
-  await page.goto('/')
-  // Start from a clean slate: the grid/presets persist to IndexedDB (see
-  // src/storage/db.ts), so a prior test run's saved blocks/presets would
-  // otherwise still be there on this load.
-  await page.evaluate(async () => {
+  // Hermetic update check (see src/hooks/useUpdateCheck.ts): the hook fetches
+  // api.github.com + the landing fallback on every fresh load. In CI the API
+  // has no releases (404) and the fallback is CORS-blocked, and browsers log
+  // failed fetches as console errors no matter how carefully the hook catches
+  // them — which trips the zero-console-error assertion below. Fulfill with a
+  // tag older than the app version so the hook resolves to "no update" and
+  // never attempts the fallback.
+  await page.route(
+    'https://api.github.com/repos/pauloedspinho20/OpenAxe/releases/latest',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tag_name: 'v0.0.0',
+          html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.0.0',
+          published_at: null,
+        }),
+      }),
+  )
+  // Belt-and-braces: if the primary mock ever misses (or the API path
+  // changes), the hook falls through to the landing fallback
+  // (useUpdateCheck.ts), which in CI 403s / is CORS-blocked from localhost
+  // and trips the same zero-console-error assertion (run 33829263762).
+  // Fulfill it hermetically too so no real network can leak console errors.
+  await page.route('https://pauloedspinho20.github.io/OpenAxe/releases-data.json', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ releases: [] }),
+    }),
+  )
+
+  // Start from a clean slate. Each test runs in a fresh browser context, so
+  // IndexedDB is already empty; clear localStorage BEFORE the app script runs
+  // so the first-run dialog never appears and the offline FX seeding takes the
+  // "setup already done" path on first load.
+  //
+  // The previous approach (goto '/', then clear + delete IndexedDB, then
+  // reload) was racy: the first goto boots the app, which opens an IndexedDB
+  // connection, so deleteDatabase() fired onblocked and resolved WITHOUT
+  // deleting. The reloaded page then saw the first boot's *partial* seeding as
+  // an established session and never re-seeded the factory scene - the grid
+  // came up empty ("Clean" missing, every slot "Empty") and this test's
+  // 3-block wait failed intermittently on mobile under parallel load.
+  await context.addInitScript(() => {
     localStorage.clear()
-    // Established-session marker: keeps the first-run factory dialog from
-    // appearing and lets the offline FX starters seed + hydrate.
-    localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
-    const dbs = await indexedDB.databases()
-    await Promise.all(
-      dbs
-        .filter((db): db is { name: string } => !!db.name)
-        .map(
-          (db) =>
-            new Promise((resolve) => {
-              const req = indexedDB.deleteDatabase(db.name)
-              req.onsuccess = req.onerror = req.onblocked = () => resolve(undefined)
-            }),
-        ),
-    )
+    localStorage.setItem('openaxe:factory-setup-dismissed', '1')
   })
-  await page.reload()
+  await page.goto('/')
   const onboardingClose = page.getByRole('button', { name: "Let's go" })
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
@@ -82,21 +118,24 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // once, after the rebuild: 3 is Clean, 1 is scene 8, there is no
   // intermediate state to race against.
   const blocks = page.getByRole('button', { name: /block - click or Enter to edit/ })
-  await expect(blocks).toHaveCount(3, { timeout: 30000 })
+  await expect(blocks).toHaveCount(3, { timeout: SCENE_LOAD_TIMEOUT })
   await page.getByRole('button', { name: '8 Bypass' }).click()
-  await expect(blocks).toHaveCount(1, { timeout: 30000 })
+  await expect(blocks).toHaveCount(1, { timeout: SCENE_LOAD_TIMEOUT })
   // Mixer removal now lives in the block's actions sheet (⋯ menu) — the direct
   // Remove button was moved from BlockCard to BlockActionSheet for mobile.
   await page.getByRole('button', { name: 'Actions for Mixer' }).click()
   await page.getByRole('button', { name: 'Remove block' }).click()
   await expect(blocks).toHaveCount(0)
 
-  // All 10 effect kinds: the four DSPark-backed ones (issue #22's last
-  // migration - Gate, Compressor, EQ, Tremolo) plus six that already run on
-  // packages/core.
+  // All 10 compiled effect kinds (effects.config.json #313): the four
+  // DSPark-backed ones (issue #22's last migration - Gate, Compressor, EQ,
+  // Tremolo) plus six that already run on packages/core. Filter/ring-mod/
+  // granular-delay/pitch-shifter are compiled out, so they must not appear
+  // here - the palette (PALETTE_BLOCK_KINDS) won't offer them and the
+  // menuitem lookup would time out.
   const FX_KINDS = [
     'Gate',
-    'Compressor',
+    'Comp',
     'EQ',
     'Tremolo',
     'Reverb',
@@ -104,7 +143,7 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     'Flanger',
     'Phaser',
     'Delay',
-    'Filter',
+    'Rotary',
   ]
 
   // One block per column across the grid's 3 rows - well within GRID_ROWS x

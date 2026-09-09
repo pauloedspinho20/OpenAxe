@@ -18,14 +18,14 @@ a second front end would have to reimplement.
 
 pnpm + Turborepo workspace (`apps/*`, `packages/*`):
 
-| Package                    | What it owns                                                                                                                                                                                          |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core`            | The C++20 DSP/graph engine — the single source of truth for signal routing, params, model/IR loading. Its own CMake/CTest build, separate from the JS toolchain (see below).                          |
-| `apps/web`                 | The live product: Vite + React SPA, AudioWorklet + WASM (built from `packages/core`, committed under `apps/web/public/wasm-core/`).                                                                   |
-| `apps/desktop`             | Native shell (C++ + `webview.h` + JUCE `audio_devices`) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                                            |
-| `packages/ui`              | Shared React component/design-system library, consumed by `apps/web` and the desktop webview. Has its own Vitest config (`packages/ui/vite.config.ts`).                                               |
-| `packages/vst3`            | VST3 + standalone plugin (iPlug2 + `packages/core`, `WHOLE_ARCHIVE`) — scaffold builds and scans (issue #125); CLAP/AU later.                                                                         |
-| `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/17), [#16](https://github.com/pauloedspinho20/NAM-Web-Studio/issues/16). |
+| Package                    | What it owns                                                                                                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core`            | The C++20 DSP/graph engine — the single source of truth for signal routing, params, model/IR loading. Its own CMake/CTest build, separate from the JS toolchain (see below).            |
+| `apps/web`                 | The live product: Vite + React SPA, AudioWorklet + WASM (built from `packages/core`, committed under `apps/web/public/wasm-core/`).                                                     |
+| `apps/desktop`             | Native shell (C++ + `webview.h` + miniaudio) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                                         |
+| `packages/ui`              | Shared React component/design-system library, consumed by `apps/web` and the desktop webview. Has its own Vitest config (`packages/ui/vite.config.ts`).                                 |
+| `packages/vst3`            | VST3 + standalone plugin (iPlug2 + `packages/core`, `WHOLE_ARCHIVE`) — scaffold builds and scans (issue #125); CLAP/AU later.                                                           |
+| `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/OpenAxe/issues/17), [#16](https://github.com/pauloedspinho20/OpenAxe/issues/16). |
 
 ## Verification commands
 
@@ -92,7 +92,7 @@ will catch it (CI is currently off, see above):
   the plugin automation-slot layout `packages/vst3/generated/automation_param_map.h`
   (`--target=automation-map`; issue #121)
 - `node scripts/check-grid-dims.mjs` — grid row/col constants, TS vs. C++ (issue #61)
-- `node scripts/check-wasm-exports.mjs` — every `_nam_studio_*` symbol the web
+- `node scripts/check-wasm-exports.mjs` — every `_openaxe_*` symbol the web
   app calls is actually in `packages/core/CMakeLists.txt`'s
   `EXPORTED_FUNCTIONS` (issue #70)
 - `node scripts/sync-version.mjs --check` — every `package.json`'s
@@ -113,16 +113,8 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Key decisions worth knowing before you edit
 
-- **The `extern "C"` ABI keeps its `nam_studio_*`/`NamStudio*`/`NAM_STUDIO_*`
-  spellings despite the OpenAxe rebrand (#151)** — those names are baked into
-  the committed prebuilt WASM artifacts (`apps/web/public/wasm-core/`), which
-  only Emscripten can regenerate. Renaming requires one atomic change:
-  `api.h` + `EXPORTED_FUNCTIONS` + `scripts/check-wasm-exports.mjs` + a wasm
-  rebuild with the artifacts re-committed. Everything around the ABI (include
-  tree, namespaces, CMake targets, npm scope) is `openaxe`-named. Same story
-  for persisted user data: the IndexedDB name (`nam-web-studio`), localStorage
-  keys, and the desktop keychain service name are deliberately unchanged so
-  users' saved rigs/settings/credentials survive the rebrand.
+- **Product vs. Neural Amp Modeler naming (`openaxe_*` vs. `NamAmp`)** — only product-prefix compounds were renamed in #311 (`openaxe_*`/`OpenAxe*`/`OPENAXE_*`, plus `OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE`/`OPENAXE_DESKTOP_ENABLE_TSAN`). Genuine Neural Amp Modeler names keep their spelling: `NamAmp`, `NamLoadError`, `NamAmpNode`, `NamModelInfo`, `NAM_MODEL_KINDS`, `NAM_CORE_DIR`/`NAM_CORE_SOURCES_*`, `NAM_SAMPLE_FLOAT`, `nam_amp.{h,cpp}`, `nam_amp_test`, `NamModelBlockKind`, `.nam`, `third_party/nam-core`, etc. — use anchored patterns (`openaxe_`, `OPENAXE_`, `OpenAxe`, `openAxe`), never bare `nam`. The WASM artifacts are still baked and require an atomic `api.h` + `EXPORTED_FUNCTIONS` + `check-wasm-exports` + rebuild for any future ABI rename.
+- **Persisted names are now `openaxe` (with migration)** — IndexedDB `openaxe`, localStorage `openaxe:*`, desktop keychain service `OpenAxe`, and on-disk `openaxe` dir. First launch after #311 copies any existing `nam-web-studio` data into the new names (IndexedDB store-by-store copy with verified counts then delete old DB; localStorage copy-on-read; keychain/disk copy-then-delete). Migration is idempotent, copy-then-delete, and falls back to the old name on failure so no user data is orphaned if interrupted.
 - **One C++ engine, four shells** (see ARCHITECTURE.md) — if you're adding
   behavior a second front end would need too (routing rules, param
   semantics, model/IR handling), it belongs in `packages/core`, not a front
@@ -133,11 +125,12 @@ rebuild, CMake reconfigure, etc.) to take effect.
   (IndexedDB persistence, WASM DSP); Tone3000 is the one exception (a
   network service with no audio meaning — a model-library client, not
   infrastructure this app depends on to function).
-- **Desktop is C++ + `webview.h` + JUCE `audio_devices`, not Electron** — the
+- **Desktop is C++ + `webview.h` + miniaudio, not Electron** — the
   React UI runs in a native system webview in the same process as the audio
-  engine; JUCE was adopted after RtAudio's CoreAudio backend had a
-  reproducible crash bridging independently-clocked duplex devices (see
-  `apps/desktop/CMakeLists.txt`'s comment on the migration).
+  engine; miniaudio replaced JUCE (itself adopted after RtAudio's CoreAudio
+  backend had a reproducible crash bridging independently-clocked duplex
+  devices - issue #374; see `apps/desktop/CMakeLists.txt`'s comment on the
+  migration).
 - **`strict-peer-dependencies=true`** (`.npmrc`) — a real unmet peer fails
   `pnpm install` outright rather than warning. If a routine dependency bump
   suddenly fails install with an unrelated-looking peer error, it's likely a

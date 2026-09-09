@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Knob, Select } from '@openaxe/ui'
-import type { Block, EffectParams } from '@/engine/blocks/Block'
+import { useState } from 'react'
+import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
+import type { Block } from '@/engine/blocks/Block'
 import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
-import { useGraphStore } from '@/state/graphStore'
+import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
+import { actionKey } from '@/midi/actions'
+import { useMidiStore } from '@/state/midiStore'
+import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
 export interface EffectParamsPanelProps {
@@ -38,31 +41,20 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * silently revert it back to the store's stale copy.
  */
 export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
-  const [values, setValues] = useState<EffectParams>(() => ({
-    ...block.getParams(),
-    ...useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params,
-  }))
-  // Keep local values in sync when the store changes externally (undo, preset load, MIDI).
-  // Use a stable key (JSON) so unrelated store updates don't retrigger the sync.
-  const storeParamsKey = useGraphStore((s) => {
-    const p = s.blocks.find((b) => b.id === blockId)?.params
-    return p ? JSON.stringify(p) : ''
-  })
-  const storeParams = storeParamsKey ? (JSON.parse(storeParamsKey) as EffectParams) : undefined
-  useEffect(() => {
-    if (storeParams) setValues((prev) => ({ ...prev, ...storeParams }))
-  }, [storeParamsKey])
-  // Also sync when switching blocks (block instance identity changes).
-  useEffect(() => {
-    const latest = useGraphStore.getState().blocks.find((b) => b.id === blockId)?.params
-    setValues({ ...block.getParams(), ...(latest ?? {}) })
-  }, [block, blockId])
+  // Shared with EffectDetailsDialog - see useBlockParamValues for why local
+  // state, rather than block.getParams(), drives what is displayed.
+  const { values, setParam } = useBlockParamValues(blockId, block)
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
-
-  const setParam = (key: string, value: number | string) => {
-    useGraphStore.getState().setBlockParams(blockId, { [key]: value })
-    setValues((prev) => ({ ...prev, [key]: value }))
-  }
+  // Right-click MIDI menu target - one menu per panel, retargeted per knob.
+  const [midiMenu, setMidiMenu] = useState<{
+    anchor: ContextMenuAnchor
+    paramKey: string
+    paramLabel: string
+  } | null>(null)
+  // The knob currently armed for MIDI learn glows accent (see Knob's
+  // `highlighted`) - subscribing to just the key keeps every other knob
+  // from re-rendering while learn is armed elsewhere.
+  const learningKey = useMidiStore((s) => s.learning?.actionKey)
 
   const renderField = (field: ParamFieldSchema) => {
     if (field.control === 'select') {
@@ -73,11 +65,12 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         // `selectors.map(...)`. It sat on the inner Select until Delay became
         // the first kind with two selects in one row (#314), at which point
         // React started warning about a keyless list.
-        <div key={field.key} className={styles.selectWrapper}>
+        <div key={field.key} className={styles.selectWrapper} title={field.description}>
           <Select
             value={current}
             onChange={(e) => setParam(field.key, e.target.value)}
             className={styles.selectField}
+            aria-label={field.label}
           >
             {field.options.map((option) => (
               <option key={option.value} value={option.value}>
@@ -103,11 +96,20 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         defaultValue={field.defaultValue}
         formatValue={field.formatValue}
         size={50}
+        description={field.description}
         onChange={(value) => setParam(field.key, value)}
+        highlighted={learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMidiMenu({
+            anchor: { x: e.clientX, y: e.clientY },
+            paramKey: field.key,
+            paramLabel: field.label,
+          })
+        }}
       />
     )
   }
-
   return (
     <div className={styles.panel}>
       {groupFields(schema).map(([groupName, fields]) => {
@@ -129,6 +131,17 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
           </div>
         )
       })}
+      {/* If the schema was grouped (e.g. EQ bands), the DynamicsMeter was added to the first group above;
+          for the flat compressor/gate schema (no groups), it is already in that sole group. */}
+      <ParamMidiMenu
+        anchor={midiMenu?.anchor ?? null}
+        target={
+          midiMenu
+            ? { blockId, paramKey: midiMenu.paramKey, paramLabel: midiMenu.paramLabel }
+            : null
+        }
+        onClose={() => setMidiMenu(null)}
+      />
     </div>
   )
 }

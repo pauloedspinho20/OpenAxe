@@ -118,7 +118,7 @@ constexpr const char* kPlaceholderHtml = R"(<!doctype html>
         <option>delay</option>
         <option>reverb</option><option>amp</option>
         <option>amp-cab</option><option>pedal</option><option>outboard</option>
-        <option>space</option><option>cab</option><option>mixer</option><option>splitter</option>
+        <option>space</option><option>cab</option><option>mixer</option>
         <option>send-1</option><option>return-1</option><option>send-2</option><option>return-2</option>
       </select>
       <button id="add">Add block</button>
@@ -350,7 +350,13 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "openAxe.loadDIWav", &openaxe_desktop::StudioBridge::HandleLoadDIWav);
     Bind(w, bridge, "openAxe.playDI", &openaxe_desktop::StudioBridge::HandlePlayDI);
     Bind(w, bridge, "openAxe.stopDI", &openaxe_desktop::StudioBridge::HandleStopDI);
+    Bind(w, bridge, "openAxe.stageBegin", &openaxe_desktop::StudioBridge::HandleStageBegin);
+    Bind(w, bridge, "openAxe.stageCommit", &openaxe_desktop::StudioBridge::HandleStageCommit);
+    Bind(w, bridge, "openAxe.stageDiscard", &openaxe_desktop::StudioBridge::HandleStageDiscard);
+    Bind(w, bridge, "openAxe.switchActive", &openaxe_desktop::StudioBridge::HandleSwitchActive);
     Bind(w, bridge, "openAxe.setInputGain", &openaxe_desktop::StudioBridge::HandleSetInputGain);
+    Bind(w, bridge, "openAxe.setInputChannel",
+         &openaxe_desktop::StudioBridge::HandleSetInputChannel);
     Bind(w, bridge, "openAxe.setMasterLevel", &openaxe_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "openAxe.setMasterMuted", &openaxe_desktop::StudioBridge::HandleSetMasterMuted);
     Bind(w, bridge, "openAxe.setTunerMuted", &openaxe_desktop::StudioBridge::HandleSetTunerMuted);

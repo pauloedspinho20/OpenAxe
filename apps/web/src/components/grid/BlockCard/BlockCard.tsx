@@ -1,5 +1,11 @@
 import { memo, useRef, useState } from 'react'
-import { BlockIcon, toast } from '@openaxe/ui'
+import {
+  BlockIcon,
+  ContextMenu,
+  toast,
+  type ContextMenuAnchor,
+  type ContextMenuItem,
+} from '@openaxe/ui'
 import { useGraphStore, type BlockInstance } from '../../../state/graphStore'
 import { useEngineVersion } from '../../../state/engineVersion'
 import { useSelection } from '../../../state/selection'
@@ -10,9 +16,8 @@ import { resolveGridCell } from '../gridGeometry'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { EFFECT_KINDS, NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
 import { MIXER_INPUT_COUNT } from '@/engine/blocks/MixerBlock'
-import { SPLITTER_OUTPUT_COUNT } from '@/engine/blocks/SplitterBlock'
-import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
+import { DotsHorizontalIcon } from '@openaxe/ui'
 import { blockColorVar } from '../blockColors'
 import { JackDisconnect } from '../JackDisconnect/JackDisconnect'
 import { jackElementId } from '../jackId'
@@ -50,8 +55,11 @@ function portCount(kind: BlockKind): number {
 }
 
 function outputPortCount(kind: BlockKind): number {
+  // A send routes implicitly into its return, so it draws no output jack.
+  // Every other kind has exactly one - the splitter was the only multi-output
+  // kind and it is gone.
   if (kind === 'send-1' || kind === 'send-2') return 0
-  return kind === 'splitter' ? SPLITTER_OUTPUT_COUNT : 1
+  return 1
 }
 
 /** Anything with an optional bypass toggle - the 11 effect kinds and the 5 NAM model kinds have one. */
@@ -70,6 +78,8 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
   const longPressTimer = useRef<number | null>(null)
   const longPressFired = useRef(false)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
+  // Right-click menu anchor - one menu per card, opened at the click point.
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null)
   const selectedBlockId = useSelection((s) => s.selectedBlockId)
   const edges = useGraphStore((s) => s.edges)
 
@@ -81,10 +91,13 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
   const isEffect = EFFECT_KINDS.has(instance.kind)
   const hasBypass = isEffect || NAM_MODEL_KINDS.has(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   const isSelected = selectedBlockId === instance.id
 
   const handleCardPointerDown = (e: React.PointerEvent) => {
+    // Right/middle mouse presses must not start a drag or arm the mobile
+    // long-press sheet - onContextMenu owns those presses. (Touch contacts
+    // arrive with button 0, so this only filters mouse buttons.)
+    if (e.pointerType === 'mouse' && e.button !== 0) return
     if ((e.target as Element).closest('[data-jack-id], button, input, select')) return
     // Long-press for mobile action sheet (500ms) — also accessible via ⋯ button.
     longPressFired.current = false
@@ -196,6 +209,69 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
 
   const bypassed = instance.bypass ?? false
 
+  /**
+   * Right-click (Ctrl-click on macOS trackpads) opens the block's context
+   * menu in place - the same actions the ⋯ button's sheet offers, without
+   * leaving the grid. Left-click select/drag, long-press, and keyboard paths
+   * are untouched.
+   */
+  const handleCardContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    useSelection.getState().select(instance.id)
+    setMenuAnchor({ x: e.clientX, y: e.clientY })
+  }
+
+  // Menu actions mirror BlockActionSheet's handlers (single source of truth
+  // stays there for change-type; bypass/remove/disconnect are one-liners).
+  const incoming = edges.filter((e) => e.to.blockId === instance.id)
+  const outgoing = edges.filter((e) => e.from.blockId === instance.id)
+
+  const menuItems: ContextMenuItem[] = [
+    ...(hasBypass
+      ? [
+          {
+            id: 'bypass',
+            label: bypassed ? 'Enable block' : 'Bypass block',
+            onSelect: () => {
+              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+            },
+          } satisfies ContextMenuItem,
+        ]
+      : []),
+    {
+      id: 'disconnect',
+      label: 'Disconnect all cables',
+      disabled: incoming.length === 0 && outgoing.length === 0,
+      onSelect: () => {
+        incoming.forEach((e) => useGraphStore.getState().disconnect(e.id))
+        outgoing.forEach((e) => useGraphStore.getState().disconnect(e.id))
+        useGraphStore.getState().disconnectConnections(jack(instance.id, 0), 'in')
+        useGraphStore.getState().disconnectConnections(jack(instance.id, 0), 'out')
+        toast('Disconnected', { description: `${label} — all cables removed` })
+      },
+    },
+    ...(onOpenMenu
+      ? [
+          {
+            id: 'more',
+            label: 'More actions…',
+            onSelect: () => onOpenMenu(),
+          } satisfies ContextMenuItem,
+        ]
+      : []),
+    {
+      id: 'remove',
+      label: 'Remove block',
+      danger: true,
+      onSelect: () => {
+        useGraphStore.getState().removeBlock(instance.id)
+        useSelection.getState().clear()
+      },
+    },
+  ]
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -232,7 +308,7 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
 
   return (
     <div
-      className={`${styles.card} ${isSelected ? styles.cardSelected : ''}`}
+      className={`${styles.card} ${isSelected ? styles.cardSelected : ''} ${bypassed ? styles.bypassed : ''}`}
       style={
         {
           ...(dragOffset
@@ -251,25 +327,28 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
       onPointerDown={handleCardPointerDown}
       onPointerMove={handleCardPointerMove}
       onPointerUp={handleCardPointerUp}
+      onContextMenu={handleCardContextMenu}
       onKeyDown={handleKeyDown}
     >
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            disabled={!hasBypass}
-            className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
-            onClick={() => {
-              useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
-              ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
-            }}
-            title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
-            aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
-          >
-            ●
-          </button>
-
-          {analyser && <LiveMeter analyser={analyser} variant="mini" label={`${label} level`} />}
+          {!['mixer', 'send-1', 'send-2', 'return-1', 'return-2'].includes(instance.kind) ? (
+            <button
+              type="button"
+              disabled={!hasBypass}
+              className={`${styles.bypassBtn} ${bypassed ? '' : styles.bypassBtnOn}`}
+              onClick={() => {
+                useGraphStore.getState().setBlockBypass(instance.id, !bypassed)
+                ;(block as MaybeBypassable | null)?.setBypass?.(!bypassed)
+              }}
+              title={bypassed ? 'Bypassed - click to enable' : 'Click to bypass'}
+              aria-label={bypassed ? `Enable ${label}` : `Bypass ${label}`}
+            >
+              ●
+            </button>
+          ) : (
+            <div />
+          )}
 
           <button
             type="button"
@@ -282,12 +361,18 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
             aria-label={`Actions for ${label}`}
             title="More actions — move, remove, disconnect"
           >
-            ⋯
+            <DotsHorizontalIcon />
           </button>
         </div>
       </div>
 
-      <BlockIcon kind={instance.kind} size={24} className={styles.blockIcon} />
+      {!bypassed ? (
+        <div className={styles.blockIconWrapper}>
+          <BlockIcon kind={instance.kind} size={32} className={styles.blockIcon} />
+        </div>
+      ) : (
+        <div className={styles.blockBypassedLine}></div>
+      )}
 
       <span className={styles.blockLabel}>{label}</span>
 
@@ -335,17 +420,20 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
                   className={`${styles.jack} ${armed ? styles.jackArmed : ''}`}
                   data-jack-id={jackId}
                   data-jack-side="out"
-                  title={
-                    instance.kind === 'splitter'
-                      ? `Output ${port + 1} — tap then tap input, or drag`
-                      : 'Output — tap then tap input, or drag'
-                  }
+                  title="Output — tap then tap input, or drag"
                 />
               </span>
             )
           })}
         </div>
       </div>
+      <ContextMenu
+        open={menuAnchor !== null}
+        anchor={menuAnchor}
+        items={menuItems}
+        onClose={() => setMenuAnchor(null)}
+        label={`${label} actions`}
+      />
     </div>
   )
 }

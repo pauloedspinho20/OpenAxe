@@ -22,7 +22,7 @@ the DSP does.
 │ Presentation      apps/web (React) · desktop webview · VST3 editor ·     │
 │                   iOS/Android views — all sharing packages/ui tokens     │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ Integration       Web Audio worklet · JUCE audio_devices + window.openAxe bridge  │
+│ Integration       Web Audio worklet · miniaudio + window.openAxe bridge  │
 │                   · iPlug2 processor · JNI / AVAudioEngine               │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ Engine ABI        packages/core/include/openaxe/api.h — extern "C",   │
@@ -47,7 +47,7 @@ meters, and CPU load.
 
 ### What a front end is still allowed to own
 
-- Device and host integration: Web Audio graph plumbing, JUCE audio_devices streams, the
+- Device and host integration: Web Audio graph plumbing, miniaudio streams, the
   plugin's process callback.
 - Persistence _mechanism_: IndexedDB in the browser, a shared on-disk store
   for the desktop app and the plugins, host state chunks for a plugin's rig.
@@ -70,7 +70,7 @@ meters, and CPU load.
 | Block I/O trims              | core trims via the rig worklet                      | core trims                         | core trims                                         | core ✅                              |
 | Bypass / master bus          | core via the rig worklet                            | core                               | core                                               | core ✅                              |
 | Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | core, via `loadIrWav`                              | core ✅                              |
-| Tuner pitch detection        | core via WASM, TS fallback kept for tests           | core (`nam_studio_detect_pitch`)   | core, fed by the monitor tap                       | core ✅                              |
+| Tuner pitch detection        | core via WASM, TS fallback kept for tests           | core (`openaxe_detect_pitch`)      | core, fed by the monitor tap                       | core ✅                              |
 | Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | core peak + `MonitorTap` (seqlock ring)            | core ✅                              |
 | Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | core table + generated automation map              | **generated from core** ⚠️           |
 | Input channel routing        | Web Audio splitter/merger                           | not offered (device layer)         | host bus → `input_routing.cpp`, in the state chunk | front end ✅                         |
@@ -88,12 +88,12 @@ Each step is useful on its own and unblocks the plugin target.
 
 1. ~~**Amp on one engine.**~~ Done: the web path runs core's `NamAmp`, and the
    `neural-amp-modeler-wasm` npm package is gone - web and desktop no longer run
-   different inference code. It also needed `nam_studio_load_nam_model_json` (a
+   different inference code. It also needed `openaxe_load_nam_model_json` (a
    browser has no filesystem to hand a path to), which the desktop bridge now
    uses too rather than staging a temp file.
 2. ~~**One graph.**~~ Done: the web path drives core's `graph_rig` from a single
-   rig worklet (`wasm-core/namStudioRigWorklet.js`) that owns one `nam_studio_core`
-   module and one `nam_studio_graph` for the whole rig, replacing the per-effect
+   rig worklet (`wasm-core/openAxeRigWorklet.js`) that owns one `openaxe_core`
+   module and one `openaxe_graph` for the whole rig, replacing the per-effect
    worklets and the TS Web Audio node graph. The trims, bypass, master bus,
    mixer per-input level/pan, splitter per-output level, routing validation and
    metering all collapsed into the engine in one move - `GraphRig.ts` is now a
@@ -105,7 +105,7 @@ Each step is useful on its own and unblocks the plugin target.
    partitioned convolver, and `dsp/wav.cpp` decodes and resamples IR files
    for the platforms with no `AudioContext.decodeAudioData` - so the desktop app
    loads IRs by handing the core the file's bytes
-   (`nam_studio_load_ir_wav`), exactly as it loads NAM models. The audio path now
+   (`openaxe_load_ir_wav`), exactly as it loads NAM models. The audio path now
    has no web-only DSP left.
 4. ~~**Tuner in core.**~~ Done (issue #123): `dsp/pitch_detect.cpp` is the one
    detector, compiled to WASM for the web and called natively on
@@ -115,7 +115,7 @@ Each step is useful on its own and unblocks the plugin target.
    so it costs no latency either way.
 5. **Preset/scene model in core**, with front ends supplying only storage.
    Half done: the _rig_ state document is core's
-   (`nam_studio_load_state`/`save`), which is what the plugin writes into the
+   (`openaxe_load_state`/`save`), which is what the plugin writes into the
    host chunk and what makes the core graph authoritative in a DAW. The
    preset bank, scene bank and their slot semantics are still the TS model in
    `apps/web/src/presets` and `apps/web/src/scenes`.
@@ -137,7 +137,7 @@ layer.
 
 | Target  | What sets latency                                                                           | Lowest available                                                                                                                                                                                                                              |
 | ------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop | JUCE audio_devices block size + the device's own buffering                                  | `bufferFrames: 0` asks the device for its smallest block; default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                                                            |
+| Desktop | miniaudio block size + the device's own buffering                                           | `bufferFrames: 0` asks the device for its smallest block; default is 128 frames ≈ 2.7ms one-way at 48kHz. `getConfig()` reports the backend's measured round-trip.                                                                            |
 | Web     | The 128-frame AudioWorklet render quantum, plus the context's `baseLatency`/`outputLatency` | Fixed by the platform. `latencyHint: 'interactive'` is what the app requests; chaining worklet nodes adds **no** extra latency (they all run inside one quantum), so the win from step 2 above is CPU and behaviour parity, not milliseconds. |
 | VST3    | The host's block size                                                                       | Nothing to add: report zero latency and process in place.                                                                                                                                                                                     |
 
@@ -249,7 +249,7 @@ picture form — added during the OpenAxe rebrand (issue #151).
 flowchart TB
     subgraph shells["Presentation + integration (four shells)"]
         WEB["apps/web<br/>React SPA<br/>AudioWorklet + WASM"]
-        DESK["apps/desktop<br/>C++ webview shell<br/>JUCE audio_devices"]
+        DESK["apps/desktop<br/>C++ webview shell<br/>miniaudio"]
         VST["packages/vst3<br/>plugin editor + processor"]
         MOBILE["apps/ios · apps/android<br/>SwiftUI / Compose"]
     end
@@ -263,7 +263,7 @@ flowchart TB
         VAL["graph_validation"]
     end
 
-    WEB -- "rig worklet calls _nam_studio_*" --> ABI
+    WEB -- "rig worklet calls _openaxe_*" --> ABI
     DESK -- "in-process calls" --> ABI
     VST -- "in-process calls" --> ABI
     MOBILE --> ABI
@@ -327,10 +327,10 @@ flowchart LR
     end
 
     subgraph abi["extern 'C' boundary"]
-        SETP["nam_studio_set_param"]
-        ADD["nam_studio_add_block / connect"]
-        LOAD["nam_studio_load_nam_model_json<br/>nam_studio_load_ir_wav"]
-        PROC["nam_studio_process"]
+        SETP["openaxe_set_param"]
+        ADD["openaxe_add_block / connect"]
+        LOAD["openaxe_load_nam_model_json<br/>openaxe_load_ir_wav"]
+        PROC["openaxe_process"]
     end
 
     subgraph engine["AudioEngine (control thread unless noted)"]

@@ -265,7 +265,7 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
 
 OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
     : iplug::Plugin(info, iplug::MakeConfig(openaxe_vst3::params::HostParamCount(), kNumPresets)) {
-  graph_ = nam_studio_graph_create();
+  graph_ = openaxe_graph_create();
   editor_ = std::make_unique<openaxe_vst3::editor::Editor>(graph_);
 #ifdef OPENAXE_HAS_WEBVIEW
   bridge_ = std::make_unique<openaxe_vst3::VstBridge>(this, graph_);
@@ -368,7 +368,7 @@ OpenAxePlugin::~OpenAxePlugin() {
   }
   bridge_.reset();
 #endif
-  nam_studio_graph_destroy(graph_);
+  openaxe_graph_destroy(graph_);
 }
 
 #if IPLUG_DSP
@@ -388,7 +388,7 @@ void OpenAxePlugin::OnReset() {
   // touches the heap or a large stack frame (issue #300 C2).
   EnsureScratch(bs);
   tap_.Clear();  // the retained window is from the previous configuration
-  nam_studio_reset(graph_, sr, bs);
+  openaxe_reset(graph_, sr, bs);
 }
 
 void OpenAxePlugin::EnsureScratch(int frames) const {
@@ -416,7 +416,7 @@ void OpenAxePlugin::OnActivate(bool enable) {
   sample_rate_.store(sr, std::memory_order_release);
   max_block_size_.store(effective_bs, std::memory_order_release);
   EnsureScratch(effective_bs);
-  nam_studio_reset(graph_, sr, effective_bs);
+  openaxe_reset(graph_, sr, effective_bs);
 }
 
 void OpenAxePlugin::SetInputChannelModeName(const std::string& name) {
@@ -432,7 +432,7 @@ std::string OpenAxePlugin::InputChannelModeNameValue() const {
 void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs, int nFrames) {
   // Suspend handshake: control thread raised suspend_requested_ before
   // mutating the graph. Acknowledge and silence this block so no
-  // nam_studio_process runs concurrently with that mutation (port of
+  // openaxe_process runs concurrently with that mutation (port of
   // RtProcessCallback's suspend branch in apps/desktop/src/audio.cpp).
   if (suspend_requested_.load(std::memory_order_acquire)) {
     suspend_ack_.fetch_add(1, std::memory_order_release);
@@ -443,7 +443,7 @@ void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs
   const int chunkLimit = max_block_size_.load(std::memory_order_acquire);
   // No OnReset yet (or a host that reported nothing usable): the core has not
   // been sized, and openaxe/api.h requires num_frames <= the max_block_size
-  // passed to nam_studio_reset. A silent first block beats undefined
+  // passed to openaxe_reset. A silent first block beats undefined
   // behaviour inside the core (issue #300 C5).
   if (chunkLimit <= 0 || scratch_frames_ <= 0) {
     ZeroOutputs(outputs, NOutChansConnected(), nFrames);
@@ -499,7 +499,7 @@ void OpenAxePlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs
       outPtrs[c] = outBase + static_cast<size_t>(c) * static_cast<size_t>(scratch_frames_);
     }
 
-    nam_studio_process(graph_, inPtrs, coreChansIn, outPtrs, nChansOut, frames);
+    openaxe_process(graph_, inPtrs, coreChansIn, outPtrs, nChansOut, frames);
 
     // Capture the window the UI's meters/scope/tuner read (issue #300 E4c).
     // Both sides come from the float scratch, so this is a straight copy into a
@@ -619,7 +619,7 @@ bool OpenAxePlugin::SavePortableJson(const std::string& path) const {
 }
 
 int OpenAxePlugin::LoadPortableJson(const std::string& path) {
-  int result = NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
+  int result = OPENAXE_LOAD_STATE_BAD_DOCUMENT;
   WithSuspend([&] {
     result = openaxe_vst3::state::LoadPortableJson(graph_, path,
                                                   sample_rate_.load(std::memory_order_acquire),
@@ -697,14 +697,14 @@ bool OpenAxePlugin::NotifyHostParamChangedFromUI(int32_t block, int32_t param_in
   // linear scan is cheaper than maintaining a second map that could drift.
   for (int slot = openaxe::automation::kFirstBlockSlot;
        slot < openaxe::automation::kSlotCount; ++slot) {
-    if (nam_studio_automation_slot_block(graph_, slot) != block) continue;
+    if (openaxe_automation_slot_block(graph_, slot) != block) continue;
     if (param_index >= openaxe::automation::kParamsPerSlot) return false;
 
     const char* name = nullptr;
     const char* sym = nullptr;
     const char* unit = nullptr;
     float mn = 0.0f, mx = 1.0f;
-    if (nam_studio_automation_slot_param_info(graph_, slot, param_index, &name, &sym, &mn, &mx,
+    if (openaxe_automation_slot_param_info(graph_, slot, param_index, &name, &sym, &mn, &mx,
                                               &unit) == 0) {
       return false;  // slot has no descriptor at this entry
     }
@@ -795,16 +795,16 @@ void OpenAxePlugin::DrainDeferredParamWrites() {
     int slot_idx = -1, entry = -1;
     if (!openaxe_vst3::params::HostIdToSlotEntry(host_id, slot_idx, entry)) continue;
     WithSuspend([&] {
-      const int32_t block = nam_studio_automation_slot_block(graph_, slot_idx);
+      const int32_t block = openaxe_automation_slot_block(graph_, slot_idx);
       if (block < 0) return;
       const char* name = nullptr;
       const char* sym = nullptr;
       const char* unit = nullptr;
       float mn = 0.0f, mx = 1.0f;
-      if (nam_studio_automation_slot_param_info(graph_, slot_idx, entry, &name, &sym, &mn, &mx,
+      if (openaxe_automation_slot_param_info(graph_, slot_idx, entry, &name, &sym, &mn, &mx,
                                                 &unit) != 0) {
         const float real = openaxe_vst3::params::NormalizedToReal(norm, mn, mx);
-        nam_studio_set_param(graph_, block, entry, real);
+        openaxe_set_param(graph_, block, entry, real);
       }
     });
   }
@@ -831,7 +831,7 @@ void OpenAxePlugin::ProcessMidiMsg(const iplug::IMidiMsg& msg) {
   if ((msg.mStatus & 0xF0) == 0xC0) size = 2;
   // Core returns 0 = not a trigger / no binding, 1 = dispatched, 2 = learn
   // completed — we don't need to act on it here (the core already applied).
-  nam_studio_midi_handle_message(graph_, data, size, msg.mOffset, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+  openaxe_midi_handle_message(graph_, data, size, msg.mOffset, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
 #endif

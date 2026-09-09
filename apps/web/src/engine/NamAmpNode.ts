@@ -21,7 +21,7 @@ const PROCESSOR_NAME = 'nam-amp-processor'
 const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
 const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
-/** What the core reports about a loaded capture (`nam_studio_block_model_info`). */
+/** What the core reports about a loaded capture (`openaxe_block_model_info`). */
 export interface NamModelInfo {
   /** The rate the capture was trained at, or -1 if it doesn't declare one. */
   sampleRate: number
@@ -58,7 +58,7 @@ function ensureWorkletRegistered(context: BaseAudioContext): Promise<void> {
 function fetchWasmBytes(context: BaseAudioContext): Promise<ArrayBuffer> {
   let promise = wasmBytesByContext.get(context)
   if (!promise) {
-    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    promise = fetch('/wasm-core/openaxe_core.wasm').then((response) => response.arrayBuffer())
     wasmBytesByContext.set(context, promise)
   }
   return promise

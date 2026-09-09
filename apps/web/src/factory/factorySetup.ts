@@ -16,7 +16,7 @@ import { SLOTS_PER_SCENE } from '../scenes/types'
 import { hydratePresetBankStore } from '../state/presetBankStore'
 import { hydrateSceneStore } from '../state/sceneStore'
 
-export const FACTORY_SETUP_KEY = 'nam-web-studio:factory-setup-dismissed'
+export const FACTORY_SETUP_KEY = 'openaxe:factory-setup-dismissed'
 
 export function getFactorySetupDone(): boolean {
   if (typeof localStorage === 'undefined') return true

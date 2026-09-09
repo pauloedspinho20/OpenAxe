@@ -51,13 +51,13 @@ void TestDelayLatency() {
   constexpr double kTimeMs = 100.0;
   const int expected = static_cast<int>(kTimeMs / 1000.0 * kRate);  // 4800 @48k
 
-  NamStudioGraph* graph = nam_studio_graph_create();
-  const int32_t delay = nam_studio_add_block(graph, NAM_STUDIO_BLOCK_DELAY, 0, 0);
-  nam_studio_connect(graph, NAM_STUDIO_IN_RAIL, 0, delay, 0);
-  nam_studio_connect(graph, delay, 0, NAM_STUDIO_OUT_RAIL, 0);
-  nam_studio_reset(graph, kRate, kBlock);
+  OpenAxeGraph* graph = openaxe_graph_create();
+  const int32_t delay = openaxe_add_block(graph, OPENAXE_BLOCK_DELAY, 0, 0);
+  openaxe_connect(graph, OPENAXE_IN_RAIL, 0, delay, 0);
+  openaxe_connect(graph, delay, 0, OPENAXE_OUT_RAIL, 0);
+  openaxe_reset(graph, kRate, kBlock);
   // Delay time is param index 0 (ms).
-  nam_studio_set_param(graph, delay, 0, static_cast<float>(kTimeMs));
+  openaxe_set_param(graph, delay, 0, static_cast<float>(kTimeMs));
 
   const int window = expected + kBlock * 2;
   std::vector<float> out(static_cast<size_t>(window), 0.0f);
@@ -70,12 +70,12 @@ void TestDelayLatency() {
     float out0[kBlock] = {0.0f}, out1[kBlock] = {0.0f};
     const float* in[2] = {in_buf, in_buf};
     float* o[2] = {out0, out1};
-    nam_studio_process(graph, in, 2, o, 2, n);
+    openaxe_process(graph, in, 2, o, 2, n);
     for (int i = 0; i < n; ++i) out[static_cast<size_t>(global + i)] = out0[i];
     global += n;
     for (int i = 0; i < kBlock; ++i) in_buf[i] = 0.0f;  // subsequent chunks: silence
   }
-  nam_studio_graph_destroy(graph);
+  openaxe_graph_destroy(graph);
 
   // Find the delayed impulse (ignore the pre-delay region).
   int peak = 0;

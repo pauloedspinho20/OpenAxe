@@ -23,24 +23,24 @@ static int g_failures = 0;
 
 namespace {
 
-float GetParamBySymbol(NamStudioGraph* g, int32_t b, const char* sym) {
-  const int32_t n = nam_studio_block_param_count(g, b);
-  for (int32_t i=0;i<n;++i){ const char* s=nullptr; if(nam_studio_block_param_info(g,b,i,nullptr,&s,nullptr,nullptr,nullptr) && s && std::string(s)==sym) return nam_studio_get_param(g,b,i); }
+float GetParamBySymbol(OpenAxeGraph* g, int32_t b, const char* sym) {
+  const int32_t n = openaxe_block_param_count(g, b);
+  for (int32_t i=0;i<n;++i){ const char* s=nullptr; if(openaxe_block_param_info(g,b,i,nullptr,&s,nullptr,nullptr,nullptr) && s && std::string(s)==sym) return openaxe_get_param(g,b,i); }
   return std::nanf("");
 }
 
 void TestHostChunkIsSelfContained() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0,0);
-  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0,1);
-  nam_studio_connect(g, NAM_STUDIO_IN_RAIL,0, amp,0);
-  nam_studio_connect(g, amp,0, cab,0);
-  nam_studio_connect(g, cab,0, NAM_STUDIO_OUT_RAIL,0);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0,0);
+  const int32_t cab = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0,1);
+  openaxe_connect(g, OPENAXE_IN_RAIL,0, amp,0);
+  openaxe_connect(g, amp,0, cab,0);
+  openaxe_connect(g, cab,0, OPENAXE_OUT_RAIL,0);
   // Set distinctive params
-  const int32_t n = nam_studio_block_param_count(g, amp);
-  for(int32_t i=0;i<n;++i){const char* s=nullptr; if(nam_studio_block_param_info(g,amp,i,nullptr,&s,nullptr,nullptr,nullptr) && s && std::string(s)=="bass") nam_studio_set_param(g,amp,i, 3.5f); }
-  nam_studio_set_master_level(g, 0.77f);
-  nam_studio_reset(g, 48000.0, 512);
+  const int32_t n = openaxe_block_param_count(g, amp);
+  for(int32_t i=0;i<n;++i){const char* s=nullptr; if(openaxe_block_param_info(g,amp,i,nullptr,&s,nullptr,nullptr,nullptr) && s && std::string(s)=="bass") openaxe_set_param(g,amp,i, 3.5f); }
+  openaxe_set_master_level(g, 0.77f);
+  openaxe_reset(g, 48000.0, 512);
 
   const std::string chunk = openaxe_vst3::state::SerializeForHost(g);
   CHECK(!chunk.empty());
@@ -48,33 +48,33 @@ void TestHostChunkIsSelfContained() {
   CHECK(chunk.find("\"bass\"") != std::string::npos || chunk.find("bass") != std::string::npos);
 
   // Fresh graph → restore with single reset (helper does it)
-  NamStudioGraph* h = nam_studio_graph_create();
+  OpenAxeGraph* h = openaxe_graph_create();
   int res = openaxe_vst3::state::Restore(h, chunk, 48000.0, 512);
-  CHECK(res == NAM_STUDIO_LOAD_STATE_OK);
+  CHECK(res == OPENAXE_LOAD_STATE_OK);
   CHECK(GetParamBySymbol(h, 0, "bass") == 3.5f);
-  CHECK(nam_studio_get_master_level(h) == 0.77f);
+  CHECK(openaxe_get_master_level(h) == 0.77f);
   // Audio identical after single reset
   float in[128]; for(int i=0;i<128;++i) in[i]= std::sin(float(i)*0.07f)*0.3f;
   float out_g[128]={}, out_h[128]={};
   const float* inP[1]={in}; float* outG[1]={out_g}; float* outH[1]={out_h};
   // Use mono->mono via the same topology — but need to reset after restore already done
   // Process both with same input (note amp without model is passthrough-like but still processes)
-  nam_studio_process(g, inP,1,outG,1,128);
-  nam_studio_process(h, inP,1,outH,1,128);
+  openaxe_process(g, inP,1,outG,1,128);
+  openaxe_process(h, inP,1,outH,1,128);
   float maxdiff=0; for(int i=0;i<128;++i) maxdiff = std::max(maxdiff, std::fabs(out_g[i]-out_h[i]));
   CHECK(maxdiff == 0.0f);
   CHECK(openaxe_vst3::state::MissingAssets(h).empty());
 
-  nam_studio_graph_destroy(g);
-  nam_studio_graph_destroy(h);
+  openaxe_graph_destroy(g);
+  openaxe_graph_destroy(h);
   std::printf("  host chunk self-contained + audio identical: ok\n");
 }
 
 void TestPortableJsonRoundTrip() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t gate = nam_studio_add_block(g, NAM_STUDIO_BLOCK_NOISE_GATE,0,0);
-  nam_studio_connect(g, NAM_STUDIO_IN_RAIL,0, gate,0);
-  nam_studio_connect(g, gate,0, NAM_STUDIO_OUT_RAIL,0);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t gate = openaxe_add_block(g, OPENAXE_BLOCK_NOISE_GATE,0,0);
+  openaxe_connect(g, OPENAXE_IN_RAIL,0, gate,0);
+  openaxe_connect(g, gate,0, OPENAXE_OUT_RAIL,0);
   // Use plugin_state file helper
   // Platform temp dir, not "/tmp": that path does not exist on Windows, so the
   // save silently failed there and the next two assertions cascaded from it.
@@ -84,38 +84,38 @@ void TestPortableJsonRoundTrip() {
       (std::filesystem::temp_directory_path() / "openaxe_portable_test.json").string();
   bool saved = openaxe_vst3::state::SavePortableJson(g, path);
   CHECK(saved);
-  NamStudioGraph* h = nam_studio_graph_create();
+  OpenAxeGraph* h = openaxe_graph_create();
   int res = openaxe_vst3::state::LoadPortableJson(h, path, 48000.0, 256);
-  CHECK(res == NAM_STUDIO_LOAD_STATE_OK);
+  CHECK(res == OPENAXE_LOAD_STATE_OK);
   // File content should be same as SerializeForHost
   std::ifstream in(path); std::string fileDoc((std::istreambuf_iterator<char>(in)), {});
   const std::string memDoc = openaxe_vst3::state::SerializeForHost(g);
   CHECK(fileDoc == memDoc);
-  nam_studio_graph_destroy(g);
-  nam_studio_graph_destroy(h);
+  openaxe_graph_destroy(g);
+  openaxe_graph_destroy(h);
   std::printf("  portable JSON file round-trip: ok\n");
 }
 
 void TestNewerSchemaGraceful() {
-  NamStudioGraph* g = nam_studio_graph_create();
-  const int32_t comp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_COMPRESSOR,0,0);
-  const int before = nam_studio_block_param_count(g, comp);
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t comp = openaxe_add_block(g, OPENAXE_BLOCK_COMPRESSOR,0,0);
+  const int before = openaxe_block_param_count(g, comp);
   CHECK(before > 0);
   const std::string doc = R"({"schemaVersion": 99, "blocks": [], "edges": []})";
   int res = openaxe_vst3::state::Restore(g, doc, 48000.0, 512);
-  CHECK(res == NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION);
+  CHECK(res == OPENAXE_LOAD_STATE_UNSUPPORTED_VERSION);
   // Graph untouched — block still there
-  CHECK(nam_studio_block_param_count(g, comp) == before);
+  CHECK(openaxe_block_param_count(g, comp) == before);
   // Parse error also leaves untouched
   int res2 = openaxe_vst3::state::Restore(g, std::string("{not json"), 48000.0, 512);
-  CHECK(res2 == NAM_STUDIO_LOAD_STATE_PARSE_ERROR);
-  CHECK(nam_studio_block_param_count(g, comp) == before);
-  nam_studio_graph_destroy(g);
+  CHECK(res2 == OPENAXE_LOAD_STATE_PARSE_ERROR);
+  CHECK(openaxe_block_param_count(g, comp) == before);
+  openaxe_graph_destroy(g);
   std::printf("  newer schema / parse error graceful (graph untouched): ok\n");
 }
 
 void TestPartialRestoreTolerance() {
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   const char* doc = R"({
     "schemaVersion": 1,
     "blocks": [
@@ -127,10 +127,10 @@ void TestPartialRestoreTolerance() {
     ]
   })";
   int res = openaxe_vst3::state::Restore(g, doc, 48000.0, 512);
-  CHECK(res == NAM_STUDIO_LOAD_STATE_OK);
-  CHECK(nam_studio_block_param_count(g, 0) == 5); // chorus survived (4 DSP params + the engine mix, issue #263)
+  CHECK(res == OPENAXE_LOAD_STATE_OK);
+  CHECK(openaxe_block_param_count(g, 0) == 6); // chorus survived (5 DSP params + the engine mix, issue #263/#357 stereo)
   CHECK(GetParamBySymbol(g,0,"rate")==1.5f);
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  partial-restore tolerance (bad entry skipped): ok\n");
 }
 
@@ -148,22 +148,22 @@ void TestWebLegacyPresetLoad() {
     ],
     "masterLevel": 0.85
   })";
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   int res = openaxe_vst3::state::Restore(g, web_preset, 48000.0, 256);
-  CHECK(res == NAM_STUDIO_LOAD_STATE_OK);
+  CHECK(res == OPENAXE_LOAD_STATE_OK);
   // trims became block trims, not calibration params
-  CHECK(nam_studio_get_block_input_trim(g,0) == 1.5f);
-  CHECK(nam_studio_get_block_output_trim(g,0) == 0.8f);
+  CHECK(openaxe_get_block_input_trim(g,0) == 1.5f);
+  CHECK(openaxe_get_block_output_trim(g,0) == 0.8f);
   CHECK(GetParamBySymbol(g,0,"bass")==1.0f);
-  CHECK(nam_studio_get_master_level(g)==0.85f);
+  CHECK(openaxe_get_master_level(g)==0.85f);
   // Save as host chunk and reload — should still be web↔plugin identical
   const std::string chunk = openaxe_vst3::state::SerializeForHost(g);
-  NamStudioGraph* h = nam_studio_graph_create();
-  CHECK(openaxe_vst3::state::Restore(h, chunk, 48000.0,256)==NAM_STUDIO_LOAD_STATE_OK);
-  CHECK(nam_studio_get_block_input_trim(h,0)==1.5f);
-  CHECK(nam_studio_get_master_level(h)==0.85f);
-  nam_studio_graph_destroy(g);
-  nam_studio_graph_destroy(h);
+  OpenAxeGraph* h = openaxe_graph_create();
+  CHECK(openaxe_vst3::state::Restore(h, chunk, 48000.0,256)==OPENAXE_LOAD_STATE_OK);
+  CHECK(openaxe_get_block_input_trim(h,0)==1.5f);
+  CHECK(openaxe_get_master_level(h)==0.85f);
+  openaxe_graph_destroy(g);
+  openaxe_graph_destroy(h);
   std::printf("  web legacy preset round-trip: ok\n");
 }
 
@@ -174,33 +174,33 @@ void TestFactoryPresetsGenerated() {
     CHECK(!p.name.empty());
     CHECK(!p.json.empty());
     CHECK(p.json.find("\"schemaVersion\"")!=std::string::npos);
-    NamStudioGraph* g = nam_studio_graph_create();
+    OpenAxeGraph* g = openaxe_graph_create();
     int res = openaxe_vst3::state::Restore(g, p.json, 48000.0,256);
-    CHECK(res==NAM_STUDIO_LOAD_STATE_OK);
+    CHECK(res==OPENAXE_LOAD_STATE_OK);
     // Not silent (at least one block wired)
-    CHECK(nam_studio_block_param_count(g,0)>=0);
-    nam_studio_graph_destroy(g);
+    CHECK(openaxe_block_param_count(g,0)>=0);
+    openaxe_graph_destroy(g);
   }
   std::printf("  factory presets (generated from rows): %zu presets, each loadable\n", presets.size());
 }
 
 void TestProgramChangeNoDropout() {
   // Simulate host preset switching back-to-back with suspend.
-  NamStudioGraph* g = nam_studio_graph_create();
+  OpenAxeGraph* g = openaxe_graph_create();
   auto presets = openaxe_vst3::presets::BuildFactoryPresets();
   CHECK(presets.size()>=2);
   for(int i=0;i<6;++i){
     const auto& json = presets[i % presets.size()].json;
     int res = openaxe_vst3::state::Restore(g, json, 48000.0,512);
-    CHECK(res==NAM_STUDIO_LOAD_STATE_OK);
+    CHECK(res==OPENAXE_LOAD_STATE_OK);
     // Process a buffer after each switch — must not NaN/crash (dropout would be silence, not crash)
     float in[64]; for(int k=0;k<64;++k) in[k]=0.1f*std::sin(float(k)*0.2f);
     float out[64]={};
     const float* ip[1]={in}; float* op[1]={out};
-    nam_studio_process(g, ip,1, op,1,64);
+    openaxe_process(g, ip,1, op,1,64);
     for(int k=0;k<64;++k) CHECK(std::isfinite(out[k]));
   }
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g);
   std::printf("  program change switching (6 swaps, process after each): ok\n");
 }
 
@@ -215,26 +215,26 @@ void TestProgramChangeNoDropout() {
 // restored document are exactly the ids the graph now holds, so rebuilding the
 // map from that document is sound.
 static void TestRestoredIdsMatchGraph() {
-  auto* g = nam_studio_graph_create();
-  nam_studio_reset(g, 48000, 512);
+  auto* g = openaxe_graph_create();
+  openaxe_reset(g, 48000, 512);
 
   // A rig whose ids will not survive as-is: remove one so the next add reuses
   // or skips an id, making a stale map demonstrably wrong.
-  const int32_t a = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0, 1);
-  const int32_t b = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 1, 3);
-  const int32_t c = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 2, 5);
-  nam_studio_remove_block(g, b);
-  nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, a, 0);
-  nam_studio_connect(g, a, 0, c, 0);
-  nam_studio_connect(g, c, 0, NAM_STUDIO_OUT_RAIL, 0);
+  const int32_t a = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0, 1);
+  const int32_t b = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 1, 3);
+  const int32_t c = openaxe_add_block(g, OPENAXE_BLOCK_DELAY, 2, 5);
+  openaxe_remove_block(g, b);
+  openaxe_connect(g, OPENAXE_IN_RAIL, 0, a, 0);
+  openaxe_connect(g, a, 0, c, 0);
+  openaxe_connect(g, c, 0, OPENAXE_OUT_RAIL, 0);
 
   const std::string saved = openaxe_vst3::state::Serialize(g, false);
   CHECK(!saved.empty());
 
   // Round-trip through a fresh graph, as a project reload does.
-  auto* g2 = nam_studio_graph_create();
-  nam_studio_reset(g2, 48000, 512);
-  CHECK(openaxe_vst3::state::Restore(g2, saved, 48000, 512) == NAM_STUDIO_LOAD_STATE_OK);
+  auto* g2 = openaxe_graph_create();
+  openaxe_reset(g2, 48000, 512);
+  CHECK(openaxe_vst3::state::Restore(g2, saved, 48000, 512) == OPENAXE_LOAD_STATE_OK);
 
   // Every id the restored document advertises must be a live block in the new
   // graph, with the kind the document claims — that is exactly what
@@ -249,17 +249,17 @@ static void TestRestoredIdsMatchGraph() {
     const int32_t id = static_cast<int32_t>(std::stol(blk.value("id", "-1")));
     CHECK(id >= 0);
     // A live block answers its param count; a stale id would not.
-    CHECK(nam_studio_block_param_count(g2, id) >= 0);
-    const char* kind_name = nam_studio_block_kind_name(
-        static_cast<NamStudioBlockKind>(0));
+    CHECK(openaxe_block_param_count(g2, id) >= 0);
+    const char* kind_name = openaxe_block_kind_name(
+        static_cast<OpenAxeBlockKind>(0));
     (void)kind_name;
     CHECK(!blk.value("kind", "").empty());
     ++checked;
   }
   CHECK(checked == 2);  // amp + delay; the removed reverb must not come back
 
-  nam_studio_graph_destroy(g2);
-  nam_studio_graph_destroy(g);
+  openaxe_graph_destroy(g2);
+  openaxe_graph_destroy(g);
   std::printf("  restored ids match the graph: ok\n");
 }
 

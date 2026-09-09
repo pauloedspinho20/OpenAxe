@@ -6,7 +6,7 @@
 //     the callback hot so violations surface.
 //  2) Fallback allocator hook: override global operator new/delete and count
 //     any heap allocation while g_check_rt is set. C DSP that mallocs would
-//     escape this hook, but the core's hot path is C++ (NAM/Dragonfly/DSPark)
+//     escape this hook, but the core's hot path is C++ (NAM/permissive-reverb/DSPark)
 //     and the plugin's own ProcessBlock never mallocs — so a new-count of
 //     zero is the right invariant. A TSan build separately catches races.
 
@@ -67,7 +67,7 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 
-void RunProcessHotLoop(NamStudioGraph* g, int frames, int iterations, const char* label) {
+void RunProcessHotLoop(OpenAxeGraph* g, int frames, int iterations, const char* label) {
   std::vector<float> in0(frames, 0.2f), in1(frames, 0.2f);
   std::vector<float> out0(frames, 0.0f), out1(frames, 0.0f);
   for (int i = 0; i < frames; ++i) { in0[i] = std::sin(float(i) * 0.07f) * 0.3f; in1[i] = in0[i]; }
@@ -76,7 +76,7 @@ void RunProcessHotLoop(NamStudioGraph* g, int frames, int iterations, const char
 
   // Warmup: one call outside the checked region so any lazy first-process
   // allocation happens before we start counting (mirrors host warmup).
-  nam_studio_process(g, in, 2, out, 2, frames);
+  openaxe_process(g, in, 2, out, 2, frames);
   for (int i = 0; i < frames; ++i) CHECK(std::isfinite(out0[i]) && std::isfinite(out1[i]));
 
   g_alloc_count.store(0, std::memory_order_relaxed);
@@ -90,7 +90,7 @@ void RunProcessHotLoop(NamStudioGraph* g, int frames, int iterations, const char
   for (int iter = 0; iter < iterations; ++iter) {
     // Vary input slightly so the compiler can't elide the call.
     in0[0] = float(iter) * 1e-4f;
-    nam_studio_process(g, in, 2, out, 2, frames);
+    openaxe_process(g, in, 2, out, 2, frames);
   }
 
 #ifdef OPENAXE_HAS_RTSAN
@@ -114,7 +114,7 @@ void RunProcessHotLoop(NamStudioGraph* g, int frames, int iterations, const char
 } // namespace
 
 int main() {
-  std::printf("realtime_safety: checking nam_studio_process does not allocate/lock\n");
+  std::printf("realtime_safety: checking openaxe_process does not allocate/lock\n");
 #ifdef OPENAXE_HAS_RTSAN
   std::printf("  RealtimeSanitizer active — will trap non-RT-safe calls\n");
 #else
@@ -123,40 +123,40 @@ int main() {
 
   // 1) Passthrough (mixer) — baseline, no DSP state.
   {
-    NamStudioGraph* g = nam_studio_graph_create();
-    int32_t mixer = nam_studio_add_block(g, NAM_STUDIO_BLOCK_MIXER, 0, 0);
-    nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, mixer, 0);
-    nam_studio_connect(g, mixer, 0, NAM_STUDIO_OUT_RAIL, 0);
-    nam_studio_reset(g, 48000.0, 128);
+    OpenAxeGraph* g = openaxe_graph_create();
+    int32_t mixer = openaxe_add_block(g, OPENAXE_BLOCK_MIXER, 0, 0);
+    openaxe_connect(g, OPENAXE_IN_RAIL, 0, mixer, 0);
+    openaxe_connect(g, mixer, 0, OPENAXE_OUT_RAIL, 0);
+    openaxe_reset(g, 48000.0, 128);
     RunProcessHotLoop(g, 128, 512, "passthrough");
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(g);
   }
 
   // 2) With reverb (tail = denormal territory) — the plugin's FTZ/DAZ guard
   // must already be on, but the DSP itself must not allocate for tail buffers.
   {
-    NamStudioGraph* g = nam_studio_graph_create();
-    int32_t mixer = nam_studio_add_block(g, NAM_STUDIO_BLOCK_MIXER, 0, 0);
-    int32_t rev = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 0, 1);
-    nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, mixer, 0);
-    nam_studio_connect(g, mixer, 0, rev, 0);
-    nam_studio_connect(g, rev, 0, NAM_STUDIO_OUT_RAIL, 0);
-    nam_studio_reset(g, 48000.0, 256);
+    OpenAxeGraph* g = openaxe_graph_create();
+    int32_t mixer = openaxe_add_block(g, OPENAXE_BLOCK_MIXER, 0, 0);
+    int32_t rev = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 0, 1);
+    openaxe_connect(g, OPENAXE_IN_RAIL, 0, mixer, 0);
+    openaxe_connect(g, mixer, 0, rev, 0);
+    openaxe_connect(g, rev, 0, OPENAXE_OUT_RAIL, 0);
+    openaxe_reset(g, 48000.0, 256);
     RunProcessHotLoop(g, 256, 256, "reverb tail");
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(g);
   }
 
   // 3) Multiple block sizes (chunking contract from #126) — plugin chunks
   // rather than re-resetting on the audio thread, so each size must be RT-safe.
   for (int bs : {64, 128, 512, 1024}) {
-    NamStudioGraph* g = nam_studio_graph_create();
-    int32_t gate = nam_studio_add_block(g, NAM_STUDIO_BLOCK_NOISE_GATE, 0, 0);
-    nam_studio_connect(g, NAM_STUDIO_IN_RAIL, 0, gate, 0);
-    nam_studio_connect(g, gate, 0, NAM_STUDIO_OUT_RAIL, 0);
-    nam_studio_reset(g, 48000.0, bs);
+    OpenAxeGraph* g = openaxe_graph_create();
+    int32_t gate = openaxe_add_block(g, OPENAXE_BLOCK_NOISE_GATE, 0, 0);
+    openaxe_connect(g, OPENAXE_IN_RAIL, 0, gate, 0);
+    openaxe_connect(g, gate, 0, OPENAXE_OUT_RAIL, 0);
+    openaxe_reset(g, 48000.0, bs);
     char label[64]; std::snprintf(label, sizeof(label), "block-size %d", bs);
     RunProcessHotLoop(g, bs, 128, label);
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(g);
   }
 
   CHECK(PLUG_LATENCY == 0);

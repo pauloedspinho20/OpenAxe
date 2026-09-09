@@ -7,12 +7,7 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import {
-  getOpenAxe,
-  getShellKind,
-  shellOwnsAudioDevice,
-  type OpenAxeBridge,
-} from '../native/openaxe'
+import { getOpenAxe, shellOwnsAudioDevice, type OpenAxeBridge } from '../native/openaxe'
 import { getDISample } from '../diSamples'
 
 export interface NativeAudioEngineState {
@@ -21,7 +16,11 @@ export interface NativeAudioEngineState {
   rig: NativeGraphRig | null
   context: NativeAudioContext | null
   analyser: NativeAnalyser | null
+  /** Right-channel tap of the rig output for the stereo rail meter (issue #385). */
+  analyserR: NativeAnalyser | null
   tunerAnalyser: NativeAnalyser | null
+  /** Right-channel tap of the trimmed input for the stereo rail meter (issue #385). */
+  tunerAnalyserR: NativeAnalyser | null
   micGranted: boolean
   /** True once the user chose "Continue without sound" - no stream is open, the
    * rig exists for editing only. Cleared automatically the moment a duplex
@@ -43,7 +42,9 @@ const IDLE: NativeAudioEngineState = {
   rig: null,
   context: null,
   analyser: null,
+  analyserR: null,
   tunerAnalyser: null,
+  tunerAnalyserR: null,
   micGranted: false,
   noSound: false,
   diPlaying: false,
@@ -83,6 +84,8 @@ export function useNativeAudioEngine() {
   const bridgeRef = useRef<OpenAxeBridge | null>(null)
   const inputTapRef = useRef<Float32Array>(new Float32Array(0))
   const outputTapRef = useRef<Float32Array>(new Float32Array(0))
+  const inputTapRRef = useRef<Float32Array>(new Float32Array(0))
+  const outputTapRRef = useRef<Float32Array>(new Float32Array(0))
   const pollIntervalRef = useRef<number | null>(null)
 
   // Serializes every open/start/stop/close sequence against every other one.
@@ -131,7 +134,9 @@ export function useNativeAudioEngine() {
                 ...s,
                 context: null,
                 analyser: null,
+                analyserR: null,
                 tunerAnalyser: null,
+                tunerAnalyserR: null,
                 micGranted: false,
                 noSound: true,
               }
@@ -220,13 +225,12 @@ export function useNativeAudioEngine() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputDeviceId, inputChannel])
 
-  // Push input-channel changes down to the plugin. Only in a plugin: the
-  // desktop shell opens the device itself, where channel selection belongs at
-  // the device layer rather than in the graph feed, and it offers no such
-  // control yet (see scripts/check-bridge-methods.mjs).
+  // Push input-channel changes down to the native shell. Both shells honor
+  // the same ioStore strings: the plugin routes per instance in the graph
+  // feed, the desktop routes in the C++ audio callback (the device layer it
+  // owns). Unknown modes degrade to stereo passthrough on the receiving end.
   useEffect(() => {
     if (state.status !== 'ready') return
-    if (getShellKind() !== 'plugin') return
     const bridge = bridgeRef.current
     if (!bridge) return
     void bridge.setInputChannel({ mode: inputChannel }).catch(() => {})
@@ -251,18 +255,23 @@ export function useNativeAudioEngine() {
         .getTap({ side: 'in', frames: TAP_FRAMES })
         .then((t) => {
           inputTapRef.current = new Float32Array(t.l)
+          inputTapRRef.current = new Float32Array(t.r ?? [])
         })
         .catch(() => {})
       void bridge
         .getTap({ side: 'out', frames: TAP_FRAMES })
         .then((t) => {
           outputTapRef.current = new Float32Array(t.l)
+          outputTapRRef.current = new Float32Array(t.r ?? [])
         })
         .catch(() => {})
       void bridge
         .meters()
         .then((meters) => {
-          for (const m of meters) rig.updateMeter(m.id, m.value)
+          for (const m of meters) {
+            rig.updateMeter(m.id, m.value)
+            if (typeof m.input === 'number') rig.updateInputMeter(m.id, m.input)
+          }
         })
         .catch(() => {})
     }
@@ -330,6 +339,14 @@ export function useNativeAudioEngine() {
           sampleRate: actualRate,
           read: () => outputTapRef.current,
         })
+        // Right-channel taps for the stereo rail meters (issue #385) - the
+        // C++ monitor taps already carry both channels (bridge getTap
+        // returns `l` and `r`); the web path was only ever reading `l`.
+        const analyserR = new NativeAnalyser({
+          fftSize: 256,
+          sampleRate: actualRate,
+          read: () => outputTapRRef.current,
+        })
         // Large fftSize: the tuner's autocorrelation needs a wide window to
         // resolve low bass (~31Hz needs >1500 samples per cycle at 48kHz).
         const tunerAnalyser = new NativeAnalyser({
@@ -337,7 +354,12 @@ export function useNativeAudioEngine() {
           sampleRate: actualRate,
           read: () => inputTapRef.current,
         })
-        return { context, analyser, tunerAnalyser }
+        const tunerAnalyserR = new NativeAnalyser({
+          fftSize: 4096,
+          sampleRate: actualRate,
+          read: () => inputTapRRef.current,
+        })
+        return { context, analyser, analyserR, tunerAnalyser, tunerAnalyserR }
       }),
     [runExclusive],
   )
@@ -384,7 +406,9 @@ export function useNativeAudioEngine() {
             rig,
             context: null,
             analyser: null,
+            analyserR: null,
             tunerAnalyser: null,
+            tunerAnalyserR: null,
             micGranted: false,
             noSound: true,
             diPlaying: false,
@@ -395,7 +419,7 @@ export function useNativeAudioEngine() {
         }
 
         const io = useIOStore.getState()
-        const { context, analyser, tunerAnalyser } = await openAndStart(
+        const { context, analyser, analyserR, tunerAnalyser, tunerAnalyserR } = await openAndStart(
           bridge,
           resolveDeviceId(io.inputDeviceId),
           resolveDeviceId(io.outputDeviceId),
@@ -407,7 +431,9 @@ export function useNativeAudioEngine() {
           rig,
           context,
           analyser,
+          analyserR,
           tunerAnalyser,
+          tunerAnalyserR,
           micGranted: true, // native input is always available (device, not permission)
           noSound: false,
           diPlaying: false,
@@ -443,7 +469,7 @@ export function useNativeAudioEngine() {
       recoveringRef.current = true
       try {
         const io = useIOStore.getState()
-        const { context, analyser, tunerAnalyser } = await openAndStart(
+        const { context, analyser, analyserR, tunerAnalyser, tunerAnalyserR } = await openAndStart(
           bridge,
           resolveDeviceId(io.inputDeviceId),
           resolveDeviceId(io.outputDeviceId),
@@ -454,7 +480,9 @@ export function useNativeAudioEngine() {
                 ...s,
                 context,
                 analyser,
+                analyserR,
                 tunerAnalyser,
+                tunerAnalyserR,
                 micGranted: true,
                 noSound: false,
               }
@@ -482,6 +510,8 @@ export function useNativeAudioEngine() {
     unbindRef.current = null
     inputTapRef.current = new Float32Array(0)
     outputTapRef.current = new Float32Array(0)
+    inputTapRRef.current = new Float32Array(0)
+    outputTapRRef.current = new Float32Array(0)
     const bridge = bridgeRef.current
     bridgeRef.current = null
     if (bridge) {
@@ -495,5 +525,20 @@ export function useNativeAudioEngine() {
     setState(IDLE)
   }, [runExclusive])
 
-  return { ...state, powerOn, powerOff, playDI, stopDI }
+  // The shared UI (App/GridEditor) reads the stereo rail meters as
+  // analyserL/analyserR (issue #385) - the same names the web engine provides.
+  // This hook's historic singular fields (analyser/tunerAnalyser) predate the
+  // stereo meters and stay for their existing consumers (e.g. Tuner); without
+  // these aliases analyserL/tunerAnalyserL are undefined on desktop, and
+  // LiveStereoMeter renders a missing side as silence - a centered signal
+  // then shows only its right bar.
+  return {
+    ...state,
+    analyserL: state.analyser,
+    tunerAnalyserL: state.tunerAnalyser,
+    powerOn,
+    powerOff,
+    playDI,
+    stopDI,
+  }
 }

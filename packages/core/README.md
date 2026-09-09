@@ -20,26 +20,28 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
   model loading, sample-rate-aware reset, real-time process, input/output
   level calibration (dBu), loudness, and slim-size quality control as a
   clean C++ class (`openaxe::dsp::NamAmp`).
-- **All four Dragonfly Reverb algorithms** (`include/openaxe/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
-  - matching `src/dsp/*.cpp`) — wrap each of Dragonfly's `DragonflyReverbDSP`
-    classes (freeverb3-based), exposing their full parameter surfaces:
-    `DragonflyHallReverb` (18 params: dry/early/late levels, size, width,
-    predelay, diffuse, low/high cut+crossover+multiplier, spin, wander, decay,
-    early send, modulation), `DragonflyRoomReverb` (17 params, its own
+- **All four algorithmic reverbs** (`include/openaxe/dsp/dragonfly_{hall,room,plate,early_reflections}_reverb.h`
+  - matching `src/dsp/*.cpp`) — permissive-licensed clean-room DSP (issue
+    #372 replaced the former Dragonfly Reverb/GPLv3 wrappers, keeping the
+    same class names and parameter surfaces): `DragonflyHallReverb`
+    (18 params: dry/early/late levels, size, width, predelay, diffuse,
+    low/high cut+crossover+multiplier, spin, wander, decay, early send,
+    modulation), `DragonflyRoomReverb` (17 params, its own
     size/damping/boost controls), `DragonflyPlateReverb` (9 params, including
-    an algorithm selector across its 3 internal plate models), and
+    an algorithm voicing switch), and
     `DragonflyEarlyReflections` (7 params, no late-reverb tail — just the
-    discrete early-reflection pattern). Stereo. Replaces the app's current
-    basic Freeverb effect with a full modulated, frequency-dependent-decay
-    reverb suite.
+    discrete early-reflection cluster). Stereo. The file/class names keep
+    their `dragonfly_*` spelling for param-schema/preset stability, but no
+    Dragonfly/DPF/freeverb3 code remains — the Pro link set contains no
+    GPL/LGPL translation unit.
 - **Real-time audio engine + full `extern "C"` API** (issue #14's follow-up
   PR): `include/openaxe/engine.h` + `src/engine.cpp` add
   `openaxe::engine::AudioEngine`, a layer on top of `GraphRig` that gives
   each block a live DSP object (NAM for the 5 amp-family kinds, one of the
-  4 Dragonfly algorithms for `kReverb`, one of the 4 DSPark effects for
-  `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`, hand-written wrappers for
-  `kChorus`/`kFlanger`/`kPhaser`/`kDelay`, and passthrough
-  for `kCab`/`kMixer`/`kSplitter`, which aren't DSP effect kinds), pre-allocated
+  4 permissive reverb algorithms for `kReverb`, one of the 5 DSPark effects for
+  `kCompressor`/`kEq`/`kNoiseGate`/`kTremolo`/`kPhaser`, hand-written wrappers for
+  `kFlanger`/`kDelay`, DaisySP's chorus for `kChorus`, and passthrough
+  for `kCab`/`kMixer`, which aren't DSP effect kinds), pre-allocated
   buffers, and real column-ordered signal routing.
   `include/openaxe/api.h` + `src/api.cpp`
   expose it as an `extern "C"` surface (int32 ids, not `GraphRig`'s strings —
@@ -59,6 +61,24 @@ APIs (web via Emscripten/WASM, desktop, VST3/CLAP/AU/AAX, iOS, Android).
     native Web Audio nodes — wired to the web app via `apps/web/public/
 wasm-core/{compressor,eq,noiseGate,tremolo}Worklet.js` and the matching
     TS classes.
+- **Chorus** (`include/openaxe/dsp/chorus.h` + `src/dsp/chorus.cpp`) — wraps
+  the MIT-licensed chorus from [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)
+  (`third_party/daisysp`, its `Source/Effects/chorus.{h,cpp}`) behind the same
+  thin-class interface, replacing a hand-rolled single-voice implementation
+  (issue #359). 5 params: rate/depth/delay/feedback/stereo. DaisySP's internal
+  equal wet/dry mix and pan/gain scaling are stripped in the wrapper so the
+  engine's own `mix` knob owns the blend; `stereo` sweeps the right channel's
+  LFO at a slightly higher rate for drift-based width, or collapses to mono.
+- **Phaser** (`include/openaxe/dsp/phaser.h` + `src/dsp/phaser.cpp`) — wraps
+  `dspark::Phaser` through the same `DsparkEffect` adapter as the Compressor,
+  voiced as an MXR Phase 90 (issue #317): the EVH pedal's circuit with its
+  Script/Block switch, replacing a hand-rolled 4-param implementation
+  (rate/depth/feedback/stages). 2 params: rate (the pedal's Speed knob,
+  0.1–8 Hz, default 0.5) and script (the Script switch, default Script voice
+  on). Stages (4), triangle LFO, 200 Hz–2.8 kHz sweep, mono sweep and wet-only
+  output are fixed in `Configure()` — fewer knobs on purpose, the way the
+  pedal has one. The engine's own `mix` knob (default 0.5 for `kPhaser`)
+  owns the blend.
 - **Convolver** (`include/openaxe/dsp/convolver.h` + `src/dsp/convolver.cpp`)
   — cabinet/room impulse-response convolution, the DSP behind a Cab block.
   Partitioned convolution in the standard two-part form: a direct time-domain FIR
@@ -107,9 +127,9 @@ boosting and cutting its own region while leaving the others alone, holding at
 one of that algorithm's parameters to their min/max and process a real
 stereo impulse through it, asserting a genuine non-silent, finite reverb
 tail comes out. `dragonfly_all_algorithms_test` constructs and processes
-audio through all four algorithms in one executable - the actual regression
-test for the symbol-isolation fix described below (linking any two would
-have failed with duplicate symbols before that fix). `compressor_test`/`equalizer_test`/`noise_gate_test`/
+audio through all four algorithms in one executable (retained from the old
+symbol-isolation regression test — each algorithm is now its own clean-room
+TU, so the duplicate-symbol hazard it guarded no longer exists). `compressor_test`/`equalizer_test`/`noise_gate_test`/
 `tremolo_test` do the same parameter-sweep + real-audio pattern for the four
 DSPark wrappers (a loud sine comes out measurably compressed/gated/modulated,
 a band boost measurably louder than a cut, silence measurably crushed), and
@@ -119,8 +139,8 @@ surface.
 
 ## Rig state wire format (issues #119, #120)
 
-`nam_studio_serialize_state` / `nam_studio_serialize_state_ex` /
-`nam_studio_load_state` (`include/openaxe/api.h`, implemented in
+`openaxe_serialize_state` / `openaxe_serialize_state_ex` /
+`openaxe_load_state` (`include/openaxe/api.h`, implemented in
 `src/serialization/{json rig_state sha256 base64}.{h,cpp}` — a hand-written
 dependency-free JSON module plus the state mapping) turn an entire rig into
 one JSON document and back. This is the single preset/scene model for host
@@ -175,10 +195,10 @@ Field notes:
   block. Rail jacks serialize as `"-1"`/`"-2"`; `"IN"`/`"OUT"` load equally.
 - **`kind` strings** are the TS union's hyphenated literals
   (`noise-gate`, ..., `delay`, `reverb`, `amp`, `amp-cab`, `pedal`,
-  `outboard`, `space`, `cab`, `mixer`, `splitter`) - block.h's documented
+  `outboard`, `space`, `cab`, `mixer`) - block.h's documented
   future mapping lives in `rig_state.cpp`.
 - **`bypass`** appears only for kinds with a bypass concept (everything except
-  cab/mixer/splitter), mirroring types.ts. **`inputTrim`/`outputTrim`**
+  cab/mixer), mirroring types.ts. **`inputTrim`/`outputTrim`**
   (core extensions, always written) are the per-block I/O staging gains.
 - **`reverbAlgorithm`** (`hall|room|plate|early-reflections`) rides on reverb
   blocks and **`delayModel`** (`digital|analog|tape`) on delay blocks - both
@@ -233,8 +253,8 @@ each cab block with an IR carries an `"ir"` object:
 
 Restoration order per block: **embedded payload first**, then **source path**
 (relinking), then the block stays empty and the asset is reported as missing -
-`nam_studio_load_state` publishes the names of unresolvable assets, which
-`nam_studio_state_missing_asset_count` / `nam_studio_state_missing_asset`
+`openaxe_load_state` publishes the names of unresolvable assets, which
+`openaxe_state_missing_asset_count` / `openaxe_state_missing_asset`
 hand back to the caller until the next load. A payload that fails to decode,
 overshoots the size ceiling below, or isn't a valid asset falls through to the
 path attempt before giving up. Missing assets never abort the restore -
@@ -257,7 +277,7 @@ name/path metadata (`SetModelSourceInfo` / `SetIrSourceInfo`).
 
 `schemaVersion` is bumped for any breaking shape change. Missing field means
 1 (the web app's existing presets predate it). Versions this build knows are
-accepted; a NEWER version is rejected (`NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION`)
+accepted; a NEWER version is rejected (`OPENAXE_LOAD_STATE_UNSUPPORTED_VERSION`)
 rather than guessed at. Unknown fields inside a known version are ignored -
 forward-compatible by construction.
 
@@ -268,7 +288,7 @@ The shape is a superset of `apps/web/src/presets/types.ts`'s `Preset`
 jacks, `masterLevel`, `masterMuted`), so today's exported `.json` files load
 as-is. Those files predate core symbols in a few places, so documents WITHOUT
 a `schemaVersion` get exactly the interpretation `RigBlock.ts` +
-`namStudioRigWorklet.js` apply today:
+`openAxeRigWorklet.js` apply today:
 
 - `params.input_level`/`output_level` mean the **I/O trims**, not the amp
   family's calibration params (which canonical documents carry under those
@@ -289,7 +309,7 @@ unparseable JSON, wrong root shape, missing `blocks`/`edges` arrays, or an
 unsupported `schemaVersion`. Everything else follows applyPreset's
 partial-failure tolerance (#64): malformed entries, unknown kinds, dangling
 or rejected edges, and unresolvable params each skip individually while the
-rest restores. `nam_studio_serialize_state` uses the usual two-call sizing
+rest restores. `openaxe_serialize_state` uses the usual two-call sizing
 pattern (pass NULL to get the required capacity, NUL included). Both calls
 are control-thread only - allocate/rebuild topology - so suspend audio around
 them like every other mutation.
@@ -297,8 +317,8 @@ them like every other mutation.
 Tests: `tests/json_test.cpp` covers the JSON module itself (escapes, number
 round-tripping, malformed input, depth limits); `tests/api_state_test.cpp`
 is issue #119's round-trip proof - a non-trivial rig (amp + cab + effects +
-mixer + splitter) serialized, reloaded into fresh graphs, and asserted
-field-by-field PLUS bit-exact audio equivalence through `nam_studio_process`;
+mixer) serialized, reloaded into fresh graphs, and asserted
+field-by-field PLUS bit-exact audio equivalence through `openaxe_process`;
 `tests/api_state_assets_test.cpp` is issue #120's - a real capture and a real
 IR embedded into a document that restores sample-identically after the source
 graph is destroyed (the sources exist nowhere on disk), plus the payload ->
@@ -313,25 +333,26 @@ binding documents.
 All added as git submodules under `third_party/`, and all wired into the
 build — every one backs a real effect kind:
 
-| Path               | Upstream                                                                                | License | Wired into the build?                                       |
-| ------------------ | --------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------- |
-| `nam-core`         | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                           |
-| `dragonfly-reverb` | [`michaelwillis/dragonfly-reverb`](https://github.com/michaelwillis/dragonfly-reverb)   | GPLv3   | **Yes** — see `dragonfly_hall_reverb.cpp` above             |
-| `dspark`           | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo, see above |
+| Path       | Upstream                                                                                | License | Wired into the build?                                              |
+| ---------- | --------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------ |
+| `nam-core` | [`sdatkinson/NeuralAmpModelerCore`](https://github.com/sdatkinson/NeuralAmpModelerCore) | MIT     | **Yes** — see `nam_amp.cpp` above                                  |
+| `dspark`   | [`CristianMoresi/DSPark`](https://github.com/CristianMoresi/DSPark)                     | MIT     | **Yes** — Compressor/Equalizer/NoiseGate/Tremolo/Phaser, see above |
+| `daisysp`  | [`electro-smith/DaisySP`](https://github.com/electro-smith/DaisySP)                     | MIT     | **Yes** — Chorus (its `Source/Effects/chorus.{h,cpp}`), see above  |
 
-Two of these libraries additionally vendor their own nested submodules —
+The reverb algorithms (hall/room/plate/early-reflections/spring) are
+hand-written and vendor nothing (issue #372 removed the former
+`dragonfly-reverb` GPLv3 submodule and its nested `dpf`, so the Pro link
+set contains no GPL/LGPL translation unit).
+
+Only one of these libraries vendors its own nested submodules —
 after cloning this repo, run:
 
 ```bash
 git submodule update --init --recursive -- packages/core/third_party/nam-core
-git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
 ```
 
 `nam-core`'s nested submodules are Eigen (`gitlab.com/libeigen/eigen`) and
-`AudioDSPTools`. `dragonfly-reverb`'s is `dpf` (DISTRHO Plugin Framework) —
-only two of its header-only utilities are actually used
-(`DistrhoPlugin.hpp` for a couple of macros, `extra/ScopedDenormalDisable.hpp`),
-never its actual plugin runtime.
+`AudioDSPTools`.
 
 `signalsmith-dsp`, `analog-tape-model`, and `lsp-plugins` were vendored
 early on for effect kinds that were never built (tape delay character,
@@ -403,7 +424,7 @@ Re-blessing is documented in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#changing-
 - WASM/browser UI wiring beyond Reverb — NAM model loading, metering, and
   reverb algorithm switching aren't wired into the web app yet
   (`apps/web/public/wasm-core/dragonflyReverbWorklet.js`, built on the
-  shared `namStudioEffectBase.js`, only calls
+  shared `openAxeEffectBase.js`, only calls
   `create`/`add_block`/`connect`/`reset`/`process`/`set_param`).
 - iOS/Android: still unverified, those toolchains aren't installed in this
   environment.
@@ -412,9 +433,8 @@ Re-blessing is documented in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#changing-
 
 **Native (macOS, this environment): verified, not just authored.** CMake
 4.4.2 configures, builds, and runs the full CTest suite, including the real
-NAM model load-and-process test, all four Dragonfly Reverb algorithms' real
-impulse-response tests, and the combined-binary symbol-isolation regression
-test, against Debug builds:
+NAM model load-and-process test, all four permissive reverb algorithms' real
+impulse-response tests, and the joint all-algorithms test, against Debug builds:
 
 ```bash
 cmake -S packages/core -B packages/core/build -DOPENAXE_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
@@ -424,7 +444,7 @@ ctest --test-dir packages/core/build --output-on-failure
 
 **Emscripten: verified for issue #22's first slice.** `openaxe_core`
 itself stays a plain `STATIC` library (Emscripten's export/link flags only
-apply to a final linked module); a small `nam_studio_core_wasm` executable
+apply to a final linked module); a small `openaxe_core_wasm` executable
 target (empty `src/wasm_entry.cpp`, no `main()` needed for the
 `MODULARIZE=1` factory-function pattern) links it and gets the actual
 Emscripten treatment. `scripts/build-core-wasm.sh` builds it and copies the
@@ -453,42 +473,15 @@ semantics, e.g. `$<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>` (CMake
 3.24+, portable across GNU/Apple/MSVC linkers) — see `tests/CMakeLists.txt`
 for the pattern `nam_amp_test` uses.
 
-**Dragonfly Reverb needed four fixes only discoverable by actually trying
-to build it:**
-
-1. The underlying freeverb3 library (`common/freeverb/`) uses dynamic
-   exception specifications (`throw(std::bad_alloc)`) removed in C++17.
-   It (and anything that includes its headers, including each wrapper's
-   own `.cpp`) must compile at C++14 - hence each algorithm gets its own
-   `dragonfly_<algo>_reverb_vendor` CMake target with `CXX_STANDARD 14`,
-   linked into the C++20 `openaxe_core` target. Mixing standards across
-   translation units in one binary is fine; only same-TU consistency
-   matters.
-2. freeverb3 needs `-DLIBFV3_FLOAT` defined (it picks its internal sample
-   type - float/double/long double - via one of four macros; Dragonfly's
-   own Makefile always builds with the float variant).
-3. `common/freeverb/*.cpp` is **not** a safe glob target - it also contains
-   files (`blockDelay.cpp`, `compmodel.cpp`, etc.) used only by Dragonfly's
-   other reverb algorithms, which need the external FFTW library. Every
-   algorithm here only needs the same specific 17 files (16 freeverb3 + one
-   more) listed in each `plugins/dragonfly-*-reverb/Makefile`'s
-   `FILES_COMMON` (identical list across all four plugins) - each wrapper
-   `#include`s them by name rather than globbing.
-4. **All four algorithms define an identically-named `DragonflyReverbDSP`
-   class** (and depend on identically-named freeverb3 classes like
-   `fv3::zrev2_f`). Linking any two into the same final binary is a
-   duplicate-symbol conflict. The fix: each wrapper `.cpp` compiles its own
-   freeverb3 sources + its own `DSP.cpp` entirely inside one anonymous
-   namespace, in one translation unit (see `dragonfly_hall_reverb.cpp`'s
-   header comment for why a _partial_ wrap - just `DSP.cpp`, leaving
-   freeverb3 externally linked - was tried first and rejected: it compiles,
-   but produces a silent linkage _mismatch_ rather than a clean error).
-   Because the real class is now invisible outside its own `.cpp`, the
-   public header can't forward-declare it the normal way - each header
-   uses an opaque `void*` instead of `std::unique_ptr<DragonflyReverbDSP>`.
-   `dragonfly_all_algorithms_test` is the regression test proving this:
-   before the fix, linking it (which uses all four wrapper classes) failed
-   with duplicate symbols; after, it passes.
+**Reverb history (issue #372): builds before it wrapped Dragonfly Reverb
+(GPLv3/freeverb3), which needed four build fixes — a C++14 override per
+algorithm (dynamic exception specifications), `-DLIBFV3_FLOAT`, an explicit
+17-file source list per algorithm (no glob: the rest needs FFTW), and one
+anonymous namespace per wrapper (all four algorithms defined an
+identically-named `DragonflyReverbDSP` class). #372 replaced all four with
+hand-written permissive DSP behind the same class names and parameter
+surfaces, deleted the submodule, and kept `dragonfly_all_algorithms_test`
+as the joint smoke test.**
 
 ## Build targets (native verified; others authored, not yet buildable here)
 
@@ -501,7 +494,7 @@ cmake --build build/native
 # scripts/build-core-wasm.sh instead, which also copies the output into
 # apps/web/public/wasm-core/
 emcmake cmake -B build/wasm -DCMAKE_BUILD_TYPE=Release
-cmake --build build/wasm --target nam_studio_core_wasm
+cmake --build build/wasm --target openaxe_core_wasm
 
 # iOS - unverified
 cmake -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS

@@ -7,9 +7,9 @@ contributions of all sizes are welcome.
 
 ## Before you start
 
-- Check the [open issues](https://github.com/pauloedspinho20/NAM-Web-Studio/issues) — work is
+- Check the [open issues](https://github.com/pauloedspinho20/OpenAxe/issues) — work is
   organized into epics (labeled `epic`), each with a task checklist. Comment on an epic or a
-  specific task before starting significant work, so effort isn't duplicated. Filter by [`good first issue`](https://github.com/pauloedspinho20/NAM-Web-Studio/labels/good%20first%20issue) for starter tasks.
+  specific task before starting significant work, so effort isn't duplicated. Filter by [`good first issue`](https://github.com/pauloedspinho20/OpenAxe/labels/good%20first%20issue) for starter tasks.
 - If you want to add a new effect or DSP component, read the licensing note below first —
   it affects which upstream source you're allowed to port from.
 - Read [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) and [`SECURITY.md`](./SECURITY.md).
@@ -29,7 +29,7 @@ This project ships under **GPLv3**. That means:
 
 ## Development setup
 
-This is a pnpm + Turborepo monorepo. `apps/web` is the live product, `packages/ui` the design system, `apps/desktop` the native shell (C++ + webview.h + JUCE), `packages/vst3` the plugin (iPlug2), `packages/core` the shared C++ engine. `apps/ios`/`apps/android` are scaffolding (#17). See [`README.md`](./README.md#project-structure) for the full layout.
+This is a pnpm + Turborepo monorepo. `apps/web` is the live product, `packages/ui` the design system, `apps/desktop` the native shell (C++ + webview.h + miniaudio), `packages/vst3` the plugin (iPlug2), `packages/core` the shared C++ engine. `apps/ios`/`apps/android` are scaffolding (#17). See [`README.md`](./README.md#project-structure) for the full layout.
 
 **One-command setup (idempotent — repairs wrong-arch binaries):**
 
@@ -47,7 +47,7 @@ pnpm dev:all                        # both, parallel
 pnpm install
 # C++ submodules (selective, fast — not full --recursive):
 git submodule update --init --recursive -- packages/core/third_party/nam-core
-git -C packages/core/third_party/dragonfly-reverb submodule update --init --depth 1 -- dpf
+git submodule update --init -- packages/core/third_party/dspark packages/core/third_party/daisysp
 # Optional Emscripten: bash scripts/build-core-wasm.sh (needs emsdk on PATH)
 ```
 

@@ -2,7 +2,12 @@ import { create } from 'zustand'
 import type { MidiAction } from '../midi/actions'
 import { actionKey as computeActionKey } from '../midi/actions'
 import { matchKey } from '../midi/message'
-import { loadMidiConfig, saveMidiConfig, type MidiMapping } from '../midi/midiConfigStore'
+import {
+  loadMidiConfig,
+  saveMidiConfig,
+  MIDI_CONFIG_VERSION,
+  type MidiMapping,
+} from '../midi/midiConfigStore'
 import type { MidiInputInfo, MidiMatch, MidiMessage } from '../midi/types'
 
 export type MidiPermission = 'unknown' | 'granted' | 'denied'
@@ -42,7 +47,7 @@ function persist(state: MidiState): void {
   if (!state.loaded) return
   void saveMidiConfig({
     id: 'midi-config',
-    version: 1,
+    version: MIDI_CONFIG_VERSION,
     selectedInputId: state.selectedInputId,
     mappings: state.mappings,
   })

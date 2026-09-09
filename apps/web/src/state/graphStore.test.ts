@@ -131,7 +131,7 @@ describe('graphStore', () => {
 
   // ── Mutations ──────────────────────────────────────────────────────────
 
-  it('removeBlock drops the block and every edge touching it', () => {
+  it('removeBlock splices the chain: deleting a middle block reconnects prev -> next', () => {
     loadGraph(
       [block('a', 'compressor', 0, 0), block('b', 'eq', 0, 1)],
       [edge('ia', 'IN', 'a'), edge('ab', 'a', 'b'), edge('bo', 'b', 'OUT')],
@@ -140,7 +140,31 @@ describe('graphStore', () => {
 
     const state = useGraphStore.getState()
     expect(state.blocks.map((x) => x.id)).toEqual(['b'])
-    expect(edgeSummary()).toEqual(['b->OUT'])
+    expect(edgeSummary()).toEqual(['IN->b', 'b->OUT'])
+  })
+
+  it('removeBlock splices a middle block between two real blocks', () => {
+    loadGraph(
+      [block('a', 'compressor', 0, 0), block('b', 'eq', 0, 1), block('c', 'delay', 0, 2)],
+      [edge('ia', 'IN', 'a'), edge('ab', 'a', 'b'), edge('bc', 'b', 'c'), edge('co', 'c', 'OUT')],
+    )
+    useGraphStore.getState().removeBlock('b')
+
+    const state = useGraphStore.getState()
+    expect(state.blocks.map((x) => x.id)).toEqual(['a', 'c'])
+    expect(edgeSummary()).toEqual(['IN->a', 'a->c', 'c->OUT'])
+  })
+
+  it('removeBlock with only one side connected drops without splicing', () => {
+    loadGraph(
+      [block('a', 'compressor', 0, 0), block('b', 'eq', 0, 1)],
+      [edge('ia', 'IN', 'a'), edge('ab', 'a', 'b')],
+    )
+    useGraphStore.getState().removeBlock('b')
+
+    const state = useGraphStore.getState()
+    expect(state.blocks.map((x) => x.id)).toEqual(['a'])
+    expect(edgeSummary()).toEqual(['IN->a'])
   })
 
   it('setBlockParams merges into existing params rather than replacing them', () => {

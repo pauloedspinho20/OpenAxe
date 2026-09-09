@@ -1,7 +1,7 @@
 # Audio engine
 
 The web app's Web Audio layer around `packages/core`. Every block on the grid — amp, effect, cab,
-mixer, splitter — is built here, and the DSP inside all of them is the **same C++ core the desktop
+mixer — is built here, and the DSP inside all of them is the **same C++ core the desktop
 app and the (planned) plugin run**, compiled to WASM and driven from an `AudioWorklet`. This layer
 owns the Web Audio plumbing between those worklets, not the audio maths.
 
@@ -42,10 +42,10 @@ Notes worth knowing:
   AudioParams. `AmpBlock` used to implement it with four Web Audio `BiquadFilterNode`s, which is why
   the desktop app - on the same core - had no working Bass/Mid/Treble/Presence at all.
 - Each node holds its own WASM instance and one-block graph (`IN -> amp -> OUT`), like every
-  effect worklet — see `public/wasm-core/namStudioEffectBase.js`.
+  effect worklet — see `public/wasm-core/openAxeEffectBase.js`.
 - The core's `input_level`/`output_level` params are the **capture's own dBu calibration**, not
   user-facing levels. The Input/Output knobs are block trims (`AmpBlock`'s gain stages on web,
-  `nam_studio_set_block_input_trim` on desktop).
+  `openaxe_set_block_input_trim` on desktop).
 
 ## `GraphRig` + `blocks/`
 
@@ -59,8 +59,9 @@ core's convolver (`CabIrNode` + `wasm-core/cabWorklet.js`), where it used to use
 Web Audio `ConvolverNode`.
 
 `graphValidation.ts` holds the connection rules — left-to-right by column (which makes cycles
-impossible by construction), at most one cable per input jack, a mixer's several input ports and a
-splitter's several output ports each counting separately. The core has the same rules in
+impossible by construction), at most one cable per input jack, and a mixer's several input ports
+each counting separately. Every kind has exactly one output port; the splitter was the only one
+with more than one, and it was removed. The core has the same rules in
 `graph_validation.cpp`; that duplication is what step 2 of the migration in ARCHITECTURE.md
 removes.
 

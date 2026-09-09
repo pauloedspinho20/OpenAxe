@@ -1,21 +1,15 @@
 #pragma once
 
-// Note: this file (and dragonfly_room_reverb.cpp) is compiled at C++14 -
-// see CMakeLists.txt - so it avoids the C++17 nested-namespace shorthand
-// used elsewhere in this codebase.
+#include <memory>
+
 namespace openaxe {
 namespace dsp {
 
-// Wraps Dragonfly Reverb's room-style algorithm, exposing its full
-// 17-parameter surface: dry/early/late levels, early send, room size/width,
-// predelay, decay, diffusion, modulation spin/wander, input high/low cut,
-// early/late damping, and low-frequency boost + boost frequency.
-//
-// See dragonfly_hall_reverb.h for why this uses an opaque `void*` rather
-// than a forward-declared DragonflyReverbDSP*: Dragonfly's four reverb
-// algorithms all define an identically-named DragonflyReverbDSP class,
-// each made anonymous-namespace-private to its own .cpp to avoid a
-// duplicate-symbol conflict if two were ever linked into the same binary.
+// Permissive-licensed clean-room room reverb (issue #372): shorter damped
+// combs + a tight allpass pair per channel, input high/low cuts, separate
+// early/late damping, and a low-frequency boost - the full 17-parameter
+// surface. Stereo only. Real-time safe after Reset(); Reset is the only
+// allocating method; Mute() silences tails.
 class DragonflyRoomReverb {
  public:
   struct ParamInfo {
@@ -41,7 +35,8 @@ class DragonflyRoomReverb {
   void SetParam(int index, float value);
 
  private:
-  void* dsp_;  // owning pointer to an (anonymous namespace)::DragonflyReverbDSP*
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace dsp

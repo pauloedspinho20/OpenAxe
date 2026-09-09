@@ -1,188 +1,155 @@
 #include "openaxe/dsp/phaser.h"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <vector>
+#include "Effects/Phaser.h"
+#include "internal/dspark_wrapper.h"
 
 namespace openaxe::dsp {
 
 namespace {
 
 constexpr int kRateParam = 0;
-constexpr int kDepthParam = 1;
-constexpr int kFeedbackParam = 2;
-constexpr int kStagesParam = 3;
-constexpr int kParamCount = 4;
+constexpr int kScriptParam = 1;
+constexpr int kParamCount = 2;
 
 // Generated from packages/core/param_schema.json (issue #51) - run
 // scripts/gen-param-schema.mjs after editing the schema.
-const Phaser::ParamInfo kParamInfo[kParamCount] = {
+const DsparkParamInfo kParamInfo[kParamCount] = {
 #include "generated/phaser_params.inc"
 };
 
-constexpr int kMaxStages = 8;
-constexpr float kLowFreq = 150.0f;       // minimum sweep frequency (Hz)
-constexpr float kHighFreq = 3000.0f;     // maximum sweep frequency (Hz)
-constexpr float kStereoOffset = 1.57079632679f;  // π/2
-
-// One first-order allpass section: y[n] = a*x[n] + x[n-1] - a*y[n-1].
-// It passes every frequency at full amplitude but rotates phase around the
-// break frequency the coefficient `a` encodes - cascading several of them and
-// summing against the dry signal is what produces a phaser's moving notches.
-struct AllPassStage {
-  float x1 = 0.0f;  // previous input
-  float y1 = 0.0f;  // previous output
-
-  // One sample through the section, updating its two-sample history.
-  float Process(float x, float a) {
-    const float y = a * x + x1 - a * y1;
-    x1 = x;
-    y1 = y;
-    return y;
-  }
-
-  // Clear the history - on a sample-rate change or a stage-count change,
-  // where stale state would otherwise click.
-  void Reset() {
-    x1 = 0.0f;
-    y1 = 0.0f;
-  }
+// An MXR Phase 90 (the EVH pedal is the same circuit with a Script/Block
+// switch) is a 4-stage cascaded-allpass phaser with a single Speed knob: no
+// depth, no stage count, no sweep-range controls. The FET stages sweep a
+// fixed ~200 Hz-2.8 kHz band - the guitar mids where the two moving notches
+// read as a vocal "whoosh" rather than a low-mid wobble - driven by a
+// triangle-ish LFO that traverses the band evenly instead of dwelling at the
+// extremes the way a sine does. The Script switch selects the feedback
+// voicing: Script (vintage script-logo) runs light regeneration for a soft,
+// chewy sweep; Block (modern block-logo) runs hotter feedback for sharper,
+// more resonant peaks. Deliberately fewer knobs than the previous surface
+// (rate/depth/feedback/stages): the fixed voicing is the sound, and the
+// dropped params only made it easier to dial in a bad one. `rate` keeps its
+// symbol so existing presets keep their speed; depth/feedback/stages keys in
+// old presets are ignored (unknown symbols never fail a load).
+//
+// This intentionally does NOT expose dspark::Phaser's centre/range/waveform/
+// spread setters as params (the direction issue #317 originally proposed).
+// They are set once in Configure() to the pedal values below - a studio
+// phaser with six sweep knobs is a different effect from a Phase 90.
+constexpr float kDefaults[kParamCount] = {
+    0.5f,  // rate: the EVH sweet spot (slow swirl, ~9 o'clock on the pedal)
+    1.0f,  // script: Script voice on (the vintage EVH sound), Block when off
 };
 
-// Allpass coefficient for a break frequency, via the bilinear transform:
-// a = (1 - tan(w0/2)) / (1 + tan(w0/2)), where w0 is the normalized angular
-// frequency. Recomputed per sample in Process() because the LFO is sweeping it.
-float ComputeCoeff(float freq, float sample_rate) {
-  const float w0 = 6.28318530718f * freq / sample_rate;
-  const float t = std::tan(w0 * 0.5f);
-  return (1.0f - t) / (1.0f + t);
-}
+// Fixed 4-stage cascade: the Phase 90's four FET allpass sections (two
+// notches). Matches the pedal; not a param.
+constexpr int kPhase90Stages = 4;
 
-// One channel's allpass cascade plus its LFO phase, carried across Process()
-// calls so the sweep stays continuous across block boundaries.
-struct Channel {
-  std::array<AllPassStage, kMaxStages> stages;
-  float phase = 0.0f;
+// Fixed sweep endpoints. dspark::Phaser sweeps logMin..logMax geometrically
+// at full depth, so these ARE the sweep: 200 Hz-2.8 kHz, ~3.8 octaves centred
+// near 750 Hz. Same territory the previous hand-rolled sweep covered
+// (175 Hz-2.8 kHz at full depth), now fixed the way the pedal fixes it.
+constexpr float kSweepMinHz = 200.0f;
+constexpr float kSweepMaxHz = 2800.0f;
 
-  // Clear every stage's history.
-  void Reset() {
-    for (auto& s : stages) s.Reset();
+// Feedback per Script-switch position. Script runs light regeneration (soft
+// notches, the "chewy" vintage sweep); Block runs hotter (sharper peaks, the
+// modern aggressive sweep). Both sit well clear of self-oscillation -
+// dspark::Phaser additionally soft-clips the loop with fastTanh, the way the
+// pedal's FET stages saturate instead of blowing up.
+constexpr float kScriptFeedback = 0.3f;
+constexpr float kBlockFeedback = 0.6f;
+
+using Waveform = dspark::Oscillator<float>::Waveform;
+
+// The policy DsparkEffect<> needs: param table, defaults, one-time pedal
+// voicing, and how each param index maps onto dspark::Phaser's setters.
+struct PhaserTraits {
+  static constexpr int kParamCount = 2;
+  static constexpr const DsparkParamInfo* kInfo = kParamInfo;
+  static constexpr const float* kDefaults = openaxe::dsp::kDefaults;
+
+  // One-time pedal voicing, applied on top of dspark::Phaser's own defaults
+  // before any param is seeded (the adapter calls Configure() first). All
+  // atomic publishes, safe before prepare().
+  static void Configure(dspark::Phaser<float>& proc) {
+    proc.setStages(kPhase90Stages);
+    proc.setLfoWaveform(Waveform::Triangle);
+    proc.setFrequencyRange(kSweepMinHz, kSweepMaxHz);
+    // Full sweep, always: the pedal has no depth knob, and narrowing the
+    // range around the centre is what the old `depth` param did least
+    // musically (it parked the notches in the low mids).
+    proc.setDepth(1.0f);
+    // Mono sweep: the pedal is a mono circuit, and both channels sharing one
+    // LFO keeps the stereo image put instead of swirling it. (This also
+    // halves the per-sample LFO/coefficient work versus the old per-channel
+    // sine - the issue's CPU note, for free.)
+    proc.setStereoSpread(0.0f);
+    // Wet-only: the engine owns the dry/wet blend via its own mix knob (see
+    // phaser.h), so the internal mixer stays fully wet.
+    proc.setMix(1.0f);
+  }
+
+  static void Apply(dspark::Phaser<float>& proc, const float* values, int index, float value) {
+    (void)values;
+    switch (index) {
+      case kRateParam:
+        proc.setRate(value);
+        break;
+      case kScriptParam:
+        // The Script switch is discrete on the pedal; the >= 0.5 threshold
+        // keeps it a switch while staying automation-smooth (dspark::Phaser
+        // one-pole-smooths feedback internally, so crossing the threshold
+        // morphs instead of clicking).
+        proc.setFeedback(value >= 0.5f ? kScriptFeedback : kBlockFeedback);
+        break;
+      default:
+        break;
+    }
   }
 };
 
 }  // namespace
 
+// Pimpl so the vendored dspark:: types stay out of the public header.
 struct Phaser::Impl {
-  std::array<Channel, 2> channels;
-  float rate = 0.2f;
-  float depth = 0.8f;
-  float feedback = 0.6f;
-  int stages = 4;
-  float sample_rate = 48000.0f;
+  DsparkEffect<dspark::Phaser<float>, PhaserTraits> dsp;
 };
 
 Phaser::Phaser() : impl_(std::make_unique<Impl>()) {}
-
 Phaser::~Phaser() = default;
 
-// Adopt a new sample rate and clear the cascade. Allocation-free (the stages
-// are a fixed array), but it discards state, so call it between blocks.
-void Phaser::Reset(double sample_rate) {
-  impl_->sample_rate = static_cast<float>(sample_rate);
-  for (auto& ch : impl_->channels) ch.Reset();
-}
+// Re-prepare for a new sample rate (the LFO and smoothing coefficients are
+// derived from it) - dspark::Phaser keeps its params across prepare(), so the
+// pedal voicing and knob positions survive. Allocates; not real-time safe.
+void Phaser::Reset(double sample_rate) { impl_->dsp.Reset(sample_rate); }
 
-// A sine LFO sweeps the break frequency of `stages` cascaded allpass sections,
-// with the last stage's output fed back into the input at `feedback` to sharpen
-// the notches. The sweep is exponential (kLowFreq * ratio^(t*depth)) rather
-// than linear, because pitch is perceived logarithmically - a linear sweep
-// spends most of its travel in the top octave and sounds lopsided.
-//
-// `depth` scales how much of the 150Hz..3kHz range the sweep actually covers.
-// The right channel's LFO is offset a quarter cycle (kStereoOffset) so the two
-// channels' notches don't move in lockstep. Output is the wet cascade; the
-// dry/wet mix belongs to the caller.
+// MXR Phase 90 voice: dspark::Phaser's series first-order-allpass chain at 4
+// stages, swept by its triangle LFO over the fixed 200 Hz-2.8 kHz band, with
+// tanh-saturated feedback per the Script switch. Output is 100%-wet; the
+// engine's block staging owns the dry/wet blend. Real-time safe.
 void Phaser::Process(const float* const* input, float* const* output, int num_frames) {
-  const float sr = impl_->sample_rate;
-  const float fb = impl_->feedback;
-  const float depth = impl_->depth;
-  const float phase_step = impl_->rate / sr;
-  const int num_stages = impl_->stages;
-  const float freq_ratio = kHighFreq / kLowFreq;
-
-  for (int ch = 0; ch < 2; ++ch) {
-    Channel& chan = impl_->channels[static_cast<size_t>(ch)];
-    const float lfo_base = chan.phase + (ch == 1 ? kStereoOffset : 0.0f);
-    for (int i = 0; i < num_frames; ++i) {
-      const float lfo = std::sin(lfo_base + static_cast<float>(i) * phase_step * 6.28318530718f);
-      const float t = 0.5f + 0.5f * lfo;                                    // [0, 1]
-      const float freq = kLowFreq * std::pow(freq_ratio, t * depth);        // exponential sweep
-      const float a = ComputeCoeff(freq, sr);
-
-      float x = input[ch][i] + fb * chan.stages[static_cast<size_t>(num_stages - 1)].y1;
-      for (int s = 0; s < num_stages; ++s) {
-        x = chan.stages[static_cast<size_t>(s)].Process(x, a);
-      }
-      output[ch][i] = x;
-    }
-    chan.phase = std::fmod(chan.phase + phase_step * static_cast<float>(num_frames) * 6.28318530718f,
-                           6.28318530718f);
-  }
+  impl_->dsp.Process(input, output, num_frames);
 }
 
-// Param surface: rate (Hz), depth (0..1 of the sweep range), feedback (0..0.9),
-// stages (2..8 allpass sections - more stages, more notches).
-int Phaser::ParamCount() { return kParamCount; }
+// Param surface: rate (Hz, the pedal's Speed knob), script (0 = Block voice,
+// 1 = Script voice - the EVH default). Indices are the kParamInfo order,
+// which is generated from packages/core/param_schema.json - never
+// hand-reorder them.
+int Phaser::ParamCount() {
+  return DsparkEffect<dspark::Phaser<float>, PhaserTraits>::ParamCount();
+}
 
 // Name/symbol/range/unit for one param index.
 const Phaser::ParamInfo& Phaser::GetParamInfo(int index) {
-  return kParamInfo[static_cast<size_t>(index)];
+  return DsparkEffect<dspark::Phaser<float>, PhaserTraits>::GetParamInfo(index);
 }
 
-// Current value of one param, 0 for an unknown index. The stage count is an
-// int internally and widened to float here, matching the ABI's all-float params.
-float Phaser::GetParam(int index) const {
-  switch (index) {
-    case kRateParam:
-      return impl_->rate;
-    case kDepthParam:
-      return impl_->depth;
-    case kFeedbackParam:
-      return impl_->feedback;
-    case kStagesParam:
-      return static_cast<float>(impl_->stages);
-    default:
-      return 0.0f;
-  }
-}
+// Current value of one param, from DsparkEffect's mirror of what it pushed
+// into the processor (the vendored types expose no getters).
+float Phaser::GetParam(int index) const { return impl_->dsp.GetParam(index); }
 
-// Store one param. All four are real-time safe: the stage count only clears
-// the cascade (no allocation - kMaxStages sections always exist), and it is
-// clamped to 2..kMaxStages because Process() indexes stages[num_stages - 1]
-// for the feedback tap.
-void Phaser::SetParam(int index, float value) {
-  switch (index) {
-    case kRateParam:
-      impl_->rate = value;
-      break;
-    case kDepthParam:
-      impl_->depth = value;
-      break;
-    case kFeedbackParam:
-      impl_->feedback = value;
-      break;
-    case kStagesParam: {
-      int stages = std::clamp(static_cast<int>(std::round(value)), 2, kMaxStages);
-      if (stages != impl_->stages) {
-        impl_->stages = stages;
-        for (auto& ch : impl_->channels) ch.Reset();
-      }
-      break;
-    }
-    default:
-      return;
-  }
-}
+// Store one param and push it into the processor. Real-time safe.
+void Phaser::SetParam(int index, float value) { impl_->dsp.SetParam(index, value); }
 
 }  // namespace openaxe::dsp

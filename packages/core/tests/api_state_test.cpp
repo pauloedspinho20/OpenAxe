@@ -1,5 +1,5 @@
 // Issue #119's round-trip test: build a non-trivial rig through the extern
-// "C" ABI (amp + cab + several effects + a mixer + a splitter), serialize it,
+// "C" ABI (amp + cab + several effects + a mixer), serialize it,
 // load the document into a fresh graph, and assert every param (by SYMBOL),
 // edge, trim and bypass matches. Also covers schemaVersion policy,
 // partial-failure tolerance (#64), and loading the web app's existing legacy
@@ -19,43 +19,44 @@
 
 namespace {
 
-constexpr int32_t kInRail = NAM_STUDIO_IN_RAIL;
-constexpr int32_t kOutRail = NAM_STUDIO_OUT_RAIL;
+constexpr int32_t kInRail = OPENAXE_IN_RAIL;
+constexpr int32_t kOutRail = OPENAXE_OUT_RAIL;
 
 // The non-trivial rig, built identically on two graphs so their block ids
-// line up for comparison. The splitter fans out to cab/reverb/delay; the
-// compressor branch feeds the mixer's fourth input directly:
+// line up for comparison. The amp fans out to cab/reverb/delay - three edges
+// off its single output port, which is all the removed splitter kind ever was
+// once its
+// per-output levels are gone - and the compressor branch feeds the mixer's
+// fourth input directly:
 //
-//   IN -> noise-gate(0,0) -> amp(0,1) -> splitter(0,2) -+-> cab(0,3) -----+
-//                                                       |-> reverb(1,3) --+|
-//   IN -> compressor(2,0) ------------------------------> delay(2,3) ----+|-> mixer(0,4) -> OUT
-//                                                       \-> delay/ping-pong(3,3)+
-void BuildRig(NamStudioGraph* g) {
-  const int32_t gate = nam_studio_add_block(g, NAM_STUDIO_BLOCK_NOISE_GATE, 0, 0);
-  const int32_t comp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_COMPRESSOR, 2, 0);
-  const int32_t amp = nam_studio_add_block(g, NAM_STUDIO_BLOCK_AMP, 0, 1);
-  const int32_t split = nam_studio_add_block(g, NAM_STUDIO_BLOCK_SPLITTER, 0, 2);
-  const int32_t cab = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 3);
-  const int32_t reverb = nam_studio_add_block(g, NAM_STUDIO_BLOCK_REVERB, 1, 3);
-  const int32_t delay = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 2, 3);
+//   IN -> noise-gate(0,0) -> amp(0,1) -+-> cab(0,3) -----+
+//                                      |-> reverb(1,3) --+|
+//   IN -> compressor(2,0) -------------> delay(2,3) ----+|-> mixer(0,4) -> OUT
+//                                      \-> delay/ping-pong(3,3)+
+void BuildRig(OpenAxeGraph* g) {
+  const int32_t gate = openaxe_add_block(g, OPENAXE_BLOCK_NOISE_GATE, 0, 0);
+  const int32_t comp = openaxe_add_block(g, OPENAXE_BLOCK_COMPRESSOR, 2, 0);
+  const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0, 1);
+  const int32_t cab = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0, 3);
+  const int32_t reverb = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 1, 3);
+  const int32_t delay = openaxe_add_block(g, OPENAXE_BLOCK_DELAY, 2, 3);
   // A second Delay, put into ping-pong mode below - the standalone
   // ping-pong-delay kind was folded into Delay in #314.
-  const int32_t ppd = nam_studio_add_block(g, NAM_STUDIO_BLOCK_DELAY, 3, 3);
-  const int32_t mixer = nam_studio_add_block(g, NAM_STUDIO_BLOCK_MIXER, 0, 4);
+  const int32_t ppd = openaxe_add_block(g, OPENAXE_BLOCK_DELAY, 3, 3);
+  const int32_t mixer = openaxe_add_block(g, OPENAXE_BLOCK_MIXER, 0, 4);
 
-  OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, gate, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, comp, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, gate, 0, amp, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, amp, 0, split, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, split, 0, cab, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, split, 1, reverb, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, split, 2, delay, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, comp, 0, ppd, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, cab, 0, mixer, 0) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, reverb, 0, mixer, 1) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, delay, 0, mixer, 2) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, ppd, 0, mixer, 3) >= 0);
-  OPENAXE_EXPECT(nam_studio_connect(g, mixer, 0, kOutRail, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, kInRail, 0, gate, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, kInRail, 0, comp, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, gate, 0, amp, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, cab, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, reverb, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, amp, 0, delay, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, comp, 0, ppd, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, cab, 0, mixer, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, reverb, 0, mixer, 1) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, delay, 0, mixer, 2) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, ppd, 0, mixer, 3) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, mixer, 0, kOutRail, 0) >= 0);
 
   // Distinctive values everywhere, set BY SYMBOL via the info table (the same
   // path the loader must use).
@@ -78,16 +79,16 @@ void BuildRig(NamStudioGraph* g) {
       {mixer, "in2_level", 1.2f},
   };
   for (const ParamWrite& w : writes) {
-    const int32_t count = nam_studio_block_param_count(g, w.block);
+    const int32_t count = openaxe_block_param_count(g, w.block);
     bool found = false;
     for (int32_t i = 0; i < count; ++i) {
       const char* symbol = nullptr;
-      if (!nam_studio_block_param_info(g, w.block, i, nullptr, &symbol, nullptr, nullptr,
+      if (!openaxe_block_param_info(g, w.block, i, nullptr, &symbol, nullptr, nullptr,
                                        nullptr)) {
         continue;
       }
       if (std::strcmp(symbol, w.symbol) == 0) {
-        nam_studio_set_param(g, w.block, i, w.value);
+        openaxe_set_param(g, w.block, i, w.value);
         found = true;
         break;
       }
@@ -98,34 +99,34 @@ void BuildRig(NamStudioGraph* g) {
     }
   }
 
-  nam_studio_set_reverb_algorithm(g, reverb, NAM_STUDIO_REVERB_ROOM);
-  nam_studio_set_reverb_control(g, reverb, NAM_STUDIO_REVERB_ROOM_SIZE, 0.5f);
-  nam_studio_set_reverb_control(g, reverb, NAM_STUDIO_REVERB_DAMPING, 0.3f);
-  nam_studio_set_reverb_control(g, reverb, NAM_STUDIO_REVERB_WIDTH, 120.0f);
-  nam_studio_set_reverb_control(g, reverb, NAM_STUDIO_REVERB_PREDELAY, 33.0f);
-  nam_studio_set_reverb_control(g, reverb, NAM_STUDIO_REVERB_DRY_LEVEL, 30.0f);
+  openaxe_set_reverb_algorithm(g, reverb, OPENAXE_REVERB_ROOM);
+  openaxe_set_reverb_control(g, reverb, OPENAXE_REVERB_ROOM_SIZE, 0.5f);
+  openaxe_set_reverb_control(g, reverb, OPENAXE_REVERB_DAMPING, 0.3f);
+  openaxe_set_reverb_control(g, reverb, OPENAXE_REVERB_WIDTH, 120.0f);
+  openaxe_set_reverb_control(g, reverb, OPENAXE_REVERB_PREDELAY, 33.0f);
+  openaxe_set_reverb_control(g, reverb, OPENAXE_REVERB_DRY_LEVEL, 30.0f);
 
   // Trims and bypass.
-  nam_studio_set_block_input_trim(g, gate, 0.8f);
-  nam_studio_set_block_output_trim(g, gate, 1.25f);
-  nam_studio_set_block_output_trim(g, amp, 0.9f);
-  nam_studio_set_block_input_trim(g, ppd, 1.1f);
-  nam_studio_set_bypass(g, ppd, 1);
-  nam_studio_set_bypass(g, comp, 1);
+  openaxe_set_block_input_trim(g, gate, 0.8f);
+  openaxe_set_block_output_trim(g, gate, 1.25f);
+  openaxe_set_block_output_trim(g, amp, 0.9f);
+  openaxe_set_block_input_trim(g, ppd, 1.1f);
+  openaxe_set_bypass(g, ppd, 1);
+  openaxe_set_bypass(g, comp, 1);
 
-  nam_studio_set_master_level(g, 0.75f);
-  nam_studio_set_master_muted(g, 1);
+  openaxe_set_master_level(g, 0.75f);
+  openaxe_set_master_muted(g, 1);
 }
 
 // Reads one param by symbol; NaN sentinel when absent.
-float GetParamBySymbol(NamStudioGraph* g, int32_t block, const char* wanted) {
-  const int32_t count = nam_studio_block_param_count(g, block);
+float GetParamBySymbol(OpenAxeGraph* g, int32_t block, const char* wanted) {
+  const int32_t count = openaxe_block_param_count(g, block);
   for (int32_t i = 0; i < count; ++i) {
     const char* symbol = nullptr;
-    if (!nam_studio_block_param_info(g, block, i, nullptr, &symbol, nullptr, nullptr, nullptr)) {
+    if (!openaxe_block_param_info(g, block, i, nullptr, &symbol, nullptr, nullptr, nullptr)) {
       continue;
     }
-    if (std::strcmp(symbol, wanted) == 0) return nam_studio_get_param(g, block, i);
+    if (std::strcmp(symbol, wanted) == 0) return openaxe_get_param(g, block, i);
   }
   return std::nanf("");
 }
@@ -133,7 +134,7 @@ float GetParamBySymbol(NamStudioGraph* g, int32_t block, const char* wanted) {
 // Bit-exact param comparison between two rigs built from the same document.
 // The wire format round-trips floats exactly, so equality (not approx) is the
 // honest assertion - and it's what catches a silently remapped value.
-void ExpectParamMatches(NamStudioGraph* a, NamStudioGraph* b, int32_t block,
+void ExpectParamMatches(OpenAxeGraph* a, OpenAxeGraph* b, int32_t block,
                         const char* symbol) {
   const float va = GetParamBySymbol(a, block, symbol);
   const float vb = GetParamBySymbol(b, block, symbol);
@@ -151,18 +152,18 @@ void ExpectParamMatches(NamStudioGraph* a, NamStudioGraph* b, int32_t block,
 }  // namespace
 
 int main() {
-  NamStudioGraph* source = nam_studio_graph_create();
+  OpenAxeGraph* source = openaxe_graph_create();
   BuildRig(source);
 
   // ── Two-call sizing pattern ────────────────────────────────────────────
-  const int32_t required = nam_studio_serialize_state(source, nullptr, 0);
+  const int32_t required = openaxe_serialize_state(source, nullptr, 0);
   OPENAXE_EXPECT(required > 16);
   std::vector<char> small(static_cast<size_t>(required) / 2);
-  OPENAXE_EXPECT(nam_studio_serialize_state(source, small.data(),
+  OPENAXE_EXPECT(openaxe_serialize_state(source, small.data(),
                                         static_cast<int32_t>(small.size())) == -1);
   std::vector<char> buffer(static_cast<size_t>(required));
   const int32_t written =
-      nam_studio_serialize_state(source, buffer.data(), static_cast<int32_t>(buffer.size()));
+      openaxe_serialize_state(source, buffer.data(), static_cast<int32_t>(buffer.size()));
   OPENAXE_EXPECT(written == required);
   OPENAXE_EXPECT(buffer.back() == '\0');
   const std::string document(buffer.data());
@@ -176,35 +177,35 @@ int main() {
   OPENAXE_EXPECT(document.find("\"delayModel\": \"analog\"") != std::string::npos);
 
   // ── Round-trip into a fresh graph ──────────────────────────────────────
-  NamStudioGraph* restored = nam_studio_graph_create();
-  OPENAXE_EXPECT(nam_studio_load_state(restored, document.c_str()) ==
-             NAM_STUDIO_LOAD_STATE_OK);
+  OpenAxeGraph* restored = openaxe_graph_create();
+  OPENAXE_EXPECT(openaxe_load_state(restored, document.c_str()) ==
+             OPENAXE_LOAD_STATE_OK);
 
   // Blocks: same count and same kinds/positions in the same order (ids line
   // up because both rigs were built with identical AddBlock sequences).
   for (int32_t id = 0; id < 9; ++id) {
-    const int32_t count_a = nam_studio_block_param_count(source, id);
-    const int32_t count_b = nam_studio_block_param_count(restored, id);
+    const int32_t count_a = openaxe_block_param_count(source, id);
+    const int32_t count_b = openaxe_block_param_count(restored, id);
     OPENAXE_EXPECT(count_a == count_b);
     for (int32_t i = 0; i < count_a; ++i) {
       const char* symbol = nullptr;
-      if (!nam_studio_block_param_info(source, id, i, nullptr, &symbol, nullptr, nullptr,
+      if (!openaxe_block_param_info(source, id, i, nullptr, &symbol, nullptr, nullptr,
                                        nullptr)) {
         OPENAXE_EXPECT(false);  // count said this index exists
         continue;
       }
       ExpectParamMatches(source, restored, id, symbol);
     }
-    OPENAXE_EXPECT(nam_studio_is_bypassed(source, id) == nam_studio_is_bypassed(restored, id));
-    OPENAXE_EXPECT(nam_studio_get_block_input_trim(source, id) ==
-               nam_studio_get_block_input_trim(restored, id));
-    OPENAXE_EXPECT(nam_studio_get_block_output_trim(source, id) ==
-               nam_studio_get_block_output_trim(restored, id));
+    OPENAXE_EXPECT(openaxe_is_bypassed(source, id) == openaxe_is_bypassed(restored, id));
+    OPENAXE_EXPECT(openaxe_get_block_input_trim(source, id) ==
+               openaxe_get_block_input_trim(restored, id));
+    OPENAXE_EXPECT(openaxe_get_block_output_trim(source, id) ==
+               openaxe_get_block_output_trim(restored, id));
   }
 
   // Master bus restored too.
-  OPENAXE_EXPECT(nam_studio_get_master_level(restored) == 0.75f);
-  OPENAXE_EXPECT(nam_studio_is_master_muted(restored) == 1);
+  OPENAXE_EXPECT(openaxe_get_master_level(restored) == 0.75f);
+  OPENAXE_EXPECT(openaxe_is_master_muted(restored) == 1);
 
   // ── Edges: probed structurally, since the ABI has no edge enumeration ──
   // mixer.in1 is already fed by the reverb, so a second cable into it must
@@ -214,16 +215,16 @@ int main() {
   const int32_t delay = 6;
   const int32_t ppd = 7;
   const int32_t mixer = 8;
-  OPENAXE_EXPECT(nam_studio_connect(restored, cab, 0, mixer, 1) == -1);
-  OPENAXE_EXPECT(nam_studio_connect(restored, reverb, 0, mixer, 2) == -1);
-  OPENAXE_EXPECT(nam_studio_connect(restored, delay, 0, mixer, 3) == -1);
-  OPENAXE_EXPECT(nam_studio_connect(restored, ppd, 0, mixer, 0) == -1);
+  OPENAXE_EXPECT(openaxe_connect(restored, cab, 0, mixer, 1) == -1);
+  OPENAXE_EXPECT(openaxe_connect(restored, reverb, 0, mixer, 2) == -1);
+  OPENAXE_EXPECT(openaxe_connect(restored, delay, 0, mixer, 3) == -1);
+  OPENAXE_EXPECT(openaxe_connect(restored, ppd, 0, mixer, 0) == -1);
   // The OUT rail's single input is taken by the mixer's output.
-  OPENAXE_EXPECT(nam_studio_connect(restored, cab, 0, kOutRail, 0) == -1);
+  OPENAXE_EXPECT(openaxe_connect(restored, cab, 0, kOutRail, 0) == -1);
   // Every input jack of the restored rig is legitimately taken, so the
   // positive control adds a fresh block first: the gate fans out into it.
-  const int32_t extra = nam_studio_add_block(restored, NAM_STUDIO_BLOCK_FLANGER, 2, 5);
-  OPENAXE_EXPECT(nam_studio_connect(restored, 0 /*gate*/, 0, extra, 0) >= 0);
+  const int32_t extra = openaxe_add_block(restored, OPENAXE_BLOCK_FLANGER, 2, 5);
+  OPENAXE_EXPECT(openaxe_connect(restored, 0 /*gate*/, 0, extra, 0) >= 0);
   // (`restored` is now deliberately dirty; the audio check below reloads a
   // fresh graph from the same document instead of reusing it.)
 
@@ -240,21 +241,21 @@ int main() {
   }
   float out_a[2][kFrames] = {};
   float out_b[2][kFrames] = {};
-  nam_studio_set_master_muted(source, 0);
-  nam_studio_set_master_muted(restored, 0);
+  openaxe_set_master_muted(source, 0);
+  openaxe_set_master_muted(restored, 0);
   // Undo the sanity cable's effect on `restored`: it feeds mixer.in2 in
   // parallel with the delay, so instead rebuild the comparison rig from the
   // same document and leave both untouched.
-  NamStudioGraph* clean = nam_studio_graph_create();
-  OPENAXE_EXPECT(nam_studio_load_state(clean, document.c_str()) == NAM_STUDIO_LOAD_STATE_OK);
+  OpenAxeGraph* clean = openaxe_graph_create();
+  OPENAXE_EXPECT(openaxe_load_state(clean, document.c_str()) == OPENAXE_LOAD_STATE_OK);
 
   // Serialize-after-load must reproduce the original document byte for byte:
   // if state ever diverges, this pinpoints it far better than an audio
   // mismatch would.
   {
-    const int32_t needed2 = nam_studio_serialize_state(clean, nullptr, 0);
+    const int32_t needed2 = openaxe_serialize_state(clean, nullptr, 0);
     std::vector<char> buf2(static_cast<size_t>(needed2));
-    nam_studio_serialize_state(clean, buf2.data(), needed2);
+    openaxe_serialize_state(clean, buf2.data(), needed2);
     if (document != std::string(buf2.data())) {
       std::fprintf(stderr, "  (re-serialized document differs from the original)\n");
       std::FILE* f = std::fopen("/tmp/nam_state_orig.json", "w");
@@ -271,18 +272,18 @@ int main() {
     OPENAXE_EXPECT(document == std::string(buf2.data()));
   }
 
-  nam_studio_reset(source, 48000.0, kFrames);
-  nam_studio_reset(clean, 48000.0, kFrames);
+  openaxe_reset(source, 48000.0, kFrames);
+  openaxe_reset(clean, 48000.0, kFrames);
   // Both rigs restore muted (that's what the document says); unmute so the
   // comparison hears anything at all.
-  nam_studio_set_master_muted(source, 0);
-  nam_studio_set_master_muted(clean, 0);
+  openaxe_set_master_muted(source, 0);
+  openaxe_set_master_muted(clean, 0);
   const float* in_ptrs[2] = {in_l, in_r};
   float* out_a_ptrs[2] = {out_a[0], out_a[1]};
   float* out_c_ptrs[2] = {out_b[0], out_b[1]};
   for (int block = 0; block < 4; ++block) {
-    nam_studio_process(source, in_ptrs, 2, out_a_ptrs, 2, kFrames);
-    nam_studio_process(clean, in_ptrs, 2, out_c_ptrs, 2, kFrames);
+    openaxe_process(source, in_ptrs, 2, out_a_ptrs, 2, kFrames);
+    openaxe_process(clean, in_ptrs, 2, out_c_ptrs, 2, kFrames);
   }
   bool identical = true;
   bool any_signal = false;
@@ -316,29 +317,29 @@ int main() {
   OPENAXE_EXPECT(any_signal);  // silence would make "identical" meaningless
 
   // ── Hard failures leave the graph untouched ────────────────────────────
-  OPENAXE_EXPECT(nam_studio_load_state(clean, "{not json") == NAM_STUDIO_LOAD_STATE_PARSE_ERROR);
-  OPENAXE_EXPECT(nam_studio_load_state(clean, "[1,2]") == NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
-  OPENAXE_EXPECT(nam_studio_load_state(clean, "{\"schemaVersion\": \"x\"}") ==
-             NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
-  OPENAXE_EXPECT(nam_studio_load_state(clean, "{\"blocks\": []}") ==
-             NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT);
-  OPENAXE_EXPECT(nam_studio_load_state(
+  OPENAXE_EXPECT(openaxe_load_state(clean, "{not json") == OPENAXE_LOAD_STATE_PARSE_ERROR);
+  OPENAXE_EXPECT(openaxe_load_state(clean, "[1,2]") == OPENAXE_LOAD_STATE_BAD_DOCUMENT);
+  OPENAXE_EXPECT(openaxe_load_state(clean, "{\"schemaVersion\": \"x\"}") ==
+             OPENAXE_LOAD_STATE_BAD_DOCUMENT);
+  OPENAXE_EXPECT(openaxe_load_state(clean, "{\"blocks\": []}") ==
+             OPENAXE_LOAD_STATE_BAD_DOCUMENT);
+  OPENAXE_EXPECT(openaxe_load_state(
                  clean, "{\"schemaVersion\": 99, \"blocks\": [], \"edges\": []}") ==
-             NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION);
+             OPENAXE_LOAD_STATE_UNSUPPORTED_VERSION);
   // Untouched: the amp still answers with its full param table.
-  OPENAXE_EXPECT(nam_studio_block_param_count(clean, 2) > 0);
+  OPENAXE_EXPECT(openaxe_block_param_count(clean, 2) > 0);
 
   // schemaVersion 1 explicit == implicit.
-  OPENAXE_EXPECT(nam_studio_load_state(
+  OPENAXE_EXPECT(openaxe_load_state(
                  clean, R"({"schemaVersion": 1, "blocks": [], "edges": [],
                             "masterLevel": 0.5, "masterMuted": false})") ==
-             NAM_STUDIO_LOAD_STATE_OK);
-  OPENAXE_EXPECT(nam_studio_get_master_level(clean) == 0.5f);
-  OPENAXE_EXPECT(nam_studio_block_param_count(clean, 2) == 0);  // old rig cleared
+             OPENAXE_LOAD_STATE_OK);
+  OPENAXE_EXPECT(openaxe_get_master_level(clean) == 0.5f);
+  OPENAXE_EXPECT(openaxe_block_param_count(clean, 2) == 0);  // old rig cleared
 
   // ── Partial-failure tolerance (#64): one bad entry never aborts ────────
   {
-    NamStudioGraph* g = nam_studio_graph_create();
+    OpenAxeGraph* g = openaxe_graph_create();
     const char* doc =
         R"({
           "schemaVersion": 1,
@@ -356,32 +357,32 @@ int main() {
           ],
           "masterLevel": 0.9, "masterMuted": false
         })";
-    OPENAXE_EXPECT(nam_studio_load_state(g, doc) == NAM_STUDIO_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_load_state(g, doc) == OPENAXE_LOAD_STATE_OK);
     // chorus (a) + tremolo (c) restored - the teleporter and the duplicate-id
     // flanger are skipped, so tremolo lands on id 1. Unknown symbol on a,
     // non-numeric rate value on c: skipped params, not failures.
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, 0) == 5);   // chorus + mix
+    OPENAXE_EXPECT(openaxe_block_param_count(g, 0) == 6);   // chorus (incl. stereo) + mix
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "rate") == 1.5f);
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "depth") == 0.7f);
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, 1) == 6);   // tremolo + mix (stereo+mode)
-    OPENAXE_EXPECT(nam_studio_is_bypassed(g, 1) == 1);
+    OPENAXE_EXPECT(openaxe_block_param_count(g, 1) == 6);   // tremolo + mix (stereo+mode)
+    OPENAXE_EXPECT(openaxe_is_bypassed(g, 1) == 1);
     {
       // The untouched rate stands - compared against a fresh tremolo rather
       // than a hardcoded default, so the test survives default retunes.
-      NamStudioGraph* reference = nam_studio_graph_create();
-      nam_studio_add_block(reference, NAM_STUDIO_BLOCK_TREMOLO, 0, 0);
+      OpenAxeGraph* reference = openaxe_graph_create();
+      openaxe_add_block(reference, OPENAXE_BLOCK_TREMOLO, 0, 0);
       OPENAXE_EXPECT(GetParamBySymbol(g, 1, "rate") == GetParamBySymbol(reference, 0, "rate"));
-      nam_studio_graph_destroy(reference);
+      openaxe_graph_destroy(reference);
     }
     // The valid edge survived: chorus -> tremolo means tremolo's input jack
     // is taken.
-    OPENAXE_EXPECT(nam_studio_connect(g, 0, 0, 1, 0) == -1);
-    nam_studio_graph_destroy(g);
+    OPENAXE_EXPECT(openaxe_connect(g, 0, 0, 1, 0) == -1);
+    openaxe_graph_destroy(g);
   }
 
   // ── Legacy web preset shape: today's exported .json files load ─────────
   {
-    NamStudioGraph* legacy = nam_studio_graph_create();
+    OpenAxeGraph* legacy = openaxe_graph_create();
     // No schemaVersion (the field postdates these files), UI-level param
     // keys, reverb algorithm inside params, trims disguised as params,
     // IN/OUT rail names, and non-numeric block ids.
@@ -407,29 +408,29 @@ int main() {
           ],
           "masterLevel": 0.85, "masterMuted": false
         })";
-    OPENAXE_EXPECT(nam_studio_load_state(legacy, web_preset) == NAM_STUDIO_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_load_state(legacy, web_preset) == OPENAXE_LOAD_STATE_OK);
 
     // amp = block 0. The legacy input_level/output_level keys became TRIMS -
     // they must NOT have been written into the amp family's calibration
     // params (those stay untouched at their defaults).
-    OPENAXE_EXPECT(nam_studio_get_block_input_trim(legacy, 0) == 1.5f);
-    OPENAXE_EXPECT(nam_studio_get_block_output_trim(legacy, 0) == 0.8f);
+    OPENAXE_EXPECT(openaxe_get_block_input_trim(legacy, 0) == 1.5f);
+    OPENAXE_EXPECT(openaxe_get_block_output_trim(legacy, 0) == 0.8f);
     OPENAXE_EXPECT(GetParamBySymbol(legacy, 0, "input_level") == 0.0f);
     OPENAXE_EXPECT(GetParamBySymbol(legacy, 0, "bass") == 1.0f);
 
     // reverb = block 1: plate selected via the legacy select value, and the
     // abstractions mapped exactly as SetReverbControl would on a live rig.
     {
-      NamStudioGraph* reference = nam_studio_graph_create();
-      const int32_t rv = nam_studio_add_block(reference, NAM_STUDIO_BLOCK_REVERB, 0, 2);
-      nam_studio_set_reverb_algorithm(reference, rv, NAM_STUDIO_REVERB_PLATE);
-      nam_studio_set_reverb_control(reference, rv, NAM_STUDIO_REVERB_ROOM_SIZE, 0.6f);
-      nam_studio_set_reverb_control(reference, rv, NAM_STUDIO_REVERB_DAMPING, 0.25f);
-      nam_studio_set_reverb_control(reference, rv, NAM_STUDIO_REVERB_WIDTH, 130.0f);
-      nam_studio_set_reverb_control(reference, rv, NAM_STUDIO_REVERB_DRY_LEVEL, 20.0f);
-      for (int32_t i = 0; i < nam_studio_block_param_count(reference, rv); ++i) {
+      OpenAxeGraph* reference = openaxe_graph_create();
+      const int32_t rv = openaxe_add_block(reference, OPENAXE_BLOCK_REVERB, 0, 2);
+      openaxe_set_reverb_algorithm(reference, rv, OPENAXE_REVERB_PLATE);
+      openaxe_set_reverb_control(reference, rv, OPENAXE_REVERB_ROOM_SIZE, 0.6f);
+      openaxe_set_reverb_control(reference, rv, OPENAXE_REVERB_DAMPING, 0.25f);
+      openaxe_set_reverb_control(reference, rv, OPENAXE_REVERB_WIDTH, 130.0f);
+      openaxe_set_reverb_control(reference, rv, OPENAXE_REVERB_DRY_LEVEL, 20.0f);
+      for (int32_t i = 0; i < openaxe_block_param_count(reference, rv); ++i) {
         const char* symbol = nullptr;
-        if (!nam_studio_block_param_info(reference, rv, i, nullptr, &symbol, nullptr, nullptr,
+        if (!openaxe_block_param_info(reference, rv, i, nullptr, &symbol, nullptr, nullptr,
                                          nullptr)) {
           OPENAXE_EXPECT(false);
           continue;
@@ -437,7 +438,7 @@ int main() {
         OPENAXE_EXPECT(GetParamBySymbol(reference, rv, symbol) ==
                    GetParamBySymbol(legacy, 1, symbol));
       }
-      nam_studio_graph_destroy(reference);
+      openaxe_graph_destroy(reference);
     }
 
     // delay = block 2: 'tape' resolved from the string select.
@@ -445,8 +446,8 @@ int main() {
     OPENAXE_EXPECT(GetParamBySymbol(legacy, 2, "time") == 380.0f);
 
     // Rails wired through their grid names.
-    OPENAXE_EXPECT(nam_studio_is_master_muted(legacy) == 0);
-    nam_studio_graph_destroy(legacy);
+    OPENAXE_EXPECT(openaxe_is_master_muted(legacy) == 0);
+    openaxe_graph_destroy(legacy);
   }
 
   // ── Amp calibration is only serialized when it exists (#119's trap) ────
@@ -454,44 +455,44 @@ int main() {
     // A fresh amp has no model and no explicit calibration: its input_level/
     // output_level slots must NOT appear in the document at all, so restoring
     // can never fabricate a dBu override over a model loaded later.
-    NamStudioGraph* bare = nam_studio_graph_create();
-    const int32_t amp = nam_studio_add_block(bare, NAM_STUDIO_BLOCK_AMP, 0, 0);
-    const int32_t needed = nam_studio_serialize_state(bare, nullptr, 0);
+    OpenAxeGraph* bare = openaxe_graph_create();
+    const int32_t amp = openaxe_add_block(bare, OPENAXE_BLOCK_AMP, 0, 0);
+    const int32_t needed = openaxe_serialize_state(bare, nullptr, 0);
     std::vector<char> buf(static_cast<size_t>(needed));
-    nam_studio_serialize_state(bare, buf.data(), needed);
+    openaxe_serialize_state(bare, buf.data(), needed);
     OPENAXE_EXPECT(std::strstr(buf.data(), "input_level") == nullptr);
     OPENAXE_EXPECT(std::strstr(buf.data(), "output_level") == nullptr);
 
     // ...but once the caller explicitly sets one, it must round-trip.
     {
-      const int32_t count = nam_studio_block_param_count(bare, amp);
+      const int32_t count = openaxe_block_param_count(bare, amp);
       for (int32_t i = 0; i < count; ++i) {
         const char* symbol = nullptr;
-        if (!nam_studio_block_param_info(bare, amp, i, nullptr, &symbol, nullptr, nullptr,
+        if (!openaxe_block_param_info(bare, amp, i, nullptr, &symbol, nullptr, nullptr,
                                          nullptr)) {
           continue;
         }
         if (std::strcmp(symbol, "input_level") == 0) {
-          nam_studio_set_param(bare, amp, i, -6.5f);
+          openaxe_set_param(bare, amp, i, -6.5f);
           break;
         }
       }
-      const int32_t needed2 = nam_studio_serialize_state(bare, nullptr, 0);
+      const int32_t needed2 = openaxe_serialize_state(bare, nullptr, 0);
       std::vector<char> buf2(static_cast<size_t>(needed2));
-      nam_studio_serialize_state(bare, buf2.data(), needed2);
+      openaxe_serialize_state(bare, buf2.data(), needed2);
       OPENAXE_EXPECT(std::strstr(buf2.data(), "\"input_level\": -6.5") != nullptr);
 
-      NamStudioGraph* reloaded = nam_studio_graph_create();
-      OPENAXE_EXPECT(nam_studio_load_state(reloaded, buf2.data()) == NAM_STUDIO_LOAD_STATE_OK);
+      OpenAxeGraph* reloaded = openaxe_graph_create();
+      OPENAXE_EXPECT(openaxe_load_state(reloaded, buf2.data()) == OPENAXE_LOAD_STATE_OK);
       OPENAXE_EXPECT(GetParamBySymbol(reloaded, 0, "input_level") == -6.5f);
-      nam_studio_graph_destroy(reloaded);
+      openaxe_graph_destroy(reloaded);
     }
-    nam_studio_graph_destroy(bare);
+    openaxe_graph_destroy(bare);
   }
 
   // ── Non-numeric document ids survive the round trip ─────────────────────
   {
-    NamStudioGraph* g = nam_studio_graph_create();
+    OpenAxeGraph* g = openaxe_graph_create();
     const char* doc =
         R"({"schemaVersion": 1,
             "blocks": [
@@ -505,17 +506,17 @@ int main() {
                 "to": { "blockId": "z", "port": 0 } }
             ],
             "masterLevel": 1.0, "masterMuted": false})";
-    OPENAXE_EXPECT(nam_studio_load_state(g, doc) == NAM_STUDIO_LOAD_STATE_OK);
+    OPENAXE_EXPECT(openaxe_load_state(g, doc) == OPENAXE_LOAD_STATE_OK);
     OPENAXE_EXPECT(GetParamBySymbol(g, 0, "threshold") == -20.0f);
     OPENAXE_EXPECT(GetParamBySymbol(g, 1, "band0_gain") == 3.5f);
     // The edge resolved through the id map: z's input jack is taken.
-    OPENAXE_EXPECT(nam_studio_connect(g, 1, 0, 0, 0) == -1);
-    nam_studio_graph_destroy(g);
+    OPENAXE_EXPECT(openaxe_connect(g, 1, 0, 0, 0) == -1);
+    openaxe_graph_destroy(g);
   }
 
   // ── Phase-2 kinds (issue #268) serialize and restore ────────────────────
   {
-    NamStudioGraph* g = nam_studio_graph_create();
+    OpenAxeGraph* g = openaxe_graph_create();
     struct KindWrite {
       int32_t block; // index into blocks[]
       const char* symbol;
@@ -537,24 +538,24 @@ int main() {
     };
     int32_t blocks[5] = {0};
     int next = 0;
-    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_RING_MOD, 0, 0);
-    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_FILTER, 0, 1);
-    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_PITCH_SHIFTER, 0, 2);
-    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_GRANULAR_DELAY, 0, 3);
-    blocks[next++] = nam_studio_add_block(g, NAM_STUDIO_BLOCK_ROTARY, 0, 4);
+    blocks[next++] = openaxe_add_block(g, OPENAXE_BLOCK_RING_MOD, 0, 0);
+    blocks[next++] = openaxe_add_block(g, OPENAXE_BLOCK_FILTER, 0, 1);
+    blocks[next++] = openaxe_add_block(g, OPENAXE_BLOCK_PITCH_SHIFTER, 0, 2);
+    blocks[next++] = openaxe_add_block(g, OPENAXE_BLOCK_GRANULAR_DELAY, 0, 3);
+    blocks[next++] = openaxe_add_block(g, OPENAXE_BLOCK_ROTARY, 0, 4);
     for (const KindWrite& w : writes) {
       // A refused block (-1) is a kind this build compiled out - skip it
       // rather than hunting for params on a block that was never created.
       if (blocks[w.block] < 0) continue;
       bool found = false;
-      for (int32_t i = 0; i < nam_studio_block_param_count(g, blocks[w.block]); ++i) {
+      for (int32_t i = 0; i < openaxe_block_param_count(g, blocks[w.block]); ++i) {
         const char* symbol = nullptr;
-        if (!nam_studio_block_param_info(g, blocks[w.block], i, nullptr, &symbol, nullptr,
+        if (!openaxe_block_param_info(g, blocks[w.block], i, nullptr, &symbol, nullptr,
                                          nullptr, nullptr)) {
           continue;
         }
         if (std::strcmp(symbol, w.symbol) == 0) {
-          nam_studio_set_param(g, blocks[w.block], i, w.value);
+          openaxe_set_param(g, blocks[w.block], i, w.value);
           found = true;
           break;
         }
@@ -562,11 +563,12 @@ int main() {
       OPENAXE_EXPECT(found);
     }
     // Phase-2 kinds serialize under their kind string names.
-    const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    const int32_t needed = openaxe_serialize_state(g, nullptr, 0);
     std::vector<char> buf(static_cast<size_t>(needed));
-    nam_studio_serialize_state(g, buf.data(), needed);
-    // ring-mod and granular-delay can be compiled out (#313), in which case
-    // add_block refused them above and they are legitimately absent.
+    openaxe_serialize_state(g, buf.data(), needed);
+    // ring-mod, granular-delay, filter and pitch-shifter can be compiled
+    // out (#313), in which case add_block refused them above and they are
+    // legitimately absent.
     if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kRingMod)) {
       OPENAXE_EXPECT(std::strstr(buf.data(), "\"ring-mod\"") != nullptr);
     }
@@ -574,17 +576,21 @@ int main() {
       OPENAXE_EXPECT(std::strstr(buf.data(), "\"granular-delay\"") != nullptr);
     }
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"rotary\"") != nullptr);
-    OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
-    OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
+    if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kPitchShifter)) {
+      OPENAXE_EXPECT(std::strstr(buf.data(), "\"pitch-shifter\"") != nullptr);
+    }
+    if (openaxe::blocks::IsCompiled(openaxe::graph::BlockKind::kFilter)) {
+      OPENAXE_EXPECT(std::strstr(buf.data(), "\"filter\"") != nullptr);
+    }
 
-    NamStudioGraph* r = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
+    OpenAxeGraph* r = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(r, buf.data()) == OPENAXE_LOAD_STATE_OK);
     for (const KindWrite& w : writes) {
       if (blocks[w.block] < 0) continue;  // kind compiled out (#313)
       OPENAXE_EXPECT(GetParamBySymbol(r, blocks[w.block], w.symbol) == w.value);
     }
-    nam_studio_graph_destroy(r);
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(r);
+    openaxe_graph_destroy(g);
   }
 
   // ── Send/Return (issue #274) serialize and restore ──────────────────────
@@ -593,27 +599,27 @@ int main() {
   // a cable, so it is not serialized - it re-derives from block presence on
   // load, and the reloaded pair must route signal exactly like the original.
   {
-    NamStudioGraph* g = nam_studio_graph_create();
-    const int32_t src = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 0);
-    const int32_t send = nam_studio_add_block(g, NAM_STUDIO_BLOCK_SEND_1, 0, 1);
-    const int32_t ret = nam_studio_add_block(g, NAM_STUDIO_BLOCK_RETURN_1, 0, 4);
-    const int32_t sink = nam_studio_add_block(g, NAM_STUDIO_BLOCK_CAB, 0, 5);
-    OPENAXE_EXPECT(nam_studio_connect(g, kInRail, 0, src, 0) >= 0);
-    OPENAXE_EXPECT(nam_studio_connect(g, src, 0, send, 0) >= 0);
-    OPENAXE_EXPECT(nam_studio_connect(g, ret, 0, sink, 0) >= 0);
-    OPENAXE_EXPECT(nam_studio_connect(g, sink, 0, kOutRail, 0) >= 0);
+    OpenAxeGraph* g = openaxe_graph_create();
+    const int32_t src = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0, 0);
+    const int32_t send = openaxe_add_block(g, OPENAXE_BLOCK_SEND_1, 0, 1);
+    const int32_t ret = openaxe_add_block(g, OPENAXE_BLOCK_RETURN_1, 0, 4);
+    const int32_t sink = openaxe_add_block(g, OPENAXE_BLOCK_CAB, 0, 5);
+    OPENAXE_EXPECT(openaxe_connect(g, kInRail, 0, src, 0) >= 0);
+    OPENAXE_EXPECT(openaxe_connect(g, src, 0, send, 0) >= 0);
+    OPENAXE_EXPECT(openaxe_connect(g, ret, 0, sink, 0) >= 0);
+    OPENAXE_EXPECT(openaxe_connect(g, sink, 0, kOutRail, 0) >= 0);
     // No params, no bypass on the routing kinds.
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, send) == 0);
-    OPENAXE_EXPECT(nam_studio_block_param_count(g, ret) == 0);
+    OPENAXE_EXPECT(openaxe_block_param_count(g, send) == 0);
+    OPENAXE_EXPECT(openaxe_block_param_count(g, ret) == 0);
 
-    const int32_t needed = nam_studio_serialize_state(g, nullptr, 0);
+    const int32_t needed = openaxe_serialize_state(g, nullptr, 0);
     std::vector<char> buf(static_cast<size_t>(needed));
-    nam_studio_serialize_state(g, buf.data(), needed);
+    openaxe_serialize_state(g, buf.data(), needed);
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"send-1\"") != nullptr);
     OPENAXE_EXPECT(std::strstr(buf.data(), "\"return-1\"") != nullptr);
 
-    NamStudioGraph* r = nam_studio_graph_create();
-    OPENAXE_EXPECT(nam_studio_load_state(r, buf.data()) == NAM_STUDIO_LOAD_STATE_OK);
+    OpenAxeGraph* r = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(r, buf.data()) == OPENAXE_LOAD_STATE_OK);
     // Restored pair still routes: a send into the reloaded graph travels the
     // implicit hop to the return. 0.5 in -> 0.5 out through the cab relays.
     const int32_t frames = 64;
@@ -621,16 +627,55 @@ int main() {
     std::vector<float> output(static_cast<size_t>(frames), 0.0f);
     const float* in_ptrs[1] = {input.data()};
     float* out_ptrs[1] = {output.data()};
-    nam_studio_reset(r, 48000.0, frames);
-    nam_studio_process(r, in_ptrs, 1, out_ptrs, 1, frames);
+    openaxe_reset(r, 48000.0, frames);
+    openaxe_process(r, in_ptrs, 1, out_ptrs, 1, frames);
     for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
-    nam_studio_graph_destroy(r);
-    nam_studio_graph_destroy(g);
+    openaxe_graph_destroy(r);
+    openaxe_graph_destroy(g);
   }
 
-  nam_studio_graph_destroy(source);
-  nam_studio_graph_destroy(restored);
-  nam_studio_graph_destroy(clean);
+  // ── Spring reverb survives save/load round-trips (issue #392) ─────────
+  // GetReverbAlgorithm + the rig_state string table each missed the Spring
+  // case, so a Spring block saved as Hall and reloaded as Hall. The "drive"
+  // symbol exists only on the spring tank (hall has 18 params, no drive),
+  // so its presence on the reloaded block proves the algorithm survived.
+  {
+    OpenAxeGraph* g = openaxe_graph_create();
+    const int32_t verb = openaxe_add_block(g, OPENAXE_BLOCK_REVERB, 0, 0);
+    openaxe_set_reverb_algorithm(g, verb, OPENAXE_REVERB_SPRING);
+    openaxe_set_reverb_control(g, verb, OPENAXE_REVERB_ROOM_SIZE, 0.6f);
+    openaxe_set_reverb_control(g, verb, OPENAXE_REVERB_DRY_LEVEL, 25.0f);
+
+    const int32_t needed = openaxe_serialize_state(g, nullptr, 0);
+    std::vector<char> buf(static_cast<size_t>(needed));
+    openaxe_serialize_state(g, buf.data(), needed);
+    OPENAXE_EXPECT(std::strstr(buf.data(), "\"reverbAlgorithm\": \"spring\"") != nullptr);
+
+    OpenAxeGraph* r = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(r, buf.data()) == OPENAXE_LOAD_STATE_OK);
+    // Spring tank surface restored, not Hall's: drive present, 8 params.
+    OPENAXE_EXPECT(!std::isnan(GetParamBySymbol(r, 0, "drive")));
+    OPENAXE_EXPECT(openaxe_block_param_count(r, 0) ==
+                   openaxe_block_param_count(g, verb));
+    OPENAXE_EXPECT(GetParamBySymbol(r, 0, "dry_level") ==
+                   GetParamBySymbol(g, verb, "dry_level"));
+
+    // And a hand-written document naming "spring" loads as Spring too.
+    OpenAxeGraph* h = openaxe_graph_create();
+    OPENAXE_EXPECT(openaxe_load_state(h, R"({"schemaVersion": 1,
+             "blocks": [{ "id": "v", "kind": "reverb", "row": 0, "col": 0,
+                          "params": { "reverbAlgorithm": "spring" } }],
+             "edges": [], "masterLevel": 1.0, "masterMuted": false})") ==
+                   OPENAXE_LOAD_STATE_OK);
+    OPENAXE_EXPECT(!std::isnan(GetParamBySymbol(h, 0, "drive")));
+    openaxe_graph_destroy(h);
+    openaxe_graph_destroy(r);
+    openaxe_graph_destroy(g);
+  }
+
+  openaxe_graph_destroy(source);
+  openaxe_graph_destroy(restored);
+  openaxe_graph_destroy(clean);
 
   if (::openaxe::test::g_failures == 0) {
     std::printf("api_state_test passed\n");

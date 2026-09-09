@@ -64,10 +64,10 @@ function webFieldsFor(kind: EffectKind): Map<string, { min?: number; max?: numbe
 //   but `predelay` on Room, ...). Covered by its own case below.
 // - `cab`, whose single param also lives in BLOCK_PARAM_SCHEMAS, under a
 //   camelCase key. Covered by its own case below too.
-// - `mixer`/`splitter`, which are grid block kinds, not effects: their
+// - `mixer`, which is a grid block kind, not an effect: its
 //   per-input level/pan and per-output level params are core DSP (issue #55)
-//   driven by MixerBlock/SplitterBlock's own param schemas, not effect knobs.
-const EXCLUDED_KINDS = ['amp', 'reverb', 'cab', 'mixer', 'splitter']
+//   driven by MixerBlock's own param schema, not effect knobs.
+const EXCLUDED_KINDS = ['amp', 'reverb', 'cab', 'mixer']
 const SYMBOL_KINDS = Object.keys(coreEffects).filter(
   (kind): kind is EffectKind => !EXCLUDED_KINDS.includes(kind) && kind in EFFECT_PARAM_SCHEMAS,
 )
@@ -107,7 +107,7 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     // Both sides happen to use the symbols `input_level`/`output_level`, but they
     // mean different things: in the core they are the loaded capture's dBu
     // calibration (-100..100 dBu), while the UI's knobs are linear I/O trims
-    // (0..1.5) that route to nam_studio_set_block_{input,output}_trim instead.
+    // (0..1.5) that route to openaxe_set_block_{input,output}_trim instead.
     // This asserts the mismatch is the known, deliberate one - if the ranges ever
     // coincide, someone has conflated them.
     const core = coreParamsFor('amp')
@@ -136,13 +136,17 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     expect(SYMBOL_KINDS.length).toBe(Object.keys(coreEffects).length - EXCLUDED_KINDS.length)
   })
 
-  it("the cab's IR mix knob matches the core's ir_mix param", () => {
-    // The UI key is camelCase (`irMix`) where the core symbol is snake_case
-    // (`ir_mix`) - the bridge aliases it, the same way it does `slimSize`. The
-    // range has to agree either way.
-    const core = coreParamsFor('cab').get('ir_mix')
+  it.each([
+    ['irMix', 'ir_mix'],
+    ['lowCut', 'low_cut'],
+    ['highCut', 'high_cut'],
+  ])("the cab's %s knob matches the core's %s param", (key, symbol) => {
+    // The UI keys are camelCase (`irMix`) where the core symbols are
+    // snake_case (`ir_mix`) - the bridge aliases them, the same way it does
+    // `slimSize`. The ranges have to agree either way.
+    const core = coreParamsFor('cab').get(symbol)
     expect(core).toBeDefined()
-    const web = (BLOCK_PARAM_SCHEMAS.cab ?? []).find((field) => field.key === 'irMix')
+    const web = (BLOCK_PARAM_SCHEMAS.cab ?? []).find((field) => field.key === key)
     expect(web?.control).toBe('knob')
     if (web?.control === 'knob') {
       expect({ min: web.min, max: web.max }).toEqual({ min: core!.min, max: core!.max })

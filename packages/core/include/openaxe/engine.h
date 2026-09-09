@@ -24,13 +24,13 @@
 // and the actual sample-by-sample signal routing extern "C" needs.
 //
 // Four DSP families are wrapped anywhere in this codebase yet: NamAmp
-// (backs the 5 structurally-identical "gear" kinds), the 4 Dragonfly reverb
-// algorithms (all back the single kReverb kind - algorithm choice is a
+// (backs the 5 structurally-identical "gear" kinds), the 4 permissive reverb
+// algorithms (issue #372; all back the single kReverb kind - algorithm choice is a
 // per-block setting this layer owns, see SetReverbAlgorithm), the
 // hand-written modulation/delay wrappers (kChorus/kFlanger/kPhaser/kDelay),
 // and the DSPark-based dynamics/EQ wrappers (kCompressor/
 // kEq/kNoiseGate/kTremolo - issue #22's last four still-native effect
-// kinds). kCab/kMixer/kSplitter pass audio through unchanged rather than
+// kinds). kCab/kMixer pass audio through unchanged rather than
 // erroring - none of them are a DSP effect kind, so a full rig is
 // buildable/testable today with no gap to fill in.
 namespace openaxe::engine {
@@ -96,10 +96,11 @@ enum class ReverbAlgorithm {
   kRoom,
   kPlate,
   kEarlyReflections,
+  kSpring,
 };
 
 // The user-facing reverb controls, as a UI presents them - deliberately not a
-// 1:1 view of any single algorithm's param table. Dragonfly's four algorithms
+// 1:1 view of any single algorithm's param table. The four algorithms
 // expose overlapping but differently-named and differently-shaped controls
 // (Hall's pre-delay is `delay`, Room's is `predelay`, Early Reflections has
 // none; damping is `high_cut` on Hall/Plate/ER but `in_high_cut` on Room),
@@ -159,7 +160,7 @@ struct EdgeSnapshot {
 // metadata travelled with it. `json` is the .nam document for amp-family
 // blocks, `wav_bytes` the WAV file bytes for cab blocks; name is a display
 // label and path the best-effort source location (both empty when unknown -
-// e.g. anything loaded through nam_studio_load_nam_model_json). Returned by
+// e.g. anything loaded through openaxe_load_nam_model_json). Returned by
 // value: multi-megabyte copies, but serialization is a control-thread call
 // and the alternative hands out pointers into engine-owned storage.
 struct ModelAssetSource {
@@ -208,7 +209,7 @@ struct IrAssetSource {
 //     - apps/desktop: StudioBridge::Mutate wraps every Tier-2 call in the
 //       suspend handshake (AudioIO::BeginSuspend/EndSuspend) - it raises a
 //       flag the audio callback observes, waits until a callback confirms it
-//       (no nam_studio_process in flight), runs the mutation, then lifts the
+//       (no openaxe_process in flight), runs the mutation, then lifts the
 //       flag. That handshake is the chosen protocol for a host that runs the
 //       audio thread separately from its control thread; a future VST3/mobile
 //       shell must provide an equivalent (or the same one) before calling any
@@ -295,6 +296,12 @@ class AudioEngine {
   // 44.1kHz IR for a 48kHz graph should resample first). Passing nullptr or
   // length <= 0 clears it, which returns the block to passthrough. No-op for
   // every other kind. Tier 2: it allocates and transforms the IR.
+  //
+  // The installed IR is leveled to unit energy when its energy exceeds unity
+  // (attenuate-only, issue #365): peak-normalized commercial IRs otherwise
+  // carry ~+20 dB of broadband convolution gain into the block. Quiet IRs
+  // install verbatim. The retained save/restore source keeps the original
+  // samples; restore re-runs this same leveling.
   void LoadIr(BlockId id, const float* samples, int length);
 
   // Install an IR from the bytes of a WAV file, decoding and - if the file's rate
@@ -302,7 +309,8 @@ class AudioEngine {
   // samples installed, or 0 if the block isn't a cab or the file can't be
   // decoded. This is the entry point for every platform without an
   // AudioContext.decodeAudioData to lean on (desktop, plugin, mobile). Not
-  // real-time safe.
+  // real-time safe. Same unit-energy leveling as LoadIr; the retained bytes
+  // stay the original file.
   int LoadIrWav(BlockId id, const uint8_t* bytes, size_t size);
   void UnloadIr(BlockId id);
   // Length of the IR installed on the block, 0 if none (or not a cab).
@@ -509,9 +517,34 @@ class AudioEngine {
   MidiHandleResult HandleMidiMessage(const uint8_t* data, size_t size,
                                      int32_t sample_offset = 0);
 
+  // ── Session-state carryover for gapless switching (issue #367) ──────
+  // Copies session-level (non-preset) state from `other` into this engine:
+  // the master bus (level/mutes), the tuner mute, the automation-slot pool
+  // (bindings + remembered lane values), and the MIDI mappings + learn
+  // target. Block params, bypass, trims and assets are deliberately NOT
+  // copied - the staged preset defines its own rig; only the session around
+  // it carries over.
+  //
+  // A slot binding carries over only when this engine has a block with the
+  // same id AND the same kind (the deterministic builders front ends use
+  // assign the same ids to the same topology, so same-topology switches keep
+  // their host automation intact). Otherwise the slot keeps its remembered
+  // lane values but unbinds - the host sees its usual unbound placeholder,
+  // and rebinding later still carries the lane's position (mirroring
+  // Unbind's survive-the-mirror semantics).
+  //
+  // Safe to call while `other` is being processed: the master fields are
+  // atomics, MIDI is read under the shared lock, and Process() never touches
+  // the automation pool. Control-thread only on `this` (the staged engine is
+  // never processed before its commit).
+  void ImportSessionStateFrom(const AudioEngine& other);
+
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
+  float GetInputMeter(BlockId id) const;  // peak |sample| at the block's input (post input trim), 0 if unknown
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
+  float GetGainReduction(BlockId id) const;  // compressor GR in dB (≤0), 0 if unknown/not a compressor. Tier 1.
+  float GetGateGain(BlockId id) const;       // gate openness 0..1 (1 = open), 0 if unknown/not a gate. Tier 1.
 
  private:
   struct BlockState;  // defined in engine.cpp (holds the live-DSP variant)
@@ -559,6 +592,11 @@ class AudioEngine {
   void AdoptLoadedModel(BlockState& state, dsp::NamAmp& amp);
   void ApplyRealtimeParams(BlockState& state);
   void RunDsp(BlockState& state, int start, int num_frames);
+  // Post-IR low-cut/high-cut for cab blocks (issue #373): re-derives the cut
+  // biquads when the params or sample rate changed, then runs the wet signal
+  // through the active stages. See the definition in engine.cpp.
+  static void ApplyCabCuts(BlockState& state, float* out_l, float* out_r, int num_frames,
+                           double sample_rate);
   // Copy the schema-derived smoothing policy + the live ramp state for `state`
   // from its current param mirror (issue #122). Called on the control thread
   // whenever the param surface changes - AddBlock, reverb algorithm switch,
@@ -574,7 +612,6 @@ class AudioEngine {
   static int SubBlocksForSmoothing(int num_frames, double sample_rate, const BlockState& state);
   // Advance a splitter's fan-out ramps by one buffer and freeze the snapshot
   // its consumers replay from (issue #122). See definition in engine.cpp.
-  static void PublishSplitterRamps(BlockState& state, int num_frames, double sample_rate);
 
   // One automation slot's bookkeeping (issue #121). `mirror` holds this
   // slot's last known normalized value per entry - written through the slot,

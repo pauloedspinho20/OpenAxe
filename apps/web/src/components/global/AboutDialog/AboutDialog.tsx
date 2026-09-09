@@ -87,9 +87,9 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         <section className={styles.section}>
           <h3 className={styles.sectionTitle}>Technology</h3>
           <p className={styles.text}>
-            Web: Vite + React + AudioWorklet + WASM (Emscripten). Desktop: C++ + webview.h + JUCE
-            audio_devices. Plugin: iPlug2 (VST3/CLAP/AU) + same C++ core (<code>packages/core</code>
-            ) + React webview. Design tokens in <code>packages/ui/tokens</code> → CSS & C++ header.
+            Web: Vite + React + AudioWorklet + WASM (Emscripten). Desktop: C++ + webview.h +
+            miniaudio. Plugin: iPlug2 (VST3/CLAP/AU) + same C++ core (<code>packages/core</code>) +
+            React webview. Design tokens in <code>packages/ui/tokens</code> → CSS & C++ header.
           </p>
           <p className={styles.text}>
             DSP wraps Dragonfly Reverb, DSPark and NeuralAmpModelerCore — one C++ core for every

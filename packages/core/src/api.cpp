@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,66 +13,65 @@
 #include "openaxe/engine.h"
 #include "openaxe/generated/enabled_blocks.h"
 #include "openaxe/midi.h"
+#include "openaxe/rig_switch.h"
 #include "serialization/rig_state.h"
 
 namespace {
 
 // Explicit switches (not ordinal-identity casts) so openaxe::graph's own
 // enums stay free to reorder/extend independently of this public C surface.
-openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
+openaxe::graph::BlockKind ToBlockKind(OpenAxeBlockKind kind) {
   using openaxe::graph::BlockKind;
   switch (kind) {
-    case NAM_STUDIO_BLOCK_NOISE_GATE:
+    case OPENAXE_BLOCK_NOISE_GATE:
       return BlockKind::kNoiseGate;
-    case NAM_STUDIO_BLOCK_COMPRESSOR:
+    case OPENAXE_BLOCK_COMPRESSOR:
       return BlockKind::kCompressor;
-    case NAM_STUDIO_BLOCK_EQ:
+    case OPENAXE_BLOCK_EQ:
       return BlockKind::kEq;
-    case NAM_STUDIO_BLOCK_CHORUS:
+    case OPENAXE_BLOCK_CHORUS:
       return BlockKind::kChorus;
-    case NAM_STUDIO_BLOCK_FLANGER:
+    case OPENAXE_BLOCK_FLANGER:
       return BlockKind::kFlanger;
-    case NAM_STUDIO_BLOCK_PHASER:
+    case OPENAXE_BLOCK_PHASER:
       return BlockKind::kPhaser;
-    case NAM_STUDIO_BLOCK_TREMOLO:
+    case OPENAXE_BLOCK_TREMOLO:
       return BlockKind::kTremolo;
-    case NAM_STUDIO_BLOCK_DELAY:
+    case OPENAXE_BLOCK_DELAY:
       return BlockKind::kDelay;
-    case NAM_STUDIO_BLOCK_REVERB:
+    case OPENAXE_BLOCK_REVERB:
       return BlockKind::kReverb;
-    case NAM_STUDIO_BLOCK_AMP:
+    case OPENAXE_BLOCK_AMP:
       return BlockKind::kAmp;
-    case NAM_STUDIO_BLOCK_AMP_CAB:
+    case OPENAXE_BLOCK_AMP_CAB:
       return BlockKind::kAmpCab;
-    case NAM_STUDIO_BLOCK_PEDAL:
+    case OPENAXE_BLOCK_PEDAL:
       return BlockKind::kPedal;
-    case NAM_STUDIO_BLOCK_OUTBOARD:
+    case OPENAXE_BLOCK_OUTBOARD:
       return BlockKind::kOutboard;
-    case NAM_STUDIO_BLOCK_SPACE:
+    case OPENAXE_BLOCK_SPACE:
       return BlockKind::kSpace;
-    case NAM_STUDIO_BLOCK_CAB:
+    case OPENAXE_BLOCK_CAB:
       return BlockKind::kCab;
-    case NAM_STUDIO_BLOCK_MIXER:
+    case OPENAXE_BLOCK_MIXER:
       return BlockKind::kMixer;
-    case NAM_STUDIO_BLOCK_SPLITTER:
-      return BlockKind::kSplitter;
-    case NAM_STUDIO_BLOCK_RING_MOD:
+    case OPENAXE_BLOCK_RING_MOD:
       return BlockKind::kRingMod;
-    case NAM_STUDIO_BLOCK_FILTER:
+    case OPENAXE_BLOCK_FILTER:
       return BlockKind::kFilter;
-    case NAM_STUDIO_BLOCK_PITCH_SHIFTER:
+    case OPENAXE_BLOCK_PITCH_SHIFTER:
       return BlockKind::kPitchShifter;
-    case NAM_STUDIO_BLOCK_GRANULAR_DELAY:
+    case OPENAXE_BLOCK_GRANULAR_DELAY:
       return BlockKind::kGranularDelay;
-    case NAM_STUDIO_BLOCK_ROTARY:
+    case OPENAXE_BLOCK_ROTARY:
       return BlockKind::kRotary;
-    case NAM_STUDIO_BLOCK_SEND_1:
+    case OPENAXE_BLOCK_SEND_1:
       return BlockKind::kSend1;
-    case NAM_STUDIO_BLOCK_RETURN_1:
+    case OPENAXE_BLOCK_RETURN_1:
       return BlockKind::kReturn1;
-    case NAM_STUDIO_BLOCK_SEND_2:
+    case OPENAXE_BLOCK_SEND_2:
       return BlockKind::kSend2;
-    case NAM_STUDIO_BLOCK_RETURN_2:
+    case OPENAXE_BLOCK_RETURN_2:
       return BlockKind::kReturn2;
   }
   return BlockKind::kCab;  // unreachable for a valid enum value
@@ -80,51 +80,87 @@ openaxe::graph::BlockKind ToBlockKind(NamStudioBlockKind kind) {
 // ABI enum -> engine enum. The two are kept separate deliberately: the C enum
 // is a stable wire format for JS/FFI callers, so the engine's own enum can be
 // reordered without breaking anyone.
-openaxe::engine::ReverbAlgorithm ToReverbAlgorithm(NamStudioReverbAlgorithm algorithm) {
+openaxe::engine::ReverbAlgorithm ToReverbAlgorithm(OpenAxeReverbAlgorithm algorithm) {
   using openaxe::engine::ReverbAlgorithm;
   switch (algorithm) {
-    case NAM_STUDIO_REVERB_HALL:
+    case OPENAXE_REVERB_HALL:
       return ReverbAlgorithm::kHall;
-    case NAM_STUDIO_REVERB_ROOM:
+    case OPENAXE_REVERB_ROOM:
       return ReverbAlgorithm::kRoom;
-    case NAM_STUDIO_REVERB_PLATE:
+    case OPENAXE_REVERB_PLATE:
       return ReverbAlgorithm::kPlate;
-    case NAM_STUDIO_REVERB_EARLY_REFLECTIONS:
+    case OPENAXE_REVERB_EARLY_REFLECTIONS:
       return ReverbAlgorithm::kEarlyReflections;
+    case OPENAXE_REVERB_SPRING:
+      return ReverbAlgorithm::kSpring;
   }
   return ReverbAlgorithm::kHall;  // unreachable for a valid enum value
 }
 
 // Engine load error -> ABI result code. std::nullopt (success) becomes
-// NAM_STUDIO_LOAD_OK, since exceptions can't cross extern "C".
-NamStudioLoadResult ToLoadResult(std::optional<openaxe::dsp::NamLoadError> error) {
-  if (!error) return NAM_STUDIO_LOAD_OK;
+// OPENAXE_LOAD_OK, since exceptions can't cross extern "C".
+OpenAxeLoadResult ToLoadResult(std::optional<openaxe::dsp::NamLoadError> error) {
+  if (!error) return OPENAXE_LOAD_OK;
   switch (*error) {
     case openaxe::dsp::NamLoadError::kFileNotFound:
-      return NAM_STUDIO_LOAD_FILE_NOT_FOUND;
+      return OPENAXE_LOAD_FILE_NOT_FOUND;
     case openaxe::dsp::NamLoadError::kInvalidFormat:
-      return NAM_STUDIO_LOAD_INVALID_FORMAT;
+      return OPENAXE_LOAD_INVALID_FORMAT;
   }
-  return NAM_STUDIO_LOAD_INVALID_FORMAT;  // unreachable for a valid enum value
+  return OPENAXE_LOAD_INVALID_FORMAT;  // unreachable for a valid enum value
 }
 
 }  // namespace
 
-struct NamStudioGraph {
-  openaxe::engine::AudioEngine engine;
+struct OpenAxeGraph {
+  // Live-engine ownership lives in the switcher (issue #367): the current
+  // engine rotates on commit, and retired engines park in its freelist for
+  // reuse rather than being freed where another thread might still hold the
+  // pointer - see rig_switch.cpp's ownership comment. Every call below that
+  // used to touch a by-value engine now resolves through LiveEngine().
+  std::unique_ptr<openaxe::switcher::RigSwitch> switch_;
+  // Staged handles only (see openaxe_staged_graph_create): the engine under
+  // construction, consumed by openaxe_staged_graph_commit. Null on parents.
+  std::unique_ptr<openaxe::engine::AudioEngine> engine;
   // The missing-asset list (#120) from the most recent load_state, kept for
   // the query ABI below. Control-thread data like everything else here.
   std::vector<std::string> missing_assets;
   // Likewise the unsupported-kind list (#313) - kinds the document named that
   // this build cannot place.
   std::vector<std::string> unsupported_blocks;
+  // Non-null on staged handles: the parent this handle stages for. Commit
+  // verifies it, so a foreign handle can never be smuggled in.
+  OpenAxeGraph* staged_parent = nullptr;
+  // Sample rate / max block size from the last openaxe_reset on THIS handle,
+  // plus whether openaxe_reset was ever called on it. Commit requires parent
+  // and staged to agree - the fade mixes their outputs sample-wise, so a
+  // rate/size mismatch (or a staged engine that was never reset, whose
+  // blocks have no buffers) would be wrong, not just degraded.
+  double sample_rate = 48000.0;
+  int max_block_size = 0;
+  bool did_reset = false;
 };
+
+// Resolves the engine an API call targets: a staged handle's engine under
+// construction (stable, owned by the handle), or the parent's current live
+// engine (atomic load - always dereferenceable, see rig_switch.cpp).
+// Every Tier-1 call routes through here so param/meter/mute writes land on
+// the engine that is actually rendering - including right after a commit.
+openaxe::engine::AudioEngine* LiveEngine(OpenAxeGraph* graph) {
+  if (graph->engine) return graph->engine.get();  // staged handle
+  return graph->switch_->Current();
+}
 
 extern "C" {
 
-NamStudioGraph* nam_studio_graph_create(void) { return new NamStudioGraph(); }
+OpenAxeGraph* openaxe_graph_create(void) {
+  auto* graph = new (std::nothrow) OpenAxeGraph();
+  if (!graph) return nullptr;
+  graph->switch_ = std::make_unique<openaxe::switcher::RigSwitch>();
+  return graph;
+}
 
-void nam_studio_graph_destroy(NamStudioGraph* graph) { delete graph; }
+void openaxe_graph_destroy(OpenAxeGraph* graph) { delete graph; }
 
 // ── Topology ────────────────────────────────────────────────────────────
 // Thin forwarders onto AudioEngine (see engine.h for the semantics and
@@ -135,54 +171,103 @@ void nam_studio_graph_destroy(NamStudioGraph* graph) { delete graph; }
 //
 // Returns the new block's id, which is never reused - or -1 if this build has
 // no DSP for `kind` (effects.config.json's compiled:false; ask
-// nam_studio_block_kind_compiled first, or just don't offer the kind).
-int32_t nam_studio_add_block(NamStudioGraph* graph, NamStudioBlockKind kind, int32_t row, int32_t col) {
-  return graph->engine.AddBlock(ToBlockKind(kind), row, col);
+// openaxe_block_kind_compiled first, or just don't offer the kind).
+int32_t openaxe_add_block(OpenAxeGraph* graph, OpenAxeBlockKind kind, int32_t row, int32_t col) {
+  return LiveEngine(graph)->AddBlock(ToBlockKind(kind), row, col);
 }
 
 // Removes the block and every edge touching it. Unknown ids are a no-op.
-void nam_studio_remove_block(NamStudioGraph* graph, int32_t block_id) {
-  graph->engine.RemoveBlock(block_id);
+void openaxe_remove_block(OpenAxeGraph* graph, int32_t block_id) {
+  LiveEngine(graph)->RemoveBlock(block_id);
 }
 
 // Moves a block; a move that would make an existing cable run right-to-left
 // silently drops that cable (query the edges afterwards to resync a UI).
-void nam_studio_move_block(NamStudioGraph* graph, int32_t block_id, int32_t row, int32_t col) {
-  graph->engine.MoveBlock(block_id, row, col);
+void openaxe_move_block(OpenAxeGraph* graph, int32_t block_id, int32_t row, int32_t col) {
+  LiveEngine(graph)->MoveBlock(block_id, row, col);
 }
 
-int32_t nam_studio_connect(NamStudioGraph* graph, int32_t from_block, int32_t from_port,
+int32_t openaxe_connect(OpenAxeGraph* graph, int32_t from_block, int32_t from_port,
                             int32_t to_block, int32_t to_port) {
-  const auto outcome = graph->engine.Connect(from_block, from_port, to_block, to_port);
+  const auto outcome = LiveEngine(graph)->Connect(from_block, from_port, to_block, to_port);
   return outcome.ok ? outcome.id : -1;
 }
 
-void nam_studio_disconnect(NamStudioGraph* graph, int32_t edge_id) { graph->engine.Disconnect(edge_id); }
+void openaxe_disconnect(OpenAxeGraph* graph, int32_t edge_id) { LiveEngine(graph)->Disconnect(edge_id); }
 
 // ── Lifecycle / processing ─────────────────────────────────────────────
 // Arms the whole graph for a sample rate and maximum block size. Allocates;
-// call before the first nam_studio_process and after any change to either.
-void nam_studio_reset(NamStudioGraph* graph, double sample_rate, int32_t max_block_size) {
-  graph->engine.Reset(sample_rate, max_block_size);
+// call before the first openaxe_process and after any change to either. On
+// the parent handle this also abandons any in-flight switch (pending commit
+// and draining engine park in the freelist) - Tier-2 context required, like
+// every other structural call.
+void openaxe_reset(OpenAxeGraph* graph, double sample_rate, int32_t max_block_size) {
+  graph->sample_rate = sample_rate;
+  graph->max_block_size = max_block_size;
+  graph->did_reset = true;
+  if (graph->switch_) graph->switch_->Clear();
+  LiveEngine(graph)->Reset(sample_rate, max_block_size);
 }
 
-void nam_studio_process(NamStudioGraph* graph, const float* const* input, int32_t input_channels,
+void openaxe_process(OpenAxeGraph* graph, const float* const* input, int32_t input_channels,
                          float* const* output, int32_t output_channels, int32_t num_frames) {
-  graph->engine.Process(input, input_channels, output, output_channels, num_frames);
+  if (graph->switch_) {
+    graph->switch_->Process(input, input_channels, output, output_channels, num_frames);
+  } else {
+    LiveEngine(graph)->Process(input, input_channels, output, output_channels, num_frames);
+  }
+}
+
+// ── Gapless staged switching (issue #367) ───────────────────────────────
+// See api.h for the contract. The staged build reuses every existing entry
+// point above (add/remove/connect, params, model/IR loads, reset,
+// load_state) - they resolve to the staged engine through LiveEngine().
+
+OpenAxeGraph* openaxe_staged_graph_create(OpenAxeGraph* parent) {
+  if (!parent || !parent->switch_) return nullptr;
+  auto* staged = new (std::nothrow) OpenAxeGraph();
+  if (!staged) return nullptr;
+  staged->engine = parent->switch_->TakeStagedEngine();
+  staged->staged_parent = parent;
+  staged->sample_rate = parent->sample_rate;
+  staged->max_block_size = parent->max_block_size;
+  return staged;
+}
+
+int32_t openaxe_staged_graph_commit(OpenAxeGraph* parent, OpenAxeGraph* staged, int32_t fade_ms,
+                                    int32_t drain_ms) {
+  // 1 = committed (the staged handle is consumed - do not touch it again);
+  // 0 = rejected, staged still yours (null/foreign/unreset/rate mismatch);
+  // -1 = busy, a switch is already in flight (staged still yours - retry).
+  if (!parent || !staged || !staged->engine || staged->staged_parent != parent) return 0;
+  if (!parent->switch_) return 0;  // cannot commit onto a staged handle
+  if (!staged->did_reset || staged->max_block_size <= 0) return 0;
+  if (staged->sample_rate != parent->sample_rate) return 0;
+  if (staged->max_block_size != parent->max_block_size) return 0;
+  if (!parent->switch_->Commit(staged->engine, parent->sample_rate, parent->max_block_size,
+                               fade_ms, drain_ms)) {
+    return -1;
+  }
+  delete staged;
+  return 1;
+}
+
+int32_t openaxe_switch_active(OpenAxeGraph* graph) {
+  return (graph && graph->switch_ && graph->switch_->Active()) ? 1 : 0;
 }
 
 // ── Params ──────────────────────────────────────────────────────────────
 // Param count for a block, 0 if unknown. Can change at runtime: loading a
 // slimmable NAM model adds a param, and each reverb algorithm has its own
 // table, so re-read this after either.
-int32_t nam_studio_block_param_count(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.ParamCount(block_id);
+int32_t openaxe_block_param_count(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->ParamCount(block_id);
 }
 
-int32_t nam_studio_block_param_info(NamStudioGraph* graph, int32_t block_id, int32_t index,
+int32_t openaxe_block_param_info(OpenAxeGraph* graph, int32_t block_id, int32_t index,
                                      const char** out_name, const char** out_symbol, float* out_min,
                                      float* out_max, const char** out_unit) {
-  const auto info = graph->engine.ParamInfo(block_id, index);
+  const auto info = LiveEngine(graph)->ParamInfo(block_id, index);
   if (!info) return 0;
   if (out_name) *out_name = info->name;
   if (out_symbol) *out_symbol = info->symbol;
@@ -193,103 +278,103 @@ int32_t nam_studio_block_param_info(NamStudioGraph* graph, int32_t block_id, int
 }
 
 // Reads/writes one param by index. Both are lock-free and safe to call from
-// any thread, including concurrently with nam_studio_process - the one
+// any thread, including concurrently with openaxe_process - the one
 // exception being the amp family's slim-size param, which reallocates inside
 // NAMCore (see AudioEngine::SetParam).
-float nam_studio_get_param(NamStudioGraph* graph, int32_t block_id, int32_t index) {
-  return graph->engine.GetParam(block_id, index);
+float openaxe_get_param(OpenAxeGraph* graph, int32_t block_id, int32_t index) {
+  return LiveEngine(graph)->GetParam(block_id, index);
 }
 
-// Writes one param (see the note on nam_studio_get_param above).
-void nam_studio_set_param(NamStudioGraph* graph, int32_t block_id, int32_t index, float value) {
-  graph->engine.SetParam(block_id, index, value);
+// Writes one param (see the note on openaxe_get_param above).
+void openaxe_set_param(OpenAxeGraph* graph, int32_t block_id, int32_t index, float value) {
+  LiveEngine(graph)->SetParam(block_id, index, value);
 }
 
-NamStudioLoadResult nam_studio_load_nam_model(NamStudioGraph* graph, int32_t block_id,
+OpenAxeLoadResult openaxe_load_nam_model(OpenAxeGraph* graph, int32_t block_id,
                                                const char* file_path) {
-  return ToLoadResult(graph->engine.LoadNamModel(block_id, file_path));
+  return ToLoadResult(LiveEngine(graph)->LoadNamModel(block_id, file_path));
 }
 
 // Loads from the model's JSON content instead of a path - see api.h.
-NamStudioLoadResult nam_studio_load_nam_model_json(NamStudioGraph* graph, int32_t block_id,
+OpenAxeLoadResult openaxe_load_nam_model_json(OpenAxeGraph* graph, int32_t block_id,
                                                    const char* json) {
-  if (!json) return NAM_STUDIO_LOAD_INVALID_FORMAT;
-  return ToLoadResult(graph->engine.LoadNamModelJson(block_id, json));
+  if (!json) return OPENAXE_LOAD_INVALID_FORMAT;
+  return ToLoadResult(LiveEngine(graph)->LoadNamModelJson(block_id, json));
 }
 
 // Drops the block's model (it becomes a passthrough). Frees; suspend audio.
-void nam_studio_unload_nam_model(NamStudioGraph* graph, int32_t block_id) {
-  graph->engine.UnloadNamModel(block_id);
+void openaxe_unload_nam_model(OpenAxeGraph* graph, int32_t block_id) {
+  LiveEngine(graph)->UnloadNamModel(block_id);
 }
 
 // 1 if an amp-family block currently has a capture loaded, else 0.
-int32_t nam_studio_block_has_model(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.BlockHasModel(block_id) ? 1 : 0;
+int32_t openaxe_block_has_model(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->BlockHasModel(block_id) ? 1 : 0;
 }
 
-void nam_studio_set_reverb_algorithm(NamStudioGraph* graph, int32_t block_id,
-                                      NamStudioReverbAlgorithm algorithm) {
-  graph->engine.SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
+void openaxe_set_reverb_algorithm(OpenAxeGraph* graph, int32_t block_id,
+                                      OpenAxeReverbAlgorithm algorithm) {
+  LiveEngine(graph)->SetReverbAlgorithm(block_id, ToReverbAlgorithm(algorithm));
 }
 
 // Installs / clears / reports a cab block's impulse response - see api.h.
-void nam_studio_load_ir(NamStudioGraph* graph, int32_t block_id, const float* samples,
+void openaxe_load_ir(OpenAxeGraph* graph, int32_t block_id, const float* samples,
                         int32_t frames) {
-  graph->engine.LoadIr(block_id, samples, frames);
+  LiveEngine(graph)->LoadIr(block_id, samples, frames);
 }
 
-int32_t nam_studio_load_ir_wav(NamStudioGraph* graph, int32_t block_id, const uint8_t* bytes,
+int32_t openaxe_load_ir_wav(OpenAxeGraph* graph, int32_t block_id, const uint8_t* bytes,
                                int32_t size) {
   if (!bytes || size <= 0) return 0;
-  return graph->engine.LoadIrWav(block_id, bytes, static_cast<size_t>(size));
+  return LiveEngine(graph)->LoadIrWav(block_id, bytes, static_cast<size_t>(size));
 }
 
-void nam_studio_unload_ir(NamStudioGraph* graph, int32_t block_id) {
-  graph->engine.UnloadIr(block_id);
+void openaxe_unload_ir(OpenAxeGraph* graph, int32_t block_id) {
+  LiveEngine(graph)->UnloadIr(block_id);
 }
 
-int32_t nam_studio_block_ir_length(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.IrLength(block_id);
+int32_t openaxe_block_ir_length(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->IrLength(block_id);
 }
 
-void nam_studio_set_reverb_control(NamStudioGraph* graph, int32_t block_id,
-                                   NamStudioReverbControl control, float value) {
+void openaxe_set_reverb_control(OpenAxeGraph* graph, int32_t block_id,
+                                   OpenAxeReverbControl control, float value) {
   using openaxe::engine::ReverbControl;
   ReverbControl mapped = ReverbControl::kRoomSize;
   switch (control) {
-    case NAM_STUDIO_REVERB_ROOM_SIZE: mapped = ReverbControl::kRoomSize; break;
-    case NAM_STUDIO_REVERB_DAMPING: mapped = ReverbControl::kDamping; break;
-    case NAM_STUDIO_REVERB_WIDTH: mapped = ReverbControl::kWidth; break;
-    case NAM_STUDIO_REVERB_PREDELAY: mapped = ReverbControl::kPredelay; break;
-    case NAM_STUDIO_REVERB_SPIN: mapped = ReverbControl::kSpin; break;
-    case NAM_STUDIO_REVERB_WANDER: mapped = ReverbControl::kWander; break;
-    case NAM_STUDIO_REVERB_EARLY_SEND: mapped = ReverbControl::kEarlySend; break;
-    case NAM_STUDIO_REVERB_DRY_LEVEL: mapped = ReverbControl::kDryLevel; break;
+    case OPENAXE_REVERB_ROOM_SIZE: mapped = ReverbControl::kRoomSize; break;
+    case OPENAXE_REVERB_DAMPING: mapped = ReverbControl::kDamping; break;
+    case OPENAXE_REVERB_WIDTH: mapped = ReverbControl::kWidth; break;
+    case OPENAXE_REVERB_PREDELAY: mapped = ReverbControl::kPredelay; break;
+    case OPENAXE_REVERB_SPIN: mapped = ReverbControl::kSpin; break;
+    case OPENAXE_REVERB_WANDER: mapped = ReverbControl::kWander; break;
+    case OPENAXE_REVERB_EARLY_SEND: mapped = ReverbControl::kEarlySend; break;
+    case OPENAXE_REVERB_DRY_LEVEL: mapped = ReverbControl::kDryLevel; break;
     default: return;
   }
-  graph->engine.SetReverbControl(block_id, mapped, value);
+  LiveEngine(graph)->SetReverbControl(block_id, mapped, value);
 }
 
-void nam_studio_set_delay_model(NamStudioGraph* graph, int32_t block_id,
-                                 NamStudioDelayModel model) {
+void openaxe_set_delay_model(OpenAxeGraph* graph, int32_t block_id,
+                                 OpenAxeDelayModel model) {
   using openaxe::dsp::Delay;
   Delay::Model m = Delay::Model::kDigital;
   switch (model) {
-    case NAM_STUDIO_DELAY_DIGITAL: m = Delay::Model::kDigital; break;
-    case NAM_STUDIO_DELAY_ANALOG:  m = Delay::Model::kAnalog; break;
-    case NAM_STUDIO_DELAY_TAPE:    m = Delay::Model::kTape; break;
+    case OPENAXE_DELAY_DIGITAL: m = Delay::Model::kDigital; break;
+    case OPENAXE_DELAY_ANALOG:  m = Delay::Model::kAnalog; break;
+    case OPENAXE_DELAY_TAPE:    m = Delay::Model::kTape; break;
   }
-  graph->engine.SetDelayModel(block_id, m);
+  LiveEngine(graph)->SetDelayModel(block_id, m);
 }
 
 // Metadata of the block's loaded capture; every out-param is optional. See
 // api.h for what each field means and when it is meaningful.
-int32_t nam_studio_block_model_info(NamStudioGraph* graph, int32_t block_id, double* out_sample_rate,
+int32_t openaxe_block_model_info(OpenAxeGraph* graph, int32_t block_id, double* out_sample_rate,
                                     int32_t* out_has_loudness, double* out_loudness_db,
                                     int32_t* out_has_input_level, double* out_input_level_dbu,
                                     int32_t* out_has_output_level, double* out_output_level_dbu,
                                     int32_t* out_is_slimmable, int32_t* out_slim_breakpoint_count) {
-  const auto info = graph->engine.BlockModelInfo(block_id);
+  const auto info = LiveEngine(graph)->BlockModelInfo(block_id);
   if (!info) return 0;
   if (out_sample_rate) *out_sample_rate = info->sample_rate;
   if (out_has_loudness) *out_has_loudness = info->has_loudness ? 1 : 0;
@@ -307,9 +392,9 @@ int32_t nam_studio_block_model_info(NamStudioGraph* graph, int32_t block_id, dou
 
 // Copies the slim-size breakpoints out into caller-owned storage; returns how
 // many were written.
-int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t block_id,
+int32_t openaxe_block_model_slim_breakpoints(OpenAxeGraph* graph, int32_t block_id,
                                                 double* out_values, int32_t max_count) {
-  const auto info = graph->engine.BlockModelInfo(block_id);
+  const auto info = LiveEngine(graph)->BlockModelInfo(block_id);
   if (!info || !out_values || max_count <= 0) return 0;
   const int32_t count =
       std::min(static_cast<int32_t>(info->slim_size_breakpoints.size()), max_count);
@@ -319,72 +404,85 @@ int32_t nam_studio_block_model_slim_breakpoints(NamStudioGraph* graph, int32_t b
 
 // ── Bypass / trims / master bus ────────────────────────────────────────
 // Everything below is lock-free and callable from any thread, including
-// concurrently with nam_studio_process.
-void nam_studio_set_bypass(NamStudioGraph* graph, int32_t block_id, int32_t bypassed) {
-  graph->engine.SetBypass(block_id, bypassed != 0);
+// concurrently with openaxe_process.
+void openaxe_set_bypass(OpenAxeGraph* graph, int32_t block_id, int32_t bypassed) {
+  LiveEngine(graph)->SetBypass(block_id, bypassed != 0);
 }
 
 // 1 while the block is bypassed, else 0.
-int32_t nam_studio_is_bypassed(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.IsBypassed(block_id) ? 1 : 0;
+int32_t openaxe_is_bypassed(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->IsBypassed(block_id) ? 1 : 0;
 }
 
 // Input-side trim, applied to the block's summed input. 1.0 = unity.
-void nam_studio_set_block_input_trim(NamStudioGraph* graph, int32_t block_id, float gain) {
-  graph->engine.SetInputTrim(block_id, gain);
+void openaxe_set_block_input_trim(OpenAxeGraph* graph, int32_t block_id, float gain) {
+  LiveEngine(graph)->SetInputTrim(block_id, gain);
 }
 
 // The per-block I/O trims - see api.h for why these are not the amp family's
 // input_level/output_level params.
-float nam_studio_get_block_input_trim(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.GetInputTrim(block_id);
+float openaxe_get_block_input_trim(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetInputTrim(block_id);
 }
 
 // Output-side trim, applied after the block's DSP (or its bypass copy).
-void nam_studio_set_block_output_trim(NamStudioGraph* graph, int32_t block_id, float gain) {
-  graph->engine.SetOutputTrim(block_id, gain);
+void openaxe_set_block_output_trim(OpenAxeGraph* graph, int32_t block_id, float gain) {
+  LiveEngine(graph)->SetOutputTrim(block_id, gain);
 }
 
 // Current output trim, 1.0 for unknown blocks.
-float nam_studio_get_block_output_trim(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.GetOutputTrim(block_id);
+float openaxe_get_block_output_trim(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetOutputTrim(block_id);
 }
 
 // The output bus: level, master mute, and the independent tuner mute.
-void nam_studio_set_master_level(NamStudioGraph* graph, float level) {
-  graph->engine.SetMasterLevel(level);
+void openaxe_set_master_level(OpenAxeGraph* graph, float level) {
+  LiveEngine(graph)->SetMasterLevel(level);
 }
 
-float nam_studio_get_master_level(NamStudioGraph* graph) { return graph->engine.GetMasterLevel(); }
+float openaxe_get_master_level(OpenAxeGraph* graph) { return LiveEngine(graph)->GetMasterLevel(); }
 
 // Master mute; independent of the tuner mute below.
-void nam_studio_set_master_muted(NamStudioGraph* graph, int32_t muted) {
-  graph->engine.SetMasterMuted(muted != 0);
+void openaxe_set_master_muted(OpenAxeGraph* graph, int32_t muted) {
+  LiveEngine(graph)->SetMasterMuted(muted != 0);
 }
 
 // 1 while the master mute is engaged, else 0.
-int32_t nam_studio_is_master_muted(NamStudioGraph* graph) {
-  return graph->engine.IsMasterMuted() ? 1 : 0;
+int32_t openaxe_is_master_muted(OpenAxeGraph* graph) {
+  return LiveEngine(graph)->IsMasterMuted() ? 1 : 0;
 }
 
 // Tuner mute - a second mute source, so a tuner overlay can silence the
 // output without disturbing the user's master mute.
-void nam_studio_set_tuner_muted(NamStudioGraph* graph, int32_t muted) {
-  graph->engine.SetTunerMuted(muted != 0);
+void openaxe_set_tuner_muted(OpenAxeGraph* graph, int32_t muted) {
+  LiveEngine(graph)->SetTunerMuted(muted != 0);
 }
 
 // 1 while the tuner mute is engaged, else 0.
-int32_t nam_studio_is_tuner_muted(NamStudioGraph* graph) {
-  return graph->engine.IsTunerMuted() ? 1 : 0;
+int32_t openaxe_is_tuner_muted(OpenAxeGraph* graph) {
+  return LiveEngine(graph)->IsTunerMuted() ? 1 : 0;
 }
 
 // ── Metering ────────────────────────────────────────────────────────────
 // Peak |sample| over the block's last processed buffer, 0 for unknown ids.
-float nam_studio_get_meter(NamStudioGraph* graph, int32_t block_id) {
-  return graph->engine.GetMeter(block_id);
+float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetMeter(block_id);
 }
 
-float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetCpuLoad(); }
+// Post-input-trim peak over the block's last processed buffer, 0 for unknown ids.
+float openaxe_get_input_meter(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetInputMeter(block_id);
+}
+
+float openaxe_get_cpu_load(OpenAxeGraph* graph) { return LiveEngine(graph)->GetCpuLoad(); }
+
+float openaxe_get_gain_reduction(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetGainReduction(block_id);
+}
+
+float openaxe_get_gate_gain(OpenAxeGraph* graph, int32_t block_id) {
+  return LiveEngine(graph)->GetGateGain(block_id);
+}
 
 // ── MIDI mapping (issue #124) ─────────────────────────────────────────
 // Thin forwarders onto the MIDI model. Helpers are pure functions; the rest
@@ -393,53 +491,53 @@ float nam_studio_get_cpu_load(NamStudioGraph* graph) { return graph->engine.GetC
 
 namespace {
 
-openaxe::midi::MessageType ToMidiMessageType(NamStudioMidiMessageType t) {
+openaxe::midi::MessageType ToMidiMessageType(OpenAxeMidiMessageType t) {
   switch (t) {
-    case NAM_STUDIO_MIDI_NOTEON: return openaxe::midi::MessageType::kNoteOn;
-    case NAM_STUDIO_MIDI_CC: return openaxe::midi::MessageType::kCc;
-    case NAM_STUDIO_MIDI_PC: return openaxe::midi::MessageType::kPc;
+    case OPENAXE_MIDI_NOTEON: return openaxe::midi::MessageType::kNoteOn;
+    case OPENAXE_MIDI_CC: return openaxe::midi::MessageType::kCc;
+    case OPENAXE_MIDI_PC: return openaxe::midi::MessageType::kPc;
   }
   return openaxe::midi::MessageType::kCc;
 }
-NamStudioMidiMessageType FromMidiMessageType(openaxe::midi::MessageType t) {
+OpenAxeMidiMessageType FromMidiMessageType(openaxe::midi::MessageType t) {
   switch (t) {
-    case openaxe::midi::MessageType::kNoteOn: return NAM_STUDIO_MIDI_NOTEON;
-    case openaxe::midi::MessageType::kCc: return NAM_STUDIO_MIDI_CC;
-    case openaxe::midi::MessageType::kPc: return NAM_STUDIO_MIDI_PC;
+    case openaxe::midi::MessageType::kNoteOn: return OPENAXE_MIDI_NOTEON;
+    case openaxe::midi::MessageType::kCc: return OPENAXE_MIDI_CC;
+    case openaxe::midi::MessageType::kPc: return OPENAXE_MIDI_PC;
   }
-  return NAM_STUDIO_MIDI_CC;
+  return OPENAXE_MIDI_CC;
 }
-openaxe::midi::ActionKind ToMidiActionKind(NamStudioMidiActionKind k) {
+openaxe::midi::ActionKind ToMidiActionKind(OpenAxeMidiActionKind k) {
   switch (k) {
-    case NAM_STUDIO_MIDI_ACTION_SLOT: return openaxe::midi::ActionKind::kSlot;
-    case NAM_STUDIO_MIDI_ACTION_SCENE: return openaxe::midi::ActionKind::kScene;
-    case NAM_STUDIO_MIDI_ACTION_NEXT_SCENE: return openaxe::midi::ActionKind::kNextScene;
-    case NAM_STUDIO_MIDI_ACTION_PREV_SCENE: return openaxe::midi::ActionKind::kPrevScene;
+    case OPENAXE_MIDI_ACTION_SLOT: return openaxe::midi::ActionKind::kSlot;
+    case OPENAXE_MIDI_ACTION_SCENE: return openaxe::midi::ActionKind::kScene;
+    case OPENAXE_MIDI_ACTION_NEXT_SCENE: return openaxe::midi::ActionKind::kNextScene;
+    case OPENAXE_MIDI_ACTION_PREV_SCENE: return openaxe::midi::ActionKind::kPrevScene;
   }
   return openaxe::midi::ActionKind::kSlot;
 }
-NamStudioMidiActionKind FromMidiActionKind(openaxe::midi::ActionKind k) {
+OpenAxeMidiActionKind FromMidiActionKind(openaxe::midi::ActionKind k) {
   switch (k) {
-    case openaxe::midi::ActionKind::kSlot: return NAM_STUDIO_MIDI_ACTION_SLOT;
-    case openaxe::midi::ActionKind::kScene: return NAM_STUDIO_MIDI_ACTION_SCENE;
-    case openaxe::midi::ActionKind::kNextScene: return NAM_STUDIO_MIDI_ACTION_NEXT_SCENE;
-    case openaxe::midi::ActionKind::kPrevScene: return NAM_STUDIO_MIDI_ACTION_PREV_SCENE;
+    case openaxe::midi::ActionKind::kSlot: return OPENAXE_MIDI_ACTION_SLOT;
+    case openaxe::midi::ActionKind::kScene: return OPENAXE_MIDI_ACTION_SCENE;
+    case openaxe::midi::ActionKind::kNextScene: return OPENAXE_MIDI_ACTION_NEXT_SCENE;
+    case openaxe::midi::ActionKind::kPrevScene: return OPENAXE_MIDI_ACTION_PREV_SCENE;
   }
-  return NAM_STUDIO_MIDI_ACTION_SLOT;
+  return OPENAXE_MIDI_ACTION_SLOT;
 }
 
 }  // namespace
 
-int32_t nam_studio_midi_mapping_count(NamStudioGraph* graph) {
-  return static_cast<int32_t>(graph->engine.MidiMappingCount());
+int32_t openaxe_midi_mapping_count(OpenAxeGraph* graph) {
+  return static_cast<int32_t>(LiveEngine(graph)->MidiMappingCount());
 }
 
-int32_t nam_studio_midi_get_mapping(NamStudioGraph* graph, int32_t index,
-                                    NamStudioMidiMessageType* out_type,
+int32_t openaxe_midi_get_mapping(OpenAxeGraph* graph, int32_t index,
+                                    OpenAxeMidiMessageType* out_type,
                                     int32_t* out_channel, int32_t* out_number,
-                                    NamStudioMidiActionKind* out_kind,
+                                    OpenAxeMidiActionKind* out_kind,
                                     int32_t* out_slot, int32_t* out_scene) {
-  const auto m = graph->engine.MidiMappingAt(static_cast<size_t>(index));
+  const auto m = LiveEngine(graph)->MidiMappingAt(static_cast<size_t>(index));
   if (!m) return 0;
   if (out_type) *out_type = FromMidiMessageType(m->match.type);
   if (out_channel) *out_channel = m->match.channel;
@@ -450,44 +548,44 @@ int32_t nam_studio_midi_get_mapping(NamStudioGraph* graph, int32_t index,
   return 1;
 }
 
-int32_t nam_studio_midi_add_mapping(NamStudioGraph* graph,
-                                    NamStudioMidiMessageType type,
+int32_t openaxe_midi_add_mapping(OpenAxeGraph* graph,
+                                    OpenAxeMidiMessageType type,
                                     int32_t channel, int32_t number,
-                                    NamStudioMidiActionKind kind,
+                                    OpenAxeMidiActionKind kind,
                                     int32_t slot, int32_t scene) {
   openaxe::midi::MidiMatch match{ToMidiMessageType(type), channel, number};
   openaxe::midi::MidiAction action;
   action.kind = ToMidiActionKind(kind);
   action.slot = slot;
   action.scene = scene;
-  return graph->engine.AddMidiMapping(match, action) ? 1 : 0;
+  return LiveEngine(graph)->AddMidiMapping(match, action) ? 1 : 0;
 }
 
-int32_t nam_studio_midi_remove_mapping(NamStudioGraph* graph, int32_t index) {
-  return graph->engine.RemoveMidiMapping(static_cast<size_t>(index)) ? 1 : 0;
+int32_t openaxe_midi_remove_mapping(OpenAxeGraph* graph, int32_t index) {
+  return LiveEngine(graph)->RemoveMidiMapping(static_cast<size_t>(index)) ? 1 : 0;
 }
 
-void nam_studio_midi_clear_mappings(NamStudioGraph* graph) { graph->engine.ClearMidiMappings(); }
+void openaxe_midi_clear_mappings(OpenAxeGraph* graph) { LiveEngine(graph)->ClearMidiMappings(); }
 
-int32_t nam_studio_midi_arm_learn(NamStudioGraph* graph, NamStudioMidiActionKind kind,
+int32_t openaxe_midi_arm_learn(OpenAxeGraph* graph, OpenAxeMidiActionKind kind,
                                   int32_t slot, int32_t scene) {
   openaxe::midi::MidiAction action;
   action.kind = ToMidiActionKind(kind);
   action.slot = slot;
   action.scene = scene;
-  return graph->engine.ArmMidiLearn(action) ? 1 : 0;
+  return LiveEngine(graph)->ArmMidiLearn(action) ? 1 : 0;
 }
 
-void nam_studio_midi_cancel_learn(NamStudioGraph* graph) { graph->engine.CancelMidiLearn(); }
+void openaxe_midi_cancel_learn(OpenAxeGraph* graph) { LiveEngine(graph)->CancelMidiLearn(); }
 
-int32_t nam_studio_midi_is_learning(NamStudioGraph* graph) {
-  return graph->engine.IsMidiLearning() ? 1 : 0;
+int32_t openaxe_midi_is_learning(OpenAxeGraph* graph) {
+  return LiveEngine(graph)->IsMidiLearning() ? 1 : 0;
 }
 
-int32_t nam_studio_midi_get_learn_target(NamStudioGraph* graph,
-                                         NamStudioMidiActionKind* out_kind,
+int32_t openaxe_midi_get_learn_target(OpenAxeGraph* graph,
+                                         OpenAxeMidiActionKind* out_kind,
                                          int32_t* out_slot, int32_t* out_scene) {
-  const auto target = graph->engine.MidiLearnTarget();
+  const auto target = LiveEngine(graph)->MidiLearnTarget();
   if (!target) return 0;
   if (out_kind) *out_kind = FromMidiActionKind(target->kind);
   if (out_slot) *out_slot = target->slot;
@@ -495,8 +593,8 @@ int32_t nam_studio_midi_get_learn_target(NamStudioGraph* graph,
   return 1;
 }
 
-int32_t nam_studio_midi_parse_message(const uint8_t* data, int32_t size,
-                                      NamStudioMidiMessageType* out_type,
+int32_t openaxe_midi_parse_message(const uint8_t* data, int32_t size,
+                                      OpenAxeMidiMessageType* out_type,
                                       int32_t* out_channel, int32_t* out_number,
                                       int32_t* out_value) {
   if (!data || size <= 0) return 0;
@@ -509,31 +607,31 @@ int32_t nam_studio_midi_parse_message(const uint8_t* data, int32_t size,
   return 1;
 }
 
-int32_t nam_studio_midi_is_trigger_edge(NamStudioMidiMessageType type, int32_t value) {
+int32_t openaxe_midi_is_trigger_edge(OpenAxeMidiMessageType type, int32_t value) {
   openaxe::midi::MessageType t = ToMidiMessageType(type);
   openaxe::midi::MidiMessage m{t, 0, 0, value};
   return openaxe::midi::IsTriggerEdge(m) ? 1 : 0;
 }
 
-int32_t nam_studio_midi_message_matches(NamStudioMidiMessageType msg_type,
+int32_t openaxe_midi_message_matches(OpenAxeMidiMessageType msg_type,
                                         int32_t msg_channel, int32_t msg_number,
-                                        NamStudioMidiMessageType match_type,
+                                        OpenAxeMidiMessageType match_type,
                                         int32_t match_channel, int32_t match_number) {
   openaxe::midi::MidiMessage msg{ToMidiMessageType(msg_type), msg_channel, msg_number, 0};
   openaxe::midi::MidiMatch match{ToMidiMessageType(match_type), match_channel, match_number};
   return openaxe::midi::MessageMatches(msg, match) ? 1 : 0;
 }
 
-int32_t nam_studio_midi_handle_message(NamStudioGraph* graph,
+int32_t openaxe_midi_handle_message(OpenAxeGraph* graph,
                                        const uint8_t* data, int32_t size,
                                        int32_t sample_offset,
-                                       NamStudioMidiActionKind* out_kind,
+                                       OpenAxeMidiActionKind* out_kind,
                                        int32_t* out_slot, int32_t* out_scene,
-                                       NamStudioMidiMessageType* out_match_type,
+                                       OpenAxeMidiMessageType* out_match_type,
                                        int32_t* out_match_channel,
                                        int32_t* out_match_number) {
   if (!data || size <= 0) return 0;
-  const auto result = graph->engine.HandleMidiMessage(data, static_cast<size_t>(size), sample_offset);
+  const auto result = LiveEngine(graph)->HandleMidiMessage(data, static_cast<size_t>(size), sample_offset);
   if (result.kind == openaxe::engine::AudioEngine::MidiHandleResult::kNone) return 0;
   if (result.action) {
     if (out_kind) *out_kind = FromMidiActionKind(result.action->kind);
@@ -552,28 +650,28 @@ int32_t nam_studio_midi_handle_message(NamStudioGraph* graph,
 // Thin forwarders onto AudioEngine's slot machinery - see api.h for the
 // caller-facing contracts and packages/vst3/README.md for the design.
 
-int32_t nam_studio_bind_automation_slot(NamStudioGraph* graph, int32_t slot,
+int32_t openaxe_bind_automation_slot(OpenAxeGraph* graph, int32_t slot,
                                         int32_t block_id) {
-  return graph->engine.BindAutomationSlot(slot, block_id) ? 1 : 0;
+  return LiveEngine(graph)->BindAutomationSlot(slot, block_id) ? 1 : 0;
 }
 
-int32_t nam_studio_unbind_automation_slot(NamStudioGraph* graph, int32_t slot) {
-  return graph->engine.UnbindAutomationSlot(slot) ? 1 : 0;
+int32_t openaxe_unbind_automation_slot(OpenAxeGraph* graph, int32_t slot) {
+  return LiveEngine(graph)->UnbindAutomationSlot(slot) ? 1 : 0;
 }
 
-int32_t nam_studio_automation_slot_block(NamStudioGraph* graph, int32_t slot) {
-  return graph->engine.AutomationSlotBlock(slot);
+int32_t openaxe_automation_slot_block(OpenAxeGraph* graph, int32_t slot) {
+  return LiveEngine(graph)->AutomationSlotBlock(slot);
 }
 
-int32_t nam_studio_automation_slot_param_count(NamStudioGraph* graph, int32_t slot) {
-  return graph->engine.AutomationSlotParamCount(slot);
+int32_t openaxe_automation_slot_param_count(OpenAxeGraph* graph, int32_t slot) {
+  return LiveEngine(graph)->AutomationSlotParamCount(slot);
 }
 
-int32_t nam_studio_automation_slot_param_info(NamStudioGraph* graph, int32_t slot,
+int32_t openaxe_automation_slot_param_info(OpenAxeGraph* graph, int32_t slot,
                                               int32_t entry, const char** out_name,
                                               const char** out_symbol, float* out_min,
                                               float* out_max, const char** out_unit) {
-  const auto info = graph->engine.AutomationParamInfo(slot, entry);
+  const auto info = LiveEngine(graph)->AutomationParamInfo(slot, entry);
   if (!info) return 0;
   if (out_name != nullptr) *out_name = info->name;
   if (out_symbol != nullptr) *out_symbol = info->symbol;
@@ -583,14 +681,14 @@ int32_t nam_studio_automation_slot_param_info(NamStudioGraph* graph, int32_t slo
   return 1;
 }
 
-void nam_studio_set_automation_param_normalized(NamStudioGraph* graph, int32_t slot,
+void openaxe_set_automation_param_normalized(OpenAxeGraph* graph, int32_t slot,
                                                 int32_t entry, float normalized) {
-  graph->engine.SetAutomationParamNormalized(slot, entry, normalized);
+  LiveEngine(graph)->SetAutomationParamNormalized(slot, entry, normalized);
 }
 
-float nam_studio_get_automation_param_normalized(NamStudioGraph* graph, int32_t slot,
+float openaxe_get_automation_param_normalized(OpenAxeGraph* graph, int32_t slot,
                                                  int32_t entry) {
-  return graph->engine.GetAutomationParamNormalized(slot, entry);
+  return LiveEngine(graph)->GetAutomationParamNormalized(slot, entry);
 }
 
 // ── Rig state (de)serialization (issue #119) ────────────────────────────
@@ -598,16 +696,16 @@ float nam_studio_get_automation_param_normalized(NamStudioGraph* graph, int32_t 
 // this file entirely. Both are control-thread calls - see api.h for the
 // contracts and packages/core/README.md for the wire format.
 
-int32_t nam_studio_serialize_state(NamStudioGraph* graph, char* out_json, int32_t capacity) {
-  return nam_studio_serialize_state_ex(graph, 0, out_json, capacity);
+int32_t openaxe_serialize_state(OpenAxeGraph* graph, char* out_json, int32_t capacity) {
+  return openaxe_serialize_state_ex(graph, 0, out_json, capacity);
 }
 
 // Shared body of both serialize entry points: the two-call sizing pattern over
 // the state layer's document (embedding assets when asked - see api.h).
-int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_assets,
+int32_t openaxe_serialize_state_ex(OpenAxeGraph* graph, int32_t embed_assets,
                                       char* out_json, int32_t capacity) {
   const std::string document =
-      openaxe::state::SerializeState(graph->engine, embed_assets != 0);
+      openaxe::state::SerializeState(*LiveEngine(graph), embed_assets != 0);
   const int32_t required = static_cast<int32_t>(document.size()) + 1;  // + NUL
   if (out_json == nullptr) return required;
   if (capacity < required) return -1;
@@ -615,32 +713,32 @@ int32_t nam_studio_serialize_state_ex(NamStudioGraph* graph, int32_t embed_asset
   return required;
 }
 
-NamStudioLoadStateResult nam_studio_load_state(NamStudioGraph* graph, const char* json) {
-  const auto outcome = openaxe::state::LoadState(graph->engine, json);
+OpenAxeLoadStateResult openaxe_load_state(OpenAxeGraph* graph, const char* json) {
+  const auto outcome = openaxe::state::LoadState(*LiveEngine(graph), json);
   // Publish the missing-asset list (#120) for the query ABI below - replaced
   // wholesale on every load, hard failures included (they restore nothing).
   graph->missing_assets = std::move(outcome.missing_assets);
   graph->unsupported_blocks = std::move(outcome.unsupported_blocks);
   switch (outcome.error) {
-    case openaxe::state::LoadError::kNone: return NAM_STUDIO_LOAD_STATE_OK;
-    case openaxe::state::LoadError::kParseError: return NAM_STUDIO_LOAD_STATE_PARSE_ERROR;
+    case openaxe::state::LoadError::kNone: return OPENAXE_LOAD_STATE_OK;
+    case openaxe::state::LoadError::kParseError: return OPENAXE_LOAD_STATE_PARSE_ERROR;
     case openaxe::state::LoadError::kUnsupportedVersion:
-      return NAM_STUDIO_LOAD_STATE_UNSUPPORTED_VERSION;
-    case openaxe::state::LoadError::kBadDocument: return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;
+      return OPENAXE_LOAD_STATE_UNSUPPORTED_VERSION;
+    case openaxe::state::LoadError::kBadDocument: return OPENAXE_LOAD_STATE_BAD_DOCUMENT;
   }
-  return NAM_STUDIO_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
+  return OPENAXE_LOAD_STATE_BAD_DOCUMENT;  // unreachable for a valid enum value
 }
 
 // ── Tuner — pitch detection + note mapping (issue #123) ───────────────
 // Pure functions — no graph, no state, safe from any thread. The web tuner
 // forwards through these via WASM; native code calls them directly.
 
-float nam_studio_detect_pitch(const float* samples, int32_t count, double sample_rate) {
+float openaxe_detect_pitch(const float* samples, int32_t count, double sample_rate) {
   const auto result = openaxe::dsp::DetectPitch(samples, count, sample_rate);
   return result ? result->frequency : 0.0f;
 }
 
-int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
+int32_t openaxe_frequency_to_note(float frequency, double reference_a4,
                                      const char** out_name, int32_t* out_octave,
                                      int32_t* out_cents) {
   if (frequency <= 0.0f || !out_name || !out_octave || !out_cents) return 0;
@@ -652,7 +750,7 @@ int32_t nam_studio_frequency_to_note(float frequency, double reference_a4,
   return 1;
 }
 
-int32_t nam_studio_compute_fingerprint(const char* json, float* out_gain_db,
+int32_t openaxe_compute_fingerprint(const char* json, float* out_gain_db,
                                        float* out_brightness) {
   if (!json || !out_gain_db || !out_brightness) return 0;
   auto fp = openaxe::dsp::ComputeFingerprint(json);
@@ -664,77 +762,76 @@ int32_t nam_studio_compute_fingerprint(const char* json, float* out_gain_db,
 
 // ── Missing-asset queries (issue #120) ──────────────────────────────────
 
-int32_t nam_studio_state_missing_asset_count(NamStudioGraph* graph) {
+int32_t openaxe_state_missing_asset_count(OpenAxeGraph* graph) {
   return static_cast<int32_t>(graph->missing_assets.size());
 }
 
-const char* nam_studio_state_missing_asset(NamStudioGraph* graph, int32_t index) {
+const char* openaxe_state_missing_asset(OpenAxeGraph* graph, int32_t index) {
   if (index < 0 || static_cast<size_t>(index) >= graph->missing_assets.size()) return nullptr;
   return graph->missing_assets[static_cast<size_t>(index)].c_str();
 }
 
-int32_t nam_studio_state_unsupported_block_count(NamStudioGraph* graph) {
+int32_t openaxe_state_unsupported_block_count(OpenAxeGraph* graph) {
   return static_cast<int32_t>(graph->unsupported_blocks.size());
 }
 
-const char* nam_studio_state_unsupported_block(NamStudioGraph* graph, int32_t index) {
+const char* openaxe_state_unsupported_block(OpenAxeGraph* graph, int32_t index) {
   if (index < 0 || static_cast<size_t>(index) >= graph->unsupported_blocks.size()) return nullptr;
   return graph->unsupported_blocks[static_cast<size_t>(index)].c_str();
 }
 
 // Graph-free: it answers a property of the build, not of a rig, so a front end
 // can ask before it has created one.
-int32_t nam_studio_block_kind_compiled(NamStudioBlockKind kind) {
-  if (kind < 0 || kind > NAM_STUDIO_BLOCK_RETURN_2) return 0;
+int32_t openaxe_block_kind_compiled(OpenAxeBlockKind kind) {
+  if (kind < 0 || kind > OPENAXE_BLOCK_RETURN_2) return 0;
   return openaxe::blocks::IsCompiled(ToBlockKind(kind)) ? 1 : 0;
 }
 
 
 namespace {
-// The canonical wire names. Kept adjacent to NamStudioBlockKind so a new kind
+// The canonical wire names. Kept adjacent to OpenAxeBlockKind so a new kind
 // is one edit, not one per front end (issue #300 J3).
 struct BlockKindName {
   const char* name;
-  NamStudioBlockKind kind;
+  OpenAxeBlockKind kind;
 };
 constexpr BlockKindName kBlockKindNames[] = {
-    {"noise-gate", NAM_STUDIO_BLOCK_NOISE_GATE},
-    {"compressor", NAM_STUDIO_BLOCK_COMPRESSOR},
-    {"eq", NAM_STUDIO_BLOCK_EQ},
-    {"chorus", NAM_STUDIO_BLOCK_CHORUS},
-    {"flanger", NAM_STUDIO_BLOCK_FLANGER},
-    {"phaser", NAM_STUDIO_BLOCK_PHASER},
-    {"tremolo", NAM_STUDIO_BLOCK_TREMOLO},
-    {"ring-mod", NAM_STUDIO_BLOCK_RING_MOD},
-    {"filter", NAM_STUDIO_BLOCK_FILTER},
-    {"pitch-shifter", NAM_STUDIO_BLOCK_PITCH_SHIFTER},
-    {"granular-delay", NAM_STUDIO_BLOCK_GRANULAR_DELAY},
-    {"rotary", NAM_STUDIO_BLOCK_ROTARY},
-    {"delay", NAM_STUDIO_BLOCK_DELAY},
-    {"reverb", NAM_STUDIO_BLOCK_REVERB},
-    {"amp", NAM_STUDIO_BLOCK_AMP},
-    {"amp-cab", NAM_STUDIO_BLOCK_AMP_CAB},
-    {"pedal", NAM_STUDIO_BLOCK_PEDAL},
-    {"outboard", NAM_STUDIO_BLOCK_OUTBOARD},
-    {"space", NAM_STUDIO_BLOCK_SPACE},
-    {"cab", NAM_STUDIO_BLOCK_CAB},
-    {"mixer", NAM_STUDIO_BLOCK_MIXER},
-    {"splitter", NAM_STUDIO_BLOCK_SPLITTER},
-    {"send-1", NAM_STUDIO_BLOCK_SEND_1},
-    {"return-1", NAM_STUDIO_BLOCK_RETURN_1},
-    {"send-2", NAM_STUDIO_BLOCK_SEND_2},
-    {"return-2", NAM_STUDIO_BLOCK_RETURN_2},
+    {"noise-gate", OPENAXE_BLOCK_NOISE_GATE},
+    {"compressor", OPENAXE_BLOCK_COMPRESSOR},
+    {"eq", OPENAXE_BLOCK_EQ},
+    {"chorus", OPENAXE_BLOCK_CHORUS},
+    {"flanger", OPENAXE_BLOCK_FLANGER},
+    {"phaser", OPENAXE_BLOCK_PHASER},
+    {"tremolo", OPENAXE_BLOCK_TREMOLO},
+    {"ring-mod", OPENAXE_BLOCK_RING_MOD},
+    {"filter", OPENAXE_BLOCK_FILTER},
+    {"pitch-shifter", OPENAXE_BLOCK_PITCH_SHIFTER},
+    {"granular-delay", OPENAXE_BLOCK_GRANULAR_DELAY},
+    {"rotary", OPENAXE_BLOCK_ROTARY},
+    {"delay", OPENAXE_BLOCK_DELAY},
+    {"reverb", OPENAXE_BLOCK_REVERB},
+    {"amp", OPENAXE_BLOCK_AMP},
+    {"amp-cab", OPENAXE_BLOCK_AMP_CAB},
+    {"pedal", OPENAXE_BLOCK_PEDAL},
+    {"outboard", OPENAXE_BLOCK_OUTBOARD},
+    {"space", OPENAXE_BLOCK_SPACE},
+    {"cab", OPENAXE_BLOCK_CAB},
+    {"mixer", OPENAXE_BLOCK_MIXER},
+    {"send-1", OPENAXE_BLOCK_SEND_1},
+    {"return-1", OPENAXE_BLOCK_RETURN_1},
+    {"send-2", OPENAXE_BLOCK_SEND_2},
+    {"return-2", OPENAXE_BLOCK_RETURN_2},
 };
 }  // namespace
 
-const char* nam_studio_block_kind_name(NamStudioBlockKind kind) {
+const char* openaxe_block_kind_name(OpenAxeBlockKind kind) {
   for (const auto& e : kBlockKindNames) {
     if (e.kind == kind) return e.name;
   }
   return nullptr;
 }
 
-int32_t nam_studio_block_kind_from_name(const char* name, NamStudioBlockKind* out_kind) {
+int32_t openaxe_block_kind_from_name(const char* name, OpenAxeBlockKind* out_kind) {
   if (!name || !out_kind) return 1;
   for (const auto& e : kBlockKindNames) {
     if (std::strcmp(e.name, name) == 0) {

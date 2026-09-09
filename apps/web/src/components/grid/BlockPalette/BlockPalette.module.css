@@ -50,6 +50,7 @@
   justify-content: center;
   gap: var(--sp-1);
   text-align: center;
+  min-width: 46px;
 }
 
 .shelf .chip > svg {

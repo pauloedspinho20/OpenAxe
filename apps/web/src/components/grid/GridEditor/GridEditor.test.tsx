@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { GridEditor } from './GridEditor'
 import { useGraphStore } from '../../../state/graphStore'
+import { useIOStore } from '../../../state/ioStore'
 import { getShellKind } from '../../../native/openaxe'
 
 vi.mock('../../../native/openaxe', () => ({
@@ -13,16 +14,17 @@ vi.mock('../../../native/openaxe', () => ({
 describe('components/GridEditor', () => {
   beforeEach(() => {
     useGraphStore.setState({ blocks: [], edges: [], masterMuted: false })
+    useIOStore.setState({ inputChannel: 'l' })
     vi.mocked(getShellKind).mockReturnValue('web')
   })
   afterEach(() => {
+    useIOStore.setState({ inputChannel: 'l' })
     vi.restoreAllMocks()
   })
 
   const baseProps = {
     rig: null,
     tunerAnalyser: null,
-    analyser: null,
     outputSelectionSupported: false,
     context: null,
     engine: {
@@ -64,7 +66,7 @@ describe('components/GridEditor', () => {
     // the result back, so a device picker there chooses nothing.
     it('offers device pickers on the web', () => {
       render(<GridEditor {...baseProps} />)
-      const inButton = screen.getByRole('button', { name: 'IN' })
+      const inButton = screen.getByRole('button', { name: 'INPUT' })
       expect(inButton).not.toBeDisabled()
 
       fireEvent.click(inButton)
@@ -75,7 +77,7 @@ describe('components/GridEditor', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
 
-      const inButton = screen.getByRole('button', { name: 'IN' })
+      const inButton = screen.getByRole('button', { name: 'INPUT' })
       expect(inButton).toHaveAttribute('title', 'Input channel')
 
       fireEvent.click(inButton)
@@ -89,7 +91,7 @@ describe('components/GridEditor', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
 
-      const outButton = screen.getByRole('button', { name: 'OUT' })
+      const outButton = screen.getByRole('button', { name: 'OUTPUT' })
       expect(outButton).toBeDisabled()
       fireEvent.click(outButton)
       expect(screen.queryByText('Default output')).not.toBeInTheDocument()
@@ -98,8 +100,35 @@ describe('components/GridEditor', () => {
     it('keeps the rails themselves, since they are still the jacks cables land on', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       render(<GridEditor {...baseProps} />)
-      expect(screen.getByRole('button', { name: 'IN' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'OUT' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'INPUT' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'OUTPUT' })).toBeInTheDocument()
+    })
+  })
+
+  describe('the IN/OUT rail meters (issue #385)', () => {
+    it('always shows the output rail as a stereo L/R pair', () => {
+      render(<GridEditor {...baseProps} />)
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      // One stereo pair on the output rail only (input is mono 'l' here).
+      expect(screen.getAllByText('L')).toHaveLength(1)
+      expect(screen.getAllByText('R')).toHaveLength(1)
+    })
+
+    it('shows the input rail as mono unless a stereo input channel is in use', () => {
+      render(<GridEditor {...baseProps} />)
+      expect(screen.getByText('Input')).toBeInTheDocument()
+      // Only the output pair contributes L/R captions.
+      expect(screen.getAllByText('L')).toHaveLength(1)
+    })
+
+    it('shows the input rail as a stereo L/R pair for a stereo input channel', () => {
+      useIOStore.setState({ inputChannel: 'stereo' })
+      render(<GridEditor {...baseProps} />)
+      expect(screen.getByText('Input')).toBeInTheDocument()
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      // Input pair + output pair.
+      expect(screen.getAllByText('L')).toHaveLength(2)
+      expect(screen.getAllByText('R')).toHaveLength(2)
     })
   })
 })

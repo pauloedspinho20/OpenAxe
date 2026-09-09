@@ -15,7 +15,7 @@ describe('hooks/useTheme', () => {
   })
 
   it('restores a stored light theme', () => {
-    localStorage.setItem('nam-web-studio:theme', 'light')
+    localStorage.setItem('openaxe:theme', 'light')
     const { result } = renderHook(() => useTheme())
     expect(result.current.theme).toBe('light')
   })
@@ -25,7 +25,7 @@ describe('hooks/useTheme', () => {
     act(() => result.current.toggleTheme())
     expect(result.current.theme).toBe('light')
     expect(document.documentElement.dataset.theme).toBe('light')
-    expect(localStorage.getItem('nam-web-studio:theme')).toBe('light')
+    expect(localStorage.getItem('openaxe:theme')).toBe('light')
 
     act(() => result.current.toggleTheme())
     expect(result.current.theme).toBe('dark')

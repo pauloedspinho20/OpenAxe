@@ -33,8 +33,8 @@ import {
   type DataBundle,
 } from './dataBundle'
 
-const THEME_KEY = 'nam-web-studio:theme'
-const ONBOARDING_KEY = 'nam-web-studio:onboarding-dismissed'
+const THEME_KEY = 'openaxe:theme'
+const ONBOARDING_KEY = 'openaxe:onboarding-dismissed'
 
 function makePreset(id = 'p1', name = 'Clean'): Preset {
   return {
@@ -298,14 +298,14 @@ describe('dataBundle', () => {
     it('wipes stores and app localStorage keys', async () => {
       await seed()
       localStorage.setItem('t3k_refresh_token', 'secret')
-      localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
+      localStorage.setItem('openaxe:factory-setup-dismissed', '1')
       await deleteAllData({ signOutTone3000: false })
 
       expect(await listPresets()).toEqual([])
       expect(await getAssetCacheStats()).toEqual({ count: 0, bytes: 0 })
       expect(await loadPresetBank()).toBeNull()
       expect(localStorage.getItem(THEME_KEY)).toBeNull()
-      expect(localStorage.getItem('nam-web-studio:factory-setup-dismissed')).toBeNull()
+      expect(localStorage.getItem('openaxe:factory-setup-dismissed')).toBeNull()
       expect(localStorage.getItem('t3k_refresh_token')).toBe('secret') // not signed out
     })
 

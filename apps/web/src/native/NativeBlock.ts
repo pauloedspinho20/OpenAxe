@@ -44,7 +44,7 @@ function toNumber(v: number | string | boolean): number {
  * Limitations (documented, issue #15 M3):
  * - IR/Cab blocks convolve for real now (dsp/convolver.cpp): loadIR forwards the
  *   file's bytes to the core, which decodes and resamples them
- *   (nam_studio_load_ir_wav).
+ *   (openaxe_load_ir_wav).
  * - Params apply by core param *symbol*. Issue #51's shared schema
  *   (packages/core/param_schema.json, generating both the C++ .inc fragments
  *   and this app's paramSchema.ts, checked by paramSchema.coreDrift.test.ts)
@@ -53,7 +53,7 @@ function toNumber(v: number | string | boolean): number {
  *   equality) by TestSymbolMappedParamRoundTripAllEffectKinds in
  *   apps/desktop/tests/bridge_test.cpp. Kinds that don't map 1:1 route
  *   through their own dedicated bridge call instead of setParam: reverb
- *   knobs (nam_studio_set_reverb_control), reverbAlgorithm/model (delay)
+ *   knobs (openaxe_set_reverb_control), reverbAlgorithm/model (delay)
  *   string selects (setReverbAlgorithm/setDelayModel), and the
  *   input_level/output_level I/O trims above (setBlockTrim, which collide in
  *   name but not meaning with the Amp family's core dBu-calibration params
@@ -86,8 +86,24 @@ export class NativeBlock implements PresetBlock {
   }
 
   setParams(params: EffectParams): void {
-    this.params = { ...params }
+    // Slim size is intentionally not per-block adjustable in the inspector
+    // (paramSchema hides the knob); slimmable models always run at max
+    // quality (1). Drop any persisted slim_size/slimSize keys, mirroring
+    // RigBlock - re-sending them on every knob move hits the desktop bridge's
+    // suspend-handshake path (Tier 2) even when unchanged.
+    const { slim_size: _slimSnake, slimSize: _slimCamel, ...rest } = params
+    void _slimSnake
+    void _slimCamel
+    const prev = this.params
+    this.params = rest
 
+    // bindGraphRig replays each block's FULL stored params object on every
+    // reconcile (i.e. every knob move anywhere), so only forward the keys that
+    // actually changed. Sending the whole object each time made the bridge
+    // re-apply structural selectors (reverb algorithm, delay model) on every
+    // move - each of which runs the suspend handshake even though the core
+    // no-ops the unchanged value - and that suspend produced an audible
+    // dropout/crack on desktop (the web worklet path never suspends).
     // The Input/Output knobs are block I/O trims, not DSP params. They must
     // not go through setParam: the core's `input_level`/`output_level` params
     // exist only on the Amp family and hold the loaded model's dBu
@@ -96,7 +112,10 @@ export class NativeBlock implements PresetBlock {
     // other block kind just rejected the symbol.
     const input = params.input_level
     const output = params.output_level
-    if (typeof input === 'number' || typeof output === 'number') {
+    if (
+      (typeof input === 'number' && input !== prev.input_level) ||
+      (typeof output === 'number' && output !== prev.output_level)
+    ) {
       void this.bridge.setBlockTrim({
         blockId: this.id,
         ...(typeof input === 'number' ? { input } : {}),
@@ -104,11 +123,15 @@ export class NativeBlock implements PresetBlock {
       })
     }
 
-    for (const [key, value] of Object.entries(params)) {
+    for (const [key, value] of Object.entries(rest)) {
       if (key === 'input_level' || key === 'output_level') continue
+      // Forward only genuinely changed values (see above). Strict equality is
+      // right: the UI sends the same shape (number | string) on every pass, so
+      // an unchanged knob never differs here.
+      if (prev[key] === value) continue
       // The reverb algorithm and delay model are string selects with no core
       // symbol - they must go through their dedicated bridge calls
-      // (nam_studio_set_reverb_algorithm / nam_studio_set_delay_model), not
+      // (openaxe_set_reverb_algorithm / openaxe_set_delay_model), not
       // setParam, which would reject the key and silently drop the knob.
       if (key === 'reverbAlgorithm' && typeof value === 'string') {
         void this.bridge.setReverbAlgorithm({ blockId: this.id, algorithm: value })
@@ -225,5 +248,36 @@ export class NativeBlock implements PresetBlock {
   clearIR(): void {
     this.loadedIr = null
     void this.bridge.unloadIr({ blockId: this.id })
+  }
+
+  /**
+   * Cache transfer for NativeGraphRig.adoptStage (issue #367): snapshot
+   * carries the already-live values, restore replays them onto a fresh live
+   * facade WITHOUT touching the bridge (the commit already made them live).
+   */
+  snapshotBlockState(): {
+    params: EffectParams
+    bypassed: boolean
+    loadedModel: { id: string; name: string } | null
+    loadedIr: { id: string; name: string } | null
+  } {
+    return {
+      params: { ...this.params },
+      bypassed: this.bypassed,
+      loadedModel: this.loadedModel ? { ...this.loadedModel } : null,
+      loadedIr: this.loadedIr ? { ...this.loadedIr } : null,
+    }
+  }
+
+  restoreBlockState(snapshot: {
+    params: EffectParams
+    bypassed: boolean
+    loadedModel: { id: string; name: string } | null
+    loadedIr: { id: string; name: string } | null
+  }): void {
+    this.params = { ...snapshot.params }
+    this.bypassed = snapshot.bypassed
+    this.loadedModel = snapshot.loadedModel ? { ...snapshot.loadedModel } : null
+    this.loadedIr = snapshot.loadedIr ? { ...snapshot.loadedIr } : null
   }
 }

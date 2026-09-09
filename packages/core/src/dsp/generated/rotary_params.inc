@@ -8,3 +8,4 @@
     {"Drum Level", "drum_level", 0.0f, 1.0f, "x"},
     {"Mic Distance", "mic_distance", 0.0f, 1.0f, "x"},
     {"Crossover", "crossover", 400.0f, 1200.0f, "Hz"},
+    {"Velocity", "velocity", 0.0f, 1.0f, "x"},

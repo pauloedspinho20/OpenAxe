@@ -23,24 +23,89 @@
   transition: background-color 0.05s linear;
 }
 
-.segment.lit.statusGreen {
+.peakLabels {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+}
+
+/* Slim stereo pair: two narrow segmented columns side by side (L/R) in
+ * roughly the footprint of one large meter, for the grid input/output rails. */
+.stereoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.stereoPair {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  box-shadow: var(--shadow-recessed);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  gap: var(--sp-1);
+}
+
+.slimCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.slimSegments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-recessed);
+}
+
+.slimSegment {
+  width: 16px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--meter-off);
+  transition: background-color 0.05s linear;
+}
+
+/* Per-side caption (L/R) below each slim column. */
+.slimCaption {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.segment.lit.statusGreen,
+.slimSegment.lit.statusGreen {
   background: var(--led-on);
   box-shadow: 0 0 4px var(--meter-glow-green);
 }
-.segment.lit.statusAmber {
+.segment.lit.statusAmber,
+.slimSegment.lit.statusAmber {
   background: var(--led-warn);
   box-shadow: 0 0 4px var(--meter-glow-amber);
 }
-.segment.lit.statusRed {
+.segment.lit.statusRed,
+.slimSegment.lit.statusRed {
   background: var(--led-hot);
   box-shadow: 0 0 4px var(--meter-glow-red);
 }
 
+/* Single-bar meters: the fill spans the whole track with a fixed
+ * green→amber→red gradient (or a solid red for gainReduction), and the level
+ * reveals it by clipping away the unlit portion - a low level shows green,
+ * a hot level shows all three colours. This is the classic VU look, as opposed
+ * to recolouring the whole bar at the amber/red thresholds. */
 .miniWrap,
 .mediumWrap {
   display: inline-block;
   background: var(--panel-recessed);
-  box-shadow: var(--shadow-recessed);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -48,28 +113,78 @@
 .miniFill,
 .mediumFill {
   display: block;
+  width: 100%;
   height: 100%;
-  transition: width 0.05s linear;
+  transition: clip-path 0.05s linear;
+}
+
+.miniFill.gradient {
+  background: linear-gradient(to right, var(--led-on) 0%, var(--led-warn) 75%, var(--led-hot) 92%);
+}
+
+.mediumFill.gradient {
+  background: linear-gradient(to top, var(--led-on) 0%, var(--led-warn) 75%, var(--led-hot) 92%);
+}
+
+.miniFill.gainReduction,
+.mediumFill.gainReduction {
+  background: var(--led-hot);
 }
 
 .miniWrap {
-  width: 22px;
+  width: 20px;
   height: 5px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .mediumWrap {
-  height: 70px;
-  width: 10px;
-  border-radius: 2px;
+  height: 72px;
+  width: 12px;
+  border-radius: var(--r-sm);
 }
 
-.miniFill.statusGreen {
-  background: var(--led-on);
+.mediumGroup {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
 }
-.miniFill.statusAmber {
-  background: var(--led-warn);
+
+.mediumGroup .peakLabel {
+  position: absolute;
+  top: -12px;
 }
-.miniFill.statusRed {
-  background: var(--led-hot);
+
+.peakLabel {
+  font-size: 6px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Caption below a vertical meter (e.g. the inspector's IN/OUT pair). */
+.meterLabel {
+  position: absolute;
+  bottom: -12px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+@media (max-width: var(--mw-md)) {
+  .segment {
+    width: 18px;
+    height: 4px;
+  }
+  .slimSegment {
+    width: 9px;
+    height: 4px;
+  }
 }

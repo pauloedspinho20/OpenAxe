@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearStore, STORE_MIDI } from '../storage/db'
+import { kvPut } from '../storage/kv'
 import {
   DEFAULT_MIDI_CONFIG,
   clearMidiConfig,
@@ -20,7 +21,7 @@ describe('midiConfigStore', () => {
   it('round-trips a config', async () => {
     const config: MidiConfig = {
       id: 'midi-config',
-      version: 1,
+      version: 2,
       selectedInputId: 'in-1',
       mappings: [
         {
@@ -32,6 +33,16 @@ describe('midiConfigStore', () => {
     }
     await saveMidiConfig(config)
     expect(await loadMidiConfig()).toEqual(config)
+  })
+
+  it('migrates a v1 row (predates knob mappings) to v2 on load', async () => {
+    await kvPut(STORE_MIDI, {
+      id: 'midi-config',
+      version: 1,
+      selectedInputId: null,
+      mappings: [],
+    })
+    expect(await loadMidiConfig()).toEqual({ ...DEFAULT_MIDI_CONFIG })
   })
 
   it('clearMidiConfig restores the default on next load', async () => {

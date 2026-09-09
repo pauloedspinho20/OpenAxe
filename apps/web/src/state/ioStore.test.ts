@@ -102,7 +102,7 @@ describe('ioStore', () => {
         [{ deviceId: 'out-1', label: 'Spk', groupId: 'g2' }],
       )
 
-    const persisted = localStorage.getItem('nam-web-studio-io')
+    const persisted = localStorage.getItem('openaxe-io')
     expect(persisted).not.toBeNull()
     const parsed = JSON.parse(persisted!)
     // Persisted fields - device IDs survive reload so a chosen input/output

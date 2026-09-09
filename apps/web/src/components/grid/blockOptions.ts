@@ -33,7 +33,7 @@ export interface BlockOption {
  * exactly (see engine/blocks/Block.ts) so each one browses Tone3000
  * pre-filtered to its own gear type; Cab is grouped there too (it is the
  * amplifier's speaker, even though it loads an IR rather than a NAM capture).
- * "Core" holds the pure-routing blocks - Mixer/Splitter and the Send/Return
+ * "Core" holds the pure-routing blocks - the Mixer and the Send/Return
  * relay pairs (issue #274).
  */
 const ALL_BLOCK_OPTIONS: BlockOption[] = [
@@ -64,13 +64,13 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     group: 'Neural Amp Modeler',
     vendor: 'Web Audio ConvolverNode (native)',
   },
-  {
+  /*   {
     kind: 'space',
     label: 'Space',
     group: 'Neural Amp Modeler',
     vendor: 'Neural Amp Modeler',
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
-  },
+  }, */
   {
     kind: 'outboard',
     label: 'Outboard',
@@ -79,7 +79,6 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendorUrl: 'https://github.com/sdatkinson/neural-amp-modeler',
   },
   { kind: 'mixer', label: 'Mixer', group: 'Core', vendor: 'Native routing (no DSP)' },
-  { kind: 'splitter', label: 'Splitter', group: 'Core', vendor: 'Native routing (no DSP)' },
   {
     kind: 'send-1',
     label: 'Send 1',
@@ -105,6 +104,20 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'Native routing (no DSP)',
   },
   {
+    kind: 'delay',
+    label: 'Delay',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
+  },
+  {
+    kind: 'reverb',
+    label: 'Reverb',
+    group: 'Effects',
+    vendor: 'packages/core (C++ WASM)',
+    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
+  },
+  {
     kind: 'noise-gate',
     label: 'Gate',
     group: 'Effects',
@@ -113,7 +126,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
   },
   {
     kind: 'compressor',
-    label: 'Compressor',
+    label: 'Comp',
     group: 'Effects',
     vendor: 'DSPark',
     vendorUrl: 'https://github.com/CristianMoresi/DSPark',
@@ -121,7 +134,7 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
   {
     kind: 'eq',
     label: 'EQ',
-    group: 'Effects',
+    group: 'Core',
     vendor: 'DSPark',
     vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
@@ -143,8 +156,12 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     kind: 'phaser',
     label: 'Phaser',
     group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
+    // Voiced as an MXR Phase 90 (issue #317): dspark::Phaser fixed to 4
+    // stages, triangle LFO, 200 Hz-2.8 kHz sweep, mono, with the EVH
+    // pedal's Script/Block feedback voices. Two knobs on purpose - the
+    // fixed voicing is the sound.
+    vendor: 'DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
   },
   {
     kind: 'tremolo',
@@ -157,20 +174,6 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     // harmonic mode needs.
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
-  {
-    kind: 'delay',
-    label: 'Delay',
-    group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
-  {
-    kind: 'reverb',
-    label: 'Reverb',
-    group: 'Effects',
-    vendor: 'Dragonfly Reverb',
-    vendorUrl: 'https://github.com/michaelwillis/dragonfly-reverb',
   },
   {
     kind: 'ring-mod',
@@ -193,13 +196,15 @@ const ALL_BLOCK_OPTIONS: BlockOption[] = [
     vendor: 'packages/core (C++ WASM)',
     vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
   },
-  {
+  /*  {
     kind: 'granular-delay',
     label: 'Granular Delay',
     group: 'Effects',
-    vendor: 'packages/core (C++ WASM)',
-    vendorUrl: 'https://github.com/pauloedspinho20/OpenAxe/tree/main/packages/core',
-  },
+    // The grain engine is dspark::GranularProcessor; the delay line, feedback,
+    // cross-feed and `character` colouring around it are packages/core.
+    vendor: 'DSPark',
+    vendorUrl: 'https://github.com/CristianMoresi/DSPark',
+  }, */
   {
     kind: 'rotary',
     label: 'Rotary',

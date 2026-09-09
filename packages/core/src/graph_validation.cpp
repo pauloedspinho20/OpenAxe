@@ -48,7 +48,9 @@ int MaxPortFor(const BlockMap& blocks, const std::string& block_id, Side side) {
   auto it = blocks.find(block_id);
   if (it != blocks.end()) {
     if (IsSendKind(it->second.kind)) return -1;  // no output jack
-    return it->second.kind == BlockKind::kSplitter ? kSplitterOutputCount - 1 : 0;
+    // No kind has more than one output port since the splitter was removed.
+    (void)it;
+    return 0;
   }
   return 0;
 }

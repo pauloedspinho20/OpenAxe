@@ -1,11 +1,10 @@
-// The actual regression test for the symbol-collision problem documented
-// in dragonfly_hall_reverb.cpp: constructs and processes audio through all
-// four Dragonfly reverb algorithms in ONE executable. Before the
-// anonymous-namespace-per-.cpp fix, linking any two of these together
-// would fail with duplicate DragonflyReverbDSP/fv3::* symbols - this test
-// existing and passing at all is the proof the fix holds, not just any
-// individual assertion inside it. Only built if OPENAXE_HAS_DRAGONFLY
-// (see tests/CMakeLists.txt).
+// Joint smoke test for the four permissive reverb algorithms (issue #372):
+// constructs and processes audio through all of them in ONE executable.
+// (It began life as the regression test for the old Dragonfly
+// symbol-collision problem - identically-named DragonflyReverbDSP classes -
+// which no longer exists now each algorithm is its own clean-room TU; the
+// test is retained as the all-algorithms finite-tail proof.) Only built if
+// OPENAXE_HAS_REVERB_ALGOS (see tests/CMakeLists.txt).
 #include <cmath>
 #include <vector>
 

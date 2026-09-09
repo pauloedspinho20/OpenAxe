@@ -39,7 +39,7 @@ test.beforeEach(async ({ page }) => {
     // Treat this as an established session so the first-run factory dialog
     // never appears: the offline FX starters seed and hydrate (see
     // src/factory/factorySetup.ts), which is exactly what these flows assume.
-    localStorage.setItem('nam-web-studio:factory-setup-dismissed', '1')
+    localStorage.setItem('openaxe:factory-setup-dismissed', '1')
     const dbs = await indexedDB.databases()
     await Promise.all(
       dbs
@@ -66,8 +66,8 @@ test('gates the app behind a power-on overlay until started', async ({ page }) =
   await expect(gate).toBeVisible()
   await expect(gate.getByRole('button', { name: 'Power on' })).toBeVisible()
   // The grid stays mounted underneath (just visually covered), ready the instant the gate clears.
-  await expect(page.getByText('IN', { exact: true })).toBeVisible()
-  await expect(page.getByText('OUT', { exact: true })).toBeVisible()
+  await expect(page.getByText('INPUT', { exact: true })).toBeVisible()
+  await expect(page.getByText('OUTPUT', { exact: true })).toBeVisible()
 
   await powerOn(page)
   await expect(gate).not.toBeVisible()

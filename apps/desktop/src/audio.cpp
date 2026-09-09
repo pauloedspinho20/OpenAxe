@@ -1,6 +1,18 @@
 #include "audio.h"
 
-#include <juce_audio_devices/juce_audio_devices.h>
+// On Windows, windows.h (pulled in by miniaudio.h) defines function-like
+// min/max macros that break std::min/std::max on MSVC (error C2589). JUCE's
+// CMake setup defined NOMINMAX for us; now we define it ourselves before
+// anything can include windows.h. The CMake WIN32 compile definition below
+// is the primary guard - this covers any other include path.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
 
 #include <algorithm>
 #include <chrono>
@@ -48,6 +60,110 @@ void CaptureTap(RtCallbackState& state, const float* const* in, float* const* ou
   state.tap_count = std::min(cap, state.tap_count + n_frames);
   state.tap_seq.fetch_add(1, std::memory_order_release);
 }
+
+// Sentinel meaning "platform default device" for Open().
+constexpr unsigned int kDefaultDevice = 0xFFFFFFFFu;
+
+// Smallest duplex period used for kLowestLatencyBuffer (0): the minimum
+// practical full-duplex block. A heavy NAM model can overrun a block this
+// small, so it stays an explicit opt-in rather than the default.
+constexpr unsigned int kMinPeriodFrames = 64;
+// Conversion scratch capacity: covers any backend period with headroom. Sized
+// on non-audio threads (Open); the data callback chunks if a backend ever
+// hands it more than this.
+constexpr unsigned int kMaScratchCap = 8192;
+
+const char* BackendApiName(ma_backend backend) {
+  const char* name = ma_get_backend_name(backend);
+  return (name && name[0] != '\0') ? name : "miniaudio";
+}
+
+// Max channels across a device's native formats. An entry with channels == 0
+// means "any channel count supported" - treat as stereo-capable (2). Zero
+// entries (no detailed info) also means unknown: assume stereo-capable so the
+// device still opens rather than being skipped.
+//
+// NOTE: miniaudio reports one nativeDataFormats list per device, shared across
+// both directions, so this is a best-effort upper bound rather than a
+// per-direction probe (JUCE used to create each device to ask). A rare duplex
+// interface advertising 2ch-out / 1ch-in under one info is reported as 2-in;
+// Open() then requests 2 capture channels and miniaudio clamps or resamples in
+// the callback, so this stays cosmetic (device-list display) rather than a
+// hard failure.
+int MaxChannelsOf(const ma_device_info& info) {
+  if (info.nativeDataFormatCount == 0) return 2;
+  int max_ch = 0;
+  for (ma_uint32 i = 0; i < info.nativeDataFormatCount; ++i) {
+    const ma_uint32 ch = info.nativeDataFormats[i].channels;
+    if (ch == 0) return 2;
+    max_ch = std::max(max_ch, static_cast<int>(ch));
+  }
+  return max_ch > 0 ? max_ch : 2;
+}
+
+bool SupportsRate(const ma_device_info& info, double rate) {
+  if (info.nativeDataFormatCount == 0) return true;
+  const auto want = static_cast<ma_uint32>(rate);
+  for (ma_uint32 i = 0; i < info.nativeDataFormatCount; ++i) {
+    const ma_uint32 sr = info.nativeDataFormats[i].sampleRate;
+    if (sr == 0 || sr == want) return true;
+  }
+  return false;
+}
+
+// Device-preferred rate: 48 kHz when offered, else the highest offered, else
+// 48 kHz when anything goes (sampleRate == 0 entries) or nothing is known.
+unsigned int PreferredRateOf(const ma_device_info& info) {
+  if (info.nativeDataFormatCount == 0) return 48000;
+  bool any = false;
+  unsigned int best = 0;
+  for (ma_uint32 i = 0; i < info.nativeDataFormatCount; ++i) {
+    const ma_uint32 sr = info.nativeDataFormats[i].sampleRate;
+    if (sr == 0) {
+      any = true;
+      continue;
+    }
+    best = std::max(best, sr);
+  }
+  // 48 kHz if offered (checked separately so a higher max doesn't win).
+  for (ma_uint32 i = 0; i < info.nativeDataFormatCount; ++i) {
+    if (info.nativeDataFormats[i].sampleRate == 48000) return 48000;
+  }
+  if (best != 0) return best;
+  if (any) return 48000;
+  return 48000;
+}
+
+double FallbackRate(double want, const ma_device_info& info) {
+  if (SupportsRate(info, want)) return want;
+  return static_cast<double>(PreferredRateOf(info));
+}
+}  // namespace
+
+// Maps the UI's ioStore strings to a routing mode. Unknown names (including
+// "") degrade to kStereo: passthrough is the safe answer when the two sides
+// ever disagree about which modes exist.
+InputChannelMode InputChannelModeFromName(const std::string& name) {
+  if (name == "l") return InputChannelMode::kLeft;
+  if (name == "r") return InputChannelMode::kRight;
+  if (name == "sum") return InputChannelMode::kSum;
+  return InputChannelMode::kStereo;
+}
+
+namespace {
+const char* InputChannelModeToName(InputChannelMode mode) {
+  switch (mode) {
+    case InputChannelMode::kLeft:
+      return "l";
+    case InputChannelMode::kRight:
+      return "r";
+    case InputChannelMode::kSum:
+      return "sum";
+    case InputChannelMode::kStereo:
+    default:
+      return "stereo";
+  }
+}
 }  // namespace
 
 TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_frames) {
@@ -76,11 +192,6 @@ TapFrame ReadTap(const RtCallbackState& state, bool input, unsigned int max_fram
   }
   return out;
 }
-
-namespace {
-// Sentinel meaning "platform default device" for Open().
-constexpr unsigned int kDefaultDevice = 0xFFFFFFFFu;
-}  // namespace
 
 int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_frames,
                       void* user_data) {
@@ -121,6 +232,49 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
   }
   const float* in_ptrs[2] = {in_l, in_r};
   float* out_ptrs[2] = {out_l, out_r};
+
+  // Input channel routing (the web UI's ioStore.inputChannel, default Ch 1):
+  // a guitar is one cable on a stereo pair, so reduce the live input to the
+  // selected mono source here rather than running the rig on a half-silent
+  // pair. The graph then runs with input_channels == 1, which the core
+  // duplicates to both internal channels - centered stereo out, exactly like
+  // the web's mono router node and the VST3's RouteInput. kStereo keeps the
+  // old untouched passthrough. Skipped for DI audition (already a mono
+  // buffer, handled below) and when the scratch isn't sized for this block -
+  // that falls back to passthrough rather than allocating on this thread.
+  int eff_in_ch = in_ch;
+  if (!state->di_playing.load(std::memory_order_relaxed) && in_l && in_ch >= 2) {
+    const auto mode = static_cast<InputChannelMode>(
+        state->input_channel_mode.load(std::memory_order_relaxed));
+    if (mode != InputChannelMode::kStereo && state->in_scratch[0].size() >= n_frames) {
+      float* mono = state->in_scratch[0].data();
+      switch (mode) {
+        case InputChannelMode::kRight:
+          if (in_r) {
+            for (unsigned int i = 0; i < n_frames; ++i) mono[i] = in_r[i];
+          } else {
+            for (unsigned int i = 0; i < n_frames; ++i) mono[i] = 0.0f;
+          }
+          break;
+        case InputChannelMode::kSum:
+          // Average, not add: summing two correlated sources gains +6dB into
+          // clipping, and both the web's mono down-mix and the plugin's
+          // RouteInput halve here too.
+          for (unsigned int i = 0; i < n_frames; ++i)
+            mono[i] = (in_l[i] + (in_r ? in_r[i] : 0.0f)) * 0.5f;
+          break;
+        case InputChannelMode::kLeft:
+        default:
+          for (unsigned int i = 0; i < n_frames; ++i) mono[i] = in_l[i];
+          break;
+      }
+      in_ptrs[0] = mono;
+      in_ptrs[1] = nullptr;
+      in_l = mono;
+      in_r = nullptr;
+      eff_in_ch = 1;
+    }
+  }
 
   // DI audition (issue #273): when active, replaces live input with the
   // looping DI buffer, still through input_gain and the graph/tap.
@@ -177,91 +331,192 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
     in_l = in_ptrs[0];
   }
 
+  // The monitor tap mirrors what the rig processes: post-routing, post-TRIM,
+  // post-DI (all of the above rewrite in_ptrs). A routed-mono input reads
+  // back on both tap channels (like the web's up-mixed mono trim output), so
+  // input meters and the tuner agree with the graph.
+  const float* tap_in[2] = {in_ptrs[0], in_ptrs[1] ? in_ptrs[1] : in_ptrs[0]};
+
   // Suspended (graph mutation in progress): write silence and signal the
   // control thread that this callback observed the pause.
   if (state->suspend.load(std::memory_order_acquire)) {
     state->suspended_callbacks.fetch_add(1, std::memory_order_release);
     if (out_l) std::memset(out_l, 0, static_cast<size_t>(n_frames) * sizeof(float));
     if (out_r) std::memset(out_r, 0, static_cast<size_t>(n_frames) * sizeof(float));
-    CaptureTap(*state, in_ptrs, out_ptrs, n_frames);
+    CaptureTap(*state, tap_in, out_ptrs, n_frames);
     return 0;
   }
 
   if (state->graph_ready.load(std::memory_order_acquire) && state->graph && n_frames > 0 &&
       out_l) {
     if (in_l) {
-      nam_studio_process(state->graph, in_ptrs, in_ch, out_ptrs, out_ch,
+      openaxe_process(state->graph, in_ptrs, eff_in_ch, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     } else {
       // Output-only stream: feed silence into the graph.
-      nam_studio_process(state->graph, nullptr, 0, out_ptrs, out_ch,
+      openaxe_process(state->graph, nullptr, 0, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     }
   } else if (out_l) {
     std::memset(out_l, 0, static_cast<size_t>(n_frames) * sizeof(float));
     if (out_r) std::memset(out_r, 0, static_cast<size_t>(n_frames) * sizeof(float));
   }
-  CaptureTap(*state, in_ptrs, out_ptrs, n_frames);
+  CaptureTap(*state, tap_in, out_ptrs, n_frames);
   return 0;
 }
 
-// Adapts juce::AudioIODeviceCallback to RtProcessCallback + HandleStreamError
-// - see the forward declaration's doc comment in audio.h for why this is a
-// private nested class rather than AudioIO itself inheriting the JUCE type.
-class AudioIO::Callback : public juce::AudioIODeviceCallback {
- public:
-  Callback(AudioIO& owner, RtCallbackState& state) : owner_(owner), state_(state) {}
+// miniaudio delivers interleaved f32 frames; the DSP core consumes
+// deinterleaved per-channel pointers (see RtProcessCallback). Deinterleave
+// into the pre-sized scratch, run the graph, interleave back - allocating
+// nothing. Chunked so an unexpectedly large backend period can never overrun
+// the scratch.
+void AudioIO::DataCallback(struct ma_device* p_device, void* p_output, const void* p_input,
+                           unsigned int frame_count) {
+  if (!p_device || frame_count == 0) return;
+  auto* self = static_cast<AudioIO*>(p_device->pUserData);
+  if (!self) return;
+  RtCallbackState& state = self->state_;
+  const int in_ch = state.input_channels;
+  const int out_ch = state.output_channels;
+  const float* in_interleaved = static_cast<const float*>(p_input);
+  float* out_interleaved = static_cast<float*>(p_output);
 
-  void audioDeviceIOCallbackWithContext(const float* const* input, int /*numInputChannels*/,
-                                        float* const* output, int /*numOutputChannels*/,
-                                        int numSamples,
-                                        const juce::AudioIODeviceCallbackContext&) override {
-    // input/output are deinterleaved per-channel pointer arrays, exactly the
-    // shape RtProcessCallback already expects (only ever reads through
-    // input's pointers, so casting away its const is safe).
-    RtProcessCallback(const_cast<float**>(output), const_cast<float**>(input),
-                      static_cast<unsigned int>(numSamples), &state_);
+  // Stream-level error (device unplugged / rerouted / interrupted - see
+  // HandleStreamError): RtProcessCallback refuses to touch buffers whose shape
+  // may have changed underneath it, so it would leave the scratch holding the
+  // previous callback's output. Write silence here instead of replaying that
+  // stale audio until the JS layer tears the stream down.
+  if (state.stream_error.load(std::memory_order_acquire)) {
+    if (out_interleaved && out_ch >= 1) {
+      std::memset(out_interleaved, 0,
+                  static_cast<size_t>(frame_count) * static_cast<size_t>(out_ch) *
+                      sizeof(float));
+    }
+    return;
   }
-  void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
-  void audioDeviceStopped() override {}
-  void audioDeviceError(const juce::String& message) override {
-    owner_.HandleStreamError(message.toStdString());
+
+  unsigned int done = 0;
+  while (done < frame_count) {
+    // Cap the chunk so it always fits BOTH scratch pools: the interleave
+    // buffers (ma_in_/ma_out_, sized >= kMaScratchCap by the ctor/Open) and
+    // in_scratch, which RtProcessCallback's routing/DI/TRIM read and which
+    // SetGraph sizes from the *requested* block. A backend's native period can
+    // exceed that (e.g. WASAPI-shared mode has a ~10ms floor), and when a
+    // chunk outgrew in_scratch the routing/DI/TRIM guards silently degraded to
+    // passthrough - the mono input picker, TRIM and DI audition would all drop.
+    // Chunking to in_scratch here keeps those paths live on real hardware.
+    unsigned int cap = kMaScratchCap;
+    if (!state.in_scratch[0].empty()) {
+      cap = std::min(cap, static_cast<unsigned int>(state.in_scratch[0].size()));
+    }
+    unsigned int n = std::min(cap, frame_count - done);
+    // Scratch is sized in Open(); if a unit test drives the state without
+    // Open (no scratch), fall back to silence rather than allocate here.
+    if (self->ma_in_[0].size() < n || self->ma_out_[0].size() < n) {
+      if (out_interleaved) {
+        std::memset(out_interleaved + static_cast<size_t>(done) * static_cast<size_t>(out_ch), 0,
+                    static_cast<size_t>(n) * static_cast<size_t>(out_ch) * sizeof(float));
+      }
+      // Still count the frames through the backend-agnostic path so tap /
+      // suspend / stream-error semantics stay identical (it handles null
+      // buffers as silence).
+      float* null_out[2] = {nullptr, nullptr};
+      RtProcessCallback(null_out, nullptr, n, &state);
+      done += n;
+      continue;
+    }
+
+    const float* chunk_in[2] = {nullptr, nullptr};
+    float* chunk_out[2] = {nullptr, nullptr};
+    if (in_interleaved && in_ch >= 1) {
+      for (unsigned int i = 0; i < n; ++i) {
+        self->ma_in_[0][i] = in_interleaved[(static_cast<size_t>(done) + i) * in_ch + 0];
+      }
+      chunk_in[0] = self->ma_in_[0].data();
+      if (in_ch >= 2) {
+        for (unsigned int i = 0; i < n; ++i) {
+          self->ma_in_[1][i] = in_interleaved[(static_cast<size_t>(done) + i) * in_ch + 1];
+        }
+        chunk_in[1] = self->ma_in_[1].data();
+      }
+    }
+    if (out_ch >= 1) {
+      chunk_out[0] = self->ma_out_[0].data();
+      if (out_ch >= 2) chunk_out[1] = self->ma_out_[1].data();
+    }
+
+    float* in_ptrs[2] = {const_cast<float*>(chunk_in[0]), const_cast<float*>(chunk_in[1])};
+    float* out_ptrs[2] = {chunk_out[0], chunk_out[1]};
+    RtProcessCallback(out_ptrs, in_ptrs, n, &state);
+
+    if (out_interleaved && out_ch >= 1) {
+      for (unsigned int i = 0; i < n; ++i) {
+        out_interleaved[(static_cast<size_t>(done) + i) * out_ch + 0] = chunk_out[0][i];
+        if (out_ch >= 2) {
+          out_interleaved[(static_cast<size_t>(done) + i) * out_ch + 1] = chunk_out[1][i];
+        }
+      }
+    }
+    done += n;
   }
+}
 
- private:
-  AudioIO& owner_;
-  RtCallbackState& state_;
-};
+void AudioIO::NotificationCallback(const void* p_notification_void) {
+  const auto* p_notification =
+      static_cast<const ma_device_notification*>(p_notification_void);
+  if (!p_notification || !p_notification->pDevice) return;
+  auto* self = static_cast<AudioIO*>(p_notification->pDevice->pUserData);
+  if (!self) return;
+  switch (p_notification->type) {
+    // miniaudio keeps the device's configured sample rate / format across a
+    // reroute (it resamples the new hardware to them), so the graph - reset at
+    // Open()'s rate - stays valid; only the error is surfaced here, never a
+    // stop/close from this callback (the JS layer tears down via TakeStreamError
+    // and reopens).
+    case ma_device_notification_type_rerouted:
+      self->HandleStreamError("audio device rerouted (unplugged or default changed)");
+      break;
+    case ma_device_notification_type_interruption_began:
+      self->HandleStreamError("audio device interrupted");
+      break;
+    default:
+      break;  // started/stopped/interruption_ended/unlocked are not errors
+  }
+}
 
-AudioIO::AudioIO() : callback_(std::make_unique<Callback>(*this, state_)) {
-  // juce_audio_devices depends on juce_events, which needs a MessageManager
-  // instance for some internal facilities (e.g. WASAPI's device-list
-  // watching). This app never calls its runDispatchLoop() - the webview
-  // shell's own native event loop keeps everything moving, exactly like a
-  // JUCE plugin never owns its host's event loop either.
-  juce::MessageManager::getInstance();
-
-#if JUCE_MAC
-  type_.reset(juce::AudioIODeviceType::createAudioIODeviceType_CoreAudio());
-#elif JUCE_WINDOWS
-  type_.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared));
-#elif JUCE_LINUX
-  type_.reset(juce::AudioIODeviceType::createAudioIODeviceType_ALSA());
+AudioIO::AudioIO() {
+#if defined(__APPLE__)
+  const ma_backend backends[] = {ma_backend_coreaudio};
+#elif defined(_WIN32)
+  const ma_backend backends[] = {ma_backend_wasapi};
+#else
+  const ma_backend backends[] = {ma_backend_alsa, ma_backend_pulseaudio, ma_backend_jack};
 #endif
+  auto ctx = std::make_unique<ma_context>();
+  ma_context_config config = ma_context_config_init();
+  const ma_result res =
+      ma_context_init(backends, static_cast<ma_uint32>(sizeof(backends) / sizeof(backends[0])),
+                      &config, ctx.get());
+  if (res == MA_SUCCESS) {
+    context_ = std::move(ctx);
+    context_ok_ = true;
+  } else {
+    WriteLog("audio: miniaudio context init failed");
+  }
+  for (auto& v : ma_in_) v.assign(kMaScratchCap, 0.0f);
+  for (auto& v : ma_out_) v.assign(kMaScratchCap, 0.0f);
 }
 
 AudioIO::~AudioIO() {
-  if (device_ && device_->isOpen()) device_->close();
-  // Tear the JUCE audio objects down first.
-  device_.reset();
-  type_.reset();
-  // NOTE: we intentionally do NOT call juce::MessageManager::deleteInstance()
-  // here. The comment above the getInstance() in the ctor explains the
-  // singleton's origin; deleting it at teardown triggered a double-free /
-  // heap-corruption crash (malloc_zone_error, SIGSEGV in the webview dispatch
-  // path) because JUCE's own teardown still reached the same singleton. The
-  // only cost of leaving it is a benign JUCE LeakedObjectDetector warning at
-  // process exit - far preferable to a crash.
+  if (device_) {
+    ma_device_uninit(device_.get());
+    device_.reset();
+  }
+  if (context_) {
+    ma_context_uninit(context_.get());
+    context_.reset();
+  }
+  context_ok_ = false;
 }
 
 void AudioIO::HandleStreamError(const std::string& text) {
@@ -302,21 +557,35 @@ unsigned int AudioIO::HashDeviceId(const std::string& name) {
 }
 
 bool AudioIO::ResolveDeviceName(unsigned int id, bool input, std::string* name) const {
-  if (!type_) return false;
-  type_->scanForDevices();
-  const juce::StringArray names = type_->getDeviceNames(input);
-  if (names.isEmpty()) return false;
-
-  if (id == kDefaultDevice) {
-    int index = type_->getDefaultDeviceIndex(input);
-    if (index < 0 || index >= names.size()) index = 0;
-    *name = names[index].toStdString();
-    return true;
+  if (!context_ok_ || !context_) return false;
+  ma_device_info* p_playback = nullptr;
+  ma_uint32 playback_count = 0;
+  ma_device_info* p_capture = nullptr;
+  ma_uint32 capture_count = 0;
+  if (ma_context_get_devices(context_.get(), &p_playback, &playback_count, &p_capture,
+                             &capture_count) != MA_SUCCESS) {
+    return false;
   }
 
-  for (const auto& n : names) {
-    if (HashDeviceId(n.toStdString()) == id) {
-      *name = n.toStdString();
+  const ma_device_info* list = input ? p_capture : p_playback;
+  const ma_uint32 count = input ? capture_count : playback_count;
+  if (id == kDefaultDevice) {
+    for (ma_uint32 i = 0; i < count; ++i) {
+      if (list[i].isDefault) {
+        *name = list[i].name;
+        return true;
+      }
+    }
+    if (count > 0) {
+      *name = list[0].name;
+      return true;
+    }
+    return false;
+  }
+
+  for (ma_uint32 i = 0; i < count; ++i) {
+    if (HashDeviceId(list[i].name) == id) {
+      *name = list[i].name;
       return true;
     }
   }
@@ -325,14 +594,16 @@ bool AudioIO::ResolveDeviceName(unsigned int id, bool input, std::string* name) 
 
 std::vector<AudioDeviceInfo> AudioIO::ListDevices() const {
   std::vector<AudioDeviceInfo> devices;
-  if (!type_) return devices;
-  type_->scanForDevices();
-
-  const juce::StringArray input_names = type_->getDeviceNames(true);
-  const juce::StringArray output_names = type_->getDeviceNames(false);
-  const int default_input = type_->getDefaultDeviceIndex(true);
-  const int default_output = type_->getDefaultDeviceIndex(false);
-  const std::string api = type_->getTypeName().toStdString();
+  if (!context_ok_ || !context_) return devices;
+  ma_device_info* p_playback = nullptr;
+  ma_uint32 playback_count = 0;
+  ma_device_info* p_capture = nullptr;
+  ma_uint32 capture_count = 0;
+  if (ma_context_get_devices(context_.get(), &p_playback, &playback_count, &p_capture,
+                             &capture_count) != MA_SUCCESS) {
+    return devices;
+  }
+  const std::string api = BackendApiName(context_->backend);
 
   // A single physical interface may be reported by the backend under one
   // shared name for both directions (a true duplex device) or under separate
@@ -340,55 +611,54 @@ std::vector<AudioDeviceInfo> AudioIO::ListDevices() const {
   // the union of every name and record which directions each provides, so all
   // interfaces show up regardless of how the backend exposes them. Open() then
   // combines an input endpoint and an output endpoint - even two names of the
-  // same device - via createDevice(output_name, input_name).
-  const juce::String def_in_name =
-      (default_input >= 0 && default_input < input_names.size()) ? input_names[default_input]
-                                                                 : juce::String();
-  const juce::String def_out_name =
-      (default_output >= 0 && default_output < output_names.size()) ? output_names[default_output]
-                                                                    : juce::String();
-
-  std::map<juce::String, AudioDeviceInfo> by_name;
-  auto ensure = [&](const juce::String& name, bool is_input) -> AudioDeviceInfo& {
-    auto it = by_name.find(name);
+  // same device - into one duplex stream.
+  std::map<std::string, AudioDeviceInfo> by_name;
+  auto ensure = [&](const char* name, bool is_input, const ma_device_info& info) {
+    const std::string key(name ? name : "");
+    if (key.empty()) return;
+    auto it = by_name.find(key);
     if (it == by_name.end()) {
       AudioDeviceInfo d;
-      d.id = HashDeviceId(name.toStdString());
-      d.name = name.toStdString();
+      d.id = HashDeviceId(key);
+      d.name = key;
       d.api = api;
       d.is_input = false;
       d.is_output = false;
-      it = by_name.emplace(name, std::move(d)).first;
+      it = by_name.emplace(key, std::move(d)).first;
     }
-    if (is_input) it->second.is_input = true;
-    else it->second.is_output = true;
-    if (name == def_in_name || name == def_out_name) it->second.is_default = true;
-    return it->second;
+    if (is_input) {
+      it->second.is_input = true;
+      const int ch = std::min(2, MaxChannelsOf(info));
+      it->second.input_channels = std::max(it->second.input_channels, ch);
+    } else {
+      it->second.is_output = true;
+      const int ch = std::min(2, MaxChannelsOf(info));
+      it->second.output_channels = std::max(it->second.output_channels, ch);
+    }
+    if (info.isDefault) it->second.is_default = true;
+    const unsigned int pref = PreferredRateOf(info);
+    if (pref != 0 && (it->second.preferred_sample_rate == 0 ||
+                      pref == 48000 || it->second.preferred_sample_rate != 48000)) {
+      // Prefer 48 kHz when any side offers it, else keep the first seen.
+      if (it->second.preferred_sample_rate == 0 || pref == 48000) {
+        it->second.preferred_sample_rate = pref;
+      }
+    }
   };
 
-  for (int i = 0; i < input_names.size(); ++i) ensure(input_names[i], true);
-  for (int i = 0; i < output_names.size(); ++i) ensure(output_names[i], false);
+  for (ma_uint32 i = 0; i < capture_count; ++i) ensure(p_capture[i].name, true, p_capture[i]);
+  for (ma_uint32 i = 0; i < playback_count; ++i)
+    ensure(p_playback[i].name, false, p_playback[i]);
 
   for (auto& [name, d] : by_name) {
-    // Probe channel counts by creating the device for the directions it has.
-    std::unique_ptr<juce::AudioIODevice> probe(
-        type_->createDevice(d.is_output ? name : juce::String(),
-                            d.is_input ? name : juce::String()));
-    if (!probe) continue;
-    const int in_ch = probe->getInputChannelNames().size();
-    const int out_ch = probe->getOutputChannelNames().size();
-    if (d.is_input && in_ch <= 0) continue;
-    if (d.is_output && out_ch <= 0) continue;
-    d.input_channels = in_ch;
-    d.output_channels = out_ch;
-
-    const juce::Array<double> rates = probe->getAvailableSampleRates();
-    double preferred = 0.0;
-    for (double r : rates) {
-      if (r > preferred) preferred = r;
-    }
-    if (rates.contains(48000.0)) preferred = 48000.0;
-    d.preferred_sample_rate = static_cast<unsigned int>(preferred);
+    if (d.is_input && d.input_channels <= 0) continue;
+    if (d.is_output && d.output_channels <= 0) continue;
+    // A capture-only entry still reports output_channels 0 (and vice versa);
+    // fill the missing side's count from the present side only for display
+    // parity with the old backend is not needed - keep 0 for the absent side
+    // so the JS layer can tell directions apart. The union entry itself is
+    // always kept: Open() pairs endpoints across names.
+    if (d.preferred_sample_rate == 0) d.preferred_sample_rate = 48000;
     devices.push_back(std::move(d));
   }
   return devices;
@@ -404,40 +674,71 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
     has_pending_stream_error_ = false;
   }
   if (device_) {
-    if (device_->isOpen()) device_->close();
+    ma_device_uninit(device_.get());
     device_.reset();
   }
-  if (!type_) {
+  if (!context_ok_ || !context_) {
     last_error_ = "no audio backend available";
     return false;
   }
 
-  std::string input_name, output_name;
-  if (!ResolveDeviceName(input_device, /*input=*/true, &input_name) ||
-      !ResolveDeviceName(output_device, /*input=*/false, &output_name)) {
+  // Fresh enumeration for both directions; never rely on a cached table.
+  ma_device_info* p_playback = nullptr;
+  ma_uint32 playback_count = 0;
+  ma_device_info* p_capture = nullptr;
+  ma_uint32 capture_count = 0;
+  if (ma_context_get_devices(context_.get(), &p_playback, &playback_count, &p_capture,
+                             &capture_count) != MA_SUCCESS) {
+    last_error_ = "failed to enumerate audio devices";
+    return false;
+  }
+
+  auto find = [&](unsigned int id, bool input, const ma_device_info** out) -> bool {
+    const ma_device_info* list = input ? p_capture : p_playback;
+    const ma_uint32 count = input ? capture_count : playback_count;
+    if (count == 0) return false;
+    if (id == kDefaultDevice) {
+      for (ma_uint32 i = 0; i < count; ++i) {
+        if (list[i].isDefault) {
+          *out = &list[i];
+          return true;
+        }
+      }
+      *out = &list[0];
+      return true;
+    }
+    for (ma_uint32 i = 0; i < count; ++i) {
+      if (HashDeviceId(list[i].name) == id) {
+        *out = &list[i];
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const ma_device_info* in_info = nullptr;
+  const ma_device_info* out_info = nullptr;
+  if (!find(input_device, true, &in_info) || !find(output_device, false, &out_info)) {
     last_error_ = "requested audio device not found";
     return false;
   }
 
   // An input endpoint and an output endpoint may legitimately be different
-  // device names (a single USB interface like the FM3 is often exposed by
-  // CoreAudio under separate input/output names, and some setups use
-  // different physical devices for each). JUCE's createDevice(output, input)
-  // bridges them into one stream cleanly - the old RtAudio CoreAudio crash
-  // doing this (issue #53) no longer applies. The one genuine hazard is an
-  // acoustic feedback loop (live mic straight into open speakers); that's a
-  // user-facing choice we no longer try to police here.
-  std::unique_ptr<juce::AudioIODevice> device(type_->createDevice(output_name, input_name));
-  if (!device) {
-    last_error_ = "failed to create audio device";
-    return false;
-  }
+  // device names (a single USB interface like the FM3 is often exposed under
+  // separate input/output names, and some setups use different physical
+  // devices for each). miniaudio's duplex device bridges them into one stream
+  // with basic drift compensation between independently-clocked devices. The
+  // one genuine hazard is an acoustic feedback loop (live mic straight into
+  // open speakers); that's a user-facing choice we no longer try to police
+  // here.
+  ma_device_id in_id = in_info->id;
+  ma_device_id out_id = out_info->id;
 
   // Clamp channels to what the device actually provides: a mono built-in mic
   // has 1 input channel, stereo speakers have 2 output channels. Never
   // exceed 2 (the rig is stereo internally).
-  const int in_ch = std::min(2, device->getInputChannelNames().size());
-  const int out_ch = std::min(2, device->getOutputChannelNames().size());
+  const int in_ch = std::min(2, MaxChannelsOf(*in_info));
+  const int out_ch = std::min(2, MaxChannelsOf(*out_info));
   if (in_ch <= 0 || out_ch <= 0) {
     last_error_ = "input/output device has no usable channels";
     return false;
@@ -447,52 +748,69 @@ bool AudioIO::Open(unsigned int input_device, unsigned int output_device, double
 
   // Prefer a rate the device actually runs at: opening at an unsupported rate
   // either fails outright or makes the OS resample around us, which costs
-  // both latency and fidelity for no benefit.
-  const juce::Array<double> rates = device->getAvailableSampleRates();
-  double rate = sample_rate;
-  if (!rates.contains(rate)) {
-    double preferred = 0.0;
-    for (double r : rates) {
-      if (r > preferred) preferred = r;
-    }
-    if (rates.contains(48000.0)) preferred = 48000.0;
-    if (preferred != 0.0) rate = preferred;
-  }
+  // both latency and fidelity for no benefit. When the two sides disagree the
+  // output side wins and miniaudio resamples the capture side in-app - even
+  // when the input can't run at the chosen rate at all, the output's rate is
+  // kept rather than failing the open.
+  const double rate = FallbackRate(sample_rate, *out_info);
 
   // buffer_frames == 0 means "as small as this device allows" - opt-in,
   // since a heavy NAM model can overrun a block that small (see the header).
-  unsigned int frames = buffer_frames;
-  if (buffer_frames == kLowestLatencyBuffer) {
-    const juce::Array<int> sizes = device->getAvailableBufferSizes();
-    int smallest = device->getDefaultBufferSize();
-    for (int s : sizes) {
-      if (s > 0 && (smallest <= 0 || s < smallest)) smallest = s;
-    }
-    frames = static_cast<unsigned int>(smallest);
-  }
+  const unsigned int frames =
+      (buffer_frames == kLowestLatencyBuffer) ? kMinPeriodFrames : buffer_frames;
 
-  juce::BigInteger in_mask, out_mask;
-  in_mask.setRange(0, in_ch, true);
-  out_mask.setRange(0, out_ch, true);
+  ma_device_config config = ma_device_config_init(ma_device_type_duplex);
+  config.sampleRate = static_cast<ma_uint32>(rate);
+  config.periodSizeInFrames = frames;
+  config.periods = 3;
+  config.performanceProfile = ma_performance_profile_low_latency;
+  config.dataCallback = DataCallback;
+  // audio.h can't name ma_device_notification (anonymous typedef, no tag to
+  // forward-declare), so adapt with a captureless lambda of the exact
+  // miniaudio signature. Defined here inside a member function, it can reach
+  // the private NotificationCallback.
+  config.notificationCallback = [](const ma_device_notification* p) {
+    AudioIO::NotificationCallback(p);
+  };
+  config.pUserData = this;
+  config.playback.format = ma_format_f32;
+  config.playback.channels = static_cast<ma_uint32>(out_ch);
+  config.playback.shareMode = ma_share_mode_shared;
+  config.capture.format = ma_format_f32;
+  config.capture.channels = static_cast<ma_uint32>(in_ch);
+  config.capture.shareMode = ma_share_mode_shared;
+  // Default endpoints: NULL selects the platform default. Explicit endpoints
+  // use the enumerated IDs (copies above stay alive for the init call, which
+  // copies them into the device).
+  ma_device_id* p_in_id = (input_device == kDefaultDevice) ? nullptr : &in_id;
+  ma_device_id* p_out_id = (output_device == kDefaultDevice) ? nullptr : &out_id;
+  config.capture.pDeviceID = p_in_id;
+  config.playback.pDeviceID = p_out_id;
 
-  const juce::String error = device->open(in_mask, out_mask, rate, static_cast<int>(frames));
-  if (error.isNotEmpty()) {
-    last_error_ = error.toStdString();
+  auto dev = std::make_unique<ma_device>();
+  const ma_result res = ma_device_init(context_.get(), &config, dev.get());
+  if (res != MA_SUCCESS) {
+    last_error_ = std::string("failed to open audio device: ") + ma_result_description(res);
     return false;
   }
 
-  device_ = std::move(device);
-  input_device_id_ = HashDeviceId(input_name);
-  output_device_id_ = HashDeviceId(output_name);
-  sample_rate_ = device_->getCurrentSampleRate();
-  buffer_frames_ = static_cast<unsigned int>(device_->getCurrentBufferSizeSamples());
+  device_ = std::move(dev);
+  input_device_id_ = HashDeviceId(in_info->name);
+  output_device_id_ = HashDeviceId(out_info->name);
+  sample_rate_ = static_cast<double>(device_->sampleRate);
+  buffer_frames_ = frames;
+  // Conversion scratch: sized here (non-audio thread) so the callback never
+  // allocates. Generous headroom over the requested period.
+  const unsigned int scratch = std::max(frames * 2u, kMaScratchCap);
+  for (auto& v : ma_in_) v.assign(scratch, 0.0f);
+  for (auto& v : ma_out_) v.assign(scratch, 0.0f);
   return true;
 }
 
 void AudioIO::Close() {
   std::lock_guard<std::mutex> lock(io_mutex_);
   if (device_) {
-    if (device_->isOpen()) device_->close();
+    ma_device_uninit(device_.get());
     device_.reset();
     state_.graph_ready.store(false, std::memory_order_release);
   }
@@ -500,25 +818,30 @@ void AudioIO::Close() {
 
 bool AudioIO::IsOpen() const {
   std::lock_guard<std::mutex> lock(io_mutex_);
-  return device_ && device_->isOpen();
+  return device_ != nullptr;
 }
 
 bool AudioIO::IsRunning() const {
   std::lock_guard<std::mutex> lock(io_mutex_);
-  return device_ && device_->isPlaying();
+  return device_ != nullptr && ma_device_is_started(device_.get()) == MA_TRUE;
 }
 
-void AudioIO::SetGraph(NamStudioGraph* graph, double sample_rate, unsigned int max_block_size) {
+void AudioIO::SetGraph(OpenAxeGraph* graph, double sample_rate, unsigned int max_block_size) {
   InitTap(state_);  // non-audio thread, so the audio thread never allocates
   // Same reasoning for the TRIM scratch buffers (see RtCallbackState::
-  // in_scratch). Sized generously: a backend may hand the callback a slightly
-  // larger block than the one it granted, and the callback will not allocate.
-  for (auto& ch : state_.in_scratch) ch.assign(std::max(max_block_size, 1u) * 2, 0.0f);
-  // nam_studio_reset is documented not real-time safe - this must be called
+  // in_scratch). Sized generously: a backend may hand the callback a larger
+  // block than the requested period (see DataCallback), so cover the full
+  // interleave chunk cap too - the mono-routing/DI/TRIM guards inside
+  // RtProcessCallback must never fail on a real chunk, or mono routing
+  // silently degrades to stereo passthrough (a guitar on input 1 then comes
+  // out left-heavy instead of centered).
+  const unsigned int scratch = std::max(std::max(max_block_size, 1u) * 2, kMaScratchCap);
+  for (auto& ch : state_.in_scratch) ch.assign(scratch, 0.0f);
+  // openaxe_reset is documented not real-time safe - this must be called
   // from a non-audio thread before Start(). Rebuild the graph while the
   // stream is stopped (or before it starts), then publish the pointer via
   // the acquire/release pair the callback reads.
-  if (graph) nam_studio_reset(graph, sample_rate, static_cast<int32_t>(max_block_size));
+  if (graph) openaxe_reset(graph, sample_rate, static_cast<int32_t>(max_block_size));
   state_.graph = graph;
   state_.graph_ready.store(graph != nullptr, std::memory_order_release);
 }
@@ -528,6 +851,18 @@ void AudioIO::SetInputGain(float gain) {
 }
 
 float AudioIO::InputGain() const { return state_.input_gain.load(std::memory_order_relaxed); }
+
+void AudioIO::SetInputChannelMode(const std::string& mode) {
+  // Like the input gain above: a lone atomic the audio callback reads, so
+  // this is safe to call while the stream is running, no suspend needed.
+  state_.input_channel_mode.store(static_cast<int>(InputChannelModeFromName(mode)),
+                                  std::memory_order_relaxed);
+}
+
+std::string AudioIO::InputChannelModeName() const {
+  return InputChannelModeToName(static_cast<InputChannelMode>(
+      state_.input_channel_mode.load(std::memory_order_relaxed)));
+}
 
 void AudioIO::SetDIBuffer(const std::vector<float>& samples) {
   // Called with di_playing==false, so the audio thread isn't reading.
@@ -559,17 +894,20 @@ bool AudioIO::Start() {
     last_error_ = "no audio device open";
     return false;
   }
-  // JUCE's start() is void - unlike RtAudio's startStream(), failures
-  // surface asynchronously via audioDeviceError/HandleStreamError (polled
-  // through TakeStreamError), not a synchronous return code here.
-  device_->start(callback_.get());
+  // Failures surface synchronously here; runtime disconnects surface
+  // asynchronously via NotificationCallback/HandleStreamError (polled through
+  // TakeStreamError), not a return code after start.
+  if (ma_device_start(device_.get()) != MA_SUCCESS) {
+    last_error_ = "failed to start audio device";
+    return false;
+  }
   return true;
 }
 
 bool AudioIO::Stop() {
   std::lock_guard<std::mutex> lock(io_mutex_);
   last_error_.clear();
-  if (device_ && device_->isPlaying()) device_->stop();
+  if (device_) ma_device_stop(device_.get());
   return true;
 }
 
@@ -591,21 +929,23 @@ std::string AudioIO::LastError() const {
 long AudioIO::StreamLatencyFrames() const {
   std::lock_guard<std::mutex> lock(io_mutex_);
   if (!device_) return 0;
-  return static_cast<long>(device_->getInputLatencyInSamples()) +
-         static_cast<long>(device_->getOutputLatencyInSamples());
+  const long in_lat = static_cast<long>(device_->capture.internalPeriodSizeInFrames);
+  const long out_lat = static_cast<long>(device_->playback.internalPeriodSizeInFrames);
+  if (in_lat > 0 && out_lat > 0) return in_lat + out_lat;
+  return static_cast<long>(buffer_frames_) * 2;
 }
 
 bool AudioIO::BeginSuspend() {
   std::lock_guard<std::mutex> lock(io_mutex_);
   // If the stream isn't running there is no audio thread touching the graph,
   // so there is nothing to synchronize with.
-  if (!device_ || !device_->isPlaying()) return true;
+  if (!device_ || ma_device_is_started(device_.get()) != MA_TRUE) return true;
 
   const unsigned int before = state_.suspended_callbacks.load(std::memory_order_acquire);
   state_.suspend.store(true, std::memory_order_release);
 
   // Wait for a callback that saw the pause: that guarantees every earlier
-  // nam_studio_process call has completed (the audio thread is now inside
+  // openaxe_process call has completed (the audio thread is now inside
   // the silence branch and stays there until EndSuspend).
   for (int i = 0; i < 2000; ++i) {
     if (state_.suspended_callbacks.load(std::memory_order_acquire) > before) return true;
@@ -614,7 +954,7 @@ bool AudioIO::BeginSuspend() {
 
   // Timed out - the device is stalling. Force the stream off; with no audio
   // thread running, mutating the graph afterwards is safe.
-  device_->stop();
+  ma_device_stop(device_.get());
   return false;
 }
 

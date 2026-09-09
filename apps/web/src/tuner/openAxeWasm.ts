@@ -2,9 +2,9 @@
  * Main-thread WASM bridge for the tuner (issue #123).
  *
  * The core's pitch detection and note mapping are pure functions compiled
- * into the same nam_studio_core module the AudioWorklets use. This module
+ * into the same openaxe_core module the AudioWorklets use. This module
  * loads that same binary on the main thread so `Tuner` can call
- * `_nam_studio_detect_pitch` / `_nam_studio_frequency_to_note` without a
+ * `_openaxe_detect_pitch` / `_openaxe_frequency_to_note` without a
  * worklet round-trip — the direct path the issue's "callable from the UI
  * thread (web)" contract expects.
  *
@@ -26,9 +26,9 @@ export interface WasmDetectedNote {
 }
 
 // Emscripten module shape we actually use.
-interface NamStudioModule {
-  _nam_studio_detect_pitch: (ptr: number, count: number, sampleRate: number) => number
-  _nam_studio_frequency_to_note: (
+interface OpenAxeModule {
+  _openaxe_detect_pitch: (ptr: number, count: number, sampleRate: number) => number
+  _openaxe_frequency_to_note: (
     freq: number,
     ref: number,
     outName: number,
@@ -43,16 +43,16 @@ interface NamStudioModule {
   UTF8ToString: (ptr: number) => string
 }
 
-let modulePromise: Promise<NamStudioModule | null> | null = null
-let cached: NamStudioModule | null = null
+let modulePromise: Promise<OpenAxeModule | null> | null = null
+let cached: OpenAxeModule | null = null
 
-async function loadModule(): Promise<NamStudioModule | null> {
+async function loadModule(): Promise<OpenAxeModule | null> {
   // Node / jsdom tests have no fetch for the wasm binary or no AudioWorklet
   // module resolution — gracefully degrade to the TS fallback.
   if (typeof window === 'undefined' || typeof fetch !== 'function') return null
   try {
     // Fetch the wasm bytes ourselves so Emscripten doesn't need locateFile.
-    const wasmBytes = await fetch('/wasm-core/nam_studio_core.wasm').then((r) =>
+    const wasmBytes = await fetch('/wasm-core/openaxe_core.wasm').then((r) =>
       r.ok ? r.arrayBuffer() : Promise.reject(new Error(`wasm fetch ${r.status}`)),
     )
     // Dynamic import of the Emscripten glue — it is an ES module (EXPORT_ES6=1).
@@ -61,11 +61,11 @@ async function loadModule(): Promise<NamStudioModule | null> {
     // Build the specifier at runtime so Vite's import-analysis can't
     // statically resolve it; the browser then fetches the already-published
     // file exactly as the worklet does via its relative import.
-    const wasmJsUrl = '/wasm-core/' + 'nam_studio_core.js'
+    const wasmJsUrl = '/wasm-core/' + 'openaxe_core.js'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const createModule = ((await Function('u', 'return import(u)')(wasmJsUrl)) as any).default as (
       opts: Record<string, unknown>,
-    ) => Promise<NamStudioModule>
+    ) => Promise<OpenAxeModule>
     const mod = await createModule({
       instantiateWasm(
         imports: WebAssembly.Imports,
@@ -74,7 +74,7 @@ async function loadModule(): Promise<NamStudioModule | null> {
         WebAssembly.instantiate(wasmBytes, imports).then(
           (r) => success(r.instance),
           (e) => {
-            console.warn('[namStudioWasm] instantiate failed', e)
+            console.warn('[openAxeWasm] instantiate failed', e)
           },
         )
         return {}
@@ -82,12 +82,12 @@ async function loadModule(): Promise<NamStudioModule | null> {
     })
     return mod
   } catch (e) {
-    console.warn('[namStudioWasm] load failed, falling back to TS tuner', e)
+    console.warn('[openAxeWasm] load failed, falling back to TS tuner', e)
     return null
   }
 }
 
-export function ensureWasm(): Promise<NamStudioModule | null> {
+export function ensureWasm(): Promise<OpenAxeModule | null> {
   if (cached) return Promise.resolve(cached)
   if (!modulePromise) {
     modulePromise = loadModule().then((m) => {
@@ -102,7 +102,7 @@ export function ensureWasm(): Promise<NamStudioModule | null> {
 export function detectPitchWasm(
   buffer: Float32Array,
   sampleRate: number,
-  mod: NamStudioModule | null,
+  mod: OpenAxeModule | null,
 ): WasmPitchResult | null {
   if (!mod || !buffer || buffer.length === 0 || sampleRate <= 0) return null
   const count = buffer.length
@@ -110,7 +110,7 @@ export function detectPitchWasm(
   if (!ptr) return null
   try {
     mod.HEAPF32.set(buffer, ptr >> 2)
-    const hz = mod._nam_studio_detect_pitch(ptr, count, sampleRate)
+    const hz = mod._openaxe_detect_pitch(ptr, count, sampleRate)
     if (!hz || hz <= 0) return null
     // Clarity isn't exposed as a separate out-param on the Hz-only ABI
     // (it drove the confidence gate inside DetectPitch). Report 1.0 for a
@@ -126,7 +126,7 @@ export function detectPitchWasm(
 export function frequencyToNoteWasm(
   frequency: number,
   referenceA4: number,
-  mod: NamStudioModule | null,
+  mod: OpenAxeModule | null,
 ): WasmDetectedNote | null {
   if (!mod || frequency <= 0) return null
   const ref = referenceA4 > 0 ? referenceA4 : 440
@@ -140,7 +140,7 @@ export function frequencyToNoteWasm(
     return null
   }
   try {
-    const ok = mod._nam_studio_frequency_to_note(frequency, ref, namePtr, octPtr, centsPtr)
+    const ok = mod._openaxe_frequency_to_note(frequency, ref, namePtr, octPtr, centsPtr)
     if (!ok) return null
     const nameAddr = mod.HEAPU32[namePtr >> 2]!
     const name = mod.UTF8ToString(nameAddr)

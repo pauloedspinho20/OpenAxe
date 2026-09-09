@@ -35,3 +35,13 @@
 .hot {
   color: var(--led-hot);
 }
+
+@media (max-width: var(--mw-sm)) {
+  .widget {
+    gap: var(--sp-1);
+  }
+
+  .statValue {
+    font-size: 9px;
+  }
+}

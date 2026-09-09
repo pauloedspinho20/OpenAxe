@@ -3,18 +3,14 @@
   flex-direction: column;
   gap: var(--sp-3);
   min-height: 64px;
-  padding: var(--sp-3) var(--sp-4);
+  padding: 0 var(--sp-2);
   justify-content: flex-end;
   z-index: 1;
-  background-color: var(--panel-raised);
-  border-radius: var(--r-md);
-  border: 1px solid var(--chassis);
-  box-shadow: var(--shadow-recessed);
 }
 
 @media (max-width: var(--mw-md)) {
   .content {
-    padding: var(--sp-3);
+    padding: 0;
   }
 }
 
@@ -69,8 +65,18 @@
   display: flex;
   width: 100%;
   flex-direction: row;
-  gap: var(--sp-4);
+  gap: var(--sp-5);
   align-items: center;
+  min-height: 82px;
+}
+
+/* The inspector's per-block IN/OUT meter pair - two medium bars side by side. */
+.meters {
+  display: flex;
+  flex-direction: row;
+  gap: var(--sp-4);
+  align-items: flex-end;
+  flex-shrink: 0;
 }
 
 @media (max-width: var(--mw-sm)) {

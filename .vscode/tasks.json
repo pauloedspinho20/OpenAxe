@@ -772,7 +772,7 @@
       "label": "Drift: check-wasm-exports --check",
       "type": "shell",
       "command": "node scripts/check-wasm-exports.mjs --check",
-      "detail": "Checks every _nam_studio_* symbol the web app calls is in packages/core CMake EXPORTED_FUNCTIONS — issue #70. Use --fix to rewrite CMakeLists.txt",
+      "detail": "Checks every _openaxe_* symbol the web app calls is in packages/core CMake EXPORTED_FUNCTIONS — issue #70. Use --fix to rewrite CMakeLists.txt",
       "group": {
         "kind": "test",
         "isDefault": false
@@ -811,6 +811,40 @@
         "panel": "shared",
         "clear": true
       },
+      "problemMatcher": []
+    },
+    {
+      "label": "CI: local (mac)",
+      "type": "shell",
+      "command": "pnpm ci:local",
+      "detail": "Full local CI on macOS: drift + lint + build + unit + e2e + core + desktop + plugin PR legs (scripts/ci-local.mjs)",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
+    },
+    {
+      "label": "CI: local (linux docker)",
+      "type": "shell",
+      "command": "pnpm ci:local:linux",
+      "detail": "Full local CI in ubuntu-24.04 Docker (CI runner parity) — first run builds the image; ccache/browsers cached in volumes",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
+    },
+    {
+      "label": "CI: local (all — mac + linux docker)",
+      "detail": "macOS leg then the Linux Docker leg, in order",
+      "dependsOrder": "sequence",
+      "dependsOn": ["CI: local (mac)", "CI: local (linux docker)"],
+      "group": "test",
       "problemMatcher": []
     }
   ]

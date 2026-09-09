@@ -1,4 +1,4 @@
-// Empty on purpose. The nam_studio_core_wasm executable target (see
+// Empty on purpose. The openaxe_core_wasm executable target (see
 // CMakeLists.txt's `if(EMSCRIPTEN)` branch) exists only to give Emscripten
 // something to link into a MODULARIZE=1 factory module - it exports
 // openaxe_core's extern "C" API (api.h), not anything declared here.

@@ -3,8 +3,8 @@ import type { BlockKind } from './blocks/Block'
 
 /**
  * Thin TS wrapper around the single rig `AudioWorkletProcessor`
- * (`wasm-core/namStudioRigWorklet.js`), which owns one openaxe_core module
- * and one nam_studio_graph for the whole rig (issue #55). This is the web-path
+ * (`wasm-core/openAxeRigWorklet.js`), which owns one openaxe_core module
+ * and one openaxe_graph for the whole rig (issue #55). This is the web-path
  * counterpart to the desktop's OpenAxeBridge: every block kind, every
  * connection, every param, trim, bypass, model/IR load and master-bus write is
  * a message resolved against the core's C ABI inside that one worklet, so the
@@ -23,7 +23,7 @@ const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
 const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
 
 /** packages/core/include/openaxe/api.h's OpenAxeBlockKind, indexed by web BlockKind. */
-const KIND_TO_CORE: Record<BlockKind, number> = {
+export const KIND_TO_CORE: Record<BlockKind, number> = {
   'noise-gate': 0,
   compressor: 1,
   eq: 2,
@@ -40,19 +40,18 @@ const KIND_TO_CORE: Record<BlockKind, number> = {
   space: 13,
   cab: 14,
   mixer: 15,
-  splitter: 16,
-  'ring-mod': 17,
-  filter: 18,
-  'pitch-shifter': 19,
-  'granular-delay': 20,
-  rotary: 21,
-  'send-1': 22,
-  'return-1': 23,
-  'send-2': 24,
-  'return-2': 25,
+  'ring-mod': 16,
+  filter: 17,
+  'pitch-shifter': 18,
+  'granular-delay': 19,
+  rotary: 20,
+  'send-1': 21,
+  'return-1': 22,
+  'send-2': 23,
+  'return-2': 24,
 }
 
-/** What the core reports about a loaded capture (`nam_studio_block_model_info`). */
+/** What the core reports about a loaded capture (`openaxe_block_model_info`). */
 export interface RigModelInfo {
   sampleRate: number
   hasLoudness: boolean
@@ -67,20 +66,48 @@ export interface RigModelInfo {
 
 export type RigConnectResult = { ok: true } | { ok: false; reason: string }
 
+/**
+ * The narrow worklet surface a block facade (RigBlock) drives. RigWorkletNode
+ * implements it for the live rig; StagedRig adapts it with `stage: true`
+ * baked into every message so the same RigBlock code builds the staged rig
+ * (issue #367). Staged param writes bypass the rAF coalescing buffer
+ * deliberately: preset builds are one-shot (no knob-drag stream to collapse),
+ * and sharing the buffer would collide live/staged writes for the same
+ * block id.
+ */
+export interface RigBlockPort {
+  setParam(blockId: string, key: string, value: number): void
+  setBypass(blockId: string, bypassed: boolean): void
+  setReverbAlgorithm(blockId: string, algorithm: string): void
+  setTrim(blockId: string, input?: number, output?: number): void
+  loadModel(blockId: string, json: string, slimSize?: number): Promise<RigModelInfo>
+  unloadModel(blockId: string): Promise<void>
+  setSlimSize(blockId: string, slimSize: number): Promise<void>
+  loadIr(blockId: string, samples: Float32Array): Promise<void>
+  unloadIr(blockId: string): Promise<void>
+}
+
 interface WorkletReply {
   id: number
   ok: boolean
   error?: string
   info?: RigModelInfo | null
   meters?: Record<string, number>
+  inputMeters?: Record<string, number>
+  gainReductions?: Record<string, number>
+  gateGains?: Record<string, number>
   /** Core block-kind ids this WASM was built with - see assertCompiledKindsMatchConfig. */
   compiledKinds?: number[]
+  /** stageCommit answered "a switch is already in flight" - the caller retries. */
+  busy?: boolean
+  /** switchActive answer: a fade or tail drain is in flight. */
+  active?: boolean
 }
 
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
   let promise = registeredContexts.get(context)
   if (!promise) {
-    promise = context.audioWorklet.addModule('/wasm-core/namStudioRigWorklet.js')
+    promise = context.audioWorklet.addModule('/wasm-core/openAxeRigWorklet.js')
     registeredContexts.set(context, promise)
   }
   return promise
@@ -90,7 +117,7 @@ function ensureWorkletRegistered(context: AudioContext): Promise<void> {
 function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
   let promise = wasmBytesByContext.get(context)
   if (!promise) {
-    promise = fetch('/wasm-core/nam_studio_core.wasm').then((response) => response.arrayBuffer())
+    promise = fetch('/wasm-core/openaxe_core.wasm').then((response) => response.arrayBuffer())
     wasmBytesByContext.set(context, promise)
   }
   return promise
@@ -129,7 +156,12 @@ export class RigWorkletNode {
       numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBytes },
+      // reverbKind: the worklet needs to recognise reverb blocks to route the
+      // ReverbControl abstraction, and used to carry its own copy of the
+      // ordinal. That copy went stale in #330 (9 vs 8) and silently swallowed
+      // every reverb param write, so KIND_TO_CORE is now the single source and
+      // the worklet is told rather than told twice.
+      processorOptions: { wasmBytes, reverbKind: KIND_TO_CORE.reverb },
     })
     const rig = new RigWorkletNode(node)
     // Deliberately not awaited: this is a diagnostic, and blocking engine
@@ -142,7 +174,7 @@ export class RigWorkletNode {
   /**
    * Cross-check the WASM against `effects.config.json` (issue #313).
    *
-   * `apps/web/public/wasm-core/nam_studio_core.wasm` is a checked-in artifact
+   * `apps/web/public/wasm-core/openaxe_core.wasm` is a checked-in artifact
    * that only a manual `scripts/build-core-wasm.sh` regenerates, so flipping a
    * kind's `compiled` flag and forgetting the rebuild leaves the palette and
    * the engine disagreeing about which blocks exist - the kind of drift that
@@ -337,12 +369,144 @@ export class RigWorkletNode {
     await this.request({ type: 'unloadIr', block: blockId })
   }
 
+  // ── Gapless staged switching (issue #367) ─────────────────────────────
+  // The staged graph is built with the same messages as the live rig plus
+  // `stage: true`, then made live by stageCommit's crossfade. Staged param
+  // writes skip the rAF coalescing buffer (see RigBlockPort).
+
+  /** Open a staged graph for the next rig. Throws when the WASM is too old. */
+  async stageBegin(): Promise<void> {
+    const reply = await this.request({ type: 'stageBegin' })
+    if (!reply.ok) throw new Error(reply.error ?? 'stageBegin failed')
+  }
+
+  /**
+   * Crossfade the staged rig live. Returns 'committed', or 'busy' when a
+   * previous switch is still fading/draining (the staged graph is kept -
+   * retry). Throws on any other failure.
+   */
+  async stageCommit(fadeMs: number, drainMs: number): Promise<'committed' | 'busy'> {
+    const reply = await this.request({ type: 'stageCommit', fadeMs, drainMs })
+    if (reply.ok) return 'committed'
+    if (reply.busy) return 'busy'
+    throw new Error(reply.error ?? 'stageCommit failed')
+  }
+
+  /** Abandon the staged graph, if any. Never throws. */
+  async stageDiscard(): Promise<void> {
+    await this.request({ type: 'stageDiscard' }).catch(() => {})
+  }
+
+  /** True while a fade or tail drain is in flight. */
+  async switchActive(): Promise<boolean> {
+    const reply = await this.request({ type: 'switchActive' }).catch(() => null)
+    return reply?.ok === true && reply.active === true
+  }
+
+  addBlockStaged(id: string, kind: BlockKind, row: number, col: number): Promise<void> {
+    return this.request({
+      type: 'addBlock',
+      block: id,
+      kind: KIND_TO_CORE[kind],
+      row,
+      col,
+      stage: true,
+    }).then((r) => {
+      if (!r.ok) throw new Error(r.error ?? 'addBlock (staged) failed')
+    })
+  }
+
+  async connectStaged(
+    from: { blockId: string; port: number },
+    to: { blockId: string; port: number },
+    id: string,
+  ): Promise<RigConnectResult> {
+    const reply = await this.request({
+      type: 'connect',
+      fromId: from.blockId,
+      fromPort: from.port,
+      toId: to.blockId,
+      toPort: to.port,
+      edgeId: id,
+      stage: true,
+    })
+    return reply.ok ? { ok: true } : { ok: false, reason: reply.error ?? 'connection rejected' }
+  }
+
+  setParamStaged(blockId: string, key: string, value: number): void {
+    this.send({ type: 'setParam', block: blockId, key, value, stage: true })
+  }
+
+  setBypassStaged(blockId: string, bypassed: boolean): void {
+    this.send({ type: 'setBypass', block: blockId, bypassed, stage: true })
+  }
+
+  setReverbAlgorithmStaged(blockId: string, algorithm: string): void {
+    this.send({ type: 'setReverbAlgorithm', block: blockId, algorithm, stage: true })
+  }
+
+  setTrimStaged(blockId: string, input?: number, output?: number): void {
+    this.send({ type: 'setTrim', block: blockId, input, output, stage: true })
+  }
+
+  async loadModelStaged(blockId: string, json: string, slimSize?: number): Promise<RigModelInfo> {
+    const bytes = new TextEncoder().encode(json)
+    const reply = await this.request(
+      {
+        type: 'loadModel',
+        block: blockId,
+        bytes: bytes.buffer,
+        byteLength: bytes.byteLength,
+        ...(slimSize === undefined ? {} : { slimSize }),
+        stage: true,
+      },
+      [bytes.buffer],
+    )
+    if (!reply.ok || !reply.info)
+      throw new Error(reply.error ?? 'the core could not load this model')
+    return reply.info
+  }
+
+  async unloadModelStaged(blockId: string): Promise<void> {
+    await this.request({ type: 'unloadModel', block: blockId, stage: true })
+  }
+
+  async setSlimSizeStaged(blockId: string, slimSize: number): Promise<void> {
+    await this.request({ type: 'setSlimSize', block: blockId, value: slimSize, stage: true })
+  }
+
+  async loadIrStaged(blockId: string, samples: Float32Array): Promise<void> {
+    await this.request({ type: 'loadIr', block: blockId, samples, stage: true }, [samples.buffer])
+  }
+
+  async unloadIrStaged(blockId: string): Promise<void> {
+    await this.request({ type: 'unloadIr', block: blockId, stage: true })
+  }
+
   // ── Meters ──────────────────────────────────────────────────────────────
 
-  /** Peak per block id from the core's own meters (nam_studio_get_meter). */
+  /** Peak per block id from the core's own meters (openaxe_get_meter). */
   async meters(): Promise<Record<string, number>> {
     const reply = await this.request({ type: 'meters' })
     return reply.meters ?? {}
+  }
+
+  /** Post-input-trim peak per block id (openaxe_get_input_meter). */
+  async inputMeters(): Promise<Record<string, number>> {
+    const reply = await this.request({ type: 'inputMeters' })
+    return reply.inputMeters ?? {}
+  }
+
+  /** Gain reduction in dB (≤0) per block id from openaxe_get_gain_reduction. */
+  async gainReductions(): Promise<Record<string, number>> {
+    const reply = await this.request({ type: 'gainReductions' })
+    return (reply as unknown as { gainReductions?: Record<string, number> }).gainReductions ?? {}
+  }
+
+  /** Gate openness 0..1 per block id from openaxe_get_gate_gain. */
+  async gateGains(): Promise<Record<string, number>> {
+    const reply = await this.request({ type: 'gateGains' })
+    return (reply as unknown as { gateGains?: Record<string, number> }).gateGains ?? {}
   }
 
   // ── Teardown ────────────────────────────────────────────────────────────

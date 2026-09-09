@@ -16,6 +16,8 @@ const SPEED_MAP: Record<string, number> = { stop: 0, chorale: 1, tremolo: 2 }
 const SHAPE_MAP: Record<string, number> = { sine: 0, triangle: 1, square: 2 }
 // Delay's ping-pong routing (#314) - orthogonal to its `model` character.
 const STEREO_MODE_MAP: Record<string, number> = { stereo: 0, 'ping-pong': 1 }
+// Phaser's Script switch (#317) - the EVH pedal's Script/Block voices.
+const SCRIPT_MAP: Record<string, number> = { script: 1, block: 0 }
 const CHARACTER_MAP: Record<string, number> = { clean: 0, opto: 1, fet: 2, varimu: 3 }
 
 // `mode` is shared by three kinds with different enums, so it keys off kind.
@@ -40,6 +42,8 @@ export function mapStringParam(kind: BlockKind, key: string, value: string): num
       return SHAPE_MAP[value]
     case 'stereo_mode':
       return STEREO_MODE_MAP[value]
+    case 'script':
+      return SCRIPT_MAP[value]
     case 'character':
       return CHARACTER_MAP[value]
     case 'mode':

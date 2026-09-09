@@ -23,6 +23,7 @@
 #include "openaxe/dsp/delay.h"
 #include "openaxe/dsp/dragonfly_hall_reverb.h"
 #include "openaxe/dsp/dragonfly_plate_reverb.h"
+#include "openaxe/dsp/spring_reverb.h"
 #include "openaxe/dsp/equalizer.h"
 #include "openaxe/dsp/filter.h"
 #include "openaxe/dsp/flanger.h"
@@ -101,6 +102,57 @@ void TestReverbDefaultsToHallThenSwitchesAlgorithm() {
 
   engine.SetReverbAlgorithm(reverb, ReverbAlgorithm::kPlate);
   OPENAXE_EXPECT(engine.ParamCount(reverb) == openaxe::dsp::DragonflyPlateReverb::ParamCount());
+
+  // The hand-rolled spring tank is a fifth algorithm with its own surface.
+  engine.SetReverbAlgorithm(reverb, ReverbAlgorithm::kSpring);
+  OPENAXE_EXPECT(engine.ParamCount(reverb) == openaxe::dsp::SpringReverb::ParamCount());
+  const auto spring_decay = engine.ParamInfo(reverb, 1);
+  OPENAXE_EXPECT(spring_decay.has_value() && spring_decay->symbol == std::string("decay"));
+}
+
+// Issue #392: every reverb algorithm must read back what was written -
+// GetReverbAlgorithm recovers the choice from the DSP variant, so a missing
+// branch silently downgrades to Hall (Spring did exactly this).
+void TestReverbAlgorithmGetRoundTripsAllFive() {
+  AudioEngine engine;
+  const BlockId reverb = engine.AddBlock(BlockKind::kReverb, 0, 0);
+  OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == ReverbAlgorithm::kHall);
+  for (ReverbAlgorithm algo : {ReverbAlgorithm::kHall, ReverbAlgorithm::kRoom,
+                               ReverbAlgorithm::kPlate,
+                               ReverbAlgorithm::kEarlyReflections,
+                               ReverbAlgorithm::kSpring}) {
+    engine.SetReverbAlgorithm(reverb, algo);
+    OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == algo);
+  }
+}
+
+// Re-selecting the already-active algorithm is a no-op: the web and desktop
+// facades replay the whole param object (algorithm included) on every knob
+// turn, so rebuilding here would wipe the ringing tail and reseed every
+// param to defaults on each edit - the cracks + effect/volume drops.
+void TestRedundantSetReverbAlgorithmKeepsTailAndParams() {
+  AudioEngine engine;
+  const BlockId reverb = engine.AddBlock(BlockKind::kReverb, 0, 0);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, reverb, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(reverb, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+  const auto paramBySymbol = [&](const char* symbol) {
+    for (int i = 0; i < engine.ParamCount(reverb); ++i) {
+      const auto info = engine.ParamInfo(reverb, i);
+      if (info && info->symbol && std::strcmp(info->symbol, symbol) == 0) {
+        return engine.GetParam(reverb, i);
+      }
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+  };
+
+  // Dial decay off-default, then redundantly "switch" to the active algo.
+  engine.SetReverbControl(reverb, ReverbControl::kRoomSize, 0.97f);
+  OPENAXE_EXPECT(std::fabs(paramBySymbol("decay") - 10.0f) < 1e-3f);
+  engine.SetReverbAlgorithm(reverb, ReverbAlgorithm::kHall);
+  // Params untouched (a rebuild would reseed decay to its 2.5 s default).
+  OPENAXE_EXPECT(std::fabs(paramBySymbol("decay") - 10.0f) < 1e-3f);
+  OPENAXE_EXPECT(engine.GetReverbAlgorithm(reverb) == ReverbAlgorithm::kHall);
 }
 
 void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
@@ -113,12 +165,16 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   // gets the engine-level mix, so param_count must be dsp + 1. Each is
   // guarded because effects.config.json can compile its DSP out (#313), and
   // the assertion below names a type that would not exist in that build.
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   const BlockId ring_mod = engine.AddBlock(BlockKind::kRingMod, 0, 4);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   const BlockId filter = engine.AddBlock(BlockKind::kFilter, 0, 5);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   const BlockId pitch = engine.AddBlock(BlockKind::kPitchShifter, 0, 6);
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#endif
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   const BlockId granular = engine.AddBlock(BlockKind::kGranularDelay, 0, 7);
 #endif
   const BlockId rotary = engine.AddBlock(BlockKind::kRotary, 0, 8);
@@ -128,12 +184,16 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   OPENAXE_EXPECT(engine.ParamCount(eq) == openaxe::dsp::Equalizer::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(noise_gate) == openaxe::dsp::NoiseGate::ParamCount() + 1);
   OPENAXE_EXPECT(engine.ParamCount(tremolo) == openaxe::dsp::Tremolo::ParamCount() + 1);
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(ring_mod) == openaxe::dsp::RingMod::ParamCount() + 1);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(filter) == openaxe::dsp::Filter::ParamCount() + 1);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(pitch) == openaxe::dsp::PitchShifter::ParamCount() + 1);
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#endif
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   OPENAXE_EXPECT(engine.ParamCount(granular) == openaxe::dsp::GranularDelay::ParamCount() + 1);
 #endif
   OPENAXE_EXPECT(engine.ParamCount(rotary) == openaxe::dsp::Rotary::ParamCount() + 1);
@@ -142,12 +202,16 @@ void TestDsparkKindsDefaultParamsAndProcessRealAudio() {
   // order, so a config that compiles one out (#313) still exercises the rest
   // of the chain end to end instead of failing to compile.
   std::vector<BlockId> chain{compressor, eq, noise_gate, tremolo};
-#if OPENAXE_BLOCK_RING_MOD
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
   chain.push_back(ring_mod);
 #endif
+#if OPENAXE_BLOCK_FILTER_COMPILED
   chain.push_back(filter);
+#endif
+#if OPENAXE_BLOCK_PITCH_SHIFTER_COMPILED
   chain.push_back(pitch);
-#if OPENAXE_BLOCK_GRANULAR_DELAY
+#endif
+#if OPENAXE_BLOCK_GRANULAR_DELAY_COMPILED
   chain.push_back(granular);
 #endif
   chain.push_back(rotary);
@@ -473,61 +537,26 @@ void TestMixerPerInputLevelAndPan() {
   }
 }
 
-// Splitter per-output level: each of the splitter's independent output jacks
-// carries its own gain, the DSP that used to live only in the web
-// SplitterBlock's per-output GainNodes. Both fan-out branches feed separate
-// cab blocks whose per-block meters report what each splitter output delivered.
-void TestSplitterPerOutputLevel() {
-  AudioEngine engine;
-  const BlockId splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
-  const BlockId a = engine.AddBlock(BlockKind::kCab, 0, 1);
-  const BlockId b = engine.AddBlock(BlockKind::kCab, 1, 1);
-  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, splitter, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 0, a, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 1, b, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(a, 0, kOutRailId, 0).ok);
-  engine.Reset(48000.0, kFrames);
-
-  // Param surface: 4 outputs x level.
-  OPENAXE_EXPECT(engine.ParamCount(splitter) == 4);
-  const auto info0 = engine.ParamInfo(splitter, 0);
-  OPENAXE_EXPECT(info0 && std::string(info0->symbol) == "out0_level");
-  OPENAXE_EXPECT(engine.GetParam(splitter, 0) == 1.0f);
-
-  // Unity defaults: both fan-out branches carry the input unchanged.
-  RunMono(engine, 0.5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(a) - 0.5f) < 1e-5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
-
-  // out0_level halves branch a; branch b stays full. The splitter output level
-  // is exponentially smoothed (issue #122), so settle before the exact check.
-  engine.SetParam(splitter, 0, 0.5f);
-  SettleMono(engine, 0.5f, 400);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(b) - 0.5f) < 1e-5f);
-
-  // out1_level on the second port scales only branch b.
-  engine.SetParam(splitter, 1, 0.25f);
-  SettleMono(engine, 0.5f, 400);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(a) - 0.25f) < 1e-5f);
-  OPENAXE_EXPECT(std::fabs(engine.GetMeter(b) - 0.125f) < 1e-5f);
-}
 
 // issue #66: Process() walks per-block incoming edges (incoming_) rather than
 // rescanning the whole flat edge list. This rig exercises the grouping in both
-// directions a splitter creates: it fans out to multiple targets (each target
-// block gets exactly its own incoming edge), and a mixer fans those branches
-// back in across its independent input ports (the mixer's incoming_ vector
-// holds several edges) - all must be delivered so the summed output is correct.
-void TestSplitterFanOutAndMixerFanInRouting() {
+// directions: one block fans out to multiple targets (each target block gets
+// exactly its own incoming edge), and a mixer fans those branches back in
+// across its independent input ports (the mixer's incoming_ vector holds
+// several edges) - all must be delivered so the summed output is correct.
+//
+// The fan-out source used to be a splitter, on its two output ports. That kind
+// is gone, and fanning out was never what made it special - several edges off a
+// single output port do the same thing, which is what this now uses.
+void TestFanOutAndMixerFanInRouting() {
   AudioEngine engine;
-  const BlockId splitter = engine.AddBlock(BlockKind::kSplitter, 0, 0);
+  const BlockId source = engine.AddBlock(BlockKind::kCab, 0, 0);
   const BlockId cab_a = engine.AddBlock(BlockKind::kCab, 0, 1);
   const BlockId cab_b = engine.AddBlock(BlockKind::kCab, 1, 1);
   const BlockId mixer = engine.AddBlock(BlockKind::kMixer, 0, 2);  // fans in from a and b
-  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, splitter, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 0, cab_a, 0).ok);
-  OPENAXE_EXPECT(engine.Connect(splitter, 1, cab_b, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, source, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(source, 0, cab_a, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(source, 0, cab_b, 0).ok);
   OPENAXE_EXPECT(engine.Connect(cab_a, 0, mixer, 0).ok);
   OPENAXE_EXPECT(engine.Connect(cab_b, 0, mixer, 1).ok);
   OPENAXE_EXPECT(engine.Connect(mixer, 0, kOutRailId, 0).ok);
@@ -546,11 +575,13 @@ void TestSplitterFanOutAndMixerFanInRouting() {
   OPENAXE_EXPECT(std::fabs(engine.GetMeter(cab_a) - 0.5f) < 1e-5f);
   OPENAXE_EXPECT(std::fabs(engine.GetMeter(cab_b) - 0.5f) < 1e-5f);
 
-  // Halving one splitter output must drop only that branch's contribution:
-  // mixer now sums 0.5 (from a) + 0.25 (from b) = 0.75. This proves both
-  // splitter fan-out edges and both mixer fan-in edges reached Process()
-  // through the per-block incoming_ lists.
-  engine.SetParam(splitter, 1, 0.5f);
+  // Halving one branch must drop only that branch's contribution: the mixer
+  // then sums 0.5 (from a) + 0.25 (from b) = 0.75. This proves both fan-out
+  // edges and both mixer fan-in edges reached Process() through the per-block
+  // incoming_ lists. The knob used to be the splitter's per-output level; with
+  // that kind gone it is the mixer's per-input level instead - input 1's level
+  // sits at index 1 * kMixerParamsPerInput.
+  engine.SetParam(mixer, 2, 0.5f);
   for (float sample : settled(0.5f)) OPENAXE_EXPECT(std::fabs(sample - 0.75f) < 1e-5f);
 }
 
@@ -615,7 +646,9 @@ void TestModulationEffects() {
     float maxWet=0; for(float v: outWet) maxWet=std::max(maxWet, std::fabs(v));
     std::printf("chorus wet %f\n", maxWet);
     OPENAXE_EXPECT(maxWet > 0.05f);
-    int mixIdx = 4; // chorus has 4 dsp params, mix at 4
+    int mixIdx = eng.ParamCount(id) - 1;  // engine mix is appended after the DSP table
+    const auto mixInfo = eng.ParamInfo(id, mixIdx);
+    OPENAXE_EXPECT(mixInfo.has_value() && mixInfo->symbol == std::string("mix"));
     eng.SetParam(id, mixIdx, 0.0f);
     for(int i=0;i<200;i++) RunMono(eng, 0.3f);
     auto outDry = RunMono(eng, 0.3f);
@@ -737,6 +770,242 @@ void TestModulationEffects() {
     float max=0; for(float v: out) max=std::max(max, std::fabs(v));
     OPENAXE_EXPECT(max > 0.05f);
   }
+}
+
+// Issue #383: the engine mix is one blend per family, picked by signal
+// correlation - not one global linear crossfade. DC stimuli give exact,
+// DSP-state-independent predictions per law, so each assertion below fails
+// under the old linear law for its (non-linear) family and under a wrong
+// family mapping.
+namespace {
+float MeanOfLastMonoBlock(AudioEngine& engine, float value, int settle_blocks) {
+  SettleMono(engine, value, settle_blocks);
+  const auto out = RunMono(engine, value);
+  float mean = 0.0f;
+  for (float s : out) mean += s;
+  return mean / static_cast<float>(out.size());
+}
+float PeakOfMonoRun(AudioEngine& engine, float value, int blocks) {
+  float peak = 0.0f;
+  for (int i = 0; i < blocks; ++i)
+    for (float s : RunMono(engine, value)) peak = std::max(peak, std::fabs(s));
+  return peak;
+}
+// The engine mix is appended after the DSP table (and delay appends a level
+// after that), so locate it by symbol instead of hardcoding an index.
+int EngineMixIndex(AudioEngine& engine, BlockId id) {
+  for (int i = 0; i < engine.ParamCount(id); ++i) {
+    const auto info = engine.ParamInfo(id, i);
+    if (info.has_value() && info->symbol == std::string("mix")) return i;
+  }
+  return -1;
+}
+}  // namespace
+
+void TestEngineMixLaws() {
+  // Linear (noise gate; DC 0.5 sits far above the -40 dB default threshold so
+  // the gate is open and wet == dry): 50% must sum back to exactly dry.
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kNoiseGate, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 300) - 0.5f) < 1e-3f);
+
+    eng.SetParam(id, kMix, 0.5f);
+    const float half = MeanOfLastMonoBlock(eng, 0.5f, 300);
+    std::printf("gate linear 50%% %f\n", half);
+    OPENAXE_EXPECT(std::fabs(half - 0.5f) < 1e-3f);  // additive would read 0.75
+
+    eng.SetParam(id, kMix, 1.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 300) - 0.5f) < 0.02f);
+  }
+
+  // Equal-power, exact when the DSP is available (ring-mod; drive=0 so wet is
+  // a pure 400 Hz multiply of dry): with DC dry the 50% peak is
+  // cos(45°)*dry + sin(45°)*wet-peak, not the linear half+half. Compiled out
+  // of some configs (effects.config.json) - the stopped-rotor test below
+  // covers the law in every build.
+#if OPENAXE_BLOCK_RING_MOD_COMPILED
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kRingMod, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+    constexpr int kDrive = 1;
+    eng.SetParam(id, kDrive, 0.0f);
+
+    eng.SetParam(id, kMix, 1.0f);
+    SettleMono(eng, 0.5f, 300);
+    const float wetPeak = PeakOfMonoRun(eng, 0.5f, 60);
+    std::printf("ringmod wet peak %f\n", wetPeak);
+    OPENAXE_EXPECT(std::fabs(wetPeak - 0.5f) < 0.03f);
+
+    eng.SetParam(id, kMix, 0.5f);
+    SettleMono(eng, 0.5f, 300);
+    const float midPeak = PeakOfMonoRun(eng, 0.5f, 60);
+    const float predicted = 0.70710678f * 0.5f + 0.70710678f * wetPeak;
+    std::printf("ringmod eq-power 50%% peak %f (predicted %f)\n", midPeak, predicted);
+    OPENAXE_EXPECT(std::fabs(midPeak - predicted) < 0.03f);
+    OPENAXE_EXPECT(midPeak > 0.6f);  // linear would peak at 0.5
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 300) - 0.5f) < 1e-3f);
+  }
+#endif
+
+  // Equal-power, always compiled (rotary with speed=Stop: the frozen rotor is
+  // a static filter, so wet of DC is a constant and the 50% mean is exactly
+  // cos(45°)*dry + sin(45°)*wet - the same prediction as above, through the
+  // decorrelated-replacement family member every build ships).
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kRotary, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+    int speedIdx = -1;
+    for (int i = 0; i < eng.ParamCount(id); ++i) {
+      const auto info = eng.ParamInfo(id, i);
+      if (info.has_value() && info->symbol == std::string("speed")) speedIdx = i;
+    }
+    OPENAXE_EXPECT(speedIdx >= 0);
+    eng.SetParam(id, speedIdx, 0.0f);  // Stop: rotor frozen from the first block
+
+    eng.SetParam(id, kMix, 1.0f);
+    SettleMono(eng, 0.5f, 400);
+    const auto wetOut = RunMono(eng, 0.5f);
+    float wetMean = 0.0f, wetMax = -1e30f, wetMin = 1e30f;
+    for (float s : wetOut) {
+      wetMean += s;
+      wetMax = std::max(wetMax, s);
+      wetMin = std::min(wetMin, s);
+    }
+    wetMean /= static_cast<float>(wetOut.size());
+    std::printf("rotary stopped wet %f (spread %f)\n", wetMean, wetMax - wetMin);
+    OPENAXE_EXPECT(wetMax - wetMin < 0.01f);  // static rotor: wet must be constant
+
+    eng.SetParam(id, kMix, 0.5f);
+    const float mid = MeanOfLastMonoBlock(eng, 0.5f, 400);
+    const float predicted = 0.70710678f * 0.5f + 0.70710678f * wetMean;
+    std::printf("rotary eq-power 50%% %f (predicted %f)\n", mid, predicted);
+    OPENAXE_EXPECT(std::fabs(mid - predicted) < 0.02f);
+    // Linear would read 0.5*(0.5+wet), additive 0.5+0.5*wet: both miss the
+    // equal-power prediction by >0.05 for any wet in [-0.5, 0.5].
+    OPENAXE_EXPECT(std::fabs(mid - 0.5f * (0.5f + wetMean)) > 0.05f);
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.5f, 400) - 0.5f) < 1e-3f);
+  }
+
+  // Additive with kill-dry (delay; digital model + zero feedback so wet is a
+  // pure delayed tap): dry stays at unity, 50% == dry + 0.5*wet, and 100%
+  // kills dry.
+  {
+    AudioEngine eng;
+    const BlockId id = eng.AddBlock(BlockKind::kDelay, 0, 0);
+    eng.Connect(kInRailId, 0, id, 0);
+    eng.Connect(id, 0, kOutRailId, 0);
+    eng.Reset(48000.0, kFrames);
+    const int kMix = EngineMixIndex(eng, id);
+    OPENAXE_EXPECT(kMix >= 0);
+    constexpr int kTime = 0, kFeedback = 1;
+    eng.SetParam(id, kTime, 50.0f);
+    eng.SetParam(id, kFeedback, 0.0f);
+
+    eng.SetParam(id, kMix, 1.0f);
+    const float wet = MeanOfLastMonoBlock(eng, 0.4f, 300);  // also fills the 50 ms line
+    std::printf("delay wet DC %f\n", wet);
+    OPENAXE_EXPECT(std::fabs(wet - 0.4f) < 0.03f);
+
+    eng.SetParam(id, kMix, 0.5f);
+    const float half = MeanOfLastMonoBlock(eng, 0.4f, 300);
+    std::printf("delay additive 50%% %f (predicted %f)\n", half, 0.4f + 0.5f * wet);
+    OPENAXE_EXPECT(std::fabs(half - (0.4f + 0.5f * wet)) < 0.02f);
+    OPENAXE_EXPECT(half > 0.5f);  // linear would read ~0.4 (dry thinned)
+
+    eng.SetParam(id, kMix, 0.0f);
+    OPENAXE_EXPECT(std::fabs(MeanOfLastMonoBlock(eng, 0.4f, 300) - 0.4f) < 1e-3f);
+
+    // Kill-dry handoff: 50% -> 100% must stay finite and converge to wet,
+    // with no burst from the >=0.999 dry mute. Settle first so the ramp
+    // transient doesn't pollute the converged assertion, and bound the peak
+    // across the whole sweep (dry 0.4 + wet 0.4 can never legitimately exceed
+    // ~0.8, so anything near/above 1.0 is a handoff burst).
+    eng.SetParam(id, kMix, 0.5f);
+    SettleMono(eng, 0.4f, 300);
+    eng.SetParam(id, kMix, 1.0f);
+    bool finite = true;
+    float sweepPeak = 0.0f;
+    for (int i = 0; i < 300; ++i) {
+      for (float s : RunMono(eng, 0.4f)) {
+        if (!std::isfinite(s)) finite = false;
+        sweepPeak = std::max(sweepPeak, std::fabs(s));
+      }
+    }
+    const auto killTail = RunMono(eng, 0.4f);
+    float killMean = 0.0f;
+    for (float s : killTail) killMean += s;
+    killMean /= static_cast<float>(killTail.size());
+    std::printf("delay kill-dry 100%% %f sweepPeak %f (wet %f)\n", killMean, sweepPeak, wet);
+    OPENAXE_EXPECT(finite);
+    OPENAXE_EXPECT(sweepPeak < 1.0f);
+    OPENAXE_EXPECT(std::fabs(killMean - wet) < 0.03f);
+  }
+}
+
+// GetGainReduction / GetGateGain (issue #361): the Tier-1 metering getters
+// must report real compressor gain reduction and gate openness, not a
+// constant 0 - they were previously dead because the #if guards named
+// never-defined OPENAXE_BLOCK_* macros (the generated header only defines the
+// *_COMPILED variants), so the if constexpr dispatch compiled out entirely.
+void TestDynamicsMetering() {
+  AudioEngine engine;
+  const BlockId compressor = engine.AddBlock(BlockKind::kCompressor, 0, 0);
+  const BlockId gate = engine.AddBlock(BlockKind::kNoiseGate, 0, 1);
+  const BlockId cab = engine.AddBlock(BlockKind::kCab, 0, 2);  // no dynamics DSP
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, compressor, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(compressor, 0, gate, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(gate, 0, cab, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(cab, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Unknown / non-dynamics blocks always report "no metering".
+  OPENAXE_EXPECT(engine.GetGainReduction(9999) == 0.0f);
+  OPENAXE_EXPECT(engine.GetGateGain(9999) == 0.0f);
+  OPENAXE_EXPECT(engine.GetGainReduction(cab) == 0.0f);
+  OPENAXE_EXPECT(engine.GetGateGain(cab) == 0.0f);
+
+  // A hot signal drives the compressor ~13 dB past its -18 dB threshold at
+  // 4:1, so it must report real gain reduction (dB < 0), and the gate (well
+  // above its -40 dB threshold) must sit open: gain ≈ 1, its own GR ≈ 0.
+  for (int i = 0; i < 20; ++i) RunMono(engine, 0.9f);
+  const float comp_gr = engine.GetGainReduction(compressor);
+  const float gate_gr = engine.GetGainReduction(gate);
+  const float gate_open = engine.GetGateGain(gate);
+  OPENAXE_EXPECT(std::isfinite(comp_gr));
+  OPENAXE_EXPECT(comp_gr < -3.0f);
+  OPENAXE_EXPECT(std::isfinite(gate_gr));
+  OPENAXE_EXPECT(gate_gr > -1.0f);  // an open gate applies ~0 dB
+  OPENAXE_EXPECT(gate_open > 0.9f);
+
+  // Silence for well past the gate's default 100 ms release closes it: the
+  // meter must read a closed gate (openness → 0, its GR → deep attenuation).
+  for (int i = 0; i < 400; ++i) RunMono(engine, 0.0f);
+  const float gate_closed = engine.GetGateGain(gate);
+  const float gate_closed_gr = engine.GetGainReduction(gate);
+  OPENAXE_EXPECT(gate_closed < 0.1f);
+  OPENAXE_EXPECT(gate_closed_gr < -20.0f);
 }
 
 // Send/Return pairs (issue #274): a Send N relays its single input into the
@@ -869,16 +1138,46 @@ void TestSendReturnInSameColumnStillRoutes() {
   for (float sample : output) OPENAXE_EXPECT(std::fabs(sample - 0.5f) < 1e-6f);
 }
 
+// The input meter reports the post-input-trim peak - what the block's DSP
+// actually received - while the output meter reports the post-output-trim
+// peak, so the inspector's IN/OUT pair shows gain staging through the block.
+void TestInputMeterTracksPostTrimInput() {
+  AudioEngine engine;
+  const BlockId first = engine.AddBlock(BlockKind::kCab, 0, 0);  // pure passthrough
+  const BlockId second = engine.AddBlock(BlockKind::kCab, 0, 1);
+  OPENAXE_EXPECT(engine.Connect(kInRailId, 0, first, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(first, 0, second, 0).ok);
+  OPENAXE_EXPECT(engine.Connect(second, 0, kOutRailId, 0).ok);
+  engine.Reset(48000.0, kFrames);
+
+  // Unknown blocks read 0 on both meters.
+  OPENAXE_EXPECT(engine.GetInputMeter(9999) == 0.0f);
+  OPENAXE_EXPECT(engine.GetMeter(9999) == 0.0f);
+
+  // Unity trims: the second block's input is the first block's output.
+  RunMono(engine, 0.5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetInputMeter(second) - 0.5f) < 1e-5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetMeter(second) - 0.5f) < 1e-5f);
+
+  // The input trim moves the IN meter; the output trim moves the OUT meter.
+  engine.SetInputTrim(second, 0.5f);
+  engine.SetOutputTrim(second, 0.5f);
+  RunMono(engine, 0.5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetInputMeter(second) - 0.25f) < 1e-5f);
+  OPENAXE_EXPECT(std::fabs(engine.GetMeter(second) - 0.125f) < 1e-5f);
+}
+
 }  // namespace
 
 int main() {
   TestPassthroughForUnwrappedKind();
   TestMixerSumsBothConnectedPorts();
   TestMixerPerInputLevelAndPan();
-  TestSplitterPerOutputLevel();
-  TestSplitterFanOutAndMixerFanInRouting();
+  TestFanOutAndMixerFanInRouting();
   TestUnconnectedOutputIsSilent();
   TestReverbDefaultsToHallThenSwitchesAlgorithm();
+  TestReverbAlgorithmGetRoundTripsAllFive();
+  TestRedundantSetReverbAlgorithmKeepsTailAndParams();
   TestDsparkKindsDefaultParamsAndProcessRealAudio();
   TestUnknownBlockIsSafeNoOp();
   TestBypassSkipsDspAndPassesInputThrough();
@@ -888,12 +1187,15 @@ int main() {
   TestMasterLevelScalesOutput();
   TestMasterAndTunerMuteAreIndependentAndBothSilence();
   TestModulationEffects();
+  TestEngineMixLaws();
+  TestDynamicsMetering();
   TestSendReturnRoutesImplicitlyAcrossColumns();
   TestSendReturnWorksWithReturnLeftOfSend();
   TestSendReturnSecondPairRoutesIndependently();
   TestUnpairedSendAndReturnSilent();
   TestSendReturnCycleIsBrokenNotDeadlocked();
   TestSendReturnInSameColumnStillRoutes();
+  TestInputMeterTracksPostTrimInput();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

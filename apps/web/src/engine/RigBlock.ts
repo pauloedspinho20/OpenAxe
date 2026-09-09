@@ -2,7 +2,7 @@ import type { EffectParams } from '../effects/Effect'
 import { mapStringParam } from '../effects/stringParamMaps'
 import type { BlockKind } from './blocks/Block'
 import type { PresetBlock } from '../presets/types'
-import type { RigModelInfo, RigWorkletNode } from './RigWorkletNode'
+import type { RigBlockPort, RigModelInfo } from './RigWorkletNode'
 
 /**
  * A block facade the web rig exposes to the UI. Mirrors NativeBlock exactly
@@ -15,18 +15,18 @@ import type { RigModelInfo, RigWorkletNode } from './RigWorkletNode'
  * (the same one NativeGraphRig makes).
  *
  * The per-block Input/Output knobs route to the core's own I/O trims
- * (nam_studio_set_block_{input,output}_trim), not to params - see setParams.
+ * (openaxe_set_block_{input,output}_trim), not to params - see setParams.
  */
 export class RigBlock implements PresetBlock {
   readonly kind: BlockKind
-  private readonly worklet: RigWorkletNode
+  private readonly worklet: RigBlockPort
   private readonly id: string
   private params: EffectParams = {}
   private bypassed = false
   private loadedModel: { id: string; name: string } | null = null
   private loadedIr: { id: string; name: string } | null = null
 
-  constructor(worklet: RigWorkletNode, id: string, kind: BlockKind) {
+  constructor(worklet: RigBlockPort, id: string, kind: BlockKind) {
     this.worklet = worklet
     this.id = id
     this.kind = kind
@@ -67,7 +67,7 @@ export class RigBlock implements PresetBlock {
       if (key === 'slim_size' || key === 'slimSize') continue
       // The reverb algorithm is a select (hall/room/plate/early-reflections),
       // not a numeric param - it has no core symbol and must go through
-      // nam_studio_set_reverb_algorithm. Reverb control knobs (roomSize/
+      // openaxe_set_reverb_algorithm. Reverb control knobs (roomSize/
       // damping/...) are routed by the worklet through the core's ReverbControl
       // mapping on setParam, so they stay generic.
       if (key === 'reverbAlgorithm' && typeof value === 'string') {
@@ -164,6 +164,37 @@ export class RigBlock implements PresetBlock {
   clearIR(): void {
     this.loadedIr = null
     void this.worklet.unloadIr(this.id)
+  }
+
+  /**
+   * Cache transfer for GraphRig.adoptStage (issue #367): snapshot carries
+   * the already-live values, restore replays them onto a fresh live facade
+   * WITHOUT touching the worklet (the commit already made them live).
+   */
+  snapshotBlockState(): {
+    params: EffectParams
+    bypassed: boolean
+    loadedModel: { id: string; name: string } | null
+    loadedIr: { id: string; name: string } | null
+  } {
+    return {
+      params: { ...this.params },
+      bypassed: this.bypassed,
+      loadedModel: this.loadedModel ? { ...this.loadedModel } : null,
+      loadedIr: this.loadedIr ? { ...this.loadedIr } : null,
+    }
+  }
+
+  restoreBlockState(snapshot: {
+    params: EffectParams
+    bypassed: boolean
+    loadedModel: { id: string; name: string } | null
+    loadedIr: { id: string; name: string } | null
+  }): void {
+    this.params = { ...snapshot.params }
+    this.bypassed = snapshot.bypassed
+    this.loadedModel = snapshot.loadedModel ? { ...snapshot.loadedModel } : null
+    this.loadedIr = snapshot.loadedIr ? { ...snapshot.loadedIr } : null
   }
 }
 

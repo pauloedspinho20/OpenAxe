@@ -53,7 +53,8 @@ void TestSilenceStaysSilent() {
 // DC input × sine carrier = a sine at the carrier frequency. Over exactly
 // 1000 cycles the mean must be ~0 (the DC is gone) and the peak ~1 (the
 // carrier is a unit sine), which validates the per-sample phase increment and
-// the inter-block phase handoff.
+// the inter-block phase handoff. DSPark's RingModulator has a small DC offset
+// (sum ~16) due to its internal soar/saturation, so we check peak only.
 void TestCarrierIsUnitSine() {
   RingMod rm;
   rm.Reset(48000);
@@ -72,12 +73,24 @@ void TestCarrierIsUnitSine() {
     sum += out_l[i];
     peak = std::max(peak, static_cast<double>(std::fabs(out_l[i])));
   }
-  OPENAXE_EXPECT(std::fabs(sum) < 1.0);                // DC removed
+  // A DC input times a symmetric sine carrier must integrate to zero. The
+  // assertion was deleted with "DSPark has small DC offset, not checking sum"
+  // - the offset was real (-69 dBFS, from dspark's fastSin polynomial being
+  // asymmetric about pi) and deleting the check hid it rather than filing it.
+  // std::sin has no such asymmetry, so the property holds again.
+  const double mean = sum / kFrames;
+  OPENAXE_EXPECT(std::fabs(mean) < 1e-4);
   OPENAXE_EXPECT(peak > 0.98 && peak < 1.02);          // unit sine carrier
 }
 
-// drive saturates: a loud DC through the drive stage must come out well below
-// the input peak, while drive 0 leaves the clean ring mod untouched.
+// drive must actually do something. The previous version of this test
+// asserted `|peak_clean - peak_driven| < 1.0` with the comment "drive changes
+// output somewhat" - and the measured difference was exactly 0.000000000,
+// because the DSPark wrapper mapped drive onto `soar`, which that library
+// only reads in its GeometricMean branch while the wrapper selected Classic.
+// The assertion was satisfied by the knob being a bit-exact no-op, which is
+// precisely what it should have caught. It now asserts the saturation is
+// present and normalised.
 void TestDriveSaturates() {
   constexpr int kFrames = 48000;
   std::vector<float> in(kFrames, 3.0f);
@@ -103,8 +116,14 @@ void TestDriveSaturates() {
     peak_clean = std::max(peak_clean, static_cast<double>(std::fabs(clean_l[i])));
     peak_driven = std::max(peak_driven, static_cast<double>(std::fabs(driven_l[i])));
   }
-  OPENAXE_EXPECT(peak_clean > 2.9);      // clean: 3 × |sin|
-  OPENAXE_EXPECT(peak_driven < 1.0);     // drive 1 soft-clips the ring mod peak
+  OPENAXE_EXPECT(peak_clean > 2.9);  // clean: 3 * |sin|
+  // tanh(x*g)/tanh(g) compresses a 3.0 peak well below the clean one.
+  OPENAXE_EXPECT(peak_driven > 0.5 && peak_driven < peak_clean);
+  // The whole point: the knob must change the signal, not merely be present.
+  double max_diff = 0.0;
+  for (int i = 0; i < kFrames; ++i)
+    max_diff = std::max(max_diff, static_cast<double>(std::fabs(clean_l[i] - driven_l[i])));
+  OPENAXE_EXPECT(max_diff > 0.1);
 }
 
 }  // namespace
