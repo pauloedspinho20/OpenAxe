@@ -36,6 +36,13 @@ OpenAxeGraph* MakePassthroughGraph(double sample_rate, int block_size) {
   return graph;
 }
 
+// Default callback frame count for TestCallbackInputChannelRouting's run_mode
+// helper. It must live at namespace scope: a default argument may not reference
+// a function-local variable (GCC rejects it; Clang happens to fold the
+// constexpr), so the local kFrames the test body uses for its arrays cannot be
+// named there.
+constexpr int kDefaultRoutingFrames = 64;
+
 void TestCallbackPassthrough() {
   constexpr double kRate = 48000.0;
   constexpr int kFrames = 64;
@@ -427,7 +434,7 @@ void TestCallbackInputChannelRouting() {
   constexpr int kBlock = 512;
 
   auto run_mode = [&](InputChannelMode mode, int in_ch, float* in_bufs[2], float* out_bufs[2],
-                      openaxe_desktop::TapFrame* tap, int frames = kFrames) {
+                      openaxe_desktop::TapFrame* tap, int frames = kDefaultRoutingFrames) {
     OpenAxeGraph* graph = MakePassthroughGraph(kRate, kBlock);
     openaxe_desktop::RtCallbackState state;
     for (auto& ch : state.tap_in)
