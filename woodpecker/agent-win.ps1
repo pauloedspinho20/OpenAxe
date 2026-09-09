@@ -1,7 +1,7 @@
 # Windows agent (UTM Windows 11 ARM VM, Local backend) — runs ci-win.yml.
 # Run inside the VM. Prereqs: git, Node 22, pnpm 10.16.1, CMake, VS Build Tools.
-# Labels are assigned in the Woodpecker UI (Agents → this agent → platform=windows/arm64).
-# If flags differ on your version, run: .\woodpecker-agent-windows-arm64.exe --help
+# Auth via WOODPECKER_AGENT_SECRET env; label via --labels (v3 CLI).
+# If flags differ on your version, run: .\woodpecker-agent.exe --help
 # For a persistent service, register this via nssm or Task Scheduler (Phase 4).
 param(
   [string]$Version = $env:WOODPECKER_VERSION,
@@ -26,4 +26,4 @@ if (-not (Test-Path $Bin)) {
 
 # $Server must resolve to the Mac from inside the VM (UTM shared-network
 # host IP, or a hosts entry `host-mac`). Verify with: Test-NetConnection host-mac -Port 9000
-& $Bin agent --server $Server --token $env:WOODPECKER_AGENT_SECRET --backend local
+& $Bin --server $Server --labels platform=windows/arm64 --backend-engine local

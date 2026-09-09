@@ -1,6 +1,6 @@
 #!/bin/bash
 # Linux agent (Docker backend) — runs ci-linux.yml steps in openaxe-ci-linux.
-# Labels are assigned in the Woodpecker UI (Agents → this agent → platform=linux/amd64).
+# Auth via WOODPECKER_AGENT_SECRET env; label via WOODPECKER_AGENT_LABELS (v3 CLI).
 set -euo pipefail
 
 VERSION="${WOODPECKER_VERSION:-v3.18.1}"
@@ -15,6 +15,7 @@ exec docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e WOODPECKER_SERVER=host.docker.internal:9000 \
   -e WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
+  -e WOODPECKER_AGENT_LABELS=platform=linux/amd64 \
   -e WOODPECKER_BACKEND=docker \
   --add-host host.docker.internal:host-gateway \
-  "woodpeckerci/woodpecker-agent:${VERSION}" agent
+  "woodpeckerci/woodpecker-agent:${VERSION}"

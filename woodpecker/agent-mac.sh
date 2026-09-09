@@ -1,7 +1,7 @@
 #!/bin/bash
 # macOS agent (native, Local backend) — runs ci-mac.yml steps directly on the Mac.
 # Prereqs: node 22 + pnpm 10.16.1 on PATH, Xcode CLT, CMake, Docker (for images).
-# Labels are assigned in the Woodpecker UI (Agents → this agent → platform=darwin/arm64).
+# Auth via WOODPECKER_AGENT_SECRET env; label via --labels below (v3 CLI).
 # If flags differ on your version, run: ~/.woodpecker/bin/woodpecker-agent --help
 set -euo pipefail
 
@@ -25,7 +25,8 @@ fi
 # Ensure toolchain is on PATH for launchd and plain-terminal runs alike.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-exec "$BIN" agent \
+# Labels ride on the command line — no UI tagging step needed.
+exec "$BIN" \
   --server localhost:9000 \
-  --token "$WOODPECKER_AGENT_SECRET" \
-  --backend local
+  --labels platform=darwin/arm64 \
+  --backend-engine local

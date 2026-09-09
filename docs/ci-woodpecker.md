@@ -36,8 +36,9 @@ https://smee.io/<id> --target http://localhost:8000/api/hook`) even
    `WOODPECKER_AGENT_SECRET` (`openssl rand -hex 32`).
 2. `docker compose up -d`, open `http://localhost:8000`, log in, activate the repo.
 3. Start agents: `bash woodpecker/agent-mac.sh`, `bash woodpecker/agent-linux.sh`
-   (Win: `woodpecker\agent-win.ps1` in the VM). In the UI (Agents) tag them
-   `platform=darwin/arm64`, `platform=linux/amd64`, `platform=windows/arm64`.
+   (Win: `woodpecker\agent-win.ps1` in the VM). Labels
+   (`platform=darwin/arm64`, `linux/amd64`, `windows/arm64`) are passed by
+   the scripts — no UI tagging needed; verify under Admin → Agents.
 4. Woodpecker auto-runs `.woodpecker/*.yml` on push/PR to `dev`/`main`;
    in local-only mode use the UI's manual trigger.
 
