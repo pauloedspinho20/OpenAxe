@@ -12,9 +12,7 @@ steps:
   guard:
     image: openaxe-ci-linux:latest
     commands:
-      - |
-        test "${CI_COMMIT_TAG#v}" = "$(cat VERSION)" || \
-          (echo "tag ${CI_COMMIT_TAG} != VERSION $(cat VERSION)"; exit 1)
+      - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
   package:
     image: openaxe-ci-linux:latest
     commands:

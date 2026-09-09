@@ -14,10 +14,7 @@ steps:
   guard:
     image: local
     commands:
-      - >
-        node -e "const t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');
-        const v=require('fs').readFileSync('VERSION','utf8').trim();
-        if(t!==v){console.error(`tag ${process.env.CI_COMMIT_TAG} != VERSION ${v}`);process.exit(1)}"
+      - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
   package:
     image: local
     commands:
