@@ -1,0 +1,39 @@
+# macOS CI — runs on the local Mac agent (Local backend, tools run natively).
+# Mirrors the GitHub PR legs via scripts/ci-local.mjs (see that file for stage docs).
+# One step per stage so logs/timeouts stay granular in the Woodpecker UI.
+
+labels:
+  platform: darwin/arm64
+
+when:
+  - event: [push, pull_request]
+    branch: [dev, main]
+
+steps:
+  setup:
+    commands:
+      - node scripts/ci-local.mjs --stage=setup
+  drift:
+    commands:
+      - node scripts/ci-local.mjs --stage=drift --skip-setup
+  lint:
+    commands:
+      - node scripts/ci-local.mjs --stage=lint --skip-setup
+  build:
+    commands:
+      - node scripts/ci-local.mjs --stage=build --skip-setup
+  unit:
+    commands:
+      - node scripts/ci-local.mjs --stage=unit --skip-setup
+  e2e:
+    commands:
+      - node scripts/ci-local.mjs --stage=e2e --skip-setup
+  core:
+    commands:
+      - node scripts/ci-local.mjs --stage=core --skip-setup
+  desktop:
+    commands:
+      - node scripts/ci-local.mjs --stage=desktop --skip-setup
+  plugin:
+    commands:
+      - node scripts/ci-local.mjs --stage=plugin --skip-setup

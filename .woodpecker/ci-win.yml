@@ -1,0 +1,31 @@
+# Windows CI — runs on the UTM Windows 11 ARM VM agent (Local backend).
+# PROVISIONAL subset: pure-JS stages + core (CMake/VS Build Tools) first.
+# desktop/plugin legs get added once this file is green (issue #427 Phase 4).
+# Requires on the VM: git, Node 22, pnpm 10.16.1, CMake, VS Build Tools.
+
+labels:
+  platform: windows/arm64
+
+when:
+  - event: [push, pull_request]
+    branch: [dev, main]
+
+steps:
+  setup:
+    commands:
+      - node scripts/ci-local.mjs --stage=setup
+  drift:
+    commands:
+      - node scripts/ci-local.mjs --stage=drift --skip-setup
+  lint:
+    commands:
+      - node scripts/ci-local.mjs --stage=lint --skip-setup
+  build:
+    commands:
+      - node scripts/ci-local.mjs --stage=build --skip-setup
+  unit:
+    commands:
+      - node scripts/ci-local.mjs --stage=unit --skip-setup
+  core:
+    commands:
+      - node scripts/ci-local.mjs --stage=core --skip-setup

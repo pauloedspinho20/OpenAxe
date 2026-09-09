@@ -1,0 +1,26 @@
+# Release (macOS leg) — SKELETON, Phase 3 completes when R2 tokens land.
+# Tag push v* → tag==VERSION guard → CPack dmg + plugin bundles → rclone to R2.
+# The Linux/Windows legs (release-linux.yml, release-win.yml) mirror this file
+# with their own artifacts; release-publish.yml (mac agent) polls R2 for all
+# three legs, then writes sha256sums.txt + manifest.json and triggers Pages.
+
+labels:
+  platform: darwin/arm64
+
+when:
+  - event: tag
+    ref: refs/tags/v*
+
+steps:
+  guard:
+    commands:
+      - |
+        test "${CI_COMMIT_TAG#v}" = "$(cat VERSION)" || \
+          (echo "tag ${CI_COMMIT_TAG} != VERSION $(cat VERSION)"; exit 1)
+  package:
+    commands:
+      - echo "TODO Phase 3: CPack dmg + universal VST3/CLAP/AU (see apps/desktop + packages/vst3)"
+  upload:
+    secrets: [r2_access_key, r2_secret_key, r2_account_id]
+    commands:
+      - echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"

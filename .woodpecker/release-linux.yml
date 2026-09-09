@@ -1,0 +1,26 @@
+# Release (Linux leg) — SKELETON, mirrors release-mac.yml.
+# Tag push v* → deb + Linux plugin bundles → rclone to R2.
+
+labels:
+  platform: linux/amd64
+
+when:
+  - event: tag
+    ref: refs/tags/v*
+
+steps:
+  guard:
+    image: openaxe-ci-linux:latest
+    commands:
+      - |
+        test "${CI_COMMIT_TAG#v}" = "$(cat VERSION)" || \
+          (echo "tag ${CI_COMMIT_TAG} != VERSION $(cat VERSION)"; exit 1)
+  package:
+    image: openaxe-ci-linux:latest
+    commands:
+      - echo "TODO Phase 3: CPack deb + Linux VST3/CLAP"
+  upload:
+    image: openaxe-ci-linux:latest
+    secrets: [r2_access_key, r2_secret_key, r2_account_id]
+    commands:
+      - echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"

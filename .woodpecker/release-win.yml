@@ -1,0 +1,24 @@
+# Release (Windows leg) — SKELETON, mirrors release-mac.yml.
+# Tag push v* → zip/msi + Win plugin bundles → rclone to R2.
+
+labels:
+  platform: windows/arm64
+
+when:
+  - event: tag
+    ref: refs/tags/v*
+
+steps:
+  guard:
+    commands:
+      - >
+        node -e "const t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');
+        const v=require('fs').readFileSync('VERSION','utf8').trim();
+        if(t!==v){console.error(`tag ${process.env.CI_COMMIT_TAG} != VERSION ${v}`);process.exit(1)}"
+  package:
+    commands:
+      - echo "TODO Phase 3/4: zip/msi + Windows VST3/CLAP"
+  upload:
+    secrets: [r2_access_key, r2_secret_key, r2_account_id]
+    commands:
+      - echo "TODO Phase 3: node scripts/r2-upload.mjs (needs R2 secrets above)"
