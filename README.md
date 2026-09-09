@@ -1,6 +1,6 @@
 # <img src="./apps/desktop/packaging/openaxe-256.png" width="28" valign="middle" alt="OpenAxe logo" /> OpenAxe
 
-A free, open-source guitar/bass amp, cabinet, and effects suite — in the spirit of Amplitube / Guitar Rig — built on [Neural Amp Modeler](https://github.com/sdatkinson/NeuralAmpModelerCore) (NAM). Runs as a **web app** (live), **desktop app** (live, C++ + webview.h + JUCE), **VST3/CLAP/AU plugin** (live, iPlug2 — beta) — **mobile** (iOS + Android) planned — all sharing the same C++ DSP engine and design system.
+A free, open-source guitar/bass amp, cabinet, and effects suite — in the spirit of Amplitube / Guitar Rig — built on [Neural Amp Modeler](https://github.com/sdatkinson/NeuralAmpModelerCore) (NAM). Runs as a **web app** (live), **desktop app** (live, C++ + webview.h + miniaudio), **VST3/CLAP/AU plugin** (live, iPlug2 — beta) — **mobile** (iOS + Android) planned — all sharing the same C++ DSP engine and design system.
 
 > **Contributing?** Start with [`AGENTS.md`](./AGENTS.md) (agent/contributor orientation + verification commands), then [`CONTRIBUTING.md`](./CONTRIBUTING.md) (setup, licensing, branching, releases, DCO) and [`ARCHITECTURE.md`](./ARCHITECTURE.md) (what belongs in `packages/core` vs a front end). Good first issues: [`good first issue`](https://github.com/pauloedspinho20/OpenAxe/labels/good%20first%20issue).
 
@@ -13,7 +13,7 @@ per-target status of that split, the migration order, and the latency budget).
 | Area             | Decision                                                                                                                                                                                 |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Distribution     | Free & open source, licensed [GPLv3](./LICENSE)                                                                                                                                          |
-| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h + JUCE `audio_devices` (desktop) / iPlug2 (VST3) / native (mobile)                                                                 |
+| Stack            | Vite + React + TypeScript SPA (web) / C++ + webview.h + miniaudio (desktop) / iPlug2 (VST3) / native (mobile)                                                                            |
 | Signal graph     | **Modular grid (GraphRig)** — blocks placed on a 4×10 grid, cabled left-to-right                                                                                                         |
 | Audio (web)      | AudioWorklet + WASM — the same C++ core as native, compiled via Emscripten (#22 shipped)                                                                                                 |
 | Audio (native)   | C++ DSP core → direct call (no FFI, no language bridge)                                                                                                                                  |
@@ -28,7 +28,7 @@ per-target status of that split, the migration order, and the latency budget).
 | Target            | Status  | Tech                                                                                                                     | Latency Target          | Issue                                                       |
 | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------- | ----------------------------------------------------------- |
 | **Web**           | Live    | Vite + React + AudioWorklet running the C++ core as WASM (one `RigWorkletNode` owns the whole graph)                     | ~15ms round-trip        | [#22](https://github.com/pauloedspinho20/OpenAxe/issues/22) |
-| **Desktop**       | Live    | C++ + webview.h + JUCE `audio_devices` + React UI (webview)                                                              | <5ms round-trip         | [#15](https://github.com/pauloedspinho20/OpenAxe/issues/15) |
+| **Desktop**       | Live    | C++ + webview.h + miniaudio + React UI (webview)                                                                         | <5ms round-trip         | [#15](https://github.com/pauloedspinho20/OpenAxe/issues/15) |
 | **VST3/CLAP/AU**  | Beta    | iPlug2 (C++) + webview (React) + `packages/core` — same React UI as web/desktop, loopback HTTP + `window.openAxe` bridge | <5ms (DAW audio thread) | [#16](https://github.com/pauloedspinho20/OpenAxe/issues/16) |
 | **iOS**           | Planned | SwiftUI + CoreAudio + C++ via ObjC++ bridge                                                                              | 5-8ms round-trip        | [#17](https://github.com/pauloedspinho20/OpenAxe/issues/17) |
 | **Android**       | Planned | Jetpack Compose + AAudio/Oboe + C++ via JNI                                                                              | ~20ms round-trip        | [#17](https://github.com/pauloedspinho20/OpenAxe/issues/17) |
@@ -38,7 +38,7 @@ per-target status of that split, the migration order, and the latency budget).
 ### Why these choices
 
 - **C++ for DSP core** — All vendored DSP libraries are C++ (DSPark, NAMCore, DaisySP). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
-- **Desktop: C++ + webview.h** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. JUCE `audio_devices` after RtAudio CoreAudio crash (see `apps/desktop/CMakeLists.txt`). webview.h ships no menu bar, so `src/mac_menu.mm` installs the standard App/Edit/Window menus — without an Edit menu macOS gives you no ⌘C/⌘V in text fields (#300 H1).
+- **Desktop: C++ + webview.h** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. miniaudio after the RtAudio CoreAudio crash and the JUCE AGPL removal (issue #374; see `apps/desktop/CMakeLists.txt`). webview.h ships no menu bar, so `src/mac_menu.mm` installs the standard App/Edit/Window menus — without an Edit menu macOS gives you no ⌘C/⌘V in text fields (#300 H1).
 - **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. Editor is the same React SPA as web/desktop via `IWebViewControl` + loopback HTTP + `window.openAxe` bridge (no IGraphics fork).
 - **Mobile: Native shells** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
 
@@ -131,7 +131,7 @@ OpenAxe/
 │   │   │   ├── tone3000/         # Tone3000 API
 │   │   │   └── tuner/            # Pitch detection
 │   │   └── e2e/                  # Playwright E2E tests
-│   ├── desktop/               # Native desktop shell — C++ + webview.h + JUCE audio_devices + React UI (#15), see apps/desktop/README.md
+│   ├── desktop/               # Native desktop shell — C++ + webview.h + miniaudio + React UI (#15), see apps/desktop/README.md
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)
 ├── packages/
@@ -368,7 +368,7 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 | 12  | Deployment & release                                | Open     |
 | 13  | Monorepo scaffold                                   | ✓ Closed |
 | 14  | Shared C++ DSP core + best-in-class DSP libraries   | ✓ Closed |
-| 15  | Desktop app (C++ + webview.h + JUCE)                | Live     |
+| 15  | Desktop app (C++ + webview.h + miniaudio)           | Live     |
 | 16  | VST3/CLAP/AU/AAX Plugin (iPlug2, C++)               | Beta     |
 | 17  | Mobile apps (native Kotlin/Swift + C++ shared core) | Open     |
 | 18  | CI/CD cross-platform build pipeline                 | Live     |

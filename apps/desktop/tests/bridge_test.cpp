@@ -375,7 +375,7 @@ void TestSuspendCallbackSilencesOutput() {
 // exactly that single-device setup (garbage input pointer on the very first
 // callback(s) during its internal duplex bridging); this test (and
 // audio_io_test.cpp's TestOpenStartStop) is the regression test for the swap
-// to JUCE's own from-scratch CoreAudio backend. Skips if no single
+// to miniaudio's own from-scratch CoreAudio backend. Skips if no single
 // duplex-capable device exists.
 void TestConcurrentMutationsWhileStreamRunning() {
   openaxe_desktop::StudioBridge bridge;

@@ -7,12 +7,7 @@ import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
 import { NativeAudioContext } from '../native/NativeAudioContext'
-import {
-  getOpenAxe,
-  getShellKind,
-  shellOwnsAudioDevice,
-  type OpenAxeBridge,
-} from '../native/openaxe'
+import { getOpenAxe, shellOwnsAudioDevice, type OpenAxeBridge } from '../native/openaxe'
 import { getDISample } from '../diSamples'
 
 export interface NativeAudioEngineState {
@@ -230,13 +225,12 @@ export function useNativeAudioEngine() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputDeviceId, inputChannel])
 
-  // Push input-channel changes down to the plugin. Only in a plugin: the
-  // desktop shell opens the device itself, where channel selection belongs at
-  // the device layer rather than in the graph feed, and it offers no such
-  // control yet (see scripts/check-bridge-methods.mjs).
+  // Push input-channel changes down to the native shell. Both shells honor
+  // the same ioStore strings: the plugin routes per instance in the graph
+  // feed, the desktop routes in the C++ audio callback (the device layer it
+  // owns). Unknown modes degrade to stereo passthrough on the receiving end.
   useEffect(() => {
     if (state.status !== 'ready') return
-    if (getShellKind() !== 'plugin') return
     const bridge = bridgeRef.current
     if (!bridge) return
     void bridge.setInputChannel({ mode: inputChannel }).catch(() => {})
@@ -531,5 +525,20 @@ export function useNativeAudioEngine() {
     setState(IDLE)
   }, [runExclusive])
 
-  return { ...state, powerOn, powerOff, playDI, stopDI }
+  // The shared UI (App/GridEditor) reads the stereo rail meters as
+  // analyserL/analyserR (issue #385) - the same names the web engine provides.
+  // This hook's historic singular fields (analyser/tunerAnalyser) predate the
+  // stereo meters and stay for their existing consumers (e.g. Tuner); without
+  // these aliases analyserL/tunerAnalyserL are undefined on desktop, and
+  // LiveStereoMeter renders a missing side as silence - a centered signal
+  // then shows only its right bar.
+  return {
+    ...state,
+    analyserL: state.analyser,
+    tunerAnalyserL: state.tunerAnalyser,
+    powerOn,
+    powerOff,
+    playDI,
+    stopDI,
+  }
 }

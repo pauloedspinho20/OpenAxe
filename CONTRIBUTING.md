@@ -29,7 +29,7 @@ This project ships under **GPLv3**. That means:
 
 ## Development setup
 
-This is a pnpm + Turborepo monorepo. `apps/web` is the live product, `packages/ui` the design system, `apps/desktop` the native shell (C++ + webview.h + JUCE), `packages/vst3` the plugin (iPlug2), `packages/core` the shared C++ engine. `apps/ios`/`apps/android` are scaffolding (#17). See [`README.md`](./README.md#project-structure) for the full layout.
+This is a pnpm + Turborepo monorepo. `apps/web` is the live product, `packages/ui` the design system, `apps/desktop` the native shell (C++ + webview.h + miniaudio), `packages/vst3` the plugin (iPlug2), `packages/core` the shared C++ engine. `apps/ios`/`apps/android` are scaffolding (#17). See [`README.md`](./README.md#project-structure) for the full layout.
 
 **One-command setup (idempotent — repairs wrong-arch binaries):**
 

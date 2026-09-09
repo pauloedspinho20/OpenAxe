@@ -34,8 +34,8 @@ add_test(NAME bridge_stage COMMAND bridge_stage_test)
 
 # ThreadSanitizer build for the threading stress tests (issue #211's acceptance
 # criterion: mutate-during-process must pass under TSan). Instruments the core,
-# the desktop lib, and the test binaries - NOT JUCE/webview (a TSan build of
-# those is slow and they aren't what the stress tests exercise; mixing
+# the desktop lib, and the test binaries - NOT miniaudio/webview (a TSan build
+# of those is slow and they aren't what the stress tests exercise; mixing
 # instrumented and uninstrumented code is fine for the races under test). The
 # device-gated stress tests skip on hosts without a duplex audio device, so a
 # TSan run needs one to be meaningful. Requires a toolchain that ships a TSan

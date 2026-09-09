@@ -355,6 +355,8 @@ int main(int argc, char** argv) {
     Bind(w, bridge, "openAxe.stageDiscard", &openaxe_desktop::StudioBridge::HandleStageDiscard);
     Bind(w, bridge, "openAxe.switchActive", &openaxe_desktop::StudioBridge::HandleSwitchActive);
     Bind(w, bridge, "openAxe.setInputGain", &openaxe_desktop::StudioBridge::HandleSetInputGain);
+    Bind(w, bridge, "openAxe.setInputChannel",
+         &openaxe_desktop::StudioBridge::HandleSetInputChannel);
     Bind(w, bridge, "openAxe.setMasterLevel", &openaxe_desktop::StudioBridge::HandleSetMasterLevel);
     Bind(w, bridge, "openAxe.setMasterMuted", &openaxe_desktop::StudioBridge::HandleSetMasterMuted);
     Bind(w, bridge, "openAxe.setTunerMuted", &openaxe_desktop::StudioBridge::HandleSetTunerMuted);

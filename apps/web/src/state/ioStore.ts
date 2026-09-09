@@ -8,9 +8,9 @@
  * Input and output device selections are independent. On the web they map to
  * getUserMedia + setSinkId (two independent choices); on the native desktop
  * shell they map to the C++ core's separate input/output device names
- * (AudioIO::Open accepts createDevice(output_name, input_name)). A previous
+ * (AudioIO::Open pairs an input endpoint with an output endpoint). A previous
  * RtAudio-era restriction (issue #53) forcing a single duplex device is gone
- * since the JUCE backend swap — see apps/desktop/src/audio.cpp.
+ * since the miniaudio backend (issue #374; formerly JUCE) — see apps/desktop/src/audio.cpp.
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
