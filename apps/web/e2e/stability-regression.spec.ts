@@ -23,6 +23,15 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // "+" button can move mid-click), so give it a real budget. It passes in
   // ~6s in isolation; this is headroom, not a per-test norm.
   test.setTimeout(180_000)
+  // Scene applies are async end to end and only *start* once the engine is
+  // ready: useSceneEngine fires reloadActive when status becomes 'ready'
+  // (== the "Power off" button flips visible), then applyPreset reads the
+  // preset from IndexedDB, tears down + rebuilds the worklet, and loadGraph
+  // renders the blocks. Under the parallel matrix this routinely exceeds a
+  // 30s wait on a loaded machine (flaked on run 38550000042 and the same
+  // count assertion), so the initial load and the slot switch below get the
+  // same generous budget the rest of this heavy test already runs under.
+  const SCENE_LOAD_TIMEOUT = 90_000
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
   page.on('pageerror', (err) => pageErrors.push(err.message))
@@ -115,9 +124,9 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // once, after the rebuild: 3 is Clean, 1 is scene 8, there is no
   // intermediate state to race against.
   const blocks = page.getByRole('button', { name: /block - click or Enter to edit/ })
-  await expect(blocks).toHaveCount(3, { timeout: 30000 })
+  await expect(blocks).toHaveCount(3, { timeout: SCENE_LOAD_TIMEOUT })
   await page.getByRole('button', { name: '8 Bypass' }).click()
-  await expect(blocks).toHaveCount(1, { timeout: 30000 })
+  await expect(blocks).toHaveCount(1, { timeout: SCENE_LOAD_TIMEOUT })
   // Mixer removal now lives in the block's actions sheet (⋯ menu) — the direct
   // Remove button was moved from BlockCard to BlockActionSheet for mobile.
   await page.getByRole('button', { name: 'Actions for Mixer' }).click()
