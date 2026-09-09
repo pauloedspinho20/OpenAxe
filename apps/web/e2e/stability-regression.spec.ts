@@ -15,6 +15,7 @@ import { test, expect } from '@playwright/test'
  */
 test('builds a full FX chain, toggles every bypass, and tears it down without errors', async ({
   page,
+  context,
 }) => {
   // Heaviest test in the suite: it sequentially builds 10 WASM-backed effect
   // blocks, each of which compiles/instantiates an AudioWorklet + fetches the
@@ -27,10 +28,9 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // ready: useSceneEngine fires reloadActive when status becomes 'ready'
   // (== the "Power off" button flips visible), then applyPreset reads the
   // preset from IndexedDB, tears down + rebuilds the worklet, and loadGraph
-  // renders the blocks. Under the parallel matrix this routinely exceeds a
-  // 30s wait on a loaded machine (flaked on run 38550000042 and the same
-  // count assertion), so the initial load and the slot switch below get the
-  // same generous budget the rest of this heavy test already runs under.
+  // renders the blocks. The initial 3-block wait and the slot-8 switch below
+  // race that apply, so give them the same generous budget this heavy test
+  // already runs under.
   const SCENE_LOAD_TIMEOUT = 90_000
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
@@ -72,29 +72,23 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
     }),
   )
 
-  await page.goto('/')
-  // Start from a clean slate: the grid/presets persist to IndexedDB (see
-  // src/storage/db.ts), so a prior test run's saved blocks/presets would
-  // otherwise still be there on this load.
-  await page.evaluate(async () => {
+  // Start from a clean slate. Each test runs in a fresh browser context, so
+  // IndexedDB is already empty; clear localStorage BEFORE the app script runs
+  // so the first-run dialog never appears and the offline FX seeding takes the
+  // "setup already done" path on first load.
+  //
+  // The previous approach (goto '/', then clear + delete IndexedDB, then
+  // reload) was racy: the first goto boots the app, which opens an IndexedDB
+  // connection, so deleteDatabase() fired onblocked and resolved WITHOUT
+  // deleting. The reloaded page then saw the first boot's *partial* seeding as
+  // an established session and never re-seeded the factory scene - the grid
+  // came up empty ("Clean" missing, every slot "Empty") and this test's
+  // 3-block wait failed intermittently on mobile under parallel load.
+  await context.addInitScript(() => {
     localStorage.clear()
-    // Established-session marker: keeps the first-run factory dialog from
-    // appearing and lets the offline FX starters seed + hydrate.
     localStorage.setItem('openaxe:factory-setup-dismissed', '1')
-    const dbs = await indexedDB.databases()
-    await Promise.all(
-      dbs
-        .filter((db): db is { name: string } => !!db.name)
-        .map(
-          (db) =>
-            new Promise((resolve) => {
-              const req = indexedDB.deleteDatabase(db.name)
-              req.onsuccess = req.onerror = req.onblocked = () => resolve(undefined)
-            }),
-        ),
-    )
   })
-  await page.reload()
+  await page.goto('/')
   const onboardingClose = page.getByRole('button', { name: "Let's go" })
   if (await onboardingClose.isVisible().catch(() => false)) {
     await onboardingClose.click()
