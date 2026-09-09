@@ -4,6 +4,15 @@
 set -euo pipefail
 
 VERSION="${WOODPECKER_VERSION:-v3.18.1}"
+# Auto-load the secret from woodpecker/.env when not exported (see agent-mac.sh).
+if [ -z "${WOODPECKER_AGENT_SECRET:-}" ]; then
+  _dotenv="$(cd "$(dirname "$0")" && pwd)/.env"
+  if [ -f "$_dotenv" ]; then
+    WOODPECKER_AGENT_SECRET="$(grep -E '^WOODPECKER_AGENT_SECRET=' "$_dotenv" | cut -d= -f2-)"
+    export WOODPECKER_AGENT_SECRET
+  fi
+  unset _dotenv
+fi
 : "${WOODPECKER_AGENT_SECRET:?set WOODPECKER_AGENT_SECRET (same value as server .env)}"
 
 # (Re)build the CI image if missing — same image docker/ci-linux documents.

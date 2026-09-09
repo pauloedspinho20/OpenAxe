@@ -20,11 +20,23 @@ if [ ! -x "$BIN" ]; then
   rm -rf "$tmp"
 fi
 
+# Auto-load the secret from woodpecker/.env when not exported, so a literal
+# placeholder can never reach the server (v3 rejects unknown tokens outright).
+if [ -z "${WOODPECKER_AGENT_SECRET:-}" ]; then
+  _dotenv="$(cd "$(dirname "$0")" && pwd)/.env"
+  if [ -f "$_dotenv" ]; then
+    WOODPECKER_AGENT_SECRET="$(grep -E '^WOODPECKER_AGENT_SECRET=' "$_dotenv" | cut -d= -f2-)"
+    export WOODPECKER_AGENT_SECRET
+  fi
+  unset _dotenv
+fi
 : "${WOODPECKER_AGENT_SECRET:?set WOODPECKER_AGENT_SECRET (same value as server .env)}"
-
 # Ensure toolchain is on PATH for launchd and plain-terminal runs alike.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+# Persist agent ID in $HOME (avoids /etc write errors + re-registration each start).
+export WOODPECKER_AGENT_CONFIG_FILE="${WOODPECKER_AGENT_CONFIG_FILE:-$HOME/.woodpecker/agent.conf}"
+mkdir -p "$(dirname "$WOODPECKER_AGENT_CONFIG_FILE")"
 # Labels ride on the command line — no UI tagging step needed.
 exec "$BIN" \
   --server localhost:9000 \
