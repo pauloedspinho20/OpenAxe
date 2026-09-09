@@ -6,8 +6,15 @@ Actions heavy legs get retired once this is proven (Phase 5).
 ## Modes
 
 - **Local-only (current):** server at `http://localhost:8000`, no public URL.
-  GitHub webhooks can't reach it → builds trigger **manually in the UI**.
-  Repo sync + commit statuses work (outbound HTTPS from the server).
+  Repo activation REQUIRES a public _webhook_ URL (GitHub rejects
+  `localhost`, so plain `Enable` fails with `could not create webhook in
+forge`). Free workaround: a [smee.io](https://smee.io/new) channel as
+  `WOODPECKER_EXPERT_WEBHOOK_HOST` (see `.env.example`) — activation then
+  succeeds, and with a forwarder running (`npx smee-client --url
+https://smee.io/<id> --target http://localhost:8000/api/hook`) even
+  push-triggered builds work without a domain. Without the forwarder,
+  builds trigger **manually in the UI**. Repo sync + commit statuses work
+  either way (outbound HTTPS from the server).
 - **Tunnel (later):** Cloudflare Tunnel + public hostname → webhook
   auto-builds on push/PR. Needs a domain; deferred with Windows pending.
 
