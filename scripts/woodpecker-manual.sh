@@ -68,6 +68,7 @@ run_ci() {
 # Mirrors .woodpecker/release-mac.yml. The plugin stage needs the web build
 # first (bundles copy apps/web/dist into the plugin UI at build time).
 mac_release_leg() {
+  local t="$1"
   step "macOS leg 1/3 — setup"
   (cd "$ROOT" && node scripts/ci-local.mjs --stage=setup)
   step "macOS leg 2/3 — web build + desktop package (dmg)"
@@ -75,7 +76,7 @@ mac_release_leg() {
   (cd "$ROOT" && pnpm --filter @openaxe/desktop package)
   step "macOS leg 3/3 — plugin build + bundles"
   (cd "$ROOT" && node scripts/ci-local.mjs --stage=plugin --skip-setup)
-  (cd "$ROOT" && node scripts/collect-plugin-bundles.mjs --platform=macos)
+  (cd "$ROOT" && node scripts/collect-plugin-bundles.mjs --platform=macos --tag="$t")
 }
 
 # Same mounts as docker/ci-linux/run-linux-ci.sh; build dirs live under the
@@ -114,6 +115,7 @@ linux_run() {
 }
 
 linux_release_leg() {
+  local t="$1"
   step "Linux leg 1/3 — setup (Docker)"
   linux_run "node scripts/ci-local.mjs --stage=setup"
   step "Linux leg 2/3 — web build + desktop package (deb)"
@@ -121,7 +123,7 @@ linux_release_leg() {
   linux_run "pnpm --filter @openaxe/desktop package"
   step "Linux leg 3/3 — plugin build + bundles"
   linux_run "node scripts/ci-local.mjs --stage=plugin --skip-setup"
-  linux_run "node scripts/collect-plugin-bundles.mjs --platform=linux"
+  linux_run "node scripts/collect-plugin-bundles.mjs --platform=linux --tag=$t"
 }
 
 # --- Release to R2 ----------------------------------------------------------
@@ -130,8 +132,8 @@ run_release() {
   local t
   t="$(tag)"
   step "Guard: releasing $t (VERSION=$(cat "$ROOT"/VERSION))"
-  mac_release_leg
-  linux_release_leg
+  mac_release_leg "$t"
+  linux_release_leg "$t"
   require_r2
   step "Uploading artifacts to R2 (r2://openaxe-releases/$t/)"
   (cd "$ROOT" && node scripts/r2-upload.mjs --tag="$t" \
