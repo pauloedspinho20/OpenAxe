@@ -16,7 +16,17 @@ IMAGE="${OPENAXE_CI_IMAGE:-openaxe-ci-linux}"
 # CI runners are x86_64; on Apple Silicon this emulates (slower) but matches.
 PLATFORM="${OPENAXE_CI_PLATFORM:-linux/amd64}"
 
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+# The image must match the platform the containers run on. If a local image
+# exists but for a different architecture (e.g. built natively on Apple
+# Silicon), rebuild it for the requested platform instead of pulling.
+if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  local_arch="$(docker image inspect "$IMAGE" --format '{{.Architecture}}')"
+  want_arch="${PLATFORM#linux/}"
+  if [ "$local_arch" != "$want_arch" ]; then
+    echo "Rebuilding $IMAGE: local arch $local_arch != platform $PLATFORM"
+    docker build --platform "$PLATFORM" -t "$IMAGE" "$ROOT/docker/ci-linux"
+  fi
+else
   echo "Building $IMAGE (first run only)…"
   docker build --platform "$PLATFORM" -t "$IMAGE" "$ROOT/docker/ci-linux"
 fi
