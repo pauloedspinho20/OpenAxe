@@ -123,7 +123,8 @@ linux_release_leg() {
   linux_run "pnpm --filter @openaxe/desktop package"
   step "Linux leg 3/3 — plugin build + bundles"
   linux_run "node scripts/ci-local.mjs --stage=plugin --skip-setup"
-  linux_run "node scripts/collect-plugin-bundles.mjs --platform=linux --tag=$t"
+  linux_run "node scripts/collect-plugin-bundles.mjs --platform=linux --tag=$t --allow-empty"
+  echo "  note: Linux plugin bundles are headless — none are produced (see r2-publish.mjs); the .deb is the Linux release artifact."
 }
 
 # --- Release to R2 ----------------------------------------------------------

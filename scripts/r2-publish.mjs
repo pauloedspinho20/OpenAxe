@@ -8,7 +8,9 @@
 // (add `windows` once the UTM agent is live; until then releases ship
 // macOS+Linux per the issue). Expected artifacts per leg:
 //   macos:   openaxe-desktop-<v>.dmg + openaxe-plugin-bundles-macos-<tag>.zip
-//   linux:   openaxe-desktop-<v>.deb + openaxe-plugin-bundles-linux-<tag>.zip
+//   linux:   openaxe-desktop-<v>.deb only — the Linux plugin builds headless
+//            (no IGraphics backend, VST3/CLAP SDKs not fetched), so no Linux
+//            GUI bundles are produced yet
 //   windows: openaxe-desktop-<v>.zip + openaxe-plugin-bundles-windows-<tag>.zip
 //
 // Steps: poll r2://<bucket>/<tag>/ until all expected files exist → download
@@ -50,7 +52,8 @@ function parseArgs(argv) {
 
 const LEG_ARTIFACTS = {
   macos: (v, tag) => [`openaxe-desktop-${v}.dmg`, `openaxe-plugin-bundles-macos-${tag}.zip`],
-  linux: (v, tag) => [`openaxe-desktop-${v}.deb`, `openaxe-plugin-bundles-linux-${tag}.zip`],
+  // Linux plugin bundles don't exist yet (headless build) — deb only.
+  linux: (v) => [`openaxe-desktop-${v}.deb`],
   windows: (v, tag) => [`openaxe-desktop-${v}.zip`, `openaxe-plugin-bundles-windows-${tag}.zip`],
 }
 

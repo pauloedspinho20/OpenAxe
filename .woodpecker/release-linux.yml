@@ -24,11 +24,14 @@ steps:
     image: openaxe-ci-linux:latest
     commands:
       - node scripts/ci-local.mjs --stage=plugin --skip-setup
-      - node scripts/collect-plugin-bundles.mjs --platform=linux
+      # Linux plugin bundles are headless (no IGraphics backend / SDKs) —
+      # allow-empty so the absence doesn't fail the release; the deb is the
+      # Linux artifact (see r2-publish.mjs).
+      - node scripts/collect-plugin-bundles.mjs --platform=linux --allow-empty
   upload:
     image: openaxe-ci-linux:latest
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
     environment:
       R2_PUBLIC_URL: https://pub-800f414cbfe9422e9faaa00ed34d2821.r2.dev
     commands:
-      - node scripts/r2-upload.mjs "apps/desktop/build/openaxe-desktop-*.deb" "packages/vst3/build/openaxe-plugin-bundles-*.zip"
+      - node scripts/r2-upload.mjs "apps/desktop/build/openaxe-desktop-*.deb"
