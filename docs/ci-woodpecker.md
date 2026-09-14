@@ -5,7 +5,15 @@ Actions heavy legs get retired once this is proven (Phase 5).
 
 ## Modes
 
-- **Local-only (current):** server at `http://localhost:8000`, no public URL.
+- **Manual / off-webhook (easiest):** `scripts/woodpecker-manual.sh` runs the
+  exact stages the pipelines perform — no server, agents or webhook needed.
+  `ci` = full mac+linux CI (`pnpm ci:local` + `ci:local:linux`); `release` =
+  desktop dmg+deb + plugin bundles → R2 → sha256sums + manifest
+  (`R2_*` creds from env or `woodpecker/.env`, same values as the UI
+  secrets); `all` = both. Wired as **VSCode tasks**:
+  "Woodpecker: run CI manually (mac + linux)", "Woodpecker: release artifacts
+  to R2 (mac + linux)", "Woodpecker: full manual run (CI + release to R2)".
+- **Local-only server (current):** server at `http://localhost:8000`, no public URL.
   Repo activation REQUIRES a public _webhook_ URL (GitHub rejects
   `localhost`, so plain `Enable` fails with `could not create webhook in
 forge`). Free workaround: a [smee.io](https://smee.io/new) channel as

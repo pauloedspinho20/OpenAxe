@@ -96,6 +96,10 @@ linux_run() {
     step "Building $image (first run only)"
     docker build --platform "$platform" -t "$image" "$ROOT/docker/ci-linux"
   fi
+  # The seqlock stress test (vst3_monitor_tap) deadlocks under Rosetta
+  # emulation — skip it when the host arch != the container arch.
+  local skip_tap=0
+  if [ "$(uname -m)" != "${platform#linux/}" ]; then skip_tap=1; fi
   docker run --rm --platform "$platform" \
     -v "$ROOT:/work" \
     -v openaxe-ci-ccache:/root/.cache/ccache \
@@ -105,6 +109,7 @@ linux_run() {
     -v openaxe-ci-nm-landing:/work/apps/landing/node_modules \
     -v openaxe-ci-nm-ui:/work/packages/ui/node_modules \
     -e CCACHE_DIR=/root/.cache/ccache \
+    -e OPENAXE_CI_SKIP_MONITOR_TAP="$skip_tap" \
     "$image" bash -lc "$*"
 }
 
