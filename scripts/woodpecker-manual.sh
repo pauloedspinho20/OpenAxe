@@ -18,6 +18,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 R2_PUBLIC_URL_DEFAULT="https://pub-800f414cbfe9422e9faaa00ed34d2821.r2.dev"
+# Staging dir: the mac and linux legs share apps/desktop/build and
+# packages/vst3/build, and each leg's setup clears them (cache-path
+# mismatch). Copy each artifact out the moment it's produced so a later leg
+# can't wipe it before upload.
+STAGE="${STAGE_DIR:-$ROOT/dist-release}"
 
 step() { printf '\n\033[1m— %s —\033[0m\n' "$*"; }
 
@@ -74,9 +79,11 @@ mac_release_leg() {
   step "macOS leg 2/3 — web build + desktop package (dmg)"
   (cd "$ROOT" && pnpm build)
   (cd "$ROOT" && pnpm --filter @openaxe/desktop package)
+  cp "$ROOT"/apps/desktop/build/openaxe-desktop-*.dmg "$STAGE"/ 2>/dev/null || true
   step "macOS leg 3/3 — plugin build + bundles"
   (cd "$ROOT" && node scripts/ci-local.mjs --stage=plugin --skip-setup)
   (cd "$ROOT" && node scripts/collect-plugin-bundles.mjs --platform=macos --tag="$t")
+  cp "$ROOT"/packages/vst3/build/openaxe-plugin-bundles-macos-*.zip "$STAGE"/ 2>/dev/null || true
 }
 
 # Same mounts as docker/ci-linux/run-linux-ci.sh; build dirs live under the
@@ -121,6 +128,7 @@ linux_release_leg() {
   step "Linux leg 2/3 — web build + desktop package (deb)"
   linux_run "pnpm build"
   linux_run "pnpm --filter @openaxe/desktop package"
+  cp "$ROOT"/apps/desktop/build/openaxe-desktop-*.deb "$STAGE"/ 2>/dev/null || true
   step "Linux leg 3/3 — plugin build + bundles"
   linux_run "node scripts/ci-local.mjs --stage=plugin --skip-setup"
   linux_run "node scripts/collect-plugin-bundles.mjs --platform=linux --tag=$t --allow-empty"
@@ -133,14 +141,16 @@ run_release() {
   local t
   t="$(tag)"
   step "Guard: releasing $t (VERSION=$(cat "$ROOT"/VERSION))"
+  rm -rf "$STAGE"
+  mkdir -p "$STAGE"
   mac_release_leg "$t"
   linux_release_leg "$t"
   require_r2
-  step "Uploading artifacts to R2 (r2://openaxe-releases/$t/)"
+  step "Uploading staged artifacts to R2 (r2://openaxe-releases/$t/)"
   (cd "$ROOT" && node scripts/r2-upload.mjs --tag="$t" \
-    "apps/desktop/build/openaxe-desktop-*.dmg" \
-    "apps/desktop/build/openaxe-desktop-*.deb" \
-    "packages/vst3/build/openaxe-plugin-bundles-*.zip")
+    "$STAGE"/openaxe-desktop-*.dmg \
+    "$STAGE"/openaxe-desktop-*.deb \
+    "$STAGE"/openaxe-plugin-bundles-*.zip)
   step "Publishing sha256sums.txt + manifest.json"
   (cd "$ROOT" && node scripts/r2-publish.mjs --tag="$t" --expect=macos,linux)
   echo
