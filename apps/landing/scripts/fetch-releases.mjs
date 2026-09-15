@@ -16,9 +16,18 @@ const API = `https://api.github.com/repos/${REPO}/releases?per_page=100`
 
 // --source=r2 (or RELEASES_SOURCE=r2): read the Woodpecker-published root
 // manifest from R2 instead of the GitHub API (issue #427 Phase 3). Same
-// output schema; the landing can't tell the difference.
+// output schema; the landing can't tell the difference. R2 is the release
+// source of truth now that the repo is private, so it's the default whenever
+// R2_PUBLIC_URL is set; pass --source=github (or RELEASES_SOURCE=github) to
+// force the GitHub API.
 const SOURCE =
-  process.argv.includes('--source=r2') || process.env.RELEASES_SOURCE === 'r2' ? 'r2' : 'github'
+  process.argv.includes('--source=github') || process.env.RELEASES_SOURCE === 'github'
+    ? 'github'
+    : process.argv.includes('--source=r2') ||
+        process.env.RELEASES_SOURCE === 'r2' ||
+        Boolean(process.env.R2_PUBLIC_URL)
+      ? 'r2'
+      : 'github'
 
 async function fetchFromR2() {
   const base = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')

@@ -13,7 +13,7 @@
 // --allow-empty to log a warning and skip instead of failing the release.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const BUNDLE_EXTS = ['.vst3', '.component', '.clap']
@@ -80,6 +80,13 @@ function main() {
     throw new Error(`No plugin bundles (*.vst3/*.component/*.clap) under ${opts.buildDir}`)
   }
   console.log(`[bundles] ${bundles.length} bundle(s):\n  ${bundles.join('\n  ')}`)
+  // Zip entries relative to the build dir, so unzipping yields
+  // `OpenAxe.component/…`, not the repo path `packages/vst3/build/…`.
+  const base = resolve(opts.buildDir)
+  const entries = bundles.map((b) => relative(base, b))
+  // zip(1) appends to an existing archive — start clean so a re-run never
+  // leaves stale entries (e.g. an earlier repo-relative path layout).
+  rmSync(opts.out, { force: true })
   if (process.platform === 'win32') {
     const list = bundles.map((b) => `'${b}'`).join(',')
     execFileSync(
@@ -93,11 +100,7 @@ function main() {
       { stdio: 'inherit' },
     )
   } else {
-    zipPosix(
-      resolve(opts.out),
-      bundles.map((b) => relative(process.cwd(), b)),
-      process.cwd(),
-    )
+    zipPosix(resolve(opts.out), entries, base)
   }
   console.log(`[bundles] wrote ${opts.out}`)
 }
