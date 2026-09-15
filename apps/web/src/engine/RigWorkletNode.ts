@@ -20,7 +20,7 @@ import type { BlockKind } from './blocks/Block'
 const PROCESSOR_NAME = 'nam-studio-rig-processor'
 
 const registeredContexts = new WeakMap<BaseAudioContext, Promise<void>>()
-const wasmBytesByContext = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+const wasmModuleByContext = new WeakMap<BaseAudioContext, Promise<WebAssembly.Module>>()
 
 /** packages/core/include/openaxe/api.h's OpenAxeBlockKind, indexed by web BlockKind. */
 export const KIND_TO_CORE: Record<BlockKind, number> = {
@@ -113,12 +113,33 @@ function ensureWorkletRegistered(context: AudioContext): Promise<void> {
   return promise
 }
 
-/** AudioWorkletGlobalScope can't be trusted to have fetch(), so fetch here. */
-function fetchWasmBytes(context: AudioContext): Promise<ArrayBuffer> {
-  let promise = wasmBytesByContext.get(context)
+/**
+ * Compile the core WASM on the main thread, streaming, so compilation starts
+ * as the ~1MB download arrives instead of only after it lands in memory.
+ * AudioWorkletGlobalScope can't be trusted to have fetch(), so the fetch stays
+ * here; the compiled `WebAssembly.Module` (structured-cloneable) is what gets
+ * handed to the worklet, which skips its own compile.
+ *
+ * `compileStreaming` rejects when the host doesn't send `application/wasm`, so
+ * the same response is buffered as a fallback - a MIME gap costs only the
+ * streaming overlap, not correctness. `response.clone()` lets the fallback
+ * reuse the already in-flight download rather than fetching twice.
+ */
+function fetchWasmModule(context: AudioContext): Promise<WebAssembly.Module> {
+  let promise = wasmModuleByContext.get(context)
   if (!promise) {
-    promise = fetch('/wasm-core/openaxe_core.wasm').then((response) => response.arrayBuffer())
-    wasmBytesByContext.set(context, promise)
+    promise = (async () => {
+      const response = await fetch('/wasm-core/openaxe_core.wasm')
+      if (typeof WebAssembly.compileStreaming === 'function') {
+        try {
+          return await WebAssembly.compileStreaming(response.clone())
+        } catch {
+          // Fall through to the buffered path below.
+        }
+      }
+      return WebAssembly.compile(await response.arrayBuffer())
+    })()
+    wasmModuleByContext.set(context, promise)
   }
   return promise
 }
@@ -148,9 +169,9 @@ export class RigWorkletNode {
   }
 
   static async create(context: AudioContext): Promise<RigWorkletNode> {
-    const [, wasmBytes] = await Promise.all([
+    const [, wasmModule] = await Promise.all([
       ensureWorkletRegistered(context),
-      fetchWasmBytes(context),
+      fetchWasmModule(context),
     ])
     const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
       numberOfInputs: 1,
@@ -161,7 +182,7 @@ export class RigWorkletNode {
       // ordinal. That copy went stale in #330 (9 vs 8) and silently swallowed
       // every reverb param write, so KIND_TO_CORE is now the single source and
       // the worklet is told rather than told twice.
-      processorOptions: { wasmBytes, reverbKind: KIND_TO_CORE.reverb },
+      processorOptions: { wasmModule, reverbKind: KIND_TO_CORE.reverb },
     })
     const rig = new RigWorkletNode(node)
     // Deliberately not awaited: this is a diagnostic, and blocking engine
