@@ -67,3 +67,19 @@ target_link_libraries(teardown_race_test PRIVATE
   openaxe_desktop_lib
 )
 add_test(NAME teardown_race COMMAND teardown_race_test)
+
+# Loopback UI server hardening (issue #415): path containment (a sibling whose
+# name extends the root's prefix) and the Host-header allowlist (DNS
+# rebinding). http_server.cpp is compiled into the app executable directly, not
+# into openaxe_desktop_lib, so the test pulls it in as its own source.
+add_executable(http_server_test http_server_test.cpp ../src/http_server.cpp)
+target_include_directories(http_server_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(http_server_test PRIVATE
+  openaxe_desktop_lib
+)
+if(WIN32)
+  # http_server.cpp calls raw Winsock (accept/bind/socket/...), which lives in a
+  # separate import library on Windows.
+  target_link_libraries(http_server_test PRIVATE ws2_32)
+endif()
+add_test(NAME http_server COMMAND http_server_test)
