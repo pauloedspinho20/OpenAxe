@@ -24,6 +24,24 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+// Fall back to woodpecker/.env (gitignored) for R2_* creds so a direct
+// `node scripts/r2-publish.mjs …` works without exporting them by hand.
+function loadDotenv() {
+  try {
+    const url = new URL('../woodpecker/.env', import.meta.url)
+    for (const line of readFileSync(url, 'utf8').split('\n')) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/)
+      if (!m) continue
+      const key = m[1]
+      const value = m[2].replace(/^["']|["']$/g, '').trim()
+      if (key.startsWith('R2_') && !process.env[key]) process.env[key] = value
+    }
+  } catch {
+    /* no .env — rely on the environment */
+  }
+}
+loadDotenv()
+
 const env = (lower, upper) => process.env[lower] ?? process.env[upper] ?? ''
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -77,6 +95,10 @@ function rcloneEnv() {
 function rclone(args, renv, { stdio = 'pipe' } = {}) {
   return execFileSync('rclone', args, { encoding: 'utf8', stdio, env: renv })
 }
+
+// --s3-no-check-bucket: bucket-scoped "Object Read & Write" R2 tokens are
+// denied HeadBucket/CreateBucket; the bucket exists, so skip the check.
+const NO_CHECK = ['--s3-no-check-bucket']
 
 function listTag(bucket, tag, renv) {
   try {
@@ -135,7 +157,9 @@ async function main() {
     const assets = []
     for (const name of expected) {
       const local = join(work, name)
-      rclone(['copyto', `r2:${opts.bucket}/${opts.tag}/${name}`, local], renv, { stdio: 'inherit' })
+      rclone(['copyto', `r2:${opts.bucket}/${opts.tag}/${name}`, local, ...NO_CHECK], renv, {
+        stdio: 'inherit',
+      })
       const buf = readFileSync(local)
       const sha = createHash('sha256').update(buf).digest('hex')
       assets.push({ name, size: buf.length, sha256: sha, url: `${base}/${opts.tag}/${name}` })
@@ -143,7 +167,12 @@ async function main() {
     const sums = assets.map((a) => `${a.sha256}  ${a.name}`).join('\n') + '\n'
     writeFileSync(join(work, 'sha256sums.txt'), sums)
     rclone(
-      ['copyto', join(work, 'sha256sums.txt'), `r2:${opts.bucket}/${opts.tag}/sha256sums.txt`],
+      [
+        'copyto',
+        join(work, 'sha256sums.txt'),
+        `r2:${opts.bucket}/${opts.tag}/sha256sums.txt`,
+        ...NO_CHECK,
+      ],
       renv,
       {
         stdio: 'inherit',
@@ -176,9 +205,13 @@ async function main() {
     manifest.generated_at = new Date().toISOString()
     manifest.releases = [entry, ...manifest.releases.filter((r) => r.tag_name !== opts.tag)]
     writeFileSync(join(work, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
-    rclone(['copyto', join(work, 'manifest.json'), `r2:${opts.bucket}/manifest.json`], renv, {
-      stdio: 'inherit',
-    })
+    rclone(
+      ['copyto', join(work, 'manifest.json'), `r2:${opts.bucket}/manifest.json`, ...NO_CHECK],
+      renv,
+      {
+        stdio: 'inherit',
+      },
+    )
     console.log(
       `[r2-publish] published ${opts.tag} (${assets.length} assets) → ${base}/${opts.tag}/`,
     )

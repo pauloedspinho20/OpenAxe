@@ -14,8 +14,26 @@
 // (mac: `brew install rclone`; linux: docker/ci-linux image; win: winget).
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
+
+// Fall back to woodpecker/.env (gitignored) for R2_* creds so a direct
+// `node scripts/r2-upload.mjs …` works without exporting them by hand.
+function loadDotenv() {
+  try {
+    const url = new URL('../woodpecker/.env', import.meta.url)
+    for (const line of readFileSync(url, 'utf8').split('\n')) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/)
+      if (!m) continue
+      const key = m[1]
+      const value = m[2].replace(/^["']|["']$/g, '').trim()
+      if (key.startsWith('R2_') && !process.env[key]) process.env[key] = value
+    }
+  } catch {
+    /* no .env — rely on the environment */
+  }
+}
+loadDotenv()
 
 const env = (lower, upper) => process.env[lower] ?? process.env[upper] ?? ''
 
@@ -80,7 +98,12 @@ function main() {
   for (const f of files) {
     const dest = `r2:${opts.bucket}/${opts.tag}/${basename(f)}`
     console.log(`[r2-upload] ${f} → ${dest}`)
-    execFileSync('rclone', ['copyto', f, dest, '--checksum'], { stdio: 'inherit', env: renv })
+    // --s3-no-check-bucket: bucket-scoped "Object Read & Write" R2 tokens are
+    // denied HeadBucket/CreateBucket; the bucket exists, so skip the check.
+    execFileSync('rclone', ['copyto', f, dest, '--checksum', '--s3-no-check-bucket'], {
+      stdio: 'inherit',
+      env: renv,
+    })
   }
   if (opts.publicUrl) {
     console.log(`[r2-upload] public dir: ${opts.publicUrl.replace(/\/$/, '')}/${opts.tag}/`)
