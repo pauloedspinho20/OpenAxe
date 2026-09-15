@@ -29,7 +29,7 @@ export function IconButton({
       disabled={disabled}
       title={title ?? label}
       onClick={onClick}
-      className={`${styles.button} ${styles[variant]} ${styles[size]}`}
+      className={`${styles.button} ${variant === 'accent' ? styles.accent : ''} ${styles[size]}`}
     >
       {children}
     </button>

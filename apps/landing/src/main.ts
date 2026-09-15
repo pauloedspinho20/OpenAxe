@@ -75,20 +75,20 @@ function renderDownloads(): void {
   const platform = detectPlatform()
   const primary = pickPrimary(latest.assets, platform)
 
-  // Latest card
+  // Latest card — system surface, domain ledger rows inside.
   const latestHtml = `
-    <div class="release-card" id="latest-release">
+    <div class="ox-card release-card" id="latest-release">
       <div class="release-head">
         <div>
           <strong>${latest.tag_name}</strong>
-          <span style="margin-left:8px;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent);border-radius:999px;padding:1px 7px;">LATEST</span>
+          <span class="ox-badge ox-badge-accent" style="margin-left:8px">LATEST</span>
         </div>
         <time datetime="${latest.published_at}">${new Date(latest.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</time>
       </div>
       <div class="release-body">
         ${
           primary
-            ? `<a class="btn btn-primary" href="${primary.browser_download_url}" download style="width:100%;margin-bottom:var(--sp-3)">${assetIcon(primary.name)} Download ${latest.tag_name} — ${assetLabel(primary.name)}</a>`
+            ? `<a class="ox-btn ox-btn-primary" href="${primary.browser_download_url}" download style="width:100%;margin-bottom:var(--sp-3)">${assetIcon(primary.name)} Download ${latest.tag_name} — ${assetLabel(primary.name)}</a>`
             : ''
         }
         <div class="asset-list" role="list" aria-label="Download assets for ${latest.tag_name}">
