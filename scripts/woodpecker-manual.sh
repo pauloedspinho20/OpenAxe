@@ -81,10 +81,11 @@ mac_release_leg() {
   (cd "$ROOT" && pnpm --filter @openaxe/desktop package)
   cp "$ROOT"/apps/desktop/build/openaxe-desktop-*.dmg "$STAGE"/ 2>/dev/null || true
   step "macOS leg 3/3 — plugin build + bundles"
-  (cd "$ROOT" && node scripts/ci-local.mjs --stage=plugin --skip-setup)
-  # The AU bundle is EXCLUDE_FROM_ALL, so the default build only stages a
-  # plist stub — build the target explicitly to get the real component.
-  (cd "$ROOT" && cmake --build packages/vst3/build --config Release --target openaxe_au -j)
+  (cd "$ROOT" && node scripts/ci-local.mjs --stage=plugin --skip-setup --with-sdks)
+  # AU and CLAP are EXCLUDE_FROM_ALL, so the default build only stages the
+  # VST3 (and a plist-only AU stub) — build both explicitly for the real
+  # .component/.clap bundles.
+  (cd "$ROOT" && cmake --build packages/vst3/build --config Release --target openaxe_au openaxe_clap -j)
   (cd "$ROOT" && node scripts/collect-plugin-bundles.mjs --platform=macos --tag="$t")
   cp "$ROOT"/packages/vst3/build/openaxe-plugin-bundles-macos-*.zip "$STAGE"/ 2>/dev/null || true
 }
