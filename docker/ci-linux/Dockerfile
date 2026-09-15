@@ -9,7 +9,7 @@
 # - Node 22 + pnpm 10.16.1 mirror .github/actions/setup-js + packageManager.
 # - The apt list mirrors the "Install system dependencies (Linux)" steps in
 #   desktop.yml / plugin.yml plus the cmake/ninja/ccache/pkg-config from
-#   ci.yml core-tests.
+#   ci.yml core-tests, plus rclone + zip for the Woodpecker release legs.
 # - Playwright browsers are installed at container-run time into a named
 #   volume (see run-linux-ci.sh), not baked into the image, so browser
 #   versions keep following pnpm-lock.yaml instead of the image build date.
@@ -28,6 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     ninja-build \
     pkg-config \
+    rclone \
+    zip \
+    unzip \
     libwebkit2gtk-4.1-dev \
     libgtk-3-dev \
     libasound2-dev \

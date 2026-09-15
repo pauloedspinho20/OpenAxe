@@ -62,3 +62,9 @@ storybook-static
 # Generated macOS iconset intermediate;
 # only the .icns/.ico/.png artifacts are committed.
 apps/desktop/packaging/openaxe.iconset
+
+# Woodpecker local secrets (OAuth + agent secret — never commit)
+woodpecker/.env
+
+# Manual release staging (woodpecker-manual.sh)
+dist-release/

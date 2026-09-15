@@ -1,0 +1,32 @@
+# Release publish — tag push v* → R2 manifest + landing deploy (mac agent).
+# Polls R2 until the expected per-OS legs land, writes sha256sums.txt +
+# root manifest.json, then rebuilds the landing against R2 (--source=r2)
+# and deploys it to Cloudflare Pages via wrangler.
+# NOTE: `image` selects the shell for the Local backend.
+
+labels:
+  platform: darwin/arm64
+
+when:
+  - event: tag
+    ref: refs/tags/v*
+
+environment:
+  R2_PUBLIC_URL: https://pub-800f414cbfe9422e9faaa00ed34d2821.r2.dev
+  RELEASES_SOURCE: r2
+
+steps:
+  publish:
+    image: bash
+    secrets: [r2_access_key, r2_secret_key, r2_account_id]
+    commands:
+      # windows joins --expect once the UTM agent is live (issue #427 Phase 4).
+      - node scripts/r2-publish.mjs --expect=macos,linux
+  landing:
+    image: bash
+    secrets: [pages_api_token, r2_account_id]
+    commands:
+      - pnpm --filter @openaxe/landing build
+      - export CLOUDFLARE_API_TOKEN="$pages_api_token"
+      - export CLOUDFLARE_ACCOUNT_ID="$r2_account_id"
+      - npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site --commit-dirty=true

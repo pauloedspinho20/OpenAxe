@@ -275,18 +275,23 @@ function main() {
       if (!configured) return false
       if (!run('cmake', ['--build', 'packages/vst3/build', '--config', 'Release', '-j']))
         return false
-      if (
-        !run('ctest', [
-          '--test-dir',
-          'packages/vst3/build',
-          '-C',
-          'Release',
-          '--output-on-failure',
-          '-LE',
-          'validator',
-        ])
-      )
-        return false
+      const ctestArgs = [
+        '--test-dir',
+        'packages/vst3/build',
+        '-C',
+        'Release',
+        '--output-on-failure',
+        '-LE',
+        'validator',
+      ]
+      // The seqlock stress (monitor_tap case 6) deadlocks under Rosetta
+      // (emulated amd64 Linux on Apple Silicon) — skip it there; it still runs
+      // natively on macOS and on real x86 Linux. Set by the Linux docker
+      // runners when the host arch differs from the container arch.
+      if (process.env.OPENAXE_CI_SKIP_MONITOR_TAP === '1') {
+        ctestArgs.push('-E', 'vst3_monitor_tap')
+      }
+      if (!run('ctest', ctestArgs)) return false
       if (
         !run('ctest', [
           '--test-dir',
