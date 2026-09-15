@@ -49,6 +49,13 @@ struct BlockRecord {
   std::string kind;  // web BlockKind string ("delay", "amp", "mixer", ...)
   int row = 0;
   int col = 0;
+  // Bridge-level memo of the last-applied structural selector, so a redundant
+  // resend (the UI replays each block's full params object on every knob move)
+  // can be skipped WITHOUT the suspend handshake that would otherwise run on
+  // every no-op. -1 = unknown/not yet set (first set always applies). Only
+  // these two selectors carry one; every other param is a lock-free atomic.
+  int32_t reverb_algorithm = -1;
+  int32_t delay_model = -1;
 };
 
 struct EdgeRecord {
@@ -126,6 +133,7 @@ class StudioBridge {
   std::string HandleLoadIrWav(const std::string& req);
   std::string HandleUnloadIr(const std::string& req);
   std::string HandleSetInputGain(const std::string& req);
+  std::string HandleSetInputChannel(const std::string& req);
   std::string HandleSetMasterLevel(const std::string& req);
   std::string HandleSetMasterMuted(const std::string& req);
   std::string HandleSetTunerMuted(const std::string& req);

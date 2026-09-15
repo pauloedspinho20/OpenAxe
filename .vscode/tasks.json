@@ -912,6 +912,43 @@
       "dependsOn": ["CI: local (mac)", "CI: local (linux docker)"],
       "group": "test",
       "problemMatcher": []
+    },
+    {
+      "label": "Woodpecker: run CI manually (mac + linux)",
+      "type": "shell",
+      "command": "bash scripts/woodpecker-manual.sh ci",
+      "detail": "Runs the full Woodpecker CI off-webhook: drift + lint + build + unit + e2e + core + desktop + plugin on the Mac natively, then the same stages in the ubuntu-24.04 Docker leg (scripts/woodpecker-manual.sh, issue #427). No server/webhook needed.",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
+    },
+    {
+      "label": "Woodpecker: release artifacts to R2 (mac + linux)",
+      "type": "shell",
+      "command": "bash scripts/woodpecker-manual.sh release",
+      "detail": "Runs the release pipeline off-webhook: setup → desktop dmg (mac) + deb (linux) → plugin bundles → upload to Cloudflare R2 → sha256sums.txt + manifest.json. R2 creds from env or woodpecker/.env (same as the UI secrets). Ends with the release folder live on the R2 bucket URL.",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
+    },
+    {
+      "label": "Woodpecker: full manual run (CI + release to R2)",
+      "detail": "Everything: the full mac+linux Woodpecker CI, then package + upload to Cloudflare R2 (sha256sums + manifest) — the complete off-webhook release flow in one run",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Woodpecker: run CI manually (mac + linux)",
+        "Woodpecker: release artifacts to R2 (mac + linux)"
+      ],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }

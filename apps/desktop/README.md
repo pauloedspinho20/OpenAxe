@@ -9,8 +9,10 @@ Native desktop shell (macOS, Windows, Linux) for OpenAxe (issue #15).
   WebKitGTK on Linux). The React UI runs inside it.
 - **DSP:** `packages/core`'s `openaxe_core` static library + `extern "C"`
   ABI — same process as the audio, no IPC.
-- **Audio I/O:** JUCE `juce_audio_devices` (issue #15 M1) — CoreAudio / WASAPI / ALSA (see `src/audio.*`) —
-  WASAPI / ALSA / JACK, fetched via CMake. The real-time callback calls
+- **Audio I/O:** [miniaudio](https://github.com/mackron/miniaudio) 0.11.25
+  (public domain / MIT-0, single header vendored at
+  `third_party/miniaudio/miniaudio.h`, issue #374) — CoreAudio / WASAPI-shared /
+  ALSA + PulseAudio + JACK (see `src/audio.*`). The real-time callback calls
   `openaxe_process` directly: same process, zero IPC, no Web Audio.
 - **Tests:** `cmake -S apps/desktop -B build -DOPENAXE_DESKTOP_BUILD_TESTS=ON` builds `audio_io_test`
   (`ctest --test-dir build`). The callback wiring is tested with fake buffers
@@ -118,7 +120,8 @@ server) instead of the bundled copy.
 
 - [x] M0 — shell scaffold: window + webview + core link + `namVersion` JS
       bridge demo (placeholder HTML).
-- [x] M1 — JUCE audio_devices duplex I/O (`AudioIO` in `src/audio.*`), device
+- [x] M1 — miniaudio duplex I/O (`AudioIO` in `src/audio.*`, issue #374;
+      formerly JUCE `audio_devices`, before that RtAudio), device
       enumeration, buffer/sample-rate control, DSP driven from the callback.
 - [x] M2 — full `window.openAxe.*` JS↔C++ bridge (`StudioBridge` in
       `src/bridge.*`): devices, stream control, graph topology, params,
@@ -128,7 +131,7 @@ server) instead of the bundled copy.
 - [x] M3 — reuse the apps/web React UI. `NativeGraphRig` (apps/web/src/native)
       implements `GraphRigControls` over the bridge; `useAudioEngine` dispatches
       to a native variant when `window.openAxe` is present; `useAudioIO` lists
-      JUCE audio_devices. `scripts/build.mjs` bundles the web build (relative base)
+      miniaudio devices. `scripts/build.mjs` bundles the web build (relative base)
       into `build/ui`, served by a small loopback HTTP server (WKWebView
       sandboxes file://). Block/input meters and the tuner are fed from C++ taps
       (`openAxe.getTap`); model JSON is loaded via `openAxe.loadModelJson`.
@@ -201,22 +204,25 @@ deferred because the C++ core doesn't implement them yet (see `NativeBlock`):
   via static initializers).
 - On macOS the TU that includes `webview.h` compiles as Objective-C++
   (`enable_language(OBJCXX)` + `LANGUAGE OBJCXX` on `main.cpp`).
-- JUCE's `AudioIODevice::open()` returns a non-empty `juce::String` on failure
-  (no exception API); `start()` is void and surfaces errors via the device's
-  `lastError`. Device ids are **strings** (`AudioIODeviceType::getDeviceNames`,
-  `AudioIODevice::getDeviceID()`), never integer indices — resolve "default"
-  via the device manager, not a hard-coded sentinel.
+- miniaudio's `ma_device_init()` returns a result code (`MA_SUCCESS` on
+  success, otherwise see `ma_result_description`); `ma_device_start()` is
+  synchronous while runtime disconnects surface asynchronously via the
+  notification callback (`rerouted` / `interruption_began`, polled through
+  `TakeStreamError`). miniaudio delivers **interleaved** f32 frames - the data
+  callback deinterleaves into scratch, runs the graph, and interleaves back.
+  Device ids are **name hashes** (see `HashDeviceId`), never integer indices
+  — resolve "default" via a fresh enumeration, not a hard-coded sentinel.
 
 ## Licensing
 
-The desktop shell uses **JUCE**'s `juce_audio_devices` module for audio I/O
-(replacing the RtAudio backend the early issues/README text referenced). JUCE is
-distributed under the GPL (or a paid JUCE licence for closed-source use); this
-project ships under GPLv3, so the GPL flavour applies. Note this in particular
-against `README.md`'s "Why these choices", which still argues _against_ JUCE on
-licensing grounds — that rationale predates the switch and should be revised.
+The desktop shell's audio I/O is [miniaudio](https://github.com/mackron/miniaudio)
+0.11.25 (vendored at `third_party/miniaudio/miniaudio.h`), released into the
+public domain / MIT-0 — no copyleft, no paid licence tier for closed-source
+use. It replaced JUCE's `juce_audio_devices` (AGPLv3-or-commercial, issue
+#374) and, before that, the RtAudio backend the early issues/README text
+referenced.
 
 The DSP itself is no longer a licensing constraint: since #372 the reverb
 algorithms (the last GPL-infecting DSP, formerly Dragonfly Reverb) are
-hand-written permissive code with no third-party dependency, so only JUCE
-keeps this shell GPL-bound.
+hand-written permissive code with no third-party dependency, so this shell
+carries no GPL-bound dependency.

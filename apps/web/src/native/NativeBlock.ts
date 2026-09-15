@@ -86,8 +86,24 @@ export class NativeBlock implements PresetBlock {
   }
 
   setParams(params: EffectParams): void {
-    this.params = { ...params }
+    // Slim size is intentionally not per-block adjustable in the inspector
+    // (paramSchema hides the knob); slimmable models always run at max
+    // quality (1). Drop any persisted slim_size/slimSize keys, mirroring
+    // RigBlock - re-sending them on every knob move hits the desktop bridge's
+    // suspend-handshake path (Tier 2) even when unchanged.
+    const { slim_size: _slimSnake, slimSize: _slimCamel, ...rest } = params
+    void _slimSnake
+    void _slimCamel
+    const prev = this.params
+    this.params = rest
 
+    // bindGraphRig replays each block's FULL stored params object on every
+    // reconcile (i.e. every knob move anywhere), so only forward the keys that
+    // actually changed. Sending the whole object each time made the bridge
+    // re-apply structural selectors (reverb algorithm, delay model) on every
+    // move - each of which runs the suspend handshake even though the core
+    // no-ops the unchanged value - and that suspend produced an audible
+    // dropout/crack on desktop (the web worklet path never suspends).
     // The Input/Output knobs are block I/O trims, not DSP params. They must
     // not go through setParam: the core's `input_level`/`output_level` params
     // exist only on the Amp family and hold the loaded model's dBu
@@ -96,7 +112,10 @@ export class NativeBlock implements PresetBlock {
     // other block kind just rejected the symbol.
     const input = params.input_level
     const output = params.output_level
-    if (typeof input === 'number' || typeof output === 'number') {
+    if (
+      (typeof input === 'number' && input !== prev.input_level) ||
+      (typeof output === 'number' && output !== prev.output_level)
+    ) {
       void this.bridge.setBlockTrim({
         blockId: this.id,
         ...(typeof input === 'number' ? { input } : {}),
@@ -104,8 +123,12 @@ export class NativeBlock implements PresetBlock {
       })
     }
 
-    for (const [key, value] of Object.entries(params)) {
+    for (const [key, value] of Object.entries(rest)) {
       if (key === 'input_level' || key === 'output_level') continue
+      // Forward only genuinely changed values (see above). Strict equality is
+      // right: the UI sends the same shape (number | string) on every pass, so
+      // an unchanged knob never differs here.
+      if (prev[key] === value) continue
       // The reverb algorithm and delay model are string selects with no core
       // symbol - they must go through their dedicated bridge calls
       // (openaxe_set_reverb_algorithm / openaxe_set_delay_model), not

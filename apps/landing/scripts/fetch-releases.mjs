@@ -14,6 +14,31 @@ const fallbackPath = path.resolve(__dirname, '../src/generated/releases.fallback
 const REPO = process.env.GITHUB_REPOSITORY || 'pauloedspinho20/OpenAxe'
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=100`
 
+// --source=r2 (or RELEASES_SOURCE=r2): read the Woodpecker-published root
+// manifest from R2 instead of the GitHub API (issue #427 Phase 3). Same
+// output schema; the landing can't tell the difference. R2 is the release
+// source of truth now that the repo is private, so it's the default whenever
+// R2_PUBLIC_URL is set; pass --source=github (or RELEASES_SOURCE=github) to
+// force the GitHub API.
+const SOURCE =
+  process.argv.includes('--source=github') || process.env.RELEASES_SOURCE === 'github'
+    ? 'github'
+    : process.argv.includes('--source=r2') ||
+        process.env.RELEASES_SOURCE === 'r2' ||
+        Boolean(process.env.R2_PUBLIC_URL)
+      ? 'r2'
+      : 'github'
+
+async function fetchFromR2() {
+  const base = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')
+  if (!base) throw new Error('RELEASES_SOURCE=r2 requires R2_PUBLIC_URL')
+  const res = await fetch(`${base}/manifest.json`)
+  if (!res.ok) throw new Error(`R2 manifest ${res.status} ${await res.text()}`)
+  const manifest = await res.json()
+  if (!Array.isArray(manifest.releases)) throw new Error('R2 manifest has no releases[]')
+  return { generated_at: manifest.generated_at, repo: REPO, releases: manifest.releases }
+}
+
 async function main() {
   await mkdir(path.dirname(outPath), { recursive: true })
 
@@ -23,6 +48,12 @@ async function main() {
     : { generated_at: new Date().toISOString(), releases: [] }
 
   try {
+    if (SOURCE === 'r2') {
+      const payload = await fetchFromR2()
+      await writeFile(outPath, JSON.stringify(payload, null, 2) + '\n', 'utf8')
+      console.log(`[fetch-releases] wrote ${payload.releases.length} releases from R2 → ${outPath}`)
+      return
+    }
     const headers = {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',

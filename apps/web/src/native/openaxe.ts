@@ -278,8 +278,9 @@ export interface OpenAxeBridge {
    * "never connected" case, not a failure (still `ok: true`). */
   secureLoad(args: { key: string }): Promise<OpenAxeOk & { value: string | null }>
   /** No-op success if there was nothing stored under `key`. */
-  /** Route the host's input channels into the rig (plugin only; a no-op
-   * elsewhere). Mirrors the web's channel modes — see input_routing.h. */
+  /** Route the host's input channels into the rig. Honored by the plugin
+   * and desktop shells, a no-op elsewhere. Mirrors the web's channel modes
+   * — see input_routing.h (plugin) and apps/desktop/src/audio.h (desktop). */
   setInputChannel(args: { mode: 'stereo' | 'l' | 'r' | 'sum' }): Promise<OpenAxeOk>
 
   secureDelete(args: { key: string }): Promise<OpenAxeOk>

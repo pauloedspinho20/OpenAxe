@@ -9,10 +9,9 @@ cmake_minimum_required(VERSION 3.24)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" OPENAXE_VERSION)
 string(STRIP "${OPENAXE_VERSION}" OPENAXE_VERSION)
 
-# C alongside CXX: JUCE's own build tooling (juceaide) needs a working C
-# compiler; enabling it late/implicitly via a FetchContent'd subdirectory
-# instead of here can leave CMAKE_C_COMPILE_OBJECT unset on some generators.
-project(openaxe_desktop VERSION ${OPENAXE_VERSION} LANGUAGES CXX C)
+# miniaudio is compiled as C++ inside audio.cpp (MINIAUDIO_IMPLEMENTATION in
+# that TU), so no C language is needed - CXX alone covers core + shell.
+project(openaxe_desktop VERSION ${OPENAXE_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,27 +52,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(webview)
 
-# ── Audio I/O (JUCE juce_audio_devices, AGPLv3/commercial) ───────────────
-# Low-latency audio via JUCE's own from-scratch per-platform backends:
-# CoreAudio (macOS), WASAPI (Windows; ASIO opt-in later), ALSA (Linux; JACK
-# opt-in later). Replaces RtAudio, whose CoreAudio backend has a reproducible
-# bug (garbage input pointer during its internal duplex bridging - see
-# audio.cpp's Open()) - JUCE's CoreAudioIODevice is an independent
-# implementation, not RtAudio-based, so that bug cannot reproduce here.
+# ── Audio I/O (miniaudio 0.11.25, public domain / MIT-0) ─────────────────
+# Low-latency duplex audio via miniaudio's own from-scratch per-platform
+# backends: CoreAudio (macOS), WASAPI shared (Windows; exclusive opt-in
+# later), ALSA + PulseAudio + JACK (Linux, same order miniaudio probes).
+# Single C header vendored at third_party/miniaudio/miniaudio.h (no
+# FetchContent, no dependencies); MINIAUDIO_IMPLEMENTATION lives in exactly
+# one TU (src/audio.cpp). Replaces JUCE juce_audio_devices (AGPLv3/
+# commercial - issue #374) and, before that, RtAudio, whose CoreAudio backend
+# had a reproducible bug (garbage input pointer during its internal duplex
+# bridging - see audio.cpp's Open()).
 #
-# Fetch the whole JUCE tree rather than a single juce_add_module() call:
-# JUCE's own top-level CMakeLists.txt registers every module as a lazy CMake
-# target (nothing compiles until something links against it), which avoids
-# manually wiring juce_audio_devices' transitive deps ourselves.
-set(JUCE_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
-set(JUCE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-  juce
-  GIT_REPOSITORY https://github.com/juce-framework/JUCE
-  GIT_TAG 9.0.1
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(juce)
+# miniaudio's AAudio backend is the future apps/android answer.
 
 # ── Bridge JSON + native file dialogs (M2) ──────────────────────────────
 # nlohmann/json (MIT, header-only): request/response marshalling for the
@@ -99,16 +89,6 @@ FetchContent_Declare(
 # floor for the fetched deps only (this project itself already requires 3.24).
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_MakeAvailable(nlohmann_json portable_file_dialogs)
-
-# ── Curl (JUCE juce_core WebInputStream on Linux) ───────────────────────
-# JUCE's juce_core uses libcurl for HTTP (pkg-config 'libcurl' found during
-# CMake configure on Linux — see CI logs: -- Found libcurl, version 8.5.0).
-# It compiles juce_core.cpp with curl symbols but does not always propagate the
-# link dep via juce_audio_devices alone, leading to undefined refs
-# (curl_easy_init etc.) on ubuntu-24.04. Link explicitly on Linux.
-if(UNIX AND NOT APPLE)
-  find_package(CURL REQUIRED)
-endif()
 
 # ── The desktop app ──────────────────────────────────────────────────────
 # openaxe_desktop_lib: the app logic (audio I/O now; the JS bridge in M2), built
@@ -145,16 +125,26 @@ target_link_libraries(openaxe_desktop_lib PUBLIC
   nlohmann_json::nlohmann_json
   portable_file_dialogs
 )
-# PRIVATE, per JUCE's own CMake docs: linking a bare module target PUBLIC can
-# cause it to be built into a target multiple times. Nothing outside
-# audio.cpp/audio.h needs JUCE symbols (same containment RtAudio had).
-target_link_libraries(openaxe_desktop_lib PRIVATE juce_audio_devices)
+# miniaudio is vendored (third_party/miniaudio/miniaudio.h, header-only with
+# MINIAUDIO_IMPLEMENTATION in src/audio.cpp) - only its include dir is needed.
+# Nothing outside audio.cpp needs miniaudio symbols.
+target_include_directories(openaxe_desktop_lib PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniaudio")
 if(UNIX AND NOT APPLE)
-  target_link_libraries(openaxe_desktop_lib PRIVATE CURL::libcurl)
+  # miniaudio Linux backends (ALSA/Pulse/JACK): pthreads, libm, dlopen.
+  target_link_libraries(openaxe_desktop_lib PRIVATE pthread m dl)
 endif()
-# Normally implied by juce_add_gui_app()/juce_add_console_app(), which this
-# bare-module integration doesn't use - several JUCE modules branch on it.
-target_compile_definitions(openaxe_desktop_lib PRIVATE JUCE_STANDALONE_APPLICATION=1)
+if(WIN32)
+  # miniaudio.h pulls in windows.h, whose function-like min/max macros break
+  # std::min/std::max on MSVC (error C2589 in audio.cpp). JUCE's CMake setup
+  # used to define NOMINMAX for us; now we do it ourselves (audio.cpp has a
+  # matching #define guard as belt-and-braces).
+  target_compile_definitions(openaxe_desktop_lib PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+if(APPLE)
+  # miniaudio CoreAudio backend frameworks.
+  target_link_libraries(openaxe_desktop_lib PRIVATE "-framework CoreAudio" "-framework AudioToolbox")
+endif()
 
 if(APPLE)
   # webview's Cocoa backend is Objective-C++; the TU that includes
