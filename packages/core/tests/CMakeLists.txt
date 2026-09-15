@@ -115,6 +115,10 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_HAS_DSPARK)
   add_executable(api_automation_slots_test api_automation_slots_test.cpp)
   target_include_directories(api_automation_slots_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
   target_link_libraries(api_automation_slots_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  # The slim-size Tier-2 guard case loads a real slimmable capture from the
+  # NAM example models, so it needs the same dir define as api_realtime_test.
+  target_compile_definitions(api_automation_slots_test PRIVATE
+    NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
   add_test(NAME api_automation_slots_test COMMAND api_automation_slots_test)
 else()
   message(WARNING "Skipping api_automation_slots_test - nam-core/dspark submodules must all be initialized (reverb algorithms need no submodule since #372)")

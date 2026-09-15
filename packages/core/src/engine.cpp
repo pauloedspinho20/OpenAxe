@@ -2326,9 +2326,20 @@ std::optional<ParamDescriptor> AudioEngine::AutomationParamInfo(int slot, int en
 
 void AudioEngine::ApplySlotMirror(AutomationSlotState& state) {
   if (!state.bound) return;
-  const int count = ParamCount(state.block);
+  const BlockState* block_state = FindBlockThreadSafe(state.block);
+  if (!block_state) return;
+  const bool amp_family = IsAmpFamily(block_state->kind);
+  const int count = block_state->param_count.load(std::memory_order_relaxed);
   for (int i = 0; i < kAutomationParamsPerSlot && i < count; ++i) {
     if (!state.dirty[i]) continue;
+    // The amp family's slim size is Tier 2 - SetParam forwards it synchronously
+    // into NAMCore, which may reallocate (issue #211). This slot path is
+    // lock-free and explicitly safe from a host's parameter-automation thread,
+    // so it cannot forward that one entry; the caller must resolve the bound
+    // block and call openaxe_set_param on it under its own suspend handshake
+    // (the VST3 layer already reroutes it - see automation_params.cpp). Ignoring
+    // it here is what keeps the "safe from host parameter threads" promise true.
+    if (amp_family && i == kAmpSlimSizeParam) continue;
     const auto info = ParamInfo(state.block, i);
     if (!info) continue;
     SetParam(state.block, i, DenormalizeFrom(state.mirror[i], info->min_value, info->max_value));
