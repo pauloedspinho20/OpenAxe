@@ -1,9 +1,9 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 
-// GitHub Pages serves project sites at /<repo>/ — keep base configurable so
-// `pnpm dev` stays at `/` and CI builds emit /OpenAxe/ asset paths.
-const base = process.env.GITHUB_ACTIONS ? '/OpenAxe/' : '/'
+// Root-relative base: the landing lives at the root of the site (Cloudflare
+// Pages), not under /OpenAxe/ on GitHub Pages.
+const base = '/'
 const dir = import.meta.dirname
 
 export default defineConfig({

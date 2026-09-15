@@ -16,8 +16,6 @@ type Release = {
 
 // Config — keep in one place so the SEO JSON-LD and the live CTA agree.
 const WEB_APP_URL = 'https://openaxe.pages.dev'
-const REPO_URL = 'https://github.com/pauloedspinho20/OpenAxe'
-const PAGES_CANONICAL = 'https://pauloedspinho20.github.io/OpenAxe/'
 
 function formatBytes(n: number): string {
   if (!n) return ''
@@ -68,7 +66,7 @@ function renderDownloads(): void {
   if (!container) return
 
   if (!latest) {
-    container.innerHTML = `<p class="muted">No releases published yet. Check <a href="${REPO_URL}/releases">GitHub Releases</a>.</p>`
+    container.innerHTML = '<p class="muted">No releases published yet.</p>'
     return
   }
 
@@ -106,8 +104,8 @@ function renderDownloads(): void {
             .join('')}
         </div>
         <p class="download-note">
-          Also available on <a href="${latest.html_url}">GitHub Releases</a>.
-          On macOS the dmg is unsigned — right-click → Open on first launch. Linux .deb installs via <code>dpkg -i</code>.
+          On macOS the dmg is unsigned — right-click → Open on first launch. Linux .deb installs via
+          <code>dpkg -i</code>.
         </p>
       </div>
     </div>
@@ -117,9 +115,7 @@ function renderDownloads(): void {
   const archive = releases.slice(1)
   const archiveHtml =
     archive.length === 0
-      ? '<p class="muted" style="margin-top:var(--sp-4)">Archive will grow with each <code>v*</code> tag — see <a href="' +
-        REPO_URL +
-        '/releases">all releases</a>.</p>'
+      ? '<p class="muted" style="margin-top:var(--sp-4)">The archive will grow with each release.</p>'
       : `
     <div class="archive">
       <h3>Previous releases</h3>
@@ -144,12 +140,10 @@ function renderDownloads(): void {
   const cta = document.getElementById('download-cta') as HTMLAnchorElement | null
   if (cta && primary) cta.href = primary.browser_download_url
 
-  // Update web app links (in case canonical changes)
+  // Update web app links
   for (const el of document.querySelectorAll<HTMLAnchorElement>('a[data-web-app]')) {
     el.href = WEB_APP_URL
   }
-  const pagesLink = document.getElementById('pages-canonical') as HTMLAnchorElement | null
-  if (pagesLink) pagesLink.href = PAGES_CANONICAL
 }
 
 // Theme: respect prefers-color-scheme, persist choice
@@ -180,7 +174,7 @@ const verEl = document.getElementById('landing-version')
 if (verEl) {
   // Keep in sync with VERSION file — duplicated at build; runtime fallback is releasesData latest
   const v =
-    (releasesData as { releases: Release[] }).releases[0]?.tag_name?.replace(/^v/, '') ?? '0.2.3'
+    (releasesData as { releases: Release[] }).releases[0]?.tag_name?.replace(/^v/, '') ?? '0.2.8'
   verEl.textContent = `v${v}`
 }
 const yearEl = document.getElementById('footer-year')
