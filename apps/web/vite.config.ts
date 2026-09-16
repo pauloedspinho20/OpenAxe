@@ -7,6 +7,19 @@ export default defineConfig({
   plugins: [
     react(),
     {
+      // The production build carries a strict Content-Security-Policy <meta> tag
+      // (see index.html) that all three shells serve. Vite's dev server can't
+      // satisfy it: it injects an inline React Refresh preamble (blocked by
+      // `script-src 'self'`) and opens an HMR WebSocket. Strip the tag while
+      // serving so `pnpm dev` and the Playwright dev-server run keep working;
+      // it is still present in what `vite build` emits (and `vite preview`).
+      name: 'strip-csp-in-dev',
+      apply: 'serve',
+      transformIndexHtml(html) {
+        return html.replace(/\s*<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?\/>/i, '')
+      },
+    },
+    {
       name: 'media-var-replace',
       transform(code, id) {
         if (id.endsWith('.css')) {
