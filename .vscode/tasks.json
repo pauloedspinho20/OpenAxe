@@ -927,6 +927,32 @@
       "problemMatcher": ["$tsc", "$gcc"]
     },
     {
+      "label": "Woodpecker: start server (UI at http://localhost:8000)",
+      "type": "shell",
+      "command": "docker compose -f woodpecker/docker-compose.yml up -d && (open http://localhost:8000 || xdg-open http://localhost:8000 || true)",
+      "detail": "Starts the local-only Woodpecker server (docker compose) and opens the UI. Activate the repo / trigger pipelines from the UI; agents are started separately (woodpecker/agent-mac.sh etc.).",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Woodpecker: stop server",
+      "type": "shell",
+      "command": "docker compose -f woodpecker/docker-compose.yml down",
+      "detail": "Stops and removes the Woodpecker server container (the woodpecker-data volume is kept).",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Woodpecker: release artifacts to R2 (mac + linux)",
       "type": "shell",
       "command": "bash scripts/woodpecker-manual.sh release",

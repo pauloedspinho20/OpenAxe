@@ -185,9 +185,11 @@ landing_build_deploy() {
     return 0
   fi
   step "Landing 2/2 — deploy to Cloudflare Pages (openaxe-site)"
+  # --branch=main: deploy to the project's production branch even from a topic
+  # branch or a detached tag checkout (issue #441).
   (cd "$ROOT" && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
     CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-${R2_ACCOUNT_ID:-}}" \
-    npx --yes wrangler pages deploy apps/landing/dist --project-name=openaxe-site --commit-dirty=true)
+    npx --yes wrangler pages deploy apps/landing/dist --project-name=openaxe-site --branch=main --commit-dirty=true)
 }
 
 usage() { sed -n '3,20p' "$0"; }
