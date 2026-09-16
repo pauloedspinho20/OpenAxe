@@ -118,16 +118,18 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
     this.reverbKind =
       typeof injectedReverbKind === 'number' ? injectedReverbKind : REVERB_KIND_FALLBACK
 
-    // The TS wrapper (RigWorkletNode) fetches the .wasm bytes on the main
-    // thread and hands them over via processorOptions - AudioWorkletGlobalScope
-    // can't be trusted to have fetch(), same dance as the old per-effect
-    // worklets and neural-amp-modeler-wasm.
+    // The TS wrapper (RigWorkletNode) stream-compiles the .wasm on the main
+    // thread (WebAssembly.compileStreaming, so download and compilation overlap)
+    // and hands the compiled Module over via processorOptions - AudioWorklet-
+    // GlobalScope can't be trusted to have fetch(), same dance as the old
+    // per-effect worklets and neural-amp-modeler-wasm. Instantiating from a
+    // Module (not raw bytes) skips a second compile inside the worklet.
     this.port.onmessage = (event) => this.handleMessage(event.data)
-    const wasmBytes = options.processorOptions.wasmBytes
+    const wasmModule = options.processorOptions.wasmModule
     this.ready = createModule({
       instantiateWasm(imports, successCallback) {
-        WebAssembly.instantiate(wasmBytes, imports).then((result) => {
-          successCallback(result.instance, result.module)
+        WebAssembly.instantiate(wasmModule, imports).then((instance) => {
+          successCallback(instance, wasmModule)
         })
         return {} // signals async instantiation - see Emscripten's instantiateWasm contract
       },

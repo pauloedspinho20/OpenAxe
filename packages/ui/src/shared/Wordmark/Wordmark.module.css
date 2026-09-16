@@ -9,14 +9,6 @@
   user-select: none;
 }
 
-.inlineDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px 1px var(--accent-dim);
-}
-
 .hero {
   display: flex;
   flex-direction: column;
@@ -77,14 +69,6 @@
   justify-content: center;
   gap: var(--sp-2);
   margin-top: var(--sp-2);
-}
-
-.metaColumn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  align-items: center;
-  justify-content: center;
 }
 
 .links {

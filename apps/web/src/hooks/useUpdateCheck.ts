@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import pkg from '../../package.json'
+import { RELEASES_MANIFEST_URL } from '../config/landing'
 
-const REPO = 'pauloedspinho20/OpenAxe'
-const GITHUB_LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
-const LANDING_RELEASES_URL = 'https://pauloedspinho20.github.io/OpenAxe/releases-data.json'
+// The release source of truth is the landing's build-time manifest
+// (apps/landing/scripts/fetch-releases.mjs → releases-data.json, published
+// alongside the landing). The repo is private, so the unauthenticated GitHub
+// API can't be used from the browser; the landing is public and serves this
+// file with `access-control-allow-origin: *`. VITE_LANDING_URL overrides the
+// host (see src/config/landing.ts).
 const CACHE_KEY = 'openaxe-update-cache'
 const DISMISS_PREFIX = 'openaxe-dismissed-update-'
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6h — stays under 60 req/h anonymous limit
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6h
 const POLL_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24h
 
 export interface ReleaseInfo {
@@ -76,54 +80,26 @@ function writeCache(entry: CacheEntry): void {
   }
 }
 
-async function fetchLatestFromGitHub(): Promise<ReleaseInfo | null> {
-  const res = await fetch(GITHUB_LATEST_URL, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  })
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`)
-  const data = (await res.json()) as {
-    tag_name: string
-    html_url: string
-    published_at: string | null
-    draft?: boolean
-    prerelease?: boolean
-  }
-  if (!data.tag_name || data.draft) return null
-  return { tag: data.tag_name, htmlUrl: data.html_url, publishedAt: data.published_at ?? null }
-}
-
-async function fetchLatestFallback(): Promise<ReleaseInfo | null> {
-  // Landing releases payload (if exposed) — currently built into landing bundle,
-  // so this is best-effort. If not available, the API result is authoritative.
-  try {
-    const res = await fetch(LANDING_RELEASES_URL, { cache: 'no-store' })
-    if (!res.ok) return null
-    const data = (await res.json()) as {
-      releases?: Array<{ tag_name: string; html_url: string; published_at: string }>
-    }
-    const latest = data.releases?.[0]
-    if (!latest?.tag_name) return null
-    return {
-      tag: latest.tag_name,
-      htmlUrl: latest.html_url,
-      publishedAt: latest.published_at ?? null,
-    }
-  } catch {
-    return null
-  }
-}
-
 async function fetchLatest(): Promise<ReleaseInfo | null> {
-  try {
-    const viaApi = await fetchLatestFromGitHub()
-    if (viaApi) return viaApi
-  } catch {
-    // fall through to landing fallback
+  const res = await fetch(RELEASES_MANIFEST_URL, { cache: 'no-store' })
+  if (!res.ok) return null
+  const data = (await res.json()) as {
+    releases?: Array<{
+      tag_name?: string
+      html_url?: string
+      published_at?: string | null
+      prerelease?: boolean
+    }>
   }
-  return fetchLatestFallback()
+  // Newest first, drafts excluded upstream; skip prereleases like the GitHub
+  // releases/latest endpoint this replaced.
+  const latest = data.releases?.find((r) => r.tag_name && r.html_url && !r.prerelease)
+  if (!latest?.tag_name || !latest.html_url) return null
+  return {
+    tag: latest.tag_name,
+    htmlUrl: latest.html_url,
+    publishedAt: latest.published_at ?? null,
+  }
 }
 
 export function dismissUpdate(tag: string): void {
@@ -139,7 +115,7 @@ export function dismissUpdate(tag: string): void {
 // ---------------------------------------------------------------------------
 
 export interface UseUpdateCheckResult {
-  /** Latest tag from GitHub if newer than current and not dismissed, else null */
+  /** Latest released tag if newer than current and not dismissed, else null */
   latest: ReleaseInfo | null
   checking: boolean
   dismiss: () => void

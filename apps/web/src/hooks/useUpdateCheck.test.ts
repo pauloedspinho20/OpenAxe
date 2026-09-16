@@ -35,15 +35,19 @@ describe('useUpdateCheck', () => {
     global.fetch = originalFetch
   })
 
-  it('shows update when GitHub reports newer tag', async () => {
+  it('shows update when the landing manifest reports a newer tag', async () => {
     global.fetch = vi.fn(
       async () =>
         ({
           ok: true,
           json: async () => ({
-            tag_name: 'v0.2.5',
-            html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.5',
-            published_at: null,
+            releases: [
+              {
+                tag_name: 'v0.2.5',
+                html_url: 'https://openaxe-site.pages.dev/releases.html',
+                published_at: null,
+              },
+            ],
           }),
         }) as Response,
     )
@@ -58,9 +62,40 @@ describe('useUpdateCheck', () => {
         ({
           ok: true,
           json: async () => ({
-            tag_name: 'v0.2.4',
-            html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.4',
-            published_at: null,
+            releases: [
+              {
+                tag_name: 'v0.2.4',
+                html_url: 'https://openaxe-site.pages.dev/releases.html',
+                published_at: null,
+              },
+            ],
+          }),
+        }) as Response,
+    )
+    const { result } = renderHook(() => useUpdateCheck('0.2.4'))
+    await waitFor(() => expect(result.current.checking).toBe(false))
+    expect(result.current.latest).toBeNull()
+  })
+
+  it('skips prereleases', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          json: async () => ({
+            releases: [
+              {
+                tag_name: 'v0.3.0-rc.1',
+                html_url: 'https://openaxe-site.pages.dev/releases.html',
+                published_at: null,
+                prerelease: true,
+              },
+              {
+                tag_name: 'v0.2.4',
+                html_url: 'https://openaxe-site.pages.dev/releases.html',
+                published_at: null,
+              },
+            ],
           }),
         }) as Response,
     )
@@ -75,9 +110,13 @@ describe('useUpdateCheck', () => {
         ({
           ok: true,
           json: async () => ({
-            tag_name: 'v0.2.5',
-            html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.2.5',
-            published_at: null,
+            releases: [
+              {
+                tag_name: 'v0.2.5',
+                html_url: 'https://openaxe-site.pages.dev/releases.html',
+                published_at: null,
+              },
+            ],
           }),
         }) as Response,
     )

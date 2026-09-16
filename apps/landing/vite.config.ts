@@ -1,9 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 
-// GitHub Pages serves project sites at /<repo>/ — keep base configurable so
-// `pnpm dev` stays at `/` and CI builds emit /OpenAxe/ asset paths.
-const base = process.env.GITHUB_ACTIONS ? '/OpenAxe/' : '/'
+// Root-relative base: the landing lives at the root of the site (Cloudflare
+// Pages), not under /OpenAxe/ on GitHub Pages.
+const base = '/'
 const dir = import.meta.dirname
 
 export default defineConfig({
@@ -20,6 +21,21 @@ export default defineConfig({
     },
   },
   plugins: [
+    {
+      // Publish the release manifest the landing already renders as a static
+      // JSON file, so the web app's update check can read it cross-origin
+      // (Cloudflare Pages serves it with `access-control-allow-origin: *`).
+      // The repo is private, so the web app can't use the unauthenticated
+      // GitHub API. Emitted in addition to being bundled into the page.
+      name: 'emit-releases-manifest',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'releases-data.json',
+          source: readFileSync(resolve(dir, 'src/generated/releases.json'), 'utf8'),
+        })
+      },
+    },
     {
       name: 'media-var-replace',
       transform(code, id) {

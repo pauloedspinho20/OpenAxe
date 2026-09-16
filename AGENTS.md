@@ -68,7 +68,7 @@ cmake --build packages/vst3/build && ctest --test-dir packages/vst3/build --outp
 cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_RTSAN=ON
 ```
 
-`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop** and **Full check** flows.
+`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop**, **Landing** (**Landing: Dev server / Build / Preview / Fetch releases**) and **Full check** flows.
 
 `packages/core`'s WASM build is a separate, manual step
 (`bash scripts/build-core-wasm.sh`, needs the Emscripten SDK on `PATH`) that
@@ -108,6 +108,7 @@ rebuild, CMake reconfigure, etc.) to take effect.
 | Var                     | Where                             | Purpose                                                                                                                                                                                           |
 | ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                     |
+| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                   |
 | `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged. |
 | `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                |
 

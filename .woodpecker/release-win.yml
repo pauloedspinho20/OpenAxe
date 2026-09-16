@@ -26,7 +26,10 @@ steps:
   plugin:
     image: powershell
     commands:
-      - node scripts/ci-local.mjs --stage=plugin --skip-setup
+      - node scripts/ci-local.mjs --stage=plugin --skip-setup --with-sdks
+      # CLAP is EXCLUDE_FROM_ALL — build it explicitly so the zip ships
+      # OpenAxe.vst3 + OpenAxe.clap (AU is macOS-only).
+      - cmake --build packages/vst3/build --config Release --target openaxe_clap -j
       - node scripts/collect-plugin-bundles.mjs --platform=windows
   upload:
     image: powershell

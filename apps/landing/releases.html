@@ -7,25 +7,25 @@
     <title>Releases — OpenAxe downloads for every version</title>
     <meta
       name="description"
-      content="Every OpenAxe release — desktop (dmg/zip/deb) and VST3/CLAP/AU bundles. Download any version from GitHub Releases, plus the live web app on Cloudflare Pages."
+      content="Every OpenAxe release — desktop (dmg/zip/deb) and VST3/CLAP/AU plugin bundles. Download any version, plus the live web app."
     />
-    <link rel="canonical" href="https://pauloedspinho20.github.io/OpenAxe/releases.html" />
+    <link rel="canonical" href="https://openaxe-site.pages.dev/releases.html" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/openaxe-32.png" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Releases — OpenAxe" />
-    <meta property="og:url" content="https://pauloedspinho20.github.io/OpenAxe/releases.html" />
-    <meta property="og:image" content="https://pauloedspinho20.github.io/OpenAxe/og-image.png" />
+    <meta property="og:url" content="https://openaxe-site.pages.dev/releases.html" />
+    <meta property="og:image" content="https://openaxe-site.pages.dev/og-image.png" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "OpenAxe Releases",
         "description": "Every OpenAxe desktop and plugin release.",
-        "url": "https://pauloedspinho20.github.io/OpenAxe/releases.html",
+        "url": "https://openaxe-site.pages.dev/releases.html",
         "isPartOf": {
           "@type": "WebSite",
           "name": "OpenAxe",
-          "url": "https://pauloedspinho20.github.io/OpenAxe/"
+          "url": "https://openaxe-site.pages.dev/"
         }
       }
     </script>
@@ -36,19 +36,13 @@
       <div class="container">
         <a class="brand" href="/" aria-label="OpenAxe home">
           <img src="/icons/openaxe-32.png" alt="" width="28" height="28" aria-hidden="true" />
-          OPEN<span>AXE</span> <span class="beta" aria-label="beta">BETA</span>
+          OPEN<span>AXE</span> <span class="ox-badge ox-badge-accent" aria-label="beta">BETA</span>
         </a>
         <nav class="nav" aria-label="Primary">
           <a href="/">Home</a>
           <a href="/releases.html" aria-current="page">Releases</a>
-          <a href="https://github.com/pauloedspinho20/OpenAxe/releases" rel="noopener">GitHub</a>
           <a data-web-app href="https://openaxe.pages.dev" rel="noopener">Web app ↗</a>
-          <button
-            id="theme-toggle"
-            class="btn btn-ghost"
-            style="padding: 6px 10px; font-size: 12px"
-            type="button"
-          >
+          <button id="theme-toggle" class="ox-btn ox-btn-ghost ox-btn-sm" type="button">
             ☾ Carbon
           </button>
         </nav>
@@ -60,32 +54,22 @@
           Releases
         </h1>
         <p class="sub">
-          Every <code>v*</code> tag publishes to
-          <a href="https://github.com/pauloedspinho20/OpenAxe/releases">GitHub Releases</a>. This
-          page mirrors them for SEO and convenience — canonical download URLs remain the Release
-          assets. Web app lives on
-          <a data-web-app href="https://openaxe.pages.dev" rel="noopener">Cloudflare Pages</a>.
+          Every release is published here with desktop installers and plugin bundles. The web app
+          runs at
+          <a data-web-app href="https://openaxe.pages.dev" rel="noopener">openaxe.pages.dev</a> — no
+          download needed.
         </p>
         <div id="download-root" aria-live="polite">
           <p class="muted">Loading releases…</p>
-          <noscript
-            ><p>
-              Enable JavaScript or
-              <a href="https://github.com/pauloedspinho20/OpenAxe/releases">browse on GitHub</a>.
-            </p></noscript
-          >
+          <noscript><p>Enable JavaScript to see the release list.</p></noscript>
         </div>
-        <p style="margin-top: var(--sp-6); font-size: 12px; color: var(--ink-3)">
-          Tip: <code>gh release download v0.2.3 --repo pauloedspinho20/OpenAxe</code> fetches a tag
-          from the CLI.
-        </p>
       </div>
     </main>
     <footer class="site-footer" role="contentinfo">
       <div class="container">
-        <div>© <span id="footer-year">2026</span> OpenAxe Contributors · GPLv3</div>
+        <div>© <span id="footer-year">2026</span> OpenAxe</div>
         <div class="footer-links">
-          <a href="/">Home</a> <a href="https://github.com/pauloedspinho20/OpenAxe">GitHub</a>
+          <a href="/">Home</a>
         </div>
       </div>
     </footer>

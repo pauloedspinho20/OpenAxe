@@ -79,6 +79,72 @@
       }
     },
     {
+      "label": "Landing: Dev server",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/landing dev",
+      "detail": "Starts the Vite dev server (apps/landing) - marketing site + releases mirror, vanilla TS + design-system vanilla CSS, no React",
+      "isBackground": true,
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "pattern": [
+          {
+            "regexp": ".",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE v",
+          "endsPattern": "ready in"
+        }
+      }
+    },
+    {
+      "label": "Landing: Build",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/landing build",
+      "detail": "Production build of the landing site to apps/landing/dist (index.html + releases.html) - prebuild refreshes generated/releases.json, see pages.yml for the GitHub Pages deploy",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Landing: Preview",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/landing preview",
+      "detail": "Serves the production build locally - run Landing: Build first",
+      "isBackground": true,
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Landing: Fetch releases",
+      "type": "shell",
+      "command": "pnpm --filter @openaxe/landing fetch:releases",
+      "detail": "Refreshes apps/landing/src/generated/releases.json from the GitHub Releases API (falls back to the checked-in snapshot offline)",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Build",
       "type": "shell",
       "command": "pnpm build",
