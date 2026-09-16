@@ -2,6 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Content-Security-Policy for the web build (and, since the desktop/plugin
+      shells serve this same built HTML, for those too). Delivered as a <meta>
+      tag because the app is a static SPA. Allowed sources are traced below;
+      any new third-party integration must be added here or it will silently
+      break.
+
+      script-src  'self' + 'wasm-unsafe-eval' (WebAssembly.instantiate for
+                  wasm-core/openaxe_core.wasm; the production bundle contains
+                  no eval/new Function).
+      style-src   'self' + 'unsafe-inline' (React inline `style` attributes).
+      img-src     'self' + data: (CSS SVG backgrounds) + api.tone3000.com
+                  (Tone3000 tone images/avatars).
+      connect-src 'self' + the Tone3000 API (tone3000/config.ts; api. is the
+                  storage origin its asset URLs/redirects resolve to) + the
+                  update check (api.github.com, pauloedspinho20.github.io).
+      font-src    'self' (no external font CDN).
+      frame-ancestors is intentionally omitted: it is ignored in a <meta> CSP.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.tone3000.com; font-src 'self'; connect-src 'self' https://www.tone3000.com https://api.tone3000.com https://api.github.com https://pauloedspinho20.github.io; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/openaxe-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/openaxe-16.png" />
