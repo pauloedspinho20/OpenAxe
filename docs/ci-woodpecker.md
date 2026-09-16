@@ -33,11 +33,17 @@ https://smee.io/<id> --target http://localhost:8000/api/hook`) even
 | `.woodpecker/ci-mac.yml`                                    | macOS agent, Local backend — full `ci-local.mjs` incl. e2e                                                                         |
 | `.woodpecker/ci-linux.yml`                                  | Docker agent, `openaxe-ci-linux` image — no e2e (browsers install at run time, see `docker/ci-linux/run-linux-ci.sh`)              |
 | `.woodpecker/ci-win.yml`                                    | UTM Win11 ARM agent, Local backend — provisional subset (JS stages + core); desktop/plugin join when green                         |
-| `.woodpecker/release-{mac,linux,win}.yml`                   | tag guard → setup → desktop CPack → plugin bundles → `r2-upload.mjs`                                                               |
+| `.woodpecker/release-{mac,linux,win}.yml`                   | tag guard → setup → desktop CPack → plugin bundles → `r2-upload.mjs` (mac zip = VST3 + AU + CLAP; win = VST3 + CLAP)               |
 | `.woodpecker/release-publish.yml`                           | polls R2 (`--expect=macos,linux`; +windows when UTM live) → sha256sums + manifest → landing rebuild (`--source=r2`) → Pages deploy |
 | `scripts/{r2-upload,r2-publish,collect-plugin-bundles}.mjs` | release tooling; `fetch-releases.mjs --source=r2` reads the R2 manifest                                                            |
 | `woodpecker/docker-compose.yml`                             | server (SQLite volume `woodpecker-data`)                                                                                           |
 | `woodpecker/agent-{mac,linux,win}.*`                        | the three agents                                                                                                                   |
+
+The release `plugin` step runs `ci-local.mjs --stage=plugin --skip-setup --with-sdks`.
+On an agent that has never built a plugin that fetches iPlug2's VST3/CLAP SDKs
+(idempotent, only when the sentinel header is missing) before configuring, then
+builds the two `EXCLUDE_FROM_ALL` targets (`openaxe_au`, `openaxe_clap`) so
+`collect-plugin-bundles.mjs` packs VST3 + AU + CLAP into one zip.
 
 ## First run
 

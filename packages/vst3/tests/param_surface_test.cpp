@@ -65,6 +65,37 @@ void TestGroups() {
   std::printf("  groups: Master, Slot 1..15\n");
 }
 
+// The descriptor data RegisterParams feeds to iPlug (issue #390). The call
+// itself needs the SDK and a host, but the values come from the generated
+// table below — a drift in any of these silently mis-ranges every host
+// automation lane, which is exactly what #390 was.
+void TestRegistrationDescriptors() {
+  using namespace openaxe::automation;
+  // Host-facing names/units, not the internal core symbols.
+  CHECK(StrEq(kMasterLabels[0], "Master Level"));
+  CHECK(StrEq(kMasterLabels[1], "Master Mute"));
+  CHECK(StrEq(kMasterUnits[0], "x"));
+  CHECK(StrEq(kMasterUnits[1], ""));
+  // Master default = normalized default mapped through the real range: level
+  // starts at unity (1.0), mute at 0.
+  const double level = kMasterMin[0] + kMasterDefaultNormalized[0] * (kMasterMax[0] - kMasterMin[0]);
+  CHECK(std::fabs(level - 1.0) < 1e-6);
+  CHECK(std::fabs(kMasterMin[1] + kMasterDefaultNormalized[1] * (kMasterMax[1] - kMasterMin[1])) < 1e-6);
+  // Every block slot's id range is contiguous, gap-free and inside the count —
+  // RegisterParams does one InitParamRange per slot over [first, last].
+  for (int slot = kFirstBlockSlot; slot < kSlotCount; ++slot) {
+    const int first = SlotParamId(slot, 0);
+    const int last = SlotParamId(slot, kParamsPerSlot - 1);
+    CHECK(last - first == kParamsPerSlot - 1);
+    CHECK(first >= kMasterParamCount);
+    CHECK(last < kTotalPluginParams);
+    if (slot > kFirstBlockSlot) {
+      CHECK(first == SlotParamId(slot - 1, kParamsPerSlot - 1) + 1);
+    }
+  }
+  std::printf("  registration descriptors: master names/units + slot ranges ok\n");
+}
+
 void TestDisplayAndSlimRouting() {
   OpenAxeGraph* g = openaxe_graph_create();
   // Master slot display should work even with no blocks bound — it resolves
@@ -174,6 +205,7 @@ int main() {
   TestHostIdLayout();
   TestNormalizedHelpers();
   TestGroups();
+  TestRegistrationDescriptors();
   TestDisplayAndSlimRouting();
   if (g_failures) { std::fprintf(stderr, "%d failure(s)\n", g_failures); return 1; }
   std::printf("param_surface_test: all checks passed\n");

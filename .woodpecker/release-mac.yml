@@ -25,10 +25,11 @@ steps:
   plugin:
     image: bash
     commands:
-      - node scripts/ci-local.mjs --stage=plugin --skip-setup
-      # AU bundle is EXCLUDE_FROM_ALL — build it so the zip holds the real
-      # component, not the plist-only stub the default build stages.
-      - cmake --build packages/vst3/build --config Release --target openaxe_au -j
+      - node scripts/ci-local.mjs --stage=plugin --skip-setup --with-sdks
+      # AU and CLAP are EXCLUDE_FROM_ALL — build them explicitly so the zip
+      # holds the real .component/.clap bundles, not just the default VST3.
+      # (matches .github/workflows/plugin.yml's AU/CLAP step)
+      - cmake --build packages/vst3/build --config Release --target openaxe_au openaxe_clap -j
       - node scripts/collect-plugin-bundles.mjs --platform=macos
   upload:
     image: bash
