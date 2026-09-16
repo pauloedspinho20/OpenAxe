@@ -25,6 +25,18 @@ https://smee.io/<id> --target http://localhost:8000/api/hook`) even
   push-triggered builds work without a domain. Without the forwarder,
   builds trigger **manually in the UI**. Repo sync + commit statuses work
   either way (outbound HTTPS from the server).
+
+  > **smee gotcha (verified).** Woodpecker generates the repo webhook as
+  > `<WOODPECKER_EXPERT_WEBHOOK_HOST>/api/hook`, but smee.io only accepts
+  > POSTs at the **channel root** — any path (`/api/hook`) returns 404, so
+  > nothing ever reaches the server. Fix: edit the repo webhook URL in
+  > GitHub to the channel root (drop `/api/hook`, keep `?access_token=…`)
+  > and point the forwarder at the hook path
+  > (`--target http://localhost:8000/api/hook`). A repo re-sync in
+  > Woodpecker may rewrite the URL back to `…/api/hook` — re-apply, or use a
+  > path-preserving tunnel (ngrok / `cloudflared` / Tailscale Funnel) where
+  > Woodpecker's generated URL works unchanged.
+
 - **Tunnel (later):** Cloudflare Tunnel + public hostname → webhook
   auto-builds on push/PR. Needs a domain; deferred with Windows pending.
 
