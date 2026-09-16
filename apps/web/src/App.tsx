@@ -42,6 +42,7 @@ import { useMidiManager } from './state/midiManager'
 import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
 import { useUpdateCheck } from './hooks/useUpdateCheck'
+import { LANDING_DOWNLOAD_URL } from './config/landing'
 
 import { getShellKind } from '@/native/openaxe'
 import styles from './App.module.css'
@@ -236,7 +237,7 @@ function App() {
         <div className={styles.updateBanner} role="status" aria-live="polite">
           <span>New version {updateLatest.tag} available</span>
           <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <a href="https://openaxe-site.pages.dev/#download" target="_blank" rel="noopener">
+            <a href={LANDING_DOWNLOAD_URL} target="_blank" rel="noopener">
               Download
             </a>
             <button

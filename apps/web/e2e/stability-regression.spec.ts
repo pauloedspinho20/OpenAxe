@@ -45,7 +45,7 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // log failed/real network fetches as console errors no matter how carefully
   // the hook catches them, which would trip the zero-console-error assertion
   // below).
-  await page.route('https://openaxe-site.pages.dev/releases-data.json', (route) =>
+  await page.route('**/releases-data.json', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

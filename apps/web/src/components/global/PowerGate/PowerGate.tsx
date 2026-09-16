@@ -5,6 +5,7 @@ import { useIOStore, type LatencyHint } from '@/state/ioStore'
 import { getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
+import { LANDING_DOWNLOAD_URL } from '@/config/landing'
 import styles from './PowerGate.module.css'
 
 export interface PowerGateProps {
@@ -78,7 +79,7 @@ export function PowerGate({
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Power on">
       <div className={styles.heroWrapper}>
-        <Wordmark variant="hero" version={pkg.version} />
+        <Wordmark variant="hero" version={pkg.version} downloadUrl={LANDING_DOWNLOAD_URL} />
 
         {status === 'error' && error && <p className={styles.error}>{error}</p>}
 
@@ -215,7 +216,7 @@ export function PowerGate({
             <span className={styles.updateActions}>
               <a
                 className={styles.updateLink}
-                href="https://openaxe-site.pages.dev/#download"
+                href={LANDING_DOWNLOAD_URL}
                 target="_blank"
                 rel="noopener"
               >

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import pkg from '../../package.json'
+import { RELEASES_MANIFEST_URL } from '../config/landing'
 
 // The release source of truth is the landing's build-time manifest
 // (apps/landing/scripts/fetch-releases.mjs → releases-data.json, published
-// alongside the landing at openaxe-site.pages.dev). The repo is private, so
-// the unauthenticated GitHub API can't be used from the browser; the landing
-// is public and serves this file with `access-control-allow-origin: *`.
-const RELEASES_MANIFEST_URL = 'https://openaxe-site.pages.dev/releases-data.json'
+// alongside the landing). The repo is private, so the unauthenticated GitHub
+// API can't be used from the browser; the landing is public and serves this
+// file with `access-control-allow-origin: *`. VITE_LANDING_URL overrides the
+// host (see src/config/landing.ts).
 const CACHE_KEY = 'openaxe-update-cache'
 const DISMISS_PREFIX = 'openaxe-dismissed-update-'
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6h
