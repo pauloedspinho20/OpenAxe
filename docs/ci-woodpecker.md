@@ -45,6 +45,32 @@ On an agent that has never built a plugin that fetches iPlug2's VST3/CLAP SDKs
 builds the two `EXCLUDE_FROM_ALL` targets (`openaxe_au`, `openaxe_clap`) so
 `collect-plugin-bundles.mjs` packs VST3 + AU + CLAP into one zip.
 
+## Official release flow (issue #441)
+
+Versioning is deliberately kept **off** Woodpecker, in the cheap GitHub Actions
+job; every heavy build runs here:
+
+| Concern                                                                                | Where                                                            |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Bump `VERSION` + `CHANGELOG`, commit `chore(release): X.Y.Z`, tag `vX.Y.Z`, back-merge | GitHub Actions — `.github/workflows/auto-release.yml`            |
+| Tests + release builds (desktop/plugin) → R2 + `sha256sums.txt` + `manifest.json`      | Woodpecker — `.woodpecker/release-*.yml` + `release-publish.yml` |
+
+Flow: PR `dev → main` (merge commit) → `auto-release.yml` bumps/tags/back-merges →
+tag `v*` → the per-OS `release-*.yml` legs (guard `tag == VERSION`) → R2 →
+`release-publish.yml` → manifest + landing deploy on Cloudflare Pages.
+
+Woodpecker is **local-only**, so the tag only triggers a build while its
+server, agents and smee forwarder are up. When they are not (or you want it
+now), run the same pipeline off-webhook: `bash scripts/woodpecker-manual.sh
+release`, or the VS Code task "Woodpecker: release artifacts to R2 (mac +
+linux)".
+
+> Caveat: the manual script does the R2 upload + `r2-publish` but **not** the
+> landing deploy (that is `release-publish.yml`'s `landing` step). Finish with
+> the Woodpecker pipeline, or run
+> `RELEASES_SOURCE=r2 pnpm --filter @openaxe/landing build` followed by
+> `npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site`.
+
 ## First run
 
 1. `cd woodpecker && cp .env.example .env` — fill `WOODPECKER_GITHUB_CLIENT/SECRET`
@@ -70,8 +96,10 @@ builds the two `EXCLUDE_FROM_ALL` targets (`openaxe_au`, `openaxe_clap`) so
   on next start) — `.env` (OAuth + agent secret) is the only irreplaceable
   file; keep a copy off-machine.
 
-## Decommission (Phase 5, not yet)
+## GitHub Actions status (Phase 5, done)
 
-Keep `.github/workflows/` green as fallback until a Woodpecker **release**
-(R2 + manifest + Pages) is proven. Then retire heavy legs, and update
-`CONTRIBUTING.md`/`AGENTS.md` + VSCode tasks.
+The heavy GitHub Actions workflows (`ci.yml`, `desktop.yml`, `plugin.yml`,
+`release.yml`, `pages.yml`) are **disabled** in repo settings to stop private-repo
+minute spend; only `auto-release.yml` (versioning) stays active. Woodpecker is
+now the CI/release engine of record — see "Official release flow" above, and
+`CONTRIBUTING.md#releasing-desktop--plugin`.

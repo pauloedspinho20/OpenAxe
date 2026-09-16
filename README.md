@@ -146,7 +146,7 @@ OpenAxe/
 │       ├── src/shared/              # Dialog, FormField, OutlineButton, Pagination, Select, StatusText, Toaster, Wordmark
 │       └── tokens/                  # CSS custom properties + design-tokens.json → generated/tokens.h
 ├── .storybook/                # Storybook, scans packages/ui stories
-├── .github/workflows/         # CI (ci.yml, desktop.yml, plugin.yml, release.yml, auto-release.yml)
+├── .github/workflows/         # auto-release.yml (version bump + tag); heavy CI/releases live in .woodpecker/
 ├── scripts/                   # setup.mjs, drift guards, sync-version, auto-bump, build-core-wasm.sh
 ├── .vscode/tasks.json         # 59 tasks — mirrors every command below (⇧⌘B)
 ├── pnpm-workspace.yaml
@@ -161,7 +161,7 @@ OpenAxe/
 - [CMake](https://cmake.org) 3.22+ and a C++20 compiler (Clang, GCC, or MSVC) — for `packages/core`, `apps/desktop`, `packages/vst3`. Not needed for pure web-app work. On macOS with CMake.app: **Tools → How to Install For Command Line Use** first.
 - Git — vendored DSP libs under `packages/core/third_party/` are git submodules.
 - Emscripten SDK (optional) — only for `bash scripts/build-core-wasm.sh` (see WASM section).
-- Linux desktop/plugin builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libpulse-dev` (see `desktop.yml`/`plugin.yml`).
+- Linux desktop/plugin builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libpulse-dev` (the same `scripts/ci-local.mjs` stages run on self-hosted Woodpecker — see `docs/ci-woodpecker.md`).
 
 ```bash
 # One-time setup (idempotent) — submodules + pnpm install (repairs Rosetta x64 binaries) + CMake configure
@@ -348,7 +348,7 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 
 ### Branching
 
-`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main`; `auto-release.yml` then merges `main` back into `dev` automatically so `dev` never falls behind on `VERSION` and the next `dev→main` doesn't conflict on `added in both` files (see `CONTRIBUTING.md#Branching`). Releases cut from `main` (`VERSION` + `v*` tag → `auto-release.yml` → `release.yml`/`plugin.yml`).
+`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main` and is merged with a **merge commit** (ancestry preserved); `auto-release.yml` then bumps `VERSION`, tags `vX.Y.Z` and merges `main` back into `dev` so `dev` never falls behind (see `CONTRIBUTING.md#Branching`). The tag drives the self-hosted **Woodpecker** release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing); the heavy tests and releases deliberately stay off GitHub Actions (see `docs/ci-woodpecker.md`, issue #441).
 
 ## Roadmap
 
