@@ -7,13 +7,17 @@
 # for a tag/webhook, or when the smee forwarder isn't running.
 #
 #   bash scripts/woodpecker-manual.sh ci       # full CI: mac (native) + linux (Docker)
-#   bash scripts/woodpecker-manual.sh release  # guard → desktop+plugin artifacts (mac+linux) → R2 → sha256sums+manifest
+#   bash scripts/woodpecker-manual.sh release  # guard → desktop+plugin artifacts (mac+linux) → R2 → sha256sums+manifest → landing deploy
+#   bash scripts/woodpecker-manual.sh landing  # landing build (from R2) + deploy to Cloudflare Pages only
 #   bash scripts/woodpecker-manual.sh all      # ci then release (default)
 #
 # Secrets: R2 creds come from the environment (R2_ACCESS_KEY, R2_SECRET_KEY,
 # R2_ACCOUNT_ID, R2_PUBLIC_URL) or, if unset, from woodpecker/.env
-# (gitignored) — same values the Woodpecker UI secrets hold. Nothing is
-# written anywhere else; nothing is printed.
+# (gitignored) — same values the Woodpecker UI secrets hold. The landing deploy
+# additionally needs CLOUDFLARE_API_TOKEN (Account → Cloudflare Pages → Edit;
+# also accepted as `pages_api_token`) plus an account id (CLOUDFLARE_ACCOUNT_ID,
+# falling back to R2_ACCOUNT_ID). Without the token the landing is built but
+# not deployed. Nothing is written anywhere else; nothing is printed.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,6 +47,10 @@ load_env() {
         [ -n "${R2_ACCOUNT_ID:-}" ] || export R2_ACCOUNT_ID="$value" ;;
       R2_PUBLIC_URL)
         [ -n "${R2_PUBLIC_URL:-}" ] || export R2_PUBLIC_URL="$value" ;;
+      pages_api_token|CLOUDFLARE_API_TOKEN)
+        [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || export CLOUDFLARE_API_TOKEN="$value" ;;
+      CLOUDFLARE_ACCOUNT_ID)
+        [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || export CLOUDFLARE_ACCOUNT_ID="$value" ;;
     esac
   done < "$envfile"
 }
@@ -157,15 +165,39 @@ run_release() {
     "$STAGE"/openaxe-plugin-bundles-*.zip)
   step "Publishing sha256sums.txt + manifest.json"
   (cd "$ROOT" && node scripts/r2-publish.mjs --tag="$t" --expect=macos,linux)
+  landing_build_deploy "$t"
   echo
   echo "✔ Release $t is live at: ${R2_PUBLIC_URL:-$R2_PUBLIC_URL_DEFAULT}/$t/"
 }
 
-usage() { sed -n '2,13p' "$0"; }
+# Build the landing against the R2 manifest and deploy it to Cloudflare Pages
+# (mirrors release-publish.yml's `landing` step). When CLOUDFLARE_API_TOKEN is
+# unset the landing is still built but not deployed.
+landing_build_deploy() {
+  local t="$1"
+  step "Landing 1/2 — build from R2 ($t)"
+  (cd "$ROOT" && RELEASES_SOURCE=r2 R2_PUBLIC_URL="${R2_PUBLIC_URL:-$R2_PUBLIC_URL_DEFAULT}" \
+    pnpm --filter @openaxe/landing build)
+  # The landing prebuild rewrites this generated fallback; keep the tree clean.
+  git -C "$ROOT" checkout -- apps/landing/src/generated/releases.json 2>/dev/null || true
+  if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+    echo "  skip  CLOUDFLARE_API_TOKEN not set — landing built but NOT deployed (see woodpecker/.env.example)" >&2
+    return 0
+  fi
+  step "Landing 2/2 — deploy to Cloudflare Pages (openaxe-site)"
+  # --branch=main: deploy to the project's production branch even from a topic
+  # branch or a detached tag checkout (issue #441).
+  (cd "$ROOT" && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+    CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-${R2_ACCOUNT_ID:-}}" \
+    npx --yes wrangler pages deploy apps/landing/dist --project-name=openaxe-site --branch=main --commit-dirty=true)
+}
+
+usage() { sed -n '3,20p' "$0"; }
 
 case "${1:-all}" in
   ci)      run_ci ;;
   release) run_release ;;
+  landing) load_env; landing_build_deploy "$(tag)" ;;
   all)     run_ci && run_release ;;
   -h|--help) usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 1 ;;

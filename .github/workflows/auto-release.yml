@@ -46,24 +46,19 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     runs-on: ubuntu-latest
     steps:
+      # No submodules, no pnpm: auto-bump.mjs / sync-version.mjs only use Node
+      # built-ins, so this stays a ~1 min job (issue #441, split-by-cost).
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          submodules: recursive
           # Use RELEASE_PAT so the push-back is authenticated as you and bypasses
           # the ruleset (GITHUB_TOKEN is the actions bot and has no bypass on
           # user-owned repos). Falls back to GITHUB_TOKEN if secret not set.
           token: ${{ secrets.RELEASE_PAT != '' && secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v6
-
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
-
-      - name: Install workspace (for sync scripts)
-        run: pnpm install --frozen-lockfile
 
       - name: Configure git
         run: |

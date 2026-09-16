@@ -8,11 +8,13 @@ Actions heavy legs get retired once this is proven (Phase 5).
 - **Manual / off-webhook (easiest):** `scripts/woodpecker-manual.sh` runs the
   exact stages the pipelines perform — no server, agents or webhook needed.
   `ci` = full mac+linux CI (`pnpm ci:local` + `ci:local:linux`); `release` =
-  desktop dmg+deb + plugin bundles → R2 → sha256sums + manifest
-  (`R2_*` creds from env or `woodpecker/.env`, same values as the UI
-  secrets); `all` = both. Wired as **VSCode tasks**:
+  desktop dmg+deb + plugin bundles → R2 → sha256sums + manifest → landing
+  build/deploy; `landing` = the landing step alone; `all` = both (`R2_*` creds
+  from env or `woodpecker/.env`, same values as the UI secrets; the landing
+  deploy also needs `CLOUDFLARE_API_TOKEN`). Wired as **VSCode tasks**:
   "Woodpecker: run CI manually (mac + linux)", "Woodpecker: release artifacts
-  to R2 (mac + linux)", "Woodpecker: full manual run (CI + release to R2)".
+  to R2 (mac + linux)", "Woodpecker: full manual run (CI + release to R2 +
+  landing)", "Release: deploy landing to Cloudflare Pages".
 - **Local-only server (current):** server at `http://localhost:8000`, no public URL.
   Repo activation REQUIRES a public _webhook_ URL (GitHub rejects
   `localhost`, so plain `Enable` fails with `could not create webhook in
@@ -45,6 +47,33 @@ On an agent that has never built a plugin that fetches iPlug2's VST3/CLAP SDKs
 builds the two `EXCLUDE_FROM_ALL` targets (`openaxe_au`, `openaxe_clap`) so
 `collect-plugin-bundles.mjs` packs VST3 + AU + CLAP into one zip.
 
+## Official release flow (issue #441)
+
+Versioning is deliberately kept **off** Woodpecker, in the cheap GitHub Actions
+job; every heavy build runs here:
+
+| Concern                                                                                | Where                                                            |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Bump `VERSION` + `CHANGELOG`, commit `chore(release): X.Y.Z`, tag `vX.Y.Z`, back-merge | GitHub Actions — `.github/workflows/auto-release.yml`            |
+| Tests + release builds (desktop/plugin) → R2 + `sha256sums.txt` + `manifest.json`      | Woodpecker — `.woodpecker/release-*.yml` + `release-publish.yml` |
+
+Flow: PR `dev → main` (merge commit) → `auto-release.yml` bumps/tags/back-merges →
+tag `v*` → the per-OS `release-*.yml` legs (guard `tag == VERSION`) → R2 →
+`release-publish.yml` → manifest + landing deploy on Cloudflare Pages.
+
+Woodpecker is **local-only**, so the tag only triggers a build while its
+server, agents and smee forwarder are up. When they are not (or you want it
+now), run the same pipeline off-webhook: `bash scripts/woodpecker-manual.sh
+release`, or the VS Code task "Woodpecker: release artifacts to R2 (mac +
+linux)".
+
+> The landing deploy needs a Cloudflare API token with **Account → Cloudflare
+> Pages → Edit**, supplied as `CLOUDFLARE_API_TOKEN` in the environment or
+> `woodpecker/.env` (the Woodpecker pipeline uses the `pages_api_token` repo
+> secret instead). Without it the manual script builds the landing but leaves
+> it undeployed — run `bash scripts/woodpecker-manual.sh landing` afterwards to
+> finish.
+
 ## First run
 
 1. `cd woodpecker && cp .env.example .env` — fill `WOODPECKER_GITHUB_CLIENT/SECRET`
@@ -70,8 +99,10 @@ builds the two `EXCLUDE_FROM_ALL` targets (`openaxe_au`, `openaxe_clap`) so
   on next start) — `.env` (OAuth + agent secret) is the only irreplaceable
   file; keep a copy off-machine.
 
-## Decommission (Phase 5, not yet)
+## GitHub Actions status (Phase 5, done)
 
-Keep `.github/workflows/` green as fallback until a Woodpecker **release**
-(R2 + manifest + Pages) is proven. Then retire heavy legs, and update
-`CONTRIBUTING.md`/`AGENTS.md` + VSCode tasks.
+The heavy GitHub Actions workflows (`ci.yml`, `desktop.yml`, `plugin.yml`,
+`release.yml`, `pages.yml`) are **disabled** in repo settings to stop private-repo
+minute spend; only `auto-release.yml` (versioning) stays active. Woodpecker is
+now the CI/release engine of record — see "Official release flow" above, and
+`CONTRIBUTING.md#releasing-desktop--plugin`.

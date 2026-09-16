@@ -78,14 +78,14 @@ run it and confirm the diff (or lack of one) whenever you change
 web app calls (see `scripts/check-wasm-exports.mjs`, which catches the latter
 in CI without needing a rebuild).
 
-**GitHub Actions is enabled** — `ci.yml` (lint/format/build/test/e2e + 5 drift checks + Storybook), `desktop.yml` (3-OS), `plugin.yml` (tags + PR) and `release.yml` run on every push/PR to `main`/`dev` and on `v*` tags. `plugin.yml` stays `workflow_dispatch` + `v*` + `pull_request` (cost-heaviest matrix — confirm with maintainer before broadening triggers). Treat “CI is green” as required for merge (see branch protection in `CONTRIBUTING.md`).
+**CI/CD is split by cost** (issue #441, #427). The heavy jobs — tests (drift/lint/unit/e2e/core/desktop/plugin) and the release builds that publish to Cloudflare R2 — run on the **self-hosted, local-only Woodpecker** (`.woodpecker/*.yml`; see `docs/ci-woodpecker.md`). GitHub Actions keeps only the cheap **versioning** job, `.github/workflows/auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge `main → dev` on push to `main`). The superseded heavy GH workflows (`ci.yml`, `desktop.yml`, `plugin.yml`, `release.yml`, `pages.yml`) are **disabled** in repo settings. Because Woodpecker is local-only, treat “Woodpecker green” as required for merge and follow the release flow in `CONTRIBUTING.md#releasing-desktop--plugin`.
 
 ## Drift-guard scripts
 
 Several values are duplicated across languages by design (WASM/native ABI,
 web/core param schemas) and are checked, not hand-verified — run these
 directly if you touch anything they might affect, don't just trust that CI
-will catch it (CI is currently off, see above):
+will catch it:
 
 - `node scripts/gen-param-schema.mjs --check` — web `paramSchema.ts` /
   `packages/core/param_schema.json` symbol/range agreement (issue #51), plus
@@ -105,12 +105,13 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Env vars
 
-| Var                     | Where                             | Purpose                                                                                                                                                                                           |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                     |
-| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                   |
-| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged. |
-| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                |
+| Var                     | Where                             | Purpose                                                                                                                                                                                                                        |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                                                  |
+| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                                                |
+| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged.                              |
+| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                                             |
+| `CLOUDFLARE_API_TOKEN`  | `scripts/woodpecker-manual.sh`    | Cloudflare Pages deploy token (`Account → Cloudflare Pages → Edit`) for the landing step of an off-webhook release. Read from the env or `woodpecker/.env`; the Woodpecker pipeline uses the `pages_api_token` secret instead. |
 
 ## Key decisions worth knowing before you edit
 
@@ -143,5 +144,14 @@ rebuild, CMake reconfigure, etc.) to take effect.
 - **Root `VERSION` file is the one version source of truth** — every
   `package.json` and both `apps/desktop`'s and `packages/core`'s CMake
   `project()` version read it; see
-  [CONTRIBUTING.md#releasing-desktop-builds](./CONTRIBUTING.md#releasing-desktop-builds)
+  [CONTRIBUTING.md#releasing-desktop--plugin](./CONTRIBUTING.md#releasing-desktop--plugin)
   for the tag-and-release flow.
+- **Releases are hybrid — cheap versioning on GitHub Actions, everything
+  heavy on Woodpecker** (issue #441). A push to `main` runs `auto-release.yml`
+  (bump + `CHANGELOG` + commit `chore(release): X.Y.Z` + tag `vX.Y.Z`, then
+  back-merge into `dev`); the tag drives `.woodpecker/release-*.yml` →
+  Cloudflare R2 and `release-publish.yml` → `sha256sums.txt`, `manifest.json`
+  and the landing deploy. `dev → main` is merged with a **merge commit** (keeps
+  ancestry); `feat → dev` stays squash. Woodpecker is local-only — if its
+  server/agents/smee aren't up, run `bash scripts/woodpecker-manual.sh release`
+  off-webhook. See [CONTRIBUTING.md#branching](./CONTRIBUTING.md#branching).
