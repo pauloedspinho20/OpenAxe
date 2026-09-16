@@ -7,6 +7,12 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-16
+### Changed
+- Dev to main (#443) (3d2ceea)
+
+
+
 ## [0.2.9] - 2026-09-16
 
 - Manual patch bump via workflow_dispatch
