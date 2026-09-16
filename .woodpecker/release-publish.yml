@@ -8,8 +8,8 @@ labels:
   platform: darwin/arm64
 
 when:
-  - event: tag
-    ref: refs/tags/v*
+  # Tag pushes publish the release; `manual` replays a missed tag (issue #441).
+  - event: [tag, manual]
 
 environment:
   R2_PUBLIC_URL: https://pub-800f414cbfe9422e9faaa00ed34d2821.r2.dev
@@ -21,7 +21,8 @@ steps:
     secrets: [r2_access_key, r2_secret_key, r2_account_id]
     commands:
       # windows joins --expect once the UTM agent is live (issue #427 Phase 4).
-      - node scripts/r2-publish.mjs --expect=macos,linux
+      # --tag makes a manual (no CI_COMMIT_TAG) run publish the checkout's VERSION.
+      - node scripts/r2-publish.mjs --tag=v$(cat VERSION) --expect=macos,linux
   landing:
     image: bash
     secrets: [pages_api_token, r2_account_id]

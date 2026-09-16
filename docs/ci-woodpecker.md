@@ -61,11 +61,24 @@ Flow: PR `dev → main` (merge commit) → `auto-release.yml` bumps/tags/back-me
 tag `v*` → the per-OS `release-*.yml` legs (guard `tag == VERSION`) → R2 →
 `release-publish.yml` → manifest + landing deploy on Cloudflare Pages.
 
-Woodpecker is **local-only**, so the tag only triggers a build while its
-server, agents and smee forwarder are up. When they are not (or you want it
-now), run the same pipeline off-webhook: `bash scripts/woodpecker-manual.sh
-release`, or the VS Code task "Woodpecker: release artifacts to R2 (mac +
-linux)".
+### Keeping it seamless
+
+Woodpecker is **local-only**, so the tag → build → publish chain only fires
+while the whole stack is up: the server (`docker compose up -d`), the macOS +
+Linux agents (`woodpecker/agent-mac.sh`, `woodpecker/agent-linux.sh`) and the
+smee forwarder (so GitHub's tag webhook reaches the server). If any of them is
+down when `auto-release.yml` pushes the tag, **nothing builds** — the tag
+exists but R2 and the landing don't move (this happened to `v0.3.0`). Keep the
+stack running (ideally auto-started as services) for hands-off releases.
+
+Recovery — either:
+
+- **Replay from the UI:** the release pipelines declare `manual`, so open the
+  project, select the `vX.Y.Z` tag ref and **Run pipeline** —
+  `release-{mac,linux}` first, then `release-publish`; or
+- **Off-webhook, one command:** `pnpm release:publish`
+  (`scripts/woodpecker-manual.sh release`) — the VS Code task **Release:
+  publish (build → R2 → landing)**.
 
 > The landing deploy needs a Cloudflare API token with **Account → Cloudflare
 > Pages → Edit**, supplied as `CLOUDFLARE_API_TOKEN` in the environment or

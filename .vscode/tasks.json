@@ -1001,6 +1001,19 @@
         "clear": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Release: publish (build → R2 → landing)",
+      "type": "shell",
+      "command": "pnpm release:publish",
+      "detail": "Off-webhook full release for the current VERSION (pnpm release:publish → scripts/woodpecker-manual.sh release): mac + Linux-Docker desktop/plugin builds → Cloudflare R2 → sha256sums + manifest → landing deploy. Needs Docker, rclone, and R2 + CLOUDFLARE_API_TOKEN in woodpecker/.env. Long (~30-40 min).",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$tsc", "$gcc"]
     }
   ]
 }
