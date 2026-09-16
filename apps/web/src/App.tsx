@@ -236,11 +236,7 @@ function App() {
         <div className={styles.updateBanner} role="status" aria-live="polite">
           <span>New version {updateLatest.tag} available</span>
           <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <a
-              href="https://pauloedspinho20.github.io/OpenAxe/#download"
-              target="_blank"
-              rel="noopener"
-            >
+            <a href="https://openaxe-site.pages.dev/#download" target="_blank" rel="noopener">
               Download
             </a>
             <button

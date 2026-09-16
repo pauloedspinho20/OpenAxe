@@ -105,11 +105,7 @@ export function Wordmark({
         )}
 
         <nav className={styles.links} aria-label="Downloads and source">
-          <a
-            href="https://pauloedspinho20.github.io/OpenAxe/#download"
-            target="_blank"
-            rel="noopener"
-          >
+          <a href="https://openaxe-site.pages.dev/#download" target="_blank" rel="noopener">
             Download
           </a>
 

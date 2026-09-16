@@ -215,7 +215,7 @@ export function PowerGate({
             <span className={styles.updateActions}>
               <a
                 className={styles.updateLink}
-                href="https://pauloedspinho20.github.io/OpenAxe/#download"
+                href="https://openaxe-site.pages.dev/#download"
                 target="_blank"
                 rel="noopener"
               >
