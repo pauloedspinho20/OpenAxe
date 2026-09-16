@@ -40,35 +40,24 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   })
 
   // Hermetic update check (see src/hooks/useUpdateCheck.ts): the hook fetches
-  // api.github.com + the landing fallback on every fresh load. In CI the API
-  // has no releases (404) and the fallback is CORS-blocked, and browsers log
-  // failed fetches as console errors no matter how carefully the hook catches
-  // them — which trips the zero-console-error assertion below. Fulfill with a
-  // tag older than the app version so the hook resolves to "no update" and
-  // never attempts the fallback.
-  await page.route(
-    'https://api.github.com/repos/pauloedspinho20/OpenAxe/releases/latest',
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          tag_name: 'v0.0.0',
-          html_url: 'https://github.com/pauloedspinho20/OpenAxe/releases/tag/v0.0.0',
-          published_at: null,
-        }),
-      }),
-  )
-  // Belt-and-braces: if the primary mock ever misses (or the API path
-  // changes), the hook falls through to the landing fallback
-  // (useUpdateCheck.ts), which in CI 403s / is CORS-blocked from localhost
-  // and trips the same zero-console-error assertion (run 33829263762).
-  // Fulfill it hermetically too so no real network can leak console errors.
-  await page.route('https://pauloedspinho20.github.io/OpenAxe/releases-data.json', (route) =>
+  // the landing's release manifest on every fresh load. Fulfill it with a tag
+  // older than the app version so the hook resolves to "no update" (browsers
+  // log failed/real network fetches as console errors no matter how carefully
+  // the hook catches them, which would trip the zero-console-error assertion
+  // below).
+  await page.route('**/releases-data.json', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ releases: [] }),
+      body: JSON.stringify({
+        releases: [
+          {
+            tag_name: 'v0.0.0',
+            html_url: 'https://openaxe-site.pages.dev/releases.html',
+            published_at: null,
+          },
+        ],
+      }),
     }),
   )
 
