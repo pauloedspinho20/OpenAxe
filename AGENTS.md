@@ -105,12 +105,13 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Env vars
 
-| Var                     | Where                             | Purpose                                                                                                                                                                                           |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                     |
-| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                   |
-| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged. |
-| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                |
+| Var                     | Where                             | Purpose                                                                                                                                                                                                                        |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                                                  |
+| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                                                |
+| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged.                              |
+| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                                             |
+| `CLOUDFLARE_API_TOKEN`  | `scripts/woodpecker-manual.sh`    | Cloudflare Pages deploy token (`Account → Cloudflare Pages → Edit`) for the landing step of an off-webhook release. Read from the env or `woodpecker/.env`; the Woodpecker pipeline uses the `pages_api_token` secret instead. |
 
 ## Key decisions worth knowing before you edit
 

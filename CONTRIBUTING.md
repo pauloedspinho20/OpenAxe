@@ -165,8 +165,7 @@ Release flow:
 bash scripts/woodpecker-manual.sh release   # VS Code: "Woodpecker: release artifacts to R2 (mac + linux)"
 ```
 
-> The manual script uploads + publishes to R2 but does **not** redeploy the landing — that step lives only in `release-publish.yml`. To finish, either start Woodpecker and run `release-publish`, or deploy the landing yourself:
-> `RELEASES_SOURCE=r2 pnpm --filter @openaxe/landing build && npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site`.
+> The `release` run also builds and deploys the landing (`openaxe-site`), which needs a Cloudflare API token (`Account → Cloudflare Pages → Edit`) as `CLOUDFLARE_API_TOKEN` in the environment or `woodpecker/.env` (the Woodpecker pipeline uses the `pages_api_token` secret instead). Without the token the landing is built but not deployed — run `bash scripts/woodpecker-manual.sh landing` once you have it.
 
 Manual escape hatch for versioning: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview.
 

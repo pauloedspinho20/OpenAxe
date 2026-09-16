@@ -8,11 +8,13 @@ Actions heavy legs get retired once this is proven (Phase 5).
 - **Manual / off-webhook (easiest):** `scripts/woodpecker-manual.sh` runs the
   exact stages the pipelines perform — no server, agents or webhook needed.
   `ci` = full mac+linux CI (`pnpm ci:local` + `ci:local:linux`); `release` =
-  desktop dmg+deb + plugin bundles → R2 → sha256sums + manifest
-  (`R2_*` creds from env or `woodpecker/.env`, same values as the UI
-  secrets); `all` = both. Wired as **VSCode tasks**:
+  desktop dmg+deb + plugin bundles → R2 → sha256sums + manifest → landing
+  build/deploy; `landing` = the landing step alone; `all` = both (`R2_*` creds
+  from env or `woodpecker/.env`, same values as the UI secrets; the landing
+  deploy also needs `CLOUDFLARE_API_TOKEN`). Wired as **VSCode tasks**:
   "Woodpecker: run CI manually (mac + linux)", "Woodpecker: release artifacts
-  to R2 (mac + linux)", "Woodpecker: full manual run (CI + release to R2)".
+  to R2 (mac + linux)", "Woodpecker: full manual run (CI + release to R2 +
+  landing)", "Release: deploy landing to Cloudflare Pages".
 - **Local-only server (current):** server at `http://localhost:8000`, no public URL.
   Repo activation REQUIRES a public _webhook_ URL (GitHub rejects
   `localhost`, so plain `Enable` fails with `could not create webhook in
@@ -65,11 +67,12 @@ now), run the same pipeline off-webhook: `bash scripts/woodpecker-manual.sh
 release`, or the VS Code task "Woodpecker: release artifacts to R2 (mac +
 linux)".
 
-> Caveat: the manual script does the R2 upload + `r2-publish` but **not** the
-> landing deploy (that is `release-publish.yml`'s `landing` step). Finish with
-> the Woodpecker pipeline, or run
-> `RELEASES_SOURCE=r2 pnpm --filter @openaxe/landing build` followed by
-> `npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site`.
+> The landing deploy needs a Cloudflare API token with **Account → Cloudflare
+> Pages → Edit**, supplied as `CLOUDFLARE_API_TOKEN` in the environment or
+> `woodpecker/.env` (the Woodpecker pipeline uses the `pages_api_token` repo
+> secret instead). Without it the manual script builds the landing but leaves
+> it undeployed — run `bash scripts/woodpecker-manual.sh landing` afterwards to
+> finish.
 
 ## First run
 
