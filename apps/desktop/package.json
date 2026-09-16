@@ -1,7 +1,7 @@
 {
   "name": "@openaxe/desktop",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "OpenAxe desktop shell — C++ + webview.h + miniaudio",
   "repository": {
     "type": "git",
