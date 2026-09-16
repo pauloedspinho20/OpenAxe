@@ -37,7 +37,12 @@ export interface WordmarkProps {
   version?: string // e.g. "0.2.0" — normalised to "v0.2.0" inside
   showBeta?: boolean // default: derived as major(version) === 0
   style?: CSSProperties
+  /** Hero variant's "Download" link target. Defaults to the canonical landing. */
+  downloadUrl?: string
 }
+
+/** Canonical landing download section, used when the caller doesn't override it. */
+const DEFAULT_DOWNLOAD_URL = 'https://openaxe-site.pages.dev/#download'
 
 function normaliseVersion(input?: string): string | undefined {
   if (!input) return undefined
@@ -70,6 +75,7 @@ export function Wordmark({
   version: versionProp,
   showBeta: showBetaProp,
   style,
+  downloadUrl = DEFAULT_DOWNLOAD_URL,
 }: WordmarkProps) {
   const fallback = resolveFallbackVersion()
   const rawVersion = versionProp ?? fallback
@@ -104,17 +110,9 @@ export function Wordmark({
           </div>
         )}
 
-        <nav className={styles.links} aria-label="Downloads and source">
-          <a
-            href="https://pauloedspinho20.github.io/OpenAxe/#download"
-            target="_blank"
-            rel="noopener"
-          >
+        <nav className={styles.links} aria-label="Downloads">
+          <a href={downloadUrl} target="_blank" rel="noopener">
             Download
-          </a>
-
-          <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener">
-            GitHub
           </a>
         </nav>
       </div>

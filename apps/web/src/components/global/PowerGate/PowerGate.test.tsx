@@ -164,10 +164,9 @@ describe('PowerGate', () => {
     expect(screen.queryByRole('button', { name: /power on/i })).toBeNull()
   })
 
-  it('shows the download and source links via the hero wordmark', () => {
+  it('shows the download link via the hero wordmark', () => {
     render(<PowerGate {...baseProps} />)
     expect(screen.getByRole('link', { name: 'Download' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument()
   })
 
   it('shows update banner when a newer version exists', () => {
