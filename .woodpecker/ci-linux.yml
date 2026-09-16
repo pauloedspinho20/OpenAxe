@@ -8,7 +8,7 @@ labels:
 
 when:
   - event: [push, pull_request, manual]
-    branch: [dev, main, feat/427-woodpecker-ci]
+    branch: [dev, main]
 
 steps:
   setup:

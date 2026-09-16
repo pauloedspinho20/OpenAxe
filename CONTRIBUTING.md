@@ -109,12 +109,14 @@ carry real energy stay tight.
 
 ## Branching
 
-- **All feature branches → `dev`** (including Dependabot — `target-branch: dev` in `.github/dependabot.yml`). Open every pull request with base `dev`.
-- Feature `→ dev` merges via **squash** (one commit per feature, Conventional Commits `feat:`/`fix:`/`feat!:`).
-- **`dev` → `main`** is the **only** PR that targets `main`. After human review on `dev`, open the release PR `dev→main`.
-- **`main` → `dev` back-merge is automatic** — the last step of `.github/workflows/auto-release.yml` merges the release commit straight back into `dev` as `chore(sync): merge main vX.Y.Z back into dev` (issue #304). Two things depend on it: `dev` keeps the released `VERSION`, so branches cut from it are not born stale; and the merge stays trivial because it runs while the two trees are identical apart from the bump. Skipping it is what left `dev` on `0.2.5` after `0.2.6` shipped and made the next `dev→main` PR (#305) conflict on five files.
-- Merge commits are currently **disabled** in the repo settings, so the `dev→main` promotion lands on `main` as a **squash** — a single commit whose content duplicates `dev`'s work but shares no ancestry with it. That is survivable only because of the automatic back-merge above, which re-establishes a usable `git merge-base` immediately. If you would rather have `dev→main` preserve ancestry directly (the older documented `--no-ff` flow), re-enable **Settings → General → Pull Requests → Allow merge commits** and merge the release PR that way; the back-merge step is correct either way.
-- Branch protection on `main`/`dev` requires PR + required CI checks; `deleteBranchOnMerge` enabled.
+- **All feature branches → `dev`** (including Dependabot — `target-branch: dev` in `.github/dependabot.yml`). Open every pull request with base `dev` and merge via **squash** (one commit per feature, Conventional Commits `feat:`/`fix:`/`feat!:`).
+- **`dev` → `main`** is the **only** PR that targets `main` (the release promotion). Merge it with a **merge commit**, not a squash, so `main` keeps `dev`'s ancestry. This relies on **Settings → General → Pull Requests → Allow merge commits** staying enabled — ancestry is what lets `auto-bump.mjs` see the real `feat:`/`fix:` commits (correct semver) and keeps the next promotion clean.
+- **Bump, tag and back-merge are automatic** (`#Releasing` below). The push to `main` runs `.github/workflows/auto-release.yml`, which commits `chore(release): X.Y.Z` and then merges that release commit back into `dev` as `chore(sync): merge main vX.Y.Z back into dev` (issue #304). The back-merge keeps `dev` on the released `VERSION`, so branches cut from it are not born stale. It stays conflict-free while the two trees differ only by the bump; when it does conflict the job fails loudly — do **not** silence it. Resolve by hand:
+  ```bash
+  git checkout dev && git merge --no-ff origin/main && git push origin dev
+  ```
+- **Hotfixes** branch from `main` (`hotfix/x.y.z`), PR back into `main`, get bumped/tagged by the same workflow, then merge `main → dev` so `dev` carries the fix.
+- Branch protection on `main`/`dev` requires PR + required checks (Woodpecker, see `#Releasing`); `deleteBranchOnMerge` enabled.
 - Use `.gitattributes` for generated/lockfile merge strategy.
 
 ## DCO — Developer Certificate of Origin
@@ -130,28 +132,44 @@ The [DCO App](https://github.com/apps/dco) checks PRs. By signing off you certif
 
 > You have the right to submit the contribution under the project's license and agree to the DCO.
 
-## Releasing (desktop + plugin) — fully automatic
+## Releasing (desktop + plugin)
 
-> **If you are not a maintainer you can ignore this section** — releases are cut from `main` only. Forks build unsigned dev artifacts (same DSP, no signing secrets) — see note below.
+> **If you are not a maintainer you can ignore this section** — releases are cut from `main` only. Forks build unsigned dev artifacts (same DSP, no signing secrets) — see the note below.
 
 The root `VERSION` file is the one source of truth — every `package.json`'s `"version"` and both `apps/desktop`/`packages/core` CMake `project()` versions are kept in sync with it (checked by `node scripts/sync-version.mjs --check` in CI and via pre-commit).
 
-Releases are **fully automatic — no manual bump or tag**. Merging to `main` is the only trigger:
+CI/CD is **split by cost**: GitHub Actions does only the cheap versioning; every heavy job (tests + release builds) runs on the self-hosted Woodpecker (`docs/ci-woodpecker.md`, issue #427).
 
-1. Open PRs against `dev` (feature work), then `dev` → `main` when ready to release. Use
-   Conventional Commits (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:` etc.) — they drive the bump.
+| Concern                                                                                | Runs on                                                             |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Version bump, `CHANGELOG`, release commit + tag `vX.Y.Z`, `main → dev` back-merge      | **GitHub Actions** — `.github/workflows/auto-release.yml`           |
+| Tests (drift / lint / unit / e2e / core / desktop / plugin)                            | **Woodpecker** — `.woodpecker/ci-{mac,linux,win}.yml`               |
+| Release builds → Cloudflare R2 + `sha256sums.txt` + `manifest.json` + landing redeploy | **Woodpecker** — `.woodpecker/release-*.yml`, `release-publish.yml` |
+| Web app (`openaxe.pages.dev`)                                                          | Cloudflare Git integration, on merge to `main`                      |
+
+Release flow:
+
+1. Open PRs against `dev` (feature work), then `dev` → `main` when ready to release. Use Conventional Commits (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:` etc.) — they drive the bump.
 2. Merging the `dev` → `main` PR fires `.github/workflows/auto-release.yml`, which:
    - reads conventional commits since the last `v*` tag (`scripts/auto-bump.mjs`),
    - decides `patch` (`fix:`/`chore:`), `minor` (`feat:`), or `major` (`BREAKING CHANGE` / `!` — with `0.y.z` mapping breaking → minor until `1.0.0`),
    - bumps `VERSION`, runs `node scripts/sync-version.mjs`, prepends `CHANGELOG.md`,
-   - commits `chore(release): X.Y.Z` (with `[skip ci]` only if needed), creates annotated tag `vX.Y.Z` and pushes both,
-   - then merges `main` back into `dev` (`chore(sync): …`) so `dev` carries the released `VERSION` — see `#Branching`. A conflict there fails the job loudly rather than leaving the drift in place.
-3. Pushing the `v*` tag triggers `.github/workflows/release.yml` (desktop: 3-OS `dmg`/`zip`/`deb` via `desktop.yml` matrix) and `.github/workflows/plugin.yml` (plugin: 9 artifacts VST3/CLAP/AU × 3 OS) which publish installers as public assets on a GitHub Release for that tag — see [CHANGELOG.md](./CHANGELOG.md).
+   - commits `chore(release): X.Y.Z`, creates annotated tag `vX.Y.Z` and pushes both,
+   - merges `main` back into `dev` (`chore(sync): …`) so `dev` carries the released `VERSION` — see `#Branching`. A conflict there fails the job loudly rather than leaving the drift in place.
+3. Pushing the `v*` tag triggers the Woodpecker release pipelines: `.woodpecker/release-{mac,linux,win}.yml` (guard `tag == VERSION` → desktop `dmg`/`zip`/`deb` + plugin bundles → **R2**) and `.woodpecker/release-publish.yml` (polls R2 → `sha256sums.txt` + root `manifest.json` → rebuilds the landing `--source=r2` → deploys it to Cloudflare Pages `openaxe-site`).
+4. Verify the R2 folder and the landing releases page — the web app's update check reads the landing's `releases-data.json`.
 
-Manual escape hatch: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force
-a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview / `node scripts/auto-bump.mjs --tag && git push && git push --tags` if you need to cut a release outside CI.
+**Woodpecker is self-hosted and local-only**, so a pushed tag only reaches it while the server + agents + smee forwarder are running. If they are not (or you want the release immediately), run the exact pipeline off-webhook:
 
-> Requires a PAT that can bypass branch protection on `main`:
+```bash
+bash scripts/woodpecker-manual.sh release   # VS Code: "Woodpecker: release artifacts to R2 (mac + linux)"
+```
+
+> The `release` run also builds and deploys the landing (`openaxe-site`), which needs a Cloudflare API token (`Account → Cloudflare Pages → Edit`) as `CLOUDFLARE_API_TOKEN` in the environment or `woodpecker/.env` (the Woodpecker pipeline uses the `pages_api_token` secret instead). Without the token the landing is built but not deployed — run `bash scripts/woodpecker-manual.sh landing` once you have it.
+
+Manual escape hatch for versioning: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview.
+
+> Requires a PAT that can bypass branch protection on `main` (the release commit and the back-merge are pushed by the workflow):
 >
 > 1. Create a classic PAT (https://github.com/settings/tokens) with `repo` scope
 >    as pauloedspinho20, or a fine-grained PAT with Contents:write on this repo.
@@ -163,35 +181,25 @@ a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview / `node scr
 
 ### Releasing — plugin specifics
 
-The plugin reuses the same `VERSION` → tag flow as desktop, but its matrix is
-nine artifacts (VST3/CLAP/AU × 3 OS, macOS universal `arm64;x86_64`) and
-macOS **must** be signed/notarized or Gatekeeper blocks the install.
+The plugin rides the same `VERSION` → tag flow as desktop, but its matrix is nine artifacts (VST3/CLAP/AU × 3 OS, macOS universal `arm64;x86_64`) and macOS **must** be signed/notarized or Gatekeeper blocks the install.
 
-See `.github/workflows/plugin.yml` (and `release.yml` for desktop):
+See `.woodpecker/release-{mac,linux,win}.yml`:
 
-1. `VERSION` → tag `v*` flow is identical (auto-release, or manual `vX.Y.Z`).
-2. Pushing the `v*` tag triggers `plugin.yml` on all three runners. It:
-   - `pnpm build` the web UI (for the webview), configures `packages/vst3`
-     with `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` on macOS, builds all three
-     bundles, runs `ctest` (smoke + `pluginval --strictness 10`/`auval`/`validator`/`clap-validator` — `SKIP` when tool/bundle absent), then
-     `cpack` to `.pkg` (macOS `productbuild` → `/Library/Audio/Plug-Ins/*`), `.msi`/`ZIP` (Windows `WIX`), `.deb`+`.tar.gz` (Linux).
-   - Attaches every installer/bundle as a public asset on the same GitHub
-     Release that `release.yml` created for desktop — versioned from `VERSION`.
-   - On PRs (path-filtered to `packages/vst3/**` etc.), `plugin.yml` builds/tests only (no signing/packaging) to keep cost low.
-3. **Signing / notarization** runs only when the matching secrets are present;
-   otherwise the workflow builds **unsigned** dev artifacts (same as `desktop.yml`):
-   - **macOS:** `APPLE_DEVELOPER_ID_CERTIFICATE_P12` (base64 `.p12`), `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — `codesign --options runtime --timestamp` + `xcrun notarytool submit --wait` + `xcrun stapler staple`.
-   - **Windows:** `WINDOWS_CERTIFICATE_P12` (base64), `WINDOWS_CERTIFICATE_PASSWORD` — `signtool sign` / `AzureSignTool` (Authenticode).
-   - **Linux:** no signing; `.deb` maintainer `OpenAxe <dev@openaxe.local>`.
-     Add each as repo secret `Settings → Secrets → Actions`. If a secret is
-     missing the corresponding step is skipped with a `::warning::` and the
-     artifact is still uploaded unsigned — intentional for forks (you get the same DSP build, just not signed).
+1. The tag push (`v*`) is the trigger, after the `tag == VERSION` guard.
+2. The `plugin` step runs `node scripts/ci-local.mjs --stage=plugin --skip-setup --with-sdks` (fetches the iPlug2 VST3/CLAP SDKs on a fresh agent), builds the `EXCLUDE_FROM_ALL` AU/CLAP targets, then `scripts/collect-plugin-bundles.mjs` zips them per platform:
+   - **macOS:** VST3 + AU + CLAP; **Windows:** VST3 + CLAP; **Linux:** headless (no IGraphics backend), so no GUI bundles — `--allow-empty`, and the `.deb` is the Linux artifact.
+3. `scripts/r2-upload.mjs` uploads the zip alongside the desktop installer to `r2://openaxe-releases/<tag>/`, and `release-publish.yml` writes `sha256sums.txt` + `manifest.json`.
+4. Tests (`ctest`, plus `pluginval --strictness 10` / `auval` / VST3 validator / `clap-validator`, which SKIP when the tool/bundle is absent) run as part of the same plugin stage.
 
-> **Cost:** `plugin.yml` is the heaviest workflow (9 artifacts + signing). Tag pushes always run it; PRs only on plugin/core path. Confirm before broadening triggers.
+**Signing / notarization** runs only when the matching secrets are present; otherwise the pipeline builds **unsigned** dev artifacts (intentional for forks):
+
+- **macOS:** `APPLE_DEVELOPER_ID_CERTIFICATE_P12` (base64 `.p12`), `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — `codesign --options runtime --timestamp` + `xcrun notarytool submit --wait` + `xcrun stapler staple`.
+- **Windows:** `WINDOWS_CERTIFICATE_P12` (base64), `WINDOWS_CERTIFICATE_PASSWORD` — `signtool sign` / `AzureSignTool` (Authenticode).
+- **Linux:** no signing; `.deb` maintainer `OpenAxe <dev@openaxe.local>`.
 
 ### Forks / unsigned builds
 
-If you fork the repo, `release.yml`/`plugin.yml` will still run on your `v*` tags but without signing secrets they produce **unsigned** installers/bundles + `::warning::` — intentionally. For local testing use `pnpm package:desktop` or `VST: Build` + `VST: Install bundle (macOS)` tasks.
+If you fork the repo, the Woodpecker release pipelines run without the signing secrets and produce **unsigned** installers/bundles — intentionally (same DSP build, just not signed). For local testing use `pnpm package:desktop`, the `VST: Build` + `VST: Install bundle (macOS)` tasks, or `bash scripts/woodpecker-manual.sh release` (needs `rclone` plus R2 creds in `woodpecker/.env`).
 
 ## Commit / PR expectations
 

@@ -137,8 +137,8 @@ server) instead of the bundled copy.
       (`openAxe.getTap`); model JSON is loaded via `openAxe.loadModelJson`.
 - [x] M4 — CPack packaging + CI. `scripts/package.mjs` produces a `.dmg`
       (macOS `.app` bundle), `.zip` (Windows) or `.deb` (Linux) in `build/`.
-      `.github/workflows/desktop.yml` builds all three and uploads unsigned dev
-      artifacts (signing/notarization deferred).
+      The Woodpecker release pipeline (`.woodpecker/release-{mac,linux,win}.yml`)
+      builds all three and uploads unsigned artifacts (signing/notarization deferred).
 - [x] M5 — latency validation. `latency_test` measures the DSP path's added
       latency (an impulse through the rig) and the device's reported I/O
       latency. On the dev machine the processing path adds **0 ms**
