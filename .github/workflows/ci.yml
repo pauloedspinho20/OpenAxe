@@ -12,7 +12,6 @@ on:
       - 'storybook-static/**'
       - '.github/workflows/pages.yml'
       - '.github/workflows/release.yml'
-      - '.github/workflows/auto-release.yml'
 
 concurrency:
   group: ci-${{ github.ref }}

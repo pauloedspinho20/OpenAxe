@@ -146,7 +146,7 @@ OpenAxe/
 │       ├── src/shared/              # Dialog, FormField, OutlineButton, Pagination, Select, StatusText, Toaster, Wordmark
 │       └── tokens/                  # CSS custom properties + design-tokens.json → generated/tokens.h
 ├── .storybook/                # Storybook, scans packages/ui stories
-├── .github/workflows/         # auto-release.yml (version bump + tag); heavy CI/releases live in .woodpecker/
+├── .github/workflows/         # legacy GH CI/releases (disabled); all CI/CD now lives in .woodpecker/
 ├── scripts/                   # setup.mjs, drift guards, sync-version, auto-bump, build-core-wasm.sh
 ├── .vscode/tasks.json         # 59 tasks — mirrors every command below (⇧⌘B)
 ├── pnpm-workspace.yaml
@@ -348,7 +348,7 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 
 ### Branching
 
-`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main` and is merged with a **merge commit** (ancestry preserved); `auto-release.yml` then bumps `VERSION`, tags `vX.Y.Z` and merges `main` back into `dev` so `dev` never falls behind (see `CONTRIBUTING.md#Branching`). The tag drives the self-hosted **Woodpecker** release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing); the heavy tests and releases deliberately stay off GitHub Actions (see `docs/ci-woodpecker.md`, issue #441).
+`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main` and is merged with a **merge commit** (ancestry preserved); the local Woodpecker `release-bump` pipeline then bumps `VERSION`, tags `vX.Y.Z` and merges `main` back into `dev` so `dev` never falls behind (see `CONTRIBUTING.md#Branching`). The tag drives the same self-hosted **Woodpecker** release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing); all CI/CD — versioning included — deliberately stays off GitHub Actions (see `docs/ci-woodpecker.md`, issue #441).
 
 ## Roadmap
 

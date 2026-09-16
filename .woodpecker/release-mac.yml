@@ -6,14 +6,17 @@ labels:
   platform: darwin/arm64
 
 when:
-  - event: tag
-    ref: refs/tags/v*
+  # Tag pushes build the release; `manual` lets a missed tag (e.g. the server
+  # wasn't running at tag time) be replayed from the Woodpecker UI (issue #441).
+  - event: [tag, manual]
 
 steps:
   guard:
     image: bash
     commands:
-      - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
+      # Manual runs have no CI_COMMIT_TAG — fall back to VERSION so the guard
+      # passes and the artifacts are stamped from the checkout.
+      - node -e "var v=require('fs').readFileSync('VERSION','utf8').trim();var t=(process.env.CI_COMMIT_TAG||('v'+v)).replace(/^v/,'');if(t!==v){console.error('tag '+t+' != VERSION '+v);process.exit(1)}"
   setup:
     image: bash
     commands:

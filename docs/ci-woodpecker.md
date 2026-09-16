@@ -25,6 +25,18 @@ https://smee.io/<id> --target http://localhost:8000/api/hook`) even
   push-triggered builds work without a domain. Without the forwarder,
   builds trigger **manually in the UI**. Repo sync + commit statuses work
   either way (outbound HTTPS from the server).
+
+  > **smee gotcha (verified).** Woodpecker generates the repo webhook as
+  > `<WOODPECKER_EXPERT_WEBHOOK_HOST>/api/hook`, but smee.io only accepts
+  > POSTs at the **channel root** — any path (`/api/hook`) returns 404, so
+  > nothing ever reaches the server. Fix: edit the repo webhook URL in
+  > GitHub to the channel root (drop `/api/hook`, keep `?access_token=…`)
+  > and point the forwarder at the hook path
+  > (`--target http://localhost:8000/api/hook`). A repo re-sync in
+  > Woodpecker may rewrite the URL back to `…/api/hook` — re-apply, or use a
+  > path-preserving tunnel (ngrok / `cloudflared` / Tailscale Funnel) where
+  > Woodpecker's generated URL works unchanged.
+
 - **Tunnel (later):** Cloudflare Tunnel + public hostname → webhook
   auto-builds on push/PR. Needs a domain; deferred with Windows pending.
 
@@ -35,6 +47,7 @@ https://smee.io/<id> --target http://localhost:8000/api/hook`) even
 | `.woodpecker/ci-mac.yml`                                    | macOS agent, Local backend — full `ci-local.mjs` incl. e2e                                                                         |
 | `.woodpecker/ci-linux.yml`                                  | Docker agent, `openaxe-ci-linux` image — no e2e (browsers install at run time, see `docker/ci-linux/run-linux-ci.sh`)              |
 | `.woodpecker/ci-win.yml`                                    | UTM Win11 ARM agent, Local backend — provisional subset (JS stages + core); desktop/plugin join when green                         |
+| `.woodpecker/release-bump.yml`                              | push to `main` → `scripts/release-bump.sh`: bump + `CHANGELOG` + commit + tag + back-merge into `dev` (needs `github_token`)       |
 | `.woodpecker/release-{mac,linux,win}.yml`                   | tag guard → setup → desktop CPack → plugin bundles → `r2-upload.mjs` (mac zip = VST3 + AU + CLAP; win = VST3 + CLAP)               |
 | `.woodpecker/release-publish.yml`                           | polls R2 (`--expect=macos,linux`; +windows when UTM live) → sha256sums + manifest → landing rebuild (`--source=r2`) → Pages deploy |
 | `scripts/{r2-upload,r2-publish,collect-plugin-bundles}.mjs` | release tooling; `fetch-releases.mjs --source=r2` reads the R2 manifest                                                            |
@@ -49,23 +62,38 @@ builds the two `EXCLUDE_FROM_ALL` targets (`openaxe_au`, `openaxe_clap`) so
 
 ## Official release flow (issue #441)
 
-Versioning is deliberately kept **off** Woodpecker, in the cheap GitHub Actions
-job; every heavy build runs here:
+Everything runs here, versioning included, so the version and the artifacts
+that ship it are produced by the same machine:
 
 | Concern                                                                                | Where                                                            |
 | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Bump `VERSION` + `CHANGELOG`, commit `chore(release): X.Y.Z`, tag `vX.Y.Z`, back-merge | GitHub Actions — `.github/workflows/auto-release.yml`            |
+| Bump `VERSION` + `CHANGELOG`, commit `chore(release): X.Y.Z`, tag `vX.Y.Z`, back-merge | Woodpecker — `.woodpecker/release-bump.yml`                      |
 | Tests + release builds (desktop/plugin) → R2 + `sha256sums.txt` + `manifest.json`      | Woodpecker — `.woodpecker/release-*.yml` + `release-publish.yml` |
 
-Flow: PR `dev → main` (merge commit) → `auto-release.yml` bumps/tags/back-merges →
+Flow: PR `dev → main` (merge commit) → `release-bump.yml` bumps/tags/back-merges →
 tag `v*` → the per-OS `release-*.yml` legs (guard `tag == VERSION`) → R2 →
 `release-publish.yml` → manifest + landing deploy on Cloudflare Pages.
 
-Woodpecker is **local-only**, so the tag only triggers a build while its
-server, agents and smee forwarder are up. When they are not (or you want it
-now), run the same pipeline off-webhook: `bash scripts/woodpecker-manual.sh
-release`, or the VS Code task "Woodpecker: release artifacts to R2 (mac +
-linux)".
+### Keeping it seamless
+
+Woodpecker is **local-only**, so nothing happens unless the whole stack is up:
+the server (`docker compose up -d`), the macOS + Linux agents
+(`woodpecker/agent-mac.sh`, `woodpecker/agent-linux.sh`) and the smee forwarder
+(so GitHub's webhooks reach the server). That is deliberate — if the stack is
+down when `main` is pushed, **no version is minted**, so there is no orphan tag
+to clean up. Keep the stack running (ideally auto-started as services) for
+hands-off releases.
+
+Recovery once the stack is back:
+
+- **Replay from the UI:** every pipeline (including `release-bump`) declares
+  `manual` — open the project, pick the `main` branch (**Run pipeline**) to mint
+  a missed version, then the `vX.Y.Z` tag for `release-{mac,linux}` +
+  `release-publish`; or
+- **Off-webhook bump:** `github_token=<PAT> bash scripts/release-bump.sh`; and
+  **off-webhook publish:** `pnpm release:publish`
+  (`scripts/woodpecker-manual.sh release`) — the VS Code task **Release:
+  publish (build → R2 → landing)**.
 
 > The landing deploy needs a Cloudflare API token with **Account → Cloudflare
 > Pages → Edit**, supplied as `CLOUDFLARE_API_TOKEN` in the environment or
@@ -89,7 +117,9 @@ linux)".
 
 ## Secrets (UI → repo Settings → Secrets, never in git)
 
-`r2_access_key`, `r2_secret_key`, `r2_account_id`, `pages_api_token`.
+`r2_access_key`, `r2_secret_key`, `r2_account_id`, `pages_api_token`, and
+`github_token` (a PAT with Contents:write + ruleset bypass, for the
+`release-bump` push/tag/back-merge).
 
 ## Recovery
 
@@ -101,8 +131,8 @@ linux)".
 
 ## GitHub Actions status (Phase 5, done)
 
-The heavy GitHub Actions workflows (`ci.yml`, `desktop.yml`, `plugin.yml`,
-`release.yml`, `pages.yml`) are **disabled** in repo settings to stop private-repo
-minute spend; only `auto-release.yml` (versioning) stays active. Woodpecker is
-now the CI/release engine of record — see "Official release flow" above, and
-`CONTRIBUTING.md#releasing-desktop--plugin`.
+GitHub Actions is retired: `auto-release.yml` is **deleted** and the heavy
+workflows (`ci.yml`, `desktop.yml`, `plugin.yml`, `release.yml`, `pages.yml`)
+are **disabled** in repo settings, so no private-repo minutes are spent.
+Woodpecker is the CI/release engine of record — see "Official release flow"
+above, and `CONTRIBUTING.md#releasing-desktop--plugin`.

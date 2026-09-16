@@ -111,7 +111,7 @@ carry real energy stay tight.
 
 - **All feature branches → `dev`** (including Dependabot — `target-branch: dev` in `.github/dependabot.yml`). Open every pull request with base `dev` and merge via **squash** (one commit per feature, Conventional Commits `feat:`/`fix:`/`feat!:`).
 - **`dev` → `main`** is the **only** PR that targets `main` (the release promotion). Merge it with a **merge commit**, not a squash, so `main` keeps `dev`'s ancestry. This relies on **Settings → General → Pull Requests → Allow merge commits** staying enabled — ancestry is what lets `auto-bump.mjs` see the real `feat:`/`fix:` commits (correct semver) and keeps the next promotion clean.
-- **Bump, tag and back-merge are automatic** (`#Releasing` below). The push to `main` runs `.github/workflows/auto-release.yml`, which commits `chore(release): X.Y.Z` and then merges that release commit back into `dev` as `chore(sync): merge main vX.Y.Z back into dev` (issue #304). The back-merge keeps `dev` on the released `VERSION`, so branches cut from it are not born stale. It stays conflict-free while the two trees differ only by the bump; when it does conflict the job fails loudly — do **not** silence it. Resolve by hand:
+- **Bump, tag and back-merge are automatic** (`#Releasing` below). The push to `main` runs the local Woodpecker pipeline `.woodpecker/release-bump.yml` (`scripts/release-bump.sh`), which commits `chore(release): X.Y.Z` and then merges that release commit back into `dev` as `chore(sync): merge main vX.Y.Z back into dev` (issue #304). The back-merge keeps `dev` on the released `VERSION`, so branches cut from it are not born stale. It stays conflict-free while the two trees differ only by the bump; when it does conflict the pipeline fails loudly — do **not** silence it. Resolve by hand:
   ```bash
   git checkout dev && git merge --no-ff origin/main && git push origin dev
   ```
@@ -138,11 +138,11 @@ The [DCO App](https://github.com/apps/dco) checks PRs. By signing off you certif
 
 The root `VERSION` file is the one source of truth — every `package.json`'s `"version"` and both `apps/desktop`/`packages/core` CMake `project()` versions are kept in sync with it (checked by `node scripts/sync-version.mjs --check` in CI and via pre-commit).
 
-CI/CD is **split by cost**: GitHub Actions does only the cheap versioning; every heavy job (tests + release builds) runs on the self-hosted Woodpecker (`docs/ci-woodpecker.md`, issue #427).
+CI/CD runs entirely on the **self-hosted Woodpecker** (`.woodpecker/*.yml`, `docs/ci-woodpecker.md`, issues #427/#441) — versioning included, so a version is never minted unless the machine that builds it is up. GitHub Actions is no longer used for releases.
 
 | Concern                                                                                | Runs on                                                             |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Version bump, `CHANGELOG`, release commit + tag `vX.Y.Z`, `main → dev` back-merge      | **GitHub Actions** — `.github/workflows/auto-release.yml`           |
+| Version bump, `CHANGELOG`, release commit + tag `vX.Y.Z`, `main → dev` back-merge      | **Woodpecker** — `.woodpecker/release-bump.yml`                     |
 | Tests (drift / lint / unit / e2e / core / desktop / plugin)                            | **Woodpecker** — `.woodpecker/ci-{mac,linux,win}.yml`               |
 | Release builds → Cloudflare R2 + `sha256sums.txt` + `manifest.json` + landing redeploy | **Woodpecker** — `.woodpecker/release-*.yml`, `release-publish.yml` |
 | Web app (`openaxe.pages.dev`)                                                          | Cloudflare Git integration, on merge to `main`                      |
@@ -150,7 +150,7 @@ CI/CD is **split by cost**: GitHub Actions does only the cheap versioning; every
 Release flow:
 
 1. Open PRs against `dev` (feature work), then `dev` → `main` when ready to release. Use Conventional Commits (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:` etc.) — they drive the bump.
-2. Merging the `dev` → `main` PR fires `.github/workflows/auto-release.yml`, which:
+2. Merging the `dev` → `main` PR fires the local `.woodpecker/release-bump.yml` pipeline, which:
    - reads conventional commits since the last `v*` tag (`scripts/auto-bump.mjs`),
    - decides `patch` (`fix:`/`chore:`), `minor` (`feat:`), or `major` (`BREAKING CHANGE` / `!` — with `0.y.z` mapping breaking → minor until `1.0.0`),
    - bumps `VERSION`, runs `node scripts/sync-version.mjs`, prepends `CHANGELOG.md`,
@@ -159,25 +159,23 @@ Release flow:
 3. Pushing the `v*` tag triggers the Woodpecker release pipelines: `.woodpecker/release-{mac,linux,win}.yml` (guard `tag == VERSION` → desktop `dmg`/`zip`/`deb` + plugin bundles → **R2**) and `.woodpecker/release-publish.yml` (polls R2 → `sha256sums.txt` + root `manifest.json` → rebuilds the landing `--source=r2` → deploys it to Cloudflare Pages `openaxe-site`).
 4. Verify the R2 folder and the landing releases page — the web app's update check reads the landing's `releases-data.json`.
 
-**Woodpecker is self-hosted and local-only**, so a pushed tag only reaches it while the server + agents + smee forwarder are running. If they are not (or you want the release immediately), run the exact pipeline off-webhook:
+**Woodpecker is self-hosted and local-only**, so a release only happens while its server + mac/linux agents (and the smee forwarder that delivers GitHub's webhooks) are running. That is deliberate now: if the stack is down when `main` is pushed, **no version is minted** — there is no orphan tag to clean up. Once the stack is back, replay the missed run:
 
-```bash
-bash scripts/woodpecker-manual.sh release   # VS Code: "Woodpecker: release artifacts to R2 (mac + linux)"
-```
+- **Bump / tag / back-merge:** Woodpecker UI → run the `release-bump` pipeline on `main`, or locally `github_token=<PAT> bash scripts/release-bump.sh`.
+- **Build / publish** (when the tag exists): `bash scripts/woodpecker-manual.sh release` — VS Code task **Release: publish (build → R2 → landing)**.
 
 > The `release` run also builds and deploys the landing (`openaxe-site`), which needs a Cloudflare API token (`Account → Cloudflare Pages → Edit`) as `CLOUDFLARE_API_TOKEN` in the environment or `woodpecker/.env` (the Woodpecker pipeline uses the `pages_api_token` secret instead). Without the token the landing is built but not deployed — run `bash scripts/woodpecker-manual.sh landing` once you have it.
 
-Manual escape hatch for versioning: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview.
+Preview the next version locally with `node scripts/auto-bump.mjs --dry-run` — the bump is driven by the Conventional Commit types that landed on `main`.
 
-> Requires a PAT that can bypass branch protection on `main` (the release commit and the back-merge are pushed by the workflow):
+> The local `release-bump` pipeline needs a PAT that can bypass branch protection on `main`/`dev` (it pushes the release commit, the tag, and the back-merge):
 >
 > 1. Create a classic PAT (https://github.com/settings/tokens) with `repo` scope
 >    as pauloedspinho20, or a fine-grained PAT with Contents:write on this repo.
-> 2. Add it as repo secret `RELEASE_PAT` (Settings → Secrets → Actions → New secret).
+> 2. Add it as a **Woodpecker** repo secret named `github_token`
+>    (Woodpecker UI → repo Settings → Secrets). It is no longer a GitHub Actions secret.
 > 3. Ruleset protect-main-dev already has Bypass → pauloedspinho20 → Always,
 >    so pushes authenticated as you bypass the PR requirement.
->    If RELEASE_PAT is missing the workflow falls back to GITHUB_TOKEN and the
->    push will be rejected by branch protection (intentional — add the secret).
 
 ### Releasing — plugin specifics
 

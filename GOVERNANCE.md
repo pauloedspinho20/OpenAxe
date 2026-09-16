@@ -13,13 +13,13 @@
 ## Roles
 
 - **Contributor:** anyone opening PRs/issues. Follow `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, DCO (`git commit -s`).
-- **Maintainer:** can merge, cut releases (`VERSION`/`v*` via `auto-release.yml`), manage secrets.
+- **Maintainer:** can merge, cut releases (`VERSION`/`v*` via the local Woodpecker `release-bump` pipeline), manage secrets.
 
 As community grows, a lightweight RFC and `CODEOWNERS` per-path reviewers will be added.
 
 ## Releases
 
-Automatic from `main` — a push to `main` runs `auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge into `dev`); the tag then drives the self-hosted **Woodpecker** release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing). See `CONTRIBUTING.md#Releasing`.
+Automatic from `main` — a push to `main` runs the local Woodpecker `release-bump` pipeline (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge into `dev`); the tag then drives the Woodpecker release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing). See `CONTRIBUTING.md#Releasing`.
 
 ## Sponsorship
 

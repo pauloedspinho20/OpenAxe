@@ -7,14 +7,15 @@ labels:
   platform: windows/arm64
 
 when:
-  - event: tag
-    ref: refs/tags/v*
+  # Tag pushes build the release; `manual` lets a missed tag be replayed from
+  # the Woodpecker UI (issue #441).
+  - event: [tag, manual]
 
 steps:
   guard:
     image: powershell
     commands:
-      - node -e "var t=(process.env.CI_COMMIT_TAG||'').replace(/^v/,'');var v=require('fs').readFileSync('VERSION','utf8').trim();if(t!==v){console.error('tag '+process.env.CI_COMMIT_TAG+' != VERSION '+v);process.exit(1)}"
+      - node -e "var v=require('fs').readFileSync('VERSION','utf8').trim();var t=(process.env.CI_COMMIT_TAG||('v'+v)).replace(/^v/,'');if(t!==v){console.error('tag '+t+' != VERSION '+v);process.exit(1)}"
   setup:
     image: powershell
     commands:
