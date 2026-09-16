@@ -78,7 +78,7 @@ run it and confirm the diff (or lack of one) whenever you change
 web app calls (see `scripts/check-wasm-exports.mjs`, which catches the latter
 in CI without needing a rebuild).
 
-**CI/CD is split by cost** (issue #441, #427). The heavy jobs — tests (drift/lint/unit/e2e/core/desktop/plugin) and the release builds that publish to Cloudflare R2 — run on the **self-hosted, local-only Woodpecker** (`.woodpecker/*.yml`; see `docs/ci-woodpecker.md`). GitHub Actions keeps only the cheap **versioning** job, `.github/workflows/auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge `main → dev` on push to `main`). The superseded heavy GH workflows (`ci.yml`, `desktop.yml`, `plugin.yml`, `release.yml`, `pages.yml`) are **disabled** in repo settings. Because Woodpecker is local-only, treat “Woodpecker green” as required for merge and follow the release flow in `CONTRIBUTING.md#releasing-desktop--plugin`.
+**CI/CD runs entirely on the self-hosted Woodpecker** (issues #441, #427). Tests (drift/lint/unit/e2e/core/desktop/plugin), the versioning pipeline (`.woodpecker/release-bump.yml` — bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge `main → dev` on push to `main`), and the release builds that publish to Cloudflare R2 all run locally (`.woodpecker/*.yml`; see `docs/ci-woodpecker.md`). GitHub Actions is not used for releases; the superseded workflows (`auto-release.yml`, `ci.yml`, `desktop.yml`, `plugin.yml`, `release.yml`, `pages.yml`) are gone/disabled. Because Woodpecker is local-only, treat “Woodpecker green” as required for merge and follow the release flow in `CONTRIBUTING.md#releasing-desktop--plugin`.
 
 ## Drift-guard scripts
 
@@ -146,12 +146,14 @@ rebuild, CMake reconfigure, etc.) to take effect.
   `project()` version read it; see
   [CONTRIBUTING.md#releasing-desktop--plugin](./CONTRIBUTING.md#releasing-desktop--plugin)
   for the tag-and-release flow.
-- **Releases are hybrid — cheap versioning on GitHub Actions, everything
-  heavy on Woodpecker** (issue #441). A push to `main` runs `auto-release.yml`
-  (bump + `CHANGELOG` + commit `chore(release): X.Y.Z` + tag `vX.Y.Z`, then
-  back-merge into `dev`); the tag drives `.woodpecker/release-*.yml` →
-  Cloudflare R2 and `release-publish.yml` → `sha256sums.txt`, `manifest.json`
-  and the landing deploy. `dev → main` is merged with a **merge commit** (keeps
-  ancestry); `feat → dev` stays squash. Woodpecker is local-only — if its
-  server/agents/smee aren't up, run `bash scripts/woodpecker-manual.sh release`
-  off-webhook. See [CONTRIBUTING.md#branching](./CONTRIBUTING.md#branching).
+- **Releases are 100% local on Woodpecker** (issue #441). A push to `main` runs
+  `.woodpecker/release-bump.yml` (`scripts/release-bump.sh` — bump + `CHANGELOG`
+  - commit `chore(release): X.Y.Z` + tag `vX.Y.Z`, then back-merge into `dev`);
+    the tag drives `.woodpecker/release-*.yml` → Cloudflare R2 and
+    `release-publish.yml` → `sha256sums.txt`, `manifest.json` and the landing
+    deploy. Versioning and building share one machine, so a missed webhook leaves
+    no orphan tag (nothing is minted). `dev → main` is merged with a **merge
+    commit** (keeps ancestry); `feat → dev` stays squash. When the stack was down,
+    replay from the Woodpecker UI (pipelines accept `manual`) or
+    `bash scripts/woodpecker-manual.sh release`. Needs the `github_token`
+    Woodpecker secret. See [CONTRIBUTING.md#branching](./CONTRIBUTING.md#branching).

@@ -1,0 +1,25 @@
+# Local auto-release (issue #441) — push to `main` bumps VERSION + CHANGELOG,
+# commits `chore(release): X.Y.Z`, tags it, pushes both, and back-merges into
+# `dev`. The tag push then triggers release-{mac,linux,win}.yml +
+# release-publish.yml.
+#
+# This replaces GitHub Actions' auto-release.yml: versioning lives on the same
+# self-hosted Woodpecker that builds the artifacts, so the two can't drift and a
+# missed webhook leaves no orphan tag. Replay from the UI (`manual`) if needed.
+#
+# Needs a `github_token` repo secret (PAT, Contents:write + ruleset bypass).
+# NOTE: `image` selects the shell for the Local backend (bash/sh/zsh/pwsh/…).
+
+labels:
+  platform: darwin/arm64
+
+when:
+  - event: [push, manual]
+    branch: [main]
+
+steps:
+  bump:
+    image: bash
+    secrets: [github_token]
+    commands:
+      - bash scripts/release-bump.sh
