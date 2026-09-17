@@ -1,7 +1,9 @@
 # Windows CI — runs on the UTM Windows 11 ARM VM agent (Local backend).
-# PROVISIONAL subset: pure-JS stages + core (CMake/VS Build Tools) first.
-# desktop/plugin legs get added once this file is green (issue #427 Phase 4).
-# Requires on the VM: git, Node 22, pnpm 10.16.1, CMake, VS Build Tools.
+# Stages: JS (drift/lint/build/unit) + core (CMake/VS Build Tools) + the
+# desktop app build (build.mjs → openaxe_desktop.exe). Plugin leg joins once
+# this file is green (issue #427 Phase 4).
+# Requires on the VM: git, Node 22, pnpm 10.16.1, CMake, VS Build Tools,
+# and the WebView2 runtime (webview's CMake fetches the SDK).
 # NOTE: `image` selects the shell for the Local backend (powershell on Win11).
 
 labels:
@@ -36,3 +38,7 @@ steps:
     image: powershell
     commands:
       - node scripts/ci-local.mjs --stage=core --skip-setup
+  desktop:
+    image: powershell
+    commands:
+      - node scripts/ci-local.mjs --stage=desktop --skip-setup
