@@ -4,6 +4,7 @@
 # this file is green (issue #427 Phase 4).
 # Requires on the VM: git, Node 22, pnpm 10.16.1, CMake, VS Build Tools,
 # and the WebView2 runtime (webview's CMake fetches the SDK).
+# VM setup guide: docs/windows-vm.md.
 # NOTE: `image` selects the shell for the Local backend (powershell on Win11).
 
 labels:
