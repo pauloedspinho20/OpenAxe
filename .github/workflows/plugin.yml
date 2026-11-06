@@ -1,9 +1,12 @@
 # Plugin CI — VST3 / CLAP / AUv2 (issue #136, extends #54 release flow).
 # Three formats × three platforms is nine artifacts, and macOS additionally
-# needs universal binaries + notarization. This workflow is the heaviest
-# in the repo — tag pushes always run it; PRs run a Linux-only build+test leg
-# without signing/packaging (see `gate` + `if:` guards, issue #379).
-# Confirm cost before broadening triggers.
+# needs universal binaries + notarization.
+#
+# Every event runs the full 3-OS matrix. The Linux-only PR leg, the `full-ci`
+# label and the weekly backstop existed only because Actions minutes were
+# billed on a private repo (issue #379); standard runners are free and
+# unmetered on public repos. PRs build and test on all three OSes; packaging,
+# signing and artifact upload still run only where something ships.
 name: Plugin Build
 
 on:
@@ -17,10 +20,6 @@ on:
       - packages/core/**
       - packages/ui/tokens/**
       - .github/workflows/plugin.yml
-  # Weekly full matrix (Sunday 03:30 UTC) — see desktop.yml for why weekly,
-  # not nightly, on a billed-minutes quota.
-  schedule:
-    - cron: '30 3 * * 0'
 
 concurrency:
   group: plugin-${{ github.ref }}
@@ -30,33 +29,28 @@ permissions:
   contents: write
 
 jobs:
-  # Full 3-OS matrix everywhere except plain PRs (Linux-only unless the
-  # reviewer adds the `full-ci` label). Same pattern as desktop.yml.
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set.outputs.matrix }}
-      full: ${{ steps.set.outputs.full }}
-    steps:
-      - id: set
-        run: |
-          if [ "${{ github.event_name }}" != "pull_request" ] || \
-             [ "${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}" = "true" ]; then
-            echo 'matrix=[{"os":"macos-14","cmake_preset":"Release","artifact_glob":"packages/vst3/build/*.vst3","extra_artifacts":"packages/vst3/build/*.component packages/vst3/build/*.clap","cpack_generator":"productbuild"},{"os":"windows-latest","cmake_preset":"Release","artifact_glob":"packages/vst3/build/**/*.vst3","extra_artifacts":"packages/vst3/build/**/*.clap","cpack_generator":"WIX"},{"os":"ubuntu-24.04","cmake_preset":"Release","artifact_glob":"packages/vst3/build/*.vst3","extra_artifacts":"packages/vst3/build/*.clap","cpack_generator":"DEB"}]' >> "$GITHUB_OUTPUT"
-            echo 'full=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'matrix=[{"os":"ubuntu-24.04","cmake_preset":"Release","artifact_glob":"packages/vst3/build/*.vst3","extra_artifacts":"packages/vst3/build/*.clap","cpack_generator":"DEB"}]' >> "$GITHUB_OUTPUT"
-            echo 'full=false' >> "$GITHUB_OUTPUT"
-          fi
-
   plugin:
-    needs: gate
-    # Draft PRs pay nothing (issue #379); ready-for-review is the signal.
+    # Drafts aren't ready for review and can't merge, so don't run on them.
     if: github.event.pull_request.draft != true
     strategy:
       fail-fast: ${{ github.event_name == 'pull_request' }}
       matrix:
-        include: ${{ fromJSON(needs.gate.outputs.matrix) }}
+        include:
+          - os: macos-14
+            cmake_preset: Release
+            artifact_glob: packages/vst3/build/*.vst3
+            extra_artifacts: packages/vst3/build/*.component packages/vst3/build/*.clap
+            cpack_generator: productbuild
+          - os: windows-latest
+            cmake_preset: Release
+            artifact_glob: packages/vst3/build/**/*.vst3
+            extra_artifacts: packages/vst3/build/**/*.clap
+            cpack_generator: WIX
+          - os: ubuntu-24.04
+            cmake_preset: Release
+            artifact_glob: packages/vst3/build/*.vst3
+            extra_artifacts: packages/vst3/build/*.clap
+            cpack_generator: DEB
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -223,10 +217,10 @@ jobs:
 
       # ── Installers / packaging — full runs only (issue #379). The PR leg
       # proves compile+tests; CPack, bundle zips and uploads ride the runs
-      # that can actually ship (merge/tag/schedule/full-ci).
+      # that can actually ship (push / tag / dispatch).
 
       - name: Package plugin (CPack)
-        if: needs.gate.outputs.full == 'true'
+        if: github.event_name != 'pull_request'
         # CPack for plugin is defined in packages/vst3/CMakeLists.txt
         # generators: productbuild (macOS .pkg → /Library/Audio/Plug-Ins/*),
         # WIX (Windows .msi → Program Files\Common Files\VST3), DEB+TGZ (Linux)
@@ -253,7 +247,7 @@ jobs:
           ls -lh packages/vst3/build/*.pkg packages/vst3/build/*.msi packages/vst3/build/*.deb packages/vst3/build/*.zip packages/vst3/build/*.tar.gz 2>/dev/null || true
 
       - name: Create fallback artifacts (debug build-tree + bundles zip)
-        if: needs.gate.outputs.full == 'true' && always()
+        if: github.event_name != 'pull_request' && always()
         shell: bash
         continue-on-error: true
         run: |
@@ -276,7 +270,7 @@ jobs:
           ls -lh openaxe-plugin-build-tree-* openaxe-plugin-bundles-* 2>/dev/null || ls -lh packages/vst3/build/*.vst3 packages/vst3/build/**/*.vst3 packages/vst3/build/*.component packages/vst3/build/*.clap 2>/dev/null || true
 
       - name: Upload VST3 artifact
-        if: needs.gate.outputs.full == 'true'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-vst3
@@ -284,7 +278,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload extra artifacts (CLAP/AU on macOS)
-        if: needs.gate.outputs.full == 'true' && matrix.extra_artifacts != ''
+        if: github.event_name != 'pull_request' && matrix.extra_artifacts != ''
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-extra
@@ -292,7 +286,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload installers
-        if: needs.gate.outputs.full == 'true' && always()
+        if: github.event_name != 'pull_request' && always()
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-installers
@@ -307,27 +301,14 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload debug build-tree (CI triage only — not installable, see #292)
-        if: needs.gate.outputs.full == 'true' && always()
+        if: github.event_name != 'pull_request' && always()
         uses: actions/upload-artifact@v7
         with:
           name: openaxe-plugin-${{ matrix.os }}-debug-build-tree
           path: openaxe-plugin-build-tree-*.tar.gz
           if-no-files-found: warn
 
-      - name: Publish to GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            packages/vst3/build/*.pkg
-            packages/vst3/build/*.dmg
-            packages/vst3/build/*.deb
-            packages/vst3/build/*.msi
-            packages/vst3/build/*.tar.gz
-            packages/vst3/build/*.zip
-            packages/vst3/build/*.vst3
-            packages/vst3/build/*.component
-            packages/vst3/build/*.clap
-            openaxe-plugin-bundles-*.zip
-          fail_on_unmatched_files: false
-          generate_release_notes: true
+      # The GitHub Release for a tag is owned by release.yml, which builds the
+      # shipping plugin bundles itself, uploads them to R2 and mirrors them on
+      # the Release. Publishing here too would race it — both workflows fire on
+      # the same `v*` tag, and whichever lost would clobber the other's notes.

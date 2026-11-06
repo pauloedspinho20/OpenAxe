@@ -32,7 +32,7 @@
 // exactly like CI's `|| true` step.
 
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -118,7 +118,16 @@ const results = []
 /** Run one command, streaming output. Returns true on success. */
 function run(command, args, options = {}) {
   console.log(`  $ ${command} ${args.join(' ')}`)
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', ...options })
+  // On Windows pnpm/npm are .cmd shims that CreateProcess can't launch
+  // directly — they need the shell. cmake/node/git are real .exe and must NOT
+  // go through it (quoting). (issue #427 Phase 4: Windows agent.)
+  const needsShell = process.platform === 'win32' && /^(pnpm|npm|npx|yarn)(\.cmd)?$/i.test(command)
+  const result = spawnSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    shell: needsShell,
+    ...options,
+  })
   return result.status === 0
 }
 
@@ -276,7 +285,8 @@ function main() {
         // The setup stage leaves a Debug/default-generator tree here for
         // local dev; this stage fully specifies its own flags, so start
         // clean instead of inheriting a clashing generator or build type.
-        run('rm', ['-rf', 'packages/core/build'])
+        // (fs, not `rm` — Windows has no rm(1).)
+        rmSync(join(root, 'packages/core/build'), { recursive: true, force: true })
         const probe = spawnSync('ninja', ['--version'], { stdio: 'ignore' })
         const generator = probe.status === 0 ? ['-G', 'Ninja'] : []
         let launcher = ['-DCMAKE_CXX_COMPILER_LAUNCHER=']
@@ -285,6 +295,8 @@ function main() {
         } else {
           ccacheHint()
         }
+        // --config/-C are no-ops on single-config generators (Ninja/Make) and
+        // required on Windows' multi-config VS generator, so pass them always.
         return (
           run('cmake', [
             '-S',
@@ -296,8 +308,15 @@ function main() {
             '-DOPENAXE_BUILD_TESTS=ON',
             ...launcher,
           ]) &&
-          run('cmake', ['--build', 'packages/core/build', '-j']) &&
-          run('ctest', ['--test-dir', 'packages/core/build', '--output-on-failure', '-j2'])
+          run('cmake', ['--build', 'packages/core/build', '--config', 'Release', '-j']) &&
+          run('ctest', [
+            '--test-dir',
+            'packages/core/build',
+            '-C',
+            'Release',
+            '--output-on-failure',
+            '-j2',
+          ])
         )
       } catch {
         return false

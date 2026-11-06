@@ -24,11 +24,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Fall back to woodpecker/.env (gitignored) for R2_* creds so a direct
+// Fall back to a gitignored .env at the repo root for R2_* creds so a direct
 // `node scripts/r2-publish.mjs …` works without exporting them by hand.
 function loadDotenv() {
   try {
-    const url = new URL('../woodpecker/.env', import.meta.url)
+    const url = new URL('../.env', import.meta.url)
     for (const line of readFileSync(url, 'utf8').split('\n')) {
       const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/)
       if (!m) continue

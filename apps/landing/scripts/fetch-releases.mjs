@@ -14,7 +14,7 @@ const fallbackPath = path.resolve(__dirname, '../src/generated/releases.fallback
 const REPO = process.env.GITHUB_REPOSITORY || 'pauloedspinho20/OpenAxe'
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=100`
 
-// --source=r2 (or RELEASES_SOURCE=r2): read the Woodpecker-published root
+// --source=r2 (or RELEASES_SOURCE=r2): read the release-published root
 // manifest from R2 instead of the GitHub API (issue #427 Phase 3). Same
 // output schema; the landing can't tell the difference. R2 is the release
 // source of truth now that the repo is private, so it's the default whenever
