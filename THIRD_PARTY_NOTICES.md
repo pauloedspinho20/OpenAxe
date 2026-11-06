@@ -64,12 +64,16 @@ plugin editor as well as on the web. The full summary and texts are generated
 into [`licenses/npm-packages.txt`](./licenses/npm-packages.txt); the headline
 components are React, Vite, Zustand and the Tone3000 client (all MIT).
 
-> **⚠️ `p5@2.3.2` is LGPL-2.1 and its "or later" status is unresolved.** It is a
-> direct, genuinely imported production dependency, so it ships in every binary.
-> LGPL-2.1-**only** is _incompatible_ with GPL-3.0; LGPL-2.1-**or-later** is
-> fine. Nothing in the published package says which. This must be settled
-> against `processing/p5.js` before the first GPLv3 binary release — see
-> [`licenses/README.md`](./licenses/README.md#-open-question-p5-is-lgpl-21).
+> **`p5@2.3.2` is LGPL-2.1, and is conveyed here under GPL-3.0 via LGPL-2.1 §3.**
+> It is a direct, genuinely imported production dependency, so it ships in every
+> binary. It carries no "or any later version" grant — but §3 lets any LGPL-2.1
+> copy be placed under the ordinary GPL, expressly including a version newer
+> than 2, so the "or later" question does not arise. The FSF's
+> [compatibility matrix](https://www.gnu.org/licenses/gpl-faq.html#AllCompatibility)
+> gives GPLv3 + "LGPLv2.1 only" as **"OK: Combination is under GPLv3"**, and its
+> [license list](https://www.gnu.org/licenses/license-list.html#LGPLv2.1) calls
+> LGPLv2.1 "compatible with GPLv2 and GPLv3". Details and the §3 quotation:
+> [`licenses/README.md`](./licenses/README.md#p5-is-lgpl-21--resolved-compatible-with-gplv3).
 
 ## Platform notes
 
