@@ -93,6 +93,13 @@ jobs:
       - name: Plugin automation map drift check
         run: node scripts/gen-param-schema.mjs --check --target=automation-map
 
+      # licenses/ is generated from the dependencies' own license files and is
+      # redistributed inside every binary, so a dependency bump that changes a
+      # license must not land silently. Sources that are not checked out or
+      # built are skipped, so this passes without submodules or a plugin build.
+      - name: Third-party licenses drift check
+        run: node scripts/sync-licenses.mjs --check
+
       - name: Effects config drift check
         # Covered by the plain --check above too; explicit so a stale
         # enabled_blocks.h / block_sources.cmake / generatedBlockConfig.ts

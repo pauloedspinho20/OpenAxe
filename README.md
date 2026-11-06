@@ -39,7 +39,7 @@ per-target status of that split, the migration order, and the latency budget).
 
 - **C++ for DSP core** — All vendored DSP libraries are C++ (DSPark, NAMCore, DaisySP). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
 - **Desktop: C++ + webview.h** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. miniaudio after the RtAudio CoreAudio crash and the JUCE AGPL removal (issue #374; see `apps/desktop/CMakeLists.txt`). webview.h ships no menu bar, so `src/mac_menu.mm` installs the standard App/Edit/Window menus — without an Edit menu macOS gives you no ⌘C/⌘V in text fields (#300 H1).
-- **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. Editor is the same React SPA as web/desktop via `IWebViewControl` + loopback HTTP + `window.openAxe` bridge (no IGraphics fork).
+- **VST3: iPlug2 (C++, zlib-style), not JUCE** — Direct C++ DSP integration. Its permissive license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. Editor is the same React SPA as web/desktop via `IWebViewControl` + loopback HTTP + `window.openAxe` bridge (no IGraphics fork).
 - **Mobile: Native shells** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
 
 ### What every platform shares
@@ -377,4 +377,4 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 
 ## License
 
-[GPLv3](./LICENSE) — keeps this and any derivative work free and open. `Copyright (C) 2024-2026 OpenAxe Contributors`. The shared DSP core wraps GPLv3/LGPLv3/MIT/BSD-3 C++ libraries. iPlug2 (VST3/AU/AAX) is MIT. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, branching, DCO sign-off, and licensing rules. Third-party notices: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+[GPLv3](./LICENSE) — keeps this and any derivative work free and open. `Copyright (C) 2024-2026 OpenAxe Contributors`. The shared DSP core wraps MIT/BSD/MPL-2.0 C++ libraries; iPlug2 is zlib-style and the VST3 SDK is used under its GPLv3 arm. Dependency notices ship inside every binary — see [`licenses/`](./licenses/). See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, branching, DCO sign-off, and licensing rules. Third-party notices: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

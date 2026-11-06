@@ -64,7 +64,7 @@ git submodule update --init -- packages/core/third_party/dspark packages/core/th
 - `pnpm build` — typecheck + production build (web + `packages/ui`; desktop is `pnpm build:desktop` / `build:all`)
 - `pnpm dev:desktop` / `pnpm dev:all` — native desktop app / web + desktop side by side (see [`README.md`](./README.md#development))
 - `pnpm storybook` / `pnpm build-storybook` — Storybook dev server / static build (`packages/ui`)
-- Drift guards: `node scripts/gen-param-schema.mjs --check` (add `--target=automation-map` for plugin), `node scripts/check-grid-dims.mjs --check`, `node scripts/check-wasm-exports.mjs --check`, `node scripts/sync-version.mjs --check`, `node packages/ui/scripts/generate-tokens.mjs --check`
+- Drift guards: `node scripts/gen-param-schema.mjs --check` (add `--target=automation-map` for plugin), `node scripts/check-grid-dims.mjs --check`, `node scripts/check-wasm-exports.mjs --check`, `node scripts/sync-version.mjs --check`, `node packages/ui/scripts/generate-tokens.mjs --check`, `node scripts/sync-licenses.mjs --check`
 
 All checks must pass before merge — CI runs them on every push/PR to `main`/`dev` (see [`AGENTS.md`](./AGENTS.md#verification-commands) + `README.md#Verification`).
 

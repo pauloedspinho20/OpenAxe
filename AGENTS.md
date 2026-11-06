@@ -98,6 +98,7 @@ will catch it:
 - `node scripts/sync-version.mjs --check` — every `package.json`'s
   `"version"` matches the root `VERSION` file (issue #54)
 - `node packages/ui/scripts/generate-tokens.mjs --check` — `packages/ui/tokens/design-tokens.json` → `packages/ui/tokens/{colors,spacing,typography,shadows}.css` and optionally `packages/vst3/generated/tokens.h` (`--target=cpp`; issue #131)
+- `node scripts/sync-licenses.mjs --check` — `licenses/` matches the dependencies' own license files. That directory is redistributed inside every binary (GPLv3 §4 plus the permissive deps' own notice requirements), so a dependency bump must not change a license silently. See `THIRD_PARTY_NOTICES.md`.
 
 Each has a `--fix`/write mode (`sync-version.mjs`'s is the no-flag default,
 not `--fix`); a fix still requires re-running the relevant build (wasm
