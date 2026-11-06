@@ -116,7 +116,7 @@ carry real energy stay tight.
   git checkout dev && git merge --no-ff origin/main && git push origin dev
   ```
 - **Hotfixes** branch from `main` (`hotfix/x.y.z`), PR back into `main`, get bumped/tagged by the same workflow, then merge `main → dev` so `dev` carries the fix.
-- Branch protection on `main`/`dev` requires PR + required checks (Woodpecker, see `#Releasing`); `deleteBranchOnMerge` enabled.
+- Branch protection on `main`/`dev` requires a PR plus `ci.yml`'s required checks (`core-tests`, `checks`, `unit`, `e2e`); `deleteBranchOnMerge` enabled.
 - Use `.gitattributes` for generated/lockfile merge strategy.
 
 ## DCO — Developer Certificate of Origin
@@ -138,14 +138,14 @@ The [DCO App](https://github.com/apps/dco) checks PRs. By signing off you certif
 
 The root `VERSION` file is the one source of truth — every `package.json`'s `"version"` and both `apps/desktop`/`packages/core` CMake `project()` versions are kept in sync with it (checked by `node scripts/sync-version.mjs --check` in CI and via pre-commit).
 
-CI/CD is **split by cost**: GitHub Actions does only the cheap versioning; every heavy job (tests + release builds) runs on the self-hosted Woodpecker (`docs/ci-woodpecker.md`, issue #427).
+CI/CD runs entirely on **GitHub Actions** (`docs/ci-github-actions.md`). The self-hosted Woodpecker split from #427/#441 is retired: it existed because Actions minutes were billed on a private repo at macOS ×10, and standard runners are free and unmetered on public repos.
 
-| Concern                                                                                | Runs on                                                             |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Version bump, `CHANGELOG`, release commit + tag `vX.Y.Z`, `main → dev` back-merge      | **GitHub Actions** — `.github/workflows/auto-release.yml`           |
-| Tests (drift / lint / unit / e2e / core / desktop / plugin)                            | **Woodpecker** — `.woodpecker/ci-{mac,linux,win}.yml`               |
-| Release builds → Cloudflare R2 + `sha256sums.txt` + `manifest.json` + landing redeploy | **Woodpecker** — `.woodpecker/release-*.yml`, `release-publish.yml` |
-| Web app (`openaxe.pages.dev`)                                                          | Cloudflare Git integration, on merge to `main`                      |
+| Concern                                                                                | Runs on                                                    |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Version bump, `CHANGELOG`, release commit + tag `vX.Y.Z`, `main → dev` back-merge      | **GitHub Actions** — `.github/workflows/auto-release.yml`  |
+| Tests (drift / lint / unit / e2e / core / desktop / plugin)                            | **GitHub Actions** — `ci.yml`, `desktop.yml`, `plugin.yml` |
+| Release builds → Cloudflare R2 + `sha256sums.txt` + `manifest.json` + landing redeploy | **GitHub Actions** — `.github/workflows/release.yml`       |
+| Web app (`openaxe.pages.dev`)                                                          | Cloudflare Git integration, on merge to `main`             |
 
 Release flow:
 
@@ -156,16 +156,16 @@ Release flow:
    - bumps `VERSION`, runs `node scripts/sync-version.mjs`, prepends `CHANGELOG.md`,
    - commits `chore(release): X.Y.Z`, creates annotated tag `vX.Y.Z` and pushes both,
    - merges `main` back into `dev` (`chore(sync): …`) so `dev` carries the released `VERSION` — see `#Branching`. A conflict there fails the job loudly rather than leaving the drift in place.
-3. Pushing the `v*` tag triggers the Woodpecker release pipelines: `.woodpecker/release-{mac,linux,win}.yml` (guard `tag == VERSION` → desktop `dmg`/`zip`/`deb` + plugin bundles → **R2**) and `.woodpecker/release-publish.yml` (polls R2 → `sha256sums.txt` + root `manifest.json` → rebuilds the landing `--source=r2` → deploys it to Cloudflare Pages `openaxe-site`).
+3. Pushing the `v*` tag triggers `.github/workflows/release.yml`: `guard` (`tag == VERSION`) → `build` on macOS/Windows/Linux (desktop `dmg`/`zip`/`deb` + plugin bundles → **R2**) → `publish` (polls R2 → `sha256sums.txt` + root `manifest.json`, then mirrors the artifacts onto the GitHub Release) → `landing` (rebuilds the landing `--source=r2` and deploys it to Cloudflare Pages `openaxe-site`).
 4. Verify the R2 folder and the landing releases page — the web app's update check reads the landing's `releases-data.json`.
 
-**Woodpecker is self-hosted and local-only**, so a pushed tag only reaches it while the server + agents + smee forwarder are running. If they are not (or you want the release immediately), run the exact pipeline off-webhook:
+To cut a release by hand — Actions degraded, or reproducing a failing leg locally — run the same stages on your own machine:
 
 ```bash
-bash scripts/woodpecker-manual.sh release   # VS Code: "Woodpecker: release artifacts to R2 (mac + linux)"
+bash scripts/release-local.sh release   # VS Code: "Release: artifacts to R2 (mac + linux)"
 ```
 
-> The `release` run also builds and deploys the landing (`openaxe-site`), which needs a Cloudflare API token (`Account → Cloudflare Pages → Edit`) as `CLOUDFLARE_API_TOKEN` in the environment or `woodpecker/.env` (the Woodpecker pipeline uses the `pages_api_token` secret instead). Without the token the landing is built but not deployed — run `bash scripts/woodpecker-manual.sh landing` once you have it.
+> The `release` run also builds and deploys the landing (`openaxe-site`), which needs a Cloudflare API token (`Account → Cloudflare Pages → Edit`) as `CLOUDFLARE_API_TOKEN` in the environment or in a gitignored `.env` at the repo root (in CI it is the GitHub Actions secret of the same name). Without the token the landing is built but not deployed — run `bash scripts/release-local.sh landing` once you have it.
 
 Manual escape hatch for versioning: `Actions → Auto Release → Run workflow` with `bump: major/minor/patch` to force a bump, or locally `node scripts/auto-bump.mjs --dry-run` to preview.
 
@@ -183,9 +183,9 @@ Manual escape hatch for versioning: `Actions → Auto Release → Run workflow` 
 
 The plugin rides the same `VERSION` → tag flow as desktop, but its matrix is nine artifacts (VST3/CLAP/AU × 3 OS, macOS universal `arm64;x86_64`) and macOS **must** be signed/notarized or Gatekeeper blocks the install.
 
-See `.woodpecker/release-{mac,linux,win}.yml`:
+See `.github/workflows/release.yml`:
 
-1. The tag push (`v*`) is the trigger, after the `tag == VERSION` guard.
+1. The tag push (`v*`) is the trigger, after the `guard` job's `tag == VERSION` check.
 2. The `plugin` step runs `node scripts/ci-local.mjs --stage=plugin --skip-setup --with-sdks` (fetches the iPlug2 VST3/CLAP SDKs on a fresh agent), builds the `EXCLUDE_FROM_ALL` AU/CLAP targets, then `scripts/collect-plugin-bundles.mjs` zips them per platform:
    - **macOS:** VST3 + AU + CLAP; **Windows:** VST3 + CLAP; **Linux:** headless (no IGraphics backend), so no GUI bundles — `--allow-empty`, and the `.deb` is the Linux artifact.
 3. `scripts/r2-upload.mjs` uploads the zip alongside the desktop installer to `r2://openaxe-releases/<tag>/`, and `release-publish.yml` writes `sha256sums.txt` + `manifest.json`.
@@ -199,7 +199,7 @@ See `.woodpecker/release-{mac,linux,win}.yml`:
 
 ### Forks / unsigned builds
 
-If you fork the repo, the Woodpecker release pipelines run without the signing secrets and produce **unsigned** installers/bundles — intentionally (same DSP build, just not signed). For local testing use `pnpm package:desktop`, the `VST: Build` + `VST: Install bundle (macOS)` tasks, or `bash scripts/woodpecker-manual.sh release` (needs `rclone` plus R2 creds in `woodpecker/.env`).
+If you fork the repo, the release workflow runs without the signing secrets and produces **unsigned** installers/bundles — intentionally (same DSP build, just not signed). GitHub never exposes repository secrets to a `pull_request` run from a fork, so this is also what every fork PR builds. For local testing use `pnpm package:desktop`, the `VST: Build` + `VST: Install bundle (macOS)` tasks, or `bash scripts/release-local.sh release` (needs `rclone` plus R2 creds in a `.env` at the repo root).
 
 ## Commit / PR expectations
 

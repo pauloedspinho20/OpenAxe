@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Manual Woodpecker CI + release-to-R2 runner (issue #427).
+# Local CI + release-to-R2 runner — the off-CI escape hatch.
 #
-# Runs, on demand (from a VSCode task or a terminal), exactly the stages the
-# .woodpecker/*.yml pipelines perform — no Woodpecker server, agents or GitHub
-# webhooks needed. Useful when you want a full CI + release without waiting
-# for a tag/webhook, or when the smee forwarder isn't running.
+# Runs, on demand (from a VSCode task or a terminal), the same stages
+# .github/workflows/release.yml performs, on this machine. Useful when GitHub
+# Actions is degraded, when you want a release without pushing a tag, or to
+# reproduce a failing release leg locally.
 #
-#   bash scripts/woodpecker-manual.sh ci       # full CI: mac (native) + linux (Docker)
-#   bash scripts/woodpecker-manual.sh release  # guard → desktop+plugin artifacts (mac+linux) → R2 → sha256sums+manifest → landing deploy
-#   bash scripts/woodpecker-manual.sh landing  # landing build (from R2) + deploy to Cloudflare Pages only
-#   bash scripts/woodpecker-manual.sh all      # ci then release (default)
+#   bash scripts/release-local.sh ci       # full CI: mac (native) + linux (Docker)
+#   bash scripts/release-local.sh release  # guard → desktop+plugin artifacts (mac+linux) → R2 → sha256sums+manifest → landing deploy
+#   bash scripts/release-local.sh landing  # landing build (from R2) + deploy to Cloudflare Pages only
+#   bash scripts/release-local.sh all      # ci then release (default)
 #
 # Secrets: R2 creds come from the environment (R2_ACCESS_KEY, R2_SECRET_KEY,
-# R2_ACCOUNT_ID, R2_PUBLIC_URL) or, if unset, from woodpecker/.env
-# (gitignored) — same values the Woodpecker UI secrets hold. The landing deploy
+# R2_ACCOUNT_ID, R2_PUBLIC_URL) or, if unset, from a gitignored .env at the
+# repo root — the same values the GitHub Actions secrets hold. The landing deploy
 # additionally needs CLOUDFLARE_API_TOKEN (Account → Cloudflare Pages → Edit;
 # also accepted as `pages_api_token`) plus an account id (CLOUDFLARE_ACCOUNT_ID,
 # falling back to R2_ACCOUNT_ID). Without the token the landing is built but
@@ -32,7 +32,7 @@ step() { printf '\n\033[1m— %s —\033[0m\n' "$*"; }
 
 # --- R2 credentials -------------------------------------------------------
 load_env() {
-  local envfile="$ROOT/woodpecker/.env"
+  local envfile="$ROOT/.env"
   [ -f "$envfile" ] || return 0
   local key value
   while IFS='=' read -r key value; do
@@ -61,7 +61,7 @@ require_r2() {
   [ -n "${R2_SECRET_KEY:-}" ] || missing+=(R2_SECRET_KEY)
   [ -n "${R2_ACCOUNT_ID:-}" ] || missing+=(R2_ACCOUNT_ID)
   if [ "${#missing[@]}" -gt 0 ]; then
-    echo "Missing R2 credentials: ${missing[*]} — set them in your env or add to woodpecker/.env (same as the UI secrets)." >&2
+    echo "Missing R2 credentials: ${missing[*]} — set them in your env or add them to a .env at the repo root (same values as the GitHub Actions secrets)." >&2
     exit 1
   fi
   export R2_PUBLIC_URL="${R2_PUBLIC_URL:-$R2_PUBLIC_URL_DEFAULT}"
@@ -78,7 +78,7 @@ run_ci() {
 }
 
 # --- Release legs ----------------------------------------------------------
-# Mirrors .woodpecker/release-mac.yml. The plugin stage needs the web build
+# Mirrors the macOS leg of .github/workflows/release.yml. The plugin stage needs the web build
 # first (bundles copy apps/web/dist into the plugin UI at build time).
 mac_release_leg() {
   local t="$1"
@@ -171,7 +171,7 @@ run_release() {
 }
 
 # Build the landing against the R2 manifest and deploy it to Cloudflare Pages
-# (mirrors release-publish.yml's `landing` step). When CLOUDFLARE_API_TOKEN is
+# (mirrors the release workflow's `landing` job). When CLOUDFLARE_API_TOKEN is
 # unset the landing is still built but not deployed.
 landing_build_deploy() {
   local t="$1"
@@ -181,7 +181,7 @@ landing_build_deploy() {
   # The landing prebuild rewrites this generated fallback; keep the tree clean.
   git -C "$ROOT" checkout -- apps/landing/src/generated/releases.json 2>/dev/null || true
   if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-    echo "  skip  CLOUDFLARE_API_TOKEN not set — landing built but NOT deployed (see woodpecker/.env.example)" >&2
+    echo "  skip  CLOUDFLARE_API_TOKEN not set — landing built but NOT deployed (see docs/ci-github-actions.md)" >&2
     return 0
   fi
   step "Landing 2/2 — deploy to Cloudflare Pages (openaxe-site)"
