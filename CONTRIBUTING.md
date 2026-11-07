@@ -53,7 +53,7 @@ git submodule update --init -- packages/core/third_party/dspark packages/core/th
 
 **Requirements:** Node 22 + pnpm 10.16.1 (`corepack enable`, `.nvmrc` pins 22), CMake 3.22+ C++20 (Clang/GCC/MSVC), Git. Linux desktop/plugin: `libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libpulse-dev`. Playwright: `pnpm --filter @openaxe/web exec playwright install --with-deps chromium firefox webkit` (once).
 
-> `.npmrc` `strict-peer-dependencies=true` — a genuinely unmet peer fails `pnpm install` outright. If install fails on a peer you didn't touch, check `pnpm-lock.yaml`'s pin and prefer a `pnpm.overrides` pin (see root `package.json` `valibot`) over loosening the strict setting. Rosetta `darwin-x64` pnpm installs wrong-arch `rolldown`/`lightningcss`/`oxlint` — fix with `node scripts/setup.mjs`.
+> `.npmrc` `strict-peer-dependencies=true` — a genuinely unmet peer fails `pnpm install` outright. If install fails on a peer you didn't touch, check `pnpm-lock.yaml`'s pin and prefer a `pnpm.overrides` pin (see root `package.json` `valibot`) over loosening the strict setting. Rosetta `darwin-x64` pnpm installs wrong-arch `rolldown`/`lightningcss`/`oxlint` — every fresh `pnpm install` (including in a new worktree) runs `scripts/check-native-bindings.mjs` as postinstall and fails fast naming the broken families; repair with `node scripts/check-native-bindings.mjs --fix` (or full `node scripts/setup.mjs`), permanently with `npm i -g pnpm@10.16.1` shadowing `~/Library/pnpm`.
 
 **Useful scripts** (run at repo root; Turborepo fans out):
 

@@ -48,6 +48,7 @@
     "ci:local:linux": "bash docker/ci-linux/run-linux-ci.sh",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
+    "postinstall": "node scripts/check-native-bindings.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
