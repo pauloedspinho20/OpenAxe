@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GraphRig, jack } from './GraphRig'
 import { IN_RAIL, OUT_RAIL } from './gridConfig'
 import { RigWorkletNode, type RigModelInfo } from './RigWorkletNode'
@@ -32,6 +32,7 @@ function makeWorklet() {
     loadIr: vi.fn(async () => undefined),
     unloadIr: vi.fn(async () => undefined),
     meters: vi.fn(async () => ({})),
+    inputMeters: vi.fn(async () => ({})),
     dispose: vi.fn(async () => undefined),
   }
   const worklet = { node, ...calls } as unknown as RigWorkletNode
@@ -55,6 +56,15 @@ describe('GraphRig', () => {
 
   beforeEach(async () => {
     ;({ calls, rig } = await createRig())
+  })
+
+  // GraphRig.create() starts a 50ms meter-poll interval; without this the
+  // timer outlives every test and keeps calling into a torn-down mock. It
+  // only bites when the suite is slower than one tick (CI, not a single
+  // file locally), which is why it surfaced as flaky unhandled errors.
+  // dispose() is idempotent, so the test that calls it explicitly is fine.
+  afterEach(async () => {
+    await rig.dispose()
   })
 
   it('starts with no blocks or edges', () => {
