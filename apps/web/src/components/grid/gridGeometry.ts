@@ -46,3 +46,18 @@ export function isPointOverGrid(gridEl: HTMLElement, clientX: number, clientY: n
     clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
   )
 }
+
+/**
+ * Measure the real rendered cell size of the grid (its tracks are responsive:
+ * 80px desktop, 70/60px on narrower widths, 80px transposed on mobile), so a
+ * drag ghost can grow to exactly match a block card. Reads the first computed
+ * column/row track of the grid container; returns null when the tracks aren't
+ * px-sized (or jsdom can't compute them), letting the caller fall back to CSS.
+ */
+export function measureGridCell(gridEl: HTMLElement): { w: number; h: number } | null {
+  const cs = window.getComputedStyle(gridEl)
+  const col = parseFloat(String(cs.gridTemplateColumns).split(' ')[0] ?? '')
+  const row = parseFloat(String(cs.gridTemplateRows).split(' ')[0] ?? '')
+  if (!Number.isFinite(col) || !Number.isFinite(row) || col <= 0 || row <= 0) return null
+  return { w: col, h: row }
+}
