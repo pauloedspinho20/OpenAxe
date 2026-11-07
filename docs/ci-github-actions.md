@@ -41,7 +41,7 @@ dev -> main
   |- auto-release.yml : bump VERSION + CHANGELOG -> commit -> tag vX.Y.Z -> back-merge to dev
        |- release.yml (on the tag)
             |- guard    : tag == VERSION, or stop
-            |- build x3 : macos-14 / windows-latest / ubuntu-24.04
+            |- build x3 : macos-15 / windows-latest / ubuntu-24.04
             |             desktop package -> plugin bundles -> upload to R2
             |- publish  : poll R2 -> sha256sums.txt + manifest.json
             |             -> mirror the artifacts onto the GitHub Release

@@ -49,7 +49,13 @@ jobs:
       fail-fast: ${{ github.event_name == 'pull_request' }}
       matrix:
         include:
-          - os: macos-14
+          # macos-15 is arm64, as macos-14 resolved to. GitHub retired the
+          # macos-14 image on 2026-11-02; a retired label cancels the job in
+          # ~1s with zero steps and only an annotation ('The configuration
+          # ...-default is not supported'), so it reads as flaky infra.
+          # Pinned, not macos-latest: that is macOS 26 + a new Xcode, which
+          # is not something to discover during a release.
+          - os: macos-15
             artifact: dmg
           - os: windows-latest
             artifact: zip
