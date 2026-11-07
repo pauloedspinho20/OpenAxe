@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
-import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
+import { getMixerParamSchema, getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
 import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
 import { actionKey } from '@/midi/actions'
 import { useMidiStore } from '@/state/midiStore'
+import { useGraphStore } from '@/state/graphStore'
 import { useBlockParamValues } from '@/effects/useBlockParamValues'
 import styles from './EffectParamsPanel.module.css'
 
@@ -44,7 +45,15 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   // Shared with EffectDetailsDialog - see useBlockParamValues for why local
   // state, rather than block.getParams(), drives what is displayed.
   const { values, setParam } = useBlockParamValues(blockId, block)
-  const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
+  // The Mixer's knobs are labelled by (and enabled for) whatever is wired into
+  // each input (issue #428), so its schema is resolved against the live graph.
+  const blocks = useGraphStore((s) => s.blocks)
+  const edges = useGraphStore((s) => s.edges)
+  const schema = (
+    block.kind === 'mixer'
+      ? getMixerParamSchema(blockId, blocks, edges)
+      : getParamSchema(block.kind)
+  ).filter((f) => !f.visible || f.visible(values))
   // Right-click MIDI menu target - one menu per panel, retargeted per knob.
   const [midiMenu, setMidiMenu] = useState<{
     anchor: ContextMenuAnchor
@@ -97,10 +106,15 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         formatValue={field.formatValue}
         size={50}
         description={field.description}
+        {...(field.disabled !== undefined ? { disabled: field.disabled } : {})}
         onChange={(value) => setParam(field.key, value)}
-        highlighted={learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })}
+        highlighted={
+          !field.disabled &&
+          learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })
+        }
         onContextMenu={(e) => {
           e.preventDefault()
+          if (field.disabled) return
           setMidiMenu({
             anchor: { x: e.clientX, y: e.clientY },
             paramKey: field.key,
