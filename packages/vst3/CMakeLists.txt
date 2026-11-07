@@ -49,11 +49,26 @@ add_subdirectory(../../packages/core core)
 # floating-pin lesson is not repeated.
 include(FetchContent)
 # Pinned to 2026-08-19 master (d54f69050f517e43b941d88c2a170f0a840b9ee4). Never float — see #74.
+# NO GIT_SHALLOW here, deliberately — it is a time bomb when GIT_TAG is a bare
+# commit SHA. For a SHA, FetchContent generates
+#   git clone --no-checkout --depth 1 --no-single-branch <url>
+#   git checkout <sha>
+# and `--depth 1 --no-single-branch` fetches exactly ONE commit from the tip of
+# every branch. This SHA was master's tip when it was pinned (2026-08-24), so
+# the checkout found it and the build was green for months. Upstream master has
+# since moved ~100 commits past it, the SHA is no longer the tip of any ref, and
+# the checkout now fails ("reference is not a tree"). Nothing in this repo
+# changed — only upstream did, which is why it surfaced on a cold _deps cache.
+# The other FetchContent deps here and in apps/desktop pin tag NAMES, which
+# `--no-single-branch` always fetches, so they keep GIT_SHALLOW safely.
+# Cost of dropping it is near zero, measured 2026-11-07: the full clone is
+# ~9s and a 73M .git, against 46M for the shallow one — only +27M, because
+# --no-single-branch snapshots all 173 upstream branches with no shared
+# history to delta against, while a full clone packs them together.
 FetchContent_Declare(
   iplug2
   GIT_REPOSITORY https://github.com/iPlug2/iPlug2
   GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4
-  GIT_SHALLOW TRUE
 )
 
 # Try to fetch iPlug2 source; if offline, keep configuring (smoke test still builds).
