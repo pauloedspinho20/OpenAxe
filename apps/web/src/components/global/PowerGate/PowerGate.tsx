@@ -2,6 +2,12 @@ import { HardwareButton, Panel, PowerIcon, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
+import {
+  classifyInputRisk,
+  isMicRiskAcknowledged,
+  resolveSelectedInputLabel,
+} from '@/audio/detectRiskyInput'
+import { MicFeedbackGuard } from '@/components/audio/MicFeedbackGuard/MicFeedbackGuard'
 import { getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
@@ -71,6 +77,22 @@ export function PowerGate({
   if (isPluginShell && status !== 'error') return null
 
   const starting = status === 'starting'
+
+  // Internal-mic feedback guard (issue #422): a built-in mic + speakers loop
+  // howls and can damage hearing/speakers, so POWER ON stays disabled until
+  // the risk is acknowledged — or the user takes the safe path (power on
+  // without the mic, then play a DI take from the Input dialog).
+  const inputRisk = hostOwnsTransport
+    ? ('safe' as const)
+    : classifyInputRisk(io.inputDeviceId, io.inputDevices, io.outputDevices)
+  const selectedInputLabel = resolveSelectedInputLabel(io.inputDeviceId, io.inputDevices)
+  const micRiskAcked = isMicRiskAcknowledged(
+    io.inputDeviceId,
+    selectedInputLabel,
+    io.micRiskAckDeviceId,
+    io.micRiskAckLabel,
+  )
+  const needsMicAck = inputRisk !== 'safe' && !micRiskAcked
 
   const tone3000Text =
     auth.status === 'connected'
@@ -201,14 +223,39 @@ export function PowerGate({
             size="large"
           />
         ) : (
-          <HardwareButton
-            label={starting ? 'Starting…' : 'POWER ON'}
-            iconOnly
-            icon={<PowerIcon />}
-            onClick={() => onPowerOn()}
-            disabled={starting}
-            size="large"
-          />
+          <>
+            {needsMicAck && (
+              <MicFeedbackGuard
+                id="powergate"
+                risk={inputRisk}
+                acknowledged={false}
+                onAcknowledge={(v) => io.setMicRiskAcknowledged(v)}
+                diHint="gate"
+              />
+            )}
+            <HardwareButton
+              label={starting ? 'Starting…' : 'POWER ON'}
+              iconOnly
+              icon={<PowerIcon />}
+              onClick={() => onPowerOn()}
+              disabled={starting || needsMicAck}
+              size="large"
+              {...(needsMicAck
+                ? {
+                    title:
+                      'Acknowledge the microphone feedback risk above, or continue without the mic',
+                  }
+                : {})}
+            />
+            {needsMicAck && !starting && (
+              <HardwareButton
+                label="Continue without mic"
+                onClick={() => onPowerOn({ noSound: true })}
+                size="small"
+                title="Power on without opening the microphone — play a DI take from the Input dialog instead"
+              />
+            )}
+          </>
         )}
         {updateLatest && (
           <div className={styles.updateBanner} role="status" aria-live="polite">

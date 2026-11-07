@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { EngineStatus } from '../../../hooks/useAudioEngine'
 import { useIOStore, type InputChannelMode, type LatencyHint } from '../../../state/ioStore'
+import {
+  classifyInputRisk,
+  isMicRiskAcknowledged,
+  resolveSelectedInputLabel,
+} from '../../../audio/detectRiskyInput'
+import { MicFeedbackGuard } from '../../audio/MicFeedbackGuard/MicFeedbackGuard'
 import { getOpenAxe, getShellKind, shellOwnsAudioDevice } from '../../../native/openaxe'
 import { useSettingsStore } from '../../../state/settingsStore'
 import { useTone3000Auth } from '../../../tone3000/authStore'
@@ -175,6 +181,26 @@ export function SettingsDialog({
   }, [open, isNative])
 
   if (!open) return null
+
+  // Internal-mic feedback guard (issue #422), same component and rule as the
+  // power gate and Input dialog. No picker exists in a plugin (the DAW owns
+  // the input), so the guard only renders in the two device branches below.
+  const inputRisk = isPluginShell
+    ? ('safe' as const)
+    : classifyInputRisk(io.inputDeviceId, io.inputDevices, io.outputDevices)
+  const selectedInputLabel = resolveSelectedInputLabel(io.inputDeviceId, io.inputDevices)
+  const micRiskAcked = isMicRiskAcknowledged(
+    io.inputDeviceId,
+    selectedInputLabel,
+    io.micRiskAckDeviceId,
+    io.micRiskAckLabel,
+  )
+  const needsMicAck = inputRisk !== 'safe' && !micRiskAcked
+  // The desktop shell opens the device once at engine start, so a revoked
+  // acknowledgement (or a new risky pick) only takes effect on restart; the
+  // web engine tears the mic down immediately instead.
+  const micGuardLiveNote =
+    ownsAudioDevice && status === 'ready' ? 'Takes effect when the audio engine restarts.' : null
 
   const handleQualityChange = (value: number) => {
     setNamQuality(value)
@@ -381,6 +407,16 @@ export function SettingsDialog({
                 ))}
               </Select>
             </div>
+            {needsMicAck && (
+              <MicFeedbackGuard
+                id="settings-native"
+                risk={inputRisk}
+                acknowledged={false}
+                onAcknowledge={(v) => io.setMicRiskAcknowledged(v)}
+                diHint="dialog"
+                liveNote={micGuardLiveNote}
+              />
+            )}
             {io.micError && <p className={styles.errorText}>{io.micError}</p>}
           </section>
 
@@ -437,6 +473,15 @@ export function SettingsDialog({
                 <option value="sum">Ch 1+2</option>
               </Select>
             </div>
+            {needsMicAck && (
+              <MicFeedbackGuard
+                id="settings-web"
+                risk={inputRisk}
+                acknowledged={false}
+                onAcknowledge={(v) => io.setMicRiskAcknowledged(v)}
+                diHint="dialog"
+              />
+            )}
             {io.micError && <p className={styles.errorText}>{io.micError}</p>}
           </section>
 

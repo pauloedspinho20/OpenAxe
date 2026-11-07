@@ -3,6 +3,12 @@ import { toast } from '@openaxe/ui'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
+import {
+  classifyInputRisk,
+  isMicRiskAcknowledged,
+  micRiskBlockedMessage,
+  resolveSelectedInputLabel,
+} from '../audio/detectRiskyInput'
 import type { EngineStatus } from '../hooks/useAudioEngine'
 import { NativeGraphRig } from '../native/NativeGraphRig'
 import { NativeAnalyser } from '../native/NativeAnalyser'
@@ -64,6 +70,27 @@ const DEVICE_RECOVERY_INTERVAL_MS = 3000
  * platform default" (see audio.cpp's Open()). */
 function resolveDeviceId(id: string): number {
   return id ? Number(id) : DEFAULT_DEVICE
+}
+
+/**
+ * Feedback guard (issue #422) for shells that open a real device: never open
+ * a likely built-in mic without explicit acknowledgement. Returns the block
+ * message when the current selection must not go live, or null when it may.
+ * Plugin shells are exempt — the DAW owns the input bus, there is no mic to
+ * open and no picker that could have chosen one.
+ */
+function blockedMicMessage(): string | null {
+  if (!shellOwnsAudioDevice()) return null
+  const io = useIOStore.getState()
+  const risk = classifyInputRisk(io.inputDeviceId, io.inputDevices, io.outputDevices)
+  if (risk === 'safe') return null
+  const acked = isMicRiskAcknowledged(
+    io.inputDeviceId,
+    resolveSelectedInputLabel(io.inputDeviceId, io.inputDevices),
+    io.micRiskAckDeviceId,
+    io.micRiskAckLabel,
+  )
+  return acked ? null : micRiskBlockedMessage(risk)
 }
 
 /**
@@ -397,9 +424,14 @@ export function useNativeAudioEngine() {
 
         unbindRef.current = bindGraphRig(useGraphStore, rig)
 
-        if (opts?.noSound) {
+        // Blocked (issue #422) lands in the same editing-only mode as an
+        // explicit no-sound power-on: the rig is usable and DI audition works,
+        // but no mic stream opens — with guidance instead of silence.
+        const blockedMessage = blockedMicMessage()
+        if (opts?.noSound || blockedMessage) {
           // Editing-only mode: build the rig, skip opening the stream. The
           // recovery effect below takes over from here.
+          if (blockedMessage) useIOStore.getState().setMicError(blockedMessage)
           setState({
             status: 'ready',
             error: null,
@@ -468,12 +500,24 @@ export function useNativeAudioEngine() {
       if (recoveringRef.current) return
       recoveringRef.current = true
       try {
+        // Stay in no-sound mode while the selection is risky-unacknowledged
+        // (issue #422) — opening the stream here would undo the guard the
+        // moment a device appears. Refresh the guidance in case enumeration
+        // just resolved the labels.
+        const blockedMessage = blockedMicMessage()
+        if (blockedMessage) {
+          const io = useIOStore.getState()
+          if (io.micError !== blockedMessage) io.setMicError(blockedMessage)
+          return
+        }
         const io = useIOStore.getState()
         const { context, analyser, analyserR, tunerAnalyser, tunerAnalyserR } = await openAndStart(
           bridge,
           resolveDeviceId(io.inputDeviceId),
           resolveDeviceId(io.outputDeviceId),
         )
+        // A stale guard message must not outlive the stream it blocked.
+        useIOStore.getState().setMicError(null)
         setState((s) =>
           s.rig === rig
             ? {

@@ -4,6 +4,12 @@ import { GraphRig } from '../engine/GraphRig'
 import { bindGraphRig } from '../engine/bindGraphRig'
 import { useGraphStore } from '../state/graphStore'
 import { useIOStore } from '../state/ioStore'
+import {
+  classifyInputRisk,
+  isMicRiskAcknowledged,
+  micRiskBlockedMessage,
+  resolveSelectedInputLabel,
+} from '../audio/detectRiskyInput'
 import { getOpenAxe } from '../native/openaxe'
 import { useNativeAudioEngine } from './useNativeAudioEngine'
 import { getDISample } from '../diSamples'
@@ -123,6 +129,11 @@ export function useWebAudioEngine() {
 
   const inputDeviceId = useIOStore((s) => s.inputDeviceId)
   const inputChannel = useIOStore((s) => s.inputChannel)
+  // Acknowledgement snapshot key: checking the box reconnects an unblocked
+  // mic, unchecking tears a live risky mic down (via connectMic's guard).
+  const micRiskAckKey = useIOStore(
+    (s) => `${s.micRiskAckDeviceId ?? ''}|${s.micRiskAckLabel ?? ''}`,
+  )
 
   // Re-route to the selected output device live, without recreating the context.
   const outputDeviceId = useIOStore((s) => s.outputDeviceId)
@@ -189,6 +200,22 @@ export function useWebAudioEngine() {
 
     try {
       const io = useIOStore.getState()
+      // Feedback guard (issue #422): never open a likely built-in mic (or an
+      // unidentifiable input that may be one) without the user's explicit
+      // acknowledgement — the pickers gate this in the UI, but the engine
+      // enforces it so no present or future surface can open a hot mic.
+      const risk = classifyInputRisk(io.inputDeviceId, io.inputDevices, io.outputDevices)
+      const acked = isMicRiskAcknowledged(
+        io.inputDeviceId,
+        resolveSelectedInputLabel(io.inputDeviceId, io.inputDevices),
+        io.micRiskAckDeviceId,
+        io.micRiskAckLabel,
+      )
+      if (risk !== 'safe' && !acked) {
+        useIOStore.getState().setMicError(micRiskBlockedMessage(risk))
+        setState((s) => (s.context === ctx ? { ...s, micGranted: false } : s))
+        return
+      }
       const audioConstraints: MediaTrackConstraints = {
         channelCount: { ideal: 2 },
         echoCancellation: false,
@@ -405,6 +432,7 @@ export function useWebAudioEngine() {
   // choosing "Continue without sound" doesn't immediately trigger the very
   // permission prompt it was meant to skip; any later device/channel change -
   // manual or auto-detected - clears the skip and reconnects normally.
+  // The ack key rides along: ticking the box connects, unticking disconnects.
   const skipNextAutoConnectRef = useRef(false)
   useEffect(() => {
     if (state.status !== 'ready' || connectingRef.current) return
@@ -413,7 +441,7 @@ export function useWebAudioEngine() {
       return
     }
     void connectMic()
-  }, [inputDeviceId, inputChannel, state.status, connectMic])
+  }, [inputDeviceId, inputChannel, micRiskAckKey, state.status, connectMic])
 
   // No-sound recovery: while deliberately running without a mic, re-attempt
   // connectMic() whenever the enumerated input device list changes (a device
@@ -434,6 +462,37 @@ export function useWebAudioEngine() {
     lastRecoveryAttemptRef.current = inputDevicesSignature
     void connectMic()
   }, [inputDevicesSignature, state.status, state.noSound, connectMic])
+
+  // Risk revelation (issue #422): device labels are empty until mic
+  // permission is granted, so a live mic can turn out to be a built-in one
+  // only after the fact — and hot-plugging can swap what `Default` resolves
+  // to. When enumeration (or the ack) changes under a live mic and the
+  // selection is now risky-unacknowledged, run it back through connectMic:
+  // that tears the live path down and the guard refuses to reopen it, with
+  // guidance pointing at the acknowledgement or a DI take. Safe selections
+  // are untouched, so unrelated hot-plugs never interrupt audio.
+  useEffect(() => {
+    if (state.status !== 'ready' || state.noSound || !state.micGranted) return
+    const io = useIOStore.getState()
+    const risk = classifyInputRisk(io.inputDeviceId, io.inputDevices, io.outputDevices)
+    if (risk === 'safe') return
+    const acked = isMicRiskAcknowledged(
+      io.inputDeviceId,
+      resolveSelectedInputLabel(io.inputDeviceId, io.inputDevices),
+      io.micRiskAckDeviceId,
+      io.micRiskAckLabel,
+    )
+    if (acked) return
+    void connectMic()
+  }, [
+    inputDeviceId,
+    inputDevicesSignature,
+    micRiskAckKey,
+    state.status,
+    state.noSound,
+    state.micGranted,
+    connectMic,
+  ])
 
   // ── Power on / off ──────────────────────────────────────────────────────
 
