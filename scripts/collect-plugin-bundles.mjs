@@ -13,8 +13,9 @@
 // --allow-empty to log a warning and skip instead of failing the release.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { cpSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const BUNDLE_EXTS = ['.vst3', '.component', '.clap']
 
@@ -84,11 +85,32 @@ function main() {
   // `OpenAxe.component/…`, not the repo path `packages/vst3/build/…`.
   const base = resolve(opts.buildDir)
   const entries = bundles.map((b) => relative(base, b))
+
+  // GPLv3 (section 4) requires the license to be conveyed with the work, and
+  // the permissive dependencies require their notices to travel with the
+  // binary too — a link in the repo is not distribution. Stage both into the
+  // build dir so they zip as top-level entries beside the bundles.
+  // See THIRD_PARTY_NOTICES.md and licenses/README.md.
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const staged = []
+  const licensesDir = join(repoRoot, 'licenses')
+  if (existsSync(licensesDir)) {
+    cpSync(licensesDir, join(base, 'licenses'), { recursive: true })
+    staged.push('licenses')
+  } else {
+    console.warn('[bundles] WARN: licenses/ missing — run node scripts/sync-licenses.mjs')
+  }
+  const gpl = join(repoRoot, 'LICENSE')
+  if (existsSync(gpl)) {
+    cpSync(gpl, join(base, 'LICENSE'))
+    staged.push('LICENSE')
+  }
+  entries.push(...staged)
   // zip(1) appends to an existing archive — start clean so a re-run never
   // leaves stale entries (e.g. an earlier repo-relative path layout).
   rmSync(opts.out, { force: true })
   if (process.platform === 'win32') {
-    const list = bundles.map((b) => `'${b}'`).join(',')
+    const list = [...bundles, ...staged.map((e) => join(base, e))].map((b) => `'${b}'`).join(',')
     execFileSync(
       'powershell',
       [

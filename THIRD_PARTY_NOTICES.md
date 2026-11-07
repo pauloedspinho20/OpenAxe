@@ -1,18 +1,87 @@
 # Third-Party Notices
 
-OpenAxe is licensed [GPLv3](./LICENSE). It wraps or vendors the following third-party components, each under its own license. The combined work is distributed as GPLv3; LGPL/MIT/BSD components remain under their original terms.
+OpenAxe is licensed [GPLv3](./LICENSE). It links, vendors or bundles the components
+below, each under its own license. The combined work is distributed as GPLv3;
+the permissive components remain under their original terms, and those terms
+require their notices to be **distributed with the binaries** — see
+[`licenses/`](./licenses/), which packaging copies into every artifact.
 
-| Component                                | Path                                                                 | License               | Upstream                                               |
-| ---------------------------------------- | -------------------------------------------------------------------- | --------------------- | ------------------------------------------------------ |
-| NeuralAmpModelerCore (NAM)               | `packages/core/third_party/nam-core` (submodule)                     | MIT                   | https://github.com/sdatkinson/NeuralAmpModelerCore     |
-| DSPark (effects)                         | `packages/core/third_party/dspark` (or vendored)                     | MIT                   | https://github.com/sdatkinson/DSPark (check submodule) |
-| Eigen (via NAMCore)                      | `packages/core/third_party/nam-core/Eigen`                           | MPL2                  | https://eigen.tuxfamily.org                            |
-| iPlug2                                   | `packages/vst3` FetchContent `d54f690`                               | MIT                   | https://github.com/iPlug2/iPlug2                       |
-| VST3 SDK / AU SDK / CLAP                 | fetched via iPlug2                                                   | GPLv3/MIT (per SDK)   | Steinberg / Apple / CLAP                               |
-| miniaudio                                | `apps/desktop/third_party/miniaudio/miniaudio.h` (vendored, 0.11.25) | Public domain / MIT-0 | https://github.com/mackron/miniaudio                   |
-| webview.h                                | `apps/desktop`                                                       | MIT                   | https://github.com/webview/webview                     |
-| React / Vite / Zustand / tone3000 client | `apps/web` npm                                                       | MIT                   | —                                                      |
+> Adding a vendored source? Add a row here, add it to `scripts/sync-licenses.mjs`,
+> run that script, and note the project/license/version in a comment near the port
+> and in your PR description — see [`CONTRIBUTING.md`](./CONTRIBUTING.md#licensing-rules-for-contributed-code).
 
-> If you add a vendored source, add a row here and note the original project/license/version in a comment near the port and in the PR description (see `CONTRIBUTING.md#Licensing rules`).
+## Compiled into the C++ engine
 
-SPDX: files that are derivative of GPL/LGPL sources should carry `SPDX-License-Identifier: GPL-3.0-only` (or appropriate). See `.reuse/` or headers.
+| Component            | Path                                                         | License  | Upstream                                           |
+| -------------------- | ------------------------------------------------------------ | -------- | -------------------------------------------------- |
+| NeuralAmpModelerCore | `packages/core/third_party/nam-core` (submodule)             | MIT      | https://github.com/sdatkinson/NeuralAmpModelerCore |
+| AudioDSPTools        | via NeuralAmpModelerCore `Dependencies/`                     | MIT      | https://github.com/sdatkinson/AudioDSPTools        |
+| Eigen                | via NeuralAmpModelerCore `Dependencies/eigen`                | MPL-2.0¹ | https://eigen.tuxfamily.org                        |
+| nlohmann/json        | via NeuralAmpModelerCore, and CMake `FetchContent` `v3.11.3` | MIT      | https://github.com/nlohmann/json                   |
+| DSPark               | `packages/core/third_party/dspark` (submodule)               | MIT      | https://github.com/CristianMoresi/DSPark           |
+| DaisySP              | `packages/core/third_party/daisysp` (submodule)              | MIT²     | https://github.com/electro-smith/DaisySP           |
+
+¹ Eigen is _primarily_ MPL-2.0; some files are BSD, Apache or MINPACK-licensed.
+Its own `COPYING.README` is reproduced at the top of `licenses/Eigen.txt`. All
+are GPL-compatible, and Eigen ships unmodified.
+
+² Only the MIT portion of the DaisySP repository is compiled — the separate
+`DaisySP-LGPL` tree is deliberately **not** used (`packages/core/CMakeLists.txt`).
+
+## Desktop shell
+
+| Component                     | Source                               | License                    | Upstream                                            |
+| ----------------------------- | ------------------------------------ | -------------------------- | --------------------------------------------------- |
+| miniaudio `0.11.25`           | `apps/desktop/third_party/miniaudio` | Public domain **or** MIT-0 | https://github.com/mackron/miniaudio                |
+| webview `0.12.0`              | CMake `FetchContent`                 | MIT                        | https://github.com/webview/webview                  |
+| portable-file-dialogs `0.1.0` | CMake `FetchContent`                 | WTFPL                      | https://github.com/samhocevar/portable-file-dialogs |
+
+## Plugin (VST3 / CLAP / AU)
+
+| Component             | Source                         | License                                     | Upstream                           |
+| --------------------- | ------------------------------ | ------------------------------------------- | ---------------------------------- |
+| iPlug2                | CMake `FetchContent` `d54f690` | **zlib-style** (_not_ MIT)³                 | https://github.com/iPlug2/iPlug2   |
+| iPlug2 WebView extras | within iPlug2                  | MIT — notice must be kept on redistribution | https://github.com/iPlug2/iPlug2   |
+| VST3 SDK              | fetched via iPlug2             | **GPLv3 or proprietary** (dual)⁴            | Steinberg                          |
+| CLAP SDK              | fetched via iPlug2             | MIT                                         | https://github.com/free-audio/clap |
+| AU SDK                | fetched via iPlug2 (macOS)     | Apple SDK terms                             | Apple                              |
+| AAX SDK               | **not used** — see issue #137  | Proprietary, NDA, no GPL arm                | Avid                               |
+
+³ iPlug2's `LICENSE.txt` is a zlib/libpng-style grant, not MIT. It is
+GPL-compatible, but it requires that the origin not be misrepresented, that
+altered sources be marked as such, and that the notice not be removed. Earlier
+revisions of this file and of `README.md` said "MIT" — that was wrong.
+
+⁴ The GPLv3 arm applies cleanly to OpenAxe and needs no agreement with
+Steinberg (see issue #125). Distributing a VST3 product nonetheless engages
+Steinberg's **VST trademark** terms and developer registration, which are
+separate from the copyright license.
+
+## Web bundle
+
+The React app's npm production dependencies ship inside the desktop app and the
+plugin editor as well as on the web. The full summary and texts are generated
+into [`licenses/npm-packages.txt`](./licenses/npm-packages.txt); the headline
+components are React, Vite, Zustand and the Tone3000 client (all MIT).
+
+> **`p5@2.3.2` is LGPL-2.1, and is conveyed here under GPL-3.0 via LGPL-2.1 §3.**
+> It is a direct, genuinely imported production dependency, so it ships in every
+> binary. It carries no "or any later version" grant — but §3 lets any LGPL-2.1
+> copy be placed under the ordinary GPL, expressly including a version newer
+> than 2, so the "or later" question does not arise. The FSF's
+> [compatibility matrix](https://www.gnu.org/licenses/gpl-faq.html#AllCompatibility)
+> gives GPLv3 + "LGPLv2.1 only" as **"OK: Combination is under GPLv3"**, and its
+> [license list](https://www.gnu.org/licenses/license-list.html#LGPLv2.1) calls
+> LGPLv2.1 "compatible with GPLv2 and GPLv3". Details and the §3 quotation:
+> [`licenses/README.md`](./licenses/README.md#p5-is-lgpl-21--resolved-compatible-with-gplv3).
+
+## Platform notes
+
+- **GPLv3 and the Apple App Store are incompatible.** Apple's terms impose
+  installation and usage restrictions GPLv3 forbids, and the FSF has enforced
+  this. `apps/ios` is on the roadmap (issue #17); shipping there would require
+  relicensing, which the project's DCO-not-CLA choice makes materially harder
+  once contributors accumulate. Worth settling early.
+- OpenAxe does not currently add `SPDX-License-Identifier` headers to its own
+  sources. If that changes, GPL-derived files should carry
+  `SPDX-License-Identifier: GPL-3.0-only`, matching `CITATION.cff`.

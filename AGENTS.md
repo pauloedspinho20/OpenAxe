@@ -78,7 +78,9 @@ run it and confirm the diff (or lack of one) whenever you change
 web app calls (see `scripts/check-wasm-exports.mjs`, which catches the latter
 in CI without needing a rebuild).
 
-**CI/CD is split by cost** (issue #441, #427). The heavy jobs — tests (drift/lint/unit/e2e/core/desktop/plugin) and the release builds that publish to Cloudflare R2 — run on the **self-hosted, local-only Woodpecker** (`.woodpecker/*.yml`; see `docs/ci-woodpecker.md`). GitHub Actions keeps only the cheap **versioning** job, `.github/workflows/auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge `main → dev` on push to `main`). The superseded heavy GH workflows (`ci.yml`, `desktop.yml`, `plugin.yml`, `release.yml`, `pages.yml`) are **disabled** in repo settings. Because Woodpecker is local-only, treat “Woodpecker green” as required for merge and follow the release flow in `CONTRIBUTING.md#releasing-desktop--plugin`.
+**CI/CD runs entirely on GitHub Actions** (`.github/workflows/`; see `docs/ci-github-actions.md`). `ci.yml` is the merge gate — drift guards, lint, format, typecheck, build, unit, e2e and the `packages/core` C++ suite. `desktop.yml` and `plugin.yml` build the native shell and the plugin on macOS, Windows and Linux. A push to `main` runs `auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge `main → dev`), and the tag drives `release.yml` → Cloudflare R2 + `manifest.json` + landing, mirrored onto the GitHub Release.
+
+This replaces the self-hosted Woodpecker split from issues #427/#441: that existed because Actions minutes were billed on a private repo at macOS ×10, and standard runners are free and unmetered on public repos. Every workflow now runs the full 3-OS matrix on every event — the `full-ci` label and the Linux-only PR legs are gone.
 
 ## Drift-guard scripts
 
@@ -98,6 +100,7 @@ will catch it:
 - `node scripts/sync-version.mjs --check` — every `package.json`'s
   `"version"` matches the root `VERSION` file (issue #54)
 - `node packages/ui/scripts/generate-tokens.mjs --check` — `packages/ui/tokens/design-tokens.json` → `packages/ui/tokens/{colors,spacing,typography,shadows}.css` and optionally `packages/vst3/generated/tokens.h` (`--target=cpp`; issue #131)
+- `node scripts/sync-licenses.mjs --check` — `licenses/` matches the dependencies' own license files. That directory is redistributed inside every binary (GPLv3 §4 plus the permissive deps' own notice requirements), so a dependency bump must not change a license silently. See `THIRD_PARTY_NOTICES.md`.
 
 Each has a `--fix`/write mode (`sync-version.mjs`'s is the no-flag default,
 not `--fix`); a fix still requires re-running the relevant build (wasm
@@ -105,13 +108,13 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Env vars
 
-| Var                     | Where                             | Purpose                                                                                                                                                                                                                        |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                                                  |
-| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                                                |
-| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged.                              |
-| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                                             |
-| `CLOUDFLARE_API_TOKEN`  | `scripts/woodpecker-manual.sh`    | Cloudflare Pages deploy token (`Account → Cloudflare Pages → Edit`) for the landing step of an off-webhook release. Read from the env or `woodpecker/.env`; the Woodpecker pipeline uses the `pages_api_token` secret instead. |
+| Var                     | Where                             | Purpose                                                                                                                                                                                                                            |
+| ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                                                      |
+| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                                                    |
+| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged.                                  |
+| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                                                 |
+| `CLOUDFLARE_API_TOKEN`  | `scripts/release-local.sh`        | Cloudflare Pages deploy token (`Account → Cloudflare Pages → Edit`) for the landing step of a hand-run release. Read from the env or a gitignored `.env` at the repo root; in CI it is the GitHub Actions secret of the same name. |
 
 ## Key decisions worth knowing before you edit
 
@@ -146,12 +149,13 @@ rebuild, CMake reconfigure, etc.) to take effect.
   `project()` version read it; see
   [CONTRIBUTING.md#releasing-desktop--plugin](./CONTRIBUTING.md#releasing-desktop--plugin)
   for the tag-and-release flow.
-- **Releases are hybrid — cheap versioning on GitHub Actions, everything
-  heavy on Woodpecker** (issue #441). A push to `main` runs `auto-release.yml`
-  (bump + `CHANGELOG` + commit `chore(release): X.Y.Z` + tag `vX.Y.Z`, then
-  back-merge into `dev`); the tag drives `.woodpecker/release-*.yml` →
-  Cloudflare R2 and `release-publish.yml` → `sha256sums.txt`, `manifest.json`
-  and the landing deploy. `dev → main` is merged with a **merge commit** (keeps
-  ancestry); `feat → dev` stays squash. Woodpecker is local-only — if its
-  server/agents/smee aren't up, run `bash scripts/woodpecker-manual.sh release`
-  off-webhook. See [CONTRIBUTING.md#branching](./CONTRIBUTING.md#branching).
+- **Releases run end to end on GitHub Actions.** A push to `main` runs
+  `auto-release.yml` (bump + `CHANGELOG` + commit `chore(release): X.Y.Z` +
+  tag `vX.Y.Z`, then back-merge into `dev`); the tag drives `release.yml` →
+  3-OS build → Cloudflare R2 → `sha256sums.txt` + `manifest.json` → landing
+  deploy, with the artifacts mirrored onto the GitHub Release. `dev → main` is
+  merged with a **merge commit** (keeps ancestry); `feat → dev` stays squash.
+  To cut a release by hand — Actions degraded, or reproducing a failing leg —
+  run `bash scripts/release-local.sh release`. See
+  [CONTRIBUTING.md#branching](./CONTRIBUTING.md#branching) and
+  [docs/ci-github-actions.md](./docs/ci-github-actions.md).

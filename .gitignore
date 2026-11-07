@@ -63,8 +63,10 @@ storybook-static
 # only the .icns/.ico/.png artifacts are committed.
 apps/desktop/packaging/openaxe.iconset
 
-# Woodpecker local secrets (OAuth + agent secret — never commit)
-woodpecker/.env
+# Local release credentials (R2 + Cloudflare — never commit).
+# In CI these are GitHub Actions secrets; this file is only for running
+# scripts/release-local.sh by hand. See docs/ci-github-actions.md.
+.env
 
-# Manual release staging (woodpecker-manual.sh)
+# Manual release staging (release-local.sh)
 dist-release/
