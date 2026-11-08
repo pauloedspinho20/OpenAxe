@@ -142,7 +142,14 @@ jobs:
       # reported success, which is exactly how the Windows CRT link error
       # reached the tagged v0.4.0 release. Same fetch-then-reconfigure the
       # release legs get via `ci-local.mjs --with-sdks`.
+      # Not on Linux: iPlug2 has no Linux support at all — its own SDK script
+      # prints "Error - Linux not yet supported", and IPlugTimer.h hits
+      # `#error NOT IMPLEMENTED`. release.yml makes the same exclusion
+      # ("Linux builds the plugin headless ... SDKs not fetched"). Linux was
+      # only ever green here because the absent SDK hid that wall by accident;
+      # this makes the exclusion deliberate.
       - name: Fetch iPlug2 SDKs and reconfigure
+        if: runner.os != 'Linux'
         shell: bash
         run: |
           deps=packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug
