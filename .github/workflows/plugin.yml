@@ -197,13 +197,17 @@ jobs:
         if: runner.os != 'Linux'
         shell: bash
         run: |
-          shopt -s globstar nullglob
-          found=(packages/vst3/build/**/*.vst3 packages/vst3/build/**/*.clap)
-          if [ ${#found[@]} -eq 0 ]; then
-            echo "::error::No .vst3 or .clap was produced — the plugin targets were skipped (SDK missing?). This job must not pass without building the plugin."
+          # find, not `shopt -s globstar`: the macOS runner's /bin/bash is 3.2,
+          # which has no globstar, and `shell: bash` runs with -e, so the shopt
+          # alone killed this step while the build itself was fine. Note .vst3
+          # and .component are bundle DIRECTORIES on macOS — find matches those
+          # as readily as files, which a -type f test would not.
+          found=$(find packages/vst3/build \( -name '*.vst3' -o -name '*.clap' -o -name '*.component' \) -print)
+          if [ -z "$found" ]; then
+            echo "::error::No .vst3/.clap/.component was produced — the plugin targets were skipped (SDK missing?). This job must not pass without building the plugin."
             exit 1
           fi
-          printf 'built: %s\n' "${found[@]}"
+          echo "$found" | sed 's/^/built: /'
 
       # Everything except the host validators, selected by label rather than a
       # name regex. The regex here used to be
