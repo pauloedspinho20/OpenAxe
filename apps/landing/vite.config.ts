@@ -7,9 +7,18 @@ import { defineConfig } from 'vite'
 const base = '/'
 const dir = import.meta.dirname
 
+// issue #54: the root VERSION file is the one source of truth. The landing
+// shell used to hardcode the version in three places and they all rotted to
+// 0.2.8 — the JSON-LD `softwareVersion` crawlers read was still advertising
+// it while the site served 0.4.1.
+const version = readFileSync(resolve(dir, '../../VERSION'), 'utf8').trim()
+
 export default defineConfig({
   base,
   publicDir: 'public',
+  define: {
+    __OPENAXE_VERSION__: JSON.stringify(version),
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -34,6 +43,17 @@ export default defineConfig({
           fileName: 'releases-data.json',
           source: readFileSync(resolve(dir, 'src/generated/releases.json'), 'utf8'),
         })
+      },
+    },
+    {
+      // Replaces %OPENAXE_VERSION% in the HTML shells. Covers the JSON-LD
+      // softwareVersion (never updated at runtime, so this is the only thing
+      // crawlers and link previews ever see) and the header badge's initial
+      // text, which main.ts later overwrites from the release manifest but
+      // which is what renders before hydration and with JS disabled.
+      name: 'inject-version',
+      transformIndexHtml(html) {
+        return html.replace(/%OPENAXE_VERSION%/g, version)
       },
     },
     {
