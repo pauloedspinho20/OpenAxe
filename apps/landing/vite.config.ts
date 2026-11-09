@@ -11,7 +11,14 @@ const dir = import.meta.dirname
 // shell used to hardcode the version in three places and they all rotted to
 // 0.2.8 — the JSON-LD `softwareVersion` crawlers read was still advertising
 // it while the site served 0.4.1.
-const version = readFileSync(resolve(dir, '../../VERSION'), 'utf8').trim()
+//
+// Read from this package's own package.json rather than ../../VERSION.
+// `scripts/sync-version.mjs --check` is a CI drift guard that holds every
+// package.json equal to the root VERSION, so the two are the same value — but
+// this path never leaves apps/, which matters because Cloudflare Pages builds
+// from a configured root directory. Reaching up to the repo root broke its
+// build while GitHub Actions was unaffected.
+const version = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')).version as string
 
 export default defineConfig({
   base,
