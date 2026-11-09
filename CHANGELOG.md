@@ -7,6 +7,17 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+### Fixed
+- fix(ci): make the plugin assert work on macOS's bash 3.2 (edc172d)
+- fix(ci): do not fetch iPlug2 SDKs on Linux — iPlug2 has no Linux support (1e706ad)
+- fix(plugin): align the MSVC runtime, and make CI actually build the plugin (335365d)
+
+### Changed
+- chore(ci): wire up the PR labeler, which was dead config (dd9780e)
+
+
+
 ## [0.4.0] - 2026-11-08
 ### Added
 - feat(landing): update copy — remove GitHub/open-source refs, keep features + block names (393bc41)
