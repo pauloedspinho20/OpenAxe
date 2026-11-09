@@ -32,6 +32,32 @@ if(APPLE)
   endif()
 endif()
 
+# ── MSVC runtime library ───────────────────────────────────────────────────
+# Must be set BEFORE openaxe_core is added, so core and the plugin targets are
+# compiled against the SAME CRT. They were not, and the Windows VST3 link
+# failed on the v0.4.0 release:
+#
+#   openaxe_core.lib(linear.obj) : LNK2019: unresolved __imp_copysignf
+#   openaxe_core.lib(wav.obj)    : LNK2019: unresolved __imp_llround
+#   openaxe_core.lib(rotary.obj) : LNK2019: unresolved __imp_exp2f
+#   openaxe_core.lib(engine.obj) : LNK2019: unresolved __imp_lroundf
+#
+# plus ~40 LNK4217/LNK4286 warnings reporting symbols *defined in* the static
+# libucrt.lib but *imported* (__imp_) by openaxe_core. That is the signature of
+# core being built /MD (DLL CRT) while the plugin link pulls /MT (static). Most
+# math symbols resolved from the static lib anyway; these four exist only in
+# the import library, so they did not.
+#
+# Static is the right side to converge on for a plugin: the .vst3/.clap then
+# loads in any host without the user having the VC++ redistributable. It also
+# matches what the link was already pulling.
+#
+# Scoped to this build tree only — apps/desktop builds openaxe_core too and is
+# internally consistent on /MD, so it is deliberately left alone.
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "openaxe: static CRT so the plugin needs no VC++ redist" FORCE)
+endif()
+
 # ── Shared core (issue #14) ────────────────────────────────────────────────
 add_subdirectory(../../packages/core core)
 
