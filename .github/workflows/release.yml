@@ -286,4 +286,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-        run: npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site --commit-dirty=true
+        # --branch is REQUIRED here. Without it wrangler infers the branch
+        # from git, and this job checks out a TAG — a detached HEAD — so
+        # wrangler reported the branch as "head" and Cloudflare filed every
+        # release as a PREVIEW:
+        #   Deployment alias URL: https://head.openaxe-site.pages.dev
+        # Production only updates from the project's production branch, so the
+        # landing job has never actually shipped a release to the live site.
+        # v0.4.1 went out with openaxe-site.pages.dev still advertising 0.2.8.
+        #
+        # Pinned to main: Cloudflare takes a Git-integration project's
+        # production branch from the repo default, which is main. If the
+        # project is ever reconfigured, change this to match — a mismatch is
+        # silent, and shows up only as the live site not moving.
+        run: npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site --branch=main --commit-dirty=true
