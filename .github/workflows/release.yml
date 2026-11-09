@@ -241,10 +241,27 @@ jobs:
           notes="Downloads and checksums: ${R2_PUBLIC_URL}/${RELEASE_TAG}/
 
           See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for what changed."
+          # find -type f, never dist-release/*. upload-artifact roots each
+          # artifact at the least common ancestor of the files it matched.
+          # While only apps/desktop/build/openaxe-desktop-* existed, that
+          # ancestor was apps/desktop/build and the download was flat. Now the
+          # plugin bundles under packages/vst3/build match too, so the ancestor
+          # is the repo root and dist-release holds apps/ and packages/ TREES.
+          # The glob then handed `gh release` a directory, and v0.4.1 died with
+          #   read dist-release/packages: is a directory
+          # after the release had already been created. Listing real files is
+          # also layout-proof: it keeps working whatever matches in future.
+          assets=()
+          while IFS= read -r f; do assets+=("$f"); done < <(find dist-release -type f)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::nothing under dist-release to mirror — the build legs stashed no artifacts"
+            exit 1
+          fi
+          printf 'asset: %s\n' "${assets[@]}"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist-release/* --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" dist-release/* \
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
               --title "$RELEASE_TAG" --notes "$notes"
           fi
 
