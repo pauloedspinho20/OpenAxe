@@ -166,15 +166,19 @@ function initTheme(): void {
   }
 }
 
+declare const __OPENAXE_VERSION__: string
+
 initTheme()
 renderDownloads()
 
 // Stamp version + footer year without needing JS for SEO content
 const verEl = document.getElementById('landing-version')
 if (verEl) {
-  // Keep in sync with VERSION file — duplicated at build; runtime fallback is releasesData latest
+  // Latest release wins; __OPENAXE_VERSION__ is injected from the root VERSION
+  // file at build time, so the fallback can no longer rot (it was '0.2.8').
   const v =
-    (releasesData as { releases: Release[] }).releases[0]?.tag_name?.replace(/^v/, '') ?? '0.2.8'
+    (releasesData as { releases: Release[] }).releases[0]?.tag_name?.replace(/^v/, '') ??
+    __OPENAXE_VERSION__
   verEl.textContent = `v${v}`
 }
 const yearEl = document.getElementById('footer-year')
