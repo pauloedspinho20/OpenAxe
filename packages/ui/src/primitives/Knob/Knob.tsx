@@ -16,9 +16,9 @@ const SCALE_OUTER = 42
 const SCALE_MAJOR_OUTER = 44
 const NUMERAL_RADIUS = 47.5
 const SKIRT = 33
-const KNURL_INNER = 28.5
+const KNURL_INNER = 29.8
 const KNURL_COUNT = 40
-const CAP = 18
+const CAP = 24
 const TICKS = 11 // 0..10
 /** Numerals are only legible on knobs at least this big (px). */
 const NUMERALS_MIN_SIZE = 60
