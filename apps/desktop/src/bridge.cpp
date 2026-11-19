@@ -1362,6 +1362,74 @@ std::string StudioBridge::HandleStopDI(const std::string&) {
   return (json{{"ok", true}}).dump();
 }
 
+std::string StudioBridge::HandlePlayer(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string op = o.value("op", "");
+    OpenAxePlayer* player = audio_.Player();
+    if (player == nullptr) return JsonError("player: unavailable");
+    if (op == "loadBegin") {
+      const int frames = o.value("frames", 0);
+      const int channels = o.value("channels", 2);
+      const double rate = o.value("sampleRate", 0.0);
+      int ok = 0;
+      // Tier 2: reallocates the buffer the audio thread reads.
+      Mutate([&] { ok = openaxe_player_load_begin(player, frames, channels, rate); }, false);
+      if (!ok) return JsonError("player: track too long or unsupported format");
+      return (json{{"ok", true}}).dump();
+    }
+    if (op == "loadWrite") {
+      const int offset = o.value("offset", 0);
+      const int channels = std::max(1, o.value("channels", 2));
+      const std::vector<uint8_t> bytes = DecodeBase64(o.value("pcm16Base64", ""));
+      const size_t samples = bytes.size() / 2;
+      const int frames = static_cast<int>(samples / static_cast<size_t>(channels));
+      std::vector<float> pcm(samples);
+      for (size_t i = 0; i < samples; ++i) {
+        const auto v = static_cast<int16_t>(static_cast<uint16_t>(bytes[2 * i]) |
+                                            (static_cast<uint16_t>(bytes[2 * i + 1]) << 8));
+        pcm[i] = static_cast<float>(v) / 32768.0f;
+      }
+      // Safe while rendering: the buffer is unpublished until loadEnd.
+      const int written = openaxe_player_load_write(player, offset, pcm.data(), frames);
+      return (json{{"ok", written == frames}, {"written", written}}).dump();
+    }
+    // Every other op answers with the player's status, like the web worklet.
+    if (op == "loadEnd") {
+      if (openaxe_player_load_end(player) != 1) return JsonError("player: no load in progress");
+    } else if (op == "unload") {
+      Mutate([&] { openaxe_player_unload(player); }, false);
+    } else if (op == "play") {
+      openaxe_player_play(player);
+    } else if (op == "pause") {
+      openaxe_player_pause(player);
+    } else if (op == "seek") {
+      openaxe_player_seek(player, o.value("frame", 0));
+    } else if (op == "setSpeed") {
+      openaxe_player_set_speed(player, o.value("value", 1.0f));
+    } else if (op == "setSemitones") {
+      openaxe_player_set_semitones(player, o.value("value", 0.0f));
+    } else if (op == "setVolume") {
+      openaxe_player_set_volume(player, o.value("value", 1.0f));
+    } else if (op == "setLoop") {
+      openaxe_player_set_loop(player, o.value("start", 0), o.value("end", 0),
+                              o.value("enabled", false) ? 1 : 0);
+    } else if (op != "status") {
+      return JsonError("player: unknown op \"" + op + "\"");
+    }
+    return (json{{"ok", true},
+                 {"position", openaxe_player_position(player)},
+                 {"length", openaxe_player_length(player)},
+                 {"sampleRate", openaxe_player_source_rate(player)},
+                 {"playing", openaxe_player_is_playing(player) == 1},
+                 {"meter", openaxe_player_get_meter(player)}})
+        .dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("player: ") + e.what());
+  }
+}
+
 std::string StudioBridge::HandleMeters(const std::string&) {
   json out = json::array();
   Call([&] {

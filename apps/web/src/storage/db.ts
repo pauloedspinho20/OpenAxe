@@ -19,8 +19,10 @@ import { ensureMigrated } from './migration'
  * v5: adds the scenes and midi stores; presets are untouched.
  * v6: adds the presetBank store (a single 512-slot row); all existing stores
  *     are untouched.
+ * v7: adds the media store (media-center library: backing tracks and scores,
+ *     issue #205); all existing stores are untouched.
  */
-const DB_VERSION = 6
+const DB_VERSION = 7
 
 /** Blob store: downloaded .nam/IR files, keyed by an explicit id (see assetCache.ts). */
 export const STORE_ASSETS = 'assets'
@@ -34,6 +36,8 @@ export const STORE_SCENES = 'scenes'
 export const STORE_MIDI = 'midi'
 /** Preset bank: keyPath 'id', a single 512-slot row keyed 'default' (see presets/presetBankStore.ts). */
 export const STORE_PRESET_BANK = 'presetBank'
+/** Media-center library (backing tracks + scores): keyPath 'id'; file bytes live in assets as `media:<id>` (see media/mediaDb.ts). */
+export const STORE_MEDIA = 'media'
 
 /**
  * Which stores declare a keyPath, and what it is. `null` means an out-of-line
@@ -50,6 +54,7 @@ export const STORE_KEY_PATHS: Record<string, string | null> = {
   [STORE_SCENES]: 'id',
   [STORE_MIDI]: 'id',
   [STORE_PRESET_BANK]: 'id',
+  [STORE_MEDIA]: 'id',
 }
 
 async function openDb(): Promise<IDBDatabase> {
@@ -77,6 +82,9 @@ async function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_PRESET_BANK)) {
         db.createObjectStore(STORE_PRESET_BANK, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_MEDIA)) {
+        db.createObjectStore(STORE_MEDIA, { keyPath: 'id' })
       }
     }
     request.onsuccess = () => resolve(request.result)

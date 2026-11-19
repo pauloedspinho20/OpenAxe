@@ -256,6 +256,9 @@ export interface OpenAxeBridge {
   loadDIWav(args: { wavBase64: string }): Promise<OpenAxeOk & { frames?: number }>
   playDI(args: { loop?: boolean }): Promise<OpenAxeOk>
   stopDI(): Promise<OpenAxeOk>
+  /** Backing-track player (issue #205), dispatched on `op` - see
+   * StudioBridge::HandlePlayer. Desktop only; the plugin doesn't bind it. */
+  player(args: { op: string } & Record<string, unknown>): Promise<OpenAxePlayerReply>
 
   meters(): Promise<Array<{ id: string; value: number; input?: number }>>
   cpuLoad(): Promise<number>
@@ -313,6 +316,17 @@ export interface OpenAxeBridge {
 }
 
 type Args = Record<string, unknown> | undefined
+
+export interface OpenAxePlayerReply {
+  ok: boolean
+  error?: string
+  position?: number
+  length?: number
+  sampleRate?: number
+  playing?: boolean
+  meter?: number
+  written?: number
+}
 
 class NativeBridge implements OpenAxeBridge {
   private readonly w: Record<string, unknown>
@@ -451,6 +465,9 @@ class NativeBridge implements OpenAxeBridge {
   }
   stopDI() {
     return this.call<OpenAxeOk>('stopDI')
+  }
+  player(args: { op: string } & Record<string, unknown>) {
+    return this.call<OpenAxePlayerReply>('player', args)
   }
   meters() {
     return this.call<Array<{ id: string; value: number }>>('meters')

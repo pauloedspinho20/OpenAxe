@@ -15,6 +15,7 @@
  */
 import {
   STORE_LIBRARY,
+  STORE_MEDIA,
   STORE_MIDI,
   STORE_PRESETS,
   STORE_PRESET_BANK,
@@ -22,11 +23,13 @@ import {
 } from '../storage/db'
 import {
   clearCachedAssets,
+  deleteCachedAsset,
   getCachedAsset,
   getCachedAssetStats,
   listCachedAssetIds,
   putCachedAsset,
 } from '../engine/assetCache'
+import { isMediaAssetId } from '../media/mediaDb'
 import { base64ToBlob, blobToBase64 } from '../storage/base64'
 import { kvClear, kvPut } from '../storage/kv'
 import { listPresets, savePreset } from '../presets/presetStore'
@@ -81,7 +84,9 @@ export async function buildDataBundle(): Promise<DataBundle> {
   ])
 
   const assets: DataBundleAsset[] = []
-  for (const id of assetIds) {
+  // Media-center files (backing tracks, scores) are user files of their own,
+  // often hundreds of MB - they stay out of the settings backup.
+  for (const id of assetIds.filter((a) => !isMediaAssetId(a))) {
     const blob = await getCachedAsset(id)
     if (!blob) continue
     assets.push({
@@ -168,7 +173,10 @@ export async function readDataBundleFromFile(file: File): Promise<DataBundle> {
  * boot; there's no live re-hydration path for an external bulk write).
  */
 export async function importDataBundle(bundle: DataBundle): Promise<void> {
-  await clearCachedAssets()
+  // Clear everything but the media library (see buildDataBundle).
+  for (const id of await listCachedAssetIds()) {
+    if (!isMediaAssetId(id)) await deleteCachedAsset(id)
+  }
   await kvClear(STORE_PRESETS)
   await kvClear(STORE_LIBRARY)
   await kvClear(STORE_SCENES)
@@ -209,7 +217,10 @@ export async function getAssetCacheStats(): Promise<{ count: number; bytes: numb
 
 /** Clears only the downloaded model/IR cache - library metadata/presets/scenes are untouched. */
 export async function clearAssetCache(): Promise<void> {
-  await clearCachedAssets()
+  // The media library's files are the user's own, not a re-downloadable cache.
+  for (const id of await listCachedAssetIds()) {
+    if (!isMediaAssetId(id)) await deleteCachedAsset(id)
+  }
 }
 
 const REFRESH_TOKEN_KEY = 't3k_refresh_token'
@@ -219,6 +230,7 @@ const SETTINGS_STORAGE_KEY = 'openaxe-settings'
 /** Wipes every store and every localStorage key this app owns - a full factory reset. */
 export async function deleteAllData(options: { signOutTone3000: boolean }): Promise<void> {
   await clearCachedAssets()
+  await kvClear(STORE_MEDIA)
   await kvClear(STORE_PRESETS)
   await kvClear(STORE_LIBRARY)
   await kvClear(STORE_SCENES)
