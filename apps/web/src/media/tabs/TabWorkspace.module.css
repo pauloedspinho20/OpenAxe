@@ -214,3 +214,148 @@
 .pre {
   white-space: pre-wrap;
 }
+
+/* ── Song & tracks panel ─────────────────────────────────────────── */
+
+.songPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+}
+
+.songInfo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.field input,
+.cellInput,
+.inlineField input {
+  font: inherit;
+  font-size: 12px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+}
+
+.trackTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.trackTable th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-3);
+  padding: 2px 4px;
+}
+
+.trackTable td {
+  padding: 2px 4px;
+}
+
+.trackRowOn td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.inlineField {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.inlineField input {
+  width: 84px;
+}
+
+/* ── Drum lane ───────────────────────────────────────────────────── */
+
+.drumLane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.drumGrid {
+  display: grid;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.drumRow {
+  display: contents;
+}
+
+.drumLabel {
+  font-size: 11px;
+  color: var(--ink-2);
+  align-self: center;
+  white-space: nowrap;
+}
+
+.drumCell {
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--seam);
+  background: var(--panel-raised);
+  cursor: pointer;
+  padding: 0;
+}
+
+.drumCell:nth-child(4n + 2) {
+  border-color: var(--seam-strong);
+}
+
+.drumOn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.drumCursor {
+  outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* The edit selection uses alphaTab's own highlight layer. */
+.host :global(.at-selection div) {
+  background: rgba(40, 110, 230, 0.18);
+}
+
+.more {
+  width: 100%;
+}
+
+.more > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 2px 0;
+}
+
+.more[open] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.more[open] > summary {
+  width: 100%;
+}

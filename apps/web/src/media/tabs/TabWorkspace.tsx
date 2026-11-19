@@ -29,8 +29,12 @@ import styles from '../MediaCenter.module.css'
 import { loadMediaFile, saveMedia, saveMediaFile, type MediaItem } from '../mediaDb'
 import { useMediaStore } from '../mediaStore'
 import { PracticeControls, TransportButtons } from '../TransportBar'
+import { DrumLane } from './DrumLane'
+import { NotationTools } from './NotationTools'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
+import * as ops from './scoreOps'
+import { SongPanel } from './SongPanel'
 import tabStyles from './TabWorkspace.module.css'
 
 type Score = model.Score
@@ -43,6 +47,23 @@ const PROFILE: Record<Profile, StaveProfile> = {
 }
 
 const UNDO_LIMIT = 100
+
+/** Shared across open tabs, so a passage can be copied from one song into another. */
+let clipboard: ops.Clipboard | null = null
+
+interface TrackInfo {
+  name: string
+  strings: number
+  percussion: boolean
+}
+
+function trackList(score: Score): TrackInfo[] {
+  return score.tracks.map((t) => ({
+    name: t.name || `Track ${t.index + 1}`,
+    strings: t.staves[0]?.stringTuning.tunings.length ?? 0,
+    percussion: !!t.staves[0]?.isPercussion,
+  }))
+}
 
 /** Error text, with AlphaTex diagnostics (line:col message) when present. */
 function describeError(err: unknown): string {
@@ -81,7 +102,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
-  const [tracks, setTracks] = useState<{ name: string; strings: number }[]>([])
+  const [tracks, setTracks] = useState<TrackInfo[]>([])
   const [trackIndex, setTrackIndex] = useState(0)
   const [muted, setMuted] = useState<Set<number>>(new Set())
   const [solo, setSolo] = useState<Set<number>>(new Set())
@@ -103,6 +124,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [texError, setTexError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [title, setTitle] = useState({ title: '', artist: '' })
+  /** Selection anchor: the range runs from here to the cursor (same track/voice). */
+  const [anchor, setAnchor] = useState<ops.BeatRef | null>(null)
+  const [songOpen, setSongOpen] = useState(false)
+  const [hasClip, setHasClip] = useState(clipboard !== null)
+  const highlightingRef = useRef(false)
 
   const position = useMediaStore((s) => s.position)
   const loaded = useMediaStore((s) => s.loaded)
@@ -133,12 +159,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     api.scoreLoaded.on((score) => {
       scoreRef.current = score
       setScore(score)
-      setTracks(
-        score.tracks.map((t) => ({
-          name: t.name || `Track ${t.index + 1}`,
-          strings: t.staves[0]?.stringTuning.tunings.length ?? 0,
-        })),
-      )
+      setTracks(trackList(score))
       setTitle({ title: score.title, artist: score.artist })
       setCursor((c) => edit.clampCursor(score, c))
     })
@@ -156,6 +177,25 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     })
     api.beatMouseDown.on((beat) => {
       setCursor((c) => edit.cursorForBeat(beat, c.string))
+    })
+    // alphaTab's own drag-to-select becomes the edit selection.
+    api.playbackRangeHighlightChanged.on((e) => {
+      if (highlightingRef.current) return
+      if (!e.startBeat || !e.endBeat) {
+        setAnchor(null)
+        return
+      }
+      const a = edit.cursorForBeat(e.startBeat)
+      const b = edit.cursorForBeat(e.endBeat)
+      setAnchor({ bar: a.bar, beat: a.beat })
+      setCursor((c) => ({
+        ...c,
+        track: b.track,
+        staff: b.staff,
+        voice: b.voice,
+        bar: b.bar,
+        beat: b.beat,
+      }))
     })
 
     void (async () => {
@@ -362,6 +402,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       const next = fn(score, api.settings)
       bumpRevision()
       syncHistory()
+      setTracks(trackList(score))
+      setTitle({ title: score.title, artist: score.artist })
       const t = score.tracks[trackIndex]
       if (t) api.renderTracks([t])
       if (next) setCursor(edit.clampCursor(score, next))
@@ -380,7 +422,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       setScore(score)
       bumpRevision()
       syncHistory()
-      api.renderScore(score, [trackIndex])
+      setTracks(trackList(score))
+      setAnchor(null)
+      api.renderScore(score, [Math.min(trackIndex, score.tracks.length - 1)])
       setCursor((c) => edit.clampCursor(score, c))
       scheduleSave()
     },
@@ -440,6 +484,77 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     })
   }, [cursor, editing, status, zoom, profile, horizontal, score, revision])
 
+  // ── Selection ─────────────────────────────────────────────────────────
+  const selection = useMemo(
+    () => (score && anchor ? ops.rangeBeats(score, cursor, anchor, cursor) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [score, anchor, cursor, revision],
+  )
+  /** The selection, or just the cursor's beat when nothing is selected. */
+  const targets = (): ops.BeatRef[] =>
+    selection.length ? selection : [{ bar: cursor.bar, beat: cursor.beat }]
+
+  useEffect(() => {
+    const api = apiRef.current
+    if (!api || !score) return
+    highlightingRef.current = true
+    try {
+      if (selection.length > 1) {
+        const first = edit.beatAt(score, { ...cursor, ...selection[0]! })
+        const last = edit.beatAt(score, { ...cursor, ...selection[selection.length - 1]! })
+        if (first && last) api.highlightPlaybackRange(first, last)
+      } else {
+        api.clearPlaybackRangeHighlight()
+      }
+    } finally {
+      highlightingRef.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection, status])
+
+  const copySelection = (cut: boolean) => {
+    const sc = scoreRef.current
+    if (!sc) return
+    const clip = ops.copyRange(sc, cursor, targets())
+    if (!clip) return
+    clipboard = clip
+    setHasClip(true)
+    if (cut) {
+      const refs = targets()
+      apply((x, s) => ops.deleteRange(x, cursor, refs, s))
+      setAnchor(null)
+    }
+  }
+
+  const pasteClipboard = () => {
+    const clip = clipboard
+    if (!clip) return
+    apply((x, s) => ops.paste(x, cursor, clip, s))
+    setAnchor(null)
+  }
+
+  /** Seconds at the start of a beat (first playthrough). */
+  const beatTime = (ref: ops.BeatRef, end = false): number | null => {
+    const sc = scoreRef.current
+    const bar = barTimes(ref.bar)
+    const beat = sc ? edit.beatAt(sc, { ...cursor, ...ref }) : null
+    if (!sc || !bar || !beat) return null
+    const tempo = edit.tempoAt(sc, ref.bar)
+    const ticks = beat.playbackStart + (end ? beat.playbackDuration : 0)
+    return bar.start + (ticks * 60) / (tempo * 960)
+  }
+
+  const loopSelection = () => {
+    const refs = targets()
+    const a = beatTime(refs[0]!)
+    const b = beatTime(refs[refs.length - 1]!, true)
+    if (a === null || b === null) return
+    useMediaStore.getState().setLoop(a, b, true)
+    void prepare().then(async (ok) => {
+      if (ok) await useMediaStore.getState().seek(a)
+    })
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const score = scoreRef.current
     if (!score) return
@@ -463,6 +578,47 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     if (!editing) return
     const s = settings()
     const c = cursor
+    if (mod && ['c', 'x', 'v', 'a'].includes(e.key.toLowerCase())) {
+      e.preventDefault()
+      const k = e.key.toLowerCase()
+      if (k === 'c') copySelection(false)
+      if (k === 'x') copySelection(true)
+      if (k === 'v') pasteClipboard()
+      if (k === 'a') {
+        const last = score.masterBars.length - 1
+        const lastVoice = edit.voiceAt(score, { ...c, bar: last })
+        setAnchor({ bar: 0, beat: 0 })
+        setCursor({ ...c, bar: last, beat: Math.max(0, (lastVoice?.beats.length ?? 1) - 1) })
+      }
+      return
+    }
+    // Shift+arrows extend the selection; plain moves drop it.
+    if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      e.preventDefault()
+      if (!anchor) setAnchor({ bar: c.bar, beat: c.beat })
+      setCursor(
+        e.key === 'ArrowRight' ? edit.moveRight(score, c, s, false) : edit.moveLeft(score, c),
+      )
+      return
+    }
+    // Alt+Up/Down transposes; Alt+Shift+Up/Down moves notes across strings.
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      const dir = e.key === 'ArrowUp' ? 1 : -1
+      const refs = targets()
+      if (e.shiftKey) apply((x) => ops.moveRangeString(x, c, refs, dir, s))
+      else apply((x) => ops.transposeRange(x, c, refs, dir, s))
+      return
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selection.length > 1) {
+      e.preventDefault()
+      const refs = selection
+      apply((x) => ops.deleteRange(x, c, refs, s))
+      setAnchor(null)
+      return
+    }
+    if (anchor && e.key.startsWith('Arrow')) setAnchor(null)
+    if (ops.isPercussion(score, c) && /^\d$/.test(e.key)) return
     let handled = true
     if (/^\d$/.test(e.key)) {
       // Two quick digits make a two-digit fret (e.g. 1 then 2 -> 12).
@@ -549,7 +705,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           setCursor({ ...c, beat: 0 })
           break
         case 'Escape':
-          setEditing(false)
+          if (anchor) setAnchor(null)
+          else setEditing(false)
           break
         default:
           handled = false
@@ -619,7 +776,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       const gen = new midi.MidiFileGenerator(
         score,
         api.settings,
-        new midi.AlphaSynthMidiFileHandler(file),
+        // SMF1: Midi 2.0 per-note bends (bends/trills) can't be written to a .mid file.
+        new midi.AlphaSynthMidiFileHandler(file, true),
       )
       gen.generate()
       download(file.toBinary(), 'mid', 'audio/midi')
@@ -738,6 +896,15 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           >
             ✎ Edit
           </button>
+          <button
+            type="button"
+            className={`${styles.chip} ${songOpen ? styles.chipOn : ''}`}
+            onClick={() => setSongOpen((v) => !v)}
+            aria-pressed={songOpen}
+            title="Song info, tracks, tunings and instruments"
+          >
+            Song &amp; tracks
+          </button>
           <select
             className={styles.select}
             value=""
@@ -759,6 +926,15 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         </div>
       </header>
 
+      {songOpen && score && (
+        <SongPanel
+          score={score}
+          trackIndex={trackIndex}
+          apply={apply}
+          onSelectTrack={setTrackIndex}
+        />
+      )}
+
       {tracks.length > 0 && (
         <div className={tabStyles.tracks} role="list" aria-label="Tracks">
           {tracks.map((t, i) => (
@@ -774,7 +950,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                 title="Show this track"
               >
                 {t.name}
-                {t.strings > 0 && <span className={styles.dim}> · {t.strings}str</span>}
+                {t.percussion ? (
+                  <span className={styles.dim}> · drums</span>
+                ) : (
+                  t.strings > 0 && <span className={styles.dim}> · {t.strings}str</span>
+                )}
               </button>
               <button
                 type="button"
@@ -1045,6 +1225,124 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                 : ''}
             </span>
           </div>
+          <div className={tabStyles.paletteGroup} aria-label="Selection">
+            <span className={styles.dim}>
+              {selection.length > 1
+                ? `${selection.length} beats selected`
+                : 'Shift+←/→ or drag to select'}
+            </span>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={() => copySelection(false)}
+              title="Copy (Ctrl/Cmd+C)"
+            >
+              Copy
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={() => copySelection(true)}
+              title="Cut (Ctrl/Cmd+X)"
+            >
+              Cut
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              disabled={!hasClip}
+              onClick={pasteClipboard}
+              title="Paste at the cursor (Ctrl/Cmd+V). Whole bars paste as new bars."
+            >
+              Paste
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={loopSelection}
+              title="Loop the selection in playback"
+            >
+              ⟲ Loop
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={() => {
+                const refs = targets()
+                apply((x, st) => ops.transposeRange(x, cursor, refs, -1, st))
+              }}
+              title="Transpose down a semitone (Alt+↓)"
+            >
+              −½
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={() => {
+                const refs = targets()
+                apply((x, st) => ops.transposeRange(x, cursor, refs, 1, st))
+              }}
+              title="Transpose up a semitone (Alt+↑)"
+            >
+              +½
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={() => {
+                const refs = targets()
+                apply((x, st) => ops.moveRangeString(x, cursor, refs, 1, st))
+              }}
+              title="Move to the next higher string, same pitch (Alt+Shift+↑)"
+            >
+              str↑
+            </button>
+            <button
+              type="button"
+              className={tabStyles.pbtn}
+              onClick={() => {
+                const refs = targets()
+                apply((x, st) => ops.moveRangeString(x, cursor, refs, -1, st))
+              }}
+              title="Move to the next lower string, same pitch (Alt+Shift+↓)"
+            >
+              str↓
+            </button>
+            <select
+              className={styles.select}
+              value=""
+              onChange={(e) => {
+                const d = Number(e.target.value) as model.Duration
+                const refs = targets()
+                if (e.target.value) apply((x, st) => ops.setRangeDuration(x, cursor, refs, d, st))
+              }}
+              aria-label="Set duration of the selection"
+            >
+              <option value="">Set length…</option>
+              {edit.DURATIONS.map((d) => (
+                <option key={d} value={d}>
+                  {edit.DURATION_LABEL[d]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <details className={tabStyles.more}>
+            <summary>
+              Notation tools — bends, slides, tremolo, trills, grace, chords, sections, lyrics,
+              voices
+            </summary>
+            <NotationTools
+              score={score}
+              cursor={cursor}
+              apply={apply}
+              onVoice={(v) =>
+                setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))
+              }
+            />
+          </details>
+          {tracks[trackIndex]?.percussion && (
+            <DrumLane score={score} cursor={cursor} apply={apply} onCursor={setCursor} />
+          )}
         </div>
       )}
 

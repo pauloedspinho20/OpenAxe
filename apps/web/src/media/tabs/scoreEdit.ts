@@ -245,7 +245,7 @@ export function copyBeat(src: Beat): Beat {
 }
 
 /** Re-establish index/prev/next links after array splices. */
-function relink(score: Score): void {
+export function relink(score: Score): void {
   score.masterBars.forEach((mb, i) => {
     mb.index = i
     mb.score = score

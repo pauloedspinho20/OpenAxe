@@ -7,6 +7,7 @@ import styles from './MediaCenter.module.css'
 import { newMediaId, SCORE_EXTENSIONS, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
 import { PracticeControls, TransportButtons } from './TransportBar'
+import { NewSongForm } from './tabs/NewSongForm'
 import { Waveform } from './Waveform'
 
 // alphaTab is large; only load it when a score is opened.
@@ -28,6 +29,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [newOpen, setNewOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const visible = useMemo(() => {
@@ -50,15 +52,6 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
     } finally {
       setBusy(false)
     }
-  }
-
-  const newScore = async () => {
-    const tex = blankTex()
-    const file = new File([tex], `Untitled ${new Date().toLocaleDateString()}.atex`, {
-      type: 'text/plain',
-    })
-    const added = await useMediaStore.getState().importFiles([file])
-    if (added[0]) void useMediaStore.getState().open(added[0].id)
   }
 
   return (
@@ -98,10 +91,11 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
             <button
               type="button"
               className={styles.chip}
-              onClick={() => void newScore()}
-              title="Start a blank tab"
+              onClick={() => setNewOpen((v) => !v)}
+              aria-pressed={newOpen}
+              title="Start a new song from scratch"
             >
-              New tab
+              New song
             </button>
             <input
               ref={fileRef}
@@ -167,7 +161,8 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
               </button>
             </div>
           )}
-          {!active && <EmptyState onImport={() => fileRef.current?.click()} />}
+          {newOpen && <NewSongForm onDone={() => setNewOpen(false)} />}
+          {!active && !newOpen && <EmptyState onImport={() => fileRef.current?.click()} />}
           {active?.kind === 'audio' && <AudioView item={active} />}
           {active?.kind === 'score' && (
             <Suspense fallback={<div className={styles.loading}>Loading tab editor…</div>}>
@@ -345,16 +340,4 @@ function AudioView({ item }: { item: MediaItem }) {
       <PracticeControls />
     </div>
   )
-}
-
-/** AlphaTex for a blank 4-bar six-string tab. */
-function blankTex(): string {
-  return [
-    '\\title "Untitled"',
-    '\\tempo 120',
-    '\\track "Guitar" { instrument electricguitarclean }',
-    '\\staff {tabs}',
-    '\\tuning (E4 B3 G3 D3 A2 E2)',
-    'r.1 | r.1 | r.1 | r.1',
-  ].join('\n')
 }
