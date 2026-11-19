@@ -28,7 +28,11 @@ export async function getCachedAsset(id: string): Promise<Blob | null> {
   if (native) {
     try {
       const response = await fetch(`/__asset/${encodeURIComponent(id)}`)
-      if (response.ok) return await response.blob()
+      // Against a Vite dev server (OPENAXE_UI_URL) the route doesn't exist and
+      // the SPA fallback answers 200 with index.html - that is "no asset
+      // server", not the asset, so fall through to the bridge.
+      const html = (response.headers.get('content-type') ?? '').startsWith('text/html')
+      if (response.ok && !html) return await response.blob()
       // A 404 is a genuine cache miss; anything else falls through to the
       // bridge rather than being reported as "not cached".
       if (response.status === 404) return null
