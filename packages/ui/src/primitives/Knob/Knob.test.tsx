@@ -131,13 +131,13 @@ describe('Knob', () => {
     const { container, rerender } = render(<Knob label="Drive" value={0.5} onChange={() => {}} />)
     const slider = screen.getByRole('slider', { name: 'Drive' })
     expect(slider.getAttribute('class')).not.toMatch(/highlighted/)
-    expect(container.querySelectorAll('circle')).toHaveLength(1)
+    expect(container.querySelector('[data-part="accent-wash"]')).toBeNull()
 
     rerender(<Knob label="Drive" value={0.5} onChange={() => {}} highlighted />)
     expect(screen.getByRole('slider', { name: 'Drive' }).getAttribute('class')).toMatch(
       /highlighted/,
     )
-    // Body circle plus the accent wash overlay.
-    expect(container.querySelectorAll('circle')).toHaveLength(2)
+    // The accent wash overlays the skirt.
+    expect(container.querySelector('[data-part="accent-wash"]')).not.toBeNull()
   })
 })

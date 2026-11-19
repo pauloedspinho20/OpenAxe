@@ -4,9 +4,24 @@ import styles from './Knob.module.css'
 const MIN_ANGLE = -135
 const MAX_ANGLE = 135
 const SWEEP = MAX_ANGLE - MIN_ANGLE
-const RADIUS = 34
-const CENTER = 40
+const CENTER = 50
 const DRAG_RANGE_PX = 150
+
+// Geometry of the analog knob (viewBox 100x100): a printed 0-10 scale on the
+// panel, a black skirted knob with a knurled edge and a white index line, and
+// a brushed-metal cap. The skirt rotates; the cap's lighting stays fixed, as a
+// real light source would.
+const SCALE_INNER = 38
+const SCALE_OUTER = 42
+const SCALE_MAJOR_OUTER = 44
+const NUMERAL_RADIUS = 47.5
+const SKIRT = 33
+const KNURL_INNER = 28.5
+const KNURL_COUNT = 40
+const CAP = 18
+const TICKS = 11 // 0..10
+/** Numerals are only legible on knobs at least this big (px). */
+const NUMERALS_MIN_SIZE = 60
 
 export interface KnobProps {
   label: string
@@ -45,14 +60,6 @@ function polarPoint(angleDeg: number, radius: number): { x: number; y: number } 
     x: CENTER + radius * Math.cos(angleRad),
     y: CENTER + radius * Math.sin(angleRad),
   }
-}
-
-function describeArc(startAngle: number, endAngle: number, radius: number): string {
-  if (endAngle <= startAngle) return ''
-  const largeArc = endAngle - startAngle > 180 ? 1 : 0
-  const start = polarPoint(startAngle, radius)
-  const end = polarPoint(endAngle, radius)
-  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`
 }
 
 /**
@@ -169,7 +176,7 @@ export function Knob({
         aria-disabled={disabled}
         aria-labelledby={id}
         aria-describedby={description ? descId : undefined}
-        viewBox="0 0 80 80"
+        viewBox="0 0 100 100"
         width={size}
         height={size}
         className={`${styles.knob} ${dragging ? styles.dragging : ''} ${disabled ? styles.disabled : ''} ${highlighted ? styles.highlighted : ''}`}
@@ -180,31 +187,122 @@ export function Knob({
         onDoubleClick={handleDoubleClick}
       >
         <defs>
-          <radialGradient id={`${id}-body`} cx="35%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#333331" />
-            <stop offset="55%" stopColor="#222220" />
-            <stop offset="100%" stopColor="#141412" />
+          <radialGradient id={`${id}-skirt`} cx="40%" cy="32%" r="80%">
+            <stop offset="0%" stopColor="#2c2c2a" />
+            <stop offset="60%" stopColor="#161615" />
+            <stop offset="100%" stopColor="#090909" />
           </radialGradient>
+          <linearGradient id={`${id}-cap`} x1="20%" y1="10%" x2="80%" y2="95%">
+            <stop offset="0%" stopColor="#e4e3de" />
+            <stop offset="45%" stopColor="#a7a6a1" />
+            <stop offset="100%" stopColor="#5c5b57" />
+          </linearGradient>
+          <radialGradient id={`${id}-shine`} cx="34%" cy="28%" r="55%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+          </radialGradient>
+          <filter id={`${id}-shadow`} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.6" />
+          </filter>
         </defs>
-        <path className={styles.track} d={describeArc(MIN_ANGLE, MAX_ANGLE, RADIUS)} fill="none" />
-        <path className={styles.fill} d={describeArc(MIN_ANGLE, angle, RADIUS)} fill="none" />
+
+        {/* Printed scale: ticks up to the value glow like a lit panel. */}
+        <g className={styles.scale}>
+          {Array.from({ length: TICKS }, (_, i) => {
+            const t = i / (TICKS - 1)
+            const a = MIN_ANGLE + t * SWEEP
+            const major = i % 5 === 0
+            const p1 = polarPoint(a, SCALE_INNER)
+            const p2 = polarPoint(a, major ? SCALE_MAJOR_OUTER : SCALE_OUTER)
+            return (
+              <line
+                key={i}
+                className={`${styles.tick} ${t <= normalized + 1e-6 ? styles.tickLit : ''} ${major ? styles.tickMajor : ''}`}
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+              />
+            )
+          })}
+          {size >= NUMERALS_MIN_SIZE &&
+            [0, 2, 4, 6, 8, 10].map((n) => {
+              const p = polarPoint(MIN_ANGLE + (n / 10) * SWEEP, NUMERAL_RADIUS)
+              return (
+                <text
+                  key={n}
+                  className={styles.numeral}
+                  x={p.x}
+                  y={p.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                >
+                  {n}
+                </text>
+              )
+            })}
+        </g>
+
+        {/* Cast shadow, offset down-right from a fixed light. */}
         <circle
-          className={styles.body}
-          cx={CENTER}
-          cy={CENTER}
-          r={RADIUS - 8}
-          fill={`url(#${id}-body)`}
+          className={styles.shadow}
+          cx={CENTER + 1.5}
+          cy={CENTER + 3.5}
+          r={SKIRT}
+          filter={`url(#${id}-shadow)`}
         />
+
+        {/* Skirt: rotates with the value, knurling and index line included. */}
+        <g transform={`rotate(${angle} ${CENTER} ${CENTER})`}>
+          <circle
+            className={styles.body}
+            cx={CENTER}
+            cy={CENTER}
+            r={SKIRT}
+            fill={`url(#${id}-skirt)`}
+          />
+          {Array.from({ length: KNURL_COUNT }, (_, i) => {
+            const a = (i / KNURL_COUNT) * 360
+            const p1 = polarPoint(a, KNURL_INNER)
+            const p2 = polarPoint(a, SKIRT - 0.6)
+            return <line key={i} className={styles.knurl} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />
+          })}
+          <line
+            className={styles.index}
+            x1={CENTER}
+            y1={CENTER - CAP - 1}
+            x2={CENTER}
+            y2={CENTER - SKIRT + 1.5}
+          />
+        </g>
         {highlighted && (
-          <circle className={styles.accentWash} cx={CENTER} cy={CENTER} r={RADIUS - 8} />
+          <circle
+            data-part="accent-wash"
+            className={styles.accentWash}
+            cx={CENTER}
+            cy={CENTER}
+            r={SKIRT}
+          />
         )}
+
+        {/* Skirt rim catching the light (fixed, upper left). */}
+        <circle className={styles.rimLight} cx={CENTER} cy={CENTER} r={SKIRT - 0.5} />
+
+        {/* Brushed-metal cap: fixed lighting, rotating pointer. */}
+        <circle className={styles.capBevel} cx={CENTER} cy={CENTER} r={CAP + 1.6} />
+        <circle cx={CENTER} cy={CENTER} r={CAP} fill={`url(#${id}-cap)`} />
+        {[0.82, 0.62, 0.42].map((k) => (
+          <circle key={k} className={styles.brush} cx={CENTER} cy={CENTER} r={CAP * k} />
+        ))}
+        <circle cx={CENTER} cy={CENTER} r={CAP} fill={`url(#${id}-shine)`} />
         <line
           className={styles.pointer}
-          x1={polarPoint(angle, 8).x}
-          y1={polarPoint(angle, 8).y}
-          x2={polarPoint(angle, RADIUS - 11).x}
-          y2={polarPoint(angle, RADIUS - 11).y}
+          x1={polarPoint(angle, 5).x}
+          y1={polarPoint(angle, 5).y}
+          x2={polarPoint(angle, CAP - 3).x}
+          y2={polarPoint(angle, CAP - 3).y}
         />
+        <circle className={styles.focusRing} cx={CENTER} cy={CENTER} r={SKIRT + 3} />
       </svg>
       <span id={id} className={`label ${styles.label}`}>
         {label}
