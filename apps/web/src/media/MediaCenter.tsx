@@ -8,7 +8,10 @@ import { newMediaId, SCORE_EXTENSIONS, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
+import { Tool } from './tabs/TabToolbox'
+import * as I from './tabs/tabIcons'
 import { SidebarIcon } from './tabs/tabIcons'
+import tabStyles from './tabs/TabWorkspace.module.css'
 import { Waveform } from './Waveform'
 
 // alphaTab is large; only load it when a score is opened.
@@ -45,14 +48,16 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   const active = items.find((i) => i.id === activeId) ?? null
   // A tab wants the whole dialog: the library folds away while one is open
   // (the rail button brings it back), and the dialog grows to the viewport.
-  const scoreMode = active?.kind === 'score'
+  // An open track or tab wants the whole dialog: the library folds away
+  // (the rail button brings it back) and the dialog grows to the viewport.
+  const focusMode = active !== null
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [lastActive, setLastActive] = useState<string | null>(null)
   if (activeId !== lastActive) {
     setLastActive(activeId)
-    setLibraryOpen(!scoreMode)
+    setLibraryOpen(!focusMode)
   }
-  const showLibrary = !scoreMode || libraryOpen
+  const showLibrary = !focusMode || libraryOpen
 
   const importFiles = async (files: FileList | File[]) => {
     if (!files.length) return
@@ -70,12 +75,12 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
       open={open}
       onClose={onClose}
       title="Media Center"
-      width={scoreMode ? '100vw' : 'min(1320px, 97vw)'}
-      maxHeight={scoreMode ? '100svh' : '95vh'}
-      className={`${styles.dialog} ${scoreMode ? styles.dialogScore : ''}`}
+      width={focusMode ? '100vw' : 'min(1320px, 97vw)'}
+      maxHeight={focusMode ? '100svh' : '95vh'}
+      className={`${styles.dialog} ${focusMode ? styles.dialogScore : ''}`}
     >
       <div
-        className={`${styles.center} ${scoreMode ? styles.centerScore : ''} ${showLibrary ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
+        className={`${styles.center} ${focusMode ? styles.centerScore : ''} ${showLibrary ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes('Files')) {
             e.preventDefault()
@@ -89,7 +94,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
           void importFiles(e.dataTransfer.files)
         }}
       >
-        {scoreMode && (
+        {focusMode && (
           <div className={styles.libToggle}>
             <HardwareButton
               label={libraryOpen ? 'Hide the library' : 'Show the library'}
@@ -277,12 +282,15 @@ function EmptyState({ onImport }: { onImport: () => void }) {
 }
 
 function AudioView({ item }: { item: MediaItem }) {
-  const position = useMediaStore((s) => s.position)
-  const duration = useMediaStore((s) => s.duration)
-  const practice = useMediaStore((s) => s.practice)
-  const loadState = useMediaStore((s) => s.loadState)
-  const progress = useMediaStore((s) => s.loadProgress)
+  const position = useMediaStore((st) => st.position)
+  const duration = useMediaStore((st) => st.duration)
+  const practice = useMediaStore((st) => st.practice)
+  const loadState = useMediaStore((st) => st.loadState)
+  const progress = useMediaStore((st) => st.loadProgress)
+  const [practiceOpen, setPracticeOpen] = useState(false)
   const s = useMediaStore.getState()
+  const total = duration || item.duration
+  const loopOn = practice.loopEnabled && practice.loopStart !== null
 
   const addMarker = () => {
     const label = String.fromCharCode(65 + (item.markers.length % 26))
@@ -293,47 +301,30 @@ function AudioView({ item }: { item: MediaItem }) {
   }
 
   return (
-    <div className={styles.view}>
-      <header className={styles.viewHeader}>
-        <div>
-          <h3 className={styles.viewTitle}>{item.name}</h3>
-          {item.artist && <div className={styles.viewSub}>{item.artist}</div>}
+    <div className={`${tabStyles.ws} ${styles.audioWs}`}>
+      <header className={tabStyles.topbar}>
+        <div className={tabStyles.songTitle} title={item.fileName}>
+          <strong>{item.name}</strong>
+          {item.artist && <span>{item.artist}</span>}
         </div>
         {loadState === 'loading' && (
-          <span className={styles.dim}>Loading… {Math.round(progress * 100)}%</span>
+          <span className={tabStyles.footerNote}>Loading… {Math.round(progress * 100)}%</span>
         )}
-      </header>
-      <Waveform
-        peaks={item.peaks}
-        duration={duration || item.duration}
-        position={position}
-        loopStart={practice.loopStart}
-        loopEnd={practice.loopEnd}
-        loopEnabled={practice.loopEnabled}
-        markers={item.markers}
-        onSeek={(t) => void s.seek(t)}
-        onLoopChange={(a, b) => s.setLoop(a, b, true)}
-        height={120}
-      />
-      <div className={styles.transportRow}>
-        <TransportButtons />
         <div className={styles.markers}>
-          <button
-            type="button"
-            className={styles.chip}
+          <Tool
+            icon={I.SectionIcon}
+            title="Add a section marker at the playhead"
             onClick={addMarker}
-            title="Add a section marker at the playhead (M)"
-          >
-            + Marker
-          </button>
+            tag="+"
+          />
           {item.markers.map((m, i) => {
-            const next = item.markers[i + 1]?.time ?? (duration || item.duration)
+            const next = item.markers[i + 1]?.time ?? total
             return (
               <span key={m.id} className={styles.markerChip}>
                 <button
                   type="button"
                   onClick={() => void s.seek(m.time)}
-                  title={`Go to ${m.label}`}
+                  title={`Go to ${m.label} (${formatTime(m.time)})`}
                 >
                   {m.label}
                 </button>
@@ -343,7 +334,7 @@ function AudioView({ item }: { item: MediaItem }) {
                   title={`Loop section ${m.label}`}
                   aria-label={`Loop section ${m.label}`}
                 >
-                  ⟲
+                  <I.LoopIcon size={12} />
                 </button>
                 <button
                   type="button"
@@ -353,6 +344,7 @@ function AudioView({ item }: { item: MediaItem }) {
                     })
                   }
                   aria-label={`Remove marker ${m.label}`}
+                  title="Remove marker"
                 >
                   ×
                 </button>
@@ -360,8 +352,113 @@ function AudioView({ item }: { item: MediaItem }) {
             )
           })}
         </div>
+      </header>
+
+      <div className={styles.waveArea}>
+        <Waveform
+          peaks={item.peaks}
+          duration={total}
+          position={position}
+          loopStart={practice.loopStart}
+          loopEnd={practice.loopEnd}
+          loopEnabled={practice.loopEnabled}
+          markers={item.markers}
+          onSeek={(t) => void s.seek(t)}
+          onLoopChange={(a, b) => s.setLoop(a, b, true)}
+          height="fill"
+        />
       </div>
-      <PracticeControls />
+
+      <footer className={tabStyles.footer}>
+        <TransportButtons />
+        <div className={tabStyles.barGroup} title="A-B loop">
+          <Tool
+            icon={I.LoopIcon}
+            title={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
+            on={loopOn}
+            onClick={() => s.toggleLoop()}
+          />
+          <Tool
+            icon={I.LoopIcon}
+            title="Set loop start here ([)"
+            tag="A"
+            onClick={() => s.setLoopPoint('start', position)}
+          />
+          <Tool
+            icon={I.LoopIcon}
+            title="Set loop end here (])"
+            tag="B"
+            onClick={() => s.setLoopPoint('end', position)}
+          />
+        </div>
+        <div className={tabStyles.barGroup} title="Speed (pitch preserved)">
+          <Tool
+            icon={I.MinusIcon}
+            title="Slower (−5%)"
+            onClick={() => s.setSpeed(practice.speed - 0.05)}
+          />
+          <button
+            type="button"
+            className={tabStyles.zoomValue}
+            onClick={() => s.setSpeed(1)}
+            title="Speed — click to reset to 100%"
+          >
+            {Math.round(practice.speed * 100)}%
+          </button>
+          <Tool
+            icon={I.PlusIcon}
+            title="Faster (+5%)"
+            onClick={() => s.setSpeed(practice.speed + 0.05)}
+          />
+        </div>
+        <div className={tabStyles.barGroup} title="Transpose">
+          <Tool
+            icon={I.FlatIcon}
+            title="Down a semitone"
+            onClick={() => s.setSemitones(practice.semitones - 1)}
+          />
+          <button
+            type="button"
+            className={tabStyles.zoomValue}
+            onClick={() => s.setSemitones(0)}
+            title="Transpose — click to reset"
+          >
+            {practice.semitones > 0 ? '+' : ''}
+            {practice.semitones} st
+          </button>
+          <Tool
+            icon={I.SharpIcon}
+            title="Up a semitone"
+            onClick={() => s.setSemitones(practice.semitones + 1)}
+          />
+        </div>
+        <div className={tabStyles.barGroup} title="Track volume">
+          <I.MuteIcon size={15} />
+          <input
+            className={styles.volume}
+            type="range"
+            min={0}
+            max={200}
+            value={Math.round(practice.volume * 100)}
+            onChange={(e) => s.setVolume(Number(e.target.value) / 100)}
+            onDoubleClick={() => s.setVolume(1)}
+            aria-label="Track volume"
+          />
+        </div>
+        <span className={tabStyles.footerSpacer} />
+        <details
+          className={tabStyles.menu}
+          open={practiceOpen}
+          onToggle={(e) => setPracticeOpen((e.target as HTMLDetailsElement).open)}
+        >
+          <summary title="Practice: speed presets, trainer, A-B loop, volume">
+            <I.TempoIcon size={18} /> Practice
+          </summary>
+          <div className={tabStyles.practicePop}>
+            <PracticeControls />
+          </div>
+        </details>
+      </footer>
     </div>
   )
 }

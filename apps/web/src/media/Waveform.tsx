@@ -13,7 +13,8 @@ interface WaveformProps {
   markers?: MediaMarker[]
   onSeek: (seconds: number) => void
   onLoopChange: (start: number | null, end: number | null) => void
-  height?: number
+  /** Pixel height, or 'fill' to take the container's height. */
+  height?: number | 'fill'
 }
 
 type Drag =
@@ -35,8 +36,11 @@ export function Waveform({
   markers = [],
   onSeek,
   onLoopChange,
-  height = 96,
+  height: heightProp = 96,
 }: WaveformProps) {
+  const fill = heightProp === 'fill'
+  const [measured, setMeasured] = useState(160)
+  const height = fill ? measured : heightProp
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(600)
@@ -46,7 +50,9 @@ export function Waveform({
     const el = wrapRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const ro = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(Math.max(100, Math.floor(entry.contentRect.width)))
+      if (!entry) return
+      setWidth(Math.max(100, Math.floor(entry.contentRect.width)))
+      setMeasured(Math.max(80, Math.floor(entry.contentRect.height)))
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -66,6 +72,10 @@ export function Waveform({
     ctx.fillStyle = style.getPropertyValue('--wave').trim() || '#7a8a99'
     const buckets = peaks.length / 2
     const mid = height / 2
+    // Draw relative to the loudest peak so quiet tracks still fill the view.
+    let loudest = 0
+    for (const p of peaks) loudest = Math.max(loudest, Math.abs(p))
+    const gain = loudest > 0.001 ? 0.95 / loudest : 0.95
     if (buckets === 0) {
       ctx.fillRect(0, mid, width, 1)
       return
@@ -79,8 +89,8 @@ export function Waveform({
         lo = Math.min(lo, peaks[b * 2]!)
         hi = Math.max(hi, peaks[b * 2 + 1]!)
       }
-      const top = mid - hi * mid * 0.95
-      const bottom = mid - lo * mid * 0.95
+      const top = mid - hi * mid * gain
+      const bottom = mid - lo * mid * gain
       ctx.fillRect(x, top, 1, Math.max(1, bottom - top))
     }
   }, [peaks, width, height])
@@ -144,7 +154,7 @@ export function Waveform({
     <div
       ref={wrapRef}
       className={styles.waveform}
-      style={{ height }}
+      style={fill ? { height: '100%' } : { height }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

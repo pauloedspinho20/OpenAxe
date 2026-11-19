@@ -673,3 +673,25 @@
 .libToggle {
   align-self: start;
 }
+
+/* ── Backing-track view in full-size mode ─────────────────────────── */
+
+.audioWs {
+  gap: 10px;
+}
+
+.waveArea {
+  flex: 1;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+}
+
+.waveArea > * {
+  flex: 1;
+}
+
+.volume {
+  width: 90px;
+  accent-color: var(--accent);
+}
