@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
-import { Dialog } from '@openaxe/ui'
+import { Dialog, HardwareButton } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
@@ -8,6 +8,7 @@ import { newMediaId, SCORE_EXTENSIONS, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
+import { SidebarIcon } from './tabs/tabIcons'
 import { Waveform } from './Waveform'
 
 // alphaTab is large; only load it when a score is opened.
@@ -42,6 +43,16 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   }, [items, filter, query])
 
   const active = items.find((i) => i.id === activeId) ?? null
+  // A tab wants the whole dialog: the library folds away while one is open
+  // (the rail button brings it back), and the dialog grows to the viewport.
+  const scoreMode = active?.kind === 'score'
+  const [libraryOpen, setLibraryOpen] = useState(true)
+  const [lastActive, setLastActive] = useState<string | null>(null)
+  if (activeId !== lastActive) {
+    setLastActive(activeId)
+    setLibraryOpen(!scoreMode)
+  }
+  const showLibrary = !scoreMode || libraryOpen
 
   const importFiles = async (files: FileList | File[]) => {
     if (!files.length) return
@@ -59,12 +70,12 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
       open={open}
       onClose={onClose}
       title="Media Center"
-      width="min(1320px, 97vw)"
-      maxHeight="95vh"
-      className={styles.dialog ?? ''}
+      width={scoreMode ? '100vw' : 'min(1320px, 97vw)'}
+      maxHeight={scoreMode ? '100svh' : '95vh'}
+      className={`${styles.dialog} ${scoreMode ? styles.dialogScore : ''}`}
     >
       <div
-        className={`${styles.center} ${dragOver ? styles.dragOver : ''}`}
+        className={`${styles.center} ${scoreMode ? styles.centerScore : ''} ${showLibrary ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes('Files')) {
             e.preventDefault()
@@ -78,72 +89,85 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
           void importFiles(e.dataTransfer.files)
         }}
       >
-        <aside className={styles.sidebar}>
-          <div className={styles.sideActions}>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={() => fileRef.current?.click()}
-              disabled={busy}
-            >
-              {busy ? 'Importing…' : 'Import files'}
-            </button>
-            <button
-              type="button"
-              className={styles.chip}
-              onClick={() => setNewOpen((v) => !v)}
-              aria-pressed={newOpen}
-              title="Start a new song from scratch"
-            >
-              New song
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              hidden
-              accept={`${AUDIO_ACCEPT},${SCORE_EXTENSIONS.join(',')}`}
-              onChange={(e) => {
-                if (e.target.files) void importFiles(e.target.files)
-                e.target.value = ''
-              }}
+        {scoreMode && (
+          <div className={styles.libToggle}>
+            <HardwareButton
+              label={libraryOpen ? 'Hide the library' : 'Show the library'}
+              icon={<SidebarIcon size={16} />}
+              iconOnly
+              active={libraryOpen}
+              onClick={() => setLibraryOpen((v) => !v)}
             />
           </div>
-          <div className={styles.filters} role="tablist" aria-label="Library filter">
-            {(['all', 'audio', 'score'] as const).map((f) => (
+        )}
+        {showLibrary && (
+          <aside className={styles.sidebar}>
+            <div className={styles.sideActions}>
               <button
-                key={f}
                 type="button"
-                role="tab"
-                aria-selected={filter === f}
-                className={`${styles.filter} ${filter === f ? styles.filterOn : ''}`}
-                onClick={() => setFilter(f)}
+                className={styles.primaryBtn}
+                onClick={() => fileRef.current?.click()}
+                disabled={busy}
               >
-                {f === 'all' ? 'All' : f === 'audio' ? 'Backing tracks' : 'Tabs'}
+                {busy ? 'Importing…' : 'Import files'}
               </button>
-            ))}
-          </div>
-          <input
-            className={styles.search}
-            type="search"
-            placeholder="Search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search library"
-          />
-          <ul className={styles.list}>
-            {visible.length === 0 && (
-              <li className={styles.emptyList}>
-                {items.length === 0
-                  ? 'Drop audio files (mp3, wav, flac…) or Guitar Pro / MusicXML files here.'
-                  : 'Nothing matches.'}
-              </li>
-            )}
-            {visible.map((item) => (
-              <LibraryRow key={item.id} item={item} active={item.id === activeId} />
-            ))}
-          </ul>
-        </aside>
+              <button
+                type="button"
+                className={styles.chip}
+                onClick={() => setNewOpen((v) => !v)}
+                aria-pressed={newOpen}
+                title="Start a new song from scratch"
+              >
+                New song
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                hidden
+                accept={`${AUDIO_ACCEPT},${SCORE_EXTENSIONS.join(',')}`}
+                onChange={(e) => {
+                  if (e.target.files) void importFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+            </div>
+            <div className={styles.filters} role="tablist" aria-label="Library filter">
+              {(['all', 'audio', 'score'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === f}
+                  className={`${styles.filter} ${filter === f ? styles.filterOn : ''}`}
+                  onClick={() => setFilter(f)}
+                >
+                  {f === 'all' ? 'All' : f === 'audio' ? 'Backing tracks' : 'Tabs'}
+                </button>
+              ))}
+            </div>
+            <input
+              className={styles.search}
+              type="search"
+              placeholder="Search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search library"
+            />
+            <ul className={styles.list}>
+              {visible.length === 0 && (
+                <li className={styles.emptyList}>
+                  {items.length === 0
+                    ? 'Drop audio files (mp3, wav, flac…) or Guitar Pro / MusicXML files here.'
+                    : 'Nothing matches.'}
+                </li>
+              )}
+              {visible.map((item) => (
+                <LibraryRow key={item.id} item={item} active={item.id === activeId} />
+              ))}
+            </ul>
+          </aside>
+        )}
 
         <section className={styles.main}>
           {!hasTransport && (

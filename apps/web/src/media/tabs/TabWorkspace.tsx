@@ -22,19 +22,20 @@ import {
   StaveProfile,
   type synth,
 } from '@coderline/alphatab'
+import { HardwareButton } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { formatTime } from '../decode'
 import styles from '../MediaCenter.module.css'
 import { loadMediaFile, saveMedia, saveMediaFile, type MediaItem } from '../mediaDb'
 import { useMediaStore } from '../mediaStore'
 import { PracticeControls, TransportButtons } from '../TransportBar'
 import { DrumLane } from './DrumLane'
-import { NotationTools } from './NotationTools'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
 import { SongPanel } from './SongPanel'
+import * as I from './tabIcons'
+import { TabToolbox, Tool, type ToolGroup } from './TabToolbox'
 import tabStyles from './TabWorkspace.module.css'
 
 type Score = model.Score
@@ -127,6 +128,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   /** Selection anchor: the range runs from here to the cursor (same track/voice). */
   const [anchor, setAnchor] = useState<ops.BeatRef | null>(null)
   const [songOpen, setSongOpen] = useState(false)
+  const [toolGroup, setToolGroup] = useState<ToolGroup | null>('note')
+  const [practiceOpen, setPracticeOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const wsRef = useRef<HTMLDivElement | null>(null)
   const [hasClip, setHasClip] = useState(clipboard !== null)
   const highlightingRef = useRef(false)
 
@@ -575,6 +581,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       void useMediaStore.getState().toggle()
       return
     }
+    if (e.key === '?') {
+      e.preventDefault()
+      setHelpOpen((v) => !v)
+      return
+    }
     if (!editing) return
     const s = settings()
     const c = cursor
@@ -816,12 +827,26 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     }
   }
 
+  // Full screen hands the whole display to the sheet (Esc or the button exits).
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === wsRef.current)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    else void wsRef.current?.requestFullscreen?.().catch(() => {})
+  }
+
   // ── Render ────────────────────────────────────────────────────────────
   const beat = score ? edit.beatAt(score, cursor) : null
-  const note = score ? edit.noteAt(score, cursor) : null
-  const mb = score?.masterBars[cursor.bar]
   const fill = score ? edit.barFill(score, cursor) : { used: 0, capacity: 0 }
-  const s = () => settings()
+  const current = tracks[trackIndex]
+  const staffTunings = score?.tracks[cursor.track]?.staves[cursor.staff]?.stringTuning.tunings ?? []
+  const stringName =
+    staffTunings.length && !current?.percussion
+      ? model.Tuning.getTextForTuning(staffTunings[staffTunings.length - cursor.string] ?? 0, false)
+      : ''
 
   const toggleIn = (set: Set<number>, i: number) => {
     const next = new Set(set)
@@ -830,584 +855,373 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     return next
   }
 
+  const practice = useMediaStore((st) => st.practice)
+  const loopOn = practice.loopEnabled && practice.loopStart !== null
+  const ms = useMediaStore.getState()
+
   return (
-    <div className={styles.view}>
-      <header className={styles.viewHeader}>
-        <div>
-          <h3 className={styles.viewTitle}>{title.title || item.name}</h3>
-          <div className={styles.viewSub}>
-            {title.artist || item.artist}
-            {savedAt && <span className={tabStyles.saved}> · saved</span>}
-          </div>
+    <div ref={wsRef} className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''}`}>
+      {/* ── Top bar ── */}
+      <header className={tabStyles.topbar}>
+        <div
+          className={tabStyles.songTitle}
+          title={`${title.title || item.name}${title.artist ? ` — ${title.artist}` : ''}`}
+        >
+          <strong>{title.title || item.name}</strong>
+          {(title.artist || item.artist) && <span>{title.artist || item.artist}</span>}
+          {savedAt && <i className={tabStyles.savedDot} title="All changes saved" />}
         </div>
-        <div className={tabStyles.toolbar}>
+
+        <div className={tabStyles.barGroup}>
+          <I.TracksIcon size={16} />
           <select
-            className={styles.select}
-            value={profile}
-            onChange={(e) => setProfile(e.target.value as Profile)}
-            aria-label="Notation"
+            className={tabStyles.trackSelect}
+            value={trackIndex}
+            onChange={(e) => setTrackIndex(Number(e.target.value))}
+            aria-label="Track"
           >
-            <option value="both">Score + Tab</option>
-            <option value="tab">Tab</option>
-            <option value="score">Score</option>
+            {tracks.map((tr, i) => (
+              <option key={i} value={i}>
+                {tr.name}
+                {tr.percussion ? ' (drums)' : tr.strings ? ` (${tr.strings} str)` : ''}
+                {muted.has(i) ? ' · muted' : ''}
+                {solo.has(i) ? ' · solo' : ''}
+              </option>
+            ))}
           </select>
-          <button
-            type="button"
-            className={styles.chip}
+          <Tool
+            icon={I.MuteIcon}
+            title="Mute this track in playback"
+            on={muted.has(trackIndex)}
+            onClick={() => setMuted((m) => toggleIn(m, trackIndex))}
+          />
+          <Tool
+            icon={I.SoloIcon}
+            title="Solo this track in playback"
+            on={solo.has(trackIndex)}
+            onClick={() => setSolo((m) => toggleIn(m, trackIndex))}
+          />
+        </div>
+
+        <div className={tabStyles.barGroup} role="group" aria-label="View">
+          {(
+            [
+              ['tab', 'Tab only'],
+              ['both', 'Standard notation + tab'],
+              ['score', 'Standard notation only'],
+            ] as const
+          ).map(([id, label]) => (
+            <Tool
+              key={id}
+              icon={id === 'tab' ? I.TabIcon : I.NotationIcon}
+              title={label}
+              on={profile === id}
+              onClick={() => setProfile(id)}
+              tag={id === 'both' ? '+T' : undefined}
+            />
+          ))}
+          <Tool
+            icon={I.ZoomOutIcon}
+            title="Zoom out"
             onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <span className={styles.dim}>{Math.round(zoom * 100)}%</span>
+          />
           <button
             type="button"
-            className={styles.chip}
+            className={tabStyles.zoomValue}
+            onClick={() => setZoom(1)}
+            title="Reset zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <Tool
+            icon={I.ZoomInIcon}
+            title="Zoom in"
             onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className={`${styles.chip} ${horizontal ? styles.chipOn : ''}`}
+          />
+          <Tool
+            icon={horizontal ? I.HorizontalLayoutIcon : I.PageLayoutIcon}
+            title={horizontal ? 'Switch to page layout' : 'Switch to one horizontal line'}
+            on={horizontal}
             onClick={() => setHorizontal((h) => !h)}
-            title="Single horizontal line"
-          >
-            ⟷
-          </button>
-          <button
-            type="button"
-            className={`${styles.chip} ${metronome ? styles.chipOn : ''}`}
-            onClick={() => setMetronome((m) => !m)}
-            aria-pressed={metronome}
-            title="Metronome clicks in the playback"
-          >
-            Metronome
-          </button>
-          <button
-            type="button"
-            className={`${styles.chip} ${editing ? styles.chipOn : ''}`}
+          />
+        </div>
+
+        <div className={tabStyles.barGroup}>
+          <HardwareButton
+            size="small"
+            label={editing ? 'Editing' : 'Edit'}
+            title="Edit mode (Esc to leave)"
+            icon={<I.EditIcon size={14} />}
+            active={editing}
             onClick={() => {
               setEditing((v) => !v)
+              if (!editing && !toolGroup) setToolGroup('note')
               setTimeout(() => viewportRef.current?.focus(), 0)
             }}
-            aria-pressed={editing}
-          >
-            ✎ Edit
-          </button>
-          <button
-            type="button"
-            className={`${styles.chip} ${songOpen ? styles.chipOn : ''}`}
+          />
+          <Tool
+            icon={I.SidebarIcon}
+            title="Song & tracks: info, instruments, tunings, capo"
+            on={songOpen}
             onClick={() => setSongOpen((v) => !v)}
-            aria-pressed={songOpen}
-            title="Song info, tracks, tunings and instruments"
-          >
-            Song &amp; tracks
-          </button>
-          <select
-            className={styles.select}
-            value=""
-            onChange={(e) => {
-              const v = e.target.value as 'gp' | 'atex' | 'mid' | 'print' | 'tex'
-              if (v === 'tex') openTex()
-              else if (v) exportAs(v)
-              e.target.value = ''
-            }}
-            aria-label="Export"
-          >
-            <option value="">Export…</option>
-            <option value="gp">Guitar Pro (.gp)</option>
-            <option value="atex">AlphaTex (.atex)</option>
-            <option value="mid">MIDI (.mid)</option>
-            <option value="print">Print / PDF</option>
-            <option value="tex">Edit as AlphaTex…</option>
-          </select>
+          />
+          <details className={tabStyles.menu}>
+            <summary title="Export" aria-label="Export">
+              <I.DownloadIcon size={18} />
+            </summary>
+            <div
+              className={tabStyles.menuList}
+              onClick={(e) =>
+                (e.currentTarget.parentElement as HTMLDetailsElement).removeAttribute('open')
+              }
+            >
+              <button type="button" onClick={() => exportAs('gp')}>
+                <I.DownloadIcon size={14} /> Guitar Pro (.gp)
+              </button>
+              <button type="button" onClick={() => exportAs('atex')}>
+                <I.DownloadIcon size={14} /> AlphaTex (.atex)
+              </button>
+              <button type="button" onClick={() => exportAs('mid')}>
+                <I.DownloadIcon size={14} /> MIDI (.mid)
+              </button>
+              <button type="button" onClick={() => exportAs('print')}>
+                <I.PageLayoutIcon size={14} /> Print / PDF
+              </button>
+              <button type="button" onClick={openTex}>
+                <I.CodeIcon size={14} /> Edit as AlphaTex…
+              </button>
+            </div>
+          </details>
+          <Tool
+            icon={I.KeyboardIcon}
+            title="Keyboard shortcuts (?)"
+            on={helpOpen}
+            onClick={() => setHelpOpen((v) => !v)}
+          />
+          <Tool
+            icon={fullscreen ? I.ZoomOutIcon : I.ZoomInIcon}
+            title={fullscreen ? 'Exit full screen' : 'Full screen'}
+            on={fullscreen}
+            onClick={toggleFullscreen}
+            tag={fullscreen ? '⤡' : '⤢'}
+          />
         </div>
       </header>
 
-      {songOpen && score && (
-        <SongPanel
-          score={score}
-          trackIndex={trackIndex}
-          apply={apply}
-          onSelectTrack={setTrackIndex}
-        />
-      )}
-
-      {tracks.length > 0 && (
-        <div className={tabStyles.tracks} role="list" aria-label="Tracks">
-          {tracks.map((t, i) => (
-            <div
-              key={i}
-              role="listitem"
-              className={`${tabStyles.track} ${i === trackIndex ? tabStyles.trackOn : ''}`}
-            >
-              <button
-                type="button"
-                className={tabStyles.trackName}
-                onClick={() => setTrackIndex(i)}
-                title="Show this track"
-              >
-                {t.name}
-                {t.percussion ? (
-                  <span className={styles.dim}> · drums</span>
-                ) : (
-                  t.strings > 0 && <span className={styles.dim}> · {t.strings}str</span>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`${tabStyles.ms} ${muted.has(i) ? tabStyles.msOn : ''}`}
-                onClick={() => setMuted((m) => toggleIn(m, i))}
-                aria-pressed={muted.has(i)}
-                title="Mute in playback"
-              >
-                M
-              </button>
-              <button
-                type="button"
-                className={`${tabStyles.ms} ${solo.has(i) ? tabStyles.soloOn : ''}`}
-                onClick={() => setSolo((m) => toggleIn(m, i))}
-                aria-pressed={solo.has(i)}
-                title="Solo in playback"
-              >
-                S
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {editing && score && (
-        <div className={tabStyles.palette} aria-label="Edit palette">
-          <div className={tabStyles.paletteGroup}>
-            {edit.DURATIONS.map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`${tabStyles.pbtn} ${beat?.duration === d ? tabStyles.pbtnOn : ''}`}
-                onClick={() => apply((sc) => edit.setDuration(sc, cursor, d, s()))}
-                title={`Duration ${edit.DURATION_LABEL[d]} (+/−)`}
-              >
-                {edit.DURATION_LABEL[d]}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={`${tabStyles.pbtn} ${beat?.dots ? tabStyles.pbtnOn : ''}`}
-              onClick={() => apply((sc) => edit.toggleDot(sc, cursor, s()))}
-              title="Dotted (.)"
-            >
-              •
-            </button>
-            <button
-              type="button"
-              className={`${tabStyles.pbtn} ${beat?.tupletNumerator === 3 ? tabStyles.pbtnOn : ''}`}
-              onClick={() => apply((sc) => edit.setTuplet(sc, cursor, 3, 2, s()))}
-              title="Triplet"
-            >
-              3
-            </button>
-            <button
-              type="button"
-              className={`${tabStyles.pbtn} ${beat?.isRest ? tabStyles.pbtnOn : ''}`}
-              onClick={() => apply((sc) => edit.makeRest(sc, cursor, s()))}
-              title="Rest (R)"
-            >
-              𝄽
-            </button>
-          </div>
-          <div className={tabStyles.paletteGroup}>
-            {(
-              [
-                ['palmMute', 'P.M.', 'Palm mute (P)', note?.isPalmMute],
-                ['letRing', 'L.R.', 'Let ring (L)', note?.isLetRing],
-                ['hammer', 'H/P', 'Hammer-on / pull-off (H)', note?.isHammerPullOrigin],
-                [
-                  'slide',
-                  'sl.',
-                  'Slide (S)',
-                  note && note.slideOutType !== model.SlideOutType.None,
-                ],
-                ['bend', 'bend', 'Full bend (B)', note?.hasBend],
-                ['vibrato', '~', 'Vibrato (V)', note && note.vibrato !== model.VibratoType.None],
-                ['dead', '×', 'Dead note (X)', note?.isDead],
-                ['ghost', '( )', 'Ghost note', note?.isGhost],
-                [
-                  'harmonic',
-                  '◇',
-                  'Natural harmonic',
-                  note && note.harmonicType !== model.HarmonicType.None,
-                ],
-                ['staccato', '·', 'Staccato', note?.isStaccato],
-                ['accent', '>', 'Accent', note && note.accentuated !== model.AccentuationType.None],
-                ['tie', '⌒', 'Tie (T)', note?.isTieDestination],
-              ] as const
-            ).map(([fx, label, tip, on]) => (
-              <button
-                key={fx}
-                type="button"
-                className={`${tabStyles.pbtn} ${on ? tabStyles.pbtnOn : ''}`}
-                disabled={!note}
-                onClick={() => apply((sc) => void edit.toggleNoteEffect(sc, cursor, fx, s()))}
-                title={tip}
-              >
-                {label}
-              </button>
-            ))}
-            {(
-              [
-                ['tap', 'T', 'Tapping', beat?.tap],
-                ['pickDown', '⊓', 'Pick down', beat?.pickStroke === model.PickStroke.Down],
-                ['pickUp', 'V', 'Pick up', beat?.pickStroke === model.PickStroke.Up],
-              ] as const
-            ).map(([fx, label, tip, on]) => (
-              <button
-                key={fx}
-                type="button"
-                className={`${tabStyles.pbtn} ${on ? tabStyles.pbtnOn : ''}`}
-                disabled={!beat}
-                onClick={() => apply((sc) => void edit.toggleBeatEffect(sc, cursor, fx, s()))}
-                title={tip}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className={tabStyles.paletteGroup}>
-            <span className={styles.dim}>Bar {cursor.bar + 1}</span>
-            <input
-              className={tabStyles.num}
-              type="number"
-              min={1}
-              max={32}
-              value={mb?.timeSignatureNumerator ?? 4}
-              onChange={(e) =>
-                apply((sc) =>
-                  edit.setTimeSignature(
-                    sc,
-                    cursor.bar,
-                    Number(e.target.value),
-                    mb?.timeSignatureDenominator ?? 4,
-                    s(),
-                  ),
-                )
-              }
-              aria-label="Beats per bar"
-            />
-            <span className={styles.dim}>/</span>
-            <select
-              className={styles.select}
-              value={mb?.timeSignatureDenominator ?? 4}
-              onChange={(e) =>
-                apply((sc) =>
-                  edit.setTimeSignature(
-                    sc,
-                    cursor.bar,
-                    mb?.timeSignatureNumerator ?? 4,
-                    Number(e.target.value),
-                    s(),
-                  ),
-                )
-              }
-              aria-label="Beat unit"
-            >
-              {[2, 4, 8, 16].map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-            <span className={styles.dim}>♩=</span>
-            <input
-              className={tabStyles.num}
-              type="number"
-              min={20}
-              max={400}
-              value={edit.tempoAt(score, cursor.bar)}
-              onChange={(e) =>
-                apply((sc) => edit.setTempo(sc, cursor.bar, Number(e.target.value), s()))
-              }
-              aria-label="Tempo"
-            />
-            <button
-              type="button"
-              className={`${tabStyles.pbtn} ${mb?.isRepeatStart ? tabStyles.pbtnOn : ''}`}
-              onClick={() => apply((sc) => edit.toggleRepeat(sc, cursor.bar, 'start', s()))}
-              title="Repeat start"
-            >
-              𝄆
-            </button>
-            <button
-              type="button"
-              className={`${tabStyles.pbtn} ${mb && mb.repeatCount > 0 ? tabStyles.pbtnOn : ''}`}
-              onClick={() => apply((sc) => edit.toggleRepeat(sc, cursor.bar, 'end', s()))}
-              title="Repeat end (x2)"
-            >
-              𝄇
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() =>
-                apply((sc) => ({ ...cursor, bar: edit.insertBar(sc, cursor.bar, s()), beat: 0 }))
-              }
-              title="Insert bar after"
-            >
-              + bar
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() =>
-                apply((sc) => ({ ...cursor, bar: edit.duplicateBar(sc, cursor.bar, s()), beat: 0 }))
-              }
-              title="Duplicate bar"
-            >
-              ⧉ bar
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              disabled={score.masterBars.length <= 1}
-              onClick={() =>
-                apply((sc) => {
-                  edit.deleteBar(sc, cursor.bar, s())
-                  return { ...cursor, beat: 0 }
-                })
-              }
-              title="Delete bar"
-            >
-              − bar
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => apply((sc) => edit.transposeBar(sc, cursor, -1, s()))}
-              title="Bar down a semitone"
-            >
-              ♭
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => apply((sc) => edit.transposeBar(sc, cursor, 1, s()))}
-              title="Bar up a semitone"
-            >
-              ♯
-            </button>
-          </div>
-          <div className={tabStyles.paletteGroup}>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              disabled={history.undo === 0}
-              onClick={undo}
-              title="Undo (Ctrl/Cmd+Z)"
-            >
-              ↶
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              disabled={history.redo === 0}
-              onClick={redo}
-              title="Redo (Ctrl/Cmd+Shift+Z)"
-            >
-              ↷
-            </button>
-            <span className={`${styles.dim} ${fill.used > fill.capacity ? tabStyles.over : ''}`}>
-              {fill.capacity > 0 && fill.used !== fill.capacity
-                ? fill.used > fill.capacity
-                  ? 'bar too long'
-                  : 'bar incomplete'
-                : ''}
-            </span>
-          </div>
-          <div className={tabStyles.paletteGroup} aria-label="Selection">
-            <span className={styles.dim}>
-              {selection.length > 1
-                ? `${selection.length} beats selected`
-                : 'Shift+←/→ or drag to select'}
-            </span>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => copySelection(false)}
-              title="Copy (Ctrl/Cmd+C)"
-            >
-              Copy
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => copySelection(true)}
-              title="Cut (Ctrl/Cmd+X)"
-            >
-              Cut
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              disabled={!hasClip}
-              onClick={pasteClipboard}
-              title="Paste at the cursor (Ctrl/Cmd+V). Whole bars paste as new bars."
-            >
-              Paste
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={loopSelection}
-              title="Loop the selection in playback"
-            >
-              ⟲ Loop
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => {
-                const refs = targets()
-                apply((x, st) => ops.transposeRange(x, cursor, refs, -1, st))
-              }}
-              title="Transpose down a semitone (Alt+↓)"
-            >
-              −½
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => {
-                const refs = targets()
-                apply((x, st) => ops.transposeRange(x, cursor, refs, 1, st))
-              }}
-              title="Transpose up a semitone (Alt+↑)"
-            >
-              +½
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => {
-                const refs = targets()
-                apply((x, st) => ops.moveRangeString(x, cursor, refs, 1, st))
-              }}
-              title="Move to the next higher string, same pitch (Alt+Shift+↑)"
-            >
-              str↑
-            </button>
-            <button
-              type="button"
-              className={tabStyles.pbtn}
-              onClick={() => {
-                const refs = targets()
-                apply((x, st) => ops.moveRangeString(x, cursor, refs, -1, st))
-              }}
-              title="Move to the next lower string, same pitch (Alt+Shift+↓)"
-            >
-              str↓
-            </button>
-            <select
-              className={styles.select}
-              value=""
-              onChange={(e) => {
-                const d = Number(e.target.value) as model.Duration
-                const refs = targets()
-                if (e.target.value) apply((x, st) => ops.setRangeDuration(x, cursor, refs, d, st))
-              }}
-              aria-label="Set duration of the selection"
-            >
-              <option value="">Set length…</option>
-              {edit.DURATIONS.map((d) => (
-                <option key={d} value={d}>
-                  {edit.DURATION_LABEL[d]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <details className={tabStyles.more}>
-            <summary>
-              Notation tools — bends, slides, tremolo, trills, grace, chords, sections, lyrics,
-              voices
-            </summary>
-            <NotationTools
-              score={score}
-              cursor={cursor}
-              apply={apply}
-              onVoice={(v) =>
-                setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))
-              }
-            />
-          </details>
-          {tracks[trackIndex]?.percussion && (
-            <DrumLane score={score} cursor={cursor} apply={apply} onCursor={setCursor} />
-          )}
-        </div>
-      )}
-
       {error && <div className={`${styles.errorNotice} ${tabStyles.pre}`}>{error}</div>}
-      <div
-        ref={viewportRef}
-        className={`${tabStyles.viewport} ${editing ? tabStyles.editing : ''}`}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        data-tab-editor={editing ? '' : undefined}
-        aria-label={editing ? 'Tab editor: digits enter frets, arrows move' : 'Tab'}
-      >
-        {status === 'loading' && !error && <div className={tabStyles.sheetMsg}>Rendering…</div>}
-        <div className={tabStyles.sheet}>
-          <div ref={hostRef} className={tabStyles.host} />
-          {box && (
-            <>
-              <div
-                className={tabStyles.beatBox}
-                style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
-              />
-              <div
-                className={tabStyles.stringMark}
-                style={{ left: box.x, top: box.stringY - 7, width: box.w }}
-              />
-            </>
+
+      {/* ── Body: toolbox rail · sheet · drawer ── */}
+      <div className={tabStyles.body}>
+        {editing && score && (
+          <TabToolbox
+            score={score}
+            cursor={cursor}
+            apply={apply}
+            group={toolGroup}
+            onGroup={setToolGroup}
+            selectionSize={selection.length}
+            hasClip={hasClip}
+            canUndo={history.undo > 0}
+            canRedo={history.redo > 0}
+            onUndo={undo}
+            onRedo={redo}
+            onCopy={copySelection}
+            onPaste={pasteClipboard}
+            onLoopSelection={loopSelection}
+            targets={targets}
+            onVoice={(v) => setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))}
+          />
+        )}
+
+        <div className={tabStyles.main}>
+          <div
+            ref={viewportRef}
+            className={`${tabStyles.viewport} ${editing ? tabStyles.editing : ''}`}
+            tabIndex={0}
+            onKeyDown={onKeyDown}
+            data-tab-editor={editing ? '' : undefined}
+            aria-label={editing ? 'Tab editor: digits enter frets, arrows move' : 'Tab'}
+          >
+            {status === 'loading' && !error && <div className={tabStyles.sheetMsg}>Rendering…</div>}
+            <div className={tabStyles.sheet}>
+              <div ref={hostRef} className={tabStyles.host} />
+              {box && (
+                <>
+                  <div
+                    className={tabStyles.beatBox}
+                    style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+                  />
+                  {!current?.percussion && (
+                    <div
+                      className={tabStyles.stringMark}
+                      style={{ left: box.x, top: box.stringY - 7, width: box.w }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {editing && score && current?.percussion && (
+            <details className={tabStyles.drawerBottom} open>
+              <summary>Drum lane — bar {cursor.bar + 1}</summary>
+              <DrumLane score={score} cursor={cursor} apply={apply} onCursor={setCursor} />
+            </details>
           )}
+
+          <div className={tabStyles.status} aria-live="polite">
+            {score && (
+              <>
+                <span>
+                  Bar {cursor.bar + 1}/{score.masterBars.length}
+                </span>
+                <span>Beat {cursor.beat + 1}</span>
+                {stringName && (
+                  <span>
+                    String {staffTunings.length - cursor.string + 1} ({stringName})
+                  </span>
+                )}
+                {beat && (
+                  <span>
+                    {edit.DURATION_LABEL[beat.duration]}
+                    {beat.dots ? '.' : ''}
+                  </span>
+                )}
+                <span>Voice {cursor.voice + 1}</span>
+                {selection.length > 1 && (
+                  <span className={tabStyles.statusAccent}>{selection.length} beats selected</span>
+                )}
+                {fill.capacity > 0 && fill.used !== fill.capacity && (
+                  <span className={tabStyles.over}>
+                    {fill.used > fill.capacity ? 'bar too long' : 'bar incomplete'}
+                  </span>
+                )}
+                {stale && !playing && renderProgress === null && (
+                  <span>edited — play to hear changes</span>
+                )}
+              </>
+            )}
+          </div>
         </div>
+
+        {songOpen && score && (
+          <aside className={tabStyles.drawer} aria-label="Song and tracks">
+            <div className={tabStyles.drawerHead}>
+              <strong>Song &amp; tracks</strong>
+              <Tool icon={I.MinusIcon} title="Close" onClick={() => setSongOpen(false)} />
+            </div>
+            <SongPanel
+              score={score}
+              trackIndex={trackIndex}
+              apply={apply}
+              onSelectTrack={setTrackIndex}
+            />
+          </aside>
+        )}
       </div>
 
-      <div className={styles.transportRow}>
-        <TransportButtons />
-        <div className={styles.markers}>
-          {renderProgress !== null && (
-            <span className={styles.dim}>Rendering audio… {Math.round(renderProgress * 100)}%</span>
-          )}
-          {stale && !playing && renderProgress === null && (
-            <span className={styles.dim}>Edited — press play to hear changes</span>
-          )}
-          <button
-            type="button"
-            className={styles.chip}
+      {/* ── Transport ── */}
+      <footer className={tabStyles.footer}>
+        <TransportButtons compact />
+        <div className={tabStyles.barGroup}>
+          <Tool
+            icon={I.LoopIcon}
+            title={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
+            on={loopOn}
+            onClick={() => ms.toggleLoop()}
+          />
+          <Tool
+            icon={I.LoopIcon}
+            title={`Loop bar ${cursor.bar + 1}`}
             onClick={() => loopBars(cursor.bar, cursor.bar)}
-            title="Loop the bar under the cursor"
-          >
-            ⟲ Bar {cursor.bar + 1}
-          </button>
+            tag="1"
+          />
+          <Tool
+            icon={I.LoopIcon}
+            title="Loop 4 bars from the cursor"
+            onClick={() => loopBars(cursor.bar, cursor.bar + 3)}
+            tag="4"
+          />
+          {selection.length > 1 && (
+            <Tool icon={I.LoopIcon} title="Loop the selection" onClick={loopSelection} tag="sel" />
+          )}
+        </div>
+        <div className={tabStyles.barGroup} title="Speed (pitch preserved)">
+          <Tool
+            icon={I.MinusIcon}
+            title="Slower (−5%)"
+            onClick={() => ms.setSpeed(practice.speed - 0.05)}
+          />
           <button
             type="button"
-            className={styles.chip}
-            onClick={() => loopBars(cursor.bar, cursor.bar + 3)}
-            title="Loop 4 bars from the cursor"
+            className={tabStyles.zoomValue}
+            onClick={() => ms.setSpeed(1)}
+            title="Speed — click to reset to 100%"
           >
-            ⟲ 4 bars
+            {Math.round(practice.speed * 100)}%
           </button>
-          <span className={styles.dim}>{formatTime(position)}</span>
+          <Tool
+            icon={I.PlusIcon}
+            title="Faster (+5%)"
+            onClick={() => ms.setSpeed(practice.speed + 0.05)}
+          />
         </div>
-      </div>
-      <PracticeControls />
+        <div className={tabStyles.barGroup} title="Transpose playback">
+          <Tool
+            icon={I.FlatIcon}
+            title="Playback down a semitone"
+            onClick={() => ms.setSemitones(practice.semitones - 1)}
+          />
+          <button
+            type="button"
+            className={tabStyles.zoomValue}
+            onClick={() => ms.setSemitones(0)}
+            title="Transpose — click to reset"
+          >
+            {practice.semitones > 0 ? '+' : ''}
+            {practice.semitones} st
+          </button>
+          <Tool
+            icon={I.SharpIcon}
+            title="Playback up a semitone"
+            onClick={() => ms.setSemitones(practice.semitones + 1)}
+          />
+        </div>
+        <Tool
+          icon={I.MetronomeIcon}
+          title="Metronome in playback"
+          on={metronome}
+          onClick={() => setMetronome((m) => !m)}
+        />
+        {renderProgress !== null && (
+          <span className={tabStyles.footerNote}>
+            Rendering audio… {Math.round(renderProgress * 100)}%
+          </span>
+        )}
+        <span className={tabStyles.footerSpacer} />
+        <details
+          className={tabStyles.menu}
+          open={practiceOpen}
+          onToggle={(e) => setPracticeOpen((e.target as HTMLDetailsElement).open)}
+        >
+          <summary title="Practice: speed presets, trainer, A-B loop, volume">
+            <I.TempoIcon size={18} /> Practice
+          </summary>
+          <div className={tabStyles.practicePop}>
+            <PracticeControls />
+          </div>
+        </details>
+      </footer>
+
+      {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
 
       {texOpen && (
         <div className={tabStyles.texPane}>
           <div className={tabStyles.texHead}>
+            <I.CodeIcon size={16} />
             <strong>AlphaTex</strong>
             <span className={styles.dim}>Edit the score as text, then apply.</span>
+            <span className={tabStyles.footerSpacer} />
             <button type="button" className={styles.primaryBtn} onClick={applyTex}>
               Apply
             </button>
@@ -1424,6 +1238,52 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+const SHORTCUTS: [string, string][] = [
+  ['Space', 'Play / pause'],
+  ['0–9', 'Enter a fret (two quick digits for 10+)'],
+  ['← →', 'Previous / next beat (adds beats/bars at the end)'],
+  ['↑ ↓', 'Higher / lower string'],
+  ['Ctrl/Cmd + ← →', 'Previous / next bar'],
+  ['+  −', 'Longer / shorter note'],
+  ['.', 'Dotted'],
+  ['R', 'Rest'],
+  ['Del', 'Delete note (Shift+Del: beat)'],
+  ['I', 'Insert beat'],
+  ['P  L  H  S  V  B  X  T', 'Palm mute · let ring · hammer · slide · vibrato · bend · dead · tie'],
+  ['Shift + ← →', 'Extend selection'],
+  ['Ctrl/Cmd + C X V A', 'Copy · cut · paste · select all'],
+  ['Alt + ↑ ↓', 'Transpose selection'],
+  ['Alt + Shift + ↑ ↓', 'Move selection across strings'],
+  ['Ctrl/Cmd + Z / Shift+Z', 'Undo / redo'],
+  ['Esc', 'Clear selection, then leave edit mode'],
+  ['?', 'This help'],
+]
+
+function Shortcuts({ onClose }: { onClose: () => void }) {
+  return (
+    <div className={tabStyles.help} role="dialog" aria-label="Keyboard shortcuts" onClick={onClose}>
+      <div className={tabStyles.helpCard} onClick={(e) => e.stopPropagation()}>
+        <div className={tabStyles.drawerHead}>
+          <strong>
+            <I.KeyboardIcon size={16} /> Keyboard shortcuts
+          </strong>
+          <Tool icon={I.MinusIcon} title="Close" onClick={onClose} />
+        </div>
+        <dl>
+          {SHORTCUTS.map(([k, v]) => (
+            <div key={k}>
+              <dt>
+                <kbd>{k}</kbd>
+              </dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </div>
   )
 }

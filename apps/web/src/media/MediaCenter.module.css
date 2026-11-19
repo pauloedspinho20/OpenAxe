@@ -643,3 +643,33 @@
     min-width: 0;
   }
 }
+
+/* ── Score mode: the tab workspace takes the whole dialog ─────────── */
+
+.dialogScore {
+  height: calc(100svh - 2 * var(--sp-5));
+}
+
+/* The Dialog body (second child) loses most of its padding in score mode. */
+.dialogScore > div:last-child {
+  padding: 6px 10px 10px;
+}
+
+.centerScore {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: 34px 240px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.centerScore .main {
+  min-height: 0;
+}
+
+.centerNoLib {
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.libToggle {
+  align-self: start;
+}

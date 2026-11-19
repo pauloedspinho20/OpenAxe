@@ -1,89 +1,525 @@
-/* Tab viewer/editor (issues #205/#206). */
+/* Tab viewer/editor (issues #205/#206): the sheet gets the space; every
+   toolbar is slim or collapsible. */
 
-.toolbar {
+/* ── Workspace frame ───────────────────────────────────────────────── */
+
+.ws {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  gap: 6px;
+  background: var(--panel);
+}
+
+/* Full screen: the workspace alone fills the display. */
+.wsFull {
+  padding: 8px;
+  height: 100vh;
+}
+
+.topbar,
+.footer {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 4px 10px;
+  min-height: 36px;
+  flex-shrink: 0;
 }
 
-.saved {
-  color: var(--led-on);
-}
-
-.tracks {
+.songTitle {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.track {
-  display: inline-flex;
-  align-items: stretch;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  max-width: 280px;
+  margin-right: auto;
+  white-space: nowrap;
   overflow: hidden;
-  background: var(--panel-raised);
 }
 
-.trackOn {
-  border-color: var(--accent);
+.songTitle strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.trackName {
+.songTitle span {
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.savedDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--led-on);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.barGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+  color: var(--ink-2);
+}
+
+.trackSelect {
+  font: inherit;
+  font-size: 12px;
+  max-width: 200px;
+  background: transparent;
+  color: var(--ink-1);
+  border: none;
+  padding: 4px 2px;
+}
+
+.zoomValue {
+  min-width: 46px;
   border: none;
   background: transparent;
   color: var(--ink-1);
   font: inherit;
   font-size: 12px;
-  padding: 3px 8px;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0 2px;
 }
 
-.ms {
+/* <details> dropdown menus (export, practice). */
+.menu {
+  position: relative;
+}
+
+.menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  color: var(--ink-1);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu > summary:hover,
+.menu[open] > summary {
+  background: var(--panel-raised);
+  border-color: var(--seam-strong);
+}
+
+.menuList {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel-raised);
+  box-shadow: 0 10px 30px var(--shadow-deep);
+}
+
+.menuList button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
   border: none;
-  border-left: 1px solid var(--seam);
+  border-radius: var(--r-sm);
   background: transparent;
-  color: var(--ink-3);
+  color: var(--ink-1);
   font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  width: 22px;
+  font-size: 12px;
+  text-align: left;
   cursor: pointer;
 }
 
-.msOn {
+.menuList button:hover {
+  background: var(--panel-recessed);
+}
+
+/* ── Body: rail · sheet · drawer ───────────────────────────────────── */
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The sheet is printed music: black on paper in both themes. */
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  overflow: auto;
+  background: #fbfaf7;
+  color: #111;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  border: 1px solid var(--seam);
+  border-bottom: none;
+}
+
+.viewport:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.editing {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.sheet {
+  position: relative;
+}
+
+.host {
+  min-height: 200px;
+}
+
+.sheetMsg {
+  padding: var(--sp-4);
+  color: #555;
+}
+
+/* alphaTab's playback cursors and selection layer. */
+.host :global(.at-cursor-bar) {
+  background: rgba(255, 196, 0, 0.12);
+}
+
+.host :global(.at-cursor-beat) {
+  background: rgba(230, 80, 40, 0.75);
+  width: 3px;
+}
+
+.host :global(.at-highlight *) {
+  fill: #d4461d;
+  stroke: #d4461d;
+}
+
+.host :global(.at-selection div) {
+  background: rgba(40, 110, 230, 0.18);
+}
+
+.beatBox {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid rgba(40, 110, 230, 0.55);
+  background: rgba(40, 110, 230, 0.07);
+  border-radius: 3px;
+}
+
+.stringMark {
+  position: absolute;
+  height: 14px;
+  pointer-events: none;
+  border: 2px solid rgba(40, 110, 230, 0.95);
+  border-radius: 3px;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.statusAccent {
+  color: var(--accent);
+}
+
+.over {
   color: var(--danger-border);
 }
 
-.soloOn {
-  color: var(--led-warn);
+/* Right-hand drawer (song & tracks). */
+.drawer {
+  width: min(440px, 42vw);
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.palette {
+.drawerHead {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-3);
-  padding: var(--sp-2);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-1);
+}
+
+.drawerHead strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Bottom drawer (drum lane): collapsible, capped so the sheet stays big. */
+.drawerBottom {
+  max-height: 40%;
+  overflow: auto;
+  padding: 4px 8px 8px;
+  background: var(--panel-recessed);
+  border-left: 1px solid var(--seam);
+  border-right: 1px solid var(--seam);
+}
+
+.drawerBottom > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 2px 0;
+}
+
+/* ── Toolbox: icon rail + one open panel ───────────────────────────── */
+
+.toolbox {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
   border: 1px solid var(--seam);
   border-radius: var(--r-md);
   background: var(--panel-recessed);
+  overflow: hidden;
 }
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  width: 46px;
+  flex-shrink: 0;
+}
+
+.toolboxOpen .rail {
+  border-right: 1px solid var(--seam);
+}
+
+.railSpacer {
+  flex: 1;
+}
+
+.panel {
+  width: 232px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boxSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.boxSection h4 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.toolGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.textField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.textField input,
+.textField select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+}
+
+.textField input[type='number'] {
+  max-width: 56px;
+}
+
+/* ── Footer transport ──────────────────────────────────────────────── */
+
+.footer {
+  padding-top: 2px;
+}
+
+.footerSpacer {
+  flex: 1;
+}
+
+.footerNote {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.practicePop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  width: min(880px, 90vw);
+  padding: 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel);
+  box-shadow: 0 -10px 30px var(--shadow-deep);
+}
+
+/* ── Shortcut sheet ────────────────────────────────────────────────── */
+
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: var(--overlay-bg);
+}
+
+.helpCard {
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel);
+}
+
+.helpCard dl {
+  margin: 10px 0 0;
+  display: grid;
+  gap: 6px;
+}
+
+.helpCard dl > div {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.helpCard dt,
+.helpCard dd {
+  margin: 0;
+}
+
+.helpCard kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--seam-strong);
+  background: var(--panel-raised);
+  color: var(--ink-1);
+}
+
+/* ── AlphaTex pane ─────────────────────────────────────────────────── */
+
+.texPane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.texHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tex {
+  min-height: 200px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--panel-recessed);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+}
+
+.pre {
+  white-space: pre-wrap;
+}
+
+/* ── Shared small controls (song panel, drum lane, new-song form) ──── */
 
 .paletteGroup {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 3px;
-}
-
-.paletteGroup + .paletteGroup {
-  padding-left: var(--sp-3);
-  border-left: 1px solid var(--seam);
 }
 
 .pbtn {
@@ -104,13 +540,8 @@
   cursor: default;
 }
 
-.pbtnOn {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .num {
-  width: 48px;
+  width: 52px;
   font: inherit;
   font-size: 12px;
   background: var(--panel-raised);
@@ -119,103 +550,6 @@
   border-radius: var(--r-sm);
   padding: 3px 4px;
 }
-
-.over {
-  color: var(--danger-border);
-}
-
-/* The sheet is printed music: always black on paper, in both themes. */
-.viewport {
-  position: relative;
-  overflow: auto;
-  height: min(56vh, 620px);
-  background: #fbfaf7;
-  color: #111;
-  border-radius: var(--r-md);
-  border: 1px solid var(--seam);
-}
-
-.viewport:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.editing {
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
-}
-
-.sheet {
-  position: relative;
-}
-
-.host {
-  min-height: 200px;
-}
-
-/* alphaTab playback cursors (classes it adds to the DOM). */
-.host :global(.at-cursor-bar) {
-  background: rgba(255, 196, 0, 0.12);
-}
-
-.host :global(.at-cursor-beat) {
-  background: rgba(230, 80, 40, 0.75);
-  width: 3px;
-}
-
-.host :global(.at-highlight *) {
-  fill: #d4461d;
-  stroke: #d4461d;
-}
-
-.beatBox {
-  position: absolute;
-  pointer-events: none;
-  border: 1px solid rgba(40, 110, 230, 0.55);
-  background: rgba(40, 110, 230, 0.07);
-  border-radius: 3px;
-}
-
-.stringMark {
-  position: absolute;
-  height: 14px;
-  pointer-events: none;
-  border: 2px solid rgba(40, 110, 230, 0.95);
-  border-radius: 3px;
-}
-
-.texPane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
-.texHead {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-
-.tex {
-  min-height: 240px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  background: var(--panel-recessed);
-  color: var(--ink-1);
-  border: 1px solid var(--seam);
-  border-radius: var(--r-sm);
-  padding: var(--sp-2);
-}
-
-.sheetMsg {
-  padding: var(--sp-4);
-  color: #555;
-}
-
-.pre {
-  white-space: pre-wrap;
-}
-
-/* ── Song & tracks panel ─────────────────────────────────────────── */
 
 .songPanel {
   display: flex;
@@ -229,7 +563,7 @@
 
 .songInfo {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--sp-2);
 }
 
@@ -242,8 +576,7 @@
 }
 
 .field input,
-.cellInput,
-.inlineField input {
+.cellInput {
   font: inherit;
   font-size: 12px;
   background: var(--panel-raised);
@@ -251,12 +584,18 @@
   border: 1px solid var(--seam);
   border-radius: var(--r-sm);
   padding: 3px 6px;
+  min-width: 0;
+  width: 100%;
 }
 
 .trackTable {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+
+.trackTable select {
+  max-width: 130px;
 }
 
 .trackTable th {
@@ -274,19 +613,7 @@
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.inlineField {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--ink-3);
-}
-
-.inlineField input {
-  width: 84px;
-}
-
-/* ── Drum lane ───────────────────────────────────────────────────── */
+/* ── Drum lane ─────────────────────────────────────────────────────── */
 
 .drumLane {
   display: flex;
@@ -334,28 +661,57 @@
   outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
-/* The edit selection uses alphaTab's own highlight layer. */
-.host :global(.at-selection div) {
-  background: rgba(40, 110, 230, 0.18);
+@media (max-width: var(--mw-md)) {
+  .drawer {
+    position: absolute;
+    right: 8px;
+    top: 52px;
+    bottom: 60px;
+    z-index: 25;
+    width: min(440px, 92vw);
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--seam-strong);
+    border-radius: var(--r-md);
+  }
+
+  .panel {
+    width: 180px;
+  }
 }
 
-.more {
-  width: 100%;
-}
-
-.more > summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--ink-2);
-  padding: 2px 0;
-}
-
-.more[open] {
+/* Track cards in the song drawer. */
+.trackCard {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-3);
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam);
+  background: var(--panel);
 }
 
-.more[open] > summary {
-  width: 100%;
+.trackCardOn {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.trackCardHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trackCardHead .cellInput {
+  flex: 1;
+}
+
+.trackCardBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.trackCardBody > :nth-child(2) {
+  grid-column: 1 / -1;
+  grid-row: 1;
 }
