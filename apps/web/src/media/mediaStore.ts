@@ -100,7 +100,7 @@ interface MediaActions {
   updateItem(
     id: string,
     patch: Partial<
-      Pick<MediaItem, 'name' | 'artist' | 'markers' | 'sync' | 'resume' | 'view' | 'runs'>
+      Pick<MediaItem, 'name' | 'artist' | 'markers' | 'sync' | 'resume' | 'view' | 'runs' | 'tone'>
     >,
   ): Promise<void>
   setTransport(transport: BackingTransport | null, engineRate?: number): void

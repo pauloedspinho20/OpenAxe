@@ -8,6 +8,8 @@ import { newMediaId, SCORE_EXTENSIONS, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
+import { ToneLink, useToneFollower } from './ToneLink'
+import { START_KEY, type ToneSection } from './tone'
 import { Tool } from './tabs/TabToolbox'
 import * as I from './tabs/tabIcons'
 import { SidebarIcon } from './tabs/tabIcons'
@@ -294,6 +296,12 @@ function AudioView({ item }: { item: MediaItem }) {
   const total = duration || item.duration
   const loopOn = practice.loopEnabled && practice.loopStart !== null
   const countInBars = practice.countInBars
+  const live = useMediaStore((st) => st.items.find((i) => i.id === item.id)) ?? item
+  const toneSections: ToneSection[] = [
+    { key: START_KEY, label: 'Start', at: 0 },
+    ...item.markers.map((m) => ({ key: m.id, label: `Marker ${m.label}`, at: m.time })),
+  ]
+  useToneFollower(live.tone, toneSections, position + 0.15 * practice.speed, playing)
 
   const addMarker = () => {
     const label = String.fromCharCode(65 + (item.markers.length % 26))
@@ -313,6 +321,19 @@ function AudioView({ item }: { item: MediaItem }) {
         {loadState === 'loading' && (
           <span className={tabStyles.footerNote}>Loading… {Math.round(progress * 100)}%</span>
         )}
+        <details className={tabStyles.menu}>
+          <summary title="Rig tone for this song: a scene, and a slot per marker">
+            <I.TracksIcon size={16} /> Tone
+            {live.tone?.scene != null ? ` · scene ${live.tone.scene + 1}` : ''}
+          </summary>
+          <div className={`${tabStyles.menuList} ${styles.toneMenu}`}>
+            <ToneLink
+              tone={live.tone ?? null}
+              sections={toneSections}
+              onChange={(tone) => void useMediaStore.getState().updateItem(item.id, { tone })}
+            />
+          </div>
+        </details>
         <div className={styles.markers}>
           <Tool
             icon={I.SectionIcon}

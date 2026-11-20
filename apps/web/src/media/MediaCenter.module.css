@@ -831,3 +831,8 @@
   border-radius: var(--r-sm);
   padding: 2px 4px;
 }
+
+.toneMenu {
+  width: 320px;
+  padding: 10px;
+}

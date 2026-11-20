@@ -1070,3 +1070,38 @@
 .legendSpeed {
   color: var(--accent);
 }
+
+.toneList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.toneList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.toneList li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.toneList select {
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 2px 4px;
+}

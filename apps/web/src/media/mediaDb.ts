@@ -58,6 +58,20 @@ export interface MediaItem {
   view?: TabViewState | null
   /** Scored practice runs, oldest first (capped). */
   runs?: PracticeRun[]
+  /** The rig tone linked to this song: a scene, and a slot per section. */
+  tone?: SongTone | null
+}
+
+/**
+ * Song -> rig tone link. `scene` is a scene index (0-63); `sections` maps a
+ * section key - "start", a tab's section bar ("bar:12") or a backing track's
+ * marker id - to a slot (0-7) of that scene.
+ */
+export interface SongTone {
+  scene: number | null
+  sections: Record<string, number>
+  /** Switch slots automatically at sections during playback. */
+  follow: boolean
 }
 
 export interface TabViewState {
@@ -126,6 +140,7 @@ function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
     resume: typeof row.resume === 'number' && row.resume > 0 ? row.resume : 0,
     view: row.view ?? null,
     runs: Array.isArray(row.runs) ? row.runs : [],
+    tone: row.tone && typeof row.tone === 'object' ? row.tone : null,
   }
 }
 

@@ -36,6 +36,8 @@ import * as ops from './scoreOps'
 import { matches, nextTarget, targetFor, type WaitTarget } from './waitMode'
 import { appendRun, barHeat, ListenTracker, RunScorer, type ListenBeat } from './practiceScore'
 import { PracticePanel } from './PracticePanel'
+import { ToneLink, useToneFollower } from '../ToneLink'
+import { START_KEY, type ToneSection } from '../tone'
 import type { PracticeRun } from '../mediaDb'
 import { audioToScore, scoreToAudio, upsertPoint } from './sync'
 import { RecordingPanel } from './RecordingPanel'
@@ -1258,6 +1260,26 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     remapTracks((x) => x, at)
   }
 
+  // ── Song tone (rig scene + slot per section) ──────────────────────────
+  const toneSections = useMemo<ToneSection[]>(() => {
+    const out: ToneSection[] = [{ key: START_KEY, label: 'Start', at: 0 }]
+    score?.masterBars.forEach((mb, i) => {
+      if (mb.section && i > 0)
+        out.push({
+          key: `bar:${i}`,
+          label: `${mb.section.marker ? `${mb.section.marker} ` : ''}${mb.section.text || `Bar ${i + 1}`}`,
+          at: i,
+        })
+    })
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [score, revision])
+  // Look a little ahead so the preset is in place on the section's downbeat.
+  const speedNow = useMediaStore((st) => st.practice.speed)
+  const toneBar =
+    loaded?.itemId === item.id ? barAtTime(fromPlayer(position) + 0.15 * speedNow) : cursor.bar
+  useToneFollower(liveItem.tone, toneSections, toneBar, playing && loaded?.itemId === item.id)
+
   // ── Recording sync ────────────────────────────────────────────────────
   const recordings = useMediaStore((st) => st.items).filter((i) => i.kind === 'audio')
   const saveSync = (next: typeof sync) =>
@@ -1616,6 +1638,16 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onClose={() => setSidebarOpen(false)}
             extra={
               <>
+                <details className={tabStyles.sideSection} open={liveItem.tone?.scene != null}>
+                  <summary>
+                    <I.TracksIcon size={14} /> Tone
+                  </summary>
+                  <ToneLink
+                    tone={liveItem.tone ?? null}
+                    sections={toneSections}
+                    onChange={(tone) => void useMediaStore.getState().updateItem(item.id, { tone })}
+                  />
+                </details>
                 <PracticePanel
                   runs={liveItem.runs ?? []}
                   heatOn={heatOn}
