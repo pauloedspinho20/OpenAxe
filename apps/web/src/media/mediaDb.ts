@@ -7,6 +7,7 @@
 import { deleteCachedAsset, getCachedAsset, putCachedAsset } from '../engine/assetCache'
 import { STORE_MEDIA } from '../storage/db'
 import { kvDelete, kvGetAll, kvPut } from '../storage/kv'
+import type { RecordingSync } from './tabs/sync'
 
 export type MediaKind = 'audio' | 'score'
 
@@ -21,6 +22,11 @@ export interface PracticeSettings {
   loopStart: number | null
   loopEnd: number | null
   loopEnabled: boolean
+  /** Count-in bars before playback (0 = off). */
+  countInBars: number
+  /** Tempo and meter for an audio track's count-in (tabs use the score's). */
+  bpm: number
+  beatsPerBar: number
 }
 
 export interface MediaMarker {
@@ -44,6 +50,8 @@ export interface MediaItem {
   peaks: number[]
   practice: PracticeSettings
   markers: MediaMarker[]
+  /** Tabs only: a recording of the song paired with the score, and its sync points. */
+  sync?: RecordingSync | null
 }
 
 export const DEFAULT_PRACTICE: PracticeSettings = {
@@ -53,6 +61,9 @@ export const DEFAULT_PRACTICE: PracticeSettings = {
   loopStart: null,
   loopEnd: null,
   loopEnabled: false,
+  countInBars: 0,
+  bpm: 120,
+  beatsPerBar: 4,
 }
 
 const ASSET_PREFIX = 'media:'
@@ -79,6 +90,7 @@ function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
     peaks: Array.isArray(row.peaks) ? row.peaks : [],
     practice: { ...DEFAULT_PRACTICE, ...(row.practice ?? {}) },
     markers: Array.isArray(row.markers) ? row.markers : [],
+    sync: row.sync && typeof row.sync.audioId === 'string' ? row.sync : null,
   }
 }
 

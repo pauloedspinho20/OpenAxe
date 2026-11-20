@@ -31,6 +31,13 @@ import type { BackingTransport, DecodedTrack, PlayerStatus } from './transport'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
+/** The slice of AnalyserNode (or the desktop's NativeAnalyser) wait mode reads. */
+export interface AnalyserLike {
+  fftSize: number
+  context: { sampleRate: number }
+  getFloatTimeDomainData(buffer: Float32Array<ArrayBuffer>): void
+}
+
 /** What is in the core player right now. */
 export interface LoadedSource {
   itemId: string
@@ -61,6 +68,12 @@ interface MediaState {
   /** Speed trainer: raise the speed by `step` every `every` loop passes, up to `target`. */
   trainer: SpeedTrainer
   loopCount: number
+  /** A count-in is sounding. */
+  counting: boolean
+  /** Tempo/meter at the play position, set by the tab workspace (overrides the item's). */
+  tempoHint: { bpm: number; beatsPerBar: number } | null
+  /** The guitar input (the tuner's analyser), for wait mode. */
+  inputAnalyser: AnalyserLike | null
   /**
    * Set by the tab workspace: makes sure the open score's current revision
    * is rendered and loaded before play. Resolves false to abort playing.
@@ -81,7 +94,7 @@ interface MediaActions {
   removeItem(id: string): Promise<void>
   updateItem(
     id: string,
-    patch: Partial<Pick<MediaItem, 'name' | 'artist' | 'markers'>>,
+    patch: Partial<Pick<MediaItem, 'name' | 'artist' | 'markers' | 'sync'>>,
   ): Promise<void>
   setTransport(transport: BackingTransport | null, engineRate?: number): void
 
@@ -103,6 +116,7 @@ interface MediaActions {
   setLoop(start: number | null, end: number | null, enabled?: boolean): void
   toggleLoop(): void
   setTrainer(patch: Partial<SpeedTrainer>): void
+  setCountIn(patch: Partial<Pick<PracticeSettings, 'countInBars' | 'bpm' | 'beatsPerBar'>>): void
   /** Called by the poller with the core's report. */
   applyStatus(status: PlayerStatus): void
 }
@@ -219,6 +233,23 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     trainer: { enabled: false, step: 0.05, every: 2, target: 1 },
     loopCount: 0,
     prepare: null,
+    counting: false,
+    tempoHint: null,
+    inputAnalyser: null,
+
+    setCountIn(patch) {
+      const p = get().practice
+      set({
+        practice: {
+          ...p,
+          ...patch,
+          countInBars: Math.min(4, Math.max(0, Math.round(patch.countInBars ?? p.countInBars))),
+          bpm: Math.min(400, Math.max(20, Math.round(patch.bpm ?? p.bpm))),
+          beatsPerBar: Math.min(16, Math.max(1, Math.round(patch.beatsPerBar ?? p.beatsPerBar))),
+        },
+      })
+      persistPractice()
+    },
 
     setTrainer(patch) {
       set({ trainer: { ...get().trainer, ...patch }, loopCount: 0 })
@@ -376,6 +407,15 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
           } else return
         } else return
       }
+      const { practice, tempoHint } = get()
+      if (practice.countInBars > 0) {
+        const bpm = tempoHint?.bpm ?? practice.bpm
+        const beats = tempoHint?.beatsPerBar ?? practice.beatsPerBar
+        // Interval in output time: the count-in follows the practice speed.
+        await transport.setCountIn(practice.countInBars * beats, 60 / (bpm * practice.speed), beats)
+      } else {
+        await transport.setCountIn(0, 0.5, 4)
+      }
       get().applyStatus(await transport.play())
     },
 
@@ -488,6 +528,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         position: next,
         playing: status.playing,
         meter: status.meter,
+        counting: !!status.counting,
         ...(status.length > 0 ? { duration: status.length / rate } : {}),
       })
     },

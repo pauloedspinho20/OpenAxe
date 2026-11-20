@@ -1415,6 +1415,9 @@ std::string StudioBridge::HandlePlayer(const std::string& req) {
     } else if (op == "setLoop") {
       openaxe_player_set_loop(player, o.value("start", 0), o.value("end", 0),
                               o.value("enabled", false) ? 1 : 0);
+    } else if (op == "setCountIn") {
+      openaxe_player_set_count_in(player, o.value("clicks", 0), o.value("interval", 0.5f),
+                                  o.value("accent", 4));
     } else if (op != "status") {
       return JsonError("player: unknown op \"" + op + "\"");
     }
@@ -1423,7 +1426,8 @@ std::string StudioBridge::HandlePlayer(const std::string& req) {
                  {"length", openaxe_player_length(player)},
                  {"sampleRate", openaxe_player_source_rate(player)},
                  {"playing", openaxe_player_is_playing(player) == 1},
-                 {"meter", openaxe_player_get_meter(player)}})
+                 {"meter", openaxe_player_get_meter(player)},
+                 {"counting", openaxe_player_is_counting(player) == 1}})
         .dump();
   } catch (const std::exception& e) {
     return JsonError(std::string("player: ") + e.what());

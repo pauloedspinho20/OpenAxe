@@ -518,3 +518,18 @@ export const CapoIcon = mk(
     <path d="M6 14v6M12 14v6M18 14v6M7 10V5h10v5" />
   </>,
 )
+export const CountInIcon = mk(
+  <>
+    <Dot cx={5} cy={16} r={1.8} />
+    <Dot cx={10} cy={13} r={1.8} />
+    <Dot cx={15} cy={10} r={1.8} />
+    <Dot cx={20} cy={7} r={2.4} />
+    <path d="M3 20h18" opacity={0.5} />
+  </>,
+)
+export const WaitIcon = mk(
+  <>
+    <path d="M6 3h12M6 21h12" />
+    <path d="M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" />
+  </>,
+)

@@ -36,6 +36,8 @@ export interface BackingTransport {
   setSemitones(semitones: number): Promise<PlayerStatus>
   setVolume(volume: number): Promise<PlayerStatus>
   setLoop(start: number, end: number, enabled: boolean): Promise<PlayerStatus>
+  /** Clicks before the next play; intervalSeconds is in output time (tempo and speed folded in). */
+  setCountIn(clicks: number, intervalSeconds: number, accentEvery: number): Promise<PlayerStatus>
   status(): Promise<PlayerStatus>
 }
 
@@ -107,6 +109,7 @@ function makeTransport(
     setVolume: (value) => call('setVolume', { value }),
     setLoop: (start, end, enabled) =>
       call('setLoop', { start: Math.round(start), end: Math.round(end), enabled }),
+    setCountIn: (clicks, interval, accent) => call('setCountIn', { clicks, interval, accent }),
     status: () => call('status'),
   }
 }
@@ -134,6 +137,7 @@ function toStatus(reply: OpenAxePlayerReply, op: string): PlayerStatus {
     sampleRate: reply.sampleRate ?? 0,
     playing: reply.playing ?? false,
     meter: reply.meter ?? 0,
+    counting: reply.counting ?? false,
   }
 }
 

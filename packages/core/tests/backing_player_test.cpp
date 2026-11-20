@@ -229,6 +229,36 @@ void TestSeekReportsTarget() {
   openaxe_player_destroy(p);
 }
 
+void TestCountIn() {
+  const auto pcm = Sine(440.0, 48000.0, 48000 * 2, 2);
+  OpenAxePlayer* p = LoadPlayer(pcm, 2, 48000.0);
+  // 4 clicks, 0.25 s apart = 1 s of count-in before the track starts.
+  openaxe_player_set_count_in(p, 4, 0.25f, 4);
+  openaxe_player_play(p);
+  OPENAXE_EXPECT(openaxe_player_is_counting(p) == 1);
+  const auto out = Render(p, kBlock * 300);  // 0.8 s
+  OPENAXE_EXPECT(openaxe_player_is_counting(p) == 1);
+  OPENAXE_EXPECT(openaxe_player_position(p) == 0);  // the track hasn't moved
+  // Clicks sound at 0, 0.25, 0.5 s; silence between them.
+  OPENAXE_EXPECT(Peak(out, 0, 200) > 0.2f);
+  OPENAXE_EXPECT(Peak(out, 6000, 11000) < 1e-6f);
+  OPENAXE_EXPECT(Peak(out, 12000, 12200) > 0.2f);
+  Render(p, kBlock * 200);  // past 1 s
+  OPENAXE_EXPECT(openaxe_player_is_counting(p) == 0);
+  OPENAXE_EXPECT(openaxe_player_position(p) > 0);
+  // Pausing mid count-in cancels it; disabled count-in plays straight away.
+  openaxe_player_pause(p);
+  openaxe_player_seek(p, 0);
+  openaxe_player_set_count_in(p, 0, 0.25f, 4);
+  Render(p, kBlock * 20);
+  openaxe_player_play(p);
+  OPENAXE_EXPECT(openaxe_player_is_counting(p) == 0);
+  Render(p, kBlock * 10);
+  // Started at once (the pause fade-out may have moved it a few ms first).
+  OPENAXE_EXPECT(openaxe_player_position(p) >= kBlock * 9 && openaxe_player_position(p) < kBlock * 16);
+  openaxe_player_destroy(p);
+}
+
 }  // namespace
 
 int main() {
@@ -240,6 +270,7 @@ int main() {
   TestLoopStaysInsideRegion();
   TestStopsAtEnd();
   TestSeekReportsTarget();
+  TestCountIn();
   if (openaxe::test::g_failures != 0) {
     std::fprintf(stderr, "%d failure(s)\n", openaxe::test::g_failures);
     return 1;

@@ -735,6 +735,16 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           message.enabled ? 1 : 0,
         )
         break
+      case 'setCountIn':
+        if (typeof module._openaxe_player_set_count_in === 'function') {
+          module._openaxe_player_set_count_in(
+            player,
+            message.clicks | 0,
+            message.interval,
+            message.accent | 0 || 4,
+          )
+        }
+        break
       case 'status':
         break
       default:
@@ -749,6 +759,9 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
         sampleRate: module._openaxe_player_source_rate(player),
         playing: module._openaxe_player_is_playing(player) === 1,
         meter: module._openaxe_player_get_meter(player),
+        counting:
+          typeof module._openaxe_player_is_counting === 'function' &&
+          module._openaxe_player_is_counting(player) === 1,
       }
     }
   }

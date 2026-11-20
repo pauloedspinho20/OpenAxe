@@ -113,6 +113,8 @@ export interface PlayerStatus {
   sampleRate: number
   playing: boolean
   meter: number
+  /** A count-in is sounding; the track hasn't started yet. */
+  counting?: boolean
 }
 
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {

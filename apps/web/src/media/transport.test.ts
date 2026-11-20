@@ -87,6 +87,7 @@ describe('media transport', () => {
       sampleRate: 48000,
       playing: true,
       meter: 0.5,
+      counting: false,
     })
     await expect(
       t.load({ channels: [new Float32Array(4)], sampleRate: 48000, frames: 4 }),

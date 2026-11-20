@@ -293,6 +293,7 @@ function AudioView({ item }: { item: MediaItem }) {
   const s = useMediaStore.getState()
   const total = duration || item.duration
   const loopOn = practice.loopEnabled && practice.loopStart !== null
+  const countInBars = practice.countInBars
 
   const addMarker = () => {
     const label = String.fromCharCode(65 + (item.markers.length % 26))
@@ -437,6 +438,21 @@ function AudioView({ item }: { item: MediaItem }) {
             onClick={() => s.setSemitones(practice.semitones + 1)}
           />
         </div>
+        <Tool
+          icon={I.CountInIcon}
+          title={
+            countInBars
+              ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''} (click to change)`
+              : 'Count-in off (click for 1 bar)'
+          }
+          tag={countInBars || undefined}
+          on={countInBars > 0}
+          onClick={() =>
+            useMediaStore
+              .getState()
+              .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
+          }
+        />
         <div className={tabStyles.barGroup} title="Track volume">
           <I.MuteIcon size={15} />
           <input

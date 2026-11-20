@@ -86,6 +86,13 @@ class BackingPlayer {
   bool LoopEnabled() const { return loop_enabled_.load(std::memory_order_relaxed); }
   float Meter() const { return meter_.load(std::memory_order_relaxed); }
 
+  // Count-in: the next Play() first sounds `clicks` metronome clicks
+  // `interval_seconds` apart (output time - the caller folds in tempo and
+  // speed), accenting every `accent_every`-th click, then starts the track.
+  // clicks <= 0 disables it. Tier 1.
+  void SetCountIn(int clicks, float interval_seconds, int accent_every);
+  bool IsCounting() const { return counting_flag_.load(std::memory_order_relaxed); }
+
   // Real-time safe. ADDS the track into `output` (1 or 2 channels, more are
   // left untouched beyond the first two). num_frames <= max_block_size.
   void Render(float* const* output, int output_channels, int num_frames);
@@ -129,6 +136,21 @@ class BackingPlayer {
   float gain_ = 0.0f;          // smoothed output gain (fades play/pause)
   std::atomic<int64_t> position_{0};
   std::atomic<float> meter_{0.0f};
+
+  // Count-in (controls + audio-thread state).
+  std::atomic<int> count_clicks_{0};
+  std::atomic<float> count_interval_{0.5f};
+  std::atomic<int> count_accent_{4};
+  std::atomic<bool> count_request_{false};
+  std::atomic<bool> counting_flag_{false};
+  bool counting_ = false;
+  int count_total_ = 0;
+  int64_t count_interval_samples_ = 0;
+  int64_t count_elapsed_ = 0;  // samples since the count-in started
+  int count_accent_every_ = 4;
+  // Writes the count-in clicks for this block into out_; returns true while
+  // the count-in is still running after it.
+  bool RenderCountIn(int num_frames);
 };
 
 }  // namespace openaxe::player

@@ -50,6 +50,7 @@ import { MediaCenter } from './media/MediaCenter'
 import { MediaDock } from './media/MediaDock'
 import { useMediaShortcuts } from './media/useMediaShortcuts'
 import { mediaCenterAvailable, useMediaTransport } from './media/useMediaTransport'
+import type { AnalyserLike } from './media/mediaStore'
 import { MediaGlyph } from './media/icons'
 
 function App() {
@@ -113,7 +114,12 @@ function App() {
   // player next to the rig. Not offered inside the plugin.
   const showMedia = mediaCenterAvailable()
   const [mediaOpen, setMediaOpen] = useState(false)
-  useMediaTransport(engine.rig, engine.context, isReady)
+  useMediaTransport(
+    engine.rig,
+    engine.context,
+    isReady,
+    engine.tunerAnalyser as AnalyserLike | null,
+  )
   useMediaShortcuts(mediaOpen)
   useSceneHotkeys()
   useUndoRedoHotkeys()

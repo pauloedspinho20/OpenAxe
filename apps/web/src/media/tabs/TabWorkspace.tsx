@@ -33,6 +33,11 @@ import { DrumLane } from './DrumLane'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
+import { matches, nextTarget, targetFor } from './waitMode'
+import { audioToScore, scoreToAudio, upsertPoint } from './sync'
+import { RecordingPanel } from './RecordingPanel'
+import { decodeAudio } from '../decode'
+import { detectPitch } from '../../tuner/pitchDetect'
 import { TrackSidebar } from './TrackSidebar'
 import * as I from './tabIcons'
 import { TabToolbox, Tool, type ToolGroup } from './TabToolbox'
@@ -137,6 +142,48 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   /** Selection anchor: the range runs from here to the cursor (same track/voice). */
   const [anchor, setAnchor] = useState<ops.BeatRef | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Recording sync: the tab's paired recording (live from the library) and
+  // whether playback uses it instead of the synth.
+  const liveItem = useMediaStore((st) => st.items.find((i) => i.id === item.id)) ?? item
+  const sync = liveItem.sync ?? null
+  const [source, setSource] = useState<'synth' | 'recording'>(item.sync ? 'recording' : 'synth')
+  const useRec = source === 'recording' && !!sync
+  const recRef = useRef({
+    on: useRec,
+    points: sync?.points ?? [],
+    key: 1,
+    audioId: sync?.audioId ?? '',
+  })
+  if (recRef.current.audioId !== (sync?.audioId ?? '') || recRef.current.on !== useRec) {
+    recRef.current.key++
+    recRef.current.audioId = sync?.audioId ?? ''
+  }
+  recRef.current.on = useRec
+  recRef.current.points = sync?.points ?? []
+  /** Score seconds -> the player's timeline (identity for the synth). */
+  const toPlayer = (sec: number) =>
+    recRef.current.on ? scoreToAudio(recRef.current.points, sec) : sec
+  /** The player's timeline -> score seconds. */
+  const fromPlayer = (sec: number) =>
+    recRef.current.on ? audioToScore(recRef.current.points, sec) : sec
+  /** What `loaded.revision` must be for the player to hold the right audio. */
+  const expectedRevision = () => (recRef.current.on ? -recRef.current.key : revisionRef.current)
+  const lastScorePos = useRef(0)
+  const [tapBar, setTapBar] = useState(0)
+
+  /** Wait mode: the cursor holds on each note until the guitar plays it. */
+  const [waitOn, setWaitOn] = useState(false)
+  const [waitInfo, setWaitInfo] = useState<{
+    label: string
+    hits: number
+    hit: boolean
+    done: boolean
+  }>({
+    label: '',
+    hits: 0,
+    hit: false,
+    done: false,
+  })
   /** Tracks shown in the score (Guitar Pro's multi-track view); the active one always is. */
   const [shown, setShown] = useState<Set<number>>(new Set([0]))
   const shownRef = useRef(shown)
@@ -257,7 +304,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       masterVolume: 1,
       seekTo(ms: number) {
         const s = useMediaStore.getState()
-        if (s.loaded?.itemId === item.id) void s.seek(ms / 1000)
+        if (s.loaded?.itemId === item.id) void s.seek(toPlayer(ms / 1000))
       },
       play() {
         void useMediaStore.getState().play()
@@ -270,7 +317,10 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
 
   useEffect(() => {
     const output = apiRef.current?.player?.output as synth.IExternalMediaSynthOutput | undefined
-    if (output && loaded?.itemId === item.id) output.updatePosition(position * 1000)
+    if (output && loaded?.itemId === item.id) {
+      lastScorePos.current = fromPlayer(position)
+      output.updatePosition(lastScorePos.current * 1000)
+    }
   }, [position, loaded, item.id])
 
   // Display settings.
@@ -329,18 +379,29 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     const api = apiRef.current
     if (!api?.score) return false
     const s = useMediaStore.getState()
-    if (
-      s.loaded?.itemId === item.id &&
-      s.loaded.revision === revisionRef.current &&
-      s.loadState === 'ready'
-    ) {
+    const revision = expectedRevision()
+    if (s.loaded?.itemId === item.id && s.loaded.revision === revision && s.loadState === 'ready') {
       return true
     }
     if (renderingRef.current) return renderingRef.current
-    const revision = revisionRef.current
-    const at = s.loaded?.itemId === item.id ? s.position : 0
+    // Resume at the same place in the song, whichever audio was loaded before.
+    const atScore = s.loaded?.itemId === item.id ? lastScorePos.current : 0
+    const rec = recRef.current
     renderingRef.current = (async () => {
       try {
+        if (rec.on) {
+          const blob = await loadMediaFile(rec.audioId)
+          if (!blob) throw new Error('The paired recording is missing from the library')
+          const audio = await decodeAudio(
+            await blob.arrayBuffer(),
+            useMediaStore.getState().engineRate,
+          )
+          await useMediaStore.getState().loadDecoded(item.id, audio, revision)
+          const at = scoreToAudio(rec.points, atScore)
+          if (at > 0)
+            await useMediaStore.getState().seek(Math.min(at, audio.frames / audio.sampleRate))
+          return useMediaStore.getState().loadState === 'ready'
+        }
         setRenderProgress(0)
         const track = await renderScoreAudio(api, {
           sampleRate: useMediaStore.getState().engineRate || 48_000,
@@ -349,8 +410,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           onProgress: setRenderProgress,
         })
         await useMediaStore.getState().loadDecoded(item.id, track, revision)
-        if (at > 0)
-          await useMediaStore.getState().seek(Math.min(at, track.frames / track.sampleRate))
+        if (atScore > 0)
+          await useMediaStore.getState().seek(Math.min(atScore, track.frames / track.sampleRate))
         return useMediaStore.getState().loadState === 'ready'
       } catch (err) {
         useMediaStore.setState({
@@ -363,7 +424,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       }
     })()
     return renderingRef.current
-  }, [item.id, metronome, renderVolumes])
+  }, [item.id, metronome, renderVolumes, useRec, sync?.audioId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     useMediaStore.setState({ prepare })
@@ -373,7 +434,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   }, [prepare])
 
   // A stale render keeps playing until the user presses play again; flag it.
-  const stale = loaded?.itemId === item.id && loaded.revision !== revision
+  const stale =
+    loaded?.itemId === item.id && loaded.revision !== (useRec ? -recRef.current.key : revision)
 
   // ── Editing ───────────────────────────────────────────────────────────
   const snapshot = (score: Score) => model.JsonConverter.scoreToJson(score)
@@ -478,7 +540,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   useEffect(() => {
     const api = apiRef.current
     const score = scoreRef.current
-    if (!api || !score || !editing) {
+    if (!api || !score || !(editing || waitOn)) {
       setBox(null)
       return
     }
@@ -509,7 +571,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       h: bar.h,
       stringY,
     })
-  }, [cursor, editing, status, zoom, profile, horizontal, score, revision])
+  }, [cursor, editing, waitOn, status, zoom, profile, horizontal, score, revision])
 
   // ── Selection ─────────────────────────────────────────────────────────
   const selection = useMemo(
@@ -571,14 +633,102 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     return bar.start + (ticks * 60) / (tempo * 960)
   }
 
+  // ── Wait mode ─────────────────────────────────────────────────────────
+  const cursorRef = useRef(cursor)
+  cursorRef.current = cursor
+  useEffect(() => {
+    if (!waitOn) return
+    const st = useMediaStore.getState()
+    const analyser = st.inputAnalyser
+    const sc = scoreRef.current
+    if (!analyser || !sc) {
+      setWaitOn(false)
+      setError(
+        'Wait mode listens to your guitar: power on with an input device (the tuner must see a signal).',
+      )
+      return
+    }
+    let at = nextTarget(sc, cursorRef.current, true)
+    let busy = false
+    let stable = 0
+    let hits = 0
+    let flashTimer: ReturnType<typeof setTimeout> | null = null
+    let pauseTimer: ReturnType<typeof setTimeout> | null = null
+    const buffer = new Float32Array(analyser.fftSize) as Float32Array<ArrayBuffer>
+    const show = (hit: boolean) => {
+      const target = at ? targetFor(sc, at) : null
+      setWaitInfo({ label: target?.label ?? '', hits, hit, done: !at })
+    }
+    if (at) setCursor(at)
+    show(false)
+    void prepare()
+
+    const timer = setInterval(() => {
+      if (busy || !at) return
+      const target = targetFor(sc, at)
+      if (!target) {
+        at = nextTarget(sc, at)
+        show(false)
+        return
+      }
+      analyser.getFloatTimeDomainData(buffer)
+      const pitch = detectPitch(buffer, analyser.context.sampleRate)
+      stable = pitch && pitch.clarity > 0.85 && matches(pitch.frequency, target) ? stable + 1 : 0
+      if (stable < 2) return
+      // Hit: play this beat (up to the next note) so it's heard in time, then wait again.
+      stable = 0
+      hits++
+      busy = true
+      const from = at
+      const next = nextTarget(sc, from)
+      const t0 = beatTime({ bar: from.bar, beat: from.beat })
+      const t1 = next
+        ? beatTime({ bar: next.bar, beat: next.beat })
+        : beatTime({ bar: from.bar, beat: from.beat }, true)
+      at = next
+      show(true)
+      if (flashTimer) clearTimeout(flashTimer)
+      flashTimer = setTimeout(() => show(false), 400)
+      void (async () => {
+        const store = useMediaStore.getState()
+        const transport = store.transport
+        if (transport && t0 !== null && t1 !== null && (await prepare())) {
+          await store.seek(toPlayer(t0))
+          await transport.setCountIn(0, 0.5, 4)
+          store.applyStatus(await transport.play())
+          const ms =
+            (Math.max(0.05, toPlayer(t1) - toPlayer(t0)) /
+              useMediaStore.getState().practice.speed) *
+            1000
+          pauseTimer = setTimeout(() => {
+            void useMediaStore.getState().pause()
+            busy = false
+          }, ms)
+        } else {
+          busy = false
+        }
+        if (next) setCursor(next)
+      })()
+    }, 40)
+
+    return () => {
+      clearInterval(timer)
+      if (flashTimer) clearTimeout(flashTimer)
+      if (pauseTimer) clearTimeout(pauseTimer)
+      void useMediaStore.getState().pause()
+    }
+    // The loop owns its position once started; restart it to re-anchor at the cursor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitOn, revision])
+
   const loopSelection = () => {
     const refs = targets()
     const a = beatTime(refs[0]!)
     const b = beatTime(refs[refs.length - 1]!, true)
     if (a === null || b === null) return
-    useMediaStore.getState().setLoop(a, b, true)
+    useMediaStore.getState().setLoop(toPlayer(a), toPlayer(b), true)
     void prepare().then(async (ok) => {
-      if (ok) await useMediaStore.getState().seek(a)
+      if (ok) await useMediaStore.getState().seek(toPlayer(a))
     })
   }
 
@@ -600,6 +750,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     if (e.key === ' ') {
       e.preventDefault()
       void useMediaStore.getState().toggle()
+      return
+    }
+    if (e.key === 'Enter' && useRec && !editing) {
+      e.preventDefault()
+      void tapSync()
       return
     }
     if (e.key === '?') {
@@ -766,13 +921,44 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     return null
   }
 
+  /** The bar (first playthrough) that playback at `sec` is in. */
+  const barAtTime = (sec: number): number => {
+    const api = apiRef.current
+    const sc = scoreRef.current
+    const lookups = api?.tickCache?.masterBars
+    if (!sc || !lookups) return 0
+    let ms = 0
+    let tempo = sc.tempo || 120
+    for (const lk of lookups) {
+      const t = lk.masterBar.tempoAutomations[0]
+      if (t) tempo = t.value
+      const dur = ((lk.end - lk.start) * 60_000) / (tempo * 960)
+      if (sec * 1000 < ms + dur) return lk.masterBar.index
+      ms += dur
+    }
+    return Math.max(0, sc.masterBars.length - 1)
+  }
+
+  // Count-in follows the score: tempo and beats of the bar playback starts in.
+  const hintBar = loaded?.itemId === item.id ? barAtTime(fromPlayer(position)) : cursor.bar
+  useEffect(() => {
+    if (!score) return
+    const mb = score.masterBars[Math.min(hintBar, score.masterBars.length - 1)]
+    if (!mb) return
+    const next = { bpm: edit.tempoAt(score, hintBar), beatsPerBar: mb.timeSignatureNumerator }
+    const cur = useMediaStore.getState().tempoHint
+    if (!cur || cur.bpm !== next.bpm || cur.beatsPerBar !== next.beatsPerBar)
+      useMediaStore.setState({ tempoHint: next })
+  }, [score, hintBar, revision])
+  useEffect(() => () => useMediaStore.setState({ tempoHint: null }), [])
+
   const loopBars = (from: number, to: number) => {
     const a = barTimes(Math.min(from, to))
     const b = barTimes(Math.max(from, to))
     if (!a || !b) return
-    useMediaStore.getState().setLoop(a.start, b.end, true)
+    useMediaStore.getState().setLoop(toPlayer(a.start), toPlayer(b.end), true)
     void prepare().then(async (ok) => {
-      if (ok) await useMediaStore.getState().seek(a.start)
+      if (ok) await useMediaStore.getState().seek(toPlayer(a.start))
     })
   }
 
@@ -927,6 +1113,37 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     remapTracks((x) => x, at)
   }
 
+  // ── Recording sync ────────────────────────────────────────────────────
+  const recordings = useMediaStore((st) => st.items).filter((i) => i.kind === 'audio')
+  const saveSync = (next: typeof sync) =>
+    void useMediaStore.getState().updateItem(item.id, { sync: next })
+
+  const pairRecording = (audioId: string | null) => {
+    void useMediaStore.getState().pause()
+    saveSync(audioId ? { audioId, points: sync?.audioId === audioId ? sync.points : [] } : null)
+    setSource(audioId ? 'recording' : 'synth')
+    setTapBar(cursor.bar)
+  }
+
+  const tapSync = async () => {
+    const st = useMediaStore.getState()
+    if (!sync || !useRec || !st.transport || st.loadState !== 'ready') return
+    const bar = barTimes(tapBar)
+    if (!bar) return
+    // Ask the player now rather than using the last poll (up to 50 ms old).
+    const status = await st.transport.status()
+    const audio = status.position / (status.sampleRate || 48_000)
+    const points = upsertPoint(sync.points, bar.start, audio)
+    if (points === sync.points) {
+      setError(
+        "That tap is earlier than a later bar's sync point - clear or re-tap from the start.",
+      )
+      return
+    }
+    saveSync({ ...sync, points })
+    setTapBar((b) => Math.min(b + 1, (scoreRef.current?.masterBars.length ?? 1) - 1))
+  }
+
   // ── Render ────────────────────────────────────────────────────────────
   const beat = score ? edit.beatAt(score, cursor) : null
   const fill = score ? edit.barFill(score, cursor) : { used: 0, capacity: 0 }
@@ -945,6 +1162,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   }
 
   const practice = useMediaStore((st) => st.practice)
+  const countInBars = practice.countInBars
   const loopOn = practice.loopEnabled && practice.loopStart !== null
   const ms = useMediaStore.getState()
 
@@ -1153,6 +1371,15 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                   </span>
                 )}
                 <span>Voice {cursor.voice + 1}</span>
+                {waitOn && (
+                  <span
+                    className={`${tabStyles.waitStatus} ${waitInfo.hit ? tabStyles.waitHit : ''}`}
+                  >
+                    {waitInfo.done
+                      ? `Done — ${waitInfo.hits} notes`
+                      : `Play ${waitInfo.label} · ${waitInfo.hits} ✓`}
+                  </span>
+                )}
                 {selection.length > 1 && (
                   <span className={tabStyles.statusAccent}>{selection.length} beats selected</span>
                 )}
@@ -1186,6 +1413,34 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onRemove={removeTrackAt}
             onAdd={addTrackFrom}
             onClose={() => setSidebarOpen(false)}
+            extra={
+              <RecordingPanel
+                recordings={recordings}
+                sync={sync}
+                source={source}
+                tapBar={tapBar}
+                barCount={score.masterBars.length}
+                barOf={barAtTime}
+                onPair={pairRecording}
+                onSource={(s) => {
+                  void useMediaStore.getState().pause()
+                  setSource(s)
+                }}
+                onTapBar={setTapBar}
+                onTap={() => void tapSync()}
+                onRemovePoint={(i) =>
+                  sync && saveSync({ ...sync, points: sync.points.filter((_, j) => j !== i) })
+                }
+                onClear={() => sync && saveSync({ ...sync, points: [] })}
+                onNudge={(d) =>
+                  sync &&
+                  saveSync({
+                    ...sync,
+                    points: sync.points.map((pt) => ({ ...pt, audio: Math.max(0, pt.audio + d) })),
+                  })
+                }
+              />
+            }
           />
         )}
       </div>
@@ -1257,6 +1512,35 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onClick={() => ms.setSemitones(practice.semitones + 1)}
           />
         </div>
+        <Tool
+          icon={I.CountInIcon}
+          title={
+            countInBars
+              ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''} (click to change)`
+              : 'Count-in off (click for 1 bar)'
+          }
+          tag={countInBars || undefined}
+          on={countInBars > 0}
+          onClick={() =>
+            useMediaStore
+              .getState()
+              .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
+          }
+        />
+        <Tool
+          icon={I.WaitIcon}
+          title={
+            waitOn
+              ? 'Wait mode on: the tab waits for you to play each note (click to stop)'
+              : 'Wait mode: the tab waits until you play each note on your guitar'
+          }
+          tag={waitOn ? 'wait' : undefined}
+          on={waitOn}
+          onClick={() => {
+            if (!waitOn) void useMediaStore.getState().pause()
+            setWaitOn((v) => !v)
+          }}
+        />
         <Tool
           icon={I.MetronomeIcon}
           title="Metronome in playback"

@@ -325,6 +325,7 @@ export interface OpenAxePlayerReply {
   sampleRate?: number
   playing?: boolean
   meter?: number
+  counting?: boolean
   written?: number
 }
 

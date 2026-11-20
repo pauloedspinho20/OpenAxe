@@ -22,6 +22,7 @@ function fakeTransport() {
     setSemitones: vi.fn(ok),
     setVolume: vi.fn(ok),
     setLoop: vi.fn(ok),
+    setCountIn: vi.fn(ok),
     status: vi.fn(ok),
     set(s) {
       status = { ...status, ...s }
@@ -46,7 +47,11 @@ describe('media store', () => {
         loopStart: null,
         loopEnd: null,
         loopEnabled: false,
+        countInBars: 0,
+        bpm: 120,
+        beatsPerBar: 4,
       },
+      tempoHint: null,
       trainer: { enabled: false, step: 0.05, every: 2, target: 1 },
       loopCount: 0,
       position: 0,
@@ -116,5 +121,25 @@ describe('media store', () => {
     useMediaStore.getState().setTransport(fakeTransport())
     expect(useMediaStore.getState().loaded).toBeNull()
     expect(useMediaStore.getState().loadState).toBe('idle')
+  })
+
+  it('counts in from the item tempo, or the score tempo when the tabs provide one', async () => {
+    const t = fakeTransport()
+    useMediaStore.getState().setTransport(t)
+    await useMediaStore.getState().loadDecoded('x', track, 1)
+    const s = useMediaStore.getState()
+    s.setCountIn({ countInBars: 1, bpm: 100, beatsPerBar: 3 })
+    s.setSpeed(0.5)
+    await useMediaStore.getState().play()
+    // 1 bar of 3/4 at 100 BPM, half speed: 3 clicks 1.2 s apart.
+    expect(t.setCountIn).toHaveBeenLastCalledWith(3, 1.2, 3)
+    await useMediaStore.getState().pause()
+    useMediaStore.setState({ tempoHint: { bpm: 60, beatsPerBar: 4 } })
+    useMediaStore.getState().setSpeed(1)
+    await useMediaStore.getState().play()
+    expect(t.setCountIn).toHaveBeenLastCalledWith(4, 1, 4)
+    useMediaStore.getState().setCountIn({ countInBars: 0 })
+    await useMediaStore.getState().play()
+    expect(t.setCountIn).toHaveBeenLastCalledWith(0, 0.5, 4)
   })
 })

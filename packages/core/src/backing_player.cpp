@@ -118,10 +118,51 @@ void BackingPlayer::Play() {
   if (!HasTrack()) return;
   // Restart from the top when play is pressed at the very end.
   if (Position() >= frames_ && !LoopEnabled()) Seek(0);
+  if (count_clicks_.load(std::memory_order_relaxed) > 0 && !IsPlaying()) {
+    count_request_.store(true, std::memory_order_relaxed);
+    counting_flag_.store(true, std::memory_order_relaxed);
+  }
   playing_.store(true, std::memory_order_relaxed);
 }
 
-void BackingPlayer::Pause() { playing_.store(false, std::memory_order_relaxed); }
+void BackingPlayer::Pause() {
+  playing_.store(false, std::memory_order_relaxed);
+  count_request_.store(false, std::memory_order_relaxed);
+  counting_flag_.store(false, std::memory_order_relaxed);
+}
+
+void BackingPlayer::SetCountIn(int clicks, float interval_seconds, int accent_every) {
+  if (!std::isfinite(interval_seconds)) return;
+  count_clicks_.store(std::clamp(clicks, 0, 32), std::memory_order_relaxed);
+  count_interval_.store(std::clamp(interval_seconds, 0.05f, 4.0f), std::memory_order_relaxed);
+  count_accent_.store(std::clamp(accent_every, 1, 32), std::memory_order_relaxed);
+}
+
+bool BackingPlayer::RenderCountIn(int num_frames) {
+  // Short decaying sine "tick"; accented clicks are higher and louder.
+  constexpr double kPi = 3.14159265358979323846;
+  const double decay = 1.0 / (0.025 * sample_rate_);
+  const int64_t click_len = static_cast<int64_t>(0.06 * sample_rate_);
+  for (int i = 0; i < num_frames; ++i) {
+    const int64_t t = count_elapsed_ + i;
+    const int64_t index = t / count_interval_samples_;
+    float v = 0.0f;
+    if (index < count_total_) {
+      const int64_t in_click = t - index * count_interval_samples_;
+      if (in_click < click_len) {
+        const bool accent = index % count_accent_every_ == 0;
+        const double freq = accent ? 2000.0 : 1400.0;
+        const double amp = accent ? 0.55 : 0.4;
+        v = static_cast<float>(amp * std::exp(-in_click * decay) *
+                               std::sin(2.0 * kPi * freq * in_click / sample_rate_));
+      }
+    }
+    out_[0][static_cast<size_t>(i)] = v;
+    out_[1][static_cast<size_t>(i)] = v;
+  }
+  count_elapsed_ += num_frames;
+  return count_elapsed_ < count_total_ * count_interval_samples_;
+}
 
 void BackingPlayer::Seek(int64_t frame) {
   const int64_t len = LengthFrames();
@@ -212,6 +253,39 @@ void BackingPlayer::Render(float* const* output, int output_channels, int num_fr
     } else {
       read_pos_ = static_cast<double>(seek);
       stretching_ = false;
+    }
+  }
+
+  // Count-in: clicks first, the track starts on the block after the last one.
+  if (count_request_.exchange(false, std::memory_order_relaxed) && playing_.load(std::memory_order_relaxed)) {
+    counting_ = true;
+    count_total_ = count_clicks_.load(std::memory_order_relaxed);
+    count_interval_samples_ = std::max<int64_t>(
+        1, static_cast<int64_t>(count_interval_.load(std::memory_order_relaxed) * sample_rate_));
+    count_accent_every_ = count_accent_.load(std::memory_order_relaxed);
+    count_elapsed_ = 0;
+  }
+  if (counting_) {
+    if (!playing_.load(std::memory_order_relaxed)) {
+      counting_ = false;
+    } else {
+      counting_ = RenderCountIn(num_frames);
+      if (!counting_) counting_flag_.store(false, std::memory_order_relaxed);
+      const float vol = std::max(0.35f, volume_.load(std::memory_order_relaxed));
+      float peak = 0.0f;
+      for (int i = 0; i < num_frames; ++i) {
+        const float v = out_[0][static_cast<size_t>(i)] * vol;
+        peak = std::max(peak, std::abs(v));
+        if (output_channels == 1) {
+          output[0][i] += v;
+        } else {
+          output[0][i] += v;
+          output[1][i] += v;
+        }
+      }
+      meter_.store(peak, std::memory_order_relaxed);
+      gain_ = 0.0f;
+      return;
     }
   }
 

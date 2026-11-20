@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 
 import type { GraphRig } from '../engine/GraphRig'
 import { getOpenAxe, getShellKind } from '../native/openaxe'
-import { useMediaStore } from './mediaStore'
+import { useMediaStore, type AnalyserLike } from './mediaStore'
 import { createBridgeTransport, createWorkletTransport } from './transport'
 
 /**
@@ -10,7 +10,12 @@ import { createBridgeTransport, createWorkletTransport } from './transport'
  * the web, the native bridge on desktop. The plugin shell has no media
  * center (the DAW is the transport there).
  */
-export function useMediaTransport(rig: unknown, context: AudioContext | null, ready: boolean) {
+export function useMediaTransport(
+  rig: unknown,
+  context: AudioContext | null,
+  ready: boolean,
+  inputAnalyser: AnalyserLike | null = null,
+) {
   useEffect(() => {
     const store = useMediaStore.getState()
     if (!ready) {
@@ -41,6 +46,11 @@ export function useMediaTransport(rig: unknown, context: AudioContext | null, re
   useEffect(() => {
     void useMediaStore.getState().loadLibrary()
   }, [])
+
+  // Wait mode listens to the guitar through the tuner's input analyser.
+  useEffect(() => {
+    useMediaStore.setState({ inputAnalyser })
+  }, [inputAnalyser])
 }
 
 export function mediaCenterAvailable(): boolean {

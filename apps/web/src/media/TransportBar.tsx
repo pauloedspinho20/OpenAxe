@@ -16,6 +16,7 @@ export function TransportButtons({ compact = false }: { compact?: boolean }) {
   const duration = useMediaStore((s) => s.duration)
   const loopStart = useMediaStore((s) => s.practice.loopStart)
   const loopEnabled = useMediaStore((s) => s.practice.loopEnabled)
+  const counting = useMediaStore((s) => s.counting)
   const { toggle, seek, skip } = useMediaStore.getState()
   const iconSize = compact ? 14 : 18
 
@@ -66,6 +67,7 @@ export function TransportButtons({ compact = false }: { compact?: boolean }) {
       <span className={styles.time} aria-live="off">
         {formatTime(position)} <span className={styles.timeDim}>/ {formatTime(duration)}</span>
       </span>
+      {counting && <span className={styles.countBadge}>count-in…</span>}
     </div>
   )
 }
@@ -76,6 +78,7 @@ export function PracticeControls() {
   const position = useMediaStore((s) => s.position)
   const trainer = useMediaStore((s) => s.trainer)
   const loopCount = useMediaStore((s) => s.loopCount)
+  const tempoHint = useMediaStore((s) => s.tempoHint)
   const s = useMediaStore.getState()
   const hasRegion =
     practice.loopStart !== null &&
@@ -84,6 +87,54 @@ export function PracticeControls() {
 
   return (
     <div className={styles.practice}>
+      <fieldset className={styles.group}>
+        <legend>Count-in</legend>
+        <div className={styles.row}>
+          {[0, 1, 2, 4].map((b) => (
+            <button
+              key={b}
+              type="button"
+              className={`${styles.chip} ${practice.countInBars === b ? styles.chipOn : ''}`}
+              onClick={() => s.setCountIn({ countInBars: b })}
+            >
+              {b === 0 ? 'Off' : `${b} bar${b > 1 ? 's' : ''}`}
+            </button>
+          ))}
+        </div>
+        {tempoHint ? (
+          <div className={styles.dim}>
+            From the score: {tempoHint.bpm} BPM, {tempoHint.beatsPerBar} beats per bar
+          </div>
+        ) : (
+          <div className={styles.row}>
+            <label className={styles.check}>
+              <input
+                className={styles.numInput}
+                type="number"
+                min={20}
+                max={400}
+                value={practice.bpm}
+                onChange={(e) => s.setCountIn({ bpm: Number(e.target.value) })}
+                aria-label="Count-in tempo (BPM)"
+              />
+              BPM
+            </label>
+            <label className={styles.check}>
+              <input
+                className={styles.numInput}
+                type="number"
+                min={1}
+                max={16}
+                value={practice.beatsPerBar}
+                onChange={(e) => s.setCountIn({ beatsPerBar: Number(e.target.value) })}
+                aria-label="Beats per bar"
+              />
+              beats/bar
+            </label>
+          </div>
+        )}
+      </fieldset>
+
       <fieldset className={styles.group}>
         <legend>Speed</legend>
         <div className={styles.row}>

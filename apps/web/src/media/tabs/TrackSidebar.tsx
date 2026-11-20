@@ -6,7 +6,7 @@
  */
 import type { model, Settings } from '@coderline/alphatab'
 import { HardwareButton } from '@openaxe/ui'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import type { EditCursor } from './scoreEdit'
@@ -32,6 +32,8 @@ export interface TrackSidebarProps {
   onRemove: (index: number) => void
   onAdd: (preset: ops.InstrumentPreset) => void
   onClose: () => void
+  /** Rendered under the song info (the recording sync panel). */
+  extra?: ReactNode
 }
 
 function SongInfo({ score, apply }: { score: model.Score; apply: Apply }) {
@@ -313,6 +315,7 @@ export function TrackSidebar(p: TrackSidebarProps) {
         />
       </div>
       <SongInfo score={p.score} apply={p.apply} />
+      {p.extra}
       <div className={t.trackList}>
         {p.score.tracks.map((_, i) => (
           <TrackRow key={`${i}:${p.score.tracks[i]!.name}`} {...p} index={i} />

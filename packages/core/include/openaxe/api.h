@@ -701,6 +701,13 @@ void openaxe_player_set_loop(OpenAxePlayer* player, int32_t start_frame, int32_t
                              int32_t enabled);
 // Peak |sample| of the last rendered block (post-volume).
 float openaxe_player_get_meter(OpenAxePlayer* player);
+// Count-in before the next play: `clicks` metronome clicks `interval_seconds`
+// apart in output time (fold tempo and speed in), accenting every
+// `accent_every`-th. clicks <= 0 disables it.
+void openaxe_player_set_count_in(OpenAxePlayer* player, int32_t clicks, float interval_seconds,
+                                 int32_t accent_every);
+// 1 while a count-in is sounding (the track has not started yet).
+int32_t openaxe_player_is_counting(OpenAxePlayer* player);
 
 // Real-time safe. ADDS the track into output (output_channels 1|2 buffers of
 // num_frames, num_frames <= the reset's max_block_size).

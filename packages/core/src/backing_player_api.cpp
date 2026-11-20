@@ -110,6 +110,16 @@ float openaxe_player_get_meter(OpenAxePlayer* player) {
   return p != nullptr ? p->Meter() : 0.0f;
 }
 
+void openaxe_player_set_count_in(OpenAxePlayer* player, int32_t clicks, float interval_seconds,
+                                 int32_t accent_every) {
+  if (auto* p = P(player)) p->SetCountIn(clicks, interval_seconds, accent_every);
+}
+
+int32_t openaxe_player_is_counting(OpenAxePlayer* player) {
+  auto* p = P(player);
+  return p != nullptr && p->IsCounting() ? 1 : 0;
+}
+
 void openaxe_player_render(OpenAxePlayer* player, float* const* output, int32_t output_channels,
                            int32_t num_frames) {
   if (auto* p = P(player)) p->Render(output, output_channels, num_frames);

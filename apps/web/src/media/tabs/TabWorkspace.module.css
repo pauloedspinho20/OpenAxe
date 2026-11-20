@@ -901,3 +901,97 @@
   display: flex;
   gap: 4px;
 }
+
+.waitStatus {
+  font-weight: 600;
+  color: var(--ink-1);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.waitHit {
+  background: color-mix(in srgb, var(--led-on) 35%, transparent);
+}
+
+/* ── Recording sync panel ─────────────────────────────────────────── */
+
+.sideBadge {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.recPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+
+.segmented button {
+  flex: 1;
+  padding: 4px 6px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segmented .segOn {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tapRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tapRow .textField input {
+  max-width: 56px;
+}
+
+.pointList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.pointList li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+
+.pointList li span:first-child {
+  flex: 1;
+}
+
+.pointList button {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
