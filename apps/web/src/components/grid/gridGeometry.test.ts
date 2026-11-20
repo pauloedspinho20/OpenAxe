@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { findGridElement, isPointOverGrid, resolveGridCell } from './gridGeometry'
+import { findGridElement, isPointOverGrid, measureGridCell, resolveGridCell } from './gridGeometry'
 
 function makeGridEl(rect: DOMRectInit): HTMLElement {
   const el = document.createElement('div')
@@ -72,6 +72,37 @@ describe('gridGeometry', () => {
       const el = makeGridEl(rect)
       // resolveGridCell would clamp this, but isPointOverGrid should reject it.
       expect(isPointOverGrid(el, 350, -10)).toBe(false)
+    })
+  })
+
+  describe('measureGridCell', () => {
+    function mockComputed(style: Partial<CSSStyleDeclaration>): void {
+      vi.spyOn(window, 'getComputedStyle').mockReturnValue(style as CSSStyleDeclaration)
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('returns the first column/row track size when px-sized', () => {
+      const el = document.createElement('div')
+      mockComputed({
+        gridTemplateColumns: '80px 80px 80px 80px 80px 80px 80px 80px 80px 80px',
+        gridTemplateRows: '80px 80px 80px 80px',
+      })
+      expect(measureGridCell(el)).toEqual({ w: 80, h: 80 })
+    })
+
+    it('returns null when tracks are not px-sized', () => {
+      const el = document.createElement('div')
+      mockComputed({ gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' })
+      expect(measureGridCell(el)).toBeNull()
+    })
+
+    it('returns null when the browser cannot compute tracks (jsdom)', () => {
+      const el = document.createElement('div')
+      mockComputed({ gridTemplateColumns: '', gridTemplateRows: '' })
+      expect(measureGridCell(el)).toBeNull()
     })
   })
 })

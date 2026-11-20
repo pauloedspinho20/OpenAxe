@@ -35,11 +35,12 @@
   font-size: 9px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--ink-2);
+  font-weight: bold;
+  color: var(--ink-1);
   background: var(--panel-raised);
-  border: 1px solid var(--seam);
+  border: 1px solid var(--ink-1);
   box-shadow: var(--shadow-control);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: var(--sp-1) var(--sp-2);
   cursor: grab;
   touch-action: none;
@@ -53,19 +54,16 @@
   min-width: 46px;
 }
 
-.shelf .chip > svg {
-  color: var(--ink-3);
-  flex-shrink: 0;
-}
-
-.shelf .chip:hover > svg {
+.chip > svg {
   color: var(--ink-1);
+  flex-shrink: 0;
 }
 
 .chip:hover {
   color: var(--ink-1);
   background: var(--panel-raised);
-  border-color: var(--seam-strong);
+  outline: 1px solid var(--ink-1);
+  outline-offset: 1px;
 }
 
 .chip:focus-visible {
@@ -80,7 +78,7 @@
 
 .chipDisabled:hover {
   color: var(--ink-1);
-  border-color: var(--seam-strong);
+  outline: none;
 }
 
 .ghost {

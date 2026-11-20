@@ -3,7 +3,7 @@ import { BlockIcon, toast } from '@openaxe/ui'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { useGraphStore } from '../../../state/graphStore'
 import { BLOCK_OPTIONS, BLOCK_KIND_LABELS } from '../blockOptions'
-import { findGridElement, isPointOverGrid, resolveGridCell } from '../gridGeometry'
+import { findGridElement, isPointOverGrid, measureGridCell, resolveGridCell } from '../gridGeometry'
 import { blockColorVar } from '../blockColors'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
@@ -15,6 +15,8 @@ interface DragState {
   x: number
   y: number
   overGrid: boolean
+  /** Measured grid cell size while over the grid — the ghost grows to a card. */
+  cellSize: { w: number; h: number } | null
 }
 
 export interface BlockPaletteProps {
@@ -47,7 +49,14 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
     } catch {
       // Synthetic/inactive pointer - the drag still works via clientX/clientY tracking below.
     }
-    const next: DragState = { kind, label, x: e.clientX, y: e.clientY, overGrid: false }
+    const next: DragState = {
+      kind,
+      label,
+      x: e.clientX,
+      y: e.clientY,
+      overGrid: false,
+      cellSize: null,
+    }
     dragRef.current = next
     setDrag(next)
   }
@@ -56,7 +65,12 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
     if (!dragRef.current) return
     const gridEl = findGridElement()
     const overGrid = !!gridEl && isPointOverGrid(gridEl, e.clientX, e.clientY)
-    const next: DragState = { ...dragRef.current, x: e.clientX, y: e.clientY, overGrid }
+    // Measure once per entry into the grid (tracks are static mid-drag); reset
+    // on exit so a re-entry re-measures in case the viewport resized.
+    let cellSize = dragRef.current.cellSize
+    if (overGrid && gridEl && !cellSize) cellSize = measureGridCell(gridEl)
+    else if (!overGrid) cellSize = null
+    const next: DragState = { ...dragRef.current, x: e.clientX, y: e.clientY, overGrid, cellSize }
     dragRef.current = next
     setDrag(next)
   }
@@ -130,6 +144,9 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
             {
               left: drag.x,
               top: drag.y,
+              ...(drag.overGrid && drag.cellSize
+                ? { minWidth: drag.cellSize.w, minHeight: drag.cellSize.h }
+                : {}),
               '--block-color': blockColorVar(drag.kind),
             } as React.CSSProperties
           }
