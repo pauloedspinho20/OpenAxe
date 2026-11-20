@@ -205,6 +205,7 @@ const NOTE_FIELDS = [
   'leftHandFinger',
   'rightHandFinger',
   'dynamics',
+  'percussionArticulation',
 ] as const
 const BEAT_FIELDS = [
   'duration',

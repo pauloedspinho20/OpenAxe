@@ -342,6 +342,82 @@ export function removeTrack(score: Score, index: number, settings: Settings): vo
   refresh(score, settings)
 }
 
+/** Move a track to another position in the track list. */
+export function moveTrack(score: Score, from: number, to: number, settings: Settings): void {
+  const n = score.tracks.length
+  if (from < 0 || from >= n || to < 0 || to >= n || from === to) return
+  const [track] = score.tracks.splice(from, 1)
+  score.tracks.splice(to, 0, track!)
+  score.tracks.forEach((t, i) => {
+    t.index = i
+  })
+  refresh(score, settings)
+}
+
+/** Copy a track (notes, tuning, capo, sound) right after itself. Returns the copy's index. */
+export function duplicateTrack(score: Score, index: number, settings: Settings): number {
+  const src = score.tracks[index]
+  if (!src) return index
+  const srcStaff = src.staves[0]!
+  const at = addTrack(
+    score,
+    {
+      id: 'copy',
+      label: `${src.name} (copy)`,
+      program: src.playbackInfo.program,
+      tunings: [...srcStaff.stringTuning.tunings],
+      percussion: srcStaff.isPercussion,
+    },
+    `${src.name} (copy)`,
+    settings,
+  )
+  const copy = score.tracks[at]!
+  const staff = copy.staves[0]!
+  staff.capo = srcStaff.capo
+  staff.showTablature = srcStaff.showTablature
+  staff.showStandardNotation = srcStaff.showStandardNotation
+  copy.playbackInfo.volume = src.playbackInfo.volume
+  copy.playbackInfo.balance = src.playbackInfo.balance
+  copy.percussionArticulations = [...src.percussionArticulations]
+  srcStaff.bars.forEach((bar, b) => {
+    const dst = staff.bars[b]!
+    bar.voices.forEach((voice, v) => {
+      let target = dst.voices[v]
+      if (!target) {
+        target = new model.Voice()
+        dst.addVoice(target)
+      }
+      target.beats.length = 0
+      for (const beat of voice.beats) target.addBeat(copyBeat(beat))
+    })
+  })
+  // Place it right after the original.
+  score.tracks.splice(at, 1)
+  score.tracks.splice(index + 1, 0, copy)
+  score.tracks.forEach((t, i) => {
+    t.index = i
+  })
+  relink(score)
+  refresh(score, settings)
+  return index + 1
+}
+
+/** Mix volume (0..16, alphaTab/GP scale) and pan (0..16, 8 = centre), saved with the file. */
+export function setTrackMix(
+  score: Score,
+  index: number,
+  mix: { volume?: number; balance?: number },
+  settings: Settings,
+): void {
+  const t = score.tracks[index]
+  if (!t) return
+  if (mix.volume !== undefined)
+    t.playbackInfo.volume = Math.min(16, Math.max(0, Math.round(mix.volume)))
+  if (mix.balance !== undefined)
+    t.playbackInfo.balance = Math.min(16, Math.max(0, Math.round(mix.balance)))
+  refresh(score, settings)
+}
+
 export function renameTrack(score: Score, index: number, name: string, settings: Settings): void {
   const t = score.tracks[index]
   if (!t || !name.trim()) return

@@ -7,6 +7,9 @@ import {
   addGraceNote,
   addTrack,
   drumId,
+  duplicateTrack,
+  moveTrack,
+  setTrackMix,
   copyRange,
   deleteRange,
   DRUM_KIT,
@@ -252,5 +255,31 @@ describe('scoreOps: voices and drums', () => {
       .filter((e) => e.type === 0x90 && (e as unknown as { channel: number }).channel === 9)
       .map((e) => (e as unknown as { noteKey: number }).noteKey)
     expect(keys).toEqual([36, 38])
+  })
+})
+
+describe('scoreOps: track list', () => {
+  it('reorders, duplicates and mixes tracks, all surviving a .gp save', () => {
+    const { score, settings } = load(
+      '\\track "A"\n\\staff {tabs}\n3.6.1 | 5.6.1\n\\track "B"\n\\staff {tabs}\n7.6.1 | 9.6.1',
+    )
+    moveTrack(score, 1, 0, settings)
+    expect(score.tracks.map((t) => [t.name, t.index])).toEqual([
+      ['B', 0],
+      ['A', 1],
+    ])
+    const copy = duplicateTrack(score, 0, settings)
+    expect(copy).toBe(1)
+    expect(score.tracks.map((t) => t.name)).toEqual(['B', 'B (copy)', 'A'])
+    expect(frets(score, 1, 1)).toEqual(['1:9'])
+    const channels = score.tracks.map((t) => t.playbackInfo.primaryChannel)
+    expect(new Set(channels).size).toBe(3)
+    setTrackMix(score, 2, { volume: 9, balance: 3 }, settings)
+    const back = roundTrip(score, settings)
+    expect(back.tracks.map((t) => t.name)).toEqual(['B', 'B (copy)', 'A'])
+    expect(frets(back, 0, 1)).toEqual(['1:7'])
+    expect([back.tracks[2]!.playbackInfo.volume, back.tracks[2]!.playbackInfo.balance]).toEqual([
+      9, 3,
+    ])
   })
 })

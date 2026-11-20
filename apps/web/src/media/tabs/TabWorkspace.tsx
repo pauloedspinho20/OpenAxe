@@ -33,7 +33,7 @@ import { DrumLane } from './DrumLane'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
-import { SongPanel } from './SongPanel'
+import { TrackSidebar } from './TrackSidebar'
 import * as I from './tabIcons'
 import { TabToolbox, Tool, type ToolGroup } from './TabToolbox'
 import tabStyles from './TabWorkspace.module.css'
@@ -56,6 +56,15 @@ interface TrackInfo {
   name: string
   strings: number
   percussion: boolean
+}
+
+/** Render the shown tracks (plus the active one), in score order. */
+function renderView(api: AlphaTabApi, score: Score, active: number, shown: Set<number>): void {
+  const indices = [...new Set([...shown, active])]
+    .filter((i) => i >= 0 && i < score.tracks.length)
+    .sort((a, b) => a - b)
+  const tracks = indices.map((i) => score.tracks[i]!)
+  if (tracks.length) api.renderTracks(tracks)
 }
 
 function trackList(score: Score): TrackInfo[] {
@@ -127,7 +136,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [title, setTitle] = useState({ title: '', artist: '' })
   /** Selection anchor: the range runs from here to the cursor (same track/voice). */
   const [anchor, setAnchor] = useState<ops.BeatRef | null>(null)
-  const [songOpen, setSongOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  /** Tracks shown in the score (Guitar Pro's multi-track view); the active one always is. */
+  const [shown, setShown] = useState<Set<number>>(new Set([0]))
+  const shownRef = useRef(shown)
+  shownRef.current = shown
   const [toolGroup, setToolGroup] = useState<ToolGroup | null>('note')
   const [practiceOpen, setPracticeOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -275,10 +288,18 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     const api = apiRef.current
     const score = scoreRef.current
     if (!api || !score) return
-    const t = score.tracks[trackIndex]
-    if (t) api.renderTracks([t])
-    setCursor((c) => edit.clampCursor(score, { ...c, track: trackIndex }))
-  }, [trackIndex, status === 'ready' && tracks.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+    renderView(api, score, trackIndex, shown)
+    setCursor((c) =>
+      c.track === trackIndex
+        ? c
+        : edit.clampCursor(score, { ...c, track: trackIndex, bar: c.bar, beat: 0 }),
+    )
+  }, [trackIndex, shown, status === 'ready' && tracks.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clicking a beat of another shown track makes it the active one.
+  useEffect(() => {
+    if (cursor.track !== trackIndex) setTrackIndex(cursor.track)
+  }, [cursor.track]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Playback preparation ──────────────────────────────────────────────
   const renderVolumes = useCallback(() => {
@@ -410,8 +431,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       syncHistory()
       setTracks(trackList(score))
       setTitle({ title: score.title, artist: score.artist })
-      const t = score.tracks[trackIndex]
-      if (t) api.renderTracks([t])
+      renderView(api, score, Math.min(trackIndex, score.tracks.length - 1), shownRef.current)
       if (next) setCursor(edit.clampCursor(score, next))
       setTick((x) => x + 1)
       scheduleSave()
@@ -431,6 +451,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       setTracks(trackList(score))
       setAnchor(null)
       api.renderScore(score, [Math.min(trackIndex, score.tracks.length - 1)])
+      setShown(new Set([Math.min(trackIndex, score.tracks.length - 1)]))
       setCursor((c) => edit.clampCursor(score, c))
       scheduleSave()
     },
@@ -838,6 +859,74 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     else void wsRef.current?.requestFullscreen?.().catch(() => {})
   }
 
+  // ── Track list (sidebar) ──────────────────────────────────────────────
+  /** Re-index per-track UI state after the track list changes. */
+  const remapTracks = (map: (i: number) => number | null, nextActive: number) => {
+    const remap = (set: Set<number>) =>
+      new Set([...set].map(map).filter((i): i is number => i !== null))
+    setMuted((m) => remap(m))
+    setSolo((m) => remap(m))
+    setShown((m) => {
+      const next = remap(m)
+      next.add(nextActive)
+      return next
+    })
+    setTrackIndex(nextActive)
+  }
+
+  const selectTrack = (i: number) => {
+    setShown((m) => (m.has(i) ? m : new Set([...m, i])))
+    setTrackIndex(i)
+  }
+
+  const toggleShown = (i: number) => {
+    setShown((m) => {
+      const next = new Set(m)
+      if (next.has(i)) {
+        if (next.size === 1) return m // always show at least one track
+        next.delete(i)
+        if (i === trackIndex) setTrackIndex(Math.min(...next))
+      } else next.add(i)
+      return next
+    })
+  }
+
+  const moveTrackTo = (from: number, to: number) => {
+    apply((sc, st) => ops.moveTrack(sc, from, to, st))
+    const map = (i: number) =>
+      i === from
+        ? to
+        : from < to && i > from && i <= to
+          ? i - 1
+          : from > to && i >= to && i < from
+            ? i + 1
+            : i
+    remapTracks(map, map(trackIndex))
+  }
+
+  const duplicateTrackAt = (i: number) => {
+    let at = i + 1
+    apply((sc, st) => {
+      at = ops.duplicateTrack(sc, i, st)
+    })
+    remapTracks((x) => (x > i ? x + 1 : x), at)
+  }
+
+  const removeTrackAt = (i: number) => {
+    apply((sc, st) => ops.removeTrack(sc, i, st))
+    const next =
+      trackIndex > i ? trackIndex - 1 : trackIndex === i ? Math.max(0, i - 1) : trackIndex
+    remapTracks((x) => (x === i ? null : x > i ? x - 1 : x), next)
+  }
+
+  const addTrackFrom = (preset: ops.InstrumentPreset) => {
+    let at = 0
+    apply((sc, st) => {
+      at = ops.addTrack(sc, preset, preset.label, st)
+    })
+    remapTracks((x) => x, at)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────
   const beat = score ? edit.beatAt(score, cursor) : null
   const fill = score ? edit.barFill(score, cursor) : { used: 0, capacity: 0 }
@@ -873,34 +962,16 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         </div>
 
         <div className={tabStyles.barGroup}>
-          <I.TracksIcon size={16} />
-          <select
-            className={tabStyles.trackSelect}
-            value={trackIndex}
-            onChange={(e) => setTrackIndex(Number(e.target.value))}
-            aria-label="Track"
-          >
-            {tracks.map((tr, i) => (
-              <option key={i} value={i}>
-                {tr.name}
-                {tr.percussion ? ' (drums)' : tr.strings ? ` (${tr.strings} str)` : ''}
-                {muted.has(i) ? ' · muted' : ''}
-                {solo.has(i) ? ' · solo' : ''}
-              </option>
-            ))}
-          </select>
           <Tool
-            icon={I.MuteIcon}
-            title="Mute this track in playback"
-            on={muted.has(trackIndex)}
-            onClick={() => setMuted((m) => toggleIn(m, trackIndex))}
+            icon={I.TracksIcon}
+            title={sidebarOpen ? 'Hide the track panel' : 'Show the track panel'}
+            on={sidebarOpen}
+            onClick={() => setSidebarOpen((v) => !v)}
           />
-          <Tool
-            icon={I.SoloIcon}
-            title="Solo this track in playback"
-            on={solo.has(trackIndex)}
-            onClick={() => setSolo((m) => toggleIn(m, trackIndex))}
-          />
+          <span className={tabStyles.activeTrack} title="Track being edited">
+            {tracks[trackIndex]?.name ?? ''}
+            {shown.size > 1 && <em> +{shown.size - 1}</em>}
+          </span>
         </div>
 
         <div className={tabStyles.barGroup} role="group" aria-label="View">
@@ -958,12 +1029,6 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
               if (!editing && !toolGroup) setToolGroup('note')
               setTimeout(() => viewportRef.current?.focus(), 0)
             }}
-          />
-          <Tool
-            icon={I.SidebarIcon}
-            title="Song & tracks: info, instruments, tunings, capo"
-            on={songOpen}
-            onClick={() => setSongOpen((v) => !v)}
           />
           <details className={tabStyles.menu}>
             <summary title="Export" aria-label="Export">
@@ -1104,19 +1169,24 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           </div>
         </div>
 
-        {songOpen && score && (
-          <aside className={tabStyles.drawer} aria-label="Song and tracks">
-            <div className={tabStyles.drawerHead}>
-              <strong>Song &amp; tracks</strong>
-              <Tool icon={I.MinusIcon} title="Close" onClick={() => setSongOpen(false)} />
-            </div>
-            <SongPanel
-              score={score}
-              trackIndex={trackIndex}
-              apply={apply}
-              onSelectTrack={setTrackIndex}
-            />
-          </aside>
+        {sidebarOpen && score && (
+          <TrackSidebar
+            score={score}
+            trackIndex={trackIndex}
+            shown={shown}
+            muted={muted}
+            solo={solo}
+            apply={apply}
+            onSelect={selectTrack}
+            onToggleShown={toggleShown}
+            onMute={(i) => setMuted((m) => toggleIn(m, i))}
+            onSolo={(i) => setSolo((m) => toggleIn(m, i))}
+            onMove={moveTrackTo}
+            onDuplicate={duplicateTrackAt}
+            onRemove={removeTrackAt}
+            onAdd={addTrackFrom}
+            onClose={() => setSidebarOpen(false)}
+          />
         )}
       </div>
 
