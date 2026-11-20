@@ -287,6 +287,8 @@ function AudioView({ item }: { item: MediaItem }) {
   const practice = useMediaStore((st) => st.practice)
   const loadState = useMediaStore((st) => st.loadState)
   const progress = useMediaStore((st) => st.loadProgress)
+  const detail = useMediaStore((st) => st.detail)
+  const playing = useMediaStore((st) => st.playing)
   const [practiceOpen, setPracticeOpen] = useState(false)
   const s = useMediaStore.getState()
   const total = duration || item.duration
@@ -366,6 +368,9 @@ function AudioView({ item }: { item: MediaItem }) {
           onSeek={(t) => void s.seek(t)}
           onLoopChange={(a, b) => s.setLoop(a, b, true)}
           height="fill"
+          zoomable
+          detail={detail}
+          playing={playing}
         />
       </div>
 

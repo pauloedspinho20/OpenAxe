@@ -695,3 +695,109 @@
   width: 90px;
   accent-color: var(--accent);
 }
+
+/* ── Zoomable waveform: ruler, zoom bar, minimap ──────────────────── */
+
+.waveStack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.ruler {
+  position: relative;
+  height: 22px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--seam);
+  overflow: hidden;
+}
+
+.rulerTick {
+  position: absolute;
+  bottom: 0;
+  padding-left: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  border-left: 1px solid var(--seam-strong);
+  line-height: 1;
+  height: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.zoomBar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.zoomBar span {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoomBar button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  cursor: pointer;
+}
+
+.zoomBar button:hover:not(:disabled) {
+  border-color: var(--seam-strong);
+  background: var(--panel-raised);
+}
+
+.zoomBar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.minimap {
+  position: relative;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--screen-bg);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  --wave: var(--screen-dim);
+}
+
+.miniWindow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.miniPlayhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}

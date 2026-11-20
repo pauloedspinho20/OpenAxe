@@ -7,7 +7,13 @@
  */
 import { create } from 'zustand'
 
-import { computePeaks, decodeAudio, MAX_AUDIO_BYTES } from './decode'
+import {
+  computeDetailPeaks,
+  computePeaks,
+  decodeAudio,
+  MAX_AUDIO_BYTES,
+  type DetailPeaks,
+} from './decode'
 import {
   DEFAULT_PRACTICE,
   deleteMedia,
@@ -49,6 +55,8 @@ interface MediaState {
   duration: number
   playing: boolean
   meter: number
+  /** High-resolution min/max peaks of the loaded audio track, for the zoomed waveform. */
+  detail: DetailPeaks | null
   practice: PracticeSettings
   /** Speed trainer: raise the speed by `step` every `every` loop passes, up to `target`. */
   trainer: SpeedTrainer
@@ -199,6 +207,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     engineRate: 48_000,
     activeId: null,
     loaded: null,
+    detail: null,
     loadState: 'idle',
     loadProgress: 0,
     error: null,
@@ -304,6 +313,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
       if (persistTimer) clearTimeout(persistTimer)
       set({ activeId: id, practice: { ...item.practice }, error: null })
       if (item.kind !== 'audio') {
+        set({ detail: null })
         // Scores load once rendered (tabs/useScorePlayback).
         if (get().loaded?.itemId !== id) {
           set({ position: 0, duration: 0, playing: false, loadState: 'idle' })
@@ -317,6 +327,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         if (!blob) throw new Error('The file for this track is missing')
         set({ loadState: 'loading', loadProgress: 0, duration: item.duration })
         const track = await decodeAudio(await blob.arrayBuffer(), get().engineRate)
+        set({ detail: computeDetailPeaks(track) })
         if (get().activeId !== id) return
         await loadIntoPlayer(id, track, 0)
       } catch (err) {
@@ -338,6 +349,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
       const { transport } = get()
       stopPolling()
       set({
+        detail: null,
         activeId: null,
         loaded: null,
         loadState: 'idle',

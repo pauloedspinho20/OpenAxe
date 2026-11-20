@@ -52,6 +52,39 @@ export function computePeaks(track: DecodedTrack, buckets = 1200): number[] {
   return out
 }
 
+export interface DetailPeaks {
+  /** Interleaved [min, max] per bucket. */
+  data: Float32Array
+  /** Buckets per second of audio. */
+  perSecond: number
+}
+
+/**
+ * Fine-grained peaks for the zoomed waveform (kept in memory only): one
+ * min/max pair per `framesPerBucket` frames - about 750 per second at 48 kHz,
+ * ~1.8 MB for a five-minute track.
+ */
+export function computeDetailPeaks(track: DecodedTrack, framesPerBucket = 64): DetailPeaks {
+  const buckets = Math.ceil(track.frames / framesPerBucket)
+  const data = new Float32Array(buckets * 2)
+  for (let b = 0; b < buckets; b++) {
+    const start = b * framesPerBucket
+    const end = Math.min(track.frames, start + framesPerBucket)
+    let lo = 0
+    let hi = 0
+    for (const ch of track.channels) {
+      for (let i = start; i < end; i++) {
+        const v = ch[i]!
+        if (v < lo) lo = v
+        else if (v > hi) hi = v
+      }
+    }
+    data[b * 2] = lo
+    data[b * 2 + 1] = hi
+  }
+  return { data, perSecond: track.sampleRate / framesPerBucket }
+}
+
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
   const m = Math.floor(seconds / 60)
