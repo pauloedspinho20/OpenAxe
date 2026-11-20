@@ -52,7 +52,39 @@ export interface MediaItem {
   markers: MediaMarker[]
   /** Tabs only: a recording of the song paired with the score, and its sync points. */
   sync?: RecordingSync | null
+  /** Where playback was left (seconds; score time for tabs). */
+  resume?: number
+  /** Tabs only: how the workspace was left (zoom, tracks, panels...). */
+  view?: TabViewState | null
+  /** Scored practice runs, oldest first (capped). */
+  runs?: PracticeRun[]
 }
+
+export interface TabViewState {
+  zoom: number
+  profile: 'tab' | 'both' | 'score'
+  horizontal: boolean
+  trackIndex: number
+  shown: number[]
+  sidebarOpen: boolean
+  source: 'synth' | 'recording'
+}
+
+/** One scored practice run (a wait-mode run, or a listened pass/play-through). */
+export interface PracticeRun {
+  /** Epoch ms when it finished. */
+  at: number
+  mode: 'wait' | 'listen'
+  speed: number
+  notes: number
+  hits: number
+  /** Per bar: [bar index, hits, misses]. */
+  bars: [number, number, number][]
+  seconds: number
+}
+
+/** Runs kept per song. */
+export const MAX_RUNS = 200
 
 export const DEFAULT_PRACTICE: PracticeSettings = {
   speed: 1,
@@ -91,6 +123,9 @@ function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
     practice: { ...DEFAULT_PRACTICE, ...(row.practice ?? {}) },
     markers: Array.isArray(row.markers) ? row.markers : [],
     sync: row.sync && typeof row.sync.audioId === 'string' ? row.sync : null,
+    resume: typeof row.resume === 'number' && row.resume > 0 ? row.resume : 0,
+    view: row.view ?? null,
+    runs: Array.isArray(row.runs) ? row.runs : [],
   }
 }
 

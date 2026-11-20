@@ -70,6 +70,7 @@ export function Tool({
       title={title}
       icon={icon}
       iconOnly={!hasTag && !!icon}
+      ariaLabel={hasTag ? title : undefined}
       active={!!on}
       disabled={!!disabled}
       onClick={onClick}

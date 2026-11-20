@@ -68,6 +68,9 @@ interface MediaState {
   /** Speed trainer: raise the speed by `step` every `every` loop passes, up to `target`. */
   trainer: SpeedTrainer
   loopCount: number
+  /** Accuracy of the last scored pass (Listen mode), for display. */
+  lastPass: number | null
+  cleanStreak: number
   /** A count-in is sounding. */
   counting: boolean
   /** Tempo/meter at the play position, set by the tab workspace (overrides the item's). */
@@ -83,6 +86,8 @@ interface MediaState {
 
 export interface SpeedTrainer {
   enabled: boolean
+  /** Only count passes scored at >= 90% (needs Listen mode). */
+  clean: boolean
   step: number
   every: number
   target: number
@@ -94,7 +99,9 @@ interface MediaActions {
   removeItem(id: string): Promise<void>
   updateItem(
     id: string,
-    patch: Partial<Pick<MediaItem, 'name' | 'artist' | 'markers' | 'sync'>>,
+    patch: Partial<
+      Pick<MediaItem, 'name' | 'artist' | 'markers' | 'sync' | 'resume' | 'view' | 'runs'>
+    >,
   ): Promise<void>
   setTransport(transport: BackingTransport | null, engineRate?: number): void
 
@@ -116,6 +123,8 @@ interface MediaActions {
   setLoop(start: number | null, end: number | null, enabled?: boolean): void
   toggleLoop(): void
   setTrainer(patch: Partial<SpeedTrainer>): void
+  /** Listen mode reports each scored loop pass; the clean-pass trainer acts on it. */
+  reportPass(accuracy: number): void
   setCountIn(patch: Partial<Pick<PracticeSettings, 'countInBars' | 'bpm' | 'beatsPerBar'>>): void
   /** Called by the poller with the core's report. */
   applyStatus(status: PlayerStatus): void
@@ -138,6 +147,18 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
   const report = (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err)
     set({ error: message })
+  }
+
+  /** Save where the active backing track is (tabs save their own score time). */
+  const rememberPosition = () => {
+    const { activeId, items, position, loaded } = get()
+    const item = items.find((i) => i.id === activeId)
+    if (!item || item.kind !== 'audio' || loaded?.itemId !== item.id) return
+    const resume = Math.round(position * 10) / 10
+    if (resume === (item.resume ?? 0)) return
+    const next = { ...item, resume }
+    set({ items: get().items.map((i) => (i.id === item.id ? next : i)) })
+    void saveMedia(next).catch(() => {})
   }
 
   const persistPractice = () => {
@@ -230,7 +251,9 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     playing: false,
     meter: 0,
     practice: { ...DEFAULT_PRACTICE },
-    trainer: { enabled: false, step: 0.05, every: 2, target: 1 },
+    trainer: { enabled: false, clean: false, step: 0.05, every: 2, target: 1 },
+    lastPass: null,
+    cleanStreak: 0,
     loopCount: 0,
     prepare: null,
     counting: false,
@@ -249,6 +272,21 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         },
       })
       persistPractice()
+    },
+
+    reportPass(accuracy) {
+      const { trainer, practice } = get()
+      set({ lastPass: accuracy })
+      if (!trainer.enabled || !trainer.clean) return
+      if (accuracy < 0.9) {
+        set({ cleanStreak: 0 })
+        return
+      }
+      const cleanStreak = get().cleanStreak + 1
+      set({ cleanStreak })
+      if (cleanStreak % Math.max(1, trainer.every) === 0 && practice.speed < trainer.target) {
+        get().setSpeed(Math.min(trainer.target, practice.speed + trainer.step))
+      }
     },
 
     setTrainer(patch) {
@@ -341,6 +379,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     async open(id) {
       const item = get().items.find((i) => i.id === id)
       if (!item) return
+      if (get().activeId !== id) rememberPosition()
       if (persistTimer) clearTimeout(persistTimer)
       set({ activeId: id, practice: { ...item.practice }, error: null })
       if (item.kind !== 'audio') {
@@ -361,6 +400,9 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         set({ detail: computeDetailPeaks(track) })
         if (get().activeId !== id) return
         await loadIntoPlayer(id, track, 0)
+        // Pick up where this track was left.
+        const resume = get().items.find((i) => i.id === id)?.resume ?? 0
+        if (resume > 0 && resume < track.frames / track.sampleRate - 1) await get().seek(resume)
       } catch (err) {
         set({ loadState: 'error' })
         report(err)
@@ -377,6 +419,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     },
 
     async close() {
+      rememberPosition()
       const { transport } = get()
       stopPolling()
       set({
@@ -423,6 +466,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
       const { transport } = get()
       if (!transport || get().loadState !== 'ready') return
       get().applyStatus(await transport.pause())
+      rememberPosition()
     },
 
     async toggle() {
@@ -518,6 +562,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         set({ loopCount })
         if (
           trainer.enabled &&
+          !trainer.clean &&
           loopCount % Math.max(1, trainer.every) === 0 &&
           practice.speed < trainer.target
         ) {

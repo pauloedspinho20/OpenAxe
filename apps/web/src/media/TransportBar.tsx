@@ -78,6 +78,8 @@ export function PracticeControls() {
   const position = useMediaStore((s) => s.position)
   const trainer = useMediaStore((s) => s.trainer)
   const loopCount = useMediaStore((s) => s.loopCount)
+  const lastPass = useMediaStore((s) => s.lastPass)
+  const cleanStreak = useMediaStore((s) => s.cleanStreak)
   const tempoHint = useMediaStore((s) => s.tempoHint)
   const s = useMediaStore.getState()
   const hasRegion =
@@ -316,6 +318,25 @@ export function PracticeControls() {
             ))}
           </select>
           {practice.loopEnabled && <span className={styles.dim}>pass {loopCount}</span>}
+        </div>
+        <div className={styles.row}>
+          <label
+            className={styles.check}
+            title="With Listen mode on, only passes you play at 90% or better count toward the next speed step"
+          >
+            <input
+              type="checkbox"
+              checked={trainer.clean}
+              onChange={(e) => s.setTrainer({ clean: e.target.checked })}
+            />
+            Only clean passes (≥90%, needs Listen)
+          </label>
+          {lastPass !== null && (
+            <span className={styles.dim}>
+              last pass {Math.round(lastPass * 100)}%
+              {trainer.clean ? ` · ${cleanStreak} clean in a row` : ''}
+            </span>
+          )}
         </div>
       </fieldset>
     </div>

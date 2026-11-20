@@ -52,7 +52,7 @@ describe('media store', () => {
         beatsPerBar: 4,
       },
       tempoHint: null,
-      trainer: { enabled: false, step: 0.05, every: 2, target: 1 },
+      trainer: { enabled: false, clean: false, step: 0.05, every: 2, target: 1 },
       loopCount: 0,
       position: 0,
       playing: false,
@@ -141,5 +141,46 @@ describe('media store', () => {
     useMediaStore.getState().setCountIn({ countInBars: 0 })
     await useMediaStore.getState().play()
     expect(t.setCountIn).toHaveBeenLastCalledWith(0, 0.5, 4)
+  })
+
+  it('speeds up only after clean passes when the trainer is in clean mode', async () => {
+    const t = fakeTransport()
+    useMediaStore.getState().setTransport(t)
+    await useMediaStore.getState().loadDecoded('x', track, 1)
+    const s = useMediaStore.getState()
+    s.setSpeed(0.7)
+    s.setTrainer({ enabled: true, clean: true, step: 0.1, every: 2, target: 1 })
+    s.reportPass(0.95)
+    s.reportPass(0.6) // a sloppy pass resets the streak
+    s.reportPass(0.92)
+    expect(useMediaStore.getState().practice.speed).toBeCloseTo(0.7)
+    s.reportPass(0.97)
+    expect(useMediaStore.getState().practice.speed).toBeCloseTo(0.8)
+    expect(useMediaStore.getState().lastPass).toBeCloseTo(0.97)
+    // Loop wraps alone don't advance it in clean mode.
+    useMediaStore.setState({ playing: true, position: 3.9 })
+    s.setLoop(2, 4, true)
+    s.applyStatus({
+      position: 2.05 * 48_000,
+      length: 480_000,
+      sampleRate: 48_000,
+      playing: true,
+      meter: 0,
+    })
+    s.applyStatus({
+      position: 3.9 * 48_000,
+      length: 480_000,
+      sampleRate: 48_000,
+      playing: true,
+      meter: 0,
+    })
+    s.applyStatus({
+      position: 2.05 * 48_000,
+      length: 480_000,
+      sampleRate: 48_000,
+      playing: true,
+      meter: 0,
+    })
+    expect(useMediaStore.getState().practice.speed).toBeCloseTo(0.8)
   })
 })
