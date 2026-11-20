@@ -36,10 +36,11 @@ import * as ops from './scoreOps'
 import { matches, nextTarget, targetFor, type WaitTarget } from './waitMode'
 import { appendRun, barHeat, ListenTracker, RunScorer, type ListenBeat } from './practiceScore'
 import { PracticePanel } from './PracticePanel'
+import { routineSections, sectionDone, type RoutineSection } from './routine'
 import { ToneLink, useToneFollower } from '../ToneLink'
 import { START_KEY, type ToneSection } from '../tone'
 import type { PracticeRun } from '../mediaDb'
-import { audioToScore, scoreToAudio, upsertPoint } from './sync'
+import { audioToScore, mixGuide, scoreToAudio, upsertPoint } from './sync'
 import { RecordingPanel } from './RecordingPanel'
 import { decodeAudio } from '../decode'
 import { detectPitch } from '../../tuner/pitchDetect'
@@ -128,6 +129,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [solo, setSolo] = useState<Set<number>>(new Set())
   const [profile, setProfile] = useState<Profile>(item.view?.profile ?? 'both')
   const [zoom, setZoom] = useState(item.view?.zoom ?? 1)
+  // Practice view: just the music, bigger, and the transport (Esc leaves).
+  const [reading, setReading] = useState(false)
+  const viewZoom = reading ? Math.min(2.5, Math.max(1.4, zoom * 1.4)) : zoom
   const [horizontal, setHorizontal] = useState(item.view?.horizontal ?? false)
   const [metronome, setMetronome] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -155,16 +159,30 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     item.view?.source ?? (item.sync ? 'recording' : 'synth'),
   )
   const useRec = source === 'recording' && !!sync
+  // Guide: the selected track's synth mixed over the recording ("isolate your part").
+  const [guide, setGuide] = useState(item.view?.guide ?? 0)
+  const guideSig =
+    useRec && guide > 0 ? `${trackIndex}|${guide}|${JSON.stringify(sync?.points ?? [])}` : ''
   const recRef = useRef({
     on: useRec,
     points: sync?.points ?? [],
     key: 1,
     audioId: sync?.audioId ?? '',
+    guideSig,
+    guide,
+    track: trackIndex,
   })
-  if (recRef.current.audioId !== (sync?.audioId ?? '') || recRef.current.on !== useRec) {
+  if (
+    recRef.current.audioId !== (sync?.audioId ?? '') ||
+    recRef.current.on !== useRec ||
+    recRef.current.guideSig !== guideSig
+  ) {
     recRef.current.key++
     recRef.current.audioId = sync?.audioId ?? ''
+    recRef.current.guideSig = guideSig
   }
+  recRef.current.guide = useRec ? guide : 0
+  recRef.current.track = trackIndex
   recRef.current.on = useRec
   recRef.current.points = sync?.points ?? []
   /** Score seconds -> the player's timeline (identity for the synth). */
@@ -352,11 +370,22 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     const api = apiRef.current
     if (!api) return
     api.settings.display.staveProfile = PROFILE[profile]
-    api.settings.display.scale = zoom
+    api.settings.display.scale = viewZoom
     api.settings.display.layoutMode = horizontal ? LayoutMode.Horizontal : LayoutMode.Page
     api.updateSettings()
     if (api.score) api.render()
-  }, [profile, zoom, horizontal])
+  }, [profile, viewZoom, horizontal])
+
+  useEffect(() => {
+    if (!reading) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      setReading(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reading])
 
   useEffect(() => {
     const api = apiRef.current
@@ -420,7 +449,22 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             await blob.arrayBuffer(),
             useMediaStore.getState().engineRate,
           )
-          await useMediaStore.getState().loadDecoded(item.id, audio, revision)
+          let mixed = audio
+          if (rec.guide > 0 && rec.points.length) {
+            setRenderProgress(0)
+            const vol = new Map<number, number>()
+            api.score?.tracks.forEach((_, i) => vol.set(i, i === rec.track ? 1 : 0))
+            const synthPart = await renderScoreAudio(api, {
+              sampleRate: audio.sampleRate,
+              trackVolume: vol,
+              onProgress: setRenderProgress,
+            })
+            mixed = {
+              ...audio,
+              channels: mixGuide(audio, synthPart, playbackBars(), rec.points, rec.guide),
+            }
+          }
+          await useMediaStore.getState().loadDecoded(item.id, mixed, revision)
           const at = scoreToAudio(rec.points, atScore)
           if (at > 0)
             await useMediaStore.getState().seek(Math.min(at, audio.frames / audio.sampleRate))
@@ -595,7 +639,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       h: bar.h,
       stringY,
     })
-  }, [cursor, editing, waitOn, status, zoom, profile, horizontal, score, revision])
+  }, [cursor, editing, waitOn, status, viewZoom, profile, horizontal, score, revision])
 
   // ── Selection ─────────────────────────────────────────────────────────
   const selection = useMemo(
@@ -800,7 +844,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       scorer = null
       tracker = null
       targets.clear()
-      if (run) useMediaStore.getState().reportPass(saveRun(run))
+      if (run) useMediaStore.getState().reportPass(saveRun(run), run.speed)
     }
     const timer = setInterval(() => {
       const st = useMediaStore.getState()
@@ -866,7 +910,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     }
     setHeatBoxes(boxes)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heat, heatOn, status, zoom, profile, horizontal, revision, shown, tick])
+  }, [heat, heatOn, status, viewZoom, profile, horizontal, revision, shown, tick])
 
   const loopSelection = () => {
     const refs = targets()
@@ -1068,6 +1112,24 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     return null
   }
 
+  /** Every bar in playback order (repeats included) with its score-time span. */
+  function playbackBars(): { start: number; end: number }[] {
+    const score = scoreRef.current
+    const lookups = apiRef.current?.tickCache?.masterBars
+    if (!score || !lookups) return []
+    const out: { start: number; end: number }[] = []
+    let ms = 0
+    let tempo = score.tempo || 120
+    for (const lk of lookups) {
+      const t = lk.masterBar.tempoAutomations[0]
+      if (t) tempo = t.value
+      const dur = ((lk.end - lk.start) * 60_000) / (tempo * 960)
+      out.push({ start: ms / 1000, end: (ms + dur) / 1000 })
+      ms += dur
+    }
+    return out
+  }
+
   /** The bar (first playthrough) that playback at `sec` is in. */
   const barAtTime = (sec: number): number => {
     const api = apiRef.current
@@ -1104,10 +1166,65 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     const b = barTimes(Math.max(from, to))
     if (!a || !b) return
     useMediaStore.getState().setLoop(toPlayer(a.start), toPlayer(b.end), true)
-    void prepare().then(async (ok) => {
+    return prepare().then(async (ok) => {
       if (ok) await useMediaStore.getState().seek(toPlayer(a.start))
+      return ok
     })
   }
+
+  // ── Section practice routine ──────────────────────────────────────────
+  const [routine, setRoutine] = useState<{
+    idx: number
+    sections: RoutineSection[]
+    start: number
+    target: number
+  } | null>(null)
+  const [routineDone, setRoutineDone] = useState(false)
+  const passCount = useMediaStore((st) => st.passCount)
+
+  const playSection = (sec: RoutineSection) => {
+    void loopBars(sec.from, sec.to)?.then(async (ok) => {
+      if (ok && !useMediaStore.getState().playing) await useMediaStore.getState().play()
+    })
+  }
+
+  const startRoutine = (start: number, target: number) => {
+    const sc = scoreRef.current
+    if (!sc) return
+    const sections = routineSections(sc)
+    const st = useMediaStore.getState()
+    st.setTrainer({ enabled: true, clean: true, step: 0.05, every: 1, target })
+    st.setSpeed(start)
+    setWaitOn(false)
+    setListenOn(true)
+    setRoutineDone(false)
+    setRoutine({ idx: 0, sections, start, target })
+    playSection(sections[0]!)
+  }
+
+  const stopRoutine = () => {
+    setRoutine(null)
+    void useMediaStore.getState().pause()
+  }
+
+  // Each scored pass: move to the next section once this one is clean at the target speed.
+  useEffect(() => {
+    if (!routine) return
+    const st = useMediaStore.getState()
+    if (st.lastPass === null || !sectionDone(st.lastPass, st.lastPassSpeed, routine.target)) return
+    const idx = routine.idx + 1
+    if (idx >= routine.sections.length) {
+      setRoutine(null)
+      setRoutineDone(true)
+      st.setLoop(null, null, false)
+      void st.pause()
+      return
+    }
+    st.setSpeed(routine.start)
+    setRoutine({ ...routine, idx })
+    playSection(routine.sections[idx]!)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passCount])
 
   // ── Export ────────────────────────────────────────────────────────────
   const download = (bytes: Uint8Array | string, ext: string, type: string) => {
@@ -1323,13 +1440,14 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         shown: [...shown],
         sidebarOpen,
         source,
+        guide,
       }
       const prev = liveItemRef.current.view
       if (JSON.stringify(prev) !== JSON.stringify(view))
         void useMediaStore.getState().updateItem(item.id, { view })
     }, 800)
     return () => clearTimeout(timer)
-  }, [zoom, profile, horizontal, trackIndex, shown, sidebarOpen, source, item.id])
+  }, [zoom, profile, horizontal, trackIndex, shown, sidebarOpen, source, guide, item.id])
 
   const saveResume = () => {
     const at = Math.round(lastScorePos.current * 10) / 10
@@ -1382,9 +1500,22 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const ms = useMediaStore.getState()
 
   return (
-    <div ref={wsRef} className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''}`}>
+    <div
+      ref={wsRef}
+      className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''} ${reading ? tabStyles.wsReading : ''}`}
+    >
+      {reading && (
+        <button
+          type="button"
+          className={tabStyles.readingExit}
+          onClick={() => setReading(false)}
+          title="Back to the full workspace (Esc)"
+        >
+          <I.ReadingIcon size={14} /> Exit practice view <kbd>Esc</kbd>
+        </button>
+      )}
       {/* ── Top bar ── */}
-      <header className={tabStyles.topbar}>
+      <header className={tabStyles.topbar} hidden={reading}>
         <div
           className={tabStyles.songTitle}
           title={`${title.title || item.name}${title.artist ? ` — ${title.artist}` : ''}`}
@@ -1451,6 +1582,15 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         </div>
 
         <div className={tabStyles.barGroup}>
+          <Tool
+            icon={I.ReadingIcon}
+            title="Practice view: just the music, bigger (Esc to leave)"
+            onClick={() => {
+              setEditing(false)
+              setReading(true)
+              setTimeout(() => viewportRef.current?.focus(), 0)
+            }}
+          />
           <HardwareButton
             size="small"
             label={editing ? 'Editing' : 'Edit'}
@@ -1510,7 +1650,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
 
       {/* ── Body: toolbox rail · sheet · drawer ── */}
       <div className={tabStyles.body}>
-        {editing && score && (
+        {editing && !reading && score && (
           <TabToolbox
             score={score}
             cursor={cursor}
@@ -1594,6 +1734,13 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                   </span>
                 )}
                 <span>Voice {cursor.voice + 1}</span>
+                {routine && (
+                  <span className={tabStyles.waitStatus}>
+                    Routine: {routine.sections[routine.idx]!.label} ({routine.idx + 1}/
+                    {routine.sections.length}) · {Math.round(speedNow * 100)}% →{' '}
+                    {Math.round(routine.target * 100)}%
+                  </span>
+                )}
                 {waitOn && (
                   <span
                     className={`${tabStyles.waitStatus} ${waitInfo.hit ? tabStyles.waitHit : ''}`}
@@ -1619,7 +1766,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           </div>
         </div>
 
-        {sidebarOpen && score && (
+        {sidebarOpen && !reading && score && (
           <TrackSidebar
             score={score}
             trackIndex={trackIndex}
@@ -1653,6 +1800,14 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                   heatOn={heatOn}
                   onHeat={setHeatOn}
                   onLoopBars={(a, b) => loopBars(a, b)}
+                  routine={
+                    routine
+                      ? `${routine.sections[routine.idx]!.label} (${routine.idx + 1}/${routine.sections.length})`
+                      : null
+                  }
+                  routineDone={routineDone}
+                  onStartRoutine={startRoutine}
+                  onStopRoutine={stopRoutine}
                   onClear={() => void useMediaStore.getState().updateItem(item.id, { runs: [] })}
                 />
                 <RecordingPanel
@@ -1668,6 +1823,12 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                     setSource(s)
                   }}
                   onTapBar={setTapBar}
+                  guide={guide}
+                  guideTrack={tracks[trackIndex]?.name ?? `Track ${trackIndex + 1}`}
+                  onGuide={(v) => {
+                    void useMediaStore.getState().pause()
+                    setGuide(v)
+                  }}
                   onTap={() => void tapSync()}
                   onRemovePoint={(i) =>
                     sync && saveSync({ ...sync, points: sync.points.filter((_, j) => j !== i) })

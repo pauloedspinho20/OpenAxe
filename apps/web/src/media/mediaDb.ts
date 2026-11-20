@@ -82,6 +82,8 @@ export interface TabViewState {
   shown: number[]
   sidebarOpen: boolean
   source: 'synth' | 'recording'
+  /** Guide-track level over the paired recording (0 = off). */
+  guide?: number
 }
 
 /** One scored practice run (a wait-mode run, or a listened pass/play-through). */

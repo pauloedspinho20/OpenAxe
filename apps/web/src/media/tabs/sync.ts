@@ -53,3 +53,50 @@ export function upsertPoint(points: SyncPoint[], score: number, audio: number): 
   }
   return next
 }
+
+export interface Segment {
+  /** Score time (seconds) the segment starts and ends at. */
+  start: number
+  end: number
+}
+
+/**
+ * Mix a synthesized guide (rendered on the score's timeline) into a synced
+ * recording, segment by segment (bars, in playback order): each segment is
+ * placed at its synced start, unstretched, so the guide keeps its pitch and
+ * every downbeat lands where the recording's does. Short fades at segment
+ * edges avoid clicks; overlaps (a recording bar shorter than the score's)
+ * simply sum. Returns new channels; the inputs are untouched.
+ */
+export function mixGuide(
+  recording: { channels: Float32Array[]; sampleRate: number; frames: number },
+  guide: { channels: Float32Array[]; sampleRate: number; frames: number },
+  segments: Segment[],
+  points: SyncPoint[],
+  gain: number,
+): Float32Array[] {
+  const sr = recording.sampleRate
+  const out = recording.channels.map((c) => new Float32Array(c))
+  const fade = Math.max(1, Math.round(0.004 * sr))
+  for (const seg of segments) {
+    const g0 = Math.round(seg.start * guide.sampleRate)
+    const g1 = Math.min(guide.frames, Math.round(seg.end * guide.sampleRate))
+    const a0 = Math.round(scoreToAudio(points, seg.start) * sr)
+    const n = g1 - g0
+    if (n <= 0) continue
+    for (let c = 0; c < out.length; c++) {
+      const dst = out[c]!
+      const src = guide.channels[Math.min(c, guide.channels.length - 1)]!
+      // Mono recording: fold a stereo guide down.
+      const src2 = out.length === 1 && guide.channels.length > 1 ? guide.channels[1]! : null
+      for (let i = 0; i < n; i++) {
+        const at = a0 + i
+        if (at < 0 || at >= dst.length) continue
+        const env = Math.min(1, i / fade, (n - 1 - i) / fade)
+        const v = src2 ? 0.5 * (src[g0 + i]! + src2[g0 + i]!) : src[g0 + i]!
+        dst[at] = dst[at]! + v * env * gain
+      }
+    }
+  }
+  return out
+}

@@ -441,6 +441,12 @@ export const SidebarIcon = mk(
     <path d="M9 4v16" />
   </>,
 )
+export const ReadingIcon = mk(
+  <>
+    <path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z" />
+    <path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z" />
+  </>,
+)
 export const CodeIcon = mk(<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" />)
 export const NotationIcon = mk(
   <>

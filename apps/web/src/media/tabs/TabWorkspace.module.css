@@ -15,6 +15,40 @@
 }
 
 /* Full screen: the workspace alone fills the display. */
+.wsReading .topbar[hidden] {
+  display: none;
+}
+
+.readingExit {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--seam-strong);
+  border-radius: 999px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12px;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.readingExit:hover,
+.readingExit:focus-visible {
+  opacity: 1;
+}
+
+.readingExit kbd {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 .wsFull {
   padding: 8px;
   height: 100vh;
@@ -1104,4 +1138,15 @@
   border: 1px solid var(--seam);
   border-radius: var(--r-sm);
   padding: 2px 4px;
+}
+
+.routineBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam);
+  background: var(--panel);
+  font-size: 12px;
 }

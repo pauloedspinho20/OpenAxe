@@ -25,6 +25,10 @@ interface RecordingPanelProps {
   onSource: (source: 'synth' | 'recording') => void
   onTapBar: (bar: number) => void
   onTap: () => void
+  /** Guide level (0 = off) and the track it plays. */
+  guide: number
+  guideTrack: string
+  onGuide: (level: number) => void
   onRemovePoint: (index: number) => void
   onClear: () => void
   onNudge: (seconds: number) => void
@@ -106,6 +110,37 @@ export function RecordingPanel(p: RecordingPanelProps) {
               Play the recording and press <kbd>Enter</kbd> (or the button) on the first beat of
               each bar. One tap sets the start; more taps follow tempo changes.
             </p>
+
+            <div className={t.tapRow}>
+              <label
+                className={styles.check}
+                title="Mix the selected track's synth over the recording, bar by bar, to hear your part"
+              >
+                <input
+                  type="checkbox"
+                  checked={p.guide > 0}
+                  disabled={points.length === 0}
+                  onChange={(e) => p.onGuide(e.target.checked ? 0.6 : 0)}
+                />
+                Guide: {p.guideTrack}
+              </label>
+              {p.guide > 0 && (
+                <select
+                  value={p.guide}
+                  onChange={(e) => p.onGuide(Number(e.target.value))}
+                  aria-label="Guide level"
+                >
+                  {[0.3, 0.6, 1].map((v) => (
+                    <option key={v} value={v}>
+                      {v === 0.3 ? 'soft' : v === 0.6 ? 'medium' : 'loud'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {points.length === 0 && p.guide === 0 && (
+              <p className={t.hint}>Tap at least one bar to enable the guide track.</p>
+            )}
 
             {points.length > 0 && (
               <>

@@ -4,7 +4,7 @@
  * of accuracy and speed across runs.
  */
 import { HardwareButton } from '@openaxe/ui'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import type { PracticeRun } from '../mediaDb'
@@ -18,6 +18,11 @@ interface PracticePanelProps {
   onHeat: (on: boolean) => void
   onLoopBars: (from: number, to: number) => void
   onClear: () => void
+  /** Label of the section the routine is on, or null when it isn't running. */
+  routine: string | null
+  routineDone: boolean
+  onStartRoutine: (startSpeed: number, targetSpeed: number) => void
+  onStopRoutine: () => void
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -60,7 +65,67 @@ function Chart({ runs }: { runs: PracticeRun[] }) {
   )
 }
 
-export function PracticePanel({ runs, heatOn, onHeat, onLoopBars, onClear }: PracticePanelProps) {
+function RoutineControls({
+  routine,
+  routineDone,
+  onStartRoutine,
+  onStopRoutine,
+}: Pick<PracticePanelProps, 'routine' | 'routineDone' | 'onStartRoutine' | 'onStopRoutine'>) {
+  const [start, setStart] = useState(0.7)
+  return (
+    <div className={t.routineBox}>
+      <strong>Practice section by section</strong>
+      {routine ? (
+        <div className={t.tapRow}>
+          <span>On {routine}</span>
+          <HardwareButton size="small" label="Stop" variant="danger" onClick={onStopRoutine} />
+        </div>
+      ) : (
+        <>
+          <p className={t.hint}>
+            Loops each section with Listen on, speeding up 5% after every clean pass from your start
+            speed to 100%, then moves to the next section.
+            {routineDone && ' Last routine: complete ✓'}
+          </p>
+          <div className={t.tapRow}>
+            <label className={t.textField}>
+              <span className={styles.dim}>from</span>
+              <select
+                value={start}
+                onChange={(e) => setStart(Number(e.target.value))}
+                aria-label="Routine start speed"
+              >
+                {[0.5, 0.6, 0.7, 0.8, 0.9].map((v) => (
+                  <option key={v} value={v}>
+                    {pct(v)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <HardwareButton
+              size="small"
+              label="Start routine"
+              icon={<I.LoopIcon size={14} />}
+              onClick={() => onStartRoutine(start, 1)}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+export function PracticePanel({
+  runs,
+  heatOn,
+  onHeat,
+  onLoopBars,
+  onClear,
+  routine,
+  routineDone,
+  onStartRoutine,
+  onStopRoutine,
+}: PracticePanelProps) {
   const last = runs[runs.length - 1]
   const heat = useMemo(() => barHeat(runs), [runs])
   const span = worstSpan(worstBars(heat))
@@ -72,6 +137,12 @@ export function PracticePanel({ runs, heatOn, onHeat, onLoopBars, onClear }: Pra
         {last && <span className={t.sideBadge}>{pct(runAccuracy(last))}</span>}
       </summary>
       <div className={t.recPanel}>
+        <RoutineControls
+          routine={routine}
+          routineDone={routineDone}
+          onStartRoutine={onStartRoutine}
+          onStopRoutine={onStopRoutine}
+        />
         {!last ? (
           <p className={t.hint}>
             Turn on <strong>Listen</strong> (scores you while the song plays) or{' '}

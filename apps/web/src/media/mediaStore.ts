@@ -70,7 +70,11 @@ interface MediaState {
   loopCount: number
   /** Accuracy of the last scored pass (Listen mode), for display. */
   lastPass: number | null
+  /** The speed that pass was played at (the trainer may have raised it since). */
+  lastPassSpeed: number
   cleanStreak: number
+  /** Increments on every scored pass (lets views react to each one). */
+  passCount: number
   /** A count-in is sounding. */
   counting: boolean
   /** Tempo/meter at the play position, set by the tab workspace (overrides the item's). */
@@ -124,7 +128,7 @@ interface MediaActions {
   toggleLoop(): void
   setTrainer(patch: Partial<SpeedTrainer>): void
   /** Listen mode reports each scored loop pass; the clean-pass trainer acts on it. */
-  reportPass(accuracy: number): void
+  reportPass(accuracy: number, speed?: number): void
   setCountIn(patch: Partial<Pick<PracticeSettings, 'countInBars' | 'bpm' | 'beatsPerBar'>>): void
   /** Called by the poller with the core's report. */
   applyStatus(status: PlayerStatus): void
@@ -253,7 +257,9 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     practice: { ...DEFAULT_PRACTICE },
     trainer: { enabled: false, clean: false, step: 0.05, every: 2, target: 1 },
     lastPass: null,
+    lastPassSpeed: 1,
     cleanStreak: 0,
+    passCount: 0,
     loopCount: 0,
     prepare: null,
     counting: false,
@@ -274,9 +280,13 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
       persistPractice()
     },
 
-    reportPass(accuracy) {
+    reportPass(accuracy, speed) {
       const { trainer, practice } = get()
-      set({ lastPass: accuracy })
+      set({
+        lastPass: accuracy,
+        lastPassSpeed: speed ?? practice.speed,
+        passCount: get().passCount + 1,
+      })
       if (!trainer.enabled || !trainer.clean) return
       if (accuracy < 0.9) {
         set({ cleanStreak: 0 })
