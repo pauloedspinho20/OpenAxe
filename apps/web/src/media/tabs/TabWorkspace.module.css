@@ -4,6 +4,8 @@
 /* ── Workspace frame ───────────────────────────────────────────────── */
 
 .ws {
+  --sheet-bg: #fbfaf7;
+  --sheet-ink: #111;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -24,12 +26,31 @@
   left: 0;
   right: 0;
   z-index: 2;
-  background: #fbfaf7;
+  background: var(--sheet-bg);
   opacity: 0.93;
   pointer-events: none;
   transition:
     top 0.25s ease,
     height 0.25s ease;
+}
+
+/* Dark sheet: the music light on dark (alphaTab's colours are set in code). */
+.sheetDark {
+  --sheet-bg: #1b1b1e;
+  --sheet-ink: #ece8de;
+}
+
+.sheetDark .host :global(.at-cursor-bar) {
+  background: rgba(255, 196, 0, 0.1);
+}
+
+.sheetDark .host :global(.at-highlight *) {
+  fill: #ff8a5c;
+  stroke: #ff8a5c;
+}
+
+.sheetDark .sheetMsg {
+  color: #aaa;
 }
 
 /* Full screen: the workspace alone fills the display. */
@@ -201,8 +222,8 @@
   flex: 1;
   min-height: 160px;
   overflow: auto;
-  background: #fbfaf7;
-  color: #111;
+  background: var(--sheet-bg);
+  color: var(--sheet-ink);
   border-radius: var(--r-md) var(--r-md) 0 0;
   border: 1px solid var(--seam);
   border-bottom: none;

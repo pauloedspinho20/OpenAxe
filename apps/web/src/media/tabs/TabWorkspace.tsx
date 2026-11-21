@@ -20,7 +20,7 @@ import {
   PlayerMode,
   ScrollMode,
   TabRhythmMode,
-  type Settings,
+  Settings,
   StaveProfile,
   type synth,
 } from '@coderline/alphatab'
@@ -117,6 +117,25 @@ interface CursorBox {
   stringY: number
 }
 
+/** alphaTab's own colours, kept to restore the light sheet. */
+const PAPER = new Settings().display.resources
+const INK: Record<string, string> = {
+  staffLineColor: '#8C877C',
+  barSeparatorColor: '#B9B3A6',
+  barNumberColor: '#E8836A',
+  mainGlyphColor: '#ECE8DE',
+  secondaryGlyphColor: '#ECE8DE99',
+  scoreInfoColor: '#ECE8DE',
+}
+
+/** Light-on-dark sheet colours (or alphaTab's defaults). */
+function applySheetColors(settings: Settings, dark: boolean): void {
+  const r = settings.display.resources as unknown as Record<string, model.Color>
+  const paper = PAPER as unknown as Record<string, model.Color>
+  for (const key of Object.keys(INK))
+    r[key] = dark ? (model.Color.fromJson(INK[key]) ?? paper[key]!) : paper[key]!
+}
+
 export default function TabWorkspace({ item }: { item: MediaItem }) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -137,6 +156,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [profile, setProfile] = useState<Profile>(item.view?.profile ?? 'both')
   const [zoom, setZoom] = useState(item.view?.zoom ?? 1)
   const [tabRhythm, setTabRhythm] = useState(item.view?.tabRhythm ?? 'auto')
+  const [sheetDark, setSheetDark] = useState(item.view?.sheetDark ?? false)
   // Practice view: just the music, bigger, and the transport (Esc leaves).
   const [reading, setReading] = useState(false)
   const viewZoom = reading ? Math.min(2.5, Math.max(1.4, zoom * 1.4)) : zoom
@@ -393,9 +413,10 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         : tabRhythm === 'off'
           ? TabRhythmMode.Hidden
           : TabRhythmMode.Automatic
+    applySheetColors(api.settings, sheetDark)
     api.updateSettings()
     if (api.score) api.render()
-  }, [profile, viewZoom, horizontal, tabRhythm])
+  }, [profile, viewZoom, horizontal, tabRhythm, sheetDark])
 
   useEffect(() => {
     if (!reading) return
@@ -1532,6 +1553,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         sidebarOpen,
         fretboard: fretOpen,
         tabRhythm,
+        sheetDark,
         source,
         guide,
       }
@@ -1551,6 +1573,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     guide,
     fretOpen,
     tabRhythm,
+    sheetDark,
     item.id,
   ])
 
@@ -1721,7 +1744,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   return (
     <div
       ref={wsRef}
-      className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''} ${reading ? tabStyles.wsReading : ''}`}
+      className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''} ${reading ? tabStyles.wsReading : ''} ${sheetDark ? tabStyles.sheetDark : ''}`}
     >
       {/* ── Top bar ── */}
       <header className={tabStyles.topbar} hidden={reading}>
@@ -1788,6 +1811,13 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             on={tabRhythm === 'on'}
             tag={tabRhythm === 'auto' ? 'A' : tabRhythm === 'off' ? '✕' : undefined}
             onClick={() => setTabRhythm((r) => (r === 'auto' ? 'on' : r === 'on' ? 'off' : 'auto'))}
+          />
+          <Tool
+            icon={I.NotationIcon}
+            title={sheetDark ? 'Light sheet (black on paper)' : 'Dark sheet (light on dark)'}
+            on={sheetDark}
+            tag="◐"
+            onClick={() => setSheetDark((v) => !v)}
           />
           <Tool
             icon={I.ChordIcon}

@@ -90,6 +90,8 @@ export interface TabViewState {
   fretboard?: boolean
   /** Rhythm (stems) on the tab staff: alphaTab's automatic choice, always, or never. */
   tabRhythm?: 'auto' | 'on' | 'off'
+  /** Render the sheet light-on-dark. */
+  sheetDark?: boolean
 }
 
 /** One scored practice run (a wait-mode run, or a listened pass/play-through). */
