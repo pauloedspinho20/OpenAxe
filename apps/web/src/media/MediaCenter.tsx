@@ -3,7 +3,7 @@ import { Dialog, HardwareButton, Select } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
-import { allTags, matches, parseTags, sortItems, STATUSES } from './library'
+import { allTags, isImportable, matches, parseTags, sortItems, STATUSES } from './library'
 import styles from './MediaCenter.module.css'
 import { newMediaId, SCORE_EXTENSIONS, type LearnStatus, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
@@ -41,6 +41,8 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   const [dragOver, setDragOver] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const folderRef = useRef<HTMLInputElement | null>(null)
+  const notice = useMediaStore((s) => s.notice)
 
   const visible = useMemo(
     () =>
@@ -129,6 +131,37 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
               >
                 New song
               </button>
+              <button
+                type="button"
+                className={styles.chip}
+                onClick={() => folderRef.current?.click()}
+                disabled={busy}
+                title="Import every audio and tab file in a folder (duplicates are skipped)"
+              >
+                Import folder
+              </button>
+              <input
+                ref={(el) => {
+                  folderRef.current = el
+                  // Not in React's typings; lets the picker choose a folder.
+                  el?.setAttribute('webkitdirectory', '')
+                }}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  const audioExt = AUDIO_ACCEPT.split(',').filter((x) => x.startsWith('.'))
+                  const files = [...(e.target.files ?? [])].filter((f) =>
+                    isImportable(f.name, audioExt, SCORE_EXTENSIONS),
+                  )
+                  if (files.length) void importFiles(files)
+                  else
+                    useMediaStore.setState({
+                      notice: 'No audio or tab files were found in that folder.',
+                    })
+                  e.target.value = ''
+                }}
+              />
               <input
                 ref={fileRef}
                 type="file"
@@ -218,6 +251,18 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
         <section className={styles.main}>
           {!hasTransport && (
             <div className={styles.notice}>Power on the audio engine to play tracks and tabs.</div>
+          )}
+          {notice && (
+            <div className={styles.notice} role="status">
+              {notice}
+              <button
+                type="button"
+                className={styles.chip}
+                onClick={() => useMediaStore.setState({ notice: null })}
+              >
+                Dismiss
+              </button>
+            </div>
           )}
           {error && (
             <div className={styles.errorNotice} role="alert">

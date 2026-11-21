@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { allTags, keyName, matches, parseTags, sortItems, type LibraryFilter } from './library'
+import {
+  allTags,
+  findDuplicate,
+  hashFile,
+  isImportable,
+  keyName,
+  matches,
+  parseTags,
+  sortItems,
+  type LibraryFilter,
+} from './library'
 import type { MediaItem } from './mediaDb'
 
 const item = (p: Partial<MediaItem>): MediaItem =>
@@ -73,5 +83,29 @@ describe('library organisation', () => {
     expect(keyName(0, true)).toBe('Am')
     expect(keyName(1, true)).toBe('Em')
     expect(keyName(-2, true)).toBe('Gm')
+  })
+})
+
+describe('duplicates', () => {
+  it('matches by hash, or by name and size for old items', () => {
+    const items = [
+      { id: 'a', hash: 'h1', size: 10, fileName: 'a.mp3' },
+      { id: 'old', size: 20, fileName: 'b.gp' },
+    ]
+    expect(findDuplicate(items, { hash: 'h1', size: 99, name: 'x' })).toBe('a')
+    expect(findDuplicate(items, { hash: 'h2', size: 10, name: 'a.mp3' })).toBeNull()
+    expect(findDuplicate(items, { hash: 'h3', size: 20, name: 'b.gp' })).toBe('old')
+    expect(findDuplicate(items, { hash: null, size: 20, name: 'c.gp' })).toBeNull()
+  })
+
+  it('hashes file contents', async () => {
+    const a = await hashFile(new Blob(['abc']))
+    expect(a).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+    expect(await hashFile(new Blob(['abc']))).toBe(a)
+  })
+
+  it('knows importable files', () => {
+    expect(isImportable('Song.MP3', ['.mp3'], ['.gp'])).toBe(true)
+    expect(isImportable('notes.txt', ['.mp3'], ['.gp'])).toBe(false)
   })
 })

@@ -81,3 +81,33 @@ export function keyName(accidentals: number, minor: boolean): string {
   if (minor) return `${n >= 0 ? MINOR[n] : FLAT_MINOR[-n]}m`
   return n >= 0 ? NOTE[n]! : FLAT_NOTE[-n]!
 }
+
+/** The library item a file duplicates: same content hash, or (for items imported before hashes) same name and size. */
+export function findDuplicate(
+  items: readonly Pick<MediaItem, 'id' | 'hash' | 'size' | 'fileName'>[],
+  file: { hash: string | null; size: number; name: string },
+): string | null {
+  for (const i of items) {
+    if (file.hash && i.hash) {
+      if (i.hash === file.hash) return i.id
+    } else if (i.size === file.size && i.fileName === file.name) return i.id
+  }
+  return null
+}
+
+/** SHA-256 of a file's bytes as hex, or null where Web Crypto isn't available. */
+export async function hashFile(file: Blob): Promise<string | null> {
+  if (typeof crypto === 'undefined' || !crypto.subtle) return null
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Whether the library can import this file (by extension). */
+export function isImportable(
+  name: string,
+  audioExt: readonly string[],
+  scoreExt: readonly string[],
+): boolean {
+  const ext = name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0] ?? ''
+  return audioExt.includes(ext) || scoreExt.includes(ext)
+}

@@ -7,6 +7,7 @@
  */
 import { create } from 'zustand'
 
+import { findDuplicate, hashFile } from './library'
 import {
   computeDetailPeaks,
   computePeaks,
@@ -57,6 +58,8 @@ interface MediaState {
   loadState: LoadState
   loadProgress: number
   error: string | null
+  /** A non-error message for the library (e.g. duplicates skipped on import). */
+  notice: string | null
 
   position: number
   duration: number
@@ -265,6 +268,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     loadState: 'idle',
     loadProgress: 0,
     error: null,
+    notice: null,
     position: 0,
     duration: 0,
     playing: false,
@@ -329,9 +333,18 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
 
     async importFiles(files) {
       const added: MediaItem[] = []
+      const skipped: string[] = []
       for (const file of Array.from(files)) {
         try {
           if (file.size > MAX_AUDIO_BYTES) throw new Error(`${file.name} is larger than 200 MB`)
+          // Skip files already in the library (or earlier in this batch).
+          const hash = await hashFile(file)
+          if (
+            findDuplicate([...get().items, ...added], { hash, size: file.size, name: file.name })
+          ) {
+            skipped.push(file.name)
+            continue
+          }
           const score = isScoreFile(file.name)
           const { name, artist } = titleFromFileName(file.name)
           const item: MediaItem = {
@@ -347,6 +360,7 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
             peaks: [],
             practice: { ...DEFAULT_PRACTICE },
             markers: [],
+            ...(hash ? { hash } : {}),
           }
           if (!score) {
             // Decode once up front: validates the file and gives the waveform.
@@ -366,6 +380,11 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         }
       }
       if (added.length) set({ items: [...added, ...get().items] })
+      set({
+        notice: skipped.length
+          ? `${skipped.length} file${skipped.length === 1 ? ' was' : 's were'} already in the library and skipped${skipped.length <= 3 ? `: ${skipped.join(', ')}` : ''}.`
+          : null,
+      })
       return added
     },
 
