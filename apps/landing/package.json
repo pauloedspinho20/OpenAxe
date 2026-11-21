@@ -11,6 +11,7 @@
     "lint": "oxlint --config ../../.oxlintrc.json .",
     "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "fetch:releases": "node scripts/fetch-releases.mjs",
+    "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "prebuild": "node scripts/fetch-releases.mjs || true"
   },
   "dependencies": {
