@@ -92,6 +92,8 @@ export interface TabViewState {
   tabRhythm?: 'auto' | 'on' | 'off'
   /** Render the sheet light-on-dark. */
   sheetDark?: boolean
+  /** Horizontal layout: keep the playing beat in the middle of the screen. */
+  centerCursor?: boolean
 }
 
 /** One scored practice run (a wait-mode run, or a listened pass/play-through). */

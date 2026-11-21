@@ -158,6 +158,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [zoom, setZoom] = useState(item.view?.zoom ?? 1)
   const [tabRhythm, setTabRhythm] = useState(item.view?.tabRhythm ?? 'auto')
   const [sheetDark, setSheetDark] = useState(item.view?.sheetDark ?? false)
+  const [centerCursor, setCenterCursor] = useState(item.view?.centerCursor ?? true)
   // Practice view: just the music, bigger, and the transport (Esc leaves).
   const [reading, setReading] = useState(false)
   const viewZoom = reading ? Math.min(2.5, Math.max(1.4, zoom * 1.4)) : zoom
@@ -1506,9 +1507,29 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   useEffect(() => {
     const api = apiRef.current
     if (!api) return
-    api.settings.player.scrollMode = reading ? ScrollMode.Off : ScrollMode.Continuous
+    const centred = horizontal && centerCursor
+    api.settings.player.scrollMode = reading || centred ? ScrollMode.Off : ScrollMode.Continuous
     api.updateSettings()
-  }, [reading])
+  }, [reading, horizontal, centerCursor])
+  // Horizontal + centred: follow alphaTab's beat cursor so it stays mid-screen.
+  useEffect(() => {
+    if (!horizontal || !centerCursor || !playing) return
+    let raf = 0
+    const tick = () => {
+      const vp = viewportRef.current
+      const cur = hostRef.current?.querySelector<HTMLElement>('.at-cursor-beat')
+      if (vp && cur) {
+        const x = cur.getBoundingClientRect().left - vp.getBoundingClientRect().left + vp.scrollLeft
+        const target = Math.max(0, x - vp.clientWidth / 2)
+        // Ease toward the target so small jumps between beats look smooth.
+        const next = vp.scrollLeft + (target - vp.scrollLeft) * 0.35
+        if (Math.abs(next - vp.scrollLeft) > 0.5) vp.scrollLeft = next
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [horizontal, centerCursor, playing])
   useEffect(() => {
     const lookup = apiRef.current?.boundsLookup
     if (!reading || horizontal || !lookup) {
@@ -1583,6 +1604,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         fretboard: fretOpen,
         tabRhythm,
         sheetDark,
+        centerCursor,
         source,
         guide,
       }
@@ -1603,6 +1625,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     fretOpen,
     tabRhythm,
     sheetDark,
+    centerCursor,
     item.id,
   ])
 
@@ -1858,6 +1881,19 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
               )
             }
           />
+          {horizontal && (
+            <Tool
+              icon={I.HorizontalLayoutIcon}
+              title={
+                centerCursor
+                  ? 'Cursor centred: the music scrolls under it (click for page-turn scrolling)'
+                  : 'Page-turn scrolling (click to keep the cursor centred)'
+              }
+              on={centerCursor}
+              tag="◎"
+              onClick={() => setCenterCursor((v) => !v)}
+            />
+          )}
           <Tool
             icon={horizontal ? I.HorizontalLayoutIcon : I.PageLayoutIcon}
             title={horizontal ? 'Switch to page layout' : 'Switch to one horizontal line'}
