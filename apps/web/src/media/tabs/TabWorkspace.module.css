@@ -1602,3 +1602,32 @@
   font-size: 1.1em;
   opacity: 0.7;
 }
+
+/* ── Video export ──────────────────────────────────────────────────── */
+
+fieldset.printGrid {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.colorRow {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.colorRow input[type='color'] {
+  width: 32px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--seam);
+  border-radius: 4px;
+  background: none;
+}
+
+.videoProgress {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent);
+}

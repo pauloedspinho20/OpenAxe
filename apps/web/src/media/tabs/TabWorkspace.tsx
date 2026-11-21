@@ -37,6 +37,8 @@ import { FretboardPanel, type StepInput } from './FretboardPanel'
 import { PrintOptions, type PrintSettings } from './PrintOptions'
 import { buildLeadSheet } from './leadSheet'
 import { LeadSheetView } from './LeadSheetView'
+import { VideoExportDialog, type VideoDialogChoice } from './VideoExportDialog'
+import { recordVideo, type TimeSegment, VIDEO_SIZES } from './videoExport'
 import { ChordCollector, midiFromFrequency, placeChord, StepDetector } from './stepEntry'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
@@ -51,6 +53,7 @@ import type { PracticeRun } from '../mediaDb'
 import { audioToScore, mixGuide, scoreToAudio, upsertPoint } from './sync'
 import { RecordingPanel } from './RecordingPanel'
 import { decodeAudio } from '../decode'
+import type { DecodedTrack } from '../transport'
 import { onMidiNote, requestMidiAccess } from '../../midi/midiAccess'
 import { useMidiStore } from '../../state/midiStore'
 import { detectPitch } from '../../tuner/pitchDetect'
@@ -187,6 +190,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [renderProgress, setRenderProgress] = useState<number | null>(null)
   const [texOpen, setTexOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
+  const [videoOpen, setVideoOpen] = useState(false)
   const [texText, setTexText] = useState('')
   const [texError, setTexError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -1190,18 +1194,18 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   }
 
   /** Every bar in playback order (repeats included) with its score-time span. */
-  function playbackBars(): { start: number; end: number }[] {
+  function playbackBars(): TimeSegment[] {
     const score = scoreRef.current
     const lookups = apiRef.current?.tickCache?.masterBars
     if (!score || !lookups) return []
-    const out: { start: number; end: number }[] = []
+    const out: TimeSegment[] = []
     let ms = 0
     let tempo = score.tempo || 120
     for (const lk of lookups) {
       const t = lk.masterBar.tempoAutomations[0]
       if (t) tempo = t.value
       const dur = ((lk.end - lk.start) * 60_000) / (tempo * 960)
-      out.push({ start: ms / 1000, end: (ms + dur) / 1000 })
+      out.push({ start: ms / 1000, end: (ms + dur) / 1000, tickStart: lk.start, tickEnd: lk.end })
       ms += dur
     }
     return out
@@ -1312,6 +1316,84 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     a.download = `${item.name}.${ext}`
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
+
+  /** Render the audio and record the video (see videoExport.ts), then download it. */
+  const exportVideo = async (
+    ch: VideoDialogChoice,
+    onProgress: (f: number) => void,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    const api = apiRef.current
+    const score = scoreRef.current
+    if (!api?.tickCache || !score) throw new Error('The tab is still loading')
+    await useMediaStore.getState().pause()
+    const size = VIDEO_SIZES.find((v) => v.id === ch.sizeId) ?? VIDEO_SIZES[0]!
+    const segments = playbackBars()
+    const scoreLength = segments.at(-1)?.end ?? 0
+    const rate = 48_000
+    let audio: DecodedTrack | null = null
+    let toScore = (sec: number) => sec
+    let duration = scoreLength
+    if (ch.audio === 'synth') {
+      audio = await renderScoreAudio(api, {
+        sampleRate: rate,
+        trackVolume: renderVolumes(),
+        metronome,
+        signal,
+      })
+      duration = audio.frames / audio.sampleRate
+    } else if (ch.audio === 'recording' && sync) {
+      const blob = await loadMediaFile(sync.audioId)
+      if (!blob) throw new Error('The paired recording is missing from the library')
+      audio = await decodeAudio(await blob.arrayBuffer(), rate)
+      const points = sync.points
+      toScore = (sec) => audioToScore(points, sec)
+      duration = Math.min(audio.frames / audio.sampleRate, scoreToAudio(points, scoreLength) + 1.5)
+    }
+    const staff = score.tracks[ch.tracks[0] ?? 0]?.staves[0]
+    const bits = [
+      title.artist || item.artist,
+      staff && !staff.isPercussion ? ops.tuningLabel(staff.stringTuning.tunings) : '',
+      staff?.capo ? `capo ${staff.capo}` : '',
+      `♩ = ${score.tempo}`,
+    ].filter(Boolean)
+    const { blob, ext } = await recordVideo(
+      {
+        score,
+        tracks: ch.tracks.map((i) => score.tracks[i]!).filter(Boolean),
+        tickCache: api.tickCache,
+        segments,
+        audio,
+        toScore,
+        duration,
+      },
+      {
+        width: size.width,
+        height: size.height,
+        fps: ch.fps,
+        background: ch.background,
+        paper: ch.paper,
+        dark: ch.dark,
+        accent: ch.accent,
+        // The zoom is relative to a 720-pixel frame, so every size looks alike.
+        scale: (ch.scale * Math.min(size.width, size.height)) / 720,
+        layout: ch.layout,
+        profile: PROFILE[ch.profile],
+        titleCard: ch.titleCard,
+        title: title.title || item.name,
+        subtitle: bits.join(' · '),
+        titleSeconds: 3,
+      },
+      onProgress,
+      signal,
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${item.name}.${ext}`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
 
   const exportAs = (kind: 'gp' | 'atex' | 'mid' | 'print') => {
@@ -1966,6 +2048,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
               <button type="button" onClick={() => exportAs('mid')}>
                 <I.DownloadIcon size={14} /> MIDI (.mid)
               </button>
+              <button type="button" onClick={() => setVideoOpen(true)}>
+                <I.DownloadIcon size={14} /> Video…
+              </button>
               <button type="button" onClick={() => exportAs('print')}>
                 <I.PageLayoutIcon size={14} /> Print / PDF
               </button>
@@ -2431,6 +2516,17 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
 
       {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
 
+      {videoOpen && score && (
+        <VideoExportDialog
+          tracks={tracks}
+          shown={[...new Set([...shown, trackIndex])].sort((a, b) => a - b)}
+          profile={profile}
+          dark={sheetDark}
+          hasRecording={!!sync?.points.length}
+          onExport={exportVideo}
+          onClose={() => setVideoOpen(false)}
+        />
+      )}
       {printOpen && score && (
         <PrintOptions
           tracks={tracks}
