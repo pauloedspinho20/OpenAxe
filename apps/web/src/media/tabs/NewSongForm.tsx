@@ -3,6 +3,7 @@
  * length and the first instrument, turned into AlphaTex and imported through
  * the normal library path.
  */
+import { Select } from '@openaxe/ui'
 import { useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -84,8 +85,7 @@ export function NewSongForm({ onDone }: { onDone: () => void }) {
               aria-label="Beats per bar"
             />
             /
-            <select
-              className={styles.select}
+            <Select
               value={denominator}
               onChange={(e) => setDenominator(Number(e.target.value))}
               aria-label="Beat unit"
@@ -95,7 +95,7 @@ export function NewSongForm({ onDone }: { onDone: () => void }) {
                   {d}
                 </option>
               ))}
-            </select>
+            </Select>
           </span>
         </label>
         <label className={tabStyles.field}>
@@ -111,17 +111,13 @@ export function NewSongForm({ onDone }: { onDone: () => void }) {
       </div>
       <label className={tabStyles.field}>
         <span>Instrument</span>
-        <select
-          className={styles.select}
-          value={instrument}
-          onChange={(e) => setInstrument(e.target.value)}
-        >
+        <Select value={instrument} onChange={(e) => setInstrument(e.target.value)}>
           {INSTRUMENTS.map((i) => (
             <option key={i.id} value={i.id}>
               {i.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className={tabStyles.paletteGroup}>
         <button type="submit" className={styles.primaryBtn} disabled={busy}>

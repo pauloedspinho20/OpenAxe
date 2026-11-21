@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
-import { Dialog, HardwareButton } from '@openaxe/ui'
+import { Dialog, HardwareButton, Select } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
@@ -165,7 +165,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
               >
                 ★
               </button>
-              <select
+              <Select
                 value={status ?? ''}
                 onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
                 aria-label="Filter by status"
@@ -176,9 +176,9 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
                     {st.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               {tags.length > 0 && (
-                <select
+                <Select
                   value={tag ?? ''}
                   onChange={(e) => setTag(e.target.value || null)}
                   aria-label="Filter by tag"
@@ -189,7 +189,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
                       #{t}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             </div>
             <input
@@ -334,7 +334,7 @@ function LibraryRow({ item, active }: { item: MediaItem; active: boolean }) {
       </div>
       {details && (
         <div className={styles.itemDetails}>
-          <select
+          <Select
             value={item.status ?? ''}
             onChange={(e) =>
               void s.updateItem(item.id, {
@@ -349,7 +349,7 @@ function LibraryRow({ item, active }: { item: MediaItem; active: boolean }) {
                 {st.label}
               </option>
             ))}
-          </select>
+          </Select>
           <input
             value={tagText}
             placeholder="Tags: rock, easy, set 1"

@@ -4,7 +4,7 @@
  * Switching goes through SceneNavigator, the same serialized path the scene
  * bar, keyboard and MIDI footswitches use.
  */
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useEffect, useRef, useState } from 'react'
 
 import { getPreset } from '../presets/presetStore'
@@ -58,7 +58,7 @@ export function ToneLink({ tone, sections, onChange }: ToneLinkProps) {
     <div className={t.recPanel}>
       <label className={t.textField} title="The rig scene (bank of 8 presets) this song uses">
         <I.TracksIcon size={14} />
-        <select
+        <Select
           value={scene ?? ''}
           onChange={(e) =>
             onChange({ ...base, scene: e.target.value === '' ? null : Number(e.target.value) })
@@ -72,7 +72,7 @@ export function ToneLink({ tone, sections, onChange }: ToneLinkProps) {
               {s.name ? ` · ${s.name}` : ''}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {scene !== null && (
         <>
@@ -104,7 +104,7 @@ export function ToneLink({ tone, sections, onChange }: ToneLinkProps) {
             {sections.map((s) => (
               <li key={s.key}>
                 <span title={s.label}>{s.label}</span>
-                <select
+                <Select
                   value={base.sections[s.key] ?? ''}
                   onChange={(e) =>
                     onChange(
@@ -123,7 +123,7 @@ export function ToneLink({ tone, sections, onChange }: ToneLinkProps) {
                       {slotLabel(i)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </li>
             ))}
           </ul>

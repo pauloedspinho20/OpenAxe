@@ -5,7 +5,7 @@
  */
 import { model, type Settings } from '@coderline/alphatab'
 import { useState, type ComponentType, type ReactNode } from 'react'
-import { HardwareButton, RedoIcon, UndoIcon, type IconProps } from '@openaxe/ui'
+import { HardwareButton, RedoIcon, UndoIcon, type IconProps, Select } from '@openaxe/ui'
 
 import { ChordLibrary } from './ChordLibrary'
 import { FindReplace } from './FindReplace'
@@ -227,7 +227,7 @@ function BarRangeTools({
       />
       <label className={t.textField} title={`Play ${label} this many times`}>
         <I.RepeatEndIcon size={16} />
-        <select
+        <Select
           value={repeatOn ? repeat : 1}
           onChange={(e) => apply((sc, s) => ops.setRepeat(sc, a, b, Number(e.target.value), s))}
           aria-label={`Repeat ${label}`}
@@ -238,7 +238,7 @@ function BarRangeTools({
               ×{n}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
     </Section>
   )
@@ -632,7 +632,7 @@ export function TabToolbox(p: ToolboxProps) {
                 ))}
                 <label className={t.textField} title="Rasgueado (flamenco strum)">
                   <span>rasg.</span>
-                  <select
+                  <Select
                     value={beat?.rasgueado ?? model.Rasgueado.None}
                     disabled={!beat}
                     onChange={(e) =>
@@ -648,7 +648,7 @@ export function TabToolbox(p: ToolboxProps) {
                         {r.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               </Section>
               <Section title="Dynamics">
@@ -693,7 +693,7 @@ export function TabToolbox(p: ToolboxProps) {
                     aria-label="Beats per bar"
                   />
                   /
-                  <select
+                  <Select
                     value={mb.timeSignatureDenominator}
                     onChange={(e) =>
                       apply((sc, s) =>
@@ -713,7 +713,7 @@ export function TabToolbox(p: ToolboxProps) {
                         {d}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
                 <label className={t.textField} title="Tempo (BPM) from this bar">
                   <I.TempoIcon size={16} />

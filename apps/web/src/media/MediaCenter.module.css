@@ -625,16 +625,6 @@
   color: var(--ink-1);
 }
 
-.select {
-  font: inherit;
-  font-size: 12px;
-  background: var(--panel-recessed);
-  color: var(--ink-1);
-  border: 1px solid var(--seam);
-  border-radius: var(--r-sm);
-  padding: 2px 4px;
-}
-
 .dim {
   color: var(--ink-3);
   font-size: 12px;

@@ -1,3 +1,4 @@
+import { Select } from '@openaxe/ui'
 import { formatTime } from './decode'
 import { BackGlyph, ForwardGlyph, LoopGlyph, PauseGlyph, PlayGlyph, ToStartGlyph } from './icons'
 import styles from './MediaCenter.module.css'
@@ -279,44 +280,41 @@ export function PracticeControls() {
             Speed trainer
           </label>
           <span className={styles.dim}>+</span>
-          <select
+          <Select
             value={trainer.step}
             onChange={(e) => s.setTrainer({ step: Number(e.target.value) })}
             aria-label="Trainer step"
-            className={styles.select}
           >
             {[0.02, 0.05, 0.1].map((v) => (
               <option key={v} value={v}>
                 {pctLabel(v)}
               </option>
             ))}
-          </select>
+          </Select>
           <span className={styles.dim}>every</span>
-          <select
+          <Select
             value={trainer.every}
             onChange={(e) => s.setTrainer({ every: Number(e.target.value) })}
             aria-label="Loops per step"
-            className={styles.select}
           >
             {[1, 2, 3, 4].map((v) => (
               <option key={v} value={v}>
                 {v} {v === 1 ? 'loop' : 'loops'}
               </option>
             ))}
-          </select>
+          </Select>
           <span className={styles.dim}>to</span>
-          <select
+          <Select
             value={trainer.target}
             onChange={(e) => s.setTrainer({ target: Number(e.target.value) })}
             aria-label="Trainer target speed"
-            className={styles.select}
           >
             {[0.8, 0.9, 1, 1.1, 1.25].map((v) => (
               <option key={v} value={v}>
                 {pctLabel(v)}
               </option>
             ))}
-          </select>
+          </Select>
           {practice.loopEnabled && <span className={styles.dim}>pass {loopCount}</span>}
         </div>
         <div className={styles.row}>

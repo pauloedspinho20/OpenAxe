@@ -4,7 +4,7 @@
  * taps become sync points, so the tab cursor, bar loops, count-in and wait
  * mode follow the real song - tempo drift included.
  */
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 
 import { formatTime } from '../decode'
 import styles from '../MediaCenter.module.css'
@@ -46,7 +46,7 @@ export function RecordingPanel(p: RecordingPanelProps) {
       <div className={t.recPanel}>
         <label className={t.textField} title="A recording of this song from your library">
           <I.NoteGlyphIcon size={14} />
-          <select
+          <Select
             value={p.sync?.audioId ?? ''}
             onChange={(e) => p.onPair(e.target.value || null)}
             aria-label="Paired recording"
@@ -58,7 +58,7 @@ export function RecordingPanel(p: RecordingPanelProps) {
                 {r.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {p.recordings.length === 0 && (
           <p className={t.hint}>
@@ -125,7 +125,7 @@ export function RecordingPanel(p: RecordingPanelProps) {
                 Guide: {p.guideTrack}
               </label>
               {p.guide > 0 && (
-                <select
+                <Select
                   value={p.guide}
                   onChange={(e) => p.onGuide(Number(e.target.value))}
                   aria-label="Guide level"
@@ -135,7 +135,7 @@ export function RecordingPanel(p: RecordingPanelProps) {
                       {v === 0.3 ? 'soft' : v === 0.6 ? 'medium' : 'loud'}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             </div>
             {points.length === 0 && p.guide === 0 && (

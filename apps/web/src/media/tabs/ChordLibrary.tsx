@@ -4,7 +4,7 @@
  * chord the beat already holds (capo-aware), one click to label it.
  */
 import { model, type Settings } from '@coderline/alphatab'
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -63,14 +63,14 @@ export function ChordLibrary({ score, c, apply }: ChordLibraryProps) {
         )}
       </div>
       <div className={t.tapRow}>
-        <select value={root} onChange={(e) => setRoot(Number(e.target.value))} aria-label="Root">
+        <Select value={root} onChange={(e) => setRoot(Number(e.target.value))} aria-label="Root">
           {ROOTS.map((r, i) => (
             <option key={r} value={i}>
               {r}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           value={quality}
           onChange={(e) => setQuality(e.target.value)}
           aria-label="Chord quality"
@@ -80,7 +80,7 @@ export function ChordLibrary({ score, c, apply }: ChordLibraryProps) {
               {q.label}
             </option>
           ))}
-        </select>
+        </Select>
         {shapeOf && (
           <span className={styles.dim}>
             {shapeOf} shapes (capo {capo})

@@ -3,7 +3,7 @@
  * the staves, scale, bars per row and margins - then alphaTab's print view
  * (the browser's print dialog also saves a PDF).
  */
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -82,7 +82,7 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
         </fieldset>
         <fieldset>
           <legend>Page</legend>
-          <select
+          <Select
             value={page}
             onChange={(e) => setPage(e.target.value as typeof page)}
             aria-label="Page size"
@@ -92,10 +92,10 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
                 {p.label}
               </option>
             ))}
-          </select>
+          </Select>
           <label>
             <span className={styles.dim}>margins</span>
-            <select
+            <Select
               value={margin}
               onChange={(e) => setMargin(Number(e.target.value))}
               aria-label="Margins"
@@ -105,12 +105,12 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
                   {m.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </fieldset>
         <fieldset>
           <legend>Music</legend>
-          <select
+          <Select
             value={prof}
             onChange={(e) => setProf(e.target.value as PrintProfile)}
             aria-label="Staves"
@@ -118,7 +118,7 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
             <option value="tab">Tab only</option>
             <option value="both">Notation + tab</option>
             <option value="score">Notation only</option>
-          </select>
+          </Select>
           <label>
             <span className={styles.dim}>size {Math.round(scale * 100)}%</span>
             <input
@@ -133,7 +133,7 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
           </label>
           <label>
             <span className={styles.dim}>bars per row</span>
-            <select
+            <Select
               value={bars}
               onChange={(e) => setBars(Number(e.target.value))}
               aria-label="Bars per row"
@@ -144,7 +144,7 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
                   {n}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </fieldset>
       </div>

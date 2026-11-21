@@ -3,7 +3,7 @@
  * clean speed, the bars to work on, the heat-map toggle and a progress chart
  * of accuracy and speed across runs.
  */
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useMemo, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -90,7 +90,7 @@ function RoutineControls({
           <div className={t.tapRow}>
             <label className={t.textField}>
               <span className={styles.dim}>from</span>
-              <select
+              <Select
                 value={start}
                 onChange={(e) => setStart(Number(e.target.value))}
                 aria-label="Routine start speed"
@@ -100,7 +100,7 @@ function RoutineControls({
                     {pct(v)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <HardwareButton
               size="small"

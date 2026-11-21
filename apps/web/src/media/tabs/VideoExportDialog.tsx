@@ -2,7 +2,7 @@
  * Video export options and progress (issue #459): size and format, frame
  * rate, colours, zoom, layout, tracks, title card and audio - then record.
  */
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -126,7 +126,7 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
       <fieldset className={t.printGrid} disabled={busy}>
         <fieldset>
           <legend>Format</legend>
-          <select
+          <Select
             value={c.sizeId}
             onChange={(e) => set('sizeId', e.target.value)}
             aria-label="Video size"
@@ -136,21 +136,21 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
                 {s.label}
               </option>
             ))}
-          </select>
+          </Select>
           <label>
             <span className={styles.dim}>frame rate</span>
-            <select
+            <Select
               value={c.fps}
               onChange={(e) => set('fps', Number(e.target.value))}
               aria-label="Frame rate"
             >
               <option value={30}>30 fps</option>
               <option value={60}>60 fps</option>
-            </select>
+            </Select>
           </label>
           <label>
             <span className={styles.dim}>audio</span>
-            <select
+            <Select
               value={c.audio}
               onChange={(e) => set('audio', e.target.value as VideoAudio)}
               aria-label="Audio"
@@ -158,7 +158,7 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
               <option value="synth">Synth (tracks as mixed)</option>
               {p.hasRecording && <option value="recording">Synced recording</option>}
               <option value="none">No audio</option>
-            </select>
+            </Select>
           </label>
           <label className={styles.check}>
             <input
@@ -179,7 +179,7 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
         </fieldset>
         <fieldset>
           <legend>Part</legend>
-          <select
+          <Select
             value={c.range}
             onChange={(e) => set('range', e.target.value as VideoDialogChoice['range'])}
             aria-label="Part to record"
@@ -187,7 +187,7 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
             <option value="song">Whole song</option>
             {p.hasLoop && <option value="loop">The A–B loop</option>}
             <option value="bars">Bars…</option>
-          </select>
+          </Select>
           {c.range === 'bars' && (
             <div className={t.tapRow}>
               <input
@@ -309,15 +309,15 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
         </fieldset>
         <fieldset>
           <legend>Music</legend>
-          <select
+          <Select
             value={c.layout}
             onChange={(e) => set('layout', e.target.value as 'line' | 'page')}
             aria-label="Layout"
           >
             <option value="line">One line, cursor centred</option>
             <option value="page">Pages, current line at the top</option>
-          </select>
-          <select
+          </Select>
+          <Select
             value={c.profile}
             onChange={(e) => set('profile', e.target.value as 'tab' | 'both' | 'score')}
             aria-label="Staves"
@@ -325,7 +325,7 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
             <option value="tab">Tab only</option>
             <option value="both">Notation + tab</option>
             <option value="score">Notation only</option>
-          </select>
+          </Select>
           <label className={styles.check}>
             <input
               type="checkbox"

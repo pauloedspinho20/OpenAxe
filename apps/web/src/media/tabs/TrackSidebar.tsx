@@ -5,7 +5,7 @@
  * expandable section for instrument, tuning, capo, order, duplicate, delete.
  */
 import type { model, Settings } from '@coderline/alphatab'
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useState, type ReactNode } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -196,7 +196,7 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
           {!staff.isPercussion && (
             <label className={t.textField} title="Instrument sound">
               <I.NoteGlyphIcon size={14} />
-              <select
+              <Select
                 value={track.playbackInfo.program}
                 onChange={(e) => apply((sc, s) => ops.setProgram(sc, i, Number(e.target.value), s))}
                 aria-label="Instrument"
@@ -211,14 +211,14 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
                     {pr.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
           {strings > 0 && (
             <>
               <label className={t.textField} title="Tuning">
                 <I.TuningIcon size={14} />
-                <select
+                <Select
                   value={tuning}
                   onChange={(e) =>
                     apply((sc, s) => ops.setTuning(sc, i, e.target.value.split(',').map(Number), s))
@@ -233,7 +233,7 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
                       {pr.name.replace(/^(Guitar|Bass) /, '')} — {ops.tuningLabel(pr.tunings)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className={t.textField} title="Capo fret">
                 <I.CapoIcon size={14} />
@@ -322,7 +322,7 @@ export function TrackSidebar(p: TrackSidebarProps) {
         ))}
       </div>
       <div className={t.textField}>
-        <select
+        <Select
           value={preset}
           onChange={(e) => setPreset(e.target.value)}
           aria-label="New track instrument"
@@ -332,7 +332,7 @@ export function TrackSidebar(p: TrackSidebarProps) {
               {pr.label}
             </option>
           ))}
-        </select>
+        </Select>
         <HardwareButton
           size="small"
           label="Add"

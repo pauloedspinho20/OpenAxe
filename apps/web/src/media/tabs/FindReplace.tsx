@@ -4,7 +4,7 @@
  * once - a new fret, a fret shift, a technique removed, a new duration.
  */
 import { model, type Settings } from '@coderline/alphatab'
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -82,7 +82,7 @@ export function FindReplace({ score, c, apply, onCursor }: FindReplaceProps) {
         </label>
         <label>
           <span className={styles.dim}>string</span>
-          <select
+          <Select
             value={string}
             onChange={(e) => setString(e.target.value)}
             aria-label="Find string"
@@ -93,11 +93,11 @@ export function FindReplace({ score, c, apply, onCursor }: FindReplaceProps) {
                 {strings - s + 1} ({noteName(open[s]!, false)})
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label>
           <span className={styles.dim}>technique</span>
-          <select
+          <Select
             value={technique}
             onChange={(e) => setTechnique(e.target.value as ops.Technique | '')}
             aria-label="Find technique"
@@ -108,11 +108,11 @@ export function FindReplace({ score, c, apply, onCursor }: FindReplaceProps) {
                 {x.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label>
           <span className={styles.dim}>rhythm</span>
-          <select
+          <Select
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             aria-label="Find rhythm"
@@ -123,7 +123,7 @@ export function FindReplace({ score, c, apply, onCursor }: FindReplaceProps) {
                 {edit.DURATION_LABEL[d]}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -184,7 +184,7 @@ export function FindReplace({ score, c, apply, onCursor }: FindReplaceProps) {
             />
           </div>
           <div className={t.tapRow}>
-            <select
+            <Select
               value={newDuration}
               onChange={(e) => setNewDuration(Number(e.target.value))}
               aria-label="Replace with rhythm"
@@ -194,7 +194,7 @@ export function FindReplace({ score, c, apply, onCursor }: FindReplaceProps) {
                   {edit.DURATION_LABEL[d]}
                 </option>
               ))}
-            </select>
+            </Select>
             <HardwareButton
               size="small"
               label="Set rhythm"
