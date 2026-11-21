@@ -7,6 +7,7 @@ import { allTags, isImportable, matches, parseTags, sortItems, STATUSES } from '
 import styles from './MediaCenter.module.css'
 import { newMediaId, SCORE_EXTENSIONS, type LearnStatus, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
+import { SetBar, SetListsPanel } from './SetListsPanel'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
 import { ToneLink, useToneFollower } from './ToneLink'
@@ -20,7 +21,7 @@ import { Waveform } from './Waveform'
 // alphaTab is large; only load it when a score is opened.
 const TabWorkspace = lazy(() => import('./tabs/TabWorkspace'))
 
-type Filter = 'all' | 'audio' | 'score'
+type Filter = 'all' | 'audio' | 'score' | 'sets'
 
 interface MediaCenterProps {
   open: boolean
@@ -46,7 +47,11 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
 
   const visible = useMemo(
     () =>
-      sortItems(items.filter((i) => matches(i, { kind: filter, favorites, status, tag, query }))),
+      filter === 'sets'
+        ? []
+        : sortItems(
+            items.filter((i) => matches(i, { kind: filter, favorites, status, tag, query })),
+          ),
     [items, filter, query, favorites, status, tag],
   )
   const tags = useMemo(() => allTags(items), [items])
@@ -175,7 +180,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
               />
             </div>
             <div className={styles.filters} role="tablist" aria-label="Library filter">
-              {(['all', 'audio', 'score'] as const).map((f) => (
+              {(['all', 'audio', 'score', 'sets'] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
@@ -184,71 +189,84 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
                   className={`${styles.filter} ${filter === f ? styles.filterOn : ''}`}
                   onClick={() => setFilter(f)}
                 >
-                  {f === 'all' ? 'All' : f === 'audio' ? 'Backing tracks' : 'Tabs'}
+                  {f === 'all'
+                    ? 'All'
+                    : f === 'audio'
+                      ? 'Backing'
+                      : f === 'score'
+                        ? 'Tabs'
+                        : 'Sets'}
                 </button>
               ))}
             </div>
-            <div className={styles.libFilters}>
-              <button
-                type="button"
-                className={`${styles.chip} ${favorites ? styles.chipOn : ''}`}
-                aria-pressed={favorites}
-                onClick={() => setFavorites((v) => !v)}
-                title="Favourites only"
-              >
-                ★
-              </button>
-              <Select
-                value={status ?? ''}
-                onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
-                aria-label="Filter by status"
-              >
-                <option value="">Any status</option>
-                {STATUSES.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.label}
-                  </option>
-                ))}
-              </Select>
-              {tags.length > 0 && (
-                <Select
-                  value={tag ?? ''}
-                  onChange={(e) => setTag(e.target.value || null)}
-                  aria-label="Filter by tag"
-                >
-                  <option value="">Any tag</option>
-                  {tags.map((t) => (
-                    <option key={t} value={t}>
-                      #{t}
-                    </option>
+            {filter === 'sets' ? (
+              <SetListsPanel />
+            ) : (
+              <>
+                <div className={styles.libFilters}>
+                  <button
+                    type="button"
+                    className={`${styles.chip} ${favorites ? styles.chipOn : ''}`}
+                    aria-pressed={favorites}
+                    onClick={() => setFavorites((v) => !v)}
+                    title="Favourites only"
+                  >
+                    ★
+                  </button>
+                  <Select
+                    value={status ?? ''}
+                    onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
+                    aria-label="Filter by status"
+                  >
+                    <option value="">Any status</option>
+                    {STATUSES.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.label}
+                      </option>
+                    ))}
+                  </Select>
+                  {tags.length > 0 && (
+                    <Select
+                      value={tag ?? ''}
+                      onChange={(e) => setTag(e.target.value || null)}
+                      aria-label="Filter by tag"
+                    >
+                      <option value="">Any tag</option>
+                      {tags.map((t) => (
+                        <option key={t} value={t}>
+                          #{t}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </div>
+                <input
+                  className={styles.search}
+                  type="search"
+                  placeholder="Search · 120 bpm · key:Am"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search library"
+                />
+                <ul className={styles.list}>
+                  {visible.length === 0 && (
+                    <li className={styles.emptyList}>
+                      {items.length === 0
+                        ? 'Drop audio files (mp3, wav, flac…) or Guitar Pro / MusicXML files here.'
+                        : 'Nothing matches.'}
+                    </li>
+                  )}
+                  {visible.map((item) => (
+                    <LibraryRow key={item.id} item={item} active={item.id === activeId} />
                   ))}
-                </Select>
-              )}
-            </div>
-            <input
-              className={styles.search}
-              type="search"
-              placeholder="Search · 120 bpm · key:Am"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search library"
-            />
-            <ul className={styles.list}>
-              {visible.length === 0 && (
-                <li className={styles.emptyList}>
-                  {items.length === 0
-                    ? 'Drop audio files (mp3, wav, flac…) or Guitar Pro / MusicXML files here.'
-                    : 'Nothing matches.'}
-                </li>
-              )}
-              {visible.map((item) => (
-                <LibraryRow key={item.id} item={item} active={item.id === activeId} />
-              ))}
-            </ul>
+                </ul>
+              </>
+            )}
           </aside>
         )}
 
         <section className={styles.main}>
+          <SetBar />
           {!hasTransport && (
             <div className={styles.notice}>Power on the audio engine to play tracks and tabs.</div>
           )}

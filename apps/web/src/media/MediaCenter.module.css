@@ -887,3 +887,100 @@
   width: 320px;
   padding: 10px;
 }
+
+/* ── Set lists ─────────────────────────────────────────────────────── */
+
+.sets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  font-size: 12px;
+}
+
+.setCreate,
+.setHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.setCreate input,
+.setName {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 4px 6px;
+  background: var(--panel-recessed);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+}
+
+.setCreate select {
+  flex: 1;
+  min-width: 0;
+}
+
+.setEntries {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding-left: 22px;
+  overflow: auto;
+}
+
+.setEntries li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+}
+
+.setEntries li:hover {
+  background: var(--panel-raised);
+}
+
+.setEntryOn {
+  background: var(--panel-raised);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.setEntryName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-1);
+}
+
+.setEntryTools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.setEntryTools .itemDelete {
+  opacity: 1;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.setBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  background: var(--panel-raised);
+  border: 1px solid var(--seam);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+
+.setBarSpacer {
+  flex: 1;
+}

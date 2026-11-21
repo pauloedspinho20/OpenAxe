@@ -16,6 +16,7 @@
 import {
   STORE_LIBRARY,
   STORE_MEDIA,
+  STORE_SETLISTS,
   STORE_MIDI,
   STORE_PRESETS,
   STORE_PRESET_BANK,
@@ -231,6 +232,7 @@ const SETTINGS_STORAGE_KEY = 'openaxe-settings'
 export async function deleteAllData(options: { signOutTone3000: boolean }): Promise<void> {
   await clearCachedAssets()
   await kvClear(STORE_MEDIA)
+  await kvClear(STORE_SETLISTS)
   await kvClear(STORE_PRESETS)
   await kvClear(STORE_LIBRARY)
   await kvClear(STORE_SCENES)

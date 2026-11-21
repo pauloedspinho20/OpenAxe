@@ -8,6 +8,7 @@
 import { create } from 'zustand'
 
 import { findDuplicate, hashFile } from './library'
+import { deleteSetList, listSetLists, liveEntries, saveSetList, type SetList } from './setlists'
 import {
   computeDetailPeaks,
   computePeaks,
@@ -48,6 +49,9 @@ export interface LoadedSource {
 
 interface MediaState {
   items: MediaItem[]
+  /** Set lists, newest first, and the one playing (with the song it's on). */
+  setLists: SetList[]
+  activeSet: { id: string; index: number } | null
   libraryLoaded: boolean
   transport: BackingTransport | null
   /** Preferred decode rate (the engine's), so the core can skip rate conversion. */
@@ -102,6 +106,13 @@ export interface SpeedTrainer {
 
 interface MediaActions {
   loadLibrary(): Promise<void>
+  saveSet(set: SetList): Promise<void>
+  removeSet(id: string): Promise<void>
+  /** Open song `index` of a set with the set's speed and transpose. */
+  playSet(id: string, index?: number): Promise<void>
+  /** Next (+1) or previous (-1) song in the playing set. */
+  stepSet(delta: 1 | -1): Promise<void>
+  stopSet(): void
   importFiles(files: FileList | File[]): Promise<MediaItem[]>
   removeItem(id: string): Promise<void>
   updateItem(
@@ -259,6 +270,8 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
 
   return {
     items: [],
+    setLists: [],
+    activeSet: null,
     libraryLoaded: false,
     transport: null,
     engineRate: 48_000,
@@ -322,8 +335,53 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
       set({ trainer: { ...get().trainer, ...patch }, loopCount: 0 })
     },
 
+    async saveSet(list) {
+      await saveSetList(list)
+      const others = get().setLists.filter((x) => x.id !== list.id)
+      set({ setLists: [list, ...others].sort((a, b) => b.createdAt - a.createdAt) })
+    },
+
+    async removeSet(id) {
+      await deleteSetList(id)
+      set({
+        setLists: get().setLists.filter((x) => x.id !== id),
+        activeSet: get().activeSet?.id === id ? null : get().activeSet,
+      })
+    },
+
+    async playSet(id, index = 0) {
+      const list = get().setLists.find((x) => x.id === id)
+      if (!list) return
+      const entries = liveEntries(list, new Set(get().items.map((i) => i.id)))
+      const entry = entries[index]
+      if (!entry) return
+      set({ activeSet: { id, index } })
+      await get().pause()
+      await get().open(entry.itemId)
+      get().setSpeed(entry.speed)
+      get().setSemitones(entry.semitones)
+    },
+
+    async stepSet(delta) {
+      const a = get().activeSet
+      if (!a) return
+      const list = get().setLists.find((x) => x.id === a.id)
+      if (!list) return
+      const n = liveEntries(list, new Set(get().items.map((i) => i.id))).length
+      const next = a.index + delta
+      if (next < 0 || next >= n) return
+      await get().playSet(a.id, next)
+    },
+
+    stopSet() {
+      set({ activeSet: null })
+    },
+
     async loadLibrary() {
       try {
+        void listSetLists()
+          .then((setLists) => set({ setLists }))
+          .catch(report)
         set({ items: await listMedia(), libraryLoaded: true })
       } catch (err) {
         set({ libraryLoaded: true })
