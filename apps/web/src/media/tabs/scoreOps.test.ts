@@ -32,6 +32,12 @@ import {
   setTuning,
   toggleDrumHit,
   transposeRange,
+  barSpan,
+  deleteBars,
+  insertBars,
+  moveBars,
+  setRepeat,
+  setTimeSignatureFrom,
 } from './scoreOps'
 
 function load(tex: string) {
@@ -281,5 +287,60 @@ describe('scoreOps: track list', () => {
     expect([back.tracks[2]!.playbackInfo.volume, back.tracks[2]!.playbackInfo.balance]).toEqual([
       9, 3,
     ])
+  })
+})
+
+describe('scoreOps: multi-bar operations', () => {
+  const four = GTR + '1.6.1 | 2.6.1 | 3.6.1 | 4.6.1'
+  const firsts = (score: model.Score) => score.masterBars.map((_, i) => frets(score, i)[0])
+
+  it('inserts and deletes several bars', () => {
+    const { score, settings } = load(four)
+    expect(insertBars(score, 1, 3, settings)).toBe(2)
+    expect(firsts(score)).toEqual(['1:1', '1:2', 'r', 'r', 'r', '1:3', '1:4'])
+    deleteBars(score, 4, 2, settings)
+    expect(firsts(score)).toEqual(['1:1', '1:2', '1:3', '1:4'])
+    deleteBars(score, 0, 10, settings)
+    expect(score.masterBars.length).toBe(1)
+  })
+
+  it('moves a block of bars, keeping their settings', () => {
+    const { score, settings } = load(four)
+    score.masterBars[1]!.isRepeatStart = true
+    expect(moveBars(score, 1, 2, 1, settings)).toBe(2)
+    expect(firsts(score)).toEqual(['1:1', '1:4', '1:2', '1:3'])
+    expect(score.masterBars[2]!.isRepeatStart).toBe(true)
+    expect(moveBars(score, 2, 3, -5, settings)).toBe(0)
+    expect(firsts(score)).toEqual(['1:2', '1:3', '1:1', '1:4'])
+    // Still a valid, linked score.
+    expect(score.masterBars.map((m) => m.index)).toEqual([0, 1, 2, 3])
+    expect(score.masterBars[1]!.previousMasterBar).toBe(score.masterBars[0])
+  })
+
+  it('changes the time signature up to the next change', () => {
+    const { score, settings } = load(four)
+    score.masterBars[3]!.timeSignatureNumerator = 3
+    setTimeSignatureFrom(score, 1, 6, 8, settings)
+    expect(
+      score.masterBars.map((m) => `${m.timeSignatureNumerator}/${m.timeSignatureDenominator}`),
+    ).toEqual(['4/4', '6/8', '6/8', '3/4'])
+  })
+
+  it('repeats a span N times and spans a selection', () => {
+    const { score, settings } = load(four)
+    setRepeat(score, 2, 1, 3, settings)
+    expect(score.masterBars[1]!.isRepeatStart).toBe(true)
+    expect(score.masterBars[2]!.repeatCount).toBe(3)
+    setRepeat(score, 1, 2, 1, settings)
+    expect(score.masterBars[1]!.isRepeatStart).toBe(false)
+    expect(score.masterBars[2]!.repeatCount).toBe(0)
+    const c = startCursor()
+    expect(barSpan({ ...c, bar: 2 }, [])).toEqual([2, 2])
+    expect(
+      barSpan(c, [
+        { bar: 3, beat: 0 },
+        { bar: 1, beat: 2 },
+      ]),
+    ).toEqual([1, 3])
   })
 })

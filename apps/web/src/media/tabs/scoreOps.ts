@@ -930,3 +930,107 @@ export function setBarGrid(
   relink(score)
   refresh(score, settings)
 }
+
+// ── Multi-bar operations (issue #459) ────────────────────────────────────
+
+/** The bars a selection covers (or the cursor's bar), first to last. */
+export function barSpan(c: EditCursor, refs: readonly BeatRef[]): [number, number] {
+  if (refs.length < 2) return [c.bar, c.bar]
+  const bars = refs.map((r) => r.bar)
+  return [Math.min(...bars), Math.max(...bars)]
+}
+
+/** Insert `count` empty bars after `after`. Returns the first new bar's index. */
+export function insertBars(score: Score, after: number, count: number, settings: Settings): number {
+  const n = Math.min(64, Math.max(1, Math.round(count)))
+  const first = insertBar(score, after, settings)
+  for (let i = 1; i < n; i++) insertBar(score, first + i - 1, settings)
+  return first
+}
+
+/** Delete bars `from`..`to` in every track (at least one bar stays). */
+export function deleteBars(score: Score, from: number, to: number, settings: Settings): void {
+  const a = Math.max(0, Math.min(from, to))
+  const b = Math.min(score.masterBars.length - 1, Math.max(from, to))
+  const count = Math.min(b - a + 1, score.masterBars.length - 1)
+  if (count <= 0) return
+  score.masterBars.splice(a, count)
+  for (const track of score.tracks) for (const staff of track.staves) staff.bars.splice(a, count)
+  relink(score)
+  refresh(score, settings)
+}
+
+/**
+ * Change the time signature from bar `from` on, Guitar-Pro style: every
+ * following bar that shared the old signature changes too, up to the next
+ * bar that had a signature of its own.
+ */
+export function setTimeSignatureFrom(
+  score: Score,
+  from: number,
+  num: number,
+  den: number,
+  settings: Settings,
+): void {
+  const start = score.masterBars[from]
+  if (!start) return
+  const oldNum = start.timeSignatureNumerator
+  const oldDen = start.timeSignatureDenominator
+  const n = Math.min(32, Math.max(1, Math.round(num)))
+  const d = [1, 2, 4, 8, 16, 32].includes(den) ? den : 4
+  for (let i = from; i < score.masterBars.length; i++) {
+    const mb = score.masterBars[i]!
+    if (
+      i > from &&
+      (mb.timeSignatureNumerator !== oldNum || mb.timeSignatureDenominator !== oldDen)
+    )
+      break
+    mb.timeSignatureNumerator = n
+    mb.timeSignatureDenominator = d
+    mb.timeSignatureCommon = false
+  }
+  refresh(score, settings)
+}
+
+/** Repeat bars `from`..`to` so they play `times` times in all (1 removes the repeat). */
+export function setRepeat(
+  score: Score,
+  from: number,
+  to: number,
+  times: number,
+  settings: Settings,
+): void {
+  const a = score.masterBars[Math.min(from, to)]
+  const b = score.masterBars[Math.max(from, to)]
+  if (!a || !b) return
+  const n = Math.min(16, Math.max(1, Math.round(times)))
+  a.isRepeatStart = n > 1
+  b.repeatCount = n > 1 ? n : 0
+  refresh(score, settings)
+}
+
+/**
+ * Move bars `from`..`to` (every track, with their bar settings) by `delta`
+ * bars. Returns the block's new first index.
+ */
+export function moveBars(
+  score: Score,
+  from: number,
+  to: number,
+  delta: number,
+  settings: Settings,
+): number {
+  const a = Math.min(from, to)
+  const count = Math.abs(to - from) + 1
+  const dest = Math.min(score.masterBars.length - count, Math.max(0, a + delta))
+  if (dest === a) return a
+  const block = <T>(arr: T[]) => {
+    const taken = arr.splice(a, count)
+    arr.splice(dest, 0, ...taken)
+  }
+  block(score.masterBars)
+  for (const track of score.tracks) for (const staff of track.staves) block(staff.bars)
+  relink(score)
+  refresh(score, settings)
+  return dest
+}

@@ -39,6 +39,8 @@ export interface ToolboxProps {
   onPaste: () => void
   onLoopSelection: () => void
   targets: () => ops.BeatRef[]
+  /** Bars moved: shift the selection's anchor by this many bars. */
+  onShiftSelection: (bars: number) => void
   onVoice: (voice: number) => void
 }
 
@@ -75,6 +77,100 @@ export function Tool({
       disabled={!!disabled}
       onClick={onClick}
     />
+  )
+}
+
+/** Several bars at once: the selection's bars, or the cursor's bar. */
+function BarRangeTools({
+  score,
+  c,
+  span,
+  apply,
+  onMoved,
+}: {
+  score: model.Score
+  c: edit.EditCursor
+  span: [number, number]
+  apply: Apply
+  onMoved: (bars: number) => void
+}) {
+  const move = (delta: number) => {
+    let moved = 0
+    apply((sc, s) => {
+      const at = ops.moveBars(sc, a, b, delta, s)
+      moved = at - a
+      return { ...c, bar: c.bar + moved }
+    })
+    if (moved) onMoved(moved)
+  }
+  const [count, setCount] = useState(1)
+  const [a, b] = span
+  const label = a === b ? `bar ${a + 1}` : `bars ${a + 1}–${b + 1}`
+  const total = score.masterBars.length
+  const repeat = score.masterBars[b]?.repeatCount ?? 0
+  const repeatOn = !!score.masterBars[a]?.isRepeatStart && repeat > 1
+  return (
+    <Section title={a === b ? 'Bars' : `Bars ${a + 1}–${b + 1}`}>
+      <label className={t.textField} title="How many bars to insert">
+        <I.BarInsertIcon size={16} />
+        <input
+          type="number"
+          min={1}
+          max={64}
+          value={count}
+          onChange={(e) => setCount(Math.min(64, Math.max(1, Number(e.target.value) || 1)))}
+          aria-label="Bars to insert"
+        />
+      </label>
+      <HardwareButton
+        size="small"
+        label={`Insert ${count}`}
+        title={`Insert ${count} empty bar${count > 1 ? 's' : ''} after ${label}`}
+        onClick={() => apply((sc, s) => ({ ...c, bar: ops.insertBars(sc, b, count, s), beat: 0 }))}
+      />
+      <HardwareButton
+        size="small"
+        label="Delete"
+        variant="danger"
+        title={`Delete ${label}`}
+        disabled={b - a + 1 >= total}
+        onClick={() =>
+          apply((sc, s) => {
+            ops.deleteBars(sc, a, b, s)
+            return { ...c, bar: Math.min(a, sc.masterBars.length - 1), beat: 0 }
+          })
+        }
+      />
+      <HardwareButton
+        size="small"
+        label="◀ Move"
+        title={`Move ${label} one bar earlier`}
+        disabled={a === 0}
+        onClick={() => move(-1)}
+      />
+      <HardwareButton
+        size="small"
+        label="Move ▶"
+        title={`Move ${label} one bar later`}
+        disabled={b >= total - 1}
+        onClick={() => move(1)}
+      />
+      <label className={t.textField} title={`Play ${label} this many times`}>
+        <I.RepeatEndIcon size={16} />
+        <select
+          value={repeatOn ? repeat : 1}
+          onChange={(e) => apply((sc, s) => ops.setRepeat(sc, a, b, Number(e.target.value), s))}
+          aria-label={`Repeat ${label}`}
+        >
+          <option value={1}>no repeat</option>
+          {[2, 3, 4, 5, 6, 8].map((n) => (
+            <option key={n} value={n}>
+              ×{n}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Section>
   )
 }
 
@@ -421,7 +517,10 @@ export function TabToolbox(p: ToolboxProps) {
           {group === 'bar' && mb && (
             <>
               <Section title={`Bar ${c.bar + 1}`}>
-                <label className={t.textField} title="Time signature">
+                <label
+                  className={t.textField}
+                  title="Time signature from this bar on (until the next change)"
+                >
                   <I.TimeSigIcon size={16} />
                   <input
                     type="number"
@@ -430,7 +529,7 @@ export function TabToolbox(p: ToolboxProps) {
                     value={mb.timeSignatureNumerator}
                     onChange={(e) =>
                       apply((sc, s) =>
-                        edit.setTimeSignature(
+                        ops.setTimeSignatureFrom(
                           sc,
                           c.bar,
                           Number(e.target.value),
@@ -446,7 +545,7 @@ export function TabToolbox(p: ToolboxProps) {
                     value={mb.timeSignatureDenominator}
                     onChange={(e) =>
                       apply((sc, s) =>
-                        edit.setTimeSignature(
+                        ops.setTimeSignatureFrom(
                           sc,
                           c.bar,
                           mb.timeSignatureNumerator,
@@ -517,6 +616,13 @@ export function TabToolbox(p: ToolboxProps) {
                   onClick={() => apply((sc, s) => edit.toggleRepeat(sc, c.bar, 'end', s))}
                 />
               </Section>
+              <BarRangeTools
+                score={score}
+                c={c}
+                span={ops.barSpan(c, p.targets())}
+                apply={apply}
+                onMoved={p.onShiftSelection}
+              />
               {!drums && (
                 <Section title="Transpose bar">
                   <Tool

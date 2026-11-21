@@ -1836,6 +1836,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onPaste={pasteClipboard}
             onLoopSelection={loopSelection}
             targets={targets}
+            onShiftSelection={(n) => setAnchor((an) => (an ? { ...an, bar: an.bar + n } : an))}
             onVoice={(v) => setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))}
           />
         )}
