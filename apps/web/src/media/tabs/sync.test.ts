@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
-import { audioToScore, mixGuide, scoreToAudio, upsertPoint } from './sync'
+import {
+  audioToScore,
+  extractScoreSections,
+  mixGuide,
+  scoreToAudio,
+  syncedScoreSections,
+  upsertPoint,
+} from './sync'
 
 describe('recording sync map', () => {
   it('is the identity without points and an offset with one', () => {
@@ -69,5 +76,71 @@ describe('recording sync map', () => {
     expect(l2![460]).toBeCloseTo(0.5) // third bar at 4.4 s (rate extended)
     expect(l2![560]).toBe(0) // unstretched: bar 3 ends 1 s later, at 5.4 s
     expect(l2![900]).toBe(0)
+  })
+
+  it('extracts score sections with bar start times and fallback labels', () => {
+    const masterBars = [
+      { section: { marker: 'A', text: 'Intro' } },
+      { section: null },
+      { section: { marker: '', text: '' } },
+      { section: { marker: 'B', text: 'Solo' } },
+    ]
+    const starts = [0, 2, 4, null]
+    expect(extractScoreSections(masterBars, (i) => starts[i] ?? null)).toEqual([
+      { bar: 0, label: 'A Intro', time: 0 },
+      { bar: 2, label: 'Bar 3', time: 4 },
+    ])
+  })
+
+  it('projects paired score sections onto the recording waveform timeline', () => {
+    const items = [
+      {
+        id: 'tab-1',
+        kind: 'score' as const,
+        name: 'Song A',
+        sync: {
+          audioId: 'rec-1',
+          points: [
+            { score: 0, audio: 2 },
+            { score: 4, audio: 6.4 },
+          ],
+        },
+        sections: [
+          { bar: 4, label: 'B Chorus', time: 8 },
+          { bar: 0, label: 'A Intro', time: 0 },
+          { bar: 99, label: 'Out of range', time: 200 },
+        ],
+      },
+      {
+        id: 'tab-other',
+        kind: 'score' as const,
+        name: 'Other Song',
+        sync: { audioId: 'rec-2', points: [{ score: 0, audio: 0 }] },
+        sections: [{ bar: 0, label: 'Ignore', time: 1 }],
+      },
+      {
+        id: 'tab-unsynced',
+        kind: 'score' as const,
+        name: 'Unsynced',
+        sync: null,
+        sections: [{ bar: 0, label: 'Ignore', time: 1 }],
+      },
+    ]
+    const projected = syncedScoreSections(items, 'rec-1', 20)
+    expect(projected).toHaveLength(2)
+    expect(projected[0]).toMatchObject({
+      id: 'score:tab-1:bar:0',
+      label: 'A Intro',
+      bar: 0,
+      sourceName: 'Song A',
+    })
+    expect(projected[0]!.time).toBeCloseTo(2)
+    expect(projected[1]).toMatchObject({
+      id: 'score:tab-1:bar:4',
+      label: 'B Chorus',
+      bar: 4,
+      sourceName: 'Song A',
+    })
+    expect(projected[1]!.time).toBeCloseTo(10.8)
   })
 })

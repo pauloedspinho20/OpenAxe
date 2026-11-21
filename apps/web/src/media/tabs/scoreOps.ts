@@ -836,6 +836,14 @@ function defaultArticulations(settings: Settings): model.InstrumentArticulation[
 }
 
 /**
+ * Warm up the default GP7 drum kit table before building a new score from
+ * scratch (loading the template resets alphaTab's global Bar/Voice/Beat IDs).
+ */
+export function ensureDrumKit(settings: Settings): void {
+  defaultArticulations(settings)
+}
+
+/**
  * The GP7 articulation id of a drum note. With a track articulation table the
  * note holds an index into it; without one it holds the id itself.
  */
@@ -849,7 +857,7 @@ export function drumId(track: model.Track, note: model.Note): number {
  * track and keep its index. A bare id would be re-read as an index after a
  * save, turning a kick into whatever sits at that slot.
  */
-function drumIndex(track: model.Track, id: number, settings: Settings): number {
+export function drumIndex(track: model.Track, id: number, settings: Settings): number {
   if (!track.percussionArticulations.length) {
     // Convert any hits stored as bare ids before the table exists.
     const pending: model.Note[] = []

@@ -17,6 +17,7 @@ interface WaveformProps {
   loopEnd: number | null
   loopEnabled: boolean
   markers?: MediaMarker[]
+  scoreMarkers?: { id: string; label: string; time: number; title?: string }[]
   onSeek: (seconds: number) => void
   onLoopChange: (start: number | null, end: number | null) => void
   /** Pixel height, or 'fill' to take the container's height. */
@@ -59,6 +60,7 @@ export function Waveform({
   loopEnd,
   loopEnabled,
   markers = [],
+  scoreMarkers = [],
   onSeek,
   onLoopChange,
   height: heightProp = 96,
@@ -346,6 +348,18 @@ export function Waveform({
         .filter((m) => visible(m.time))
         .map((m) => (
           <div key={m.id} className={styles.marker} style={{ left: pct(m.time) }} title={m.label}>
+            <span>{m.label}</span>
+          </div>
+        ))}
+      {scoreMarkers
+        .filter((m) => visible(m.time))
+        .map((m) => (
+          <div
+            key={m.id}
+            className={styles.scoreMarker}
+            style={{ left: pct(m.time) }}
+            title={m.title ?? m.label}
+          >
             <span>{m.label}</span>
           </div>
         ))}

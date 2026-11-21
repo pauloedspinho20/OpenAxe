@@ -11,6 +11,7 @@ import { PACK_EXTENSION } from './practicePack'
 import { SetBar, SetListsPanel } from './SetListsPanel'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
+import { syncedScoreSections } from './tabs/sync'
 import { ToneLink, tonePresetNames, useToneFollower } from './ToneLink'
 import { START_KEY, type ToneSection } from './tone'
 import { Tool } from './tabs/TabToolbox'
@@ -470,9 +471,9 @@ function EmptyState({ onImport }: { onImport: () => void }) {
       <h3>Practice with backing tracks and tabs</h3>
       <p>
         Import audio (mp3, wav, flac, ogg, m4a) to play along at any speed without changing pitch,
-        transpose it, and loop the hard parts. Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML or
-        AlphaTex files to read, play and edit tabs, or a practice pack (.oapack) someone shared.
-        Everything plays through your rig's output.
+        transpose it, and loop the hard parts. Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML,
+        AlphaTex or MIDI (.mid/.midi) files to read, play and edit tabs, or a practice pack
+        (.oapack) someone shared. Everything plays through your rig's output.
       </p>
       <button type="button" className={styles.primaryBtn} onClick={onImport}>
         Import files
@@ -495,6 +496,11 @@ function AudioView({ item }: { item: MediaItem }) {
   const loopOn = practice.loopEnabled && practice.loopStart !== null
   const countInBars = practice.countInBars
   const live = useMediaStore((st) => st.items.find((i) => i.id === item.id)) ?? item
+  const items = useMediaStore((st) => st.items)
+  const scoreMarkers = useMemo(
+    () => syncedScoreSections(items, item.id, total),
+    [items, item.id, total],
+  )
   const toneSections: ToneSection[] = [
     { key: START_KEY, label: 'Start', at: 0 },
     ...item.markers.map((m) => ({ key: m.id, label: `Marker ${m.label}`, at: m.time })),
@@ -573,6 +579,28 @@ function AudioView({ item }: { item: MediaItem }) {
               </span>
             )
           })}
+          {scoreMarkers.map((m, i) => {
+            const next = scoreMarkers[i + 1]?.time ?? total
+            return (
+              <span key={m.id} className={`${styles.markerChip} ${styles.scoreMarkerChip}`}>
+                <button
+                  type="button"
+                  onClick={() => void s.seek(m.time)}
+                  title={`${m.label} (${m.sourceName}, bar ${m.bar + 1} · ${formatTime(m.time)})`}
+                >
+                  {m.label}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => s.setLoop(m.time, next, true)}
+                  title={`Loop score section ${m.label}`}
+                  aria-label={`Loop score section ${m.label}`}
+                >
+                  <I.LoopIcon size={12} />
+                </button>
+              </span>
+            )
+          })}
         </div>
       </header>
 
@@ -585,6 +613,12 @@ function AudioView({ item }: { item: MediaItem }) {
           loopEnd={practice.loopEnd}
           loopEnabled={practice.loopEnabled}
           markers={item.markers}
+          scoreMarkers={scoreMarkers.map((m) => ({
+            id: m.id,
+            label: m.label,
+            time: m.time,
+            title: `${m.label} (${m.sourceName}, bar ${m.bar + 1})`,
+          }))}
           onSeek={(t) => void s.seek(t)}
           onLoopChange={(a, b) => s.setLoop(a, b, true)}
           height="fill"

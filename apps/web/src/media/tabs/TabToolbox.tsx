@@ -9,6 +9,7 @@ import { HardwareButton, RedoIcon, UndoIcon, type IconProps, Select } from '@ope
 
 import { ChordLibrary } from './ChordLibrary'
 import { FindReplace } from './FindReplace'
+import * as rhythm from './rhythm'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
 import * as I from './tabIcons'
@@ -49,6 +50,8 @@ export interface ToolboxProps {
   /** Move the edit cursor (find: next / previous match). */
   onCursor: (c: edit.EditCursor) => void
   onVoice: (voice: number) => void
+  keepRhythm: boolean
+  onKeepRhythm: (on: boolean) => void
 }
 
 /**
@@ -292,6 +295,9 @@ function TextField({
 
 export function TabToolbox(p: ToolboxProps) {
   const { score, cursor: c, apply, group } = p
+  const [tupNum, setTupNum] = useState(3)
+  const [tupDen, setTupDen] = useState(2)
+  const [quantizeGrid, setQuantizeGrid] = useState<rhythm.QuantizeGrid>('1/16')
   const beat = edit.beatAt(score, c)
   const note = edit.noteAt(score, c)
   const mb = score.masterBars[c.bar]
@@ -350,26 +356,36 @@ export function TabToolbox(p: ToolboxProps) {
                     icon={I.NOTE_ICON[d]}
                     title={`${edit.DURATION_LABEL[d]} note (+ / − to step)`}
                     on={beat?.duration === d}
-                    onClick={() => apply((sc, s) => edit.setDuration(sc, c, d, s))}
+                    onClick={() =>
+                      apply((sc, s) =>
+                        p.keepRhythm
+                          ? rhythm.setDurationKeepRhythm(sc, c, d, s)
+                          : edit.setDuration(sc, c, d, s),
+                      )
+                    }
                   />
                 ))}
                 <Tool
                   icon={I.DotIcon}
                   title="Dotted (.)"
                   on={!!beat?.dots}
-                  onClick={() => apply((sc, s) => edit.toggleDot(sc, c, s))}
-                />
-                <Tool
-                  icon={I.TripletIcon}
-                  title="Triplet"
-                  on={beat?.tupletNumerator === 3}
-                  onClick={() => apply((sc, s) => edit.setTuplet(sc, c, 3, 2, s))}
+                  onClick={() =>
+                    apply((sc, s) =>
+                      p.keepRhythm
+                        ? rhythm.toggleDotKeepRhythm(sc, c, s)
+                        : edit.toggleDot(sc, c, s),
+                    )
+                  }
                 />
                 <Tool
                   icon={I.RestIcon}
                   title="Rest (R)"
                   on={beat?.isRest}
-                  onClick={() => apply((sc, s) => edit.makeRest(sc, c, s))}
+                  onClick={() =>
+                    apply((sc, s) =>
+                      p.keepRhythm ? rhythm.makeRestAndMerge(sc, c, s) : edit.makeRest(sc, c, s),
+                    )
+                  }
                 />
                 <Tool
                   icon={I.TieIcon}
@@ -377,6 +393,105 @@ export function TabToolbox(p: ToolboxProps) {
                   on={note?.isTieDestination}
                   disabled={!note}
                   onClick={fx('tie')}
+                />
+              </Section>
+              <Section title="Rhythm">
+                <HardwareButton
+                  size="small"
+                  label="Keep rhythm"
+                  active={p.keepRhythm}
+                  title="Split/merge rests to keep bar length when changing durations or pasting"
+                  onClick={() => p.onKeepRhythm(!p.keepRhythm)}
+                />
+                <HardwareButton
+                  size="small"
+                  label="Clean up rests"
+                  title="Pad and merge rests in this bar"
+                  onClick={() => apply((sc, s) => rhythm.normalizeBarRests(sc, c, s))}
+                />
+              </Section>
+              <Section title="Tuplet">
+                {rhythm.TUPLET_PRESETS.map((tp) => (
+                  <Tool
+                    key={tp.label}
+                    icon={tp.num === 3 && tp.den === 2 ? I.TripletIcon : undefined}
+                    tag={tp.num === 3 && tp.den === 2 ? undefined : tp.label}
+                    title={tp.title}
+                    on={beat?.tupletNumerator === tp.num && beat?.tupletDenominator === tp.den}
+                    onClick={() =>
+                      apply((sc, s) =>
+                        rhythm.applyTuplet(sc, c, p.targets(), tp.num, tp.den, p.keepRhythm, s),
+                      )
+                    }
+                  />
+                ))}
+                <div className={t.tapRow}>
+                  <label className={t.textField} title="Tuplet notes">
+                    <input
+                      type="number"
+                      min={2}
+                      max={15}
+                      value={tupNum}
+                      onChange={(e) =>
+                        setTupNum(Math.min(15, Math.max(2, Number(e.target.value) || 2)))
+                      }
+                      onKeyDown={(e) => e.stopPropagation()}
+                      aria-label="Tuplet numerator"
+                    />
+                  </label>
+                  <span>:</span>
+                  <label className={t.textField} title="In the time of">
+                    <input
+                      type="number"
+                      min={1}
+                      max={15}
+                      value={tupDen}
+                      onChange={(e) =>
+                        setTupDen(Math.min(15, Math.max(1, Number(e.target.value) || 1)))
+                      }
+                      onKeyDown={(e) => e.stopPropagation()}
+                      aria-label="Tuplet denominator"
+                    />
+                  </label>
+                  <HardwareButton
+                    size="small"
+                    label="Apply"
+                    title={`Apply ${tupNum}:${tupDen} tuplet`}
+                    onClick={() =>
+                      apply((sc, s) =>
+                        rhythm.applyTuplet(sc, c, p.targets(), tupNum, tupDen, p.keepRhythm, s),
+                      )
+                    }
+                  />
+                  <HardwareButton
+                    size="small"
+                    label="Clear"
+                    title="Remove tuplet grouping"
+                    disabled={!beat || beat.tupletNumerator <= 0}
+                    onClick={() => apply((sc, s) => rhythm.clearTuplet(sc, c, p.keepRhythm, s))}
+                  />
+                </div>
+              </Section>
+              <Section title="Quantize">
+                <Select
+                  value={quantizeGrid}
+                  onChange={(e) => setQuantizeGrid(e.target.value as rhythm.QuantizeGrid)}
+                  aria-label="Quantize grid"
+                >
+                  {rhythm.QUANTIZE_GRIDS.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                    </option>
+                  ))}
+                </Select>
+                <HardwareButton
+                  size="small"
+                  label="Quantize"
+                  title="Snap notes in the selection (or current bar) onto the grid"
+                  onClick={() => {
+                    const [a, b] = ops.barSpan(c, p.targets())
+                    apply((sc, s) => rhythm.quantizeBars(sc, c, a, b, quantizeGrid, s))
+                  }}
                 />
               </Section>
               <Section title="Beat">

@@ -559,6 +559,19 @@
   white-space: pre-wrap;
 }
 
+.midiBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+}
+
 /* ── Shared small controls (song panel, drum lane, new-song form) ──── */
 
 .paletteGroup {

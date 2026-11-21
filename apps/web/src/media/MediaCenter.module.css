@@ -419,6 +419,29 @@
   color: var(--led-warn);
 }
 
+.scoreMarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed var(--accent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.scoreMarker span {
+  position: absolute;
+  bottom: 3px;
+  left: 3px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ── Transport ─────────────────────────────────────────────────────── */
 
 .transportRow {
@@ -508,6 +531,14 @@
 .markerChip button + button {
   border-left: 1px solid var(--seam);
   color: var(--ink-3);
+}
+
+.scoreMarkerChip {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--seam-strong));
+}
+
+.scoreMarkerChip button:first-child {
+  color: var(--accent);
 }
 
 /* ── Practice controls ─────────────────────────────────────────────── */

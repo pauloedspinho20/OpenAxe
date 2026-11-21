@@ -11,8 +11,10 @@ SUMMARY
 @coderline/alphatab@1.9.0 — MPL-2.0
 @davepagurek/bezier-path@0.0.7 — MIT
 @japont/unicode-range@1.0.0 — MIT
+@types/dom-webcodecs@0.1.19 — MIT
 @types/p5@1.7.7 — MIT
 @types/react@19.2.18 — MIT
+@types/wicg-file-system-access@2020.9.8 — MIT
 acorn@8.18.0 — MIT
 acorn-walk@8.3.5 — MIT
 colorjs.io@0.6.1 — MIT
@@ -25,6 +27,7 @@ gifenc@1.0.3 — MIT
 i18next@19.9.2 — MIT
 i18next-browser-languagedetector@4.3.1 — MIT
 libtess@1.2.2 — SGI-B-2.0
+mp4-muxer@5.2.2 — MIT
 omggif@1.0.10 — MIT
 p5@2.3.2 — LGPL-2.1
 pako@2.2.0 — (MIT AND Zlib)
@@ -33,6 +36,7 @@ react-dom@19.2.8 — MIT
 scheduler@0.27.0 — MIT
 source-map@0.6.1 — BSD-3-Clause
 use-sync-external-store@1.6.0 — MIT
+webm-muxer@5.1.4 — MIT
 zod@4.4.3 — MIT
 zustand@5.0.15 — MIT
 
@@ -487,6 +491,33 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 -------------------------------------------------------------------------------
+@types/dom-webcodecs@0.1.19 (MIT)
+https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/dom-webcodecs
+-------------------------------------------------------------------------------
+
+    MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
+
+-------------------------------------------------------------------------------
 @types/p5@1.7.7 (MIT)
 https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/p5
 -------------------------------------------------------------------------------
@@ -516,6 +547,33 @@ https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/p5
 -------------------------------------------------------------------------------
 @types/react@19.2.18 (MIT)
 https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react
+-------------------------------------------------------------------------------
+
+    MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
+
+-------------------------------------------------------------------------------
+@types/wicg-file-system-access@2020.9.8 (MIT)
+https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/wicg-file-system-access
 -------------------------------------------------------------------------------
 
     MIT License
@@ -794,6 +852,33 @@ Version 1.2.1, released January 26, 2000, developed by Silicon Graphics,
 Inc. The Original Code is Copyright (c) 1991-2000 Silicon Graphics, Inc.
 Copyright in any portions created by third parties is as indicated
 elsewhere herein. All Rights Reserved.
+
+-------------------------------------------------------------------------------
+mp4-muxer@5.2.2 (MIT)
+https://github.com/Vanilagy/mp4-muxer#readme
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2023 Vanilagy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 -------------------------------------------------------------------------------
 omggif@1.0.10 (MIT)
@@ -1417,6 +1502,33 @@ https://github.com/facebook/react#readme
 MIT License
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+webm-muxer@5.1.4 (MIT)
+https://github.com/Vanilagy/webm-muxer#readme
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2022 Vanilagy
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -24,7 +24,7 @@ import {
   StaveProfile,
   type synth,
 } from '@coderline/alphatab'
-import { HardwareButton } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -41,6 +41,8 @@ import { LeadSheetView } from './LeadSheetView'
 import { VideoExportDialog, type VideoDialogChoice } from './VideoExportDialog'
 import { recordVideo, sliceAudio, type TimeSegment, VIDEO_SIZES, withCountIn } from './videoExport'
 import { ChordCollector, midiFromFrequency, placeChord, StepDetector } from './stepEntry'
+import { importMidiToScore } from './midiImport'
+import * as rhythm from './rhythm'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
@@ -51,7 +53,7 @@ import { routineSections, sectionDone, type RoutineSection } from './routine'
 import { ToneLink, useToneFollower } from '../ToneLink'
 import { START_KEY, type ToneSection } from '../tone'
 import type { PracticeRun } from '../mediaDb'
-import { audioToScore, mixGuide, scoreToAudio, upsertPoint } from './sync'
+import { audioToScore, extractScoreSections, mixGuide, scoreToAudio, upsertPoint } from './sync'
 import { RecordingPanel } from './RecordingPanel'
 import { decodeAudio } from '../decode'
 import type { DecodedTrack } from '../transport'
@@ -174,6 +176,12 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [horizontal, setHorizontal] = useState(item.view?.horizontal ?? false)
   const [metronome, setMetronome] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [keepRhythm, setKeepRhythm] = useState(true)
+  const midiBytesRef = useRef<Uint8Array | null>(null)
+  const itemNameRef = useRef(item.name)
+  itemNameRef.current = item.name
+  const [isMidiSource, setIsMidiSource] = useState(false)
+  const [midiGrid, setMidiGrid] = useState<rhythm.QuantizeGrid>('1/16')
   // Fretboard / piano input panel, and the notes of the beat playing now on it.
   const [fretOpen, setFretOpen] = useState(item.view?.fretboard ?? false)
   const [playingNotes, setPlayingNotes] = useState<FretPos[]>([])
@@ -373,11 +381,23 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         if (!blob) throw new Error('The file for this tab is missing')
         const lower = item.fileName.toLowerCase()
         if (lower.endsWith('.atex') || lower.endsWith('.tex')) {
+          midiBytesRef.current = null
+          setIsMidiSource(false)
           const text = await blob.text()
           const imp = new importer.AlphaTexImporter()
           imp.initFromString(text, api.settings)
           api.renderScore(imp.readScore())
+        } else if (lower.endsWith('.mid') || lower.endsWith('.midi')) {
+          const bytes = new Uint8Array(await blob.arrayBuffer())
+          midiBytesRef.current = bytes
+          setIsMidiSource(true)
+          setMidiGrid('1/16')
+          api.renderScore(
+            importMidiToScore(bytes, api.settings, { grid: '1/16', title: itemNameRef.current }),
+          )
         } else {
+          midiBytesRef.current = null
+          setIsMidiSource(false)
           api.load(new Uint8Array(await blob.arrayBuffer()))
         }
       } catch (err) {
@@ -754,8 +774,32 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const pasteClipboard = () => {
     const clip = clipboard
     if (!clip) return
-    apply((x, s) => ops.paste(x, cursor, clip, s))
+    apply((x, s) =>
+      keepRhythm ? rhythm.pasteKeepRhythm(x, cursor, clip, s) : ops.paste(x, cursor, clip, s),
+    )
     setAnchor(null)
+  }
+
+  const reimportMidi = (grid: rhythm.QuantizeGrid) => {
+    const api = apiRef.current
+    const bytes = midiBytesRef.current
+    if (!api || !bytes) return
+    setMidiGrid(grid)
+    const next = importMidiToScore(bytes, api.settings, { grid, title: item.name })
+    undoRef.current = []
+    redoRef.current = []
+    syncHistory()
+    scoreRef.current = next
+    setScore(next)
+    setTracks(trackList(next))
+    setTitle({ title: next.title, artist: next.artist })
+    const nextTrack = Math.min(trackIndex, Math.max(0, next.tracks.length - 1))
+    setTrackIndex(nextTrack)
+    setShown(new Set([nextTrack]))
+    setCursor(edit.startCursor(nextTrack))
+    bumpRevision()
+    api.renderScore(next, [nextTrack])
+    setTick((t) => t + 1)
   }
 
   /** Seconds at the start of a beat (first playthrough). */
@@ -1119,18 +1163,28 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           break
         case '+':
         case '=':
-          apply((sc) => edit.stepDuration(sc, c, -1, s))
+          apply((sc) =>
+            keepRhythm
+              ? rhythm.stepDurationKeepRhythm(sc, c, -1, s)
+              : edit.stepDuration(sc, c, -1, s),
+          )
           break
         case '-':
         case '_':
-          apply((sc) => edit.stepDuration(sc, c, 1, s))
+          apply((sc) =>
+            keepRhythm
+              ? rhythm.stepDurationKeepRhythm(sc, c, 1, s)
+              : edit.stepDuration(sc, c, 1, s),
+          )
           break
         case '.':
-          apply((sc) => edit.toggleDot(sc, c, s))
+          apply((sc) =>
+            keepRhythm ? rhythm.toggleDotKeepRhythm(sc, c, s) : edit.toggleDot(sc, c, s),
+          )
           break
         case 'r':
         case 'R':
-          apply((sc) => edit.makeRest(sc, c, s))
+          apply((sc) => (keepRhythm ? rhythm.makeRestAndMerge(sc, c, s) : edit.makeRest(sc, c, s)))
           break
         case 'Delete':
         case 'Backspace':
@@ -1437,6 +1491,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         titleSeconds: 3,
         backgroundImage: ch.backgroundImage ? await createImageBitmap(ch.backgroundImage) : null,
         paperOpacity: ch.paperOpacity,
+        format: ch.format,
         fretboard: (() => {
           if (!ch.fretboard) return null
           const ti = ch.tracks.find((i) => {
@@ -1654,6 +1709,21 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const toneBar =
     loaded?.itemId === item.id ? barAtTime(fromPlayer(position) + 0.15 * speedNow) : cursor.bar
   useToneFollower(liveItem.tone, toneSections, toneBar, playing && loaded?.itemId === item.id)
+
+  // Cache score section markers + times on the library item so synced audio
+  // waveforms can display them without loading alphaTab.
+  useEffect(() => {
+    if (!score || !apiRef.current?.tickCache) return
+    const next = extractScoreSections(score.masterBars, (i) => barTimes(i)?.start ?? null)
+    const prev = useMediaStore.getState().items.find((i) => i.id === item.id)?.sections ?? []
+    const same =
+      prev.length === next.length &&
+      prev.every(
+        (p, i) => p.bar === next[i]!.bar && p.label === next[i]!.label && p.time === next[i]!.time,
+      )
+    if (!same) void useMediaStore.getState().updateItem(item.id, { sections: next })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [score, status, revision, tick, item.id])
 
   // Practice view: only the current system and the next one are shown; the
   // rest of the sheet is veiled and the view turns the page a system at a time.
@@ -2156,6 +2226,28 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       </header>
 
       {error && <div className={`${styles.errorNotice} ${tabStyles.pre}`}>{error}</div>}
+      {isMidiSource && !reading && (
+        <div className={tabStyles.midiBanner}>
+          <span>Imported MIDI · Quantize grid:</span>
+          <Select
+            value={midiGrid}
+            onChange={(e) => reimportMidi(e.target.value as rhythm.QuantizeGrid)}
+            aria-label="MIDI quantize grid"
+          >
+            {rhythm.QUANTIZE_GRIDS.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </Select>
+          <HardwareButton
+            size="small"
+            label="Save as tab"
+            title="Convert and save the quantized score as a Guitar Pro tab"
+            onClick={() => scheduleSave()}
+          />
+        </div>
+      )}
 
       {/* ── Body: toolbox rail · sheet · drawer ── */}
       <div className={tabStyles.body}>
@@ -2181,6 +2273,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onBarNote={(text) => setBarNote(cursor.bar, text)}
             onCursor={setCursor}
             onVoice={(v) => setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))}
+            keepRhythm={keepRhythm}
+            onKeepRhythm={setKeepRhythm}
           />
         )}
 
@@ -2295,6 +2389,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                   <span>
                     {edit.DURATION_LABEL[beat.duration]}
                     {beat.dots ? '.' : ''}
+                    {beat.tupletNumerator > 0
+                      ? ` (${beat.tupletNumerator}:${beat.tupletDenominator})`
+                      : ''}
                   </span>
                 )}
                 <span>Voice {cursor.voice + 1}</span>
