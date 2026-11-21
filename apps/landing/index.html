@@ -269,23 +269,55 @@
         </div>
       </section>
 
-      <!-- 2. Full Studio Overview (revealed on scroll below the hero) -->
+      <!-- 2. Full Studio Overview & Live Carbon/Aluminum Finish Comparator (revealed on scroll) -->
       <section
         class="section showcase-section reveal-section"
         id="studio-preview"
         aria-labelledby="studio-preview-title"
       >
         <div class="container">
-          <div class="section-head">
-            <span class="section-kicker">01 · Studio Overview</span>
-            <h2 id="studio-preview-title">The full rig at a glance</h2>
-            <p class="sub">
-              Patch Neural Amp Modeler captures, stereo cabinet IRs, and studio effects inside one
-              unified 4×10 hardware console — identical on web, desktop, and DAW plugins.
-            </p>
+          <div class="finish-header-row">
+            <div class="section-head" style="margin-bottom: 0">
+              <span class="section-kicker">01 · Studio Overview</span>
+              <h2 id="studio-preview-title">The full rig in Carbon or Aluminum</h2>
+              <p class="sub" style="margin-bottom: 0">
+                Patch Neural Amp Modeler captures, stereo cabinet IRs, and studio effects inside one
+                4×10 hardware console. Pick TX-6-inspired <strong>Carbon</strong> or OP-1-inspired
+                <strong>Aluminum</strong> — drag the divider to compare finishes live.
+              </p>
+            </div>
+
+            <div class="finish-plates" role="group" aria-label="Select hardware finish">
+              <button
+                type="button"
+                class="finish-plate is-active"
+                data-set-theme="dark"
+                aria-pressed="true"
+              >
+                <span class="finish-swatch finish-swatch-dark" aria-hidden="true"></span>
+                <span class="finish-plate-text">
+                  <strong>Carbon</strong>
+                  <span>#101010 unibody</span>
+                </span>
+                <span class="plate-led" aria-hidden="true"></span>
+              </button>
+              <button
+                type="button"
+                class="finish-plate"
+                data-set-theme="light"
+                aria-pressed="false"
+              >
+                <span class="finish-swatch finish-swatch-light" aria-hidden="true"></span>
+                <span class="finish-plate-text">
+                  <strong>Aluminum</strong>
+                  <span>#E7E2D6 brushed</span>
+                </span>
+                <span class="plate-led" aria-hidden="true"></span>
+              </button>
+            </div>
           </div>
 
-          <!-- Centerpiece hardware frame with live theme-aware webapp screenshot -->
+          <!-- Centerpiece hardware frame with interactive Carbon vs. Aluminum split comparator -->
           <div class="showcase-frame">
             <span class="screw screw-tl" aria-hidden="true"></span>
             <span class="screw screw-tr" aria-hidden="true"></span>
@@ -298,39 +330,46 @@
                 <span>OPENAXE GRAPHRIG · 48 kHz · REAL-TIME WASM &amp; NATIVE</span>
               </div>
               <div class="frame-bezel-right">
-                <button
-                  type="button"
-                  data-theme-toggle
-                  class="ox-btn ox-btn-ghost ox-btn-sm"
-                  aria-pressed="false"
-                  aria-label="Switch finish to Aluminum (light)"
-                >
-                  <span data-theme-label>☾ Carbon</span>
-                </button>
+                <span class="bezel-hint">Drag ⇄ to compare</span>
                 <a class="bezel-link" data-web-app href="https://openaxe.pages.dev" rel="noopener"
                   >Try Live ↗</a
                 >
               </div>
             </div>
 
-            <div class="frame-viewport">
+            <div class="frame-viewport finish-compare" id="finish-compare">
               <img
-                class="finish-img finish-img-dark"
+                class="compare-base"
                 src="/screenshots/hero-rig-dark.webp"
-                alt="OpenAxe 4×10 modular guitar rig interface in dark Carbon hardware finish"
+                alt="OpenAxe 4×10 modular guitar rig interface comparing dark Carbon and light Aluminum finishes"
                 width="1440"
                 height="900"
                 loading="lazy"
                 decoding="async"
               />
-              <img
-                class="finish-img finish-img-light"
-                src="/screenshots/hero-rig-light.webp"
-                alt="OpenAxe 4×10 modular guitar rig interface in light Aluminum hardware finish"
-                width="1440"
-                height="900"
-                loading="lazy"
-                decoding="async"
+              <div class="compare-overlay" aria-hidden="true">
+                <img
+                  src="/screenshots/hero-rig-light.webp"
+                  alt=""
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <span class="compare-tag compare-tag-left" aria-hidden="true">CARBON · DARK</span>
+              <span class="compare-tag compare-tag-right" aria-hidden="true">ALUMINUM · LIGHT</span>
+              <div class="compare-divider" aria-hidden="true">
+                <span class="compare-knob">⇄</span>
+              </div>
+              <input
+                id="finish-compare-slider"
+                class="compare-slider"
+                type="range"
+                min="5"
+                max="95"
+                value="50"
+                aria-label="Drag to compare Carbon dark and Aluminum light finishes"
               />
             </div>
 
@@ -377,93 +416,11 @@
         </div>
       </section>
 
-      <!-- 3. Live Carbon vs. Aluminum Hardware Finish Showcase -->
-      <section class="section reveal-section" id="finish" aria-labelledby="finish-title">
-        <div class="container">
-          <div class="finish-header-row">
-            <div class="section-head" style="margin-bottom: 0">
-              <span class="section-kicker">03 · Hardware Finishes</span>
-              <h2 id="finish-title">Carbon or Aluminum — one chassis</h2>
-              <p class="sub" style="margin-bottom: 0">
-                A physical instrument doesn’t flip colors when your OS clock hits sunset. Pick
-                TX-6-inspired <strong>Carbon</strong> or OP-1-inspired <strong>Aluminum</strong>;
-                LCD screens stay recessed dark glass in both finishes.
-              </p>
-            </div>
-
-            <div class="finish-plates" role="group" aria-label="Select hardware finish">
-              <button
-                type="button"
-                class="finish-plate is-active"
-                data-set-theme="dark"
-                aria-pressed="true"
-              >
-                <span class="finish-swatch finish-swatch-dark" aria-hidden="true"></span>
-                <span class="finish-plate-text">
-                  <strong>Carbon</strong>
-                  <span>#101010 unibody</span>
-                </span>
-                <span class="plate-led" aria-hidden="true"></span>
-              </button>
-              <button
-                type="button"
-                class="finish-plate"
-                data-set-theme="light"
-                aria-pressed="false"
-              >
-                <span class="finish-swatch finish-swatch-light" aria-hidden="true"></span>
-                <span class="finish-plate-text">
-                  <strong>Aluminum</strong>
-                  <span>#E7E2D6 brushed</span>
-                </span>
-                <span class="plate-led" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div class="finish-compare" id="finish-compare">
-            <img
-              class="compare-base"
-              src="/screenshots/hero-rig-dark.webp"
-              alt="OpenAxe studio interface in dark Carbon finish"
-              width="1440"
-              height="900"
-              loading="lazy"
-              decoding="async"
-            />
-            <div class="compare-overlay" aria-hidden="true">
-              <img
-                src="/screenshots/hero-rig-light.webp"
-                alt=""
-                width="1440"
-                height="900"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <span class="compare-tag compare-tag-left" aria-hidden="true">CARBON · DARK</span>
-            <span class="compare-tag compare-tag-right" aria-hidden="true">ALUMINUM · LIGHT</span>
-            <div class="compare-divider" aria-hidden="true">
-              <span class="compare-knob">⇄</span>
-            </div>
-            <input
-              id="finish-compare-slider"
-              class="compare-slider"
-              type="range"
-              min="5"
-              max="95"
-              value="50"
-              aria-label="Drag to compare Carbon dark and Aluminum light finishes"
-            />
-          </div>
-        </div>
-      </section>
-
-      <!-- 4. Studio Workflow Deep-Dive -->
+      <!-- 3. Studio Workflow Deep-Dive -->
       <section class="section reveal-section" id="workflow" aria-labelledby="workflow-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">04 · Studio Workflow</span>
+            <span class="section-kicker">03 · Studio Workflow</span>
             <h2 id="workflow-title">From patch grid to gig-ready scene banks</h2>
             <p class="sub">
               Inspect how parallel cabling, 8-slot performance scenes, real-time pitch tuning, and
@@ -703,7 +660,7 @@
       <section class="section reveal-section" id="platforms" aria-labelledby="platforms-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">05 · Cross-Platform Architecture</span>
+            <span class="section-kicker">04 · Cross-Platform Architecture</span>
             <h2 id="platforms-title">One C++20 engine, four ways to play</h2>
             <p class="sub">
               Every shell drives the exact same lock-free <code>packages/core</code> DSP engine via
@@ -790,7 +747,7 @@
       <section class="section reveal-section" id="open-source" aria-labelledby="oss-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">06 · Open Source &amp; Engineering</span>
+            <span class="section-kicker">05 · Open Source &amp; Engineering</span>
             <h2 id="oss-title">Built in the open, owned by players</h2>
             <p class="sub">
               Zero lock-in, zero background phone-home, and lock-free audio thread guarantees tested
@@ -858,7 +815,7 @@
       <section class="section reveal-section" id="download" aria-labelledby="download-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">07 · Install &amp; Play</span>
+            <span class="section-kicker">06 · Install &amp; Play</span>
             <h2 id="download-title">Download OpenAxe</h2>
             <p class="sub">
               Auto-detected for your platform. Prefer zero setup?
@@ -920,7 +877,7 @@
       <section class="section reveal-section" id="faq" aria-labelledby="faq-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">08 · Quick-Start FAQ</span>
+            <span class="section-kicker">07 · Quick-Start FAQ</span>
             <h2 id="faq-title">Frequently asked questions</h2>
           </div>
 
