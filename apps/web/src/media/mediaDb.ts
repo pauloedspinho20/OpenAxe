@@ -94,6 +94,10 @@ export interface TabViewState {
   sheetDark?: boolean
   /** Horizontal layout: keep the playing beat in the middle of the screen. */
   centerCursor?: boolean
+  /** Chord chart view, its transposition (semitones) and text size (px). */
+  chart?: boolean
+  chartTranspose?: number
+  chartSize?: number
 }
 
 /** One scored practice run (a wait-mode run, or a listened pass/play-through). */

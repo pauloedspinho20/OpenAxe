@@ -35,6 +35,8 @@ import { DrumLane } from './DrumLane'
 import { beatPositions, type FretPos, pitchAt as pitchOf, placePitch } from './fretboard'
 import { FretboardPanel, type StepInput } from './FretboardPanel'
 import { PrintOptions, type PrintSettings } from './PrintOptions'
+import { buildLeadSheet } from './leadSheet'
+import { LeadSheetView } from './LeadSheetView'
 import { ChordCollector, midiFromFrequency, placeChord, StepDetector } from './stepEntry'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
@@ -159,6 +161,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [tabRhythm, setTabRhythm] = useState(item.view?.tabRhythm ?? 'auto')
   const [sheetDark, setSheetDark] = useState(item.view?.sheetDark ?? false)
   const [centerCursor, setCenterCursor] = useState(item.view?.centerCursor ?? true)
+  const [chart, setChart] = useState(item.view?.chart ?? false)
+  const [chartTranspose, setChartTranspose] = useState(item.view?.chartTranspose ?? 0)
+  const [chartSize, setChartSize] = useState(item.view?.chartSize ?? 18)
   // Practice view: just the music, bigger, and the transport (Esc leaves).
   const [reading, setReading] = useState(false)
   const viewZoom = reading ? Math.min(2.5, Math.max(1.4, zoom * 1.4)) : zoom
@@ -1499,6 +1504,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   // Practice view: only the current system and the next one are shown; the
   // rest of the sheet is veiled and the view turns the page a system at a time.
   const readingBar = loaded?.itemId === item.id ? barAtTime(fromPlayer(position)) : cursor.bar
+  const leadSheet = useMemo(
+    () => (chart && score ? buildLeadSheet(score, trackIndex) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chart, score, trackIndex, revision, tick],
+  )
   const [readingWindow, setReadingWindow] = useState<{
     first: number
     top: number
@@ -1605,6 +1615,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         tabRhythm,
         sheetDark,
         centerCursor,
+        chart,
+        chartTranspose,
+        chartSize,
         source,
         guide,
       }
@@ -1626,6 +1639,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     tabRhythm,
     sheetDark,
     centerCursor,
+    chart,
+    chartTranspose,
+    chartSize,
     item.id,
   ])
 
@@ -1881,6 +1897,13 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
               )
             }
           />
+          <Tool
+            icon={I.ChordIcon}
+            title={chart ? 'Back to the sheet' : 'Chord chart: chords and lyrics only'}
+            on={chart}
+            tag="≡"
+            onClick={() => setChart((v) => !v)}
+          />
           {horizontal && (
             <Tool
               icon={I.HorizontalLayoutIcon}
@@ -2005,9 +2028,30 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         )}
 
         <div className={tabStyles.main}>
+          {chart && score && !reading && (
+            <LeadSheetView
+              title={title.title || item.name}
+              sections={leadSheet}
+              currentBar={readingBar}
+              transpose={chartTranspose}
+              onTranspose={setChartTranspose}
+              size={chartSize}
+              onSize={setChartSize}
+              onBar={(bar) => {
+                setCursor((c) => edit.clampCursor(score, { ...c, bar, beat: 0 }))
+                const at = barTimes(bar)
+                if (at)
+                  void prepare().then(async (ok) => {
+                    if (ok) await useMediaStore.getState().seek(toPlayer(at.start))
+                  })
+              }}
+            />
+          )}
           <div
             ref={viewportRef}
             className={`${tabStyles.viewport} ${editing ? tabStyles.editing : ''}`}
+            // Under the chord chart: hidden, but laid out so alphaTab keeps its width.
+            style={chart && !reading ? { visibility: 'hidden' } : undefined}
             tabIndex={0}
             onKeyDown={onKeyDown}
             data-tab-editor={editing ? '' : undefined}

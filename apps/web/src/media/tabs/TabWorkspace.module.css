@@ -209,6 +209,7 @@
 }
 
 .main {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1499,4 +1500,105 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* ── Chord chart / lead sheet ──────────────────────────────────────── */
+
+.lead {
+  position: absolute;
+  /* Over the sheet, leaving the status bar below visible. */
+  inset: 0 0 31px;
+  z-index: 4;
+  overflow: auto;
+  padding: 10px 16px 24px;
+  background: var(--sheet-bg);
+  color: var(--sheet-ink);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+
+.leadBar {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -10px -16px 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--panel);
+  color: var(--ink-1);
+  border-bottom: 1px solid var(--seam);
+}
+
+.leadValue {
+  min-width: 2.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.leadSection h3 {
+  margin: 0.9em 0 0.3em;
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sheet-ink);
+  opacity: 0.65;
+}
+
+.leadBars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9em, 1fr));
+  gap: 0;
+}
+
+.leadCell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  min-height: 3.2em;
+  padding: 0.35em 0.5em;
+  border: none;
+  border-left: 2px solid color-mix(in srgb, var(--sheet-ink) 35%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leadCell:hover {
+  background: color-mix(in srgb, var(--sheet-ink) 6%, transparent);
+}
+
+.leadCellOn {
+  background: rgba(255, 196, 0, 0.22);
+}
+
+.leadChords {
+  position: relative;
+  display: block;
+  height: 1.3em;
+  font-weight: 700;
+}
+
+.leadChords > span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.leadLyrics {
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.leadRepeat {
+  position: absolute;
+  right: 0.3em;
+  bottom: 0.2em;
+  font-size: 1.1em;
+  opacity: 0.7;
 }
