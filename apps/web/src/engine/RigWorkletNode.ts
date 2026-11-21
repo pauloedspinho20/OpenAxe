@@ -102,6 +102,19 @@ interface WorkletReply {
   busy?: boolean
   /** switchActive answer: a fade or tail drain is in flight. */
   active?: boolean
+  /** Backing-track player status after a `player` op (issue #205). */
+  player?: PlayerStatus
+}
+
+/** Backing-track player state, as the core reports it (frames at the track's rate). */
+export interface PlayerStatus {
+  position: number
+  length: number
+  sampleRate: number
+  playing: boolean
+  meter: number
+  /** A count-in is sounding; the track hasn't started yet. */
+  counting?: boolean
 }
 
 function ensureWorkletRegistered(context: AudioContext): Promise<void> {
@@ -249,6 +262,22 @@ export class RigWorkletNode {
     void this.request(message).then((reply) => {
       if (!reply.ok && reply.error) console.warn(`[rig] ${message.type}: ${reply.error}`)
     })
+  }
+
+  // ── Backing-track player (issue #205) ───────────────────────────────────
+
+  /**
+   * One backing-track player op (see the worklet's handlePlayer). Rejects
+   * with the worklet's error; resolves with the player's status after the op.
+   */
+  async player(
+    op: string,
+    args: Record<string, unknown> = {},
+    transfer?: Transferable[],
+  ): Promise<PlayerStatus> {
+    const reply = await this.request({ type: 'player', op, ...args }, transfer)
+    if (!reply.ok || !reply.player) throw new Error(reply.error ?? `player ${op} failed`)
+    return reply.player
   }
 
   // ── Topology ────────────────────────────────────────────────────────────

@@ -27,3 +27,7 @@ apps/web/public/wasm-core/openaxe_core.js
 # prettier restyle them turns every re-bless into a 1300-line reformat diff,
 # which defeats the point - the diff is meant to show which metrics moved.
 packages/core/tests/golden/
+
+# alphaTab assets its Vite plugin copies into public/ (gitignored, vendor files).
+apps/web/public/font
+apps/web/public/soundfont

@@ -102,6 +102,9 @@ InputChannelMode InputChannelModeFromName(const std::string& name);
 // call RtProcessCallback with fake buffers).
 struct RtCallbackState {
   OpenAxeGraph* graph = nullptr;  // owned by the app; guarded by graph_ready
+  // Backing-track player (issue #205), owned by AudioIO. Rendered after the
+  // graph into the same output buffers; null in unit tests that don't set it.
+  OpenAxePlayer* player = nullptr;
   std::atomic<bool> graph_ready{false};
   // Pause flag set by the control thread while it mutates the graph (topology
   // edits, NAM model loads, algorithm swaps). The audio callback, on observing
@@ -253,6 +256,11 @@ class AudioIO {
   // openaxe_reset (not real-time safe) so it must be called before
   // Start(), from a non-audio thread. Passing nullptr detaches.
   void SetGraph(OpenAxeGraph* graph, double sample_rate, unsigned int max_block_size);
+
+  // Backing-track player (issue #205). Lives as long as this AudioIO; its
+  // Tier-2 calls (load_begin/unload) need the same suspend handshake as
+  // graph mutations - see StudioBridge::HandlePlayer.
+  OpenAxePlayer* Player() const { return state_.player; }
 
   // Input TRIM applied to the incoming signal before the graph and before the
   // monitor tap (see RtCallbackState::input_gain). 1 = unity. Safe to call

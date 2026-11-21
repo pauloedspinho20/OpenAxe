@@ -1,0 +1,1632 @@
+/* Tab viewer/editor (issues #205/#206): the sheet gets the space; every
+   toolbar is slim or collapsible. */
+
+/* ── Workspace frame ───────────────────────────────────────────────── */
+
+.ws {
+  --sheet-bg: #fbfaf7;
+  --sheet-ink: #111;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  gap: 6px;
+  background: var(--panel);
+}
+
+/* Practice view: no top bar; the sheet outside the current and next system is veiled. */
+.wsReading .topbar[hidden] {
+  display: none;
+}
+
+.readingVeil {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  background: var(--sheet-bg);
+  opacity: 0.93;
+  pointer-events: none;
+  transition:
+    top 0.25s ease,
+    height 0.25s ease;
+}
+
+/* Dark sheet: the music light on dark (alphaTab's colours are set in code). */
+.sheetDark {
+  --sheet-bg: #1b1b1e;
+  --sheet-ink: #ece8de;
+}
+
+.sheetDark .host :global(.at-cursor-bar) {
+  background: rgba(255, 196, 0, 0.1);
+}
+
+.sheetDark .host :global(.at-highlight *) {
+  fill: #ff8a5c;
+  stroke: #ff8a5c;
+}
+
+.sheetDark .sheetMsg {
+  color: #aaa;
+}
+
+/* Full screen: the workspace alone fills the display. */
+.wsFull {
+  padding: 8px;
+  height: 100vh;
+}
+
+.topbar,
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.songTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  max-width: 280px;
+  margin-right: auto;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.songTitle strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.songTitle span {
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.savedDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--led-on);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.barGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+  color: var(--ink-2);
+}
+
+.trackSelect {
+  font: inherit;
+  font-size: 12px;
+  max-width: 200px;
+  background: transparent;
+  color: var(--ink-1);
+  border: none;
+  padding: 4px 2px;
+}
+
+.zoomValue {
+  min-width: 46px;
+  border: none;
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+/* <details> dropdown menus (export, practice). */
+.menu {
+  position: relative;
+}
+
+.menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  color: var(--ink-1);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu > summary:hover,
+.menu[open] > summary {
+  background: var(--panel-raised);
+  border-color: var(--seam-strong);
+}
+
+.menuList {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel-raised);
+  box-shadow: 0 10px 30px var(--shadow-deep);
+}
+
+.menuList button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuList button:hover {
+  background: var(--panel-recessed);
+}
+
+/* ── Body: rail · sheet · drawer ───────────────────────────────────── */
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+}
+
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The sheet is printed music: black on paper in both themes. */
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  overflow: auto;
+  background: var(--sheet-bg);
+  color: var(--sheet-ink);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  border: 1px solid var(--seam);
+  border-bottom: none;
+}
+
+.viewport:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.editing {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.sheet {
+  position: relative;
+}
+
+.host {
+  min-height: 200px;
+}
+
+.sheetMsg {
+  padding: var(--sp-4);
+  color: #555;
+}
+
+/* alphaTab's playback cursors and selection layer. */
+.host :global(.at-cursor-bar) {
+  background: rgba(255, 196, 0, 0.12);
+}
+
+.host :global(.at-cursor-beat) {
+  background: rgba(230, 80, 40, 0.75);
+  width: 3px;
+}
+
+.host :global(.at-highlight *) {
+  fill: #d4461d;
+  stroke: #d4461d;
+}
+
+.host :global(.at-selection div) {
+  background: rgba(40, 110, 230, 0.18);
+}
+
+.beatBox {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid rgba(40, 110, 230, 0.55);
+  background: rgba(40, 110, 230, 0.07);
+  border-radius: 3px;
+}
+
+.stringMark {
+  position: absolute;
+  height: 14px;
+  pointer-events: none;
+  border: 2px solid rgba(40, 110, 230, 0.95);
+  border-radius: 3px;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.statusAccent {
+  color: var(--accent);
+}
+
+.over {
+  color: var(--danger-border);
+}
+
+/* Right-hand drawer (song & tracks). */
+.drawer {
+  width: min(440px, 42vw);
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-1);
+}
+
+.drawerHead strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Bottom drawer (drum lane): collapsible, capped so the sheet stays big. */
+.drawerBottom {
+  max-height: 40%;
+  overflow: auto;
+  padding: 4px 8px 8px;
+  background: var(--panel-recessed);
+  border-left: 1px solid var(--seam);
+  border-right: 1px solid var(--seam);
+}
+
+.drawerBottom > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 2px 0;
+}
+
+/* ── Toolbox: icon rail + one open panel ───────────────────────────── */
+
+.toolbox {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+  overflow: hidden;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  width: 46px;
+  flex-shrink: 0;
+}
+
+.toolboxOpen .rail {
+  border-right: 1px solid var(--seam);
+}
+
+.railSpacer {
+  flex: 1;
+}
+
+.panel {
+  width: 232px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boxSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.boxSection h4 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.toolGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.textField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.textField input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+}
+
+/* Selects are the design system's (@openaxe/ui Select); only size them here. */
+.textField select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.textField input[type='number'] {
+  max-width: 56px;
+}
+
+/* ── Footer transport ──────────────────────────────────────────────── */
+
+.footer {
+  padding-top: 2px;
+}
+
+.footerSpacer {
+  flex: 1;
+}
+
+.footerNote {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.practicePop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  width: min(880px, 90vw);
+  padding: 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel);
+  box-shadow: 0 -10px 30px var(--shadow-deep);
+}
+
+/* ── Shortcut sheet ────────────────────────────────────────────────── */
+
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: var(--overlay-bg);
+}
+
+.helpCard {
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel);
+}
+
+.helpCard dl {
+  margin: 10px 0 0;
+  display: grid;
+  gap: 6px;
+}
+
+.helpCard dl > div {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.helpCard dt,
+.helpCard dd {
+  margin: 0;
+}
+
+.helpCard kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--seam-strong);
+  background: var(--panel-raised);
+  color: var(--ink-1);
+}
+
+/* ── AlphaTex pane ─────────────────────────────────────────────────── */
+
+.texPane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.texHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tex {
+  min-height: 200px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--panel-recessed);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+}
+
+.pre {
+  white-space: pre-wrap;
+}
+
+/* ── Shared small controls (song panel, drum lane, new-song form) ──── */
+
+.paletteGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.pbtn {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.num {
+  width: 52px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 3px 4px;
+}
+
+.songPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+}
+
+.songInfo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.field input,
+.cellInput {
+  font: inherit;
+  font-size: 12px;
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.trackTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.trackTable select {
+  max-width: 130px;
+}
+
+.trackTable th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-3);
+  padding: 2px 4px;
+}
+
+.trackTable td {
+  padding: 2px 4px;
+}
+
+.trackRowOn td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ── Drum lane ─────────────────────────────────────────────────────── */
+
+.drumLane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.drumGrid {
+  display: grid;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.drumRow {
+  display: contents;
+}
+
+.drumLabel {
+  font-size: 11px;
+  color: var(--ink-2);
+  align-self: center;
+  white-space: nowrap;
+}
+
+.drumCell {
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--seam);
+  background: var(--panel-raised);
+  cursor: pointer;
+  padding: 0;
+}
+
+.drumCell:nth-child(4n + 2) {
+  border-color: var(--seam-strong);
+}
+
+.drumOn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.drumCursor {
+  outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+@media (max-width: var(--mw-md)) {
+  .drawer {
+    position: absolute;
+    right: 8px;
+    top: 52px;
+    bottom: 60px;
+    z-index: 25;
+    width: min(440px, 92vw);
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--seam-strong);
+    border-radius: var(--r-md);
+  }
+
+  .panel {
+    width: 180px;
+  }
+}
+
+/* Track cards in the song drawer. */
+.trackCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam);
+  background: var(--panel);
+}
+
+.trackCardOn {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.trackCardHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trackCardHead .cellInput {
+  flex: 1;
+}
+
+.trackCardBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.trackCardBody > :nth-child(2) {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+/* ── Track sidebar ──────────────────────────────────────────────────── */
+
+.activeTrack {
+  padding: 0 6px;
+  max-width: 180px;
+  font-size: 12px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activeTrack em {
+  font-style: normal;
+  color: var(--ink-3);
+}
+
+.sidebar {
+  width: 290px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+}
+
+.sideSection > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 4px 2px;
+}
+
+.sideSection[open] > summary {
+  margin-bottom: 6px;
+}
+
+.trackList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trackRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam);
+  background: var(--panel);
+}
+
+.trackRowActive {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.trackRowSilent .trackRowName {
+  opacity: 0.5;
+}
+
+.trackRowHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trackRowHead .cellInput {
+  flex: 1;
+}
+
+.eye {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--seam);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.eyeOn {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.trackRowName {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  text-align: left;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.trackRowName strong,
+.trackRowName span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trackRowName strong {
+  font-size: 12px;
+}
+
+.trackRowName span {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.expand {
+  width: 22px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.expandOpen {
+  transform: rotate(180deg);
+}
+
+.mix {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-left: 32px;
+}
+
+.mix label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--ink-3);
+}
+
+.mix input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  accent-color: var(--accent);
+  height: 14px;
+}
+
+.panLabel {
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.trackMore {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 0 32px;
+  border-top: 1px solid var(--seam);
+}
+
+.trackActions {
+  display: flex;
+  gap: 4px;
+}
+
+.waitStatus {
+  font-weight: 600;
+  color: var(--ink-1);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.waitHit {
+  background: color-mix(in srgb, var(--led-on) 35%, transparent);
+}
+
+/* ── Recording sync panel ─────────────────────────────────────────── */
+
+.sideBadge {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.recPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+
+.segmented button {
+  flex: 1;
+  padding: 4px 6px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segmented .segOn {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tapRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tapRow .textField input {
+  max-width: 56px;
+}
+
+.pointList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.pointList li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+
+.pointList li span:first-child {
+  flex: 1;
+}
+
+.pointList button {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+/* ── Practice report and heat map ─────────────────────────────────── */
+
+.heat {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+  mix-blend-mode: multiply;
+}
+
+.heatGood {
+  background: rgba(60, 170, 90, 0.16);
+}
+
+.heatOk {
+  background: rgba(230, 170, 30, 0.22);
+}
+
+.heatBad {
+  background: rgba(220, 60, 50, 0.24);
+}
+
+.reportRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.bigNumber {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--ink-1);
+}
+
+.chart {
+  margin: 0;
+}
+
+.chart figcaption {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.chartGuide {
+  stroke: var(--seam-strong);
+  stroke-dasharray: 3 3;
+}
+
+.chartAcc {
+  fill: none;
+  stroke: var(--led-on);
+  stroke-width: 1.8;
+}
+
+.chartDot {
+  fill: var(--led-on);
+}
+
+.chartSpeed {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  opacity: 0.8;
+}
+
+.legendAcc {
+  color: var(--led-on);
+}
+
+.legendSpeed {
+  color: var(--accent);
+}
+
+.toneList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.toneList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.toneList li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.toneList select {
+  min-width: 0;
+}
+
+.routineBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam);
+  background: var(--panel);
+  font-size: 12px;
+}
+
+/* ── Fretboard / piano input ───────────────────────────────────────── */
+
+.fretPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 6px 8px 8px;
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+}
+
+.fretHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 11px;
+}
+
+.fretLegend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--ink-2);
+}
+
+.fretLegend > i {
+  position: static;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.neckScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.neck {
+  display: grid;
+  min-width: 760px;
+  background: linear-gradient(180deg, #3a2a1c, #2c2016);
+  border-radius: var(--r-sm);
+}
+
+.neckRow {
+  display: contents;
+}
+
+.fret {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-right: 2px solid #b9b3a6;
+  background: transparent;
+  cursor: pointer;
+}
+
+.fret:hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+.fret:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.fretOpen {
+  border-right: 4px solid #e9e4d6;
+  background: var(--panel-raised);
+}
+
+.fretRowOn {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.fretCapo {
+  background: rgb(0 0 0 / 25%);
+}
+
+.fretString {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(180deg, #ddd6c4, #8f8878);
+  pointer-events: none;
+}
+
+.fretOpen .fretString {
+  display: none;
+}
+
+.fretOpenName {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.fretDot {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.fretDotCursor {
+  background: var(--accent);
+}
+
+.fretDotPlay {
+  background: #3a9a5b;
+  box-shadow: 0 0 0 2px rgb(58 154 91 / 35%);
+}
+
+.fretDot.fretDotCursor.fretDotPlay {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px #3a9a5b;
+}
+
+.fretNumber {
+  height: 14px;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  color: #d9d2c0;
+  background: var(--panel-recessed);
+}
+
+.piano {
+  position: relative;
+  display: flex;
+  height: 92px;
+}
+
+.keyWhite {
+  position: relative;
+  flex: 0 0 22px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 3px;
+  border: 1px solid #9c978c;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #f3f0e8, #fffdf7);
+  font-size: 8px;
+  color: #555;
+  cursor: pointer;
+}
+
+.keyBlack {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 14px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #2a2a2a, #111);
+  cursor: pointer;
+}
+
+.keyWhite:hover,
+.keyBlack:hover {
+  filter: brightness(0.92);
+}
+
+.keyWhite.keyPlay,
+.keyBlack.keyPlay {
+  background: #3a9a5b;
+}
+
+.keyWhite.keyCursor,
+.keyBlack.keyCursor {
+  background: var(--accent);
+}
+
+/* ── Chord library ─────────────────────────────────────────────────── */
+
+.chordLib {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.chordGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 4px;
+}
+
+.chordCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.chordCard:hover,
+.chordCard:focus-visible {
+  border-color: var(--accent);
+  color: var(--ink-1);
+}
+
+.chordSvg {
+  stroke: var(--ink-2);
+  fill: var(--ink-1);
+  stroke-width: 1;
+}
+
+.chordSvg text {
+  stroke: none;
+}
+
+.chordDot {
+  fill: var(--accent);
+  stroke: none;
+}
+
+/* ── Practice notes on bars ────────────────────────────────────────── */
+
+.notePin {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: #f2c94c;
+  color: #3a2a00;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.notePin:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.statusNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #f2c94c;
+  color: #3a2a00;
+}
+
+/* ── Find & replace ────────────────────────────────────────────────── */
+
+.findBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.findGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.findGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.findGrid input,
+.findGrid select {
+  width: 100%;
+  min-width: 0;
+}
+
+.findActions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--seam);
+}
+
+/* ── Print options ─────────────────────────────────────────────────── */
+
+.printGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  font-size: 12px;
+}
+
+.printGrid fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 10px 10px;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+}
+
+.printGrid legend {
+  padding: 0 4px;
+  color: var(--ink-2);
+}
+
+.printGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Chord chart / lead sheet ──────────────────────────────────────── */
+
+.lead {
+  position: absolute;
+  /* Over the sheet, leaving the status bar below visible. */
+  inset: 0 0 31px;
+  z-index: 4;
+  overflow: auto;
+  padding: 10px 16px 24px;
+  background: var(--sheet-bg);
+  color: var(--sheet-ink);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+
+.leadBar {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -10px -16px 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--panel);
+  color: var(--ink-1);
+  border-bottom: 1px solid var(--seam);
+}
+
+.leadValue {
+  min-width: 2.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.leadSection h3 {
+  margin: 0.9em 0 0.3em;
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sheet-ink);
+  opacity: 0.65;
+}
+
+.leadBars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9em, 1fr));
+  gap: 0;
+}
+
+.leadCell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  min-height: 3.2em;
+  padding: 0.35em 0.5em;
+  border: none;
+  border-left: 2px solid color-mix(in srgb, var(--sheet-ink) 35%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leadCell:hover {
+  background: color-mix(in srgb, var(--sheet-ink) 6%, transparent);
+}
+
+.leadCellOn {
+  background: rgba(255, 196, 0, 0.22);
+}
+
+.leadChords {
+  position: relative;
+  display: block;
+  height: 1.3em;
+  font-weight: 700;
+}
+
+.leadChords > span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.leadLyrics {
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.leadRepeat {
+  position: absolute;
+  right: 0.3em;
+  bottom: 0.2em;
+  font-size: 1.1em;
+  opacity: 0.7;
+}
+
+/* ── Video export ──────────────────────────────────────────────────── */
+
+fieldset.printGrid {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.colorRow {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.colorRow input[type='color'] {
+  width: 32px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--seam);
+  border-radius: 4px;
+  background: none;
+}
+
+.videoProgress {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent);
+}
