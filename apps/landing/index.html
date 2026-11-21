@@ -5,18 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#101010" />
+    <script>
+      try {
+        var t = localStorage.getItem('openaxe-theme') === 'light' ? 'light' : 'dark'
+        document.documentElement.setAttribute('data-theme', t)
+        var cs = document.querySelector('meta[name="color-scheme"]')
+        if (cs) cs.setAttribute('content', t)
+        var tc = document.querySelector('meta[name="theme-color"]')
+        if (tc) tc.setAttribute('content', t === 'light' ? '#e7e2d6' : '#101010')
+      } catch (e) {}
+    </script>
 
     <!-- Primary SEO -->
-    <title>OpenAxe — Guitar &amp; bass amp, cab &amp; effects suite</title>
+    <title>OpenAxe — Modular Guitar &amp; Bass Rig · NAM Amp, Cab IR &amp; Effects</title>
     <meta
       name="description"
-      content="Guitar &amp; bass amp, cabinet and 10 effects in one modular rig, powered by Neural Amp Modeler. Play in your browser, on desktop, or as a VST3/CLAP/AU plugin in your DAW."
+      content="Open-source guitar and bass amp, cabinet IR, and 10 C++ effects in a modular 4×10 grid powered by Neural Amp Modeler. Play in your browser, on desktop, or as a VST3/CLAP/AU plugin."
     />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="author" content="OpenAxe" />
     <meta
       name="keywords"
-      content="guitar amp sim, bass amp, Neural Amp Modeler, NAM, amp capture, VST3, CLAP, AU, guitar effects, cabinet IR, audio plugin"
+      content="guitar amp sim, bass amp, Neural Amp Modeler, NAM, amp capture, VST3, CLAP, AU, guitar effects, cabinet IR, audio plugin, open source"
     />
     <link rel="canonical" href="https://openaxe-site.pages.dev/" />
 
@@ -29,23 +39,32 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="OpenAxe" />
-    <meta property="og:title" content="OpenAxe — Guitar &amp; bass amp, cab &amp; effects suite" />
+    <meta
+      property="og:title"
+      content="OpenAxe — Modular Guitar &amp; Bass Rig · NAM Amp, Cab IR &amp; Effects"
+    />
     <meta
       property="og:description"
-      content="Neural Amp Modeler amp captures, cabinet IRs, and 10 effects in a modular 3×8 grid. Web, desktop, and VST3/CLAP/AU."
+      content="Neural Amp Modeler captures, zero-latency cabinet IRs, and 10 C++ effects on a modular 4×10 grid. Web, native Desktop, and VST3/CLAP/AU."
     />
     <meta property="og:url" content="https://openaxe-site.pages.dev/" />
     <meta property="og:image" content="https://openaxe-site.pages.dev/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="OpenAxe wordmark on Carbon chassis" />
+    <meta
+      property="og:image:alt"
+      content="OpenAxe modular guitar rig interface and wordmark on Carbon hardware chassis"
+    />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="OpenAxe — Guitar &amp; bass amp, cab &amp; effects suite" />
+    <meta
+      name="twitter:title"
+      content="OpenAxe — Modular Guitar &amp; Bass Rig · NAM Amp, Cab IR &amp; Effects"
+    />
     <meta
       name="twitter:description"
-      content="Neural Amp Modeler amps, cabinet IRs, 10 effects, modular grid. Web, desktop, VST3/CLAP/AU."
+      content="Neural Amp Modeler captures, zero-latency cab IRs, and 10 C++ effects on a 4×10 grid. Web, Desktop, and VST3/CLAP/AU."
     />
     <meta name="twitter:image" content="https://openaxe-site.pages.dev/og-image.png" />
 
@@ -60,10 +79,11 @@
         "name": "OpenAxe",
         "applicationCategory": "MusicApplication",
         "operatingSystem": "Web, Windows, macOS, Linux",
-        "description": "Guitar/bass amp, cabinet and effects suite powered by Neural Amp Modeler. Web app, desktop app, and VST3/CLAP/AU plugin.",
+        "description": "Free, open-source guitar and bass amp, cabinet IR, and effects suite powered by Neural Amp Modeler. Web app, native desktop app, and VST3/CLAP/AU plugin.",
         "url": "https://openaxe-site.pages.dev/",
         "installUrl": "https://openaxe-site.pages.dev/releases.html",
         "isAccessibleForFree": true,
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
         "author": { "@type": "Organization", "name": "OpenAxe" },
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "screenshot": "https://openaxe-site.pages.dev/og-image.png",
@@ -78,26 +98,50 @@
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "Is OpenAxe free to use?",
+            "name": "Is OpenAxe free and open source?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes — the web app, desktop app, and VST3/CLAP/AU plugin are all free to use, with no accounts."
+              "text": "Yes. OpenAxe is licensed under GPLv3 and completely free to use across the Web Studio, native Desktop app, and VST3/CLAP/AU DAW plugins — with no subscriptions, accounts, or telemetry."
             }
           },
           {
             "@type": "Question",
-            "name": "What is NAM?",
+            "name": "What is Neural Amp Modeler (NAM) and where do I get captures?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Neural Amp Modeler — a technology that captures the sound of real amplifiers and pedals as a neural model. Every OpenAxe amp block plays a NAM capture."
+              "text": "Neural Amp Modeler captures the exact nonlinear tone of physical guitar and bass amplifiers, pedals, and outboard hardware as lightweight .nam models. Load your own .nam files and .wav cabinet IRs locally or browse Tone3000 directly inside OpenAxe."
             }
           },
           {
             "@type": "Question",
-            "name": "Do I need to install anything to try it?",
+            "name": "Do I need to install anything to play right away?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "No — open the web app at openaxe.pages.dev and play. Desktop and the DAW plugin are optional."
+              "text": "No. Open the Web Studio at openaxe.pages.dev in any modern desktop or mobile browser to run the same C++20 DSP engine inside an AudioWorklet via WebAssembly, including built-in DI guitar audition samples."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I open the unsigned macOS Desktop app on first launch?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Beta macOS builds are currently unsigned. On first launch, right-click (or Control-click) OpenAxe in Applications and choose Open, then confirm in the dialog."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where do I install the VST3, CLAP, and AU plugin bundles?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "On macOS, place .vst3, .clap, and .component bundles into ~/Library/Audio/Plug-Ins/{VST3,CLAP,Components}. On Windows, copy them to C:\\Program Files\\Common Files\\VST3 or CLAP. On Linux, use ~/.vst3 or ~/.clap."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are my presets and tone library uploaded anywhere?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Never. Everything is local-first: the browser stores rigs in IndexedDB, while the native Desktop app and DAW plugins share one local on-disk library directory on your machine."
             }
           }
         ]
@@ -108,206 +152,1047 @@
     <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="site-header" role="banner">
-      <div class="container">
+      <div class="container header-inner">
         <a class="brand" href="/" aria-label="OpenAxe home">
           <img src="/icons/openaxe-32.png" alt="" width="28" height="28" aria-hidden="true" />
-          OPEN<span>AXE</span>
+          <span class="brand-word">OPEN<span>AXE</span></span>
           <span class="ver" id="landing-version" aria-label="version v%OPENAXE_VERSION%"
             >v%OPENAXE_VERSION%</span
           >
           <span class="ox-badge ox-badge-accent" aria-label="beta">BETA</span>
         </a>
-        <nav class="nav" aria-label="Primary">
-          <a href="#features">Features</a>
-          <a href="#platforms">Platforms</a>
-          <a href="#download">Download</a>
-          <a href="/releases.html">Releases</a>
+
+        <nav class="site-nav" aria-label="Primary">
           <button
-            id="theme-toggle"
-            class="ox-btn ox-btn-ghost ox-btn-sm"
+            class="ox-btn ox-btn-ghost ox-btn-sm menu-button"
             type="button"
-            aria-label="Toggle Carbon / Aluminum finish"
+            popovertarget="site-menu"
+            popovertargetaction="toggle"
+            aria-controls="site-menu"
+            aria-expanded="false"
           >
-            ☾ Carbon
+            Menu
           </button>
+
+          <ul id="site-menu" class="site-menu" popover="auto">
+            <li><a href="/" aria-current="page">Home</a></li>
+            <li><a href="/#signal-chain">Signal Chain</a></li>
+            <li><a href="/#workflow">Workflow</a></li>
+            <li><a href="/#platforms">Platforms</a></li>
+            <li><a href="/#download">Download</a></li>
+            <li><a href="/releases.html">Releases</a></li>
+            <li><a href="/vendors.html">Vendors</a></li>
+            <li>
+              <a
+                class="icon-start"
+                data-icon="github"
+                href="https://github.com/pauloedspinho20/OpenAxe"
+                target="_blank"
+                rel="noopener"
+                >GitHub ↗</a
+              >
+            </li>
+            <li>
+              <button
+                id="theme-toggle"
+                data-theme-toggle
+                class="ox-btn ox-btn-ghost ox-btn-sm"
+                type="button"
+                aria-pressed="false"
+                aria-label="Switch finish to Aluminum (light)"
+              >
+                <span data-theme-label>☾ Carbon</span>
+              </button>
+            </li>
+            <li class="nav-cta-item">
+              <a
+                class="ox-btn ox-btn-primary ox-btn-sm nav-webapp-cta"
+                data-web-app
+                href="https://openaxe.pages.dev"
+                rel="noopener"
+                >↗ Web App</a
+              >
+            </li>
+          </ul>
         </nav>
       </div>
     </header>
 
     <main id="main">
-      <!-- Hero -->
+      <!-- 1. Full-Viewport Hero + Large App Emblem -->
       <section class="hero" aria-labelledby="hero-title">
-        <div class="container hero-grid">
-          <div>
-            <div class="eyebrow">
-              <i class="dot" aria-hidden="true"></i> Neural Amp Modeler · amp + cab + effects
+        <div class="container hero-container">
+          <div class="hero-grid">
+            <div class="hero-intro">
+              <div class="eyebrow">
+                <i class="dot dot-live" aria-hidden="true"></i>
+                <img
+                  class="brand-img-nam"
+                  src="/brands/nam.png"
+                  alt=""
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
+                />
+                <span>Neural Amp Modeler</span>
+                <span aria-hidden="true">·</span>
+                <span class="icon-start" data-icon="cplusplus">C++20 DSP Core</span>
+                <span aria-hidden="true">·</span>
+                <span class="icon-start" data-icon="gnu">GPLv3</span>
+              </div>
+              <h1 id="hero-title">One modular rig. <em>Everywhere</em> you play.</h1>
+              <p class="lead">
+                Wire <strong>Neural Amp Modeler</strong> captures, zero-latency cabinet IRs, and 10
+                studio effects across a 4×10 parallel grid. Play instantly in your browser, on
+                native desktop, or inside your DAW as a VST3, CLAP, or Audio Unit plugin.
+              </p>
+              <div class="hero-ctas">
+                <a
+                  class="ox-btn ox-btn-primary icon-start"
+                  data-icon="webassembly"
+                  data-web-app
+                  href="https://openaxe.pages.dev"
+                  rel="noopener"
+                  >Launch Web Studio — no install ↗</a
+                >
+                <a
+                  id="download-cta"
+                  class="ox-btn ox-btn-ghost icon-start"
+                  data-icon="download"
+                  href="#download"
+                  >Download Desktop</a
+                >
+              </div>
+              <p class="hero-note">
+                No accounts. No telemetry. Your rigs, presets, and captures stay on your device.
+              </p>
+              <div class="hero-ecosystem" aria-label="Supported engines and platforms">
+                <span class="hero-eco-chip">
+                  <img
+                    class="brand-img-nam"
+                    src="/brands/nam.png"
+                    alt=""
+                    width="15"
+                    height="15"
+                    aria-hidden="true"
+                  />
+                  <span>NAM</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="apple">macOS</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="windows">Windows</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="linux">Linux</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="ios">iOS</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="android">Android</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="webassembly">WASM</span>
+                </span>
+              </div>
             </div>
-            <h1 id="hero-title">A guitar rig that <em>lives</em> everywhere you play.</h1>
-            <p class="lead">
-              Amp, cabinet and 10 effects in a modular 3×8 grid, powered by
-              <strong>Neural Amp Modeler</strong>. Play it in your browser, as a native desktop app,
-              or as a VST3/CLAP/AU plugin in your DAW.
-            </p>
-            <div class="hero-ctas">
-              <a
-                class="ox-btn ox-btn-primary"
-                data-web-app
-                href="https://openaxe.pages.dev"
-                rel="noopener"
-                >↗ Open web app — no install</a
-              >
-              <a id="download-cta" class="ox-btn ox-btn-ghost" href="#download"
-                >⬇ Download desktop</a
-              >
+
+            <div class="hero-emblem">
+              <div class="hero-logo-stage">
+                <span class="hero-logo-halo" aria-hidden="true"></span>
+                <span class="hero-logo-ring" aria-hidden="true"></span>
+                <img
+                  class="hero-logo-mark"
+                  src="/icons/openaxe-512.png"
+                  alt="OpenAxe logo"
+                  width="512"
+                  height="512"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
             </div>
-            <p class="hero-note">No accounts. No telemetry. Your rigs stay on your device.</p>
           </div>
 
-          <div class="hero-card" role="img" aria-label="Signal chain preview">
-            <div class="screen">
-              <pre><span class="dim">Input →</span> [IN] → <span class="hot">AMP</span> (NAM) → <span class="hot">CAB</span> (IR) → GATE → COMP → EQ → CHORUS → DELAY → REVERB → [OUT] → Master
-<span class="dim">3 rows × 8 columns · drag to move · cable to connect</span>
+          <a class="hero-scroll-cue" href="#studio-preview">
+            <span>Scroll to explore the studio</span>
+            <span class="hero-scroll-arrow" aria-hidden="true">↓</span>
+          </a>
+        </div>
+      </section>
 
-<span class="dim"> Amp:  </span> any .nam capture
-<span class="dim"> Cab:  </span> cabinet IR (.wav)
-<span class="dim"> Effects:</span> gate · comp · EQ · chorus · flanger · phaser · tremolo · delay · ping-pong · reverb</pre>
+      <!-- 2. Full Studio Overview & Live Carbon/Aluminum Finish Comparator (revealed on scroll) -->
+      <section
+        class="section showcase-section reveal-section"
+        id="studio-preview"
+        aria-labelledby="studio-preview-title"
+      >
+        <div class="container">
+          <div class="finish-header-row">
+            <div class="section-head" style="margin-bottom: 0">
+              <span class="section-kicker">01 · Studio Overview</span>
+              <h2 id="studio-preview-title">The full rig in Carbon or Aluminum</h2>
+              <p class="sub" style="margin-bottom: 0">
+                Patch Neural Amp Modeler captures, stereo cabinet IRs, and studio effects inside one
+                4×10 hardware console. Pick TX-6-inspired <strong>Carbon</strong> or OP-1-inspired
+                <strong>Aluminum</strong> — drag the divider to compare finishes live.
+              </p>
             </div>
-            <div class="bar">
-              <span class="ox-badge ox-badge-live"
-                ><i class="dot dot-live" aria-hidden="true"></i> Zero added latency</span
+
+            <div class="finish-plates" role="group" aria-label="Select hardware finish">
+              <button
+                type="button"
+                class="finish-plate is-active"
+                data-set-theme="dark"
+                aria-pressed="true"
               >
-              <span class="muted">48 kHz</span>
+                <span class="finish-swatch finish-swatch-dark" aria-hidden="true"></span>
+                <span class="finish-plate-text">
+                  <strong>Carbon</strong>
+                  <span>#101010 unibody</span>
+                </span>
+                <span class="plate-led" aria-hidden="true"></span>
+              </button>
+              <button
+                type="button"
+                class="finish-plate"
+                data-set-theme="light"
+                aria-pressed="false"
+              >
+                <span class="finish-swatch finish-swatch-light" aria-hidden="true"></span>
+                <span class="finish-plate-text">
+                  <strong>Aluminum</strong>
+                  <span>#E7E2D6 brushed</span>
+                </span>
+                <span class="plate-led" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Centerpiece hardware frame with interactive Carbon vs. Aluminum split comparator -->
+          <div class="showcase-frame">
+            <span class="screw screw-tl" aria-hidden="true"></span>
+            <span class="screw screw-tr" aria-hidden="true"></span>
+            <span class="screw screw-bl" aria-hidden="true"></span>
+            <span class="screw screw-br" aria-hidden="true"></span>
+
+            <div class="frame-bezel">
+              <div class="frame-bezel-left">
+                <i class="dot dot-live" aria-hidden="true"></i>
+                <span>OPENAXE GRAPHRIG · 48 kHz · REAL-TIME WASM &amp; NATIVE</span>
+              </div>
+              <div class="frame-bezel-right">
+                <span class="bezel-hint">Drag ⇄ to compare</span>
+                <a class="bezel-link" data-web-app href="https://openaxe.pages.dev" rel="noopener"
+                  >Try Live ↗</a
+                >
+              </div>
+            </div>
+
+            <div class="frame-viewport finish-compare" id="finish-compare">
+              <img
+                class="compare-base"
+                src="/screenshots/hero-rig-dark.webp"
+                alt="OpenAxe 4×10 modular guitar rig interface comparing dark Carbon and light Aluminum finishes"
+                width="1440"
+                height="900"
+                loading="lazy"
+                decoding="async"
+              />
+              <div class="compare-overlay" aria-hidden="true">
+                <img
+                  src="/screenshots/hero-rig-light.webp"
+                  alt=""
+                  width="1440"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <span class="compare-tag compare-tag-left" aria-hidden="true">CARBON · DARK</span>
+              <span class="compare-tag compare-tag-right" aria-hidden="true">ALUMINUM · LIGHT</span>
+              <div class="compare-divider" aria-hidden="true">
+                <span class="compare-knob">⇄</span>
+              </div>
+              <input
+                id="finish-compare-slider"
+                class="compare-slider"
+                type="range"
+                min="5"
+                max="95"
+                value="50"
+                aria-label="Drag to compare Carbon dark and Aluminum light finishes"
+              />
+            </div>
+
+            <div class="spec-strip" role="list" aria-label="Engine specifications">
+              <div class="spec-cell" role="listitem">
+                <span class="spec-val">0 ms</span>
+                <span class="spec-key">Added DSP latency</span>
+              </div>
+              <div class="spec-cell" role="listitem">
+                <span class="spec-val">4 × 10</span>
+                <span class="spec-key">Modular parallel grid</span>
+              </div>
+              <div class="spec-cell" role="listitem">
+                <span class="spec-val">~12 MB</span>
+                <span class="spec-key">Native desktop binary</span>
+              </div>
+              <div class="spec-cell" role="listitem">
+                <span class="spec-val">GPLv3</span>
+                <span class="spec-key">Open source · local-first</span>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Features -->
-      <section class="section" id="features" aria-labelledby="features-title">
+      <!-- 2. Interactive Signal-Chain & Effects Rack (real @openaxe/ui components) -->
+      <section
+        class="section reveal-section"
+        id="signal-chain"
+        aria-labelledby="signal-chain-title"
+      >
         <div class="container">
-          <h2 id="features-title">Everything a rig needs — one graph</h2>
-          <p class="sub">
-            Amp, cabinet, and 10 effects wire together in a modular grid. Drag blocks to move them,
-            cable them up, and build the signal chain you want.
-          </p>
+          <div class="section-head">
+            <span class="section-kicker">02 · Signal Architecture</span>
+            <h2 id="signal-chain-title">19 modular blocks — live interactive rack</h2>
+            <p class="sub">
+              Built directly with OpenAxe’s hardware <code>@openaxe/ui</code> controls. Drag the
+              knobs, switch models, toggle block bypasses, or pick any module from the palette
+              below.
+            </p>
+          </div>
+
+          <div id="signal-architecture-root"></div>
+        </div>
+      </section>
+
+      <!-- 3. Studio Workflow Deep-Dive -->
+      <section class="section reveal-section" id="workflow" aria-labelledby="workflow-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="section-kicker">03 · Studio Workflow</span>
+            <h2 id="workflow-title">From patch grid to gig-ready scene banks</h2>
+            <p class="sub">
+              Inspect how parallel cabling, 8-slot performance scenes, real-time pitch tuning, and
+              sample-accurate MIDI Learn work inside the live app.
+            </p>
+          </div>
+
+          <div class="workflow-tabs" data-tabs>
+            <div class="tablist-scroll" role="tablist" aria-label="Studio workflow capabilities">
+              <button
+                type="button"
+                id="wf-tab-grid"
+                class="wf-tab"
+                role="tab"
+                data-tab="grid"
+                aria-selected="true"
+                tabindex="0"
+              >
+                01 · 4×10 Modular Grid
+              </button>
+              <button
+                type="button"
+                id="wf-tab-presets"
+                class="wf-tab"
+                role="tab"
+                data-tab="presets"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                02 · Presets &amp; 8-Slot Scenes
+              </button>
+              <button
+                type="button"
+                id="wf-tab-tuner"
+                class="wf-tab"
+                role="tab"
+                data-tab="tuner"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                03 · Chromatic Tuner &amp; DI
+              </button>
+              <button
+                type="button"
+                id="wf-tab-midi"
+                class="wf-tab"
+                role="tab"
+                data-tab="midi"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                04 · MIDI Learn &amp; Tone3000
+              </button>
+            </div>
+
+            <div class="workflow-panels">
+              <div role="tabpanel" data-panel="grid" aria-labelledby="wf-tab-grid">
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Routing Engine</span>
+                    <h3>Parallel stereo routing with semi-smart cabling</h3>
+                    <p>
+                      Drag blocks anywhere on the 4-row × 10-column matrix. Drop a new module onto a
+                      cable to auto-splice, fan outputs into wet/dry rows merged through a 4-input
+                      stereo Mixer, or use wireless Send/Return 1 &amp; 2 relays across the grid.
+                    </p>
+                    <ul>
+                      <li>Real-time cycle validation prevents accidental feedback loops</li>
+                      <li>Per-block input/output trim, bypass LED, and live peak meters</li>
+                      <li>Built-in undo/redo history across topology and parameter changes</li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/workflow-grid-dark.webp"
+                      alt="OpenAxe 4×10 parallel grid routing with Reverb inspector in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/workflow-grid-light.webp"
+                      alt="OpenAxe 4×10 parallel grid routing with Reverb inspector in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="tabpanel"
+                data-panel="presets"
+                aria-labelledby="wf-tab-presets"
+                hidden="until-found"
+              >
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Live Switching</span>
+                    <h3>512-slot preset bank &amp; 8-slot performance scenes</h3>
+                    <p>
+                      Organize tones into a 512-slot bank and map up to 8 instant slots per Scene.
+                      Switch rigs via keyboard hotkeys, UI buttons, or MIDI Program Change without
+                      leaving the studio canvas.
+                    </p>
+                    <ul>
+                      <li>JSON preset import/export for effortless sharing and backup</li>
+                      <li>Dirty-state detection highlights unsaved rig tweaks in the bar</li>
+                      <li>Desktop and DAW plugins share one local preset &amp; capture library</li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/workflow-presets-dark.webp"
+                      alt="OpenAxe Presets Manager showing saved rigs and bank slots in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/workflow-presets-light.webp"
+                      alt="OpenAxe Presets Manager showing saved rigs and bank slots in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="tabpanel"
+                data-panel="tuner"
+                aria-labelledby="wf-tab-tuner"
+                hidden="until-found"
+              >
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Core Pitch Detection</span>
+                    <h3>C++ chromatic tuner + built-in DI audition</h3>
+                    <p>
+                      A continuous mini tuner lives right inside the input rail. Click to expand the
+                      full-size chromatic tuner with adjustable A4 calibration (mutes output while
+                      tuning) — or audition rigs immediately using bundled 48 kHz guitar DI loops.
+                    </p>
+                    <ul>
+                      <li>Shared C++ pitch detector compiled across Web, Desktop &amp; Plugin</li>
+                      <li>±50 cent needle readout with ±5 cent in-tune lock LED</li>
+                      <li>Play built-in Stratocaster DI loops even before plugging in a guitar</li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/workflow-tuner-dark.webp"
+                      alt="OpenAxe Chromatic Tuner dialog showing live note and frequency in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/workflow-tuner-light.webp"
+                      alt="OpenAxe Chromatic Tuner dialog showing live note and frequency in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="tabpanel"
+                data-panel="midi"
+                aria-labelledby="wf-tab-midi"
+                hidden="until-found"
+              >
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Control &amp; Library</span>
+                    <h3>Sample-accurate MIDI Learn &amp; Tone3000 catalog</h3>
+                    <p>
+                      Bind any pedalboard footswitch, expression pedal, or DAW CC message to block
+                      bypasses, individual knobs, or scene slots. Browse and import community
+                      <code>.nam</code> captures and cab IRs directly from Tone3000.
+                    </p>
+                    <ul>
+                      <li>
+                        MIDI bindings travel inside the serialized rig state across DAW sessions
+                      </li>
+                      <li>Web MIDI in the browser; sample-accurate host MIDI in VST3/CLAP/AU</li>
+                      <li>
+                        Optional Tone3000 OAuth connect, or drop local .nam / .wav files offline
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/workflow-midi-dark.webp"
+                      alt="OpenAxe MIDI Manager dialog for parameter and scene bindings in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/workflow-midi-light.webp"
+                      alt="OpenAxe MIDI Manager dialog for parameter and scene bindings in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. One Engine, Four Shells -->
+      <section class="section reveal-section" id="platforms" aria-labelledby="platforms-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="section-kicker">04 · Cross-Platform Architecture</span>
+            <h2 id="platforms-title">One C++20 engine, four ways to play</h2>
+            <p class="sub">
+              Every shell drives the exact same lock-free <code>packages/core</code> DSP engine via
+              a minimal <code>extern "C"</code> ABI. Presets and tone stacks sound identical from
+              browser practice to studio mixdown.
+            </p>
+          </div>
+
+          <div class="arch-diagram" aria-label="Shared DSP core diagram">
+            <div class="arch-core">
+              <span class="ox-badge ox-badge-live icon-start" data-icon="cplusplus"
+                >packages/core (C++20)</span
+              >
+              <span class="ecosystem-nam-pill">
+                <img
+                  class="brand-img-nam"
+                  src="/brands/nam.png"
+                  alt=""
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
+                />
+                <span>NeuralAmpModelerCore</span>
+              </span>
+              <span class="arch-core-spec"
+                >GraphRig · Zero-Latency Convolver · 10 DSP Effects · Pitch Detector</span
+              >
+            </div>
+          </div>
+
+          <div class="platforms" role="list">
+            <article class="ox-card platform" role="listitem">
+              <div class="platform-top">
+                <span class="ox-badge ox-badge-live">Live</span>
+                <span class="platform-latency">~15 ms RT</span>
+              </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="WebAssembly">
+                  <span
+                    class="icon"
+                    data-icon="webassembly"
+                    role="img"
+                    aria-label="WebAssembly"
+                  ></span>
+                </span>
+                <span class="platform-icon-chip" title="React">
+                  <span class="icon" data-icon="react" role="img" aria-label="React"></span>
+                </span>
+                <span class="platform-icon-chip" title="Browser AudioWorklet">
+                  <span class="icon" data-icon="globe" role="img" aria-label="Browser"></span>
+                </span>
+              </div>
+              <h3>Web Studio</h3>
+              <p>
+                Zero-install SPA running inside a dedicated AudioWorklet via Emscripten WebAssembly.
+                Ideal for instant auditioning, practice, and mobile tablets.
+              </p>
+              <a class="platform-link" data-web-app href="https://openaxe.pages.dev" rel="noopener"
+                >Open Web Studio ↗</a
+              >
+            </article>
+
+            <article class="ox-card platform" role="listitem">
+              <div class="platform-top">
+                <span class="ox-badge ox-badge-live">Live</span>
+                <span class="platform-latency">&lt;5 ms RT</span>
+              </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="macOS">
+                  <span class="icon" data-icon="apple" role="img" aria-label="macOS"></span>
+                </span>
+                <span class="platform-icon-chip" title="Windows">
+                  <span class="icon" data-icon="windows" role="img" aria-label="Windows"></span>
+                </span>
+                <span class="platform-icon-chip" title="Linux">
+                  <span class="icon" data-icon="linux" role="img" aria-label="Linux"></span>
+                </span>
+              </div>
+              <h3>Desktop App</h3>
+              <p>
+                Lean ~12 MB native C++ shell using <code>miniaudio</code> and system webviews —
+                direct metal audio I/O on macOS, Windows, and Linux without Electron bloat.
+              </p>
+              <a class="platform-link" href="#download">Download Desktop ↓</a>
+            </article>
+
+            <article class="ox-card platform" role="listitem">
+              <div class="platform-top">
+                <span class="ox-badge ox-badge-beta">Beta</span>
+                <span class="platform-latency">Host Buffer</span>
+              </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="VST3 / CLAP / AU">
+                  <span class="icon" data-icon="plug" role="img" aria-label="DAW Plugin"></span>
+                </span>
+                <span class="platform-icon-chip" title="macOS">
+                  <span class="icon" data-icon="apple" role="img" aria-label="macOS"></span>
+                </span>
+                <span class="platform-icon-chip" title="Windows">
+                  <span class="icon" data-icon="windows" role="img" aria-label="Windows"></span>
+                </span>
+                <span class="platform-icon-chip" title="Linux">
+                  <span class="icon" data-icon="linux" role="img" aria-label="Linux"></span>
+                </span>
+              </div>
+              <h3>VST3 · CLAP · AU</h3>
+              <p>
+                iPlug2-powered DAW plugin sharing the exact React editor, host automation slot map,
+                and local preset store with Desktop.
+              </p>
+              <a class="platform-link" href="#download">Get Plugin Bundles ↓</a>
+            </article>
+
+            <article class="ox-card platform" role="listitem">
+              <div class="platform-top">
+                <span class="ox-badge ox-badge-planned">Planned</span>
+                <span class="platform-latency">5–20 ms RT</span>
+              </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="iOS">
+                  <span class="icon" data-icon="ios" role="img" aria-label="iOS"></span>
+                </span>
+                <span class="platform-icon-chip" title="Android">
+                  <span class="icon" data-icon="android" role="img" aria-label="Android"></span>
+                </span>
+              </div>
+              <h3>iOS &amp; Android</h3>
+              <p>
+                Native SwiftUI + CoreAudio and Jetpack Compose + AAudio/Oboe shells calling
+                <code>packages/core</code> directly over ObjC++ and JNI.
+              </p>
+              <a
+                class="platform-link"
+                href="https://github.com/pauloedspinho20/OpenAxe/issues/17"
+                target="_blank"
+                rel="noopener"
+                >Track Roadmap #17 ↗</a
+              >
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Open-Source & Engineering Credibility -->
+      <section class="section reveal-section" id="open-source" aria-labelledby="oss-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="section-kicker">05 · Open Source &amp; Engineering</span>
+            <h2 id="oss-title">Built in the open, owned by players</h2>
+            <p class="sub">
+              Zero lock-in, zero background phone-home, and lock-free audio thread guarantees tested
+              with ThreadSanitizer and RealtimeSanitizer in CI.
+            </p>
+          </div>
+
           <div class="grid3">
             <article class="ox-card">
-              <h3 class="ox-card-title">AMP — NAM captures</h3>
+              <div class="oss-card-head">
+                <span class="oss-icon-tile" aria-hidden="true">
+                  <span class="icon" data-icon="gnu"></span>
+                </span>
+                <h3 class="ox-card-title">GPLv3 License</h3>
+              </div>
               <p>
-                Load any Neural Amp Modeler (<code>.nam</code>) capture — amps, pedals and outboard
-                gear. Every capture gets a tone stack and per-block trims.
+                Free software forever. Every DSP wrapper, plugin host layer, and design token
+                pipeline is open to inspect, fork, and build from source across all three desktop
+                OSes.
               </p>
               <ul>
-                <li>Tone stack controls</li>
-                <li>Per-block input/output trim &amp; bypass</li>
-                <li>Tone3000 catalog integration</li>
+                <li>Deterministic drift guards across TS, JSON &amp; C++</li>
+                <li>MIT-licensed NeuralAmpModelerCore engine</li>
+                <li>Bundled dependency notices inside every binary</li>
               </ul>
             </article>
+
             <article class="ox-card">
-              <h3 class="ox-card-title">Effects — 10, best-in-class</h3>
+              <div class="oss-card-head">
+                <span class="oss-icon-tile" aria-hidden="true">
+                  <span class="icon" data-icon="cpu"></span>
+                </span>
+                <h3 class="ox-card-title">Real-Time Audio Safety</h3>
+              </div>
               <p>
-                GATE · COMP · EQ · CHORUS · FLANGER · PHASER · TREMOLO · DELAY · PING-PONG · REVERB
+                No heap allocations, locks, or disk I/O ever touch the audio callback. Parameter
+                changes cross via lock-free atomics while model loads run safely off-thread.
               </p>
               <ul>
-                <li>Wet/dry mix on every effect</li>
-                <li>Reverb expert mode</li>
-                <li>Per-block metering</li>
+                <li>0-sample impulse-verified internal DSP delay</li>
+                <li>Native device rates without forced resampling</li>
+                <li>Shared on-disk store across Desktop &amp; DAW plugins</li>
               </ul>
             </article>
+
             <article class="ox-card">
-              <h3 class="ox-card-title">CAB — IR convolution</h3>
+              <div class="oss-card-head">
+                <span class="oss-icon-tile" aria-hidden="true">
+                  <span class="icon" data-icon="shield"></span>
+                </span>
+                <h3 class="ox-card-title">Local-First Ecosystem</h3>
+              </div>
               <p>
-                Load cabinet impulse responses (<code>.wav</code>) with zero-latency convolution,
-                and blend cabinets to taste.
+                Load local <code>.nam</code> captures and <code>.wav</code> cabinet IRs completely
+                offline, or connect your
+                <a href="https://www.tone3000.com" target="_blank" rel="noopener">Tone3000</a>
+                account to search thousands of community models.
               </p>
               <ul>
-                <li>IR mix &amp; cabinet loading</li>
-                <li>Mixer / Splitter utilities</li>
-                <li>Master bus level &amp; mute</li>
+                <li>No OpenAxe account required to play or save presets</li>
+                <li>Zero analytics scripts or tracking beacons</li>
+                <li>OS keychain storage for optional Tone3000 tokens</li>
               </ul>
+              <div class="ecosystem-marks">
+                <a
+                  class="ecosystem-nam-pill"
+                  href="https://www.neuralampmodeler.com/"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <img
+                    class="brand-img-nam"
+                    src="/brands/nam.png"
+                    alt="Neural Amp Modeler"
+                    width="22"
+                    height="22"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span>NAM Compatible</span>
+                </a>
+                <a
+                  class="brand-pill-tone3000"
+                  href="https://www.tone3000.com/"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <img
+                    src="/brands/tone3000.svg"
+                    alt="Tone3000"
+                    width="92"
+                    height="14"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
+              </div>
             </article>
+          </div>
+
+          <div id="vendors-preview-root">
+            <noscript>
+              <div class="ox-card vendors-banner">
+                <a class="ox-btn ox-btn-ghost ox-btn-sm" href="/vendors.html">
+                  Browse external vendors, versions &amp; upstream repos →
+                </a>
+              </div>
+            </noscript>
           </div>
         </div>
       </section>
 
-      <!-- Platforms -->
-      <section class="section" id="platforms" aria-labelledby="platforms-title">
+      <!-- 7. Smart OS-Aware Download Center -->
+      <section class="section reveal-section" id="download" aria-labelledby="download-title">
         <div class="container">
-          <h2 id="platforms-title">One rig, four ways to play</h2>
-          <p class="sub">The same rig, sound and presets everywhere you load it.</p>
-          <div class="platforms" role="list">
-            <div class="ox-card platform" role="listitem">
-              <span class="ox-badge ox-badge-live">Live</span>
-              <h3>Web</h3>
-              <p>
-                Runs in your browser with no install. Low-latency audio on desktop and mobile
-                browsers.
-              </p>
-            </div>
-            <div class="ox-card platform" role="listitem">
-              <span class="ox-badge ox-badge-live">Live</span>
-              <h3>Desktop</h3>
-              <p>
-                Native app for macOS, Windows and Linux. Same UI and sound, closer to the metal.
-              </p>
-            </div>
-            <div class="ox-card platform" role="listitem">
-              <span class="ox-badge ox-badge-beta">Beta</span>
-              <h3>VST3 / CLAP / AU</h3>
-              <p>Use OpenAxe inside your DAW as a VST3, CLAP or AU plugin.</p>
-            </div>
-            <div class="ox-card platform" role="listitem">
-              <span class="ox-badge ox-badge-planned">Planned</span>
-              <h3>iOS / Android</h3>
-              <p>Native mobile apps with direct audio.</p>
-            </div>
+          <div class="section-head">
+            <span class="section-kicker">06 · Install &amp; Play</span>
+            <h2 id="download-title">Download OpenAxe</h2>
+            <p class="sub">
+              Auto-detected for your platform. Prefer zero setup?
+              <a data-web-app href="https://openaxe.pages.dev" rel="noopener"
+                >Launch the Web Studio directly in your browser ↗</a
+              >.
+            </p>
           </div>
-        </div>
-      </section>
-
-      <!-- Download -->
-      <section class="section" id="download" aria-labelledby="download-title">
-        <div class="container">
-          <h2 id="download-title">Download</h2>
-          <p class="sub">
-            Installers are published with every release. The web app needs no download —
-            <a data-web-app href="https://openaxe.pages.dev" rel="noopener"
-              >open it in your browser</a
-            >.
-          </p>
 
           <div class="download">
             <div id="download-root" aria-live="polite" aria-busy="true">
               <p class="muted">Loading releases…</p>
-              <noscript><p>Enable JavaScript to see the latest download buttons.</p></noscript>
+              <noscript
+                ><p>
+                  Enable JavaScript to inspect platform installers, or visit the Releases page.
+                </p></noscript
+              >
             </div>
 
-            <aside class="ox-card" aria-label="Quick links">
+            <aside class="ox-card download-aside" aria-label="Quick links and verification">
               <h3 class="ox-card-title">Quick links</h3>
-              <ul>
+              <ul class="aside-links">
                 <li>
-                  <a data-web-app href="https://openaxe.pages.dev" rel="noopener">↗ Open web app</a>
+                  <a
+                    class="icon-start"
+                    data-icon="webassembly"
+                    data-web-app
+                    href="https://openaxe.pages.dev"
+                    rel="noopener"
+                    >Open Web Studio (no install) ↗</a
+                  >
                 </li>
-                <li><a href="/releases.html">All releases archive</a></li>
+                <li>
+                  <a class="icon-start" data-icon="layers" href="/releases.html"
+                    >All versions &amp; full release archive →</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="icon-start"
+                    data-icon="github"
+                    href="https://github.com/pauloedspinho20/OpenAxe"
+                    target="_blank"
+                    rel="noopener"
+                    >Source repository on GitHub ↗</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="icon-start"
+                    data-icon="shield"
+                    href="https://github.com/pauloedspinho20/OpenAxe/issues"
+                    target="_blank"
+                    rel="noopener"
+                    >Report a bug or request a feature ↗</a
+                  >
+                </li>
               </ul>
-              <p style="margin-top: var(--sp-4); font-size: 12px; color: var(--ink-3)">
-                Checksums: see <code>sha256sums.txt</code> alongside each release. Desktop builds
-                are unsigned — on macOS, right-click → Open on first launch.
-              </p>
+              <div class="aside-callout">
+                <strong>Checksums &amp; verification</strong>
+                <p>
+                  Every tag publishes a <code>sha256sums.txt</code> manifest alongside R2 and GitHub
+                  Release assets so you can verify binaries before running.
+                </p>
+              </div>
             </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. FAQ & Quick-Start Guide -->
+      <section class="section reveal-section" id="faq" aria-labelledby="faq-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="section-kicker">07 · Quick-Start FAQ</span>
+            <h2 id="faq-title">Frequently asked questions</h2>
+          </div>
+
+          <div class="faq-list">
+            <details class="faq-item" open>
+              <summary>Is OpenAxe free and open source?</summary>
+              <div class="faq-answer">
+                <p>
+                  Yes. OpenAxe is licensed under GPLv3 and completely free to use across the Web
+                  Studio, native Desktop app, and VST3/CLAP/AU DAW plugins — with no subscriptions,
+                  accounts, or telemetry.
+                </p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>What is Neural Amp Modeler (NAM) and where do I get captures?</summary>
+              <div class="faq-answer">
+                <p>
+                  Neural Amp Modeler captures the exact nonlinear tone of physical guitar and bass
+                  amplifiers, pedals, and studio gear as lightweight <code>.nam</code> files. You
+                  can drop your own local <code>.nam</code> and <code>.wav</code> IR files onto any
+                  Amp or Cab block, or sign in to Tone3000 inside OpenAxe to browse community
+                  captures.
+                </p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Do I need to install anything to play right away?</summary>
+              <div class="faq-answer">
+                <p>
+                  No. Open
+                  <a data-web-app href="https://openaxe.pages.dev" rel="noopener"
+                    >openaxe.pages.dev</a
+                  >
+                  in any modern desktop or mobile browser to run the same C++20 DSP engine inside an
+                  AudioWorklet via WebAssembly — including built-in guitar DI loops if you don’t
+                  have an audio interface plugged in yet.
+                </p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>How do I open the unsigned macOS Desktop app on first launch?</summary>
+              <div class="faq-answer">
+                <p>
+                  Beta macOS disk images are not Apple-notarized yet. After dragging OpenAxe to
+                  Applications, right-click (or Control-click) the app icon, choose
+                  <strong>Open</strong>, and confirm in the Gatekeeper prompt. Subsequent launches
+                  open normally.
+                </p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Where do I install the VST3, CLAP, and AU plugin bundles?</summary>
+              <div class="faq-answer">
+                <p>
+                  On <strong>macOS</strong>, copy <code>.vst3</code>, <code>.clap</code>, and
+                  <code>.component</code> bundles into
+                  <code>~/Library/Audio/Plug-Ins/{VST3,CLAP,Components}</code>. On
+                  <strong>Windows</strong>, copy bundles to
+                  <code>C:\Program Files\Common Files\VST3</code> (or <code>CLAP</code>). On
+                  <strong>Linux</strong>, extract them to <code>~/.vst3</code> or
+                  <code>~/.clap</code>, then rescan in your DAW.
+                </p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Are my presets and tone library uploaded anywhere?</summary>
+              <div class="faq-answer">
+                <p>
+                  Never. Everything stays local-first: the Web Studio stores rigs and cached
+                  captures in your browser’s IndexedDB, while Desktop and DAW plugins share a single
+                  local application data directory on your computer.
+                </p>
+              </div>
+            </details>
           </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer" role="contentinfo">
-      <div class="container">
-        <div>© <span id="footer-year">2026</span> OpenAxe</div>
-        <div class="footer-links">
-          <a href="/">Home</a>
-          <a href="/releases.html">Releases</a>
-          <a data-web-app href="https://openaxe.pages.dev" rel="noopener">Web app</a>
+      <div class="container footer-grid">
+        <div class="footer-brand-col">
+          <div class="footer-brand-line">
+            <img src="/icons/openaxe-32.png" alt="" width="24" height="24" aria-hidden="true" />
+            <span class="brand-word">OPEN<span>AXE</span></span>
+            <span class="ox-badge ox-badge-accent">BETA</span>
+            <span class="ox-badge ox-badge-live">GPLv3</span>
+          </div>
+          <p class="footer-copy">
+            © 2024–<span id="footer-year">2026</span> OpenAxe Contributors · Made with ❤ by
+            <a href="https://hotdogtor.com" target="_blank" rel="noopener">Hot Dogtor</a>
+          </p>
         </div>
+
+        <nav class="footer-links" aria-label="Footer">
+          <a href="/">Home</a>
+          <a data-web-app href="https://openaxe.pages.dev" rel="noopener">Web Studio ↗</a>
+          <a href="/releases.html">Releases</a>
+          <a href="/vendors.html">Vendors</a>
+          <a
+            class="icon-start"
+            data-icon="github"
+            href="https://github.com/pauloedspinho20/OpenAxe"
+            target="_blank"
+            rel="noopener"
+            >GitHub ↗</a
+          >
+          <a
+            href="https://github.com/pauloedspinho20/OpenAxe/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener"
+            >GPLv3 License ↗</a
+          >
+          <a
+            href="https://github.com/sdatkinson/NeuralAmpModelerCore"
+            target="_blank"
+            rel="noopener"
+          >
+            <img
+              class="brand-img-nam"
+              src="/brands/nam.png"
+              alt=""
+              width="16"
+              height="16"
+              loading="lazy"
+              decoding="async"
+              aria-hidden="true"
+            />
+            <span>NAMCore ↗</span>
+          </a>
+          <a href="https://www.tone3000.com" target="_blank" rel="noopener">Tone3000 ↗</a>
+        </nav>
       </div>
     </footer>
 
