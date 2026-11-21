@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#101010" />
+    <script>
+      try {
+        var t = localStorage.getItem('openaxe-theme') === 'light' ? 'light' : 'dark'
+        document.documentElement.setAttribute('data-theme', t)
+        var cs = document.querySelector('meta[name="color-scheme"]')
+        if (cs) cs.setAttribute('content', t)
+        var tc = document.querySelector('meta[name="theme-color"]')
+        if (tc) tc.setAttribute('content', t === 'light' ? '#e7e2d6' : '#101010')
+      } catch (e) {}
+    </script>
+
+    <title>Vendors &amp; Licenses — OpenAxe Third-Party Stack</title>
+    <meta
+      name="description"
+      content="Complete external vendor ledger for OpenAxe — C++20 DSP libraries, native desktop & DAW plugin SDKs, web stack, versions, roles, and upstream repositories."
+    />
+    <link rel="canonical" href="https://openaxe-site.pages.dev/vendors.html" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/openaxe-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/openaxe-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/openaxe-180.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Vendors &amp; Licenses — OpenAxe Third-Party Stack" />
+    <meta
+      property="og:description"
+      content="Every external library, SDK, version, license, and upstream repository powering OpenAxe."
+    />
+    <meta property="og:url" content="https://openaxe-site.pages.dev/vendors.html" />
+    <meta property="og:image" content="https://openaxe-site.pages.dev/og-image.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "OpenAxe Vendors & Third-Party Stack",
+        "description": "External libraries, DSP engines, SDKs, versions, roles, and upstream repositories used in OpenAxe.",
+        "url": "https://openaxe-site.pages.dev/vendors.html",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "OpenAxe",
+          "url": "https://openaxe-site.pages.dev/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" role="banner">
+      <div class="container header-inner">
+        <a class="brand" href="/" aria-label="OpenAxe home">
+          <img src="/icons/openaxe-32.png" alt="" width="28" height="28" aria-hidden="true" />
+          <span class="brand-word">OPEN<span>AXE</span></span>
+          <span class="ver" id="landing-version" aria-label="version v%OPENAXE_VERSION%"
+            >v%OPENAXE_VERSION%</span
+          >
+          <span class="ox-badge ox-badge-accent" aria-label="beta">BETA</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary">
+          <button
+            class="ox-btn ox-btn-ghost ox-btn-sm menu-button"
+            type="button"
+            popovertarget="site-menu"
+            popovertargetaction="toggle"
+            aria-controls="site-menu"
+            aria-expanded="false"
+          >
+            Menu
+          </button>
+
+          <ul id="site-menu" class="site-menu" popover="auto">
+            <li><a href="/">Home</a></li>
+            <li><a href="/releases.html">Releases</a></li>
+            <li><a href="/vendors.html" aria-current="page">Vendors</a></li>
+            <li>
+              <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener"
+                >GitHub ↗</a
+              >
+            </li>
+            <li>
+              <button
+                id="theme-toggle"
+                data-theme-toggle
+                class="ox-btn ox-btn-ghost ox-btn-sm"
+                type="button"
+                aria-pressed="false"
+                aria-label="Switch finish to Aluminum (light)"
+              >
+                <span data-theme-label>☾ Carbon</span>
+              </button>
+            </li>
+            <li class="nav-cta-item">
+              <a
+                class="ox-btn ox-btn-primary ox-btn-sm nav-webapp-cta"
+                data-web-app
+                href="https://openaxe.pages.dev"
+                rel="noopener"
+                >↗ Web App</a
+              >
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="section">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-kicker">Vendor Ledger</span>
+          <h1 class="releases-title">External vendors &amp; open-source stack</h1>
+          <p class="sub">
+            Every third-party DSP engine, native audio/shell library, plugin SDK, web dependency,
+            and external ecosystem service shipped with or used by OpenAxe — pinned versions, roles,
+            licenses, and upstream links.
+          </p>
+        </div>
+
+        <div id="vendors-root">
+          <p class="muted">Loading external vendors…</p>
+          <noscript>
+            <p>
+              Enable JavaScript to filter vendors interactively, or view the full list in
+              <a
+                href="https://github.com/pauloedspinho20/OpenAxe/blob/main/THIRD_PARTY_NOTICES.md"
+                target="_blank"
+                rel="noopener"
+                >THIRD_PARTY_NOTICES.md ↗</a
+              >.
+            </p>
+          </noscript>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer" role="contentinfo">
+      <div class="container footer-grid">
+        <div class="footer-brand-col">
+          <div class="footer-brand-line">
+            <img src="/icons/openaxe-32.png" alt="" width="24" height="24" aria-hidden="true" />
+            <span class="brand-word">OPEN<span>AXE</span></span>
+            <span class="ox-badge ox-badge-accent">BETA</span>
+            <span class="ox-badge ox-badge-live">GPLv3</span>
+          </div>
+          <p class="footer-copy">
+            © 2024–<span id="footer-year">2026</span> OpenAxe Contributors · Made with ❤ by
+            <a href="https://hotdogtor.com" target="_blank" rel="noopener">Hot Dogtor</a>
+          </p>
+        </div>
+
+        <nav class="footer-links" aria-label="Footer">
+          <a href="/">Home</a>
+          <a data-web-app href="https://openaxe.pages.dev" rel="noopener">Web Studio ↗</a>
+          <a href="/releases.html">Releases</a>
+          <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener"
+            >GitHub ↗</a
+          >
+          <a
+            href="https://github.com/pauloedspinho20/OpenAxe/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener"
+            >GPLv3 License ↗</a
+          >
+          <a
+            href="https://github.com/pauloedspinho20/OpenAxe/blob/main/THIRD_PARTY_NOTICES.md"
+            target="_blank"
+            rel="noopener"
+            >Third-Party Notices ↗</a
+          >
+        </nav>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

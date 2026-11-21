@@ -6,6 +6,7 @@ import { initNav } from './nav'
 import { initTabs } from './tabs'
 import { initFinishCompare } from './finishCompare'
 import { getLatestVersionString, initDownloads } from './releases'
+import { initVendors } from './vendors'
 import { SignalArchitecture } from './components/SignalArchitecture'
 
 const WEB_APP_URL = 'https://openaxe.pages.dev'
@@ -17,6 +18,7 @@ initNav()
 initTabs()
 initFinishCompare()
 initDownloads()
+initVendors()
 
 const signalRootEl = document.getElementById('signal-architecture-root')
 if (signalRootEl) {

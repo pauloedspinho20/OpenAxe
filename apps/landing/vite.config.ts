@@ -34,6 +34,7 @@ export default defineConfig({
       input: {
         main: resolve(dir, 'index.html'),
         releases: resolve(dir, 'releases.html'),
+        vendors: resolve(dir, 'vendors.html'),
       },
     },
   },

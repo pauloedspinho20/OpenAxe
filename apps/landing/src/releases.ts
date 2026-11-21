@@ -22,7 +22,7 @@ export interface ReleaseRecord {
 const RELEASE_DATA = releasesData as { repo?: string; releases: ReleaseRecord[] }
 const REPO = RELEASE_DATA.repo || 'pauloedspinho20/OpenAxe'
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
