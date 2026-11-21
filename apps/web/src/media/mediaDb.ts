@@ -60,6 +60,8 @@ export interface MediaItem {
   runs?: PracticeRun[]
   /** The rig tone linked to this song: a scene, and a slot per section. */
   tone?: SongTone | null
+  /** Personal practice notes on bars (bar index -> text); not part of the tab file. */
+  barNotes?: Record<number, string>
 }
 
 /**
@@ -86,6 +88,8 @@ export interface TabViewState {
   guide?: number
   /** Fretboard / piano input panel open. */
   fretboard?: boolean
+  /** Rhythm (stems) on the tab staff: alphaTab's automatic choice, always, or never. */
+  tabRhythm?: 'auto' | 'on' | 'off'
 }
 
 /** One scored practice run (a wait-mode run, or a listened pass/play-through). */
@@ -145,6 +149,7 @@ function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
     view: row.view ?? null,
     runs: Array.isArray(row.runs) ? row.runs : [],
     tone: row.tone && typeof row.tone === 'object' ? row.tone : null,
+    barNotes: row.barNotes && typeof row.barNotes === 'object' ? row.barNotes : {},
   }
 }
 

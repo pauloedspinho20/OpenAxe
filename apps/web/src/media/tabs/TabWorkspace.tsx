@@ -19,6 +19,7 @@ import {
   model,
   PlayerMode,
   ScrollMode,
+  TabRhythmMode,
   type Settings,
   StaveProfile,
   type synth,
@@ -135,6 +136,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [solo, setSolo] = useState<Set<number>>(new Set())
   const [profile, setProfile] = useState<Profile>(item.view?.profile ?? 'both')
   const [zoom, setZoom] = useState(item.view?.zoom ?? 1)
+  const [tabRhythm, setTabRhythm] = useState(item.view?.tabRhythm ?? 'auto')
   // Practice view: just the music, bigger, and the transport (Esc leaves).
   const [reading, setReading] = useState(false)
   const viewZoom = reading ? Math.min(2.5, Math.max(1.4, zoom * 1.4)) : zoom
@@ -385,9 +387,15 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     api.settings.display.staveProfile = PROFILE[profile]
     api.settings.display.scale = viewZoom
     api.settings.display.layoutMode = horizontal ? LayoutMode.Horizontal : LayoutMode.Page
+    api.settings.notation.rhythmMode =
+      tabRhythm === 'on'
+        ? TabRhythmMode.ShowWithBars
+        : tabRhythm === 'off'
+          ? TabRhythmMode.Hidden
+          : TabRhythmMode.Automatic
     api.updateSettings()
     if (api.score) api.render()
-  }, [profile, viewZoom, horizontal])
+  }, [profile, viewZoom, horizontal, tabRhythm])
 
   useEffect(() => {
     if (!reading) return
@@ -902,6 +910,33 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listenOn])
+
+  // Practice notes on bars: pinned on the sheet, shown with the bar.
+  const barNotes = liveItem.barNotes ?? {}
+  const setBarNote = (bar: number, text: string) => {
+    const next = { ...(liveItem.barNotes ?? {}) }
+    if (text.trim()) next[bar] = text.trim()
+    else delete next[bar]
+    void useMediaStore.getState().updateItem(item.id, { barNotes: next })
+  }
+  const [notePins, setNotePins] = useState<{ bar: number; x: number; y: number; text: string }[]>(
+    [],
+  )
+  useEffect(() => {
+    const lookup = apiRef.current?.boundsLookup
+    const notes = Object.entries(liveItem.barNotes ?? {})
+    if (!lookup || !notes.length) {
+      setNotePins([])
+      return
+    }
+    const pins: { bar: number; x: number; y: number; text: string }[] = []
+    for (const [k, text] of notes) {
+      const r = lookup.findMasterBarByIndex(Number(k))?.realBounds
+      if (r) pins.push({ bar: Number(k), x: r.x + r.w - 18, y: r.y + 2, text })
+    }
+    setNotePins(pins)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveItem.barNotes, status, viewZoom, profile, horizontal, revision, shown, tick, tabRhythm])
 
   // Heat map: colour each scored bar of the recent runs on the sheet.
   const heat = useMemo(() => (heatOn ? barHeat(liveItem.runs) : new Map()), [heatOn, liveItem.runs])
@@ -1496,6 +1531,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         shown: [...shown],
         sidebarOpen,
         fretboard: fretOpen,
+        tabRhythm,
         source,
         guide,
       }
@@ -1504,7 +1540,19 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         void useMediaStore.getState().updateItem(item.id, { view })
     }, 800)
     return () => clearTimeout(timer)
-  }, [zoom, profile, horizontal, trackIndex, shown, sidebarOpen, source, guide, fretOpen, item.id])
+  }, [
+    zoom,
+    profile,
+    horizontal,
+    trackIndex,
+    shown,
+    sidebarOpen,
+    source,
+    guide,
+    fretOpen,
+    tabRhythm,
+    item.id,
+  ])
 
   const saveResume = () => {
     const at = Math.round(lastScorePos.current * 10) / 10
@@ -1735,6 +1783,13 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
           />
           <Tool
+            icon={I.QuarterNoteIcon}
+            title={`Rhythm on the tab staff: ${tabRhythm === 'auto' ? 'automatic (when there is no notation)' : tabRhythm === 'on' ? 'always' : 'hidden'} — click to change`}
+            on={tabRhythm === 'on'}
+            tag={tabRhythm === 'auto' ? 'A' : tabRhythm === 'off' ? '✕' : undefined}
+            onClick={() => setTabRhythm((r) => (r === 'auto' ? 'on' : r === 'on' ? 'off' : 'auto'))}
+          />
+          <Tool
             icon={I.ChordIcon}
             title="Chord diagrams in a strip at the top of the sheet"
             on={score?.stylesheet.globalDisplayChordDiagramsOnTop ?? false}
@@ -1847,6 +1902,8 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onLoopSelection={loopSelection}
             targets={targets}
             onShiftSelection={(n) => setAnchor((an) => (an ? { ...an, bar: an.bar + n } : an))}
+            barNote={barNotes[cursor.bar] ?? ''}
+            onBarNote={(text) => setBarNote(cursor.bar, text)}
             onVoice={(v) => setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))}
           />
         )}
@@ -1878,6 +1935,21 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                   />
                 </>
               )}
+              {notePins.map((n) => (
+                <button
+                  key={n.bar}
+                  type="button"
+                  className={tabStyles.notePin}
+                  style={{ left: n.x, top: n.y }}
+                  title={`Bar ${n.bar + 1}: ${n.text}`}
+                  aria-label={`Practice note on bar ${n.bar + 1}: ${n.text}`}
+                  onClick={() =>
+                    setCursor((c) => edit.clampCursor(score!, { ...c, bar: n.bar, beat: 0 }))
+                  }
+                >
+                  <I.EditIcon size={11} />
+                </button>
+              ))}
               {heatBoxes.map((b, i) => (
                 <div
                   key={i}
@@ -1929,6 +2001,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                   </span>
                 )}
                 <span>Voice {cursor.voice + 1}</span>
+                {barNotes[readingBar] && (
+                  <span className={tabStyles.statusNote} title="Your practice note on this bar">
+                    <I.EditIcon size={11} /> {barNotes[readingBar]}
+                  </span>
+                )}
                 {routine && (
                   <span className={tabStyles.waitStatus}>
                     Routine: {routine.sections[routine.idx]!.label} ({routine.idx + 1}/

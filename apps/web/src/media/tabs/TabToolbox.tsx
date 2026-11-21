@@ -42,6 +42,9 @@ export interface ToolboxProps {
   targets: () => ops.BeatRef[]
   /** Bars moved: shift the selection's anchor by this many bars. */
   onShiftSelection: (bars: number) => void
+  /** The cursor bar's personal practice note, and saving it. */
+  barNote: string
+  onBarNote: (text: string) => void
   onVoice: (voice: number) => void
 }
 
@@ -724,6 +727,13 @@ export function TabToolbox(p: ToolboxProps) {
                 value={beat?.text ?? ''}
                 placeholder="Text, e.g. let ring"
                 onCommit={(v) => apply((sc, s) => ops.setBeatText(sc, c, v, s))}
+              />
+              <TextField
+                label="Practice note on this bar (just for you, not saved in the tab)"
+                icon={I.EditIcon}
+                value={p.barNote}
+                placeholder="Note to self, e.g. mute the B string"
+                onCommit={p.onBarNote}
               />
               <TextField
                 label="Lyric syllable"
