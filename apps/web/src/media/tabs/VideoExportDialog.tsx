@@ -33,6 +33,11 @@ export interface VideoDialogChoice {
   speed: number
   /** A bar of metronome clicks before the music. */
   countIn: boolean
+  backgroundImage: File | null
+  /** 0..1: how solid the sheet behind the music is. */
+  paperOpacity: number
+  /** Show a fretboard with the playing notes under the music. */
+  fretboard: boolean
 }
 
 interface VideoExportDialogProps {
@@ -73,6 +78,9 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
     toBar: p.span[1],
     speed: 1,
     countIn: false,
+    backgroundImage: null,
+    paperOpacity: 1,
+    fretboard: false,
   })
   const [progress, setProgress] = useState<number | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -250,6 +258,34 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
             />
             cursor
           </label>
+          <label>
+            <span className={styles.dim}>background image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => set('backgroundImage', e.target.files?.[0] ?? null)}
+              aria-label="Background image"
+            />
+          </label>
+          {c.backgroundImage && (
+            <HardwareButton
+              size="small"
+              label="Remove image"
+              onClick={() => set('backgroundImage', null)}
+            />
+          )}
+          <label>
+            <span className={styles.dim}>sheet {Math.round(c.paperOpacity * 100)}%</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={c.paperOpacity}
+              onChange={(e) => set('paperOpacity', Number(e.target.value))}
+              aria-label="Sheet opacity"
+            />
+          </label>
           <label className={styles.check}>
             <input
               type="checkbox"
@@ -290,6 +326,14 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
             <option value="both">Notation + tab</option>
             <option value="score">Notation only</option>
           </select>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={c.fretboard}
+              onChange={(e) => set('fretboard', e.target.checked)}
+            />
+            Fretboard with the playing notes
+          </label>
           {p.tracks.map((tr, i) => (
             <label key={i} className={styles.check}>
               <input

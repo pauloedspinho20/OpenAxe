@@ -54,6 +54,12 @@ export interface VideoOptions {
   subtitle: string
   /** Seconds of title card before the music. */
   titleSeconds: number
+  /** Drawn over the background colour, scaled to cover the frame. */
+  backgroundImage?: ImageBitmap | null
+  /** Opacity of the sheet behind the music (0 = the background shows through). */
+  paperOpacity?: number
+  /** A fretboard under the music showing the notes of this track as they play. */
+  fretboard?: { track: number; tunings: number[]; capo: number; maxFret: number } | null
 }
 
 /** One played bar on the score timeline (repeats unrolled). */
@@ -280,8 +286,7 @@ export async function recordVideo(
   const drawTitle = (alpha: number) => {
     g.save()
     g.globalAlpha = alpha
-    g.fillStyle = o.dark ? '#ECE8DE' : '#111111'
-    if (!o.paper) g.fillStyle = contrast(o.background)
+    g.fillStyle = o.paper && paperAlpha > 0.5 ? contrast(o.paper) : contrast(o.background)
     g.textAlign = 'center'
     g.textBaseline = 'middle'
     const unit = Math.min(o.width, o.height)
@@ -292,15 +297,34 @@ export async function recordVideo(
     g.restore()
   }
 
-  const drawFrame = (t: number) => {
+  const fb = o.fretboard ?? null
+  const musicH = fb ? Math.round(o.height * 0.74) : o.height
+  const paperAlpha = o.paperOpacity ?? 1
+  const fbTrack = fb ? new Set([fb.track]) : null
+
+  const drawBackground = () => {
     g.fillStyle = o.background
     g.fillRect(0, 0, o.width, o.height)
+    const img = o.backgroundImage
+    if (img) {
+      // Cover: fill the frame, crop the overflow, keep the aspect ratio.
+      const k = Math.max(o.width / img.width, o.height / img.height)
+      const w = img.width * k
+      const h = img.height * k
+      g.drawImage(img, (o.width - w) / 2, (o.height - h) / 2, w, h)
+    }
+  }
+
+  const drawFrame = (t: number) => {
+    drawBackground()
     if (t < lead) {
-      if (o.paper) {
-        g.fillStyle = o.paper
-        g.fillRect(0, 0, o.width, o.height)
+      if (o.paper && paperAlpha > 0) {
+        g.fillStyle = withAlpha(o.paper, paperAlpha)
+        const bandH = Math.min(o.width, o.height) * 0.32
+        g.fillRect(0, o.height / 2 - bandH / 2, o.width, bandH)
       }
       drawTitle(Math.min(1, t / 0.4, (lead - t) / 0.4))
+      drawAttribution()
       return
     }
     const scoreSec = input.toScore(t - lead)
@@ -327,9 +351,9 @@ export async function recordVideo(
     let wantY = 0
     if (o.layout === 'line') {
       wantX = Math.min(Math.max(0, x - o.width / 2), Math.max(0, sheetW - o.width))
-      wantY = sys ? sys.y + sys.h / 2 - o.height / 2 : 0
+      wantY = sys ? sys.y + sys.h / 2 - musicH / 2 : 0
     } else {
-      wantY = sys ? Math.max(0, sys.y - o.height * 0.12) : 0
+      wantY = sys ? Math.max(0, sys.y - musicH * 0.12) : 0
     }
     if (first) {
       camX = wantX
@@ -339,9 +363,17 @@ export async function recordVideo(
       camX += (wantX - camX) * (o.layout === 'line' ? 0.5 : 0.18)
       camY += (wantY - camY) * 0.18
     }
-    if (o.paper) {
-      g.fillStyle = o.paper
-      g.fillRect(0, 0, o.width, o.height)
+    g.save()
+    g.beginPath()
+    g.rect(0, 0, o.width, musicH)
+    g.clip()
+    // The sheet: a band behind the line, or the whole music area for pages.
+    if (o.paper && paperAlpha > 0) {
+      g.fillStyle = withAlpha(o.paper, paperAlpha)
+      if (o.layout === 'line' && sys) {
+        const pad = musicH * 0.06
+        g.fillRect(0, sys.y - camY - pad, o.width, sys.h + 2 * pad)
+      } else g.fillRect(0, 0, o.width, musicH)
     }
     if (mbb) {
       const r = mbb.visualBounds
@@ -349,7 +381,7 @@ export async function recordVideo(
       g.fillRect(r.x - camX, r.y - camY, r.w, r.h)
     }
     for (const p of partials) {
-      if (p.x + p.w < camX || p.x > camX + o.width || p.y + p.h < camY || p.y > camY + o.height)
+      if (p.x + p.w < camX || p.x > camX + o.width || p.y + p.h < camY || p.y > camY + musicH)
         continue
       g.drawImage(p.canvas, p.x - camX, p.y - camY, p.w, p.h)
     }
@@ -358,10 +390,20 @@ export async function recordVideo(
       g.fillStyle = o.accent
       g.fillRect(Math.round(x - camX) - 1, r.y - camY, 3, r.h)
     }
-    // alphaTab's attribution, on every frame.
+    g.restore()
+    if (fb && fbTrack) {
+      const beat = input.tickCache.findBeat(fbTrack, tick)?.beat
+      const notes = (beat?.notes ?? []).map((n) => ({ string: n.string, fret: n.fret }))
+      drawFretboard(g, 0, musicH, o.width, o.height - musicH, fb, notes, o.accent)
+    }
+    drawAttribution()
+  }
+
+  // alphaTab's attribution, on every frame.
+  const drawAttribution = () => {
     g.save()
     g.font = `${Math.round(Math.min(o.width, o.height) * 0.018)}px sans-serif`
-    g.fillStyle = withAlpha(o.paper ? contrast(o.paper) : contrast(o.background), 0.55)
+    g.fillStyle = withAlpha(contrast(fb ? '#2c2016' : o.paper || o.background), 0.6)
     g.textAlign = 'right'
     g.textBaseline = 'bottom'
     g.fillText('♪ alphaTab.net', o.width - 12, o.height - 10)
@@ -482,4 +524,100 @@ export function silence(seconds: number, sampleRate = 48_000, channels = 2): Dec
     sampleRate,
     frames,
   }
+}
+
+const INLAYS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24]
+
+/** A fretboard with the playing notes (strings: 1 = lowest, drawn at the bottom). */
+function drawFretboard(
+  g: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+  fb: { tunings: number[]; capo: number; maxFret: number },
+  notes: { string: number; fret: number }[],
+  accent: string,
+): void {
+  const strings = fb.tunings.length
+  const padX = w * 0.04
+  const padY = h * 0.14
+  const left = x0 + padX * 1.6
+  const right = x0 + w - padX
+  // The neck, with a row under it for the fret numbers.
+  const top = y0 + h * 0.12
+  const bottom = y0 + h * 0.7
+  const frets = fb.maxFret
+  const fretX = (f: number) => left + ((right - left) * f) / frets
+  const stringY = (s: number) => bottom - ((bottom - top) * (s - 1)) / Math.max(1, strings - 1)
+  g.save()
+  // Neck.
+  const wood = g.createLinearGradient(0, top, 0, bottom)
+  wood.addColorStop(0, '#3a2a1c')
+  wood.addColorStop(1, '#2c2016')
+  g.fillStyle = wood
+  g.fillRect(left, top - padY * 0.5, right - left, bottom - top + padY)
+  // Inlays.
+  g.fillStyle = 'rgba(236, 232, 222, 0.35)'
+  const mid = (top + bottom) / 2
+  const r = Math.min(h * 0.05, (fretX(1) - fretX(0)) * 0.18)
+  for (const f of INLAYS) {
+    if (f > frets) continue
+    const cx = (fretX(f - 1) + fretX(f)) / 2
+    if (f % 12 === 0) {
+      g.beginPath()
+      g.arc(cx, mid - (bottom - top) * 0.22, r, 0, Math.PI * 2)
+      g.arc(cx, mid + (bottom - top) * 0.22, r, 0, Math.PI * 2)
+      g.fill()
+    } else {
+      g.beginPath()
+      g.arc(cx, mid, r, 0, Math.PI * 2)
+      g.fill()
+    }
+  }
+  // Capo.
+  if (fb.capo > 0 && fb.capo <= frets) {
+    g.fillStyle = 'rgba(0, 0, 0, 0.45)'
+    g.fillRect(fretX(fb.capo) - 6, top - padY * 0.5, 12, bottom - top + padY)
+  }
+  // Frets and nut.
+  for (let f = 0; f <= frets; f++) {
+    g.fillStyle = f === 0 ? '#e9e4d6' : '#b9b3a6'
+    g.fillRect(fretX(f) - (f === 0 ? 3 : 1), top - padY * 0.5, f === 0 ? 6 : 2, bottom - top + padY)
+  }
+  // Strings, thicker toward the low end.
+  for (let s = 1; s <= strings; s++) {
+    g.fillStyle = '#d9d2c0'
+    const thick = 1 + (strings - s) * 0.35
+    g.fillRect(left, stringY(s) - thick / 2, right - left, thick)
+  }
+  // Fret numbers.
+  g.fillStyle = 'rgba(236, 232, 222, 0.7)'
+  g.font = `${Math.round(h * 0.075)}px sans-serif`
+  g.textAlign = 'center'
+  g.textBaseline = 'top'
+  for (const f of INLAYS)
+    if (f <= frets) g.fillText(String(f), (fretX(f - 1) + fretX(f)) / 2, bottom + h * 0.12)
+  // Playing notes.
+  const dot = Math.min(h * 0.075, (fretX(1) - fretX(0)) * 0.36)
+  g.font = `700 ${Math.round(dot * 1.1)}px sans-serif`
+  g.textBaseline = 'middle'
+  for (const n of notes) {
+    if (n.string < 1 || n.string > strings || n.fret > frets) continue
+    const cx = n.fret === 0 ? left - padX * 0.7 : (fretX(n.fret - 1) + fretX(n.fret)) / 2
+    const cy = stringY(n.string)
+    g.beginPath()
+    g.arc(cx, cy, dot, 0, Math.PI * 2)
+    if (n.fret === 0) {
+      g.strokeStyle = accent
+      g.lineWidth = 3
+      g.stroke()
+    } else {
+      g.fillStyle = accent
+      g.fill()
+      g.fillStyle = '#fff'
+      g.fillText(String(n.fret), cx, cy + 1)
+    }
+  }
+  g.restore()
 }

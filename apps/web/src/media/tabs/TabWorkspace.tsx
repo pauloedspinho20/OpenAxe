@@ -1421,6 +1421,27 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         title: title.title || item.name,
         subtitle: bits.join(' · '),
         titleSeconds: 3,
+        backgroundImage: ch.backgroundImage ? await createImageBitmap(ch.backgroundImage) : null,
+        paperOpacity: ch.paperOpacity,
+        fretboard: (() => {
+          if (!ch.fretboard) return null
+          const ti = ch.tracks.find((i) => {
+            const st = score.tracks[i]?.staves[0]
+            return st && !st.isPercussion && st.stringTuning.tunings.length > 0
+          })
+          const st = ti === undefined ? null : score.tracks[ti]!.staves[0]!
+          if (ti === undefined || !st) return null
+          let top = 0
+          for (const bar of st.bars)
+            for (const v of bar.voices)
+              for (const b of v.beats) for (const n of b.notes) top = Math.max(top, n.fret)
+          return {
+            track: ti,
+            tunings: [...st.stringTuning.tunings],
+            capo: st.capo,
+            maxFret: top > 15 ? 24 : 15,
+          }
+        })(),
       },
       onProgress,
       signal,
