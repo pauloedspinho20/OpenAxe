@@ -84,6 +84,8 @@ export interface TabViewState {
   source: 'synth' | 'recording'
   /** Guide-track level over the paired recording (0 = off). */
   guide?: number
+  /** Fretboard / piano input panel open. */
+  fretboard?: boolean
 }
 
 /** One scored practice run (a wait-mode run, or a listened pass/play-through). */

@@ -31,6 +31,8 @@ import { loadMediaFile, saveMedia, saveMediaFile, type MediaItem } from '../medi
 import { useMediaStore } from '../mediaStore'
 import { PracticeControls, TransportButtons } from '../TransportBar'
 import { DrumLane } from './DrumLane'
+import { beatPositions, type FretPos, pitchAt as pitchOf, placePitch } from './fretboard'
+import { FretboardPanel } from './FretboardPanel'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
@@ -136,6 +138,10 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [horizontal, setHorizontal] = useState(item.view?.horizontal ?? false)
   const [metronome, setMetronome] = useState(false)
   const [editing, setEditing] = useState(false)
+  // Fretboard / piano input panel, and the notes of the beat playing now on it.
+  const [fretOpen, setFretOpen] = useState(item.view?.fretboard ?? false)
+  const [playingNotes, setPlayingNotes] = useState<FretPos[]>([])
+  const fretTrackRef = useRef(0)
   const [cursor, setCursor] = useState<edit.EditCursor>(edit.startCursor())
   const [box, setBox] = useState<CursorBox | null>(null)
   const [tick, setTick] = useState(0) // re-render after in-place model edits
@@ -1483,6 +1489,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         trackIndex,
         shown: [...shown],
         sidebarOpen,
+        fretboard: fretOpen,
         source,
         guide,
       }
@@ -1491,7 +1498,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         void useMediaStore.getState().updateItem(item.id, { view })
     }, 800)
     return () => clearTimeout(timer)
-  }, [zoom, profile, horizontal, trackIndex, shown, sidebarOpen, source, guide, item.id])
+  }, [zoom, profile, horizontal, trackIndex, shown, sidebarOpen, source, guide, fretOpen, item.id])
 
   const saveResume = () => {
     const at = Math.round(lastScorePos.current * 10) / 10
@@ -1526,6 +1533,48 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const fill = score ? edit.barFill(score, cursor) : { used: 0, capacity: 0 }
   const current = tracks[trackIndex]
   const staffTunings = score?.tracks[cursor.track]?.staves[cursor.staff]?.stringTuning.tunings ?? []
+  fretTrackRef.current = cursor.track
+  // The beat playing now, from alphaTab's tick position (it follows our player).
+  useEffect(() => {
+    const api = apiRef.current
+    const found =
+      fretOpen && playing && api
+        ? api.tickCache?.findBeat(new Set([fretTrackRef.current]), api.tickPosition)
+        : null
+    const next = beatPositions(found?.beat ?? null)
+    setPlayingNotes((prev) =>
+      prev.length === next.length &&
+      prev.every((p, i) => p.string === next[i]!.string && p.fret === next[i]!.fret)
+        ? prev
+        : next,
+    )
+  }, [fretOpen, playing, position])
+  const fretCapo = score?.tracks[cursor.track]?.staves[cursor.staff]?.capo ?? 0
+  const cursorNotes = score ? beatPositions(edit.beatAt(score, cursor)) : []
+  /** Fretboard click: add the note to the cursor's beat, or remove it if it's there. */
+  const enterFret = (pos: FretPos) => {
+    const c = { ...cursor, string: pos.string }
+    const there = cursorNotes.some((n) => n.string === pos.string && n.fret === pos.fret)
+    apply((sc, st) => {
+      if (there) edit.deleteNote(sc, c, st)
+      else edit.setFret(sc, c, pos.fret, st)
+      return c
+    })
+    setEditing(true)
+  }
+  const enterPitch = (pitch: number) => {
+    const tunings = staffTunings
+    const existing = cursorNotes.find((n) => tunings.length && pitchOf(tunings, n) === pitch)
+    if (existing) return enterFret(existing)
+    const pos = placePitch(
+      tunings,
+      pitch,
+      cursor.string,
+      24,
+      cursorNotes.map((n) => n.string),
+    )
+    if (pos) enterFret(pos)
+  }
   const stringName =
     staffTunings.length && !current?.percussion
       ? model.Tuning.getTextForTuning(staffTunings[staffTunings.length - cursor.string] ?? 0, false)
@@ -1664,6 +1713,14 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
               </button>
             </div>
           </details>
+          <Tool
+            icon={I.TuningIcon}
+            title={
+              fretOpen ? 'Hide the fretboard / piano' : 'Fretboard / piano: click to enter notes'
+            }
+            on={fretOpen}
+            onClick={() => setFretOpen((v) => !v)}
+          />
           <Tool
             icon={I.KeyboardIcon}
             title="Keyboard shortcuts (?)"
@@ -1899,6 +1956,19 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           />
         )}
       </div>
+
+      {/* ── Fretboard / piano input ── */}
+      {fretOpen && !reading && score && !current?.percussion && staffTunings.length > 0 && (
+        <FretboardPanel
+          tunings={staffTunings}
+          capo={fretCapo}
+          cursorString={cursor.string}
+          cursorNotes={cursorNotes}
+          playingNotes={playingNotes}
+          onFret={enterFret}
+          onPitch={enterPitch}
+        />
+      )}
 
       {/* ── Transport ── */}
       <footer className={tabStyles.footer}>

@@ -1134,3 +1134,196 @@
   background: var(--panel);
   font-size: 12px;
 }
+
+/* ── Fretboard / piano input ───────────────────────────────────────── */
+
+.fretPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 6px 8px 8px;
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+}
+
+.fretHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 11px;
+}
+
+.fretLegend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--ink-2);
+}
+
+.fretLegend > i {
+  position: static;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.neckScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.neck {
+  display: grid;
+  min-width: 760px;
+  background: linear-gradient(180deg, #3a2a1c, #2c2016);
+  border-radius: var(--r-sm);
+}
+
+.neckRow {
+  display: contents;
+}
+
+.fret {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-right: 2px solid #b9b3a6;
+  background: transparent;
+  cursor: pointer;
+}
+
+.fret:hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+.fret:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.fretOpen {
+  border-right: 4px solid #e9e4d6;
+  background: var(--panel-raised);
+}
+
+.fretRowOn {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.fretCapo {
+  background: rgb(0 0 0 / 25%);
+}
+
+.fretString {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(180deg, #ddd6c4, #8f8878);
+  pointer-events: none;
+}
+
+.fretOpen .fretString {
+  display: none;
+}
+
+.fretOpenName {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.fretDot {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.fretDotCursor {
+  background: var(--accent);
+}
+
+.fretDotPlay {
+  background: #3a9a5b;
+  box-shadow: 0 0 0 2px rgb(58 154 91 / 35%);
+}
+
+.fretDot.fretDotCursor.fretDotPlay {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px #3a9a5b;
+}
+
+.fretNumber {
+  height: 14px;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  color: #d9d2c0;
+  background: var(--panel-recessed);
+}
+
+.piano {
+  position: relative;
+  display: flex;
+  height: 92px;
+}
+
+.keyWhite {
+  position: relative;
+  flex: 0 0 22px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 3px;
+  border: 1px solid #9c978c;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #f3f0e8, #fffdf7);
+  font-size: 8px;
+  color: #555;
+  cursor: pointer;
+}
+
+.keyBlack {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 14px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #2a2a2a, #111);
+  cursor: pointer;
+}
+
+.keyWhite:hover,
+.keyBlack:hover {
+  filter: brightness(0.92);
+}
+
+.keyWhite.keyPlay,
+.keyBlack.keyPlay {
+  background: #3a9a5b;
+}
+
+.keyWhite.keyCursor,
+.keyBlack.keyCursor {
+  background: var(--accent);
+}
