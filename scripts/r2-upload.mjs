@@ -3,25 +3,26 @@
 //
 //   node scripts/r2-upload.mjs --tag=v0.2.8 [--bucket=openaxe-releases] [--public-url=https://pub-....r2.dev] <file-or-glob>...
 //
-// Env (Woodpecker user secrets `r2_access_key/_secret_key/_account_id_;
-// UPPERCASE variants also accepted for terminal use):
+// Env (GitHub Actions secrets R2_ACCESS_KEY/_SECRET_KEY/_ACCOUNT_ID; the
+// lowercase variants are still accepted for terminal use):
 //   r2_access_key / R2_ACCESS_KEY, r2_secret_key / R2_SECRET_KEY,
 //   r2_account_id / R2_ACCOUNT_ID, R2_BUCKET / --bucket,
 //   R2_PUBLIC_URL / --public-url (printed only, for the release notes).
-// --tag defaults to process.env.CI_COMMIT_TAG (never pass $VAR through YAML).
+// --tag is passed explicitly by the Release workflow; it falls back to
+// CI_COMMIT_TAG for compatibility with ad-hoc runners.
 //
 // Layout: r2://<bucket>/<tag>/<basename>. Requires `rclone` on PATH
-// (mac: `brew install rclone`; linux: docker/ci-linux image; win: winget).
+// (mac: `brew install rclone`; linux: docker/ci-linux image or apt; win: choco).
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
 
-// Fall back to woodpecker/.env (gitignored) for R2_* creds so a direct
+// Fall back to a gitignored .env at the repo root for R2_* creds so a direct
 // `node scripts/r2-upload.mjs …` works without exporting them by hand.
 function loadDotenv() {
   try {
-    const url = new URL('../woodpecker/.env', import.meta.url)
+    const url = new URL('../.env', import.meta.url)
     for (const line of readFileSync(url, 'utf8').split('\n')) {
       const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/)
       if (!m) continue

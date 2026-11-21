@@ -1,17 +1,43 @@
+# Area labels applied automatically to PRs by .github/workflows/labeler.yml
+# (actions/labeler v5+ syntax — the bare glob lists this file used before were
+# v4 and were never wired to a workflow, so nothing ever read them).
+#
+# Label names must exist in the repo or the action silently skips them. These
+# six do: web / desktop / core / plugin mirror the package layout, and `infra`
+# and `documentation` are the repo's existing labels rather than the `ci` and
+# `docs` this file used to name, which never existed.
+
 web:
-  - apps/web/**/*
-  - packages/ui/**/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'apps/web/**'
+          - 'packages/ui/**'
+
 desktop:
-  - apps/desktop/**/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'apps/desktop/**'
+
 core:
-  - packages/core/**/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'packages/core/**'
+
 plugin:
-  - packages/vst3/**/*
-ci:
-  - .github/workflows/**/*
-  - scripts/**/*
-  - turbo.json
-  - pnpm-workspace.yaml
-docs:
-  - '**/*.md'
-  - .github/ISSUE_TEMPLATE/**/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'packages/vst3/**'
+
+infra:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - 'scripts/**'
+          - 'turbo.json'
+          - 'pnpm-workspace.yaml'
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - '.github/ISSUE_TEMPLATE/**'

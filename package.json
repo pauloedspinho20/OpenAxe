@@ -1,7 +1,7 @@
 {
   "name": "openaxe",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.4.1",
   "description": "OpenAxe — guitar/bass amp + cab + effects suite (web + desktop + VST3 plugin) built on Neural Amp Modeler",
   "repository": {
     "type": "git",
@@ -35,8 +35,8 @@
     "build:all": "turbo run build",
     "package:desktop": "pnpm --filter @openaxe/desktop package",
     "release:preview": "node scripts/auto-bump.mjs --dry-run",
-    "release:publish": "bash scripts/woodpecker-manual.sh release",
-    "release:landing": "bash scripts/woodpecker-manual.sh landing",
+    "release:publish": "bash scripts/release-local.sh release",
+    "release:landing": "bash scripts/release-local.sh landing",
     "lint": "turbo run lint",
     "check:grid": "node scripts/check-grid-dims.mjs",
     "format": "prettier --write .",

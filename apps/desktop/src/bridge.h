@@ -142,6 +142,13 @@ class StudioBridge {
   std::string HandlePlayDI(const std::string& req);
   std::string HandleStopDI(const std::string& req);
 
+  // Backing-track player (issue #205): one entry point, dispatched on "op".
+  // loadBegin {frames, channels, sampleRate} / loadWrite {offset, pcm16Base64
+  // (interleaved little-endian int16)} / loadEnd / unload / play / pause /
+  // seek {frame} / setSpeed {value} / setSemitones {value} / setVolume
+  // {value} / setLoop {start, end, enabled} / status.
+  std::string HandlePlayer(const std::string& req);
+
   // Gapless staged switching (issue #367) - see MutationTarget above.
   std::string HandleStageBegin(const std::string& req);
   std::string HandleStageCommit(const std::string& req);

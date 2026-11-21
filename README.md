@@ -39,7 +39,7 @@ per-target status of that split, the migration order, and the latency budget).
 
 - **C++ for DSP core** — All vendored DSP libraries are C++ (DSPark, NAMCore, DaisySP). Wrapping them in Rust requires FFI layers for no algorithmic benefit. C++ compiles natively everywhere — desktop, VST3, iOS, Android, and WASM (via Emscripten). One language, no bridges between DSP and platform APIs.
 - **Desktop: C++ + webview.h** — React UI runs in a native system webview, same process as audio engine. Zero IPC overhead for parameter changes. 5-10MB binary vs 150MB+. miniaudio after the RtAudio CoreAudio crash and the JUCE AGPL removal (issue #374; see `apps/desktop/CMakeLists.txt`). webview.h ships no menu bar, so `src/mac_menu.mm` installs the standard App/Edit/Window menus — without an Edit menu macOS gives you no ⌘C/⌘V in text fields (#300 H1).
-- **VST3: iPlug2 (C++, MIT), not JUCE** — Direct C++ DSP integration. MIT license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. Editor is the same React SPA as web/desktop via `IWebViewControl` + loopback HTTP + `window.openAxe` bridge (no IGraphics fork).
+- **VST3: iPlug2 (C++, zlib-style), not JUCE** — Direct C++ DSP integration. Its permissive license avoids JUCE's proprietary/AGPL restrictions. Supports VST3, CLAP, AU, AAX Native. Editor is the same React SPA as web/desktop via `IWebViewControl` + loopback HTTP + `window.openAxe` bridge (no IGraphics fork).
 - **Mobile: Native shells** — C++ DSP runs directly on the device's audio hardware via JNI (Android) and ObjC++ bridge (iOS). No WASM runtime, no webview, no JS bridge in the audio path.
 
 ### What every platform shares
@@ -146,7 +146,7 @@ OpenAxe/
 │       ├── src/shared/              # Dialog, FormField, OutlineButton, Pagination, Select, StatusText, Toaster, Wordmark
 │       └── tokens/                  # CSS custom properties + design-tokens.json → generated/tokens.h
 ├── .storybook/                # Storybook, scans packages/ui stories
-├── .github/workflows/         # auto-release.yml (version bump + tag); heavy CI/releases live in .woodpecker/
+├── .github/workflows/         # ci, desktop, plugin, release, auto-release, pages, stale
 ├── scripts/                   # setup.mjs, drift guards, sync-version, auto-bump, build-core-wasm.sh
 ├── .vscode/tasks.json         # 59 tasks — mirrors every command below (⇧⌘B)
 ├── pnpm-workspace.yaml
@@ -161,7 +161,7 @@ OpenAxe/
 - [CMake](https://cmake.org) 3.22+ and a C++20 compiler (Clang, GCC, or MSVC) — for `packages/core`, `apps/desktop`, `packages/vst3`. Not needed for pure web-app work. On macOS with CMake.app: **Tools → How to Install For Command Line Use** first.
 - Git — vendored DSP libs under `packages/core/third_party/` are git submodules.
 - Emscripten SDK (optional) — only for `bash scripts/build-core-wasm.sh` (see WASM section).
-- Linux desktop/plugin builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libpulse-dev` (the same `scripts/ci-local.mjs` stages run on self-hosted Woodpecker — see `docs/ci-woodpecker.md`).
+- Linux desktop/plugin builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libpulse-dev` (the same `scripts/ci-local.mjs` stages run in CI — see `docs/ci-github-actions.md`).
 
 ```bash
 # One-time setup (idempotent) — submodules + pnpm install (repairs Rosetta x64 binaries) + CMake configure
@@ -348,7 +348,7 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 
 ### Branching
 
-`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main` and is merged with a **merge commit** (ancestry preserved); `auto-release.yml` then bumps `VERSION`, tags `vX.Y.Z` and merges `main` back into `dev` so `dev` never falls behind (see `CONTRIBUTING.md#Branching`). The tag drives the self-hosted **Woodpecker** release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing); the heavy tests and releases deliberately stay off GitHub Actions (see `docs/ci-woodpecker.md`, issue #441).
+`feature/* → dev` via **squash** (one commit per feature). `dev → main` is the only PR targeting `main` and is merged with a **merge commit** (ancestry preserved); `auto-release.yml` then bumps `VERSION`, tags `vX.Y.Z` and merges `main` back into `dev` so `dev` never falls behind (see `CONTRIBUTING.md#Branching`). The tag drives `.github/workflows/release.yml` — desktop/plugin builds on all three OSes → Cloudflare R2 + `manifest.json` + landing, mirrored onto the GitHub Release (see `docs/ci-github-actions.md`).
 
 ## Roadmap
 
@@ -377,4 +377,4 @@ Or **Run Task** `Full check (lint + format + build + test + e2e)` + `C++: Test` 
 
 ## License
 
-[GPLv3](./LICENSE) — keeps this and any derivative work free and open. `Copyright (C) 2024-2026 OpenAxe Contributors`. The shared DSP core wraps GPLv3/LGPLv3/MIT/BSD-3 C++ libraries. iPlug2 (VST3/AU/AAX) is MIT. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, branching, DCO sign-off, and licensing rules. Third-party notices: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+[GPLv3](./LICENSE) — keeps this and any derivative work free and open. `Copyright (C) 2024-2026 OpenAxe Contributors`. The shared DSP core wraps MIT/BSD/MPL-2.0 C++ libraries; iPlug2 is zlib-style and the VST3 SDK is used under its GPLv3 arm. Dependency notices ship inside every binary — see [`licenses/`](./licenses/). See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, branching, DCO sign-off, and licensing rules. Third-party notices: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

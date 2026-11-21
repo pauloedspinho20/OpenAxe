@@ -647,6 +647,73 @@ typedef enum OpenAxeLoadStateResult {
 // suspend audio around it.
 OpenAxeLoadStateResult openaxe_load_state(OpenAxeGraph* graph, const char* json);
 
+
+// ── Backing-track player (issue #205) ──────────────────────────────────
+// A stereo audio track (backing track, song stem) played next to the rig with
+// pitch-preserving speed (0.25..2x), transposition (+-12 semitones), an A-B
+// loop and its own volume. It is a separate handle, not a grid block: it has
+// no routing path into the rig and survives staged rig switches untouched.
+// Front ends call openaxe_player_render right after openaxe_process on the
+// same output buffers, which ADDS the track into them - so it reaches the same
+// device as the rig on every shell. Positions/lengths are in frames at the
+// track's own sample rate (openaxe_player_source_rate).
+//
+// Tier 2 (not concurrently with openaxe_player_render): create/destroy,
+// reset, load_begin, unload. load_write/load_end are safe concurrently with
+// render (the buffer is unpublished until load_end). Everything else is
+// Tier 1. Decoding is the front end's job (decodeAudioData on web/webview).
+typedef struct OpenAxePlayer OpenAxePlayer;
+
+// Never returns NULL.
+OpenAxePlayer* openaxe_player_create(void);
+// NULL is a no-op.
+void openaxe_player_destroy(OpenAxePlayer* player);
+// Must be called before render and whenever the engine rate/block size
+// change. Keeps the loaded track and position.
+void openaxe_player_reset(OpenAxePlayer* player, double sample_rate, int32_t max_block_size);
+// Stops playback and allocates num_frames x num_channels (1|2) at
+// source_rate. 1 on success, 0 for bad arguments (over 20 minutes at 48 kHz,
+// channels not 1/2, rate outside 8k..384k).
+int32_t openaxe_player_load_begin(OpenAxePlayer* player, int32_t num_frames, int32_t num_channels,
+                                  double source_rate);
+// Copies num_frames interleaved float frames at frame_offset. Returns frames
+// written (0 when no load is in progress).
+int32_t openaxe_player_load_write(OpenAxePlayer* player, int32_t frame_offset,
+                                  const float* interleaved, int32_t num_frames);
+// Publishes the track at position 0 with the loop cleared. 1 on success.
+int32_t openaxe_player_load_end(OpenAxePlayer* player);
+void openaxe_player_unload(OpenAxePlayer* player);
+int32_t openaxe_player_has_track(OpenAxePlayer* player);
+int32_t openaxe_player_length(OpenAxePlayer* player);
+double openaxe_player_source_rate(OpenAxePlayer* player);
+
+void openaxe_player_play(OpenAxePlayer* player);
+void openaxe_player_pause(OpenAxePlayer* player);
+int32_t openaxe_player_is_playing(OpenAxePlayer* player);
+void openaxe_player_seek(OpenAxePlayer* player, int32_t frame);
+// Audible (latency-compensated) position.
+int32_t openaxe_player_position(OpenAxePlayer* player);
+void openaxe_player_set_speed(OpenAxePlayer* player, float speed);
+void openaxe_player_set_semitones(OpenAxePlayer* player, float semitones);
+void openaxe_player_set_volume(OpenAxePlayer* player, float volume);
+// enabled == 0 or end <= start plays straight through and stops at the end.
+void openaxe_player_set_loop(OpenAxePlayer* player, int32_t start_frame, int32_t end_frame,
+                             int32_t enabled);
+// Peak |sample| of the last rendered block (post-volume).
+float openaxe_player_get_meter(OpenAxePlayer* player);
+// Count-in before the next play: `clicks` metronome clicks `interval_seconds`
+// apart in output time (fold tempo and speed in), accenting every
+// `accent_every`-th. clicks <= 0 disables it.
+void openaxe_player_set_count_in(OpenAxePlayer* player, int32_t clicks, float interval_seconds,
+                                 int32_t accent_every);
+// 1 while a count-in is sounding (the track has not started yet).
+int32_t openaxe_player_is_counting(OpenAxePlayer* player);
+
+// Real-time safe. ADDS the track into output (output_channels 1|2 buffers of
+// num_frames, num_frames <= the reset's max_block_size).
+void openaxe_player_render(OpenAxePlayer* player, float* const* output, int32_t output_channels,
+                           int32_t num_frames);
+
 #ifdef __cplusplus
 }
 #endif

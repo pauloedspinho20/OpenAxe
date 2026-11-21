@@ -7,7 +7,7 @@
 ## Decision Making
 
 - Issues and Discussions are the forum. Epics (`epic` label) carry checklists; comment before starting large work.
-- PRs require maintainer review; CI must be green (branch protection on `main`/`dev`).
+- PRs require maintainer review; CI must be green (branch protection on `main`/`dev` requires `ci.yml`'s checks).
 - `feature/* → dev` via squash, `dev → main` via merge commit (`--no-ff`) — see `CONTRIBUTING.md#Branching`.
 
 ## Roles
@@ -19,7 +19,7 @@ As community grows, a lightweight RFC and `CODEOWNERS` per-path reviewers will b
 
 ## Releases
 
-Automatic from `main` — a push to `main` runs `auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge into `dev`); the tag then drives the self-hosted **Woodpecker** release pipelines (desktop/plugin builds → Cloudflare R2 + `manifest.json` + landing). See `CONTRIBUTING.md#Releasing`.
+Automatic from `main` — a push to `main` runs `auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge into `dev`); the tag then drives `release.yml` (desktop/plugin builds on macOS, Windows and Linux → Cloudflare R2 + `manifest.json` + landing, mirrored onto the GitHub Release). See `CONTRIBUTING.md#Releasing` and `docs/ci-github-actions.md`.
 
 ## Sponsorship
 

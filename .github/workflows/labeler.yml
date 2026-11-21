@@ -1,0 +1,30 @@
+# Applies the area labels in .github/labeler.yml to every PR.
+#
+# pull_request_target, not pull_request, so PRs from forks get labelled too —
+# a fork's GITHUB_TOKEN is read-only and cannot add labels. That trigger runs
+# in the context of the BASE repo with a writable token, so it is only safe
+# because this workflow never checks out or executes the PR's code: it has no
+# checkout step, and actions/labeler reads the file list from the API.
+# Permissions are the minimum for that: read the PR, write its labels.
+name: Labeler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: labeler-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v7
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: false
