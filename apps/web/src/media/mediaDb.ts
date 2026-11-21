@@ -62,7 +62,18 @@ export interface MediaItem {
   tone?: SongTone | null
   /** Personal practice notes on bars (bar index -> text); not part of the tab file. */
   barNotes?: Record<number, string>
+  /** Library organisation (issue #459). */
+  favorite?: boolean
+  status?: LearnStatus | null
+  /** Free tags: genre, difficulty, a folder name... (lower-cased, trimmed). */
+  tags?: string[]
+  /** What the file says about the song, for search: tempo (BPM) and key. */
+  info?: { tempo?: number; key?: string } | null
+  /** SHA-256 of the file's bytes (hex), to spot duplicates on import. */
+  hash?: string
 }
+
+export type LearnStatus = 'wishlist' | 'learning' | 'learned'
 
 /**
  * Song -> rig tone link. `scene` is a scene index (0-63); `sections` maps a
@@ -158,6 +169,14 @@ function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
     runs: Array.isArray(row.runs) ? row.runs : [],
     tone: row.tone && typeof row.tone === 'object' ? row.tone : null,
     barNotes: row.barNotes && typeof row.barNotes === 'object' ? row.barNotes : {},
+    favorite: row.favorite === true,
+    status:
+      row.status === 'wishlist' || row.status === 'learning' || row.status === 'learned'
+        ? row.status
+        : null,
+    tags: Array.isArray(row.tags) ? row.tags.filter((t) => typeof t === 'string') : [],
+    info: row.info && typeof row.info === 'object' ? row.info : null,
+    ...(typeof row.hash === 'string' ? { hash: row.hash } : {}),
   }
 }
 

@@ -106,7 +106,19 @@ interface MediaActions {
     patch: Partial<
       Pick<
         MediaItem,
-        'name' | 'artist' | 'markers' | 'sync' | 'resume' | 'view' | 'runs' | 'tone' | 'barNotes'
+        | 'name'
+        | 'artist'
+        | 'markers'
+        | 'sync'
+        | 'resume'
+        | 'view'
+        | 'runs'
+        | 'tone'
+        | 'barNotes'
+        | 'favorite'
+        | 'status'
+        | 'tags'
+        | 'info'
       >
     >,
   ): Promise<void>

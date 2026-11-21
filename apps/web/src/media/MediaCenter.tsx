@@ -3,8 +3,9 @@ import { Dialog, HardwareButton } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
+import { allTags, matches, parseTags, sortItems, STATUSES } from './library'
 import styles from './MediaCenter.module.css'
-import { newMediaId, SCORE_EXTENSIONS, type MediaItem } from './mediaDb'
+import { newMediaId, SCORE_EXTENSIONS, type LearnStatus, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
@@ -33,19 +34,20 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   const hasTransport = useMediaStore((s) => s.transport !== null)
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+  const [favorites, setFavorites] = useState(false)
+  const [status, setStatus] = useState<LearnStatus | null>(null)
+  const [tag, setTag] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return items.filter(
-      (i) =>
-        (filter === 'all' || i.kind === filter) &&
-        (!q || `${i.name} ${i.artist} ${i.fileName}`.toLowerCase().includes(q)),
-    )
-  }, [items, filter, query])
+  const visible = useMemo(
+    () =>
+      sortItems(items.filter((i) => matches(i, { kind: filter, favorites, status, tag, query }))),
+    [items, filter, query, favorites, status, tag],
+  )
+  const tags = useMemo(() => allTags(items), [items])
 
   const active = items.find((i) => i.id === activeId) ?? null
   // A tab wants the whole dialog: the library folds away while one is open
@@ -153,10 +155,47 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
                 </button>
               ))}
             </div>
+            <div className={styles.libFilters}>
+              <button
+                type="button"
+                className={`${styles.chip} ${favorites ? styles.chipOn : ''}`}
+                aria-pressed={favorites}
+                onClick={() => setFavorites((v) => !v)}
+                title="Favourites only"
+              >
+                ★
+              </button>
+              <select
+                value={status ?? ''}
+                onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
+                aria-label="Filter by status"
+              >
+                <option value="">Any status</option>
+                {STATUSES.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.label}
+                  </option>
+                ))}
+              </select>
+              {tags.length > 0 && (
+                <select
+                  value={tag ?? ''}
+                  onChange={(e) => setTag(e.target.value || null)}
+                  aria-label="Filter by tag"
+                >
+                  <option value="">Any tag</option>
+                  {tags.map((t) => (
+                    <option key={t} value={t}>
+                      #{t}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
             <input
               className={styles.search}
               type="search"
-              placeholder="Search"
+              placeholder="Search · 120 bpm · key:Am"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Search library"
@@ -208,61 +247,133 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
 
 function LibraryRow({ item, active }: { item: MediaItem; active: boolean }) {
   const [editing, setEditing] = useState(false)
+  const [details, setDetails] = useState(false)
   const [name, setName] = useState(item.name)
+  const [tagText, setTagText] = useState((item.tags ?? []).join(', '))
   const s = useMediaStore.getState()
+  const statusLabel = STATUSES.find((x) => x.id === item.status)?.label
   return (
-    <li className={`${styles.item} ${active ? styles.itemActive : ''}`}>
-      <button
-        type="button"
-        className={styles.itemMain}
-        onClick={() => void s.open(item.id)}
-        onDoubleClick={() => setEditing(true)}
-        title={item.fileName}
-      >
-        <span className={styles.itemIcon}>
-          {item.kind === 'score' ? <TabGlyph size={16} /> : <NoteGlyph size={14} />}
-        </span>
-        {editing ? (
+    <li
+      className={`${styles.item} ${active ? styles.itemActive : ''} ${details ? styles.itemOpen : ''}`}
+    >
+      <div className={styles.itemRow}>
+        <button
+          type="button"
+          className={`${styles.itemStar} ${item.favorite ? styles.itemStarOn : ''}`}
+          aria-pressed={!!item.favorite}
+          aria-label={item.favorite ? `Unfavourite ${item.name}` : `Favourite ${item.name}`}
+          title={item.favorite ? 'Favourite' : 'Mark as favourite'}
+          onClick={() => void s.updateItem(item.id, { favorite: !item.favorite })}
+        >
+          {item.favorite ? '★' : '☆'}
+        </button>
+        <button
+          type="button"
+          className={styles.itemMain}
+          onClick={() => void s.open(item.id)}
+          onDoubleClick={() => setEditing(true)}
+          title={item.fileName}
+        >
+          <span className={styles.itemIcon}>
+            {item.kind === 'score' ? <TabGlyph size={16} /> : <NoteGlyph size={14} />}
+          </span>
+          {editing ? (
+            <input
+              className={styles.renameInput}
+              value={name}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => {
+                setEditing(false)
+                if (name.trim() && name !== item.name)
+                  void s.updateItem(item.id, { name: name.trim() })
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') {
+                  setName(item.name)
+                  setEditing(false)
+                }
+              }}
+            />
+          ) : (
+            <span className={styles.itemText}>
+              <span className={styles.itemName}>{item.name}</span>
+              <span className={styles.itemMeta}>
+                {item.artist || (item.kind === 'score' ? 'Tab' : 'Backing track')}
+                {item.duration > 0 && ` · ${formatTime(item.duration).replace(/\.\d$/, '')}`}
+                {statusLabel && ` · ${statusLabel}`}
+                {(item.tags ?? []).length > 0 &&
+                  ` · ${(item.tags ?? []).map((t) => `#${t}`).join(' ')}`}
+              </span>
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={styles.itemDelete}
+          aria-label={`Delete ${item.name}`}
+          title="Delete"
+          onClick={() => {
+            if (confirm(`Delete "${item.name}" from the library?`)) void s.removeItem(item.id)
+          }}
+        >
+          ×
+        </button>
+        <button
+          type="button"
+          className={styles.itemDelete}
+          aria-label={`Status and tags for ${item.name}`}
+          aria-expanded={details}
+          title="Status and tags"
+          onClick={() => setDetails((v) => !v)}
+        >
+          ⋯
+        </button>
+      </div>
+      {details && (
+        <div className={styles.itemDetails}>
+          <select
+            value={item.status ?? ''}
+            onChange={(e) =>
+              void s.updateItem(item.id, {
+                status: (e.target.value || null) as LearnStatus | null,
+              })
+            }
+            aria-label={`Status of ${item.name}`}
+          >
+            <option value="">No status</option>
+            {STATUSES.map((st) => (
+              <option key={st.id} value={st.id}>
+                {st.label}
+              </option>
+            ))}
+          </select>
           <input
-            className={styles.renameInput}
-            value={name}
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setName(e.target.value)}
+            value={tagText}
+            placeholder="Tags: rock, easy, set 1"
+            onChange={(e) => setTagText(e.target.value)}
             onBlur={() => {
-              setEditing(false)
-              if (name.trim() && name !== item.name)
-                void s.updateItem(item.id, { name: name.trim() })
+              const next = parseTags(tagText)
+              setTagText(next.join(', '))
+              if (next.join(',') !== (item.tags ?? []).join(','))
+                void s.updateItem(item.id, { tags: next })
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-              if (e.key === 'Escape') {
-                setName(item.name)
-                setEditing(false)
-              }
             }}
+            aria-label={`Tags for ${item.name}`}
           />
-        ) : (
-          <span className={styles.itemText}>
-            <span className={styles.itemName}>{item.name}</span>
-            <span className={styles.itemMeta}>
-              {item.artist || (item.kind === 'score' ? 'Tab' : 'Backing track')}
-              {item.duration > 0 && ` · ${formatTime(item.duration).replace(/\.\d$/, '')}`}
+          {item.info && (item.info.tempo || item.info.key) && (
+            <span className={styles.dim}>
+              {[item.info.key, item.info.tempo ? `${item.info.tempo} bpm` : '']
+                .filter(Boolean)
+                .join(' · ')}
             </span>
-          </span>
-        )}
-      </button>
-      <button
-        type="button"
-        className={styles.itemDelete}
-        aria-label={`Delete ${item.name}`}
-        title="Delete"
-        onClick={() => {
-          if (confirm(`Delete "${item.name}" from the library?`)) void s.removeItem(item.id)
-        }}
-      >
-        ×
-      </button>
+          )}
+        </div>
+      )}
     </li>
   )
 }

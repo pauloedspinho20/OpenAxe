@@ -28,6 +28,7 @@ import { HardwareButton } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
+import { keyName } from '../library'
 import { loadMediaFile, saveMedia, saveMediaFile, type MediaItem } from '../mediaDb'
 import { useMediaStore } from '../mediaStore'
 import { PracticeControls, TransportButtons } from '../TransportBar'
@@ -317,6 +318,19 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       setTracks(trackList(score))
       setTitle({ title: score.title, artist: score.artist })
       setCursor((c) => edit.clampCursor(score, c))
+      // Remember the song's tempo and key so the library can search them.
+      const bar = score.tracks[0]?.staves[0]?.bars[0]
+      const info = {
+        tempo: Math.round(score.tempo),
+        ...(bar
+          ? {
+              key: keyName(bar.keySignature, bar.keySignatureType === model.KeySignatureType.Minor),
+            }
+          : {}),
+      }
+      const prev = useMediaStore.getState().items.find((i) => i.id === item.id)?.info
+      if (prev?.tempo !== info.tempo || prev?.key !== info.key)
+        void useMediaStore.getState().updateItem(item.id, { info })
     })
     api.renderFinished.on(() => {
       if (!disposed) setStatus('ready')

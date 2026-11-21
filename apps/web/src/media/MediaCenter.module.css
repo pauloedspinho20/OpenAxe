@@ -113,8 +113,69 @@
 
 .item {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   border-radius: var(--r-sm);
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.itemStar {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 14px;
+  padding: 0 0 0 6px;
+  cursor: pointer;
+}
+
+.itemStarOn {
+  color: #f2c94c;
+}
+
+.itemOpen .itemDelete {
+  opacity: 1;
+}
+
+.itemDetails {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 8px 30px;
+  font-size: 12px;
+}
+
+.itemDetails input {
+  flex: 1;
+  min-width: 120px;
+  font: inherit;
+  padding: 3px 6px;
+  background: var(--panel-recessed);
+  color: var(--ink-1);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+}
+
+.libFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.libFilters select {
+  min-width: 0;
+  flex: 1;
+}
+
+.chipOn {
+  border-color: #f2c94c !important;
+  color: #f2c94c !important;
 }
 
 .item:hover {
