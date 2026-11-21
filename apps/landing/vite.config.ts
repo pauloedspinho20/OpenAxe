@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 // Root-relative base: the landing lives at the root of the site (Cloudflare
@@ -33,10 +34,12 @@ export default defineConfig({
       input: {
         main: resolve(dir, 'index.html'),
         releases: resolve(dir, 'releases.html'),
+        vendors: resolve(dir, 'vendors.html'),
       },
     },
   },
   plugins: [
+    react(),
     {
       // Publish the release manifest the landing already renders as a static
       // JSON file, so the web app's update check can read it cross-origin
@@ -65,8 +68,10 @@ export default defineConfig({
     },
     {
       name: 'media-var-replace',
+      enforce: 'pre',
       transform(code, id) {
-        if (id.endsWith('.css')) {
+        const cleanId = id.split('?', 1)[0]
+        if (cleanId.endsWith('.css')) {
           return code
             .replace(/var\(--mw-xxs\)/g, '320px')
             .replace(/var\(--mw-xs\)/g, '496px')
