@@ -54,6 +54,40 @@ void TestVersion() {
   CHECK(j.is_string() && !j.get<std::string>().empty());
 }
 
+// Backing-track player (issue #205): the single `openAxe.player` handler.
+void TestPlayerOps() {
+  openaxe_desktop::StudioBridge bridge;
+  // 4 stereo frames of int16 silence = 16 zero bytes.
+  const char* kPcm = "AAAAAAAAAAAAAAAAAAAAAA==";
+  auto r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"loadBegin","frames":4,"channels":3,"sampleRate":48000}])")));
+  CHECK(r["ok"] == false);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"loadBegin","frames":4,"channels":2,"sampleRate":44100}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandlePlayer(
+      Arr((std::string(R"([{"op":"loadWrite","offset":0,"channels":2,"pcm16Base64":")") + kPcm + R"("}])").c_str())));
+  CHECK(r["ok"] == true);
+  CHECK(r["written"] == 4);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"loadEnd"}])")));
+  CHECK(r["ok"] == true);
+  CHECK(r["length"] == 4);
+  CHECK(r["sampleRate"] == 44100.0);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"play"}])")));
+  CHECK(r["playing"] == true);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"seek","frame":2}])")));
+  CHECK(r["position"] == 2);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"setSpeed","value":0.5}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"setLoop","start":0,"end":4,"enabled":true}])")));
+  CHECK(r["ok"] == true);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"pause"}])")));
+  CHECK(r["playing"] == false);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"bogus"}])")));
+  CHECK(r["ok"] == false);
+  r = Parse(bridge.HandlePlayer(Arr(R"([{"op":"unload"}])")));
+  CHECK(r["ok"] == true);
+  CHECK(r["length"] == 0);
+}
+
 void TestAddBlockAndInfo() {
   openaxe_desktop::StudioBridge bridge;
   // Delay has wrapped DSP, so it exposes a real param table.
@@ -1009,6 +1043,7 @@ void TestSecureStorageRoundTrip() {
 
 int main() {
   TestVersion();
+  TestPlayerOps();
   TestAddBlockAndInfo();
   TestParamsByIndexAndSymbol();
   TestSymbolMappedParamRoundTripAllEffectKinds();

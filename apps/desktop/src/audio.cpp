@@ -357,6 +357,11 @@ int RtProcessCallback(void* output_buffer, void* input_buffer, unsigned int n_fr
       openaxe_process(state->graph, nullptr, 0, out_ptrs, out_ch,
                          static_cast<int32_t>(n_frames));
     }
+    // Backing track (issue #205): added after the rig, before the output tap
+    // so the output meters see what the user hears.
+    if (state->player) {
+      openaxe_player_render(state->player, out_ptrs, out_ch, static_cast<int32_t>(n_frames));
+    }
   } else if (out_l) {
     std::memset(out_l, 0, static_cast<size_t>(n_frames) * sizeof(float));
     if (out_r) std::memset(out_r, 0, static_cast<size_t>(n_frames) * sizeof(float));
@@ -505,6 +510,7 @@ AudioIO::AudioIO() {
   }
   for (auto& v : ma_in_) v.assign(kMaScratchCap, 0.0f);
   for (auto& v : ma_out_) v.assign(kMaScratchCap, 0.0f);
+  state_.player = openaxe_player_create();
 }
 
 AudioIO::~AudioIO() {
@@ -517,6 +523,8 @@ AudioIO::~AudioIO() {
     context_.reset();
   }
   context_ok_ = false;
+  openaxe_player_destroy(state_.player);
+  state_.player = nullptr;
 }
 
 void AudioIO::HandleStreamError(const std::string& text) {
@@ -842,6 +850,12 @@ void AudioIO::SetGraph(OpenAxeGraph* graph, double sample_rate, unsigned int max
   // stream is stopped (or before it starts), then publish the pointer via
   // the acquire/release pair the callback reads.
   if (graph) openaxe_reset(graph, sample_rate, static_cast<int32_t>(max_block_size));
+  // The player clamps to its reset block size, so cover the largest chunk
+  // the callback can hand it (see DataCallback's kMaScratchCap chunking).
+  if (state_.player && sample_rate > 0) {
+    openaxe_player_reset(state_.player, sample_rate,
+                         static_cast<int32_t>(std::max(max_block_size, kMaScratchCap)));
+  }
   state_.graph = graph;
   state_.graph_ready.store(graph != nullptr, std::memory_order_release);
 }

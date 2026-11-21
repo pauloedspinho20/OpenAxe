@@ -72,3 +72,33 @@ describe('assetCache', () => {
     expect(await getCachedAsset('bad-model')).toBeNull()
   })
 })
+
+describe('assetCache in a native shell against a dev server', () => {
+  it('treats the SPA index.html fallback as "no asset server" and reads via the bridge', async () => {
+    // This file runs in the node environment: stand in the desktop bridge's window globals.
+    const w: Record<string, unknown> = {
+      'openAxe.version': vi.fn(),
+      'openAxe.assetGet': vi
+        .fn()
+        .mockResolvedValue({ ok: true, base64: 'AQID', type: 'audio/wav' }),
+    }
+    vi.stubGlobal('window', w)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('<!doctype html><html></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        }),
+      ),
+    )
+    try {
+      const blob = await getCachedAsset('media:x')
+      expect(blob?.type).toBe('audio/wav')
+      expect(new Uint8Array(await blob!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+      expect(w['openAxe.assetGet']).toHaveBeenCalledWith({ key: 'media:x' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

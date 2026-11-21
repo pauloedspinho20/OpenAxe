@@ -12,6 +12,8 @@ export interface HardwareButtonProps {
   icon?: ReactNode
   size?: 'small' | 'medium' | 'large'
   iconOnly?: boolean
+  /** Accessible name when the visible label is only a short tag (e.g. "1" for "Loop 1 bar"). */
+  ariaLabel?: string | undefined
 }
 
 /** A tactile rack button. `active` lights it up in the given variant color, like an engaged pedal. */
@@ -26,8 +28,9 @@ export function HardwareButton({
   icon,
   size = 'medium',
   iconOnly = false,
+  ariaLabel,
 }: HardwareButtonProps) {
-  const accessibleLabel = iconOnly ? label : undefined
+  const accessibleLabel = ariaLabel ?? (iconOnly ? label : undefined)
   return (
     <button
       type="button"

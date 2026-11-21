@@ -2,10 +2,15 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { alphaTab } from '@coderline/alphatab-vite'
 
 export default defineConfig({
   plugins: [
     react(),
+    // Tab viewer/editor (issue #205/#206): copies alphaTab's Bravura font and
+    // SoundFont into the build and wires its render/synth workers as same-
+    // origin module workers, so they satisfy the CSP's worker-src 'self'.
+    alphaTab(),
     {
       // The production build carries a strict Content-Security-Policy <meta> tag
       // (see index.html) that all three shells serve. Vite's dev server can't
