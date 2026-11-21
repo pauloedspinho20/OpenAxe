@@ -212,34 +212,75 @@
     </header>
 
     <main id="main">
-      <!-- 1. Hero -->
+      <!-- 1. Full-Viewport Hero + Large App Emblem -->
       <section class="hero" aria-labelledby="hero-title">
+        <div class="container hero-container">
+          <div class="hero-grid">
+            <div class="hero-intro">
+              <div class="eyebrow">
+                <i class="dot dot-live" aria-hidden="true"></i>
+                Neural Amp Modeler · C++20 DSP Core · GPLv3
+              </div>
+              <h1 id="hero-title">One modular rig. <em>Everywhere</em> you play.</h1>
+              <p class="lead">
+                Wire <strong>Neural Amp Modeler</strong> captures, zero-latency cabinet IRs, and 10
+                studio effects across a 4×10 parallel grid. Play instantly in your browser, on
+                native desktop, or inside your DAW as a VST3, CLAP, or Audio Unit plugin.
+              </p>
+              <div class="hero-ctas">
+                <a
+                  class="ox-btn ox-btn-primary"
+                  data-web-app
+                  href="https://openaxe.pages.dev"
+                  rel="noopener"
+                  >↗ Launch Web Studio — no install</a
+                >
+                <a id="download-cta" class="ox-btn ox-btn-ghost" href="#download"
+                  >⬇ Download Desktop</a
+                >
+              </div>
+              <p class="hero-note">
+                No accounts. No telemetry. Your rigs, presets, and captures stay on your device.
+              </p>
+            </div>
+
+            <div class="hero-emblem">
+              <div class="hero-logo-stage">
+                <span class="hero-logo-halo" aria-hidden="true"></span>
+                <span class="hero-logo-ring" aria-hidden="true"></span>
+                <img
+                  class="hero-logo-mark"
+                  src="/icons/openaxe-512.png"
+                  alt="OpenAxe logo"
+                  width="512"
+                  height="512"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
+            </div>
+          </div>
+
+          <a class="hero-scroll-cue" href="#studio-preview">
+            <span>Scroll to explore the studio</span>
+            <span class="hero-scroll-arrow" aria-hidden="true">↓</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- 2. Full Studio Overview (revealed on scroll below the hero) -->
+      <section
+        class="section showcase-section reveal-section"
+        id="studio-preview"
+        aria-labelledby="studio-preview-title"
+      >
         <div class="container">
-          <div class="hero-intro">
-            <div class="eyebrow">
-              <i class="dot dot-live" aria-hidden="true"></i>
-              Neural Amp Modeler · C++20 DSP Core · GPLv3
-            </div>
-            <h1 id="hero-title">One modular rig. <em>Everywhere</em> you play.</h1>
-            <p class="lead">
-              Wire <strong>Neural Amp Modeler</strong> captures, zero-latency cabinet IRs, and 10
-              studio effects across a 4×10 parallel grid. Play instantly in your browser, on native
-              desktop, or inside your DAW as a VST3, CLAP, or Audio Unit plugin.
-            </p>
-            <div class="hero-ctas">
-              <a
-                class="ox-btn ox-btn-primary"
-                data-web-app
-                href="https://openaxe.pages.dev"
-                rel="noopener"
-                >↗ Launch Web Studio — no install</a
-              >
-              <a id="download-cta" class="ox-btn ox-btn-ghost" href="#download"
-                >⬇ Download Desktop</a
-              >
-            </div>
-            <p class="hero-note">
-              No accounts. No telemetry. Your rigs, presets, and captures stay on your device.
+          <div class="section-head">
+            <span class="section-kicker">01 · Studio Overview</span>
+            <h2 id="studio-preview-title">The full rig at a glance</h2>
+            <p class="sub">
+              Patch Neural Amp Modeler captures, stereo cabinet IRs, and studio effects inside one
+              unified 4×10 hardware console — identical on web, desktop, and DAW plugins.
             </p>
           </div>
 
@@ -278,7 +319,7 @@
                 alt="OpenAxe 4×10 modular guitar rig interface in dark Carbon hardware finish"
                 width="1440"
                 height="900"
-                fetchpriority="high"
+                loading="lazy"
                 decoding="async"
               />
               <img
@@ -287,7 +328,6 @@
                 alt="OpenAxe 4×10 modular guitar rig interface in light Aluminum hardware finish"
                 width="1440"
                 height="900"
-                fetchpriority="low"
                 loading="lazy"
                 decoding="async"
               />
@@ -323,7 +363,7 @@
       >
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">01 · Signal Architecture</span>
+            <span class="section-kicker">02 · Signal Architecture</span>
             <h2 id="signal-chain-title">19 modular blocks — live interactive rack</h2>
             <p class="sub">
               Built directly with OpenAxe’s hardware <code>@openaxe/ui</code> controls. Drag the
@@ -341,7 +381,7 @@
         <div class="container">
           <div class="finish-header-row">
             <div class="section-head" style="margin-bottom: 0">
-              <span class="section-kicker">02 · Hardware Finishes</span>
+              <span class="section-kicker">03 · Hardware Finishes</span>
               <h2 id="finish-title">Carbon or Aluminum — one chassis</h2>
               <p class="sub" style="margin-bottom: 0">
                 A physical instrument doesn’t flip colors when your OS clock hits sunset. Pick
@@ -422,7 +462,7 @@
       <section class="section reveal-section" id="workflow" aria-labelledby="workflow-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">03 · Studio Workflow</span>
+            <span class="section-kicker">04 · Studio Workflow</span>
             <h2 id="workflow-title">From patch grid to gig-ready scene banks</h2>
             <p class="sub">
               Inspect how parallel cabling, 8-slot performance scenes, real-time pitch tuning, and
@@ -662,7 +702,7 @@
       <section class="section reveal-section" id="platforms" aria-labelledby="platforms-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">04 · Cross-Platform Architecture</span>
+            <span class="section-kicker">05 · Cross-Platform Architecture</span>
             <h2 id="platforms-title">One C++20 engine, four ways to play</h2>
             <p class="sub">
               Every shell drives the exact same lock-free <code>packages/core</code> DSP engine via
@@ -749,7 +789,7 @@
       <section class="section reveal-section" id="open-source" aria-labelledby="oss-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">05 · Open Source &amp; Engineering</span>
+            <span class="section-kicker">06 · Open Source &amp; Engineering</span>
             <h2 id="oss-title">Built in the open, owned by players</h2>
             <p class="sub">
               Zero lock-in, zero background phone-home, and lock-free audio thread guarantees tested
@@ -807,7 +847,7 @@
       <section class="section reveal-section" id="download" aria-labelledby="download-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">06 · Install &amp; Play</span>
+            <span class="section-kicker">07 · Install &amp; Play</span>
             <h2 id="download-title">Download OpenAxe</h2>
             <p class="sub">
               Auto-detected for your platform. Prefer zero setup?
@@ -869,7 +909,7 @@
       <section class="section reveal-section" id="faq" aria-labelledby="faq-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">07 · Quick-Start FAQ</span>
+            <span class="section-kicker">08 · Quick-Start FAQ</span>
             <h2 id="faq-title">Frequently asked questions</h2>
           </div>
 
