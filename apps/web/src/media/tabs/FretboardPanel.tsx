@@ -21,9 +21,15 @@ interface FretboardPanelProps {
   playingNotes: FretPos[]
   onFret: (pos: FretPos) => void
   onPitch: (pitch: number) => void
+  /** Step entry: write notes played on a MIDI controller or the guitar. */
+  stepInput: StepInput
+  onStepInput: (mode: StepInput) => void
+  stepAdvance: boolean
+  onStepAdvance: (on: boolean) => void
 }
 
 type Mode = 'neck' | 'piano'
+export type StepInput = 'off' | 'midi' | 'guitar'
 
 const has = (list: FretPos[], s: number, f: number) =>
   list.some((p) => p.string === s && p.fret === f)
@@ -37,6 +43,10 @@ export function FretboardPanel({
   playingNotes,
   onFret,
   onPitch,
+  stepInput,
+  onStepInput,
+  stepAdvance,
+  onStepAdvance,
 }: FretboardPanelProps) {
   const [mode, setMode] = useState<Mode>('neck')
   const open = useMemo(() => openPitches(tunings), [tunings])
@@ -65,8 +75,49 @@ export function FretboardPanel({
             </button>
           ))}
         </div>
+        <div className={t.segmented} role="radiogroup" aria-label="Play to enter notes">
+          {(
+            [
+              ['off', 'Click'],
+              ['midi', 'MIDI'],
+              ['guitar', 'Guitar'],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={stepInput === m}
+              className={stepInput === m ? t.segOn : ''}
+              title={
+                m === 'off'
+                  ? 'Enter notes by clicking'
+                  : m === 'midi'
+                    ? 'Play notes or chords on a MIDI keyboard or guitar to write them at the cursor'
+                    : 'Play single notes on your guitar to write them at the cursor (when stopped)'
+              }
+              onClick={() => onStepInput(m)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {stepInput !== 'off' && (
+          <label className={styles.check} title="Move to the next beat after each note or chord">
+            <input
+              type="checkbox"
+              checked={stepAdvance}
+              onChange={(e) => onStepAdvance(e.target.checked)}
+            />
+            Advance
+          </label>
+        )}
         <span className={styles.dim}>
-          Click to add a note to the beat at the cursor · click it again to remove
+          {stepInput === 'midi'
+            ? 'Listening to MIDI: play a note or chord'
+            : stepInput === 'guitar'
+              ? 'Listening to your guitar: pick one note at a time'
+              : 'Click to add a note to the beat at the cursor · click it again to remove'}
           {capo > 0 && ` · capo ${capo}`}
         </span>
         <span className={t.fretLegend}>

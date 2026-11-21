@@ -32,7 +32,8 @@ import { useMediaStore } from '../mediaStore'
 import { PracticeControls, TransportButtons } from '../TransportBar'
 import { DrumLane } from './DrumLane'
 import { beatPositions, type FretPos, pitchAt as pitchOf, placePitch } from './fretboard'
-import { FretboardPanel } from './FretboardPanel'
+import { FretboardPanel, type StepInput } from './FretboardPanel'
+import { ChordCollector, midiFromFrequency, placeChord, StepDetector } from './stepEntry'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
@@ -46,6 +47,8 @@ import type { PracticeRun } from '../mediaDb'
 import { audioToScore, mixGuide, scoreToAudio, upsertPoint } from './sync'
 import { RecordingPanel } from './RecordingPanel'
 import { decodeAudio } from '../decode'
+import { onMidiNote, requestMidiAccess } from '../../midi/midiAccess'
+import { useMidiStore } from '../../state/midiStore'
 import { detectPitch } from '../../tuner/pitchDetect'
 import { TrackSidebar } from './TrackSidebar'
 import * as I from './tabIcons'
@@ -142,6 +145,9 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [fretOpen, setFretOpen] = useState(item.view?.fretboard ?? false)
   const [playingNotes, setPlayingNotes] = useState<FretPos[]>([])
   const fretTrackRef = useRef(0)
+  // Step entry: notes played on a MIDI controller or the guitar are written at the cursor.
+  const [stepInput, setStepInput] = useState<StepInput>('off')
+  const [stepAdvance, setStepAdvance] = useState(true)
   const [cursor, setCursor] = useState<edit.EditCursor>(edit.startCursor())
   const [box, setBox] = useState<CursorBox | null>(null)
   const [tick, setTick] = useState(0) // re-render after in-place model edits
@@ -1562,6 +1568,78 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     })
     setEditing(true)
   }
+  // ── Step entry (MIDI / guitar) ──
+  const applyRef = useRef(apply)
+  applyRef.current = apply
+  const handFretRef = useRef<number | null>(null)
+  const advanceRef = useRef(stepAdvance)
+  advanceRef.current = stepAdvance
+  /** Write a played note or chord at the cursor (replacing the beat's notes), then move on. */
+  const writePlayed = useCallback((pitches: number[]) => {
+    applyRef.current((sc, st) => {
+      const c = cursorRef.current
+      const staff = sc.tracks[c.track]?.staves[c.staff]
+      if (!staff || staff.isPercussion) return
+      const placed = placeChord(
+        staff.stringTuning.tunings,
+        pitches,
+        c.string,
+        24,
+        handFretRef.current,
+      )
+      if (!placed.length) return
+      // Where the hand is now: the chord's highest fret, or the note's fret.
+      handFretRef.current = Math.max(...placed.map((p) => p.fret))
+      const beat = edit.beatAt(sc, c)
+      for (const n of [...(beat?.notes ?? [])]) edit.deleteNote(sc, { ...c, string: n.string }, st)
+      for (const p of placed) edit.setFret(sc, { ...c, string: p.string }, p.fret, st)
+      const at = { ...c, string: placed[placed.length - 1]!.string }
+      return advanceRef.current ? edit.moveRight(sc, at, st) : at
+    })
+    setEditing(true)
+  }, [])
+  const chooseStepInput = (mode: StepInput) => {
+    if (mode === 'midi' && useMidiStore.getState().permission !== 'granted')
+      void requestMidiAccess()
+    if (mode === 'guitar' && !useMediaStore.getState().inputAnalyser) {
+      setError('Guitar step entry listens to your input: power on with an input device first.')
+      return
+    }
+    setStepInput(mode)
+  }
+  useEffect(() => {
+    if (stepInput !== 'midi' || !fretOpen) return
+    const chords = new ChordCollector()
+    const off = onMidiNote((note) => {
+      chords.add(note, performance.now())
+      return true
+    })
+    const timer = setInterval(() => {
+      const chord = chords.poll(performance.now())
+      if (chord) writePlayed(chord)
+    }, 20)
+    return () => {
+      off()
+      clearInterval(timer)
+    }
+  }, [stepInput, fretOpen, writePlayed])
+  useEffect(() => {
+    if (stepInput !== 'guitar' || !fretOpen) return
+    const analyser = useMediaStore.getState().inputAnalyser
+    if (!analyser) return
+    const detector = new StepDetector()
+    const buffer = new Float32Array(analyser.fftSize) as Float32Array<ArrayBuffer>
+    const timer = setInterval(() => {
+      if (useMediaStore.getState().playing) return
+      analyser.getFloatTimeDomainData(buffer)
+      const pitch = detectPitch(buffer, analyser.context.sampleRate)
+      const note = pitch && pitch.clarity > 0.9 ? midiFromFrequency(pitch.frequency) : null
+      const played = detector.feed(note, performance.now())
+      if (played !== null) writePlayed([played])
+    }, 30)
+    return () => clearInterval(timer)
+  }, [stepInput, fretOpen, writePlayed])
+
   const enterPitch = (pitch: number) => {
     const tunings = staffTunings
     const existing = cursorNotes.find((n) => tunings.length && pitchOf(tunings, n) === pitch)
@@ -1967,6 +2045,10 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           playingNotes={playingNotes}
           onFret={enterFret}
           onPitch={enterPitch}
+          stepInput={stepInput}
+          onStepInput={chooseStepInput}
+          stepAdvance={stepAdvance}
+          onStepAdvance={setStepAdvance}
         />
       )}
 
