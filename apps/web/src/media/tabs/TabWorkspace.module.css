@@ -14,41 +14,25 @@
   background: var(--panel);
 }
 
-/* Full screen: the workspace alone fills the display. */
+/* Practice view: no top bar; the sheet outside the current and next system is veiled. */
 .wsReading .topbar[hidden] {
   display: none;
 }
 
-.readingExit {
+.readingVeil {
   position: absolute;
-  top: 10px;
-  right: 14px;
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--seam-strong);
-  border-radius: 999px;
-  background: var(--panel-raised);
-  color: var(--ink-1);
-  font: inherit;
-  font-size: 12px;
-  opacity: 0.55;
-  cursor: pointer;
-  transition: opacity 0.15s;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  background: #fbfaf7;
+  opacity: 0.93;
+  pointer-events: none;
+  transition:
+    top 0.25s ease,
+    height 0.25s ease;
 }
 
-.readingExit:hover,
-.readingExit:focus-visible {
-  opacity: 1;
-}
-
-.readingExit kbd {
-  font-size: 10px;
-  opacity: 0.7;
-}
-
+/* Full screen: the workspace alone fills the display. */
 .wsFull {
   padding: 8px;
   height: 100vh;

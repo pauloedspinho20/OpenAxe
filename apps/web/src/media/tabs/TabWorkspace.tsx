@@ -18,6 +18,7 @@ import {
   midi,
   model,
   PlayerMode,
+  ScrollMode,
   type Settings,
   StaveProfile,
   type synth,
@@ -1397,6 +1398,49 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     loaded?.itemId === item.id ? barAtTime(fromPlayer(position) + 0.15 * speedNow) : cursor.bar
   useToneFollower(liveItem.tone, toneSections, toneBar, playing && loaded?.itemId === item.id)
 
+  // Practice view: only the current system and the next one are shown; the
+  // rest of the sheet is veiled and the view turns the page a system at a time.
+  const readingBar = loaded?.itemId === item.id ? barAtTime(fromPlayer(position)) : cursor.bar
+  const [readingWindow, setReadingWindow] = useState<{
+    first: number
+    top: number
+    bottom: number
+  } | null>(null)
+  useEffect(() => {
+    const api = apiRef.current
+    if (!api) return
+    api.settings.player.scrollMode = reading ? ScrollMode.Off : ScrollMode.Continuous
+    api.updateSettings()
+  }, [reading])
+  useEffect(() => {
+    const lookup = apiRef.current?.boundsLookup
+    if (!reading || horizontal || !lookup) {
+      setReadingWindow(null)
+      return
+    }
+    const sys = lookup.findMasterBarByIndex(readingBar)?.staffSystemBounds
+    if (!sys) return
+    const i = lookup.staffSystems.indexOf(sys)
+    const next = lookup.staffSystems[i + 1]
+    const top = sys.realBounds.y
+    const bottom = (next ?? sys).realBounds.y + (next ?? sys).realBounds.h
+    // The veil never covers the header or the first system: alphaTab's
+    // attribution is drawn in that band and must stay visible.
+    const head = lookup.staffSystems[0]!.realBounds
+    const first = head.y + head.h + 8
+    setReadingWindow((w) =>
+      w && w.top === top && w.bottom === bottom ? w : { first, top, bottom },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reading, horizontal, readingBar, tick, viewZoom, profile, shown])
+  useEffect(() => {
+    if (readingWindow)
+      viewportRef.current?.scrollTo({
+        top: Math.max(0, readingWindow.top - 16),
+        behavior: 'smooth',
+      })
+  }, [readingWindow])
+
   // ── Recording sync ────────────────────────────────────────────────────
   const recordings = useMediaStore((st) => st.items).filter((i) => i.kind === 'audio')
   const saveSync = (next: typeof sync) =>
@@ -1504,16 +1548,6 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       ref={wsRef}
       className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''} ${reading ? tabStyles.wsReading : ''}`}
     >
-      {reading && (
-        <button
-          type="button"
-          className={tabStyles.readingExit}
-          onClick={() => setReading(false)}
-          title="Back to the full workspace (Esc)"
-        >
-          <I.ReadingIcon size={14} /> Exit practice view <kbd>Esc</kbd>
-        </button>
-      )}
       {/* ── Top bar ── */}
       <header className={tabStyles.topbar} hidden={reading}>
         <div
@@ -1683,6 +1717,21 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             {status === 'loading' && !error && <div className={tabStyles.sheetMsg}>Rendering…</div>}
             <div className={tabStyles.sheet}>
               <div ref={hostRef} className={tabStyles.host} />
+              {readingWindow && (
+                <>
+                  <div
+                    className={tabStyles.readingVeil}
+                    style={{
+                      top: readingWindow.first,
+                      height: Math.max(0, readingWindow.top - 8 - readingWindow.first),
+                    }}
+                  />
+                  <div
+                    className={tabStyles.readingVeil}
+                    style={{ top: readingWindow.bottom + 8, bottom: 0 }}
+                  />
+                </>
+              )}
               {heatBoxes.map((b, i) => (
                 <div
                   key={i}
@@ -1976,6 +2025,16 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           </span>
         )}
         <span className={tabStyles.footerSpacer} />
+        {reading && (
+          <HardwareButton
+            size="small"
+            label="Exit practice view"
+            title="Back to the full workspace (Esc)"
+            icon={<I.ReadingIcon size={14} />}
+            active
+            onClick={() => setReading(false)}
+          />
+        )}
         <details
           className={tabStyles.menu}
           open={practiceOpen}
