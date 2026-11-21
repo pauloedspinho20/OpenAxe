@@ -1469,3 +1469,34 @@
   padding-top: 4px;
   border-top: 1px solid var(--seam);
 }
+
+/* ── Print options ─────────────────────────────────────────────────── */
+
+.printGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  font-size: 12px;
+}
+
+.printGrid fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 10px 10px;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+}
+
+.printGrid legend {
+  padding: 0 4px;
+  color: var(--ink-2);
+}
+
+.printGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

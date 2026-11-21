@@ -34,6 +34,7 @@ import { PracticeControls, TransportButtons } from '../TransportBar'
 import { DrumLane } from './DrumLane'
 import { beatPositions, type FretPos, pitchAt as pitchOf, placePitch } from './fretboard'
 import { FretboardPanel, type StepInput } from './FretboardPanel'
+import { PrintOptions, type PrintSettings } from './PrintOptions'
 import { ChordCollector, midiFromFrequency, placeChord, StepDetector } from './stepEntry'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
@@ -179,6 +180,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const [history, setHistory] = useState({ undo: 0, redo: 0 })
   const [renderProgress, setRenderProgress] = useState<number | null>(null)
   const [texOpen, setTexOpen] = useState(false)
+  const [printOpen, setPrintOpen] = useState(false)
   const [texText, setTexText] = useState('')
   const [texError, setTexError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -1333,7 +1335,34 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       gen.generate()
       download(file.toBinary(), 'mid', 'audio/midi')
     }
-    if (kind === 'print') api.print()
+    if (kind === 'print') setPrintOpen(true)
+  }
+
+  /** Print the chosen tracks with the chosen layout (always black on paper). */
+  const printWith = (o: PrintSettings) => {
+    const api = apiRef.current
+    const score = scoreRef.current
+    if (!api || !score || !o.tracks.length) return
+    renderView(api, score, o.tracks[0]!, new Set(o.tracks))
+    applySheetColors(api.settings, false)
+    try {
+      api.print(o.width, {
+        display: {
+          scale: o.scale,
+          barsPerRow: o.barsPerRow,
+          padding: [o.margin, o.margin],
+          staveProfile: PROFILE[o.profile],
+          layoutMode: LayoutMode.Page,
+        },
+      })
+    } catch {
+      // alphaTab prints from a pop-up window; a blocker leaves it null.
+      setError('Printing opens a new window - allow pop-ups for this site and try again.')
+    } finally {
+      applySheetColors(api.settings, sheetDark)
+    }
+    renderView(api, score, trackIndex, shownRef.current)
+    setPrintOpen(false)
   }
 
   const openTex = () => {
@@ -2322,6 +2351,15 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
 
       {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
 
+      {printOpen && score && (
+        <PrintOptions
+          tracks={tracks}
+          shown={[...new Set([...shown, trackIndex])]}
+          profile={profile}
+          onPrint={printWith}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
       {texOpen && (
         <div className={tabStyles.texPane}>
           <div className={tabStyles.texHead}>
