@@ -18,6 +18,22 @@ import * as I from './tabs/tabIcons'
 import t from './tabs/TabWorkspace.module.css'
 import { slotAt, START_KEY, withSection, type ToneSection } from './tone'
 
+/** Names of the presets a song's tone uses (its sections' slots), for a practice pack. */
+export async function tonePresetNames(tone: SongTone | null | undefined): Promise<string[]> {
+  if (!tone || tone.scene === null) return []
+  const slots = useSceneStore.getState().scenes[tone.scene]?.slots ?? []
+  const bank = usePresetBankStore.getState().slots
+  const used = [...new Set(Object.values(tone.sections))]
+  const names = await Promise.all(
+    (used.length ? used : [0]).map(async (i) => {
+      const bankSlot = slots[i]
+      const id = bankSlot != null ? bank[bankSlot] : null
+      return id ? ((await getPreset(id))?.name ?? null) : null
+    }),
+  )
+  return names.filter((n): n is string => !!n)
+}
+
 /** Preset names for the 8 slots of a scene (null = empty slot). */
 function useSlotNames(scene: number | null): (string | null)[] {
   const scenes = useSceneStore((s) => s.scenes)

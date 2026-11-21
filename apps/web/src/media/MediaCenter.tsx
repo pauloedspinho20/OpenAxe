@@ -7,10 +7,11 @@ import { allTags, isImportable, matches, parseTags, sortItems, STATUSES } from '
 import styles from './MediaCenter.module.css'
 import { newMediaId, SCORE_EXTENSIONS, type LearnStatus, type MediaItem } from './mediaDb'
 import { useMediaStore } from './mediaStore'
+import { PACK_EXTENSION } from './practicePack'
 import { SetBar, SetListsPanel } from './SetListsPanel'
 import { PracticeControls, TransportButtons } from './TransportBar'
 import { NewSongForm } from './tabs/NewSongForm'
-import { ToneLink, useToneFollower } from './ToneLink'
+import { ToneLink, tonePresetNames, useToneFollower } from './ToneLink'
 import { START_KEY, type ToneSection } from './tone'
 import { Tool } from './tabs/TabToolbox'
 import * as I from './tabs/tabIcons'
@@ -157,7 +158,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
                 onChange={(e) => {
                   const audioExt = AUDIO_ACCEPT.split(',').filter((x) => x.startsWith('.'))
                   const files = [...(e.target.files ?? [])].filter((f) =>
-                    isImportable(f.name, audioExt, SCORE_EXTENSIONS),
+                    isImportable(f.name, audioExt, [...SCORE_EXTENSIONS, PACK_EXTENSION]),
                   )
                   if (files.length) void importFiles(files)
                   else
@@ -172,7 +173,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
                 type="file"
                 multiple
                 hidden
-                accept={`${AUDIO_ACCEPT},${SCORE_EXTENSIONS.join(',')}`}
+                accept={`${AUDIO_ACCEPT},${SCORE_EXTENSIONS.join(',')},${PACK_EXTENSION}`}
                 onChange={(e) => {
                   if (e.target.files) void importFiles(e.target.files)
                   e.target.value = ''
@@ -435,6 +436,28 @@ function LibraryRow({ item, active }: { item: MediaItem; active: boolean }) {
                 .join(' · ')}
             </span>
           )}
+          <HardwareButton
+            size="small"
+            label="Share as practice pack"
+            title="One file with the song, its paired recording, loops, markers and notes"
+            onClick={() => {
+              void tonePresetNames(item.tone)
+                .then((names) => s.exportPack(item.id, names))
+                .then((blob) => {
+                  const url = URL.createObjectURL(blob)
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.download = `${item.name}${PACK_EXTENSION}`
+                  link.click()
+                  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+                })
+                .catch((err: unknown) =>
+                  useMediaStore.setState({
+                    error: `Could not make the practice pack: ${err instanceof Error ? err.message : String(err)}`,
+                  }),
+                )
+            }}
+          />
         </div>
       )}
     </li>
@@ -448,7 +471,8 @@ function EmptyState({ onImport }: { onImport: () => void }) {
       <p>
         Import audio (mp3, wav, flac, ogg, m4a) to play along at any speed without changing pitch,
         transpose it, and loop the hard parts. Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML or
-        AlphaTex files to read, play and edit tabs. Everything plays through your rig's output.
+        AlphaTex files to read, play and edit tabs, or a practice pack (.oapack) someone shared.
+        Everything plays through your rig's output.
       </p>
       <button type="button" className={styles.primaryBtn} onClick={onImport}>
         Import files

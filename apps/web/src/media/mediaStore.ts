@@ -8,6 +8,7 @@
 import { create } from 'zustand'
 
 import { findDuplicate, hashFile } from './library'
+import { buildPack, packItem, parsePack, type PackItem, PACK_EXTENSION } from './practicePack'
 import { deleteSetList, listSetLists, liveEntries, saveSetList, type SetList } from './setlists'
 import {
   computeDetailPeaks,
@@ -107,6 +108,10 @@ export interface SpeedTrainer {
 interface MediaActions {
   loadLibrary(): Promise<void>
   saveSet(set: SetList): Promise<void>
+  /** One file with the song, its paired recording and its practice set-up. */
+  exportPack(id: string, toneNames?: string[]): Promise<Blob>
+  /** Add a practice pack's songs to the library; returns the main item. */
+  importPack(file: Blob): Promise<MediaItem | null>
   removeSet(id: string): Promise<void>
   /** Open song `index` of a set with the set's speed and transpose. */
   playSet(id: string, index?: number): Promise<void>
@@ -335,6 +340,68 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
       set({ trainer: { ...get().trainer, ...patch }, loopCount: 0 })
     },
 
+    async exportPack(id, toneNames) {
+      const item = get().items.find((i) => i.id === id)
+      if (!item) throw new Error('That song is not in the library')
+      const main = await loadMediaFile(id)
+      if (!main) throw new Error('The file for this song is missing')
+      const files: { key: 'main' | 'recording'; item: PackItem; blob: Blob }[] = [
+        { key: 'main', item: packItem(item), blob: main },
+      ]
+      const recId = item.sync?.audioId
+      const rec = recId ? get().items.find((i) => i.id === recId) : null
+      const recBlob = rec ? await loadMediaFile(rec.id) : null
+      if (rec && recBlob) files.push({ key: 'recording', item: packItem(rec), blob: recBlob })
+      return buildPack(files, toneNames?.length ? { toneNames } : {})
+    },
+
+    async importPack(file) {
+      const { manifest, files } = await parsePack(file)
+      const mainFile = files.find((f) => f.file.key === 'main')!
+      const recFile = files.find((f) => f.file.key === 'recording')
+      const create = async (
+        p: PackItem,
+        blob: Blob,
+      ): Promise<{ item: MediaItem; isNew: boolean }> => {
+        const hash = await hashFile(blob)
+        const dupId = findDuplicate(get().items, { hash, size: blob.size, name: p.fileName })
+        const dup = dupId ? get().items.find((i) => i.id === dupId) : null
+        if (dup) return { item: dup, isNew: false }
+        const item: MediaItem = {
+          ...p,
+          id: newMediaId(),
+          size: blob.size,
+          addedAt: Date.now(),
+          practice: { ...DEFAULT_PRACTICE, ...p.practice },
+          markers: Array.isArray(p.markers) ? p.markers : [],
+          ...(hash ? { hash } : {}),
+        }
+        await saveMediaFile(item.id, blob)
+        await saveMedia(item)
+        set({ items: [item, ...get().items] })
+        return { item, isNew: true }
+      }
+      const rec = recFile ? await create(recFile.file.item, recFile.blob) : null
+      const mainPack: PackItem = { ...mainFile.file.item }
+      // Point the sync at this library's copy of the recording.
+      if (mainPack.sync) {
+        if (rec) mainPack.sync = { ...mainPack.sync, audioId: rec.item.id }
+        else delete mainPack.sync
+      }
+      const main = await create(mainPack, mainFile.blob)
+      const parts = [
+        main.isNew
+          ? `Imported "${main.item.name}"`
+          : `"${main.item.name}" was already in the library`,
+        rec ? (rec.isNew ? 'with its recording' : 'using the recording you already had') : '',
+        manifest.toneNames?.length
+          ? `It was set up with the presets: ${manifest.toneNames.join(', ')} - link your own scene under Tone.`
+          : '',
+      ].filter(Boolean)
+      set({ notice: `${parts.slice(0, 2).join(' ')}.${parts[2] ? ` ${parts[2]}` : ''}` })
+      return main.item
+    },
+
     async saveSet(list) {
       await saveSetList(list)
       const others = get().setLists.filter((x) => x.id !== list.id)
@@ -392,8 +459,15 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
     async importFiles(files) {
       const added: MediaItem[] = []
       const skipped: string[] = []
+      // Packs add their own items to the library; only remembered here to return.
+      const fromPacks: MediaItem[] = []
       for (const file of Array.from(files)) {
         try {
+          if (file.name.toLowerCase().endsWith(PACK_EXTENSION)) {
+            const main = await get().importPack(file)
+            if (main) fromPacks.push(main)
+            continue
+          }
           if (file.size > MAX_AUDIO_BYTES) throw new Error(`${file.name} is larger than 200 MB`)
           // Skip files already in the library (or earlier in this batch).
           const hash = await hashFile(file)
@@ -438,12 +512,12 @@ export const useMediaStore = create<MediaStore>()((set, get) => {
         }
       }
       if (added.length) set({ items: [...added, ...get().items] })
-      set({
-        notice: skipped.length
-          ? `${skipped.length} file${skipped.length === 1 ? ' was' : 's were'} already in the library and skipped${skipped.length <= 3 ? `: ${skipped.join(', ')}` : ''}.`
-          : null,
-      })
-      return added
+      if (skipped.length)
+        set({
+          notice: `${skipped.length} file${skipped.length === 1 ? ' was' : 's were'} already in the library and skipped${skipped.length <= 3 ? `: ${skipped.join(', ')}` : ''}.`,
+        })
+      else if (!fromPacks.length) set({ notice: null })
+      return [...added, ...fromPacks]
     },
 
     async removeItem(id) {
