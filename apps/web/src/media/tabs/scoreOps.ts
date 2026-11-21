@@ -1034,3 +1034,34 @@ export function moveBars(
   refresh(score, settings)
   return dest
 }
+
+/**
+ * Write a chord voicing into the cursor's beat (replacing its notes) and
+ * label it: `frets` is lowest string first, -1 = not played.
+ */
+export function insertVoicing(
+  score: Score,
+  c: EditCursor,
+  frets: readonly number[],
+  name: string,
+  settings: Settings,
+): void {
+  const beat = beatAt(score, c)
+  if (!beat || frets.length !== stringCount(score, c)) return
+  for (const n of [...beat.notes]) beat.removeNote(n)
+  frets.forEach((f, i) => {
+    if (f < 0) return
+    const note = new model.Note()
+    note.string = i + 1
+    note.fret = f
+    beat.addNote(note)
+  })
+  beat.isEmpty = beat.notes.length === 0
+  setChord(score, c, name, settings)
+}
+
+/** Show the song's chord diagrams in a strip at the top of the sheet. */
+export function setChordStrip(score: Score, on: boolean, settings: Settings): void {
+  score.stylesheet.globalDisplayChordDiagramsOnTop = on
+  refresh(score, settings)
+}

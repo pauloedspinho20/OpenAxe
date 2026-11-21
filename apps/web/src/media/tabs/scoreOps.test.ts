@@ -38,6 +38,7 @@ import {
   moveBars,
   setRepeat,
   setTimeSignatureFrom,
+  insertVoicing,
 } from './scoreOps'
 
 function load(tex: string) {
@@ -342,5 +343,21 @@ describe('scoreOps: multi-bar operations', () => {
         { bar: 1, beat: 2 },
       ]),
     ).toEqual([1, 3])
+  })
+})
+
+describe('scoreOps: chord voicings', () => {
+  it('writes a voicing into the beat with a named diagram', () => {
+    const { score, settings } = load(GTR + '3.6.4 5.6.4 7.6.4 8.6.4')
+    const c = startCursor()
+    insertVoicing(score, c, [-1, 0, 2, 2, 1, 0], 'Am', settings)
+    expect(frets(score, 0)[0]).toBe('2:0,3:2,4:2,5:1,6:0')
+    const beat = score.tracks[0]!.staves[0]!.bars[0]!.voices[0]!.beats[0]!
+    const chord = score.tracks[0]!.staves[0]!.getChord(beat.chordId!)
+    expect(chord?.name).toBe('Am')
+    expect(chord?.strings).toEqual([0, 1, 2, 2, 0, -1])
+    // Survives a save.
+    const back = roundTrip(score, settings)
+    expect(frets(back, 0)[0]).toBe('2:0,3:2,4:2,5:1,6:0')
   })
 })

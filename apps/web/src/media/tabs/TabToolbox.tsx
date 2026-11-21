@@ -7,6 +7,7 @@ import { model, type Settings } from '@coderline/alphatab'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { HardwareButton, RedoIcon, UndoIcon, type IconProps } from '@openaxe/ui'
 
+import { ChordLibrary } from './ChordLibrary'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
 import * as I from './tabIcons'
@@ -695,6 +696,12 @@ export function TabToolbox(p: ToolboxProps) {
             </>
           )}
 
+          {group === 'text' && !drums && (
+            <section className={t.boxSection}>
+              <h4>Chord library</h4>
+              <ChordLibrary score={score} c={c} apply={apply} />
+            </section>
+          )}
           {group === 'text' && (
             <div className={t.boxSection}>
               <TextField

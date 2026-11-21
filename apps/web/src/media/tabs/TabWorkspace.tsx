@@ -1735,6 +1735,16 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
           />
           <Tool
+            icon={I.ChordIcon}
+            title="Chord diagrams in a strip at the top of the sheet"
+            on={score?.stylesheet.globalDisplayChordDiagramsOnTop ?? false}
+            onClick={() =>
+              apply((sc, st) =>
+                ops.setChordStrip(sc, !sc.stylesheet.globalDisplayChordDiagramsOnTop, st),
+              )
+            }
+          />
+          <Tool
             icon={horizontal ? I.HorizontalLayoutIcon : I.PageLayoutIcon}
             title={horizontal ? 'Switch to page layout' : 'Switch to one horizontal line'}
             on={horizontal}
