@@ -46,6 +46,7 @@ import {
   setWhammy,
   findNotes,
   replaceNotes,
+  autoFingerRange,
 } from './scoreOps'
 
 function load(tex: string) {
@@ -427,5 +428,31 @@ describe('scoreOps: find & replace', () => {
     expect(score.tracks[0]!.staves[0]!.bars[0]!.voices[0]!.beats[2]!.duration).toBe(
       model.Duration.Half,
     )
+  })
+})
+
+describe('scoreOps: auto-fingering', () => {
+  it('re-fingers a selection without changing the pitches, and saves', () => {
+    // A2 C3 E3 (written at the 12th fret of the low E) D3 A3.
+    const { score, settings } = load(GTR + '5.6.4 3.5.4 12.6.4 0.4.4 | 2.3.1')
+    const c = startCursor()
+    const refs = rangeBeats(score, c, { bar: 0, beat: 0 }, { bar: 1, beat: 0 })
+    const tunings = score.tracks[0]!.staves[0]!.stringTuning.tunings
+    const pitch = (sc: model.Score) =>
+      [0, 1].flatMap((bar) =>
+        sc.tracks[0]!.staves[0]!.bars[bar]!.voices[0]!.beats.flatMap((b) =>
+          b.notes.map((n) => tunings[tunings.length - n.string]! + n.fret),
+        ),
+      )
+    const before = pitch(score)
+    expect(autoFingerRange(score, c, refs, {}, settings)).toBeGreaterThan(0)
+    expect(pitch(score)).toEqual(before)
+    const allFrets = [0, 1].flatMap((bar) =>
+      score.tracks[0]!.staves[0]!.bars[bar]!.voices[0]!.beats.flatMap((b) =>
+        b.notes.map((n) => n.fret),
+      ),
+    )
+    expect(Math.max(...allFrets)).toBeLessThanOrEqual(7)
+    expect(pitch(roundTrip(score, settings))).toEqual(before)
   })
 })

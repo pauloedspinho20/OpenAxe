@@ -6,6 +6,7 @@
  */
 import { exporter, importer, model, type Settings } from '@coderline/alphatab'
 
+import { autoFinger, type FingeringOptions } from './fingering'
 import {
   beatAt,
   clampCursor,
@@ -1378,4 +1379,52 @@ export function replaceNotes(
   for (const b of beats) b.duration = action.duration!
   refresh(score, settings)
   return changed
+}
+
+// ── Auto-fingering (issue #459) ──────────────────────────────────────────
+
+/**
+ * Re-pick strings and frets for the beats in `refs` (pitches unchanged).
+ * Tied notes follow their origin's string. Returns how many notes moved.
+ */
+export function autoFingerRange(
+  score: Score,
+  c: EditCursor,
+  refs: readonly BeatRef[],
+  options: FingeringOptions,
+  settings: Settings,
+): number {
+  const staff = score.tracks[c.track]?.staves[c.staff]
+  if (!staff || staff.isPercussion) return 0
+  const beats = refs
+    .map((r) => voiceAt(score, { ...c, bar: r.bar })?.beats[r.beat])
+    .filter((b): b is Beat => !!b && !b.isRest && b.notes.length > 0)
+  const current = beats.map((b) => b.notes.map((n) => ({ string: n.string, fret: n.fret })))
+  const next = autoFinger(staff.stringTuning.tunings, current, options)
+  let moved = 0
+  beats.forEach((beat, bi) => {
+    const notes = [...beat.notes]
+    for (const n of notes) beat.removeNote(n)
+    notes.forEach((n, i) => {
+      const to = next[bi]![i]!
+      if (to.string !== n.string || to.fret !== n.fret) moved++
+      n.string = to.string
+      n.fret = to.fret
+    })
+    for (const n of notes) beat.addNote(n)
+  })
+  // A tie must stay on its origin's string (same pitch, so the same fret).
+  for (const beat of beats) {
+    for (const n of [...beat.notes]) {
+      const origin = n.tieOrigin
+      if (!n.isTieDestination || !origin || origin.string === n.string) continue
+      if (beat.getNoteOnString(origin.string)) continue
+      beat.removeNote(n)
+      n.string = origin.string
+      n.fret = origin.fret
+      beat.addNote(n)
+    }
+  }
+  refresh(score, settings)
+  return moved
 }

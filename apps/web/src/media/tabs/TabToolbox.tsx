@@ -87,6 +87,69 @@ export function Tool({
   )
 }
 
+/** Re-pick strings/frets for the selection (or the cursor's bar). */
+function AutoFingering({
+  score,
+  c,
+  targets,
+  apply,
+}: {
+  score: model.Score
+  c: edit.EditCursor
+  targets: () => ops.BeatRef[]
+  apply: Apply
+}) {
+  const [position, setPosition] = useState(5)
+  const [result, setResult] = useState<string | null>(null)
+  const run = (options: { position?: number | null }, label: string) => {
+    let refs = targets()
+    // No selection: the whole bar.
+    if (refs.length < 2) {
+      const beats = edit.voiceAt(score, c)?.beats.length ?? 0
+      refs = Array.from({ length: beats }, (_, beat) => ({ bar: c.bar, beat }))
+    }
+    apply((sc, s) => {
+      const moved = ops.autoFingerRange(sc, c, refs, options, s)
+      setResult(`${label}: ${moved} note${moved === 1 ? '' : 's'} moved`)
+    })
+  }
+  return (
+    <section className={t.boxSection}>
+      <h4>Auto-fingering</h4>
+      <p className={t.hint}>
+        Re-picks strings and frets for the selection (or this bar). The notes sound the same.
+      </p>
+      <div className={t.toolGrid}>
+        <HardwareButton
+          size="small"
+          label="Least movement"
+          title="Keep the hand as still as possible"
+          onClick={() => run({}, 'Least movement')}
+        />
+        <label className={t.textField} title="Hand position (lowest fret of the box)">
+          <span>pos.</span>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={position}
+            onChange={(e) => setPosition(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+            onKeyDown={(e) => e.stopPropagation()}
+            aria-label="Hand position"
+          />
+        </label>
+        <HardwareButton
+          size="small"
+          label="Stay in position"
+          title={`Keep notes between frets ${position} and ${position + 4} (plus open strings)`}
+          onClick={() => run({ position }, `Position ${position}`)}
+        />
+      </div>
+      {result && <p className={t.hint}>{result}.</p>}
+    </section>
+  )
+}
+
 /** Several bars at once: the selection's bars, or the cursor's bar. */
 function BarRangeTools({
   score,
@@ -737,6 +800,7 @@ export function TabToolbox(p: ToolboxProps) {
                   <FindReplace score={score} c={c} apply={apply} onCursor={p.onCursor} />
                 </section>
               )}
+              {!drums && <AutoFingering score={score} c={c} targets={p.targets} apply={apply} />}
               <p className={t.hint}>
                 {p.selectionSize > 1
                   ? `${p.selectionSize} beats selected.`
