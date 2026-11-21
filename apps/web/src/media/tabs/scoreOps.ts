@@ -1065,3 +1065,140 @@ export function setChordStrip(score: Score, on: boolean, settings: Settings): vo
   score.stylesheet.globalDisplayChordDiagramsOnTop = on
   refresh(score, settings)
 }
+
+// ── More techniques (issue #459) ─────────────────────────────────────────
+
+export const HARMONICS: { type: model.HarmonicType; label: string; title: string }[] = [
+  { type: model.HarmonicType.Natural, label: 'N.H.', title: 'Natural harmonic' },
+  { type: model.HarmonicType.Pinch, label: 'P.H.', title: 'Pinch harmonic' },
+  { type: model.HarmonicType.Artificial, label: 'A.H.', title: 'Artificial harmonic (+12)' },
+  { type: model.HarmonicType.Tap, label: 'T.H.', title: 'Tapped harmonic (+12)' },
+  { type: model.HarmonicType.Semi, label: 'S.H.', title: 'Semi-harmonic' },
+]
+
+/** Set (or clear, when it's already that type) a harmonic on the cursor's note. */
+export function setHarmonic(
+  score: Score,
+  c: EditCursor,
+  type: model.HarmonicType,
+  settings: Settings,
+): void {
+  const note = noteAt(score, c)
+  if (!note) return
+  if (note.harmonicType === type) {
+    note.harmonicType = model.HarmonicType.None
+    note.harmonicValue = 0
+  } else {
+    note.harmonicType = type
+    // Natural: the fret itself; the others sound an octave over the fretted note.
+    note.harmonicValue =
+      type === model.HarmonicType.Natural ? note.fret : type === model.HarmonicType.Semi ? 0 : 12
+  }
+  refresh(score, settings)
+}
+
+export type WhammyPreset = 'none' | 'dive' | 'dip' | 'diveReturn' | 'predive'
+
+export const WHAMMY_PRESETS: { id: WhammyPreset; label: string; title: string }[] = [
+  { id: 'dive', label: 'dive', title: 'Whammy dive (down a whole tone... and more)' },
+  { id: 'dip', label: 'dip', title: 'Whammy dip (down and back)' },
+  { id: 'diveReturn', label: 'd+r', title: 'Dive and return' },
+  { id: 'predive', label: 'pre', title: 'Pre-dive (starts down, returns)' },
+]
+
+/** Whammy bar on the cursor's beat. Values are quarter tones (negative = down); offsets 0..60. */
+export function setWhammy(
+  score: Score,
+  c: EditCursor,
+  preset: WhammyPreset,
+  settings: Settings,
+): void {
+  const beat = beatAt(score, c)
+  if (!beat) return
+  beat.whammyBarPoints = null
+  const shape: Record<WhammyPreset, [model.WhammyType, [number, number][]]> = {
+    none: [model.WhammyType.None, []],
+    dive: [
+      model.WhammyType.Dive,
+      [
+        [0, 0],
+        [45, -8],
+        [60, -8],
+      ],
+    ],
+    dip: [
+      model.WhammyType.Dip,
+      [
+        [0, 0],
+        [15, -4],
+        [30, 0],
+      ],
+    ],
+    diveReturn: [
+      model.WhammyType.Dive,
+      [
+        [0, 0],
+        [30, -8],
+        [60, 0],
+      ],
+    ],
+    predive: [
+      model.WhammyType.Predive,
+      [
+        [0, -4],
+        [60, 0],
+      ],
+    ],
+  }
+  const [type, pts] = shape[preset]
+  beat.whammyBarType = type
+  for (const [offset, value] of pts) beat.addWhammyBarPoint(new model.BendPoint(offset, value))
+  refresh(score, settings)
+}
+
+/** Left-hand finger for the cursor's note (Fingers.Unknown clears it). */
+export function setFinger(
+  score: Score,
+  c: EditCursor,
+  finger: model.Fingers,
+  settings: Settings,
+): void {
+  const note = noteAt(score, c)
+  if (!note) return
+  note.leftHandFinger = note.leftHandFinger === finger ? model.Fingers.Unknown : finger
+  refresh(score, settings)
+}
+
+/** Fade in / fade out / volume swell on the cursor's beat (same again clears it). */
+export function setFade(
+  score: Score,
+  c: EditCursor,
+  fade: model.FadeType,
+  settings: Settings,
+): void {
+  const beat = beatAt(score, c)
+  if (!beat) return
+  beat.fade = beat.fade === fade ? model.FadeType.None : fade
+  refresh(score, settings)
+}
+
+export const RASGUEADOS: { type: model.Rasgueado; label: string }[] = [
+  { type: model.Rasgueado.Ii, label: 'ii' },
+  { type: model.Rasgueado.Mi, label: 'mi' },
+  { type: model.Rasgueado.MiiTriplet, label: 'mii (triplet)' },
+  { type: model.Rasgueado.PmpTriplet, label: 'pmp (triplet)' },
+  { type: model.Rasgueado.AmiTriplet, label: 'ami (triplet)' },
+  { type: model.Rasgueado.Ppp, label: 'ppp' },
+]
+
+export function setRasgueado(
+  score: Score,
+  c: EditCursor,
+  type: model.Rasgueado,
+  settings: Settings,
+): void {
+  const beat = beatAt(score, c)
+  if (!beat) return
+  beat.rasgueado = type
+  refresh(score, settings)
+}

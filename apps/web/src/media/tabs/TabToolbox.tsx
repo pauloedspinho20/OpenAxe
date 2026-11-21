@@ -395,13 +395,6 @@ export function TabToolbox(p: ToolboxProps) {
                   onClick={fx('ghost')}
                 />
                 <Tool
-                  icon={I.HarmonicIcon}
-                  title="Natural harmonic"
-                  on={!!note && note.harmonicType !== model.HarmonicType.None}
-                  disabled={!note}
-                  onClick={fx('harmonic')}
-                />
-                <Tool
                   icon={I.StaccatoIcon}
                   title="Staccato"
                   on={note?.isStaccato}
@@ -502,6 +495,95 @@ export function TabToolbox(p: ToolboxProps) {
                     apply((sc, s) => ops.addGraceNote(sc, c, Math.max(0, (note?.fret ?? 2) - 2), s))
                   }
                 />
+              </Section>
+              <Section title="Harmonics">
+                {ops.HARMONICS.map((h) => (
+                  <Tool
+                    key={h.type}
+                    icon={I.HarmonicIcon}
+                    title={h.title}
+                    on={note?.harmonicType === h.type}
+                    disabled={!note}
+                    onClick={() => apply((sc, s) => ops.setHarmonic(sc, c, h.type, s))}
+                    tag={h.label}
+                  />
+                ))}
+              </Section>
+              <Section title="Whammy bar">
+                {ops.WHAMMY_PRESETS.map((w) => (
+                  <Tool
+                    key={w.id}
+                    icon={I.VibratoIcon}
+                    title={w.title}
+                    disabled={!beat}
+                    onClick={() => apply((sc, s) => ops.setWhammy(sc, c, w.id, s))}
+                    tag={w.label}
+                  />
+                ))}
+                <Tool
+                  icon={I.MinusIcon}
+                  title="Remove the whammy bar"
+                  disabled={!beat || beat.whammyBarType === model.WhammyType.None}
+                  onClick={() => apply((sc, s) => ops.setWhammy(sc, c, 'none', s))}
+                />
+              </Section>
+              <Section title="Fingering (left hand)">
+                {(
+                  [
+                    [model.Fingers.Thumb, 'T'],
+                    [model.Fingers.IndexFinger, '1'],
+                    [model.Fingers.MiddleFinger, '2'],
+                    [model.Fingers.AnnularFinger, '3'],
+                    [model.Fingers.LittleFinger, '4'],
+                  ] as const
+                ).map(([f, label]) => (
+                  <Tool
+                    key={f}
+                    title={`Finger ${label === 'T' ? 'thumb' : label} (shown on the notation staff)`}
+                    on={note?.leftHandFinger === f}
+                    disabled={!note}
+                    onClick={() => apply((sc, s) => ops.setFinger(sc, c, f, s))}
+                    tag={label}
+                  />
+                ))}
+              </Section>
+              <Section title="Volume">
+                {(
+                  [
+                    [model.FadeType.FadeIn, 'fade in', '<'],
+                    [model.FadeType.FadeOut, 'fade out', '>'],
+                    [model.FadeType.VolumeSwell, 'volume swell', '<>'],
+                  ] as const
+                ).map(([f, label, tag]) => (
+                  <Tool
+                    key={f}
+                    title={`${label[0]!.toUpperCase()}${label.slice(1)}`}
+                    on={beat?.fade === f}
+                    disabled={!beat}
+                    onClick={() => apply((sc, s) => ops.setFade(sc, c, f, s))}
+                    tag={tag}
+                  />
+                ))}
+                <label className={t.textField} title="Rasgueado (flamenco strum)">
+                  <span>rasg.</span>
+                  <select
+                    value={beat?.rasgueado ?? model.Rasgueado.None}
+                    disabled={!beat}
+                    onChange={(e) =>
+                      apply((sc, s) =>
+                        ops.setRasgueado(sc, c, Number(e.target.value) as model.Rasgueado, s),
+                      )
+                    }
+                    aria-label="Rasgueado"
+                  >
+                    <option value={model.Rasgueado.None}>none</option>
+                    {ops.RASGUEADOS.map((r) => (
+                      <option key={r.type} value={r.type}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </Section>
               <Section title="Dynamics">
                 {ops.DYNAMICS.map((d) => (

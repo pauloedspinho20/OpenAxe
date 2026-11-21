@@ -39,6 +39,11 @@ import {
   setRepeat,
   setTimeSignatureFrom,
   insertVoicing,
+  setFade,
+  setFinger,
+  setHarmonic,
+  setRasgueado,
+  setWhammy,
 } from './scoreOps'
 
 function load(tex: string) {
@@ -359,5 +364,37 @@ describe('scoreOps: chord voicings', () => {
     // Survives a save.
     const back = roundTrip(score, settings)
     expect(frets(back, 0)[0]).toBe('2:0,3:2,4:2,5:1,6:0')
+  })
+})
+
+describe('scoreOps: more techniques', () => {
+  it('sets pinch harmonics, whammy, fingering, fades and rasgueado, and saves them', () => {
+    const { score, settings } = load(GTR + '5.3.4 7.3.4 | 3.6.4 5.6.4')
+    const c = startCursor()
+    // alphaTex counts strings from the top: "5.3" is the G string, model string 4.
+    const at = { ...c, string: 4 }
+    setHarmonic(score, at, model.HarmonicType.Pinch, settings)
+    setWhammy(score, at, 'dip', settings)
+    setFinger(score, at, model.Fingers.MiddleFinger, settings)
+    setFade(score, at, model.FadeType.VolumeSwell, settings)
+    const b2 = { ...c, beat: 1, string: 4 }
+    setRasgueado(score, b2, model.Rasgueado.Ii, settings)
+    const back = roundTrip(score, settings)
+    const beats = back.tracks[0]!.staves[0]!.bars[0]!.voices[0]!.beats
+    const n = beats[0]!.notes[0]!
+    expect(n.harmonicType).toBe(model.HarmonicType.Pinch)
+    expect(n.leftHandFinger).toBe(model.Fingers.MiddleFinger)
+    expect(beats[0]!.whammyBarType).not.toBe(model.WhammyType.None)
+    expect(beats[0]!.whammyBarPoints?.some((p) => p.value < 0)).toBe(true)
+    expect(beats[0]!.fade).toBe(model.FadeType.VolumeSwell)
+    expect(beats[1]!.rasgueado).toBe(model.Rasgueado.Ii)
+    // The same again clears.
+    setHarmonic(score, at, model.HarmonicType.Pinch, settings)
+    setFade(score, at, model.FadeType.VolumeSwell, settings)
+    setWhammy(score, at, 'none', settings)
+    const b = score.tracks[0]!.staves[0]!.bars[0]!.voices[0]!.beats[0]!
+    expect(b.notes[0]!.harmonicType).toBe(model.HarmonicType.None)
+    expect(b.fade).toBe(model.FadeType.None)
+    expect(b.whammyBarType).toBe(model.WhammyType.None)
   })
 })
