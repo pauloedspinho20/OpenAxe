@@ -88,7 +88,7 @@ export function initNav(): void {
 
   // Dismiss mobile menu cleanly after clicking an in-page anchor.
   menu.addEventListener('click', (event) => {
-    const link = (event.target as Element | null)?.closest('a[href^="#"]')
+    const link = (event.target as Element | null)?.closest('a[href^="#"], a[href^="/#"]')
     if (!link || isWide) return
     if (supportsPopover && menu.matches(':popover-open')) {
       menu.hidePopover()
