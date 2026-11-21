@@ -3,6 +3,9 @@ import type { EffectParams } from './Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
 import { PARAM_RANGES } from './generatedParamRanges'
+import type { BlockInstance, EdgeInstance } from '../state/graphStore'
+import { BLOCK_KIND_LABELS } from '../components/grid/blockOptions'
+import { sendReturnPairOf } from '../engine/blocks/blockRegistry'
 
 interface KnobField {
   key: string
@@ -19,6 +22,8 @@ interface KnobField {
   visible?: (values: EffectParams) => boolean
   /** Human-readable help shown in knob tooltip and Effect Details dialog. */
   description?: string
+  /** If set, the knob renders disabled - used by the Mixer for inputs with no block connected (issue #428). */
+  disabled?: boolean
 }
 
 interface SelectField {
@@ -1395,4 +1400,34 @@ export function getReverbRawSchemas(algorithm: string): ParamFieldSchema[] {
 export function getParamSchema(kind: BlockKind): ParamFieldSchema[] {
   if (kind in EFFECT_PARAM_SCHEMAS) return EFFECT_PARAM_SCHEMAS[kind as EffectKind]
   return BLOCK_PARAM_SCHEMAS[kind] ?? []
+}
+
+/**
+ * The Mixer's per-input knobs, resolved against the live graph (issue #428).
+ *
+ * A mixer input with a connected source block is labelled by that block
+ * (`Delay Volume` / `Delay Pan`) instead of the static `Level N` / `Pan N`.
+ * Send/Return relays label by the pair (`Send 1`), not their `return-*` kind.
+ * Inputs with no cable stay on their numbered labels and render disabled. An
+ * input fed by the IN rail keeps its numbered label but stays enabled.
+ */
+export function getMixerParamSchema(
+  blockId: string,
+  blocks: BlockInstance[],
+  edges: EdgeInstance[],
+): ParamFieldSchema[] {
+  const base = getParamSchema('mixer') as KnobField[]
+  return base.map((field) => {
+    const match = /^in(\d+)_(level|pan)$/.exec(field.key)
+    if (!match) return field
+    const port = Number(match[1])
+    const edge = edges.find((e) => e.to.blockId === blockId && e.to.port === port)
+    if (!edge) return { ...field, disabled: true }
+    const source = blocks.find((b) => b.id === edge.from.blockId)
+    if (!source) return { ...field, disabled: false }
+    const labelKind = sendReturnPairOf(source.kind) ?? source.kind
+    const sourceLabel = BLOCK_KIND_LABELS[labelKind]
+    const noun = match[2] === 'level' ? 'Volume' : 'Pan'
+    return { ...field, label: `${sourceLabel} ${noun}`, disabled: false }
+  })
 }
