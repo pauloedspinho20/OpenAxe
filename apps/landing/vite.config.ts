@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 // Root-relative base: the landing lives at the root of the site (Cloudflare
@@ -37,6 +38,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    react(),
     {
       // Publish the release manifest the landing already renders as a static
       // JSON file, so the web app's update check can read it cross-origin

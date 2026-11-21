@@ -19,7 +19,8 @@ export interface ReleaseRecord {
   assets: ReleaseAsset[]
 }
 
-const RELEASE_DATA = releasesData as { releases: ReleaseRecord[] }
+const RELEASE_DATA = releasesData as { repo?: string; releases: ReleaseRecord[] }
+const REPO = RELEASE_DATA.repo || 'pauloedspinho20/OpenAxe'
 
 function escapeHtml(text: string): string {
   return text
@@ -28,6 +29,46 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+function parseSemver(tag: string): [number, number, number] | null {
+  const m = tag.match(/(\d+)\.(\d+)\.(\d+)/)
+  if (!m) return null
+  return [Number(m[1]), Number(m[2]), Number(m[3])]
+}
+
+function compareSemverDesc(a: ReleaseRecord, b: ReleaseRecord): number {
+  const va = parseSemver(a.tag_name)
+  const vb = parseSemver(b.tag_name)
+  if (va && vb) {
+    for (let i = 0; i < 3; i += 1) {
+      if (va[i] !== vb[i]) return vb[i]! - va[i]!
+    }
+  } else if (va || vb) {
+    return va ? -1 : 1
+  }
+  return new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
+}
+
+function mergeReleaseLists(bundled: ReleaseRecord[], incoming: ReleaseRecord[]): ReleaseRecord[] {
+  const byTag = new Map<string, ReleaseRecord>()
+  for (const r of bundled) byTag.set(r.tag_name, r)
+  for (const r of incoming) {
+    const existing = byTag.get(r.tag_name)
+    if (!existing) {
+      byTag.set(r.tag_name, r)
+      continue
+    }
+    const existingUsesR2 = existing.assets.some((a) => a.browser_download_url.includes('.r2.dev/'))
+    byTag.set(r.tag_name, {
+      ...r,
+      ...existing,
+      assets: existingUsesR2 || existing.assets.length ? existing.assets : r.assets,
+      html_url: r.html_url || existing.html_url,
+      body: existing.body || r.body,
+    })
+  }
+  return Array.from(byTag.values()).sort(compareSemverDesc)
 }
 
 function formatBytes(bytes: number): string {
@@ -103,6 +144,14 @@ function assetFormatsHint(name: string): string {
 }
 
 function extractChecksumsUrl(release: ReleaseRecord): string {
+  const r2Asset = release.assets.find((a) => a.browser_download_url.includes('.r2.dev/'))
+  if (r2Asset) {
+    const dir = r2Asset.browser_download_url.replace(/\/[^/]+$/, '')
+    return `${dir}/sha256sums.txt`
+  }
+  if (release.html_url.includes('.r2.dev/')) {
+    return `${release.html_url.replace(/\/$/, '')}/sha256sums.txt`
+  }
   const match = release.body?.match(/https:\/\/[^\s)\]]+/)
   return match ? match[0] : release.html_url
 }
@@ -253,15 +302,14 @@ function renderHomeDownloadSection(releases: ReleaseRecord[]): void {
         </div>
 
         <div class="release-foot">
-          <a href="${escapeHtml(checksumsUrl)}" target="_blank" rel="noopener">SHA-256 checksums &amp; artifacts ↗</a>
-          <a href="${escapeHtml(latest.html_url)}" target="_blank" rel="noopener">Release notes on GitHub ↗</a>
+          <a href="${escapeHtml(checksumsUrl)}" target="_blank" rel="noopener">SHA-256 checksums ↗</a>
+          <a href="${escapeHtml(latest.html_url)}" target="_blank" rel="noopener">Release notes ↗</a>
         </div>
       </div>
     </div>`
 
   root.setAttribute('aria-busy', 'false')
 
-  // Wire OS tabs rendered dynamically inside #download-root.
   const tabWidget = root.querySelector('[data-tabs]')
   if (tabWidget) wireTabContainer(tabWidget)
 }
@@ -304,7 +352,7 @@ function renderReleasesArchivePage(releases: ReleaseRecord[]): void {
           </div>
           <div class="release-head-links">
             <a href="${escapeHtml(extractChecksumsUrl(latest))}" target="_blank" rel="noopener">sha256sums ↗</a>
-            <a href="${escapeHtml(latest.html_url)}" target="_blank" rel="noopener">GitHub Release ↗</a>
+            <a href="${escapeHtml(latest.html_url)}" target="_blank" rel="noopener">Release notes ↗</a>
           </div>
         </div>
         <div class="release-body">
@@ -420,15 +468,63 @@ function renderReleasesArchivePage(releases: ReleaseRecord[]): void {
   draw()
 }
 
+function updateHeaderVersion(releases: ReleaseRecord[]): void {
+  const verEl = document.getElementById('landing-version')
+  const tag = releases[0]?.tag_name?.replace(/^v/i, '')
+  if (verEl && tag) {
+    verEl.textContent = `v${tag}`
+    verEl.setAttribute('aria-label', `version v${tag}`)
+  }
+}
+
+async function refreshLatestReleases(bundled: ReleaseRecord[]): Promise<void> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, {
+      headers: { Accept: 'application/vnd.github+json' },
+      priority: 'low',
+    } as RequestInit)
+    if (!res.ok) return
+    const raw = (await res.json()) as Array<ReleaseRecord & { draft?: boolean }>
+    if (!Array.isArray(raw)) return
+
+    const live = raw
+      .filter((r) => !r.draft)
+      .map((r) => ({
+        tag_name: r.tag_name,
+        name: r.name || r.tag_name,
+        published_at: r.published_at,
+        html_url: r.html_url,
+        body: r.body || '',
+        assets: (r.assets || []).map((a) => ({
+          name: a.name,
+          size: a.size,
+          browser_download_url: a.browser_download_url,
+        })),
+      }))
+
+    const merged = mergeReleaseLists(bundled, live)
+    const changed = merged.length !== bundled.length || merged[0]?.tag_name !== bundled[0]?.tag_name
+    if (!changed) return
+
+    renderHomeDownloadSection(merged)
+    renderReleasesArchivePage(merged)
+    updateHeaderVersion(merged)
+  } catch {
+    // Offline or API rate-limited: stay with bundled releases silently.
+  }
+}
+
 /** Returns the latest release tag without leading `v`, if present. */
 export function getLatestVersionString(): string | null {
-  const latest = RELEASE_DATA.releases?.[0]?.tag_name
+  const sorted = [...(RELEASE_DATA.releases || [])].sort(compareSemverDesc)
+  const latest = sorted[0]?.tag_name
   return latest ? latest.replace(/^v/i, '') : null
 }
 
 /** Populates download cards on index.html and the archive ledger on releases.html. */
 export function initDownloads(): void {
-  const releases = RELEASE_DATA.releases || []
+  const releases = [...(RELEASE_DATA.releases || [])].sort(compareSemverDesc)
   renderHomeDownloadSection(releases)
   renderReleasesArchivePage(releases)
+  void refreshLatestReleases(releases)
 }

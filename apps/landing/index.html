@@ -197,6 +197,15 @@
                 <span data-theme-label>☾ Carbon</span>
               </button>
             </li>
+            <li class="nav-cta-item">
+              <a
+                class="ox-btn ox-btn-primary ox-btn-sm nav-webapp-cta"
+                data-web-app
+                href="https://openaxe.pages.dev"
+                rel="noopener"
+                >↗ Web App</a
+              >
+            </li>
           </ul>
         </nav>
       </div>
@@ -306,7 +315,7 @@
         </div>
       </section>
 
-      <!-- 2. Interactive Signal-Chain & Effects Rack Explorer -->
+      <!-- 2. Interactive Signal-Chain & Effects Rack (real @openaxe/ui components) -->
       <section
         class="section reveal-section"
         id="signal-chain"
@@ -315,31 +324,15 @@
         <div class="container">
           <div class="section-head">
             <span class="section-kicker">01 · Signal Architecture</span>
-            <h2 id="signal-chain-title">17 modular blocks on one real-time graph</h2>
+            <h2 id="signal-chain-title">19 modular blocks — live interactive rack</h2>
             <p class="sub">
-              Click any node along the signal patch or pick a module from the palette to inspect its
-              DSP engine and parameter surface. Every block executes inside the same C++20 core.
+              Built directly with OpenAxe’s hardware <code>@openaxe/ui</code> controls. Drag the
+              knobs, switch models, toggle block bypasses, or pick any module from the palette
+              below.
             </p>
           </div>
 
-          <div class="ox-card explorer-shell">
-            <div
-              id="signal-patch-strip"
-              class="patch-strip"
-              role="group"
-              aria-label="Interactive signal chain"
-            ></div>
-
-            <div class="explorer-workspace">
-              <div id="signal-palette-groups" class="palette-column"></div>
-              <div
-                id="signal-lcd-inspector"
-                class="lcd-inspector"
-                aria-live="polite"
-                aria-label="Selected block specification"
-              ></div>
-            </div>
-          </div>
+          <div id="signal-architecture-root"></div>
         </div>
       </section>
 
