@@ -8,6 +8,7 @@ import { useState, type ComponentType, type ReactNode } from 'react'
 import { HardwareButton, RedoIcon, UndoIcon, type IconProps } from '@openaxe/ui'
 
 import { ChordLibrary } from './ChordLibrary'
+import { FindReplace } from './FindReplace'
 import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
 import * as I from './tabIcons'
@@ -45,6 +46,8 @@ export interface ToolboxProps {
   /** The cursor bar's personal practice note, and saving it. */
   barNote: string
   onBarNote: (text: string) => void
+  /** Move the edit cursor (find: next / previous match). */
+  onCursor: (c: edit.EditCursor) => void
   onVoice: (voice: number) => void
 }
 
@@ -728,6 +731,12 @@ export function TabToolbox(p: ToolboxProps) {
 
           {group === 'select' && (
             <>
+              {!drums && (
+                <section className={t.boxSection}>
+                  <h4>Find &amp; replace</h4>
+                  <FindReplace score={score} c={c} apply={apply} onCursor={p.onCursor} />
+                </section>
+              )}
               <p className={t.hint}>
                 {p.selectionSize > 1
                   ? `${p.selectionSize} beats selected.`

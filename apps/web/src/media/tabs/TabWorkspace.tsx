@@ -1934,6 +1934,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onShiftSelection={(n) => setAnchor((an) => (an ? { ...an, bar: an.bar + n } : an))}
             barNote={barNotes[cursor.bar] ?? ''}
             onBarNote={(text) => setBarNote(cursor.bar, text)}
+            onCursor={setCursor}
             onVoice={(v) => setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))}
           />
         )}

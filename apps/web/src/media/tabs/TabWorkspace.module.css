@@ -1433,3 +1433,39 @@
   background: #f2c94c;
   color: #3a2a00;
 }
+
+/* ── Find & replace ────────────────────────────────────────────────── */
+
+.findBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.findGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.findGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.findGrid input,
+.findGrid select {
+  width: 100%;
+  min-width: 0;
+}
+
+.findActions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--seam);
+}

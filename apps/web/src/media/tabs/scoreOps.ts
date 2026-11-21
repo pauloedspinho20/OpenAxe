@@ -1202,3 +1202,180 @@ export function setRasgueado(
   beat.rasgueado = type
   refresh(score, settings)
 }
+
+// ── Find & replace (issue #459) ──────────────────────────────────────────
+
+export type Technique =
+  | 'palmMute'
+  | 'letRing'
+  | 'hammer'
+  | 'slide'
+  | 'bend'
+  | 'vibrato'
+  | 'harmonic'
+  | 'dead'
+  | 'ghost'
+  | 'tie'
+  | 'staccato'
+  | 'accent'
+
+export const TECHNIQUES: { id: Technique; label: string }[] = [
+  { id: 'palmMute', label: 'palm mute' },
+  { id: 'letRing', label: 'let ring' },
+  { id: 'hammer', label: 'hammer-on / pull-off' },
+  { id: 'slide', label: 'slide' },
+  { id: 'bend', label: 'bend' },
+  { id: 'vibrato', label: 'vibrato' },
+  { id: 'harmonic', label: 'harmonic' },
+  { id: 'dead', label: 'dead note' },
+  { id: 'ghost', label: 'ghost note' },
+  { id: 'tie', label: 'tie' },
+  { id: 'staccato', label: 'staccato' },
+  { id: 'accent', label: 'accent' },
+]
+
+function hasTechnique(n: model.Note, t: Technique): boolean {
+  switch (t) {
+    case 'palmMute':
+      return n.isPalmMute
+    case 'letRing':
+      return n.isLetRing
+    case 'hammer':
+      return n.isHammerPullOrigin
+    case 'slide':
+      return n.slideOutType !== model.SlideOutType.None || n.slideInType !== model.SlideInType.None
+    case 'bend':
+      return n.hasBend
+    case 'vibrato':
+      return n.vibrato !== model.VibratoType.None
+    case 'harmonic':
+      return n.harmonicType !== model.HarmonicType.None
+    case 'dead':
+      return n.isDead
+    case 'ghost':
+      return n.isGhost
+    case 'tie':
+      return n.isTieDestination
+    case 'staccato':
+      return n.isStaccato
+    case 'accent':
+      return n.accentuated !== model.AccentuationType.None
+  }
+}
+
+function clearTechnique(n: model.Note, t: Technique): void {
+  switch (t) {
+    case 'palmMute':
+      n.isPalmMute = false
+      break
+    case 'letRing':
+      n.isLetRing = false
+      break
+    case 'hammer':
+      n.isHammerPullOrigin = false
+      break
+    case 'slide':
+      n.slideOutType = model.SlideOutType.None
+      n.slideInType = model.SlideInType.None
+      break
+    case 'bend':
+      n.bendType = model.BendType.None
+      n.bendPoints = null
+      break
+    case 'vibrato':
+      n.vibrato = model.VibratoType.None
+      break
+    case 'harmonic':
+      n.harmonicType = model.HarmonicType.None
+      n.harmonicValue = 0
+      break
+    case 'dead':
+      n.isDead = false
+      break
+    case 'ghost':
+      n.isGhost = false
+      break
+    case 'tie':
+      n.isTieDestination = false
+      break
+    case 'staccato':
+      n.isStaccato = false
+      break
+    case 'accent':
+      n.accentuated = model.AccentuationType.None
+      break
+  }
+}
+
+/** What to look for; unset fields match anything. */
+export interface FindQuery {
+  fret?: number | null
+  /** alphaTab string number (1 = lowest). */
+  string?: number | null
+  technique?: Technique | null
+  duration?: model.Duration | null
+}
+
+export interface NoteRef {
+  bar: number
+  voice: number
+  beat: number
+  string: number
+}
+
+/** Every note on the cursor's track/staff matching the query, in song order. */
+export function findNotes(score: Score, c: EditCursor, q: FindQuery): NoteRef[] {
+  const staff = score.tracks[c.track]?.staves[c.staff]
+  if (!staff) return []
+  const out: NoteRef[] = []
+  staff.bars.forEach((bar, bi) =>
+    bar.voices.forEach((voice, vi) =>
+      voice.beats.forEach((beat, ei) => {
+        if (beat.isEmpty || beat.isRest) return
+        if (q.duration != null && beat.duration !== q.duration) return
+        for (const n of beat.notes) {
+          if (q.fret != null && n.fret !== q.fret) continue
+          if (q.string != null && n.string !== q.string) continue
+          if (q.technique && !hasTechnique(n, q.technique)) continue
+          out.push({ bar: bi, voice: vi, beat: ei, string: n.string })
+        }
+      }),
+    ),
+  )
+  return out
+}
+
+/** What to do to every match: a new fret, a fret shift, removing the technique, a new duration. */
+export interface ReplaceAction {
+  fret?: number
+  shift?: number
+  clear?: Technique
+  duration?: model.Duration
+}
+
+/** Apply `action` to the matched notes. Returns how many changed. */
+export function replaceNotes(
+  score: Score,
+  c: EditCursor,
+  matches: readonly NoteRef[],
+  action: ReplaceAction,
+  settings: Settings,
+): number {
+  const staff = score.tracks[c.track]?.staves[c.staff]
+  if (!staff) return 0
+  let changed = 0
+  const beats = new Set<model.Beat>()
+  for (const m of matches) {
+    const beat = staff.bars[m.bar]?.voices[m.voice]?.beats[m.beat]
+    const note = beat?.getNoteOnString(m.string)
+    if (!beat || !note) continue
+    if (action.fret != null) note.fret = Math.min(30, Math.max(0, Math.round(action.fret)))
+    if (action.shift) note.fret = Math.min(30, Math.max(0, note.fret + action.shift))
+    if (action.clear) clearTechnique(note, action.clear)
+    if (action.duration != null) beats.add(beat)
+    changed++
+  }
+  for (const b of beats) b.duration = action.duration!
+  refresh(score, settings)
+  return changed
+}

@@ -44,6 +44,8 @@ import {
   setHarmonic,
   setRasgueado,
   setWhammy,
+  findNotes,
+  replaceNotes,
 } from './scoreOps'
 
 function load(tex: string) {
@@ -396,5 +398,34 @@ describe('scoreOps: more techniques', () => {
     expect(b.notes[0]!.harmonicType).toBe(model.HarmonicType.None)
     expect(b.fade).toBe(model.FadeType.None)
     expect(b.whammyBarType).toBe(model.WhammyType.None)
+  })
+})
+
+describe('scoreOps: find & replace', () => {
+  it('finds notes by fret, string, technique and duration, and replaces them', () => {
+    // Model strings: alphaTex 6 = low E (model 1), 5 = A (model 2).
+    const { score, settings } = load(GTR + '3.6{pm}.4 5.6.4 3.5.8 3.6{pm}.8 5.5.4 | 3.6.4 r.4 r.2')
+    const c = startCursor()
+    expect(findNotes(score, c, { fret: 3 }).length).toBe(4)
+    expect(findNotes(score, c, { fret: 3, string: 1 }).length).toBe(3)
+    const pm = findNotes(score, c, { technique: 'palmMute' })
+    expect(pm).toEqual([
+      { bar: 0, voice: 0, beat: 0, string: 1 },
+      { bar: 0, voice: 0, beat: 3, string: 1 },
+    ])
+    expect(findNotes(score, c, { duration: model.Duration.Eighth }).length).toBe(2)
+    expect(replaceNotes(score, c, pm, { clear: 'palmMute', shift: 2 }, settings)).toBe(2)
+    expect(findNotes(score, c, { technique: 'palmMute' })).toEqual([])
+    expect(frets(score, 0)).toEqual(['1:5', '1:5', '2:3', '1:5', '2:5'])
+    replaceNotes(
+      score,
+      c,
+      findNotes(score, c, { string: 2 }),
+      { duration: model.Duration.Half },
+      settings,
+    )
+    expect(score.tracks[0]!.staves[0]!.bars[0]!.voices[0]!.beats[2]!.duration).toBe(
+      model.Duration.Half,
+    )
   })
 })
