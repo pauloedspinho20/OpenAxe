@@ -6,7 +6,7 @@
  * (PlayerMode.EnabledExternalMedia).
  */
 import type { AlphaTabApi } from '@coderline/alphatab'
-import { synth } from '@coderline/alphatab'
+import { model, synth } from '@coderline/alphatab'
 
 import type { DecodedTrack } from '../transport'
 
@@ -34,6 +34,12 @@ export interface RenderOptions {
   metronome?: boolean
   onProgress?: (fraction: number) => void
   signal?: AbortSignal
+  /**
+   * Play the song this much slower or faster (1 = as written): every tempo is
+   * scaled while the synth's MIDI is built, then restored. The synth keeps
+   * its pitch, unlike resampling.
+   */
+  tempoScale?: number
 }
 
 export async function renderScoreAudio(
@@ -47,7 +53,33 @@ export async function renderScoreAudio(
   options.masterVolume = 1
   options.metronomeVolume = opts.metronome ? 1.2 : 0
   if (opts.trackVolume) options.trackVolume = opts.trackVolume
-  const exporter = await api.exportAudio(options)
+  const scale = opts.tempoScale ?? 1
+  const score = api.score
+  const restore: (() => void)[] = []
+  if (score && scale !== 1) {
+    // score.tempo is read-only (alphaTab derives it); a song without a tempo
+    // change on bar 1 gets one for the render.
+    const first = score.masterBars[0]
+    if (first && !first.tempoAutomations.some((x) => x.ratioPosition === 0)) {
+      const added = model.Automation.buildTempoAutomation(false, 0, score.tempo, 0)
+      first.tempoAutomations.unshift(added)
+      restore.push(() => {
+        first.tempoAutomations.splice(first.tempoAutomations.indexOf(added), 1)
+      })
+    }
+    for (const mb of score.masterBars)
+      for (const a of mb.tempoAutomations) {
+        const v = a.value
+        a.value = v * scale
+        restore.push(() => (a.value = v))
+      }
+  }
+  let exporter: Awaited<ReturnType<AlphaTabApi['exportAudio']>>
+  try {
+    exporter = await api.exportAudio(options)
+  } finally {
+    for (const r of restore.reverse()) r()
+  }
   const chunks: Float32Array[] = []
   let frames = 0
   try {

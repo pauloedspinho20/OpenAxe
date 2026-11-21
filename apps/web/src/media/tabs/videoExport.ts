@@ -437,3 +437,49 @@ export function contrast(css: string): string {
   const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)
   return lum > 140 ? '#111111' : '#F4F1EA'
 }
+
+/** `track` cut to [from, to] seconds, with 5 ms fades at the cut edges. */
+export function sliceAudio(track: DecodedTrack, from: number, to: number): DecodedTrack {
+  const sr = track.sampleRate
+  const a = Math.max(0, Math.min(track.frames, Math.round(from * sr)))
+  const b = Math.max(a, Math.min(track.frames, Math.round(to * sr)))
+  const fade = Math.max(1, Math.round(0.005 * sr))
+  const channels = track.channels.map((ch) => {
+    const out = ch.slice(a, b)
+    for (let i = 0; i < Math.min(fade, out.length); i++) {
+      out[i]! *= i / fade
+      out[out.length - 1 - i]! *= i / fade
+    }
+    return out
+  })
+  return { channels, sampleRate: sr, frames: b - a }
+}
+
+/** `beats` metronome clicks `interval` seconds apart (accent on the first), then `track`. */
+export function withCountIn(track: DecodedTrack, beats: number, interval: number): DecodedTrack {
+  const sr = track.sampleRate
+  const lead = Math.round(beats * interval * sr)
+  const clickLen = Math.round(0.05 * sr)
+  const channels = track.channels.map((ch) => {
+    const out = new Float32Array(lead + ch.length)
+    for (let b = 0; b < beats; b++) {
+      const at = Math.round(b * interval * sr)
+      const freq = b === 0 ? 1600 : 1100
+      for (let i = 0; i < clickLen && at + i < lead; i++)
+        out[at + i] = 0.5 * Math.sin((2 * Math.PI * freq * i) / sr) * Math.exp(-i / (0.008 * sr))
+    }
+    out.set(ch, lead)
+    return out
+  })
+  return { channels, sampleRate: sr, frames: lead + track.frames }
+}
+
+/** Silence of `seconds` (a video with no audio still needs a count-in's time). */
+export function silence(seconds: number, sampleRate = 48_000, channels = 2): DecodedTrack {
+  const frames = Math.round(seconds * sampleRate)
+  return {
+    channels: Array.from({ length: channels }, () => new Float32Array(frames)),
+    sampleRate,
+    frames,
+  }
+}

@@ -38,7 +38,7 @@ import { PrintOptions, type PrintSettings } from './PrintOptions'
 import { buildLeadSheet } from './leadSheet'
 import { LeadSheetView } from './LeadSheetView'
 import { VideoExportDialog, type VideoDialogChoice } from './VideoExportDialog'
-import { recordVideo, type TimeSegment, VIDEO_SIZES } from './videoExport'
+import { recordVideo, sliceAudio, type TimeSegment, VIDEO_SIZES, withCountIn } from './videoExport'
 import { ChordCollector, midiFromFrequency, placeChord, StepDetector } from './stepEntry'
 import { renderScoreAudio } from './scoreAudio'
 import * as edit from './scoreEdit'
@@ -1332,24 +1332,61 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     const segments = playbackBars()
     const scoreLength = segments.at(-1)?.end ?? 0
     const rate = 48_000
+    // The part to record, on the score's timeline.
+    let s0 = 0
+    let s1 = scoreLength
+    const pr = useMediaStore.getState().practice
+    if (ch.range === 'loop' && pr.loopStart !== null && pr.loopEnd !== null) {
+      s0 = fromPlayer(pr.loopStart)
+      s1 = fromPlayer(pr.loopEnd)
+    } else if (ch.range === 'bars') {
+      const a = barTimes(Math.min(ch.fromBar, ch.toBar) - 1)
+      const b = barTimes(Math.max(ch.fromBar, ch.toBar) - 1)
+      if (a && b) {
+        s0 = a.start
+        s1 = b.end
+      }
+    }
+    const speed = ch.audio === 'recording' ? 1 : ch.speed
     let audio: DecodedTrack | null = null
-    let toScore = (sec: number) => sec
-    let duration = scoreLength
+    let toScore = (sec: number) => s0 + sec * speed
+    let duration = (s1 - s0) / speed
     if (ch.audio === 'synth') {
-      audio = await renderScoreAudio(api, {
+      const full = await renderScoreAudio(api, {
         sampleRate: rate,
         trackVolume: renderVolumes(),
         metronome,
         signal,
+        tempoScale: speed,
       })
-      duration = audio.frames / audio.sampleRate
+      audio = sliceAudio(full, s0 / speed, s1 / speed)
     } else if (ch.audio === 'recording' && sync) {
       const blob = await loadMediaFile(sync.audioId)
       if (!blob) throw new Error('The paired recording is missing from the library')
-      audio = await decodeAudio(await blob.arrayBuffer(), rate)
+      const rec = await decodeAudio(await blob.arrayBuffer(), rate)
       const points = sync.points
-      toScore = (sec) => audioToScore(points, sec)
-      duration = Math.min(audio.frames / audio.sampleRate, scoreToAudio(points, scoreLength) + 1.5)
+      const length = rec.frames / rec.sampleRate
+      const a0 = ch.range === 'song' ? 0 : Math.max(0, scoreToAudio(points, s0))
+      const a1 =
+        ch.range === 'song'
+          ? Math.min(length, scoreToAudio(points, scoreLength) + 1.5)
+          : Math.min(length, scoreToAudio(points, s1))
+      audio = sliceAudio(rec, a0, a1)
+      toScore = (sec) => audioToScore(points, a0 + sec)
+      duration = a1 - a0
+    }
+    if (ch.countIn) {
+      // One bar of clicks at the tempo the part starts in.
+      const bar = barAtTime(s0)
+      const mb = score.masterBars[bar]
+      const beats = mb?.timeSignatureNumerator ?? 4
+      const interval =
+        (60 / (edit.tempoAt(score, bar) * speed)) * (4 / (mb?.timeSignatureDenominator ?? 4))
+      const lead = beats * interval
+      if (audio) audio = withCountIn(audio, beats, interval)
+      const inner = toScore
+      toScore = (sec) => (sec < lead ? s0 : inner(sec - lead))
+      duration += lead
     }
     const staff = score.tracks[ch.tracks[0] ?? 0]?.staves[0]
     const bits = [
@@ -2523,6 +2560,12 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           profile={profile}
           dark={sheetDark}
           hasRecording={!!sync?.points.length}
+          barCount={score.masterBars.length}
+          hasLoop={practice.loopStart !== null && practice.loopEnd !== null}
+          span={(() => {
+            const [a, b] = ops.barSpan(cursor, targets())
+            return [a + 1, b + 1] as [number, number]
+          })()}
           onExport={exportVideo}
           onClose={() => setVideoOpen(false)}
         />

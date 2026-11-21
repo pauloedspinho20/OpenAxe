@@ -25,6 +25,14 @@ export interface VideoDialogChoice {
   tracks: number[]
   titleCard: boolean
   audio: VideoAudio
+  /** What to record: the whole song, the A-B loop, or bars from..to (1-based). */
+  range: 'song' | 'loop' | 'bars'
+  fromBar: number
+  toBar: number
+  /** Playback speed (synth only; 1 = as written). */
+  speed: number
+  /** A bar of metronome clicks before the music. */
+  countIn: boolean
 }
 
 interface VideoExportDialogProps {
@@ -33,6 +41,10 @@ interface VideoExportDialogProps {
   profile: 'tab' | 'both' | 'score'
   dark: boolean
   hasRecording: boolean
+  barCount: number
+  hasLoop: boolean
+  /** Default bar range (the selection, or the cursor's bar), 1-based. */
+  span: [number, number]
   /** Runs the export; resolves when done (or rejects). */
   onExport: (
     c: VideoDialogChoice,
@@ -56,6 +68,11 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
     tracks: [...p.shown],
     titleCard: true,
     audio: p.hasRecording ? 'recording' : 'synth',
+    range: 'song',
+    fromBar: p.span[0],
+    toBar: p.span[1],
+    speed: 1,
+    countIn: false,
   })
   const [progress, setProgress] = useState<number | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -142,6 +159,66 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
               onChange={(e) => set('titleCard', e.target.checked)}
             />
             Title card
+          </label>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={c.countIn}
+              onChange={(e) => set('countIn', e.target.checked)}
+            />
+            Count-in bar
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Part</legend>
+          <select
+            value={c.range}
+            onChange={(e) => set('range', e.target.value as VideoDialogChoice['range'])}
+            aria-label="Part to record"
+          >
+            <option value="song">Whole song</option>
+            {p.hasLoop && <option value="loop">The A–B loop</option>}
+            <option value="bars">Bars…</option>
+          </select>
+          {c.range === 'bars' && (
+            <div className={t.tapRow}>
+              <input
+                type="number"
+                min={1}
+                max={p.barCount}
+                value={c.fromBar}
+                onChange={(e) =>
+                  set('fromBar', Math.min(p.barCount, Math.max(1, Number(e.target.value) || 1)))
+                }
+                aria-label="First bar"
+              />
+              <span className={styles.dim}>to</span>
+              <input
+                type="number"
+                min={1}
+                max={p.barCount}
+                value={c.toBar}
+                onChange={(e) =>
+                  set('toBar', Math.min(p.barCount, Math.max(1, Number(e.target.value) || 1)))
+                }
+                aria-label="Last bar"
+              />
+            </div>
+          )}
+          <label>
+            <span className={styles.dim}>
+              speed {Math.round(c.speed * 100)}%{c.audio === 'recording' ? ' (synth only)' : ''}
+            </span>
+            <input
+              type="range"
+              min={0.5}
+              max={1.5}
+              step={0.05}
+              value={c.audio === 'recording' ? 1 : c.speed}
+              disabled={c.audio === 'recording'}
+              onChange={(e) => set('speed', Number(e.target.value))}
+              aria-label="Speed"
+            />
           </label>
         </fieldset>
         <fieldset>
