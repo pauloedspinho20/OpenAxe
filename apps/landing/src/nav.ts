@@ -31,6 +31,7 @@ export function initNav(): void {
 
     header.classList.add('is-measuring')
     header.classList.add('is-wide')
+    header.classList.remove('is-collapsed')
     menu.removeAttribute('popover')
 
     const fitsInline = inner.scrollWidth <= inner.clientWidth + 1
@@ -38,10 +39,12 @@ export function initNav(): void {
 
     if (fitsInline) {
       header.classList.add('is-wide')
+      header.classList.remove('is-collapsed')
       menu.removeAttribute('popover')
       setCollapsedMenuOpen(false)
     } else {
       header.classList.remove('is-wide')
+      header.classList.add('is-collapsed')
       if (supportsPopover) {
         menu.setAttribute('popover', 'auto')
         if (wasPopoverOpen) {

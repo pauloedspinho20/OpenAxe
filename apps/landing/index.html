@@ -15,6 +15,23 @@
         if (tc) tc.setAttribute('content', t === 'light' ? '#e7e2d6' : '#101010')
       } catch (e) {}
     </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #101010;
+        color: #eeece6;
+      }
+
+      html[data-theme='light'],
+      html[data-theme='light'] body {
+        background: #e7e2d6;
+        color: #201f1a;
+      }
+    </style>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="preload" as="image" href="/icons/openaxe-512.png" fetchpriority="high" />
+    <link rel="expect" href="#hero" blocking="render" />
 
     <!-- Primary SEO -->
     <title>OpenAxe — Modular Guitar &amp; Bass Rig · NAM Amp, Cab IR &amp; Effects</title>
@@ -220,7 +237,7 @@
 
     <main id="main">
       <!-- 1. Full-Viewport Hero + Large App Emblem -->
-      <section class="hero" aria-labelledby="hero-title">
+      <section id="hero" class="hero" aria-labelledby="hero-title">
         <div class="container hero-container">
           <div class="hero-grid">
             <div class="hero-intro">

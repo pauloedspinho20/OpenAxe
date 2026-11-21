@@ -7,6 +7,16 @@
 @import '@openaxe/ui/vanilla/actions.css';
 @import '@openaxe/ui/vanilla/surfaces.css';
 
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+}
+
 @property --fade-start {
   syntax: '<length>';
   inherits: false;
@@ -618,6 +628,41 @@ code {
 
 .site-header.is-wide .site-menu::backdrop {
   display: none;
+}
+
+/* Pre-hydration desktop layout before nav.ts measures inline fit; JS still collapses via .is-collapsed */
+@media (min-width: 1180px) {
+  .site-header:not(.is-collapsed) .menu-button {
+    display: none;
+  }
+
+  .site-header:not(.is-collapsed) .site-menu {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    inline-size: auto;
+    max-inline-size: none;
+    block-size: auto;
+    max-block-size: none;
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    opacity: 1;
+    translate: none;
+  }
+
+  .site-header:not(.is-collapsed) .site-menu::backdrop {
+    display: none;
+  }
+
+  .site-header:not(.is-collapsed) .site-menu a.nav-webapp-cta {
+    width: auto;
+  }
 }
 
 /* ============================================================================

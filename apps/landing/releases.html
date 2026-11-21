@@ -15,6 +15,22 @@
         if (tc) tc.setAttribute('content', t === 'light' ? '#e7e2d6' : '#101010')
       } catch (e) {}
     </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #101010;
+        color: #eeece6;
+      }
+
+      html[data-theme='light'],
+      html[data-theme='light'] body {
+        background: #e7e2d6;
+        color: #201f1a;
+      }
+    </style>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="expect" href="#releases-head" blocking="render" />
 
     <title>Releases — OpenAxe Desktop &amp; DAW Plugin Downloads</title>
     <meta
@@ -122,7 +138,7 @@
 
     <main id="main" class="section">
       <div class="container">
-        <div class="section-head">
+        <div id="releases-head" class="section-head">
           <span class="section-kicker">Release Ledger</span>
           <h1 class="releases-title">All OpenAxe releases</h1>
           <p class="sub">

@@ -1,13 +1,9 @@
-import './style.css'
-import { createElement } from 'react'
-import { createRoot } from 'react-dom/client'
 import { initTheme } from './theme'
 import { initNav } from './nav'
 import { initTabs } from './tabs'
 import { initFinishCompare } from './finishCompare'
 import { getLatestVersionString, initDownloads } from './releases'
 import { initVendors } from './vendors'
-import { SignalArchitecture } from './components/SignalArchitecture'
 
 const WEB_APP_URL = 'https://openaxe.pages.dev'
 
@@ -22,7 +18,17 @@ initVendors()
 
 const signalRootEl = document.getElementById('signal-architecture-root')
 if (signalRootEl) {
-  createRoot(signalRootEl).render(createElement(SignalArchitecture))
+  void Promise.all([
+    import('react'),
+    import('react-dom/client'),
+    import('./components/SignalArchitecture'),
+  ])
+    .then(([{ createElement }, { createRoot }, { SignalArchitecture }]) => {
+      createRoot(signalRootEl).render(createElement(SignalArchitecture))
+    })
+    .catch((err) => {
+      console.error('Failed to mount SignalArchitecture:', err)
+    })
 }
 
 const versionEl = document.getElementById('landing-version')

@@ -68,8 +68,10 @@ export default defineConfig({
     },
     {
       name: 'media-var-replace',
+      enforce: 'pre',
       transform(code, id) {
-        if (id.endsWith('.css')) {
+        const cleanId = id.split('?', 1)[0]
+        if (cleanId.endsWith('.css')) {
           return code
             .replace(/var\(--mw-xxs\)/g, '320px')
             .replace(/var\(--mw-xs\)/g, '496px')
