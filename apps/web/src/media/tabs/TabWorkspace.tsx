@@ -24,7 +24,7 @@ import {
   StaveProfile,
   type synth,
 } from '@coderline/alphatab'
-import { HardwareButton, Select } from '@openaxe/ui'
+import { HardwareButton, RedoIcon, Select, UndoIcon } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -32,6 +32,7 @@ import { keyName } from '../library'
 import { loadMediaFile, saveMedia, saveMediaFile, type MediaItem } from '../mediaDb'
 import { useMediaStore } from '../mediaStore'
 import { PracticeControls, TransportButtons } from '../TransportBar'
+import { useNarrowViewport } from '../useMediaQuery'
 import { DrumLane } from './DrumLane'
 import { beatPositions, type FretPos, pitchAt as pitchOf, placePitch } from './fretboard'
 import { FretboardPanel, type StepInput } from './FretboardPanel'
@@ -60,9 +61,15 @@ import type { DecodedTrack } from '../transport'
 import { onMidiNote, requestMidiAccess } from '../../midi/midiAccess'
 import { useMidiStore } from '../../state/midiStore'
 import { detectPitch } from '../../tuner/pitchDetect'
-import { TrackSidebar } from './TrackSidebar'
+import { TrackSidebar, type InspectorTab } from './TrackSidebar'
 import * as I from './tabIcons'
-import { TabToolbox, Tool, type ToolGroup } from './TabToolbox'
+import { TabToolbox, type ToolGroup } from './TabToolbox'
+import {
+  ToolbarButton,
+  ToolbarGroup,
+  WorkspacePopover,
+  useRovingToolbar,
+} from './WorkspaceControls'
 import tabStyles from './TabWorkspace.module.css'
 
 type Score = model.Score
@@ -145,7 +152,15 @@ function applySheetColors(settings: Settings, dark: boolean): void {
     r[key] = dark ? (model.Color.fromJson(INK[key]) ?? paper[key]!) : paper[key]!
 }
 
-export default function TabWorkspace({ item }: { item: MediaItem }) {
+type WorkspaceMode = 'play' | 'practice' | 'edit'
+
+export interface TabWorkspaceProps {
+  item: MediaItem
+  libraryOpen?: boolean
+  onToggleLibrary?: () => void
+}
+
+export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: TabWorkspaceProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const apiRef = useRef<AlphaTabApi | null>(null)
@@ -155,6 +170,12 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const revisionRef = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typedRef = useRef<{ digits: string; at: number }>({ digits: '', at: 0 })
+  const topbarRef = useRef<HTMLDivElement | null>(null)
+  const footerRef = useRef<HTMLDivElement | null>(null)
+  const topbarRoving = useRovingToolbar(topbarRef, 'horizontal')
+  const footerRoving = useRovingToolbar(footerRef, 'horizontal')
+  const isNarrow = useNarrowViewport('(max-width: 920px)')
+  const isPhone = useNarrowViewport('(max-width: 640px)')
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -175,8 +196,27 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const viewZoom = reading ? Math.min(2.5, Math.max(1.4, zoom * 1.4)) : zoom
   const [horizontal, setHorizontal] = useState(item.view?.horizontal ?? false)
   const [metronome, setMetronome] = useState(false)
-  const [editing, setEditing] = useState(false)
+  const [mode, setMode] = useState<WorkspaceMode>('play')
+  const [lastBrowseMode, setLastBrowseMode] = useState<'play' | 'practice'>('play')
+  const editing = mode === 'edit'
+  const setEditing = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setMode((cur) => {
+        const was = cur === 'edit'
+        const target = typeof next === 'function' ? next(was) : next
+        if (target === was) return cur
+        if (target) {
+          if (cur !== 'edit') setLastBrowseMode(cur)
+          return 'edit'
+        }
+        return lastBrowseMode
+      })
+    },
+    [lastBrowseMode],
+  )
   const [keepRhythm, setKeepRhythm] = useState(true)
+  const [padAdvance, setPadAdvance] = useState(true)
+  const [dockCollapsed, setDockCollapsed] = useState(false)
   const midiBytesRef = useRef<Uint8Array | null>(null)
   const itemNameRef = useRef(item.name)
   itemNameRef.current = item.name
@@ -207,6 +247,17 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   /** Selection anchor: the range runs from here to the cursor (same track/voice). */
   const [anchor, setAnchor] = useState<ops.BeatRef | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(item.view?.sidebarOpen ?? true)
+  const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('tracks')
+  const inspectorOpen = isNarrow ? narrowInspectorOpen : sidebarOpen
+  const toggleInspector = () => {
+    if (isNarrow) setNarrowInspectorOpen((v) => !v)
+    else setSidebarOpen((v) => !v)
+  }
+  const closeInspector = () => {
+    if (isNarrow) setNarrowInspectorOpen(false)
+    else setSidebarOpen(false)
+  }
   // Recording sync: the tab's paired recording (live from the library) and
   // whether playback uses it instead of the synth.
   const liveItem = useMediaStore((st) => st.items.find((i) => i.id === item.id)) ?? item
@@ -1897,6 +1948,29 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, score])
 
+  // Re-fit alphaTab page width when container size or narrow drawer layout changes.
+  useEffect(() => {
+    const vp = viewportRef.current
+    if (!vp || typeof ResizeObserver === 'undefined') return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let lastW = vp.clientWidth
+    const ro = new ResizeObserver((entries) => {
+      const nextW = Math.round(entries[0]?.contentRect.width ?? vp.clientWidth)
+      if (nextW < 40 || Math.abs(nextW - lastW) < 4) return
+      lastW = nextW
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        const api = apiRef.current
+        if (api?.score) api.render()
+      }, 120)
+    })
+    ro.observe(vp)
+    return () => {
+      if (timer) clearTimeout(timer)
+      ro.disconnect()
+    }
+  }, [item.id])
+
   // ── Render ────────────────────────────────────────────────────────────
   const beat = score ? edit.beatAt(score, cursor) : null
   const fill = score ? edit.barFill(score, cursor) : { used: 0, capacity: 0 }
@@ -1938,29 +2012,33 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   const advanceRef = useRef(stepAdvance)
   advanceRef.current = stepAdvance
   /** Write a played note or chord at the cursor (replacing the beat's notes), then move on. */
-  const writePlayed = useCallback((pitches: number[]) => {
-    applyRef.current((sc, st) => {
-      const c = cursorRef.current
-      const staff = sc.tracks[c.track]?.staves[c.staff]
-      if (!staff || staff.isPercussion) return
-      const placed = placeChord(
-        staff.stringTuning.tunings,
-        pitches,
-        c.string,
-        24,
-        handFretRef.current,
-      )
-      if (!placed.length) return
-      // Where the hand is now: the chord's highest fret, or the note's fret.
-      handFretRef.current = Math.max(...placed.map((p) => p.fret))
-      const beat = edit.beatAt(sc, c)
-      for (const n of [...(beat?.notes ?? [])]) edit.deleteNote(sc, { ...c, string: n.string }, st)
-      for (const p of placed) edit.setFret(sc, { ...c, string: p.string }, p.fret, st)
-      const at = { ...c, string: placed[placed.length - 1]!.string }
-      return advanceRef.current ? edit.moveRight(sc, at, st) : at
-    })
-    setEditing(true)
-  }, [])
+  const writePlayed = useCallback(
+    (pitches: number[]) => {
+      applyRef.current((sc, st) => {
+        const c = cursorRef.current
+        const staff = sc.tracks[c.track]?.staves[c.staff]
+        if (!staff || staff.isPercussion) return
+        const placed = placeChord(
+          staff.stringTuning.tunings,
+          pitches,
+          c.string,
+          24,
+          handFretRef.current,
+        )
+        if (!placed.length) return
+        // Where the hand is now: the chord's highest fret, or the note's fret.
+        handFretRef.current = Math.max(...placed.map((p) => p.fret))
+        const beat = edit.beatAt(sc, c)
+        for (const n of [...(beat?.notes ?? [])])
+          edit.deleteNote(sc, { ...c, string: n.string }, st)
+        for (const p of placed) edit.setFret(sc, { ...c, string: p.string }, p.fret, st)
+        const at = { ...c, string: placed[placed.length - 1]!.string }
+        return advanceRef.current ? edit.moveRight(sc, at, st) : at
+      })
+      setEditing(true)
+    },
+    [setEditing],
+  )
   const chooseStepInput = (mode: StepInput) => {
     if (mode === 'midi' && useMidiStore.getState().permission !== 'granted')
       void requestMidiAccess()
@@ -2029,9 +2107,95 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
   }
 
   const practice = useMediaStore((st) => st.practice)
+  const trainerEnabled = useMediaStore((st) => st.trainer.enabled)
   const countInBars = practice.countInBars
   const loopOn = practice.loopEnabled && practice.loopStart !== null
   const ms = useMediaStore.getState()
+
+  const selectMode = (next: WorkspaceMode) => {
+    if (next !== 'edit' && mode !== 'edit') setLastBrowseMode(next)
+    if (next === 'edit') {
+      if (mode !== 'edit') setLastBrowseMode(mode)
+      if (isNarrow) {
+        setToolGroup('entry')
+        setDockCollapsed(false)
+      } else if (!toolGroup || toolGroup === 'entry') {
+        setToolGroup('note')
+      }
+    }
+    setMode(next)
+    setTimeout(() => viewportRef.current?.focus(), 0)
+  }
+
+  const enterFretFromPad = (fret: number) => {
+    const s = settings()
+    const c = cursor
+    apply((sc, st) => {
+      edit.setFret(sc, c, fret, st)
+      return padAdvance ? edit.moveRight(sc, c, s) : c
+    })
+  }
+
+  const touchPadProps = score
+    ? {
+        barIndex: cursor.bar,
+        barCount: score.masterBars.length,
+        beatIndex: cursor.beat,
+        beatDuration: beat?.duration ?? model.Duration.Quarter,
+        beatDotted: !!beat?.dots,
+        beatIsRest: !!beat?.isRest,
+        autoAdvance: padAdvance,
+        onAutoAdvance: setPadAdvance,
+        onSelectString: (str: number) => setCursor((c) => ({ ...c, string: str })),
+        onEnterFret: enterFretFromPad,
+        onClearNote: () => apply((sc, st) => edit.deleteNote(sc, cursor, st)),
+        onRest: () =>
+          apply((sc, st) =>
+            keepRhythm ? rhythm.makeRestAndMerge(sc, cursor, st) : edit.makeRest(sc, cursor, st),
+          ),
+        onDeadNote: () => apply((sc, st) => void edit.toggleNoteEffect(sc, cursor, 'dead', st)),
+        onMoveBeat: (dir: -1 | 1) => {
+          const s = settings()
+          if (dir < 0) setCursor((c) => edit.moveLeft(score, c))
+          else apply((sc) => edit.moveRight(sc, cursor, s))
+        },
+        onMoveBar: (dir: -1 | 1) => setCursor((c) => edit.moveBar(score, c, dir)),
+        onDuration: (d: model.Duration) =>
+          apply((sc, st) =>
+            keepRhythm
+              ? rhythm.setDurationKeepRhythm(sc, cursor, d, st)
+              : edit.setDuration(sc, cursor, d, st),
+          ),
+        onToggleDot: () =>
+          apply((sc, st) =>
+            keepRhythm
+              ? rhythm.toggleDotKeepRhythm(sc, cursor, st)
+              : edit.toggleDot(sc, cursor, st),
+          ),
+      }
+    : undefined
+
+  const inputPanelNode =
+    score && !current?.percussion && staffTunings.length > 0 ? (
+      <FretboardPanel
+        tunings={staffTunings}
+        capo={fretCapo}
+        cursorString={cursor.string}
+        cursorNotes={cursorNotes}
+        playingNotes={playingNotes}
+        onFret={enterFret}
+        onPitch={enterPitch}
+        stepInput={stepInput}
+        onStepInput={chooseStepInput}
+        stepAdvance={stepAdvance}
+        onStepAdvance={setStepAdvance}
+        defaultMode={isNarrow ? 'keypad' : 'neck'}
+        touchPadProps={touchPadProps}
+        embedded={isNarrow && editing}
+      />
+    ) : score && current?.percussion ? (
+      <DrumLane score={score} cursor={cursor} apply={apply} onCursor={setCursor} />
+    ) : null
 
   return (
     <div
@@ -2039,188 +2203,360 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
       className={`${tabStyles.ws} ${fullscreen ? tabStyles.wsFull : ''} ${reading ? tabStyles.wsReading : ''} ${sheetDark ? tabStyles.sheetDark : ''}`}
     >
       {/* ── Top bar ── */}
-      <header className={tabStyles.topbar} hidden={reading}>
-        <div
-          className={tabStyles.songTitle}
-          title={`${title.title || item.name}${title.artist ? ` — ${title.artist}` : ''}`}
-        >
-          <strong>{title.title || item.name}</strong>
-          {(title.artist || item.artist) && <span>{title.artist || item.artist}</span>}
-          {savedAt && <i className={tabStyles.savedDot} title="All changes saved" />}
-        </div>
-
-        <div className={tabStyles.barGroup}>
-          <Tool
-            icon={I.TracksIcon}
-            title={sidebarOpen ? 'Hide the track panel' : 'Show the track panel'}
-            on={sidebarOpen}
-            onClick={() => setSidebarOpen((v) => !v)}
-          />
-          <span className={tabStyles.activeTrack} title="Track being edited">
-            {tracks[trackIndex]?.name ?? ''}
-            {shown.size > 1 && <em> +{shown.size - 1}</em>}
-          </span>
-        </div>
-
-        <div className={tabStyles.barGroup} role="group" aria-label="View">
-          {(
-            [
-              ['tab', 'Tab only'],
-              ['both', 'Standard notation + tab'],
-              ['score', 'Standard notation only'],
-            ] as const
-          ).map(([id, label]) => (
-            <Tool
-              key={id}
-              icon={id === 'tab' ? I.TabIcon : I.NotationIcon}
-              title={label}
-              on={profile === id}
-              onClick={() => setProfile(id)}
-              tag={id === 'both' ? '+T' : undefined}
-            />
-          ))}
-          <Tool
-            icon={I.ZoomOutIcon}
-            title="Zoom out"
-            onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-          />
-          <button
-            type="button"
-            className={tabStyles.zoomValue}
-            onClick={() => setZoom(1)}
-            title="Reset zoom"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <Tool
-            icon={I.ZoomInIcon}
-            title="Zoom in"
-            onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
-          />
-          <Tool
-            icon={I.QuarterNoteIcon}
-            title={`Rhythm on the tab staff: ${tabRhythm === 'auto' ? 'automatic (when there is no notation)' : tabRhythm === 'on' ? 'always' : 'hidden'} — click to change`}
-            on={tabRhythm === 'on'}
-            tag={tabRhythm === 'auto' ? 'A' : tabRhythm === 'off' ? '✕' : undefined}
-            onClick={() => setTabRhythm((r) => (r === 'auto' ? 'on' : r === 'on' ? 'off' : 'auto'))}
-          />
-          <Tool
-            icon={I.NotationIcon}
-            title={sheetDark ? 'Light sheet (black on paper)' : 'Dark sheet (light on dark)'}
-            on={sheetDark}
-            tag="◐"
-            onClick={() => setSheetDark((v) => !v)}
-          />
-          <Tool
-            icon={I.ChordIcon}
-            title="Chord diagrams in a strip at the top of the sheet"
-            on={score?.stylesheet.globalDisplayChordDiagramsOnTop ?? false}
-            onClick={() =>
-              apply((sc, st) =>
-                ops.setChordStrip(sc, !sc.stylesheet.globalDisplayChordDiagramsOnTop, st),
-              )
-            }
-          />
-          <Tool
-            icon={I.ChordIcon}
-            title={chart ? 'Back to the sheet' : 'Chord chart: chords and lyrics only'}
-            on={chart}
-            tag="≡"
-            onClick={() => setChart((v) => !v)}
-          />
-          {horizontal && (
-            <Tool
-              icon={I.HorizontalLayoutIcon}
-              title={
-                centerCursor
-                  ? 'Cursor centred: the music scrolls under it (click for page-turn scrolling)'
-                  : 'Page-turn scrolling (click to keep the cursor centred)'
-              }
-              on={centerCursor}
-              tag="◎"
-              onClick={() => setCenterCursor((v) => !v)}
+      <header
+        ref={topbarRef}
+        className={tabStyles.topbar}
+        hidden={reading}
+        role="toolbar"
+        aria-label="Tab workspace controls"
+        {...topbarRoving}
+      >
+        <div className={tabStyles.topLeft}>
+          {onToggleLibrary && (
+            <ToolbarButton
+              label={libraryOpen ? 'Hide library' : 'Show library'}
+              text="Library"
+              hideLabelBelow="md"
+              icon={<I.LibraryIcon size={15} />}
+              pressed={!!libraryOpen}
+              onClick={onToggleLibrary}
             />
           )}
-          <Tool
-            icon={horizontal ? I.HorizontalLayoutIcon : I.PageLayoutIcon}
-            title={horizontal ? 'Switch to page layout' : 'Switch to one horizontal line'}
-            on={horizontal}
-            onClick={() => setHorizontal((h) => !h)}
-          />
+          <div
+            className={tabStyles.songTitle}
+            title={`${title.title || item.name}${title.artist ? ` — ${title.artist}` : ''}`}
+          >
+            <strong>{title.title || item.name}</strong>
+            {(title.artist || item.artist) && <span>{title.artist || item.artist}</span>}
+            {savedAt && <i className={tabStyles.savedDot} title="All changes saved" />}
+          </div>
+          <button
+            type="button"
+            className={tabStyles.trackPill}
+            onClick={() => {
+              setInspectorTab('tracks')
+              if (isNarrow) setNarrowInspectorOpen(true)
+              else setSidebarOpen(true)
+            }}
+            title="Active track — open Tracks inspector"
+          >
+            <I.TracksIcon size={13} />
+            <span>{tracks[trackIndex]?.name ?? 'Track'}</span>
+            {shown.size > 1 && <em>+{shown.size - 1}</em>}
+          </button>
         </div>
 
-        <div className={tabStyles.barGroup}>
-          <Tool
-            icon={I.ReadingIcon}
-            title="Practice view: just the music, bigger (Esc to leave)"
-            onClick={() => {
-              setEditing(false)
-              setReading(true)
-              setTimeout(() => viewportRef.current?.focus(), 0)
-            }}
-          />
-          <HardwareButton
-            size="small"
-            label={editing ? 'Editing' : 'Edit'}
-            title="Edit mode (Esc to leave)"
-            icon={<I.EditIcon size={14} />}
-            active={editing}
-            onClick={() => {
-              setEditing((v) => !v)
-              if (!editing && !toolGroup) setToolGroup('note')
-              setTimeout(() => viewportRef.current?.focus(), 0)
-            }}
-          />
-          <details className={tabStyles.menu}>
-            <summary title="Export" aria-label="Export">
-              <I.DownloadIcon size={18} />
-            </summary>
-            <div
-              className={tabStyles.menuList}
-              onClick={(e) =>
-                (e.currentTarget.parentElement as HTMLDetailsElement).removeAttribute('open')
-              }
+        <div className={tabStyles.modeSwitch} role="group" aria-label="Workspace mode">
+          {(
+            [
+              ['play', 'Play', I.PlayTabIcon],
+              ['practice', 'Practice', I.PracticeIcon],
+              ['edit', 'Edit', I.EditIcon],
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              type="button"
+              className={`${tabStyles.modeTab} ${mode === id ? tabStyles.modeTabOn : ''}`}
+              aria-pressed={mode === id}
+              onClick={() => selectMode(id)}
             >
-              <button type="button" onClick={() => exportAs('gp')}>
-                <I.DownloadIcon size={14} /> Guitar Pro (.gp)
-              </button>
-              <button type="button" onClick={() => exportAs('atex')}>
-                <I.DownloadIcon size={14} /> AlphaTex (.atex)
-              </button>
-              <button type="button" onClick={() => exportAs('mid')}>
-                <I.DownloadIcon size={14} /> MIDI (.mid)
-              </button>
-              <button type="button" onClick={() => setVideoOpen(true)}>
-                <I.DownloadIcon size={14} /> Video…
-              </button>
-              <button type="button" onClick={() => exportAs('print')}>
-                <I.PageLayoutIcon size={14} /> Print / PDF
-              </button>
-              <button type="button" onClick={openTex}>
-                <I.CodeIcon size={14} /> Edit as AlphaTex…
-              </button>
-            </div>
-          </details>
-          <Tool
-            icon={I.TuningIcon}
-            title={
-              fretOpen ? 'Hide the fretboard / piano' : 'Fretboard / piano: click to enter notes'
-            }
-            on={fretOpen}
-            onClick={() => setFretOpen((v) => !v)}
+              <Icon size={14} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className={tabStyles.topRight}>
+          {editing && !isNarrow && (
+            <ToolbarGroup label="History">
+              <ToolbarButton
+                label="Undo"
+                icon={<UndoIcon size={14} />}
+                disabled={history.undo === 0}
+                title="Undo (Ctrl/Cmd+Z)"
+                onClick={undo}
+              />
+              <ToolbarButton
+                label="Redo"
+                icon={<RedoIcon size={14} />}
+                disabled={history.redo === 0}
+                title="Redo (Ctrl/Cmd+Shift+Z)"
+                onClick={redo}
+              />
+            </ToolbarGroup>
+          )}
+
+          <WorkspacePopover
+            label="View"
+            hideLabelBelow="sm"
+            icon={<I.ViewIcon size={15} />}
+            sheetOnMobile
+            width="wide"
+          >
+            {(close) => (
+              <div className={tabStyles.popPanel}>
+                <div className={tabStyles.popRow}>
+                  <span className={tabStyles.popLabel}>Staves</span>
+                  <div className={tabStyles.segmented} role="group" aria-label="Stave profile">
+                    {(
+                      [
+                        ['tab', 'Tab', I.TabIcon],
+                        ['both', 'Both', I.NotationTabIcon],
+                        ['score', 'Notation', I.NotationIcon],
+                      ] as const
+                    ).map(([id, label, Icon]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={profile === id}
+                        className={profile === id ? tabStyles.segOn : ''}
+                        onClick={() => setProfile(id)}
+                      >
+                        <Icon size={13} />
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={tabStyles.popRow}>
+                  <span className={tabStyles.popLabel}>Zoom</span>
+                  <div className={tabStyles.popGroup}>
+                    <ToolbarButton
+                      label="Zoom out"
+                      icon={<I.ZoomOutIcon size={14} />}
+                      onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                    />
+                    <button
+                      type="button"
+                      className={tabStyles.zoomValue}
+                      onClick={() => setZoom(1)}
+                      title="Reset zoom to 100%"
+                    >
+                      {Math.round(zoom * 100)}%
+                    </button>
+                    <ToolbarButton
+                      label="Zoom in"
+                      icon={<I.ZoomInIcon size={14} />}
+                      onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
+                    />
+                  </div>
+                </div>
+
+                <div className={tabStyles.popRow}>
+                  <span className={tabStyles.popLabel}>Layout</span>
+                  <div className={tabStyles.segmented} role="group" aria-label="Sheet layout">
+                    <button
+                      type="button"
+                      aria-pressed={!horizontal}
+                      className={!horizontal ? tabStyles.segOn : ''}
+                      onClick={() => setHorizontal(false)}
+                    >
+                      <I.PageLayoutIcon size={13} />
+                      <span>Page</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={horizontal}
+                      className={horizontal ? tabStyles.segOn : ''}
+                      onClick={() => setHorizontal(true)}
+                    >
+                      <I.HorizontalLayoutIcon size={13} />
+                      <span>Line</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className={tabStyles.popRow}>
+                  <span className={tabStyles.popLabel}>Tab stems</span>
+                  <div
+                    className={tabStyles.segmented}
+                    role="group"
+                    aria-label="Rhythm on tab staff"
+                  >
+                    {(
+                      [
+                        ['auto', 'Auto'],
+                        ['on', 'Show'],
+                        ['off', 'Hide'],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={tabRhythm === id}
+                        className={tabRhythm === id ? tabStyles.segOn : ''}
+                        onClick={() => setTabRhythm(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={tabStyles.popToggles}>
+                  <ToolbarButton
+                    label="Dark sheet"
+                    text="Dark sheet"
+                    icon={<I.SheetThemeIcon size={14} />}
+                    pressed={sheetDark}
+                    onClick={() => setSheetDark((v) => !v)}
+                  />
+                  <ToolbarButton
+                    label="Chord diagrams on top"
+                    text="Chord strip"
+                    icon={<I.ChordIcon size={14} />}
+                    pressed={score?.stylesheet.globalDisplayChordDiagramsOnTop ?? false}
+                    onClick={() =>
+                      apply((sc, st) =>
+                        ops.setChordStrip(sc, !sc.stylesheet.globalDisplayChordDiagramsOnTop, st),
+                      )
+                    }
+                  />
+                  <ToolbarButton
+                    label="Lead sheet"
+                    text="Lead sheet"
+                    icon={<I.LeadSheetIcon size={14} />}
+                    pressed={chart}
+                    onClick={() => setChart((v) => !v)}
+                  />
+                  {horizontal && (
+                    <ToolbarButton
+                      label="Center cursor"
+                      text="Center cursor"
+                      icon={<I.CenterCursorIcon size={14} />}
+                      pressed={centerCursor}
+                      onClick={() => setCenterCursor((v) => !v)}
+                    />
+                  )}
+                  <ToolbarButton
+                    label="Practice view (Esc to exit)"
+                    text="Focus view"
+                    icon={<I.ReadingIcon size={14} />}
+                    pressed={reading}
+                    onClick={() => {
+                      close()
+                      setEditing(false)
+                      setReading(true)
+                      setTimeout(() => viewportRef.current?.focus(), 0)
+                    }}
+                  />
+                  <ToolbarButton
+                    label={fullscreen ? 'Exit full screen' : 'Full screen'}
+                    text={fullscreen ? 'Exit full screen' : 'Full screen'}
+                    icon={
+                      fullscreen ? (
+                        <I.ExitFullscreenIcon size={14} />
+                      ) : (
+                        <I.FullscreenIcon size={14} />
+                      )
+                    }
+                    pressed={fullscreen}
+                    onClick={() => {
+                      close()
+                      toggleFullscreen()
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </WorkspacePopover>
+
+          <WorkspacePopover label="File" hideLabelBelow="md" icon={<I.FileIcon size={15} />}>
+            {(close) => (
+              <div className={tabStyles.popMenuList}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    exportAs('gp')
+                  }}
+                >
+                  <I.DownloadIcon size={14} /> Export Guitar Pro (.gp)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    exportAs('atex')
+                  }}
+                >
+                  <I.DownloadIcon size={14} /> Export AlphaTex (.atex)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    exportAs('mid')
+                  }}
+                >
+                  <I.DownloadIcon size={14} /> Export MIDI (.mid)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    setVideoOpen(true)
+                  }}
+                >
+                  <I.DownloadIcon size={14} /> Export Video…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    exportAs('print')
+                  }}
+                >
+                  <I.PageLayoutIcon size={14} /> Print / PDF…
+                </button>
+                <hr className={tabStyles.popDivider} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    openTex()
+                  }}
+                >
+                  <I.CodeIcon size={14} /> Edit as AlphaTex…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    setHelpOpen((v) => !v)
+                  }}
+                >
+                  <I.KeyboardIcon size={14} /> Keyboard shortcuts (?)
+                </button>
+              </div>
+            )}
+          </WorkspacePopover>
+
+          <ToolbarButton
+            label={fretOpen ? 'Hide fretboard / keypad' : 'Show fretboard / keypad'}
+            text="Input"
+            hideLabelBelow="md"
+            icon={<I.FretboardIcon size={15} />}
+            pressed={isNarrow && editing ? toolGroup === 'entry' && !dockCollapsed : fretOpen}
+            onClick={() => {
+              if (isNarrow && editing) {
+                setToolGroup('entry')
+                setDockCollapsed(false)
+              } else {
+                setFretOpen((v) => !v)
+              }
+            }}
           />
-          <Tool
-            icon={I.KeyboardIcon}
-            title="Keyboard shortcuts (?)"
-            on={helpOpen}
-            onClick={() => setHelpOpen((v) => !v)}
-          />
-          <Tool
-            icon={fullscreen ? I.ZoomOutIcon : I.ZoomInIcon}
-            title={fullscreen ? 'Exit full screen' : 'Full screen'}
-            on={fullscreen}
-            onClick={toggleFullscreen}
-            tag={fullscreen ? '⤡' : '⤢'}
+
+          <ToolbarButton
+            label={inspectorOpen ? 'Hide inspector panel' : 'Show inspector panel'}
+            text="Panel"
+            hideLabelBelow="sm"
+            icon={<I.SidebarIcon size={15} />}
+            pressed={inspectorOpen}
+            onClick={toggleInspector}
           />
         </div>
       </header>
@@ -2249,10 +2585,11 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
         </div>
       )}
 
-      {/* ── Body: toolbox rail · sheet · drawer ── */}
+      {/* ── Body: toolbox rail (desktop) · sheet · inspector ── */}
       <div className={tabStyles.body}>
-        {editing && !reading && score && (
+        {editing && !reading && score && !isNarrow && (
           <TabToolbox
+            layout="rail"
             score={score}
             cursor={cursor}
             apply={apply}
@@ -2366,7 +2703,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             </div>
           </div>
 
-          {editing && score && current?.percussion && (
+          {editing && !isNarrow && score && current?.percussion && (
             <details className={tabStyles.drawerBottom} open>
               <summary>Drum lane — bar {cursor.bar + 1}</summary>
               <DrumLane score={score} cursor={cursor} apply={apply} onCursor={setCursor} />
@@ -2382,7 +2719,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                 <span>Beat {cursor.beat + 1}</span>
                 {stringName && (
                   <span>
-                    String {staffTunings.length - cursor.string + 1} ({stringName})
+                    Str {staffTunings.length - cursor.string + 1} ({stringName})
                   </span>
                 )}
                 {beat && (
@@ -2394,7 +2731,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
                       : ''}
                   </span>
                 )}
-                <span>Voice {cursor.voice + 1}</span>
+                <span>V{cursor.voice + 1}</span>
                 {barNotes[readingBar] && (
                   <span className={tabStyles.statusNote} title="Your practice note on this bar">
                     <I.EditIcon size={11} /> {barNotes[readingBar]}
@@ -2432,7 +2769,7 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
           </div>
         </div>
 
-        {sidebarOpen && !reading && score && (
+        {inspectorOpen && !reading && score && (
           <TrackSidebar
             score={score}
             trackIndex={trackIndex}
@@ -2448,239 +2785,368 @@ export default function TabWorkspace({ item }: { item: MediaItem }) {
             onDuplicate={duplicateTrackAt}
             onRemove={removeTrackAt}
             onAdd={addTrackFrom}
-            onClose={() => setSidebarOpen(false)}
-            extra={
-              <>
-                <details className={tabStyles.sideSection} open={liveItem.tone?.scene != null}>
-                  <summary>
-                    <I.TracksIcon size={14} /> Tone
-                  </summary>
-                  <ToneLink
-                    tone={liveItem.tone ?? null}
-                    sections={toneSections}
-                    onChange={(tone) => void useMediaStore.getState().updateItem(item.id, { tone })}
-                  />
-                </details>
-                <PracticePanel
-                  runs={liveItem.runs ?? []}
-                  heatOn={heatOn}
-                  onHeat={setHeatOn}
-                  onLoopBars={(a, b) => loopBars(a, b)}
-                  routine={
-                    routine
-                      ? `${routine.sections[routine.idx]!.label} (${routine.idx + 1}/${routine.sections.length})`
-                      : null
-                  }
-                  routineDone={routineDone}
-                  onStartRoutine={startRoutine}
-                  onStopRoutine={stopRoutine}
-                  onClear={() => void useMediaStore.getState().updateItem(item.id, { runs: [] })}
-                />
-                <RecordingPanel
-                  recordings={recordings}
-                  sync={sync}
-                  source={source}
-                  tapBar={tapBar}
-                  barCount={score.masterBars.length}
-                  barOf={barAtTime}
-                  onPair={pairRecording}
-                  onSource={(s) => {
-                    void useMediaStore.getState().pause()
-                    setSource(s)
-                  }}
-                  onTapBar={setTapBar}
-                  guide={guide}
-                  guideTrack={tracks[trackIndex]?.name ?? `Track ${trackIndex + 1}`}
-                  onGuide={(v) => {
-                    void useMediaStore.getState().pause()
-                    setGuide(v)
-                  }}
-                  onTap={() => void tapSync()}
-                  onRemovePoint={(i) =>
-                    sync && saveSync({ ...sync, points: sync.points.filter((_, j) => j !== i) })
-                  }
-                  onClear={() => sync && saveSync({ ...sync, points: [] })}
-                  onNudge={(d) =>
-                    sync &&
-                    saveSync({
-                      ...sync,
-                      points: sync.points.map((pt) => ({
-                        ...pt,
-                        audio: Math.max(0, pt.audio + d),
-                      })),
-                    })
-                  }
-                />
-              </>
+            onClose={closeInspector}
+            asDrawer={isNarrow}
+            activeTab={inspectorTab}
+            onTabChange={setInspectorTab}
+            practiceBadge={
+              routine
+                ? '●'
+                : liveItem.runs?.length
+                  ? `${Math.round((liveItem.runs[liveItem.runs.length - 1]!.hits / Math.max(1, liveItem.runs[liveItem.runs.length - 1]!.notes)) * 100)}%`
+                  : undefined
+            }
+            syncBadge={sync ? `${sync.points.length}` : undefined}
+            toneBadge={liveItem.tone?.scene != null ? `S${liveItem.tone.scene + 1}` : undefined}
+            practiceTab={
+              <PracticePanel
+                bare
+                runs={liveItem.runs ?? []}
+                heatOn={heatOn}
+                onHeat={setHeatOn}
+                onLoopBars={(a, b) => loopBars(a, b)}
+                routine={
+                  routine
+                    ? `${routine.sections[routine.idx]!.label} (${routine.idx + 1}/${routine.sections.length})`
+                    : null
+                }
+                routineDone={routineDone}
+                onStartRoutine={startRoutine}
+                onStopRoutine={stopRoutine}
+                onClear={() => void useMediaStore.getState().updateItem(item.id, { runs: [] })}
+              />
+            }
+            syncTab={
+              <RecordingPanel
+                bare
+                recordings={recordings}
+                sync={sync}
+                source={source}
+                tapBar={tapBar}
+                barCount={score.masterBars.length}
+                barOf={barAtTime}
+                onPair={pairRecording}
+                onSource={(s) => {
+                  void useMediaStore.getState().pause()
+                  setSource(s)
+                }}
+                onTapBar={setTapBar}
+                guide={guide}
+                guideTrack={tracks[trackIndex]?.name ?? `Track ${trackIndex + 1}`}
+                onGuide={(v) => {
+                  void useMediaStore.getState().pause()
+                  setGuide(v)
+                }}
+                onTap={() => void tapSync()}
+                onRemovePoint={(i) =>
+                  sync && saveSync({ ...sync, points: sync.points.filter((_, j) => j !== i) })
+                }
+                onClear={() => sync && saveSync({ ...sync, points: [] })}
+                onNudge={(d) =>
+                  sync &&
+                  saveSync({
+                    ...sync,
+                    points: sync.points.map((pt) => ({
+                      ...pt,
+                      audio: Math.max(0, pt.audio + d),
+                    })),
+                  })
+                }
+              />
+            }
+            toneTab={
+              <ToneLink
+                tone={liveItem.tone ?? null}
+                sections={toneSections}
+                onChange={(tone) => void useMediaStore.getState().updateItem(item.id, { tone })}
+              />
             }
           />
         )}
       </div>
 
-      {/* ── Fretboard / piano input ── */}
-      {fretOpen && !reading && score && !current?.percussion && staffTunings.length > 0 && (
-        <FretboardPanel
-          tunings={staffTunings}
-          capo={fretCapo}
-          cursorString={cursor.string}
-          cursorNotes={cursorNotes}
-          playingNotes={playingNotes}
-          onFret={enterFret}
-          onPitch={enterPitch}
-          stepInput={stepInput}
-          onStepInput={chooseStepInput}
-          stepAdvance={stepAdvance}
-          onStepAdvance={setStepAdvance}
+      {/* ── Narrow-viewport bottom edit dock (Keypad / Fretboard / Piano + Tools) ── */}
+      {editing && !reading && score && isNarrow && (
+        <TabToolbox
+          layout="dock"
+          score={score}
+          cursor={cursor}
+          apply={apply}
+          group={toolGroup}
+          onGroup={setToolGroup}
+          collapsed={dockCollapsed}
+          onCollapsedChange={setDockCollapsed}
+          entryContent={inputPanelNode}
+          selectionSize={selection.length}
+          hasClip={hasClip}
+          canUndo={history.undo > 0}
+          canRedo={history.redo > 0}
+          onUndo={undo}
+          onRedo={redo}
+          onCopy={copySelection}
+          onPaste={pasteClipboard}
+          onLoopSelection={loopSelection}
+          targets={targets}
+          onShiftSelection={(n) => setAnchor((an) => (an ? { ...an, bar: an.bar + n } : an))}
+          barNote={barNotes[cursor.bar] ?? ''}
+          onBarNote={(text) => setBarNote(cursor.bar, text)}
+          onCursor={setCursor}
+          onVoice={(v) => setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))}
+          keepRhythm={keepRhythm}
+          onKeepRhythm={setKeepRhythm}
         />
       )}
 
-      {/* ── Transport ── */}
-      <footer className={tabStyles.footer}>
+      {/* ── Desktop or non-edit Fretboard / Piano input ── */}
+      {fretOpen && !reading && !(isNarrow && editing) && inputPanelNode}
+
+      {/* ── Transport & Mode Footer ── */}
+      <footer
+        ref={footerRef}
+        className={tabStyles.footer}
+        role="toolbar"
+        aria-label="Transport and practice controls"
+        {...footerRoving}
+      >
         <TransportButtons compact />
-        <div className={tabStyles.barGroup}>
-          <Tool
-            icon={I.LoopIcon}
-            title={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
-            on={loopOn}
+
+        {isPhone ? (
+          <ToolbarButton
+            label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
+            icon={<I.LoopIcon size={15} />}
+            pressed={loopOn}
             onClick={() => ms.toggleLoop()}
           />
-          <Tool
-            icon={I.LoopIcon}
-            title={`Loop bar ${cursor.bar + 1}`}
-            onClick={() => loopBars(cursor.bar, cursor.bar)}
-            tag="1"
+        ) : (
+          <ToolbarGroup label="Loop">
+            <ToolbarButton
+              label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
+              text="Loop"
+              icon={<I.LoopIcon size={15} />}
+              pressed={loopOn}
+              onClick={() => ms.toggleLoop()}
+            />
+            <ToolbarButton
+              label={`Loop bar ${cursor.bar + 1}`}
+              text="1 bar"
+              onClick={() => loopBars(cursor.bar, cursor.bar)}
+            />
+            <ToolbarButton
+              label="Loop 4 bars from cursor"
+              text="4 bars"
+              onClick={() => loopBars(cursor.bar, cursor.bar + 3)}
+            />
+            {selection.length > 1 && (
+              <ToolbarButton label="Loop selection" text="Sel" onClick={loopSelection} />
+            )}
+          </ToolbarGroup>
+        )}
+
+        {!isPhone && (
+          <>
+            <ToolbarGroup label="Speed">
+              <ToolbarButton
+                label="Slower (−5%)"
+                icon={<I.MinusIcon size={14} />}
+                onClick={() => ms.setSpeed(practice.speed - 0.05)}
+              />
+              <button
+                type="button"
+                className={tabStyles.zoomValue}
+                onClick={() => ms.setSpeed(1)}
+                title="Speed — click to reset to 100%"
+                aria-label={`Speed ${Math.round(practice.speed * 100)}%, reset to 100%`}
+              >
+                {Math.round(practice.speed * 100)}%
+              </button>
+              <ToolbarButton
+                label="Faster (+5%)"
+                icon={<I.PlusIcon size={14} />}
+                onClick={() => ms.setSpeed(practice.speed + 0.05)}
+              />
+            </ToolbarGroup>
+
+            {(mode === 'play' || mode === 'practice' || reading) && (
+              <ToolbarGroup label="Transpose">
+                <ToolbarButton
+                  label="Transpose down a semitone"
+                  icon={<I.FlatIcon size={14} />}
+                  onClick={() => ms.setSemitones(practice.semitones - 1)}
+                />
+                <button
+                  type="button"
+                  className={tabStyles.zoomValue}
+                  onClick={() => ms.setSemitones(0)}
+                  title="Transpose — click to reset"
+                  aria-label={`Transpose ${practice.semitones} semitones, reset`}
+                >
+                  {practice.semitones > 0 ? '+' : ''}
+                  {practice.semitones} st
+                </button>
+                <ToolbarButton
+                  label="Transpose up a semitone"
+                  icon={<I.SharpIcon size={14} />}
+                  onClick={() => ms.setSemitones(practice.semitones + 1)}
+                />
+              </ToolbarGroup>
+            )}
+          </>
+        )}
+
+        {(mode === 'practice' || reading) && (
+          <ToolbarGroup label="Practice modes">
+            <ToolbarButton
+              label={
+                listenOn
+                  ? 'Listen mode on (click to stop)'
+                  : 'Listen mode: score your playing against the tab'
+              }
+              text="Listen"
+              hideLabelBelow="sm"
+              icon={<I.EarIcon size={15} />}
+              pressed={listenOn}
+              onClick={() => {
+                if (!listenOn) setWaitOn(false)
+                setListenOn((v) => !v)
+              }}
+            />
+            <ToolbarButton
+              label={
+                waitOn
+                  ? 'Wait mode on (click to stop)'
+                  : 'Wait mode: wait for each note on your guitar'
+              }
+              text="Wait"
+              hideLabelBelow="sm"
+              icon={<I.WaitIcon size={15} />}
+              pressed={waitOn}
+              onClick={() => {
+                if (!waitOn) {
+                  void useMediaStore.getState().pause()
+                  setListenOn(false)
+                }
+                setWaitOn((v) => !v)
+              }}
+            />
+            {!isPhone && (
+              <ToolbarButton
+                label={
+                  countInBars
+                    ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''}`
+                    : 'Count-in off (click for 1 bar)'
+                }
+                text="Count"
+                hideLabelBelow="md"
+                badge={countInBars || undefined}
+                icon={<I.CountInIcon size={15} />}
+                pressed={countInBars > 0}
+                onClick={() =>
+                  useMediaStore
+                    .getState()
+                    .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
+                }
+              />
+            )}
+            {!reading && !isPhone && (
+              <ToolbarButton
+                label="Open practice report"
+                text="Report"
+                icon={<I.PracticeIcon size={14} />}
+                onClick={() => {
+                  setInspectorTab('practice')
+                  if (isNarrow) setNarrowInspectorOpen(true)
+                  else setSidebarOpen(true)
+                }}
+              />
+            )}
+          </ToolbarGroup>
+        )}
+
+        {mode === 'edit' && !reading && !isPhone && (
+          <ToolbarGroup label="Edit quick toggles">
+            <ToolbarButton
+              label="Keep rhythm"
+              text="Keep rhythm"
+              pressed={keepRhythm}
+              title="Split/merge rests to keep bar length when changing durations or pasting"
+              onClick={() => setKeepRhythm((v) => !v)}
+            />
+            {[0, 1].map((v) => (
+              <ToolbarButton
+                key={v}
+                label={`Voice ${v + 1}`}
+                text={`V${v + 1}`}
+                icon={<I.VoiceIcon size={14} />}
+                pressed={cursor.voice === v}
+                onClick={() => {
+                  const staff = score?.tracks[cursor.track]?.staves[cursor.staff]
+                  const voices = staff?.bars[cursor.bar]?.voices.length ?? 1
+                  if (score && v >= voices) apply((sc, s) => ops.ensureVoice(sc, cursor, v, s))
+                  if (score) setCursor((c) => edit.clampCursor(score, { ...c, voice: v, beat: 0 }))
+                }}
+              />
+            ))}
+          </ToolbarGroup>
+        )}
+
+        {(!isPhone || mode !== 'practice') && (
+          <ToolbarButton
+            label={metronome ? 'Metronome on' : 'Metronome off'}
+            text={isPhone ? undefined : 'Click'}
+            icon={<I.MetronomeIcon size={15} />}
+            pressed={metronome}
+            onClick={() => setMetronome((m) => !m)}
           />
-          <Tool
-            icon={I.LoopIcon}
-            title="Loop 4 bars from the cursor"
-            onClick={() => loopBars(cursor.bar, cursor.bar + 3)}
-            tag="4"
-          />
-          {selection.length > 1 && (
-            <Tool icon={I.LoopIcon} title="Loop the selection" onClick={loopSelection} tag="sel" />
-          )}
-        </div>
-        <div className={tabStyles.barGroup} title="Speed (pitch preserved)">
-          <Tool
-            icon={I.MinusIcon}
-            title="Slower (−5%)"
-            onClick={() => ms.setSpeed(practice.speed - 0.05)}
-          />
-          <button
-            type="button"
-            className={tabStyles.zoomValue}
-            onClick={() => ms.setSpeed(1)}
-            title="Speed — click to reset to 100%"
-          >
-            {Math.round(practice.speed * 100)}%
-          </button>
-          <Tool
-            icon={I.PlusIcon}
-            title="Faster (+5%)"
-            onClick={() => ms.setSpeed(practice.speed + 0.05)}
-          />
-        </div>
-        <div className={tabStyles.barGroup} title="Transpose playback">
-          <Tool
-            icon={I.FlatIcon}
-            title="Playback down a semitone"
-            onClick={() => ms.setSemitones(practice.semitones - 1)}
-          />
-          <button
-            type="button"
-            className={tabStyles.zoomValue}
-            onClick={() => ms.setSemitones(0)}
-            title="Transpose — click to reset"
-          >
-            {practice.semitones > 0 ? '+' : ''}
-            {practice.semitones} st
-          </button>
-          <Tool
-            icon={I.SharpIcon}
-            title="Playback up a semitone"
-            onClick={() => ms.setSemitones(practice.semitones + 1)}
-          />
-        </div>
-        <Tool
-          icon={I.CountInIcon}
-          title={
-            countInBars
-              ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''} (click to change)`
-              : 'Count-in off (click for 1 bar)'
-          }
-          tag={countInBars || undefined}
-          on={countInBars > 0}
-          onClick={() =>
-            useMediaStore
-              .getState()
-              .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
-          }
-        />
-        <Tool
-          icon={I.EarIcon}
-          title={
-            listenOn
-              ? 'Listen on: your playing is scored while the song plays (click to stop)'
-              : 'Listen: score your playing against the tab while the song plays'
-          }
-          tag={listenOn ? 'listen' : undefined}
-          on={listenOn}
-          onClick={() => {
-            if (!listenOn) setWaitOn(false)
-            setListenOn((v) => !v)
-          }}
-        />
-        <Tool
-          icon={I.WaitIcon}
-          title={
-            waitOn
-              ? 'Wait mode on: the tab waits for you to play each note (click to stop)'
-              : 'Wait mode: the tab waits until you play each note on your guitar'
-          }
-          tag={waitOn ? 'wait' : undefined}
-          on={waitOn}
-          onClick={() => {
-            if (!waitOn) {
-              void useMediaStore.getState().pause()
-              setListenOn(false)
-            }
-            setWaitOn((v) => !v)
-          }}
-        />
-        <Tool
-          icon={I.MetronomeIcon}
-          title="Metronome in playback"
-          on={metronome}
-          onClick={() => setMetronome((m) => !m)}
-        />
+        )}
+
         {renderProgress !== null && (
           <span className={tabStyles.footerNote}>
-            Rendering audio… {Math.round(renderProgress * 100)}%
+            Rendering… {Math.round(renderProgress * 100)}%
           </span>
         )}
+
         <span className={tabStyles.footerSpacer} />
-        {reading && (
-          <HardwareButton
-            size="small"
-            label="Exit practice view"
-            title="Back to the full workspace (Esc)"
-            icon={<I.ReadingIcon size={14} />}
-            active
+
+        {reading ? (
+          <ToolbarButton
+            label="Exit practice view (Esc)"
+            text="Exit focus"
+            icon={<I.ReadingIcon size={15} />}
+            pressed
+            variant="accent"
             onClick={() => setReading(false)}
           />
+        ) : (
+          !isPhone &&
+          mode === 'practice' && (
+            <ToolbarButton
+              label="Focus / practice view (Esc to exit)"
+              text="Focus view"
+              icon={<I.ReadingIcon size={15} />}
+              onClick={() => {
+                setEditing(false)
+                setReading(true)
+                setTimeout(() => viewportRef.current?.focus(), 0)
+              }}
+            />
+          )
         )}
-        <details
-          className={tabStyles.menu}
+
+        <WorkspacePopover
+          label="Practice controls"
+          triggerText={isPhone ? `${Math.round(practice.speed * 100)}%` : 'Practice'}
+          icon={<I.TempoIcon size={15} />}
+          badge={!isPhone && trainerEnabled ? 'ON' : undefined}
+          active={practiceOpen || trainerEnabled}
+          placement="top-end"
+          sheetOnMobile
+          width="wide"
           open={practiceOpen}
-          onToggle={(e) => setPracticeOpen((e.target as HTMLDetailsElement).open)}
+          onOpenChange={setPracticeOpen}
+          title="Speed presets, trainer, count-in, A-B loop, transpose & volume"
         >
-          <summary title="Practice: speed presets, trainer, A-B loop, volume">
-            <I.TempoIcon size={18} /> Practice
-          </summary>
-          <div className={tabStyles.practicePop}>
-            <PracticeControls />
-          </div>
-        </details>
+          <PracticeControls />
+        </WorkspacePopover>
       </footer>
 
       {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
@@ -2760,6 +3226,17 @@ const SHORTCUTS: [string, string][] = [
 ]
 
 function Shortcuts({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
     <div className={tabStyles.help} role="dialog" aria-label="Keyboard shortcuts" onClick={onClose}>
       <div className={tabStyles.helpCard} onClick={(e) => e.stopPropagation()}>
@@ -2767,7 +3244,11 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
           <strong>
             <I.KeyboardIcon size={16} /> Keyboard shortcuts
           </strong>
-          <Tool icon={I.MinusIcon} title="Close" onClick={onClose} />
+          <ToolbarButton
+            label="Close shortcuts"
+            icon={<I.CloseIcon size={14} />}
+            onClick={onClose}
+          />
         </div>
         <dl>
           {SHORTCUTS.map(([k, v]) => (

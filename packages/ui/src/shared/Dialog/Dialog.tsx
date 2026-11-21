@@ -19,6 +19,8 @@ export interface DialogProps {
   zIndex?: number
   maxHeight?: string
   ariaLabel?: string
+  /** Fill the viewport edge-to-edge on narrow mobile screens (<=720px). */
+  fullScreenMobile?: boolean
 }
 
 export function Dialog({
@@ -32,6 +34,7 @@ export function Dialog({
   zIndex,
   maxHeight,
   ariaLabel,
+  fullScreenMobile = false,
 }: DialogProps) {
   useEffect(() => {
     if (!open) return
@@ -70,13 +73,20 @@ export function Dialog({
 
   return (
     <div
-      className={styles.overlay}
+      className={[styles.overlay, fullScreenMobile ? styles.overlayFullMobile : '']
+        .filter(Boolean)
+        .join(' ')}
       style={style}
       onClick={onClose}
       role="dialog"
       aria-label={ariaLabel ?? title}
     >
-      <div className={[styles.dialog, className].join(' ')} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={[styles.dialog, fullScreenMobile ? styles.dialogFullMobile : '', className]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
           <span className={styles.title}>{title}</span>
           {headerContent && <div className={styles.headerExtra}>{headerContent}</div>}

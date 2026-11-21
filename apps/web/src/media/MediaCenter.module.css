@@ -31,6 +31,8 @@
 @media (max-width: var(--mw-md)) {
   .center {
     grid-template-columns: 1fr;
+    min-height: 0;
+    flex: 1;
   }
 }
 
@@ -41,15 +43,63 @@
   flex-direction: column;
   gap: var(--sp-2);
   min-width: 0;
+  min-height: 0;
   border-right: 1px solid var(--seam);
   padding-right: var(--sp-4);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--seam);
+  color: var(--ink-1);
+  font-size: 13px;
+}
+
+.drawerHeader strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: var(--overlay-bg);
+  display: flex;
+  justify-content: flex-start;
+}
+
+.drawerHostLeft {
+  height: 100%;
+  display: flex;
+}
+
+.sidebarDrawer {
+  width: min(320px, 88vw);
+  height: 100%;
+  max-height: none !important;
+  background: var(--panel);
+  border-right: 1px solid var(--seam-strong);
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
+  box-shadow: 12px 0 32px var(--shadow-deep);
 }
 
 @media (max-width: var(--mw-md)) {
   .sidebar {
     border-right: none;
     padding-right: 0;
-    max-height: 260px;
+    flex: 1;
+    max-height: none;
+  }
+
+  .mainBrowse {
+    display: none;
   }
 }
 
@@ -244,6 +294,42 @@
 .item:hover .itemDelete,
 .itemDelete:focus-visible {
   opacity: 1;
+}
+
+@media (pointer: coarse), (max-width: var(--mw-md)) {
+  .itemMain,
+  .itemStar {
+    min-height: 44px;
+  }
+
+  .itemStar {
+    min-width: 36px;
+    padding: 0 4px;
+  }
+
+  .itemDelete {
+    opacity: 0.78;
+    min-width: 38px;
+    min-height: 44px;
+    display: inline-grid;
+    place-items: center;
+  }
+}
+
+@media (pointer: coarse) {
+  .filter,
+  .chip,
+  .primaryBtn,
+  .search,
+  .step,
+  .tbtn {
+    min-height: 40px;
+  }
+
+  .tbtnPlay {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .renameInput {
@@ -714,6 +800,7 @@
 @media (max-width: var(--mw-sm)) {
   .dock {
     flex-wrap: wrap;
+    padding: var(--sp-2) var(--sp-3) max(var(--sp-2), env(safe-area-inset-bottom, 0px));
   }
 
   .dockSeek {
@@ -723,6 +810,30 @@
 
   .time {
     min-width: 0;
+    font-size: 11px;
+    margin-left: 2px;
+    white-space: nowrap;
+  }
+
+  .transportRow,
+  .transportButtons {
+    gap: 4px;
+  }
+
+  .tbtn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tbtnPlay {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: var(--mw-xs)) {
+  .timeDim {
+    display: none;
   }
 }
 
@@ -740,7 +851,7 @@
 .centerScore {
   flex: 1;
   min-height: 0;
-  grid-template-columns: 34px 240px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -749,11 +860,17 @@
 }
 
 .centerNoLib {
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.libToggle {
-  align-self: start;
+@media (max-width: var(--mw-md)) {
+  .dialogScore {
+    height: 100svh;
+  }
+
+  .dialogScore > div:last-child {
+    padding: 4px 6px 6px;
+  }
 }
 
 /* ── Backing-track view in full-size mode ─────────────────────────── */

@@ -1,12 +1,12 @@
 /**
- * The tab workspace's track sidebar (issue #206): song info, and one row per
- * track - show it in the score (several at once), select it for editing,
- * mute/solo for playback, volume and pan (saved with the file), and an
- * expandable section for instrument, tuning, capo, order, duplicate, delete.
+ * The tab workspace's right-hand tabbed inspector (issues #206 / #459):
+ * clean segmented tabs for Tracks, Practice, Sync, and Tone (instead of
+ * stacked nested <details> disclosures), plus slide-over drawer support
+ * on narrow/tablet viewports.
  */
 import type { model, Settings } from '@coderline/alphatab'
 import { HardwareButton, Select } from '@openaxe/ui'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import type { EditCursor } from './scoreEdit'
@@ -15,6 +15,8 @@ import * as I from './tabIcons'
 import t from './TabWorkspace.module.css'
 
 type Apply = (fn: (score: model.Score, s: Settings) => EditCursor | void) => void
+
+export type InspectorTab = 'tracks' | 'practice' | 'sync' | 'tone'
 
 export interface TrackSidebarProps {
   score: model.Score
@@ -32,8 +34,18 @@ export interface TrackSidebarProps {
   onRemove: (index: number) => void
   onAdd: (preset: ops.InstrumentPreset) => void
   onClose: () => void
-  /** Rendered under the song info (the recording sync panel). */
+  /** Legacy slot rendered under Song info when tabbed panels aren't passed. */
   extra?: ReactNode
+  activeTab?: InspectorTab
+  onTabChange?: (tab: InspectorTab) => void
+  practiceTab?: ReactNode
+  syncTab?: ReactNode
+  toneTab?: ReactNode
+  practiceBadge?: string | number | undefined
+  syncBadge?: string | number | undefined
+  toneBadge?: string | number | undefined
+  /** Render as a slide-over overlay drawer on narrow viewports. */
+  asDrawer?: boolean
 }
 
 function SongInfo({ score, apply }: { score: model.Score; apply: Apply }) {
@@ -154,13 +166,13 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
           aria-label={open ? 'Fewer options' : 'More options'}
           aria-expanded={open}
         >
-          ▾
+          <I.ChevronDownIcon size={14} />
         </button>
       </div>
 
       <div className={t.mix}>
         <label title={`Volume ${track.playbackInfo.volume}/16`}>
-          <I.MuteIcon size={12} />
+          <I.VolumeIcon size={13} />
           <input
             type="range"
             min={0}
@@ -300,22 +312,54 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
 
 export function TrackSidebar(p: TrackSidebarProps) {
   const [preset, setPreset] = useState(ops.INSTRUMENTS[0]!.id)
-  return (
-    <aside className={t.sidebar} aria-label="Tracks">
-      <div className={t.drawerHead}>
-        <strong>
-          <I.TracksIcon size={15} /> Tracks
-        </strong>
-        <HardwareButton
-          size="small"
-          label="Hide the track panel"
-          icon={<I.SidebarIcon size={14} />}
-          iconOnly
-          onClick={p.onClose}
-        />
-      </div>
-      <SongInfo score={p.score} apply={p.apply} />
-      {p.extra}
+  const [localTab, setLocalTab] = useState<InspectorTab>('tracks')
+  const hasTabs = !!(p.practiceTab || p.syncTab || p.toneTab)
+  const activeTab = p.activeTab ?? localTab
+  const setTab = (tab: InspectorTab) => {
+    if (p.onTabChange) p.onTabChange(tab)
+    else setLocalTab(tab)
+  }
+
+  const { asDrawer, onClose } = p
+  useEffect(() => {
+    if (!asDrawer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [asDrawer, onClose])
+
+  const tabs: {
+    id: InspectorTab
+    label: string
+    Icon: typeof I.TracksIcon
+    badge?: string | number | undefined
+  }[] = [
+    { id: 'tracks', label: 'Tracks', Icon: I.TracksIcon, badge: p.score.tracks.length },
+    ...(p.practiceTab
+      ? [
+          {
+            id: 'practice' as const,
+            label: 'Practice',
+            Icon: I.PracticeIcon,
+            badge: p.practiceBadge,
+          },
+        ]
+      : []),
+    ...(p.syncTab
+      ? [{ id: 'sync' as const, label: 'Sync', Icon: I.SyncIcon, badge: p.syncBadge }]
+      : []),
+    ...(p.toneTab
+      ? [{ id: 'tone' as const, label: 'Tone', Icon: I.ToneIcon, badge: p.toneBadge }]
+      : []),
+  ]
+
+  const tracksContent = (
+    <>
       <div className={t.trackList}>
         {p.score.tracks.map((_, i) => (
           <TrackRow key={`${i}:${p.score.tracks[i]!.name}`} {...p} index={i} />
@@ -340,10 +384,69 @@ export function TrackSidebar(p: TrackSidebarProps) {
           onClick={() => p.onAdd(ops.INSTRUMENTS.find((x) => x.id === preset)!)}
         />
       </div>
+      <SongInfo score={p.score} apply={p.apply} />
+      {p.extra}
       <p className={t.hint}>
         The eye shows a track in the score; several can be shown at once. Click a track's name to
         edit it.
       </p>
+    </>
+  )
+
+  const panel = (
+    <aside className={`${t.sidebar} ${p.asDrawer ? t.inspectorDrawer : ''}`} aria-label="Inspector">
+      <div className={t.drawerHead}>
+        <strong>
+          <I.SidebarIcon size={15} /> Inspector
+        </strong>
+        <button
+          type="button"
+          className={t.tbBtn}
+          aria-label="Close inspector"
+          title="Close inspector"
+          onClick={p.onClose}
+        >
+          <I.CloseIcon size={14} />
+        </button>
+      </div>
+
+      {hasTabs && (
+        <div className={t.inspectorTabs} role="tablist" aria-label="Inspector sections">
+          {tabs.map(({ id, label, Icon, badge }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === id}
+              className={`${t.inspectorTab} ${activeTab === id ? t.inspectorTabOn : ''}`}
+              onClick={() => setTab(id)}
+            >
+              <Icon size={14} />
+              <span>{label}</span>
+              {badge !== undefined && badge !== '' && <em className={t.tabBadge}>{badge}</em>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={t.inspectorBody} role={hasTabs ? 'tabpanel' : undefined}>
+        {(!hasTabs || activeTab === 'tracks') && tracksContent}
+        {hasTabs && activeTab === 'practice' && p.practiceTab}
+        {hasTabs && activeTab === 'sync' && p.syncTab}
+        {hasTabs && activeTab === 'tone' && p.toneTab}
+      </div>
     </aside>
   )
+
+  if (p.asDrawer) {
+    return (
+      <div className={t.drawerBackdrop} onClick={p.onClose} role="presentation">
+        <div className={t.drawerHostRight} onClick={(e) => e.stopPropagation()}>
+          {panel}
+        </div>
+      </div>
+    )
+  }
+
+  return panel
 }

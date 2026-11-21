@@ -1,13 +1,16 @@
 /**
- * Fretboard / piano input panel (issue #459): click a fret (or a piano key)
- * to write that note into the beat at the edit cursor; the notes of the
- * cursor's beat and the beat playing now light up on the neck and the keys.
+ * Fretboard / piano / keypad input panel (issue #459): switchable between
+ * numeric touch keypad (default on narrow/touch), interactive fretboard neck
+ * (with position jump shortcuts), and piano roll; cursor & playing notes
+ * light up live, and MIDI / guitar step entry remain directly accessible.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import { type FretPos, INLAYS, isBlackKey, noteName, openPitches, pitchAt } from './fretboard'
+import * as I from './tabIcons'
 import t from './TabWorkspace.module.css'
+import { TouchFretPad, type TouchFretPadProps } from './TouchFretPad'
 
 interface FretboardPanelProps {
   /** The staff's tuning as alphaTab lists it (highest string first). */
@@ -26,9 +29,16 @@ interface FretboardPanelProps {
   onStepInput: (mode: StepInput) => void
   stepAdvance: boolean
   onStepAdvance: (on: boolean) => void
+  /** Default view mode; narrow/touch defaults to 'keypad'. */
+  defaultMode?: InputMode | undefined
+  /** Props needed to render the TouchFretPad when mode === 'keypad'. */
+  touchPadProps?:
+    Omit<TouchFretPadProps, 'tunings' | 'capo' | 'cursorString' | 'cursorNotes'> | undefined
+  /** Hide the outer panel card frame when embedded inside the bottom dock. */
+  embedded?: boolean | undefined
 }
 
-type Mode = 'neck' | 'piano'
+export type InputMode = 'keypad' | 'neck' | 'piano'
 export type StepInput = 'off' | 'midi' | 'guitar'
 
 const has = (list: FretPos[], s: number, f: number) =>
@@ -47,38 +57,54 @@ export function FretboardPanel({
   onStepInput,
   stepAdvance,
   onStepAdvance,
+  defaultMode = 'neck',
+  touchPadProps,
+  embedded = false,
 }: FretboardPanelProps) {
-  const [mode, setMode] = useState<Mode>('neck')
+  const [mode, setMode] = useState<InputMode>(touchPadProps ? defaultMode : 'neck')
+  const neckScrollRef = useRef<HTMLDivElement | null>(null)
   const open = useMemo(() => openPitches(tunings), [tunings])
   const strings = tunings.length
   // Top row = highest string, as on the tab.
   const rows = Array.from({ length: strings }, (_, i) => strings - i)
+
+  const jumpFret = (fret: number) => {
+    const el = neckScrollRef.current
+    if (!el) return
+    const ratio = fret / Math.max(1, frets)
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
+    el.scrollTo({ left: Math.round(maxScroll * ratio), behavior: 'smooth' })
+  }
+
+  const modeOptions: { id: InputMode; label: string; Icon: typeof I.KeypadIcon }[] = [
+    ...(touchPadProps ? [{ id: 'keypad' as const, label: 'Keypad', Icon: I.KeypadIcon }] : []),
+    { id: 'neck', label: 'Fretboard', Icon: I.FretboardIcon },
+    { id: 'piano', label: 'Piano', Icon: I.PianoIcon },
+  ]
+
   return (
-    <div className={t.fretPanel}>
+    <div className={`${t.fretPanel} ${embedded ? t.fretPanelEmbedded : ''}`}>
       <div className={t.fretHead}>
-        <div className={t.segmented} role="radiogroup" aria-label="Input">
-          {(
-            [
-              ['neck', 'Fretboard'],
-              ['piano', 'Piano'],
-            ] as const
-          ).map(([m, label]) => (
+        <div className={t.segmented} role="radiogroup" aria-label="Input mode">
+          {modeOptions.map(({ id, label, Icon }) => (
             <button
-              key={m}
+              key={id}
               type="button"
               role="radio"
-              aria-checked={mode === m}
-              className={mode === m ? t.segOn : ''}
-              onClick={() => setMode(m)}
+              aria-checked={mode === id}
+              className={mode === id ? t.segOn : ''}
+              onClick={() => setMode(id)}
             >
-              {label}
+              <Icon size={13} />
+              <span>{label}</span>
             </button>
           ))}
         </div>
+
         <div className={t.segmented} role="radiogroup" aria-label="Play to enter notes">
           {(
             [
-              ['off', 'Click'],
+              ['off', 'Tap'],
               ['midi', 'MIDI'],
               ['guitar', 'Guitar'],
             ] as const
@@ -91,7 +117,7 @@ export function FretboardPanel({
               className={stepInput === m ? t.segOn : ''}
               title={
                 m === 'off'
-                  ? 'Enter notes by clicking'
+                  ? 'Enter notes by tapping'
                   : m === 'midi'
                     ? 'Play notes or chords on a MIDI keyboard or guitar to write them at the cursor'
                     : 'Play single notes on your guitar to write them at the cursor (when stopped)'
@@ -102,6 +128,7 @@ export function FretboardPanel({
             </button>
           ))}
         </div>
+
         {stepInput !== 'off' && (
           <label className={styles.check} title="Move to the next beat after each note or chord">
             <input
@@ -112,26 +139,67 @@ export function FretboardPanel({
             Advance
           </label>
         )}
-        <span className={styles.dim}>
+
+        {mode === 'neck' && (
+          <div className={t.neckJumps} role="group" aria-label="Fretboard position">
+            {(
+              [
+                ['0–5', 0],
+                ['5–12', 5],
+                ['12–24', 12],
+              ] as const
+            ).map(([label, f]) => (
+              <button
+                key={label}
+                type="button"
+                className={t.neckJumpBtn}
+                onClick={() => jumpFret(f)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <span className={t.fretHint}>
           {stepInput === 'midi'
             ? 'Listening to MIDI: play a note or chord'
             : stepInput === 'guitar'
-              ? 'Listening to your guitar: pick one note at a time'
-              : 'Click to add a note to the beat at the cursor · click it again to remove'}
+              ? 'Listening to guitar: pick one note at a time'
+              : mode === 'keypad'
+                ? 'Tap a string, then tap a fret'
+                : 'Tap to add or remove a note'}
           {capo > 0 && ` · capo ${capo}`}
         </span>
-        <span className={t.fretLegend}>
-          <i className={t.fretDotCursor} /> cursor beat <i className={t.fretDotPlay} /> playing
-        </span>
+
+        {mode !== 'keypad' && (
+          <span className={t.fretLegend}>
+            <i className={t.fretDotCursor} /> cursor <i className={t.fretDotPlay} /> playing
+          </span>
+        )}
       </div>
 
-      {mode === 'neck' ? (
-        <div className={t.neckScroll}>
+      {mode === 'keypad' && touchPadProps ? (
+        <TouchFretPad
+          tunings={tunings}
+          capo={capo}
+          cursorString={cursorString}
+          cursorNotes={cursorNotes}
+          {...touchPadProps}
+        />
+      ) : mode === 'neck' ? (
+        <div
+          ref={neckScrollRef}
+          className={t.neckScroll}
+          tabIndex={0}
+          role="region"
+          aria-label="Fretboard"
+        >
           <div
             className={t.neck}
-            style={{ gridTemplateColumns: `34px repeat(${frets}, minmax(30px, 1fr))` }}
+            style={{ gridTemplateColumns: `36px repeat(${frets}, minmax(30px, 1fr))` }}
             role="grid"
-            aria-label="Fretboard"
+            aria-label="Fretboard grid"
           >
             {rows.map((s) => (
               <div key={s} className={t.neckRow} role="row">
@@ -206,7 +274,7 @@ function Piano({
   const to = isBlackKey(high) ? high + 1 : high
   const keys = Array.from({ length: to - from + 1 }, (_, i) => from + i)
   const whites = keys.filter((k) => !isBlackKey(k))
-  const W = 22
+  const W = 28
   const key = (p: number, black: boolean, left?: number) => {
     const cur = cursor.includes(p)
     const play = playing.includes(p)
@@ -226,10 +294,10 @@ function Piano({
     )
   }
   return (
-    <div className={t.neckScroll}>
+    <div className={t.neckScroll} tabIndex={0} role="region" aria-label="Piano keyboard">
       <div className={t.piano} style={{ width: whites.length * W }} aria-label="Piano">
         {whites.map((p) => key(p, false))}
-        {keys.filter(isBlackKey).map((p) => key(p, true, whites.indexOf(p - 1) * W + W - 7))}
+        {keys.filter(isBlackKey).map((p) => key(p, true, whites.indexOf(p - 1) * W + W - 9))}
       </div>
     </div>
   )

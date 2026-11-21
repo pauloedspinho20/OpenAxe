@@ -73,7 +73,7 @@ export function ToneLink({ tone, sections, onChange }: ToneLinkProps) {
   return (
     <div className={t.recPanel}>
       <label className={t.textField} title="The rig scene (bank of 8 presets) this song uses">
-        <I.TracksIcon size={14} />
+        <I.ToneIcon size={14} />
         <Select
           value={scene ?? ''}
           onChange={(e) =>
