@@ -37,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 async function makeRig(): Promise<RigWorkletNode> {
@@ -57,7 +58,14 @@ async function makeRig(): Promise<RigWorkletNode> {
     audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
     sampleRate: 48000,
   } as unknown as AudioContext
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ arrayBuffer: async () => new ArrayBuffer(8) }))
+  // create() now stream-compiles the wasm on the main thread; these tests only
+  // assert message shape, so stub the compile rather than shipping real bytes
+  // (the real ABI handshake is covered by RigWorkletNode.integration.test.ts).
+  vi.spyOn(WebAssembly, 'compileStreaming').mockResolvedValue({} as WebAssembly.Module)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ clone: () => ({}), arrayBuffer: async () => new ArrayBuffer(8) }),
+  )
   const rig = await RigWorkletNode.create(fakeContext)
   return rig
 }

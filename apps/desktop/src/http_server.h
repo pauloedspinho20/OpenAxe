@@ -58,6 +58,9 @@ class HttpServer {
   void OAuthRedirectLoop();
 
   int listen_fd_ = -1;
+  // Our bound port, so each request's Host header can be checked against it
+  // (issue #415). Set by Start before the serve thread begins.
+  unsigned short port_ = 0;
   std::thread thread_;
   std::atomic<bool> running_{false};
   const unsigned short* oauth_target_port_ = nullptr;

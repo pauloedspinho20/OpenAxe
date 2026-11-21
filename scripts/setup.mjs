@@ -42,10 +42,20 @@ const ok = (text) => console.log(`  ok    ${text}`)
 const skip = (text) => console.log(`  skip  ${text}`)
 const warn = (text) => console.log(`  warn  ${text}`)
 
+/** On Windows pnpm/npm/npx are .cmd shims that CreateProcess can't launch
+ *  directly — they need the shell; cmake/git/node are real .exe and must not. */
+const needsShell = (command) =>
+  process.platform === 'win32' && /^(pnpm|npm|npx|yarn)(\.cmd)?$/i.test(command)
+
 /** Run a command, streaming its output. Returns false instead of throwing. */
 function run(command, args, options = {}) {
   console.log(`  $ ${command} ${args.join(' ')}`)
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', ...options })
+  const result = spawnSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    shell: needsShell(command),
+    ...options,
+  })
   return result.status === 0
 }
 
@@ -56,6 +66,7 @@ function capture(command, args) {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      shell: needsShell(command),
     }).trim()
   } catch {
     return ''

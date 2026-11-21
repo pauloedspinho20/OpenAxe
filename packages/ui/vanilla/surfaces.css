@@ -1,0 +1,81 @@
+/* ================================================================
+   Surfaces — canonical card + badge styles (vanilla layer)
+   Single source of truth for surfaces, consumed two ways:
+   - React: `src/shared/Card/Card.tsx` and `src/shared/Badge/Badge.tsx`
+     render these classes
+   - Vanilla: `apps/landing` imports `@openaxe/ui/vanilla/surfaces.css`
+   Keep selectors stable (`ox-card*`, `ox-badge*`) — visual changes
+   here intentionally affect both. Token-only: no hardcoded colors.
+   ================================================================ */
+
+.ox-card {
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-panel);
+}
+
+.ox-card-title {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-1);
+}
+
+.ox-card p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.ox-card ul {
+  margin: var(--sp-3) 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ox-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+
+.ox-badge-live {
+  color: var(--led-on);
+  background: color-mix(in srgb, var(--led-on) 14%, transparent);
+  border-color: color-mix(in srgb, var(--led-on) 40%, transparent);
+}
+
+.ox-badge-beta {
+  color: var(--led-warn);
+  background: color-mix(in srgb, var(--led-warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--led-warn) 40%, transparent);
+}
+
+.ox-badge-planned {
+  color: var(--ink-3);
+  background: var(--panel-raised);
+  border-color: var(--seam);
+}
+
+.ox-badge-accent {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}

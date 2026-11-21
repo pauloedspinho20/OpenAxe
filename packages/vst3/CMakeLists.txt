@@ -32,6 +32,32 @@ if(APPLE)
   endif()
 endif()
 
+# ── MSVC runtime library ───────────────────────────────────────────────────
+# Must be set BEFORE openaxe_core is added, so core and the plugin targets are
+# compiled against the SAME CRT. They were not, and the Windows VST3 link
+# failed on the v0.4.0 release:
+#
+#   openaxe_core.lib(linear.obj) : LNK2019: unresolved __imp_copysignf
+#   openaxe_core.lib(wav.obj)    : LNK2019: unresolved __imp_llround
+#   openaxe_core.lib(rotary.obj) : LNK2019: unresolved __imp_exp2f
+#   openaxe_core.lib(engine.obj) : LNK2019: unresolved __imp_lroundf
+#
+# plus ~40 LNK4217/LNK4286 warnings reporting symbols *defined in* the static
+# libucrt.lib but *imported* (__imp_) by openaxe_core. That is the signature of
+# core being built /MD (DLL CRT) while the plugin link pulls /MT (static). Most
+# math symbols resolved from the static lib anyway; these four exist only in
+# the import library, so they did not.
+#
+# Static is the right side to converge on for a plugin: the .vst3/.clap then
+# loads in any host without the user having the VC++ redistributable. It also
+# matches what the link was already pulling.
+#
+# Scoped to this build tree only — apps/desktop builds openaxe_core too and is
+# internally consistent on /MD, so it is deliberately left alone.
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "openaxe: static CRT so the plugin needs no VC++ redist" FORCE)
+endif()
+
 # ── Shared core (issue #14) ────────────────────────────────────────────────
 add_subdirectory(../../packages/core core)
 
@@ -49,11 +75,26 @@ add_subdirectory(../../packages/core core)
 # floating-pin lesson is not repeated.
 include(FetchContent)
 # Pinned to 2026-08-19 master (d54f69050f517e43b941d88c2a170f0a840b9ee4). Never float — see #74.
+# NO GIT_SHALLOW here, deliberately — it is a time bomb when GIT_TAG is a bare
+# commit SHA. For a SHA, FetchContent generates
+#   git clone --no-checkout --depth 1 --no-single-branch <url>
+#   git checkout <sha>
+# and `--depth 1 --no-single-branch` fetches exactly ONE commit from the tip of
+# every branch. This SHA was master's tip when it was pinned (2026-08-24), so
+# the checkout found it and the build was green for months. Upstream master has
+# since moved ~100 commits past it, the SHA is no longer the tip of any ref, and
+# the checkout now fails ("reference is not a tree"). Nothing in this repo
+# changed — only upstream did, which is why it surfaced on a cold _deps cache.
+# The other FetchContent deps here and in apps/desktop pin tag NAMES, which
+# `--no-single-branch` always fetches, so they keep GIT_SHALLOW safely.
+# Cost of dropping it is near zero, measured 2026-11-07: the full clone is
+# ~9s and a 73M .git, against 46M for the shallow one — only +27M, because
+# --no-single-branch snapshots all 173 upstream branches with no shared
+# history to delta against, while a full clone packs them together.
 FetchContent_Declare(
   iplug2
   GIT_REPOSITORY https://github.com/iPlug2/iPlug2
   GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4
-  GIT_SHALLOW TRUE
 )
 
 # Try to fetch iPlug2 source; if offline, keep configuring (smoke test still builds).

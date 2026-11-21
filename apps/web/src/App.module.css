@@ -83,15 +83,6 @@
   outline-offset: 2px;
 }
 
-.statusText {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 .errorBanner {
   margin: var(--sp-4) var(--sp-6) 0;
   padding: var(--sp-3) var(--sp-4);
@@ -126,63 +117,13 @@
     padding: 0 var(--sp-2);
   }
 
-  .brand,
-  .status {
+  .brand {
     margin: 0;
   }
 
   .main {
     padding: var(--sp-4);
   }
-}
-
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-3);
-  padding: var(--sp-4) var(--sp-6) var(--sp-6);
-  text-align: center;
-  font-size: 12px;
-  color: var(--ink-3);
-}
-
-.footerDot {
-  color: var(--ink-3);
-  opacity: 0.5;
-}
-
-.footerLink {
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: inherit;
-  color: var(--ink-3);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-.footerLink:hover {
-  color: var(--ink-1);
-}
-
-.footerVersion {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  text-transform: uppercase;
-}
-
-.connectionBadge {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--led-on);
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .updateBanner {

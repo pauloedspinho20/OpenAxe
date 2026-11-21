@@ -81,6 +81,11 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
   }
 
   /** The rig's single output - the worklet node carrying the core graph's OUT rail. Connect this to your output chain / AudioContext.destination. */
+  /** The backing-track player op channel (issue #205) - see RigWorkletNode.player. */
+  get playerPort(): Pick<RigWorkletNode, 'player'> {
+    return this.worklet
+  }
+
   get outputNode(): AudioNode {
     return this.worklet.node
   }

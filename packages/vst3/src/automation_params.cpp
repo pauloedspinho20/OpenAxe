@@ -69,48 +69,51 @@ void RegisterParams(iplug::Plugin& plugin) {
   // iPlug's Plugin is also an IEditorDelegate: GetParam / InitParamRange etc.
   // Declare exactly kTotalPluginParams stable ids, grouped per slot so hosts
   // show "Master" + "Slot 1" .. "Slot 15" sections rather than 302 flat rows.
+  //
+  // The constructor already allocates all kTotalPluginParams IParam objects
+  // (MakeConfig(HostParamCount(), kNumPresets) in plugin.cpp); this function
+  // *initialises* them. Before issue #390 the Init calls below were commented
+  // out, so every slot kept its uninitialised [0,1] default, the host saw
+  // unnamed parameters, and automation recorded nothing the core understood.
+  //
+  // Exact API is the pinned iPlug2 d54f690:
+  //   IParam::InitDouble(name, default, min, max, step, label, flags, group,
+  //                      shape, unit, displayFunc)   (IPlugParameter.h)
+  //   IPlugPluginBase::InitParamRange(start, end, countStart, nameFmt, ...)
+  // `label` is the unit suffix the host appends to the value; `group` is the
+  // automation-list section name. Both are strcpy'd by InitDouble, so the
+  // temporaries below are safe.
 
   // Master slot: fixed descriptors from the generated header. Their min/max
   // come straight from param_schema.json's masterSlot.params, normalized
-  // default already provided there.
+  // default already provided there. kMasterLabels is the host-facing name
+  // ("Master Level" / "Master Mute"); kMasterSymbols are the internal core
+  // symbols and stay out of the host UI.
+  const std::string master_group = GroupForSlot(kMasterSlotIndex);
   for (int e = 0; e < kMasterParamCount; ++e) {
     const int host_id = SlotEntryToHostId(kMasterSlotIndex, e);
     const double mn = kMasterMin[e];
     const double mx = kMasterMax[e];
     const double def = mn + kMasterDefaultNormalized[e] * (mx - mn);
-    // InitParamRange not needed for singletons; use per-param init.
-    // plugin.GetParam(host_id)->InitDouble(kMasterSymbols[e], ... ) is the
-    // per-param form, but the exact IParam API varies by iPlug version — the
-    // shape below matches IPlugPluginBase::InitParamRange which the SDK
-    // guarantees. We defer to a range call for block slots below; for the two
-    // masters spell them out individually so group/name/default are clear.
-    (void)host_id;
-    (void)mn;
-    (void)mx;
-    (void)def;
-    // The actual Init calls are compiled only when IPLUG_DSP is defined and
-    // the SDK's headers are present; keep this guarded so smoke builds stay
-    // clean.
-    // Example (uncomment when SDK resolution is verified against the pinned
-    // d54f690 tag):
-    //   plugin.GetParam(host_id)->InitDouble(kMasterSymbols[e], def, mn, mx, 0.01, kMasterLabels[e], 0, GroupForSlot(kMasterSlotIndex).c_str());
-    //   plugin.GetParam(host_id)->SetDisplayText(0, ""); // display hook uses DisplayForSlotEntry
+    plugin.GetParam(host_id)->InitDouble(kMasterLabels[e], def, mn, mx, 0.01,
+                                         kMasterUnits[e], 0, master_group.c_str());
   }
 
-  // Block slots: kParamsPerSlot generic entries per slot. Hosts see
-  // "Param 01" .. "Param 20" placeholders until a block is bound and the
-  // title-change notification fires (VST3 restartComponent, etc.). Ranges are
-  // seeded generically [0,1] here and resolved dynamically on each write/
-  // display — the host always sends normalized 0..1 anyway.
+  // Block slots: kParamsPerSlot generic entries per slot, one contiguous
+  // InitParamRange per slot. Hosts see "Param 1" .. "Param 20" placeholders
+  // until a block is bound and the title-change notification fires (VST3
+  // restartComponent, etc.). Ranges are seeded generically [0,1] here and
+  // resolved dynamically on each write — the host always sends normalized
+  // 0..1 anyway, so the lane's real units live in the block descriptor, not
+  // in the IParam. A per-entry display hook would need the live graph, which
+  // is not available at declaration time; the host's default readout is used
+  // instead.
   for (int slot = kFirstBlockSlot; slot < kSlotCount; ++slot) {
     const std::string group = GroupForSlot(slot);
     const int first = SlotParamId(slot, 0);
     const int last = SlotParamId(slot, kParamsPerSlot - 1);
-    (void)first;
-    (void)last;
-    (void)group;
-    // Example:
-    //   plugin.InitParamRange(first, last, 0, "Param %d", 0.0, 0.0, 1.0, 0.01, "", 0, group.c_str());
+    plugin.InitParamRange(first, last, 1, "Param %d", 0.0, 0.0, 1.0, 0.01, "", 0,
+                          group.c_str());
   }
 
   // Host -> core and Core -> host wiring beyond declaration:

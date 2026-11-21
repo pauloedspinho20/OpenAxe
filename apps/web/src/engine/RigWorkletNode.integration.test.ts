@@ -59,9 +59,11 @@ interface RigProc {
 }
 
 async function makeProcessor(): Promise<{ proc: RigProc; replies: any[] }> {
-  const wasmBytes = readFileSync(WASM_PATH)
+  // RigWorkletNode stream-compiles on the main thread and hands the worklet a
+  // compiled WebAssembly.Module (not raw bytes) - mirror that contract here.
+  const wasmModule = await WebAssembly.compile(readFileSync(WASM_PATH))
   await import(WORKLET_URL.href)
-  const proc = new capturedClass({ processorOptions: { wasmBytes } }) as RigProc
+  const proc = new capturedClass({ processorOptions: { wasmModule } }) as RigProc
   const replies: any[] = []
   proc.port.postMessage = (m: unknown) => replies.push(m)
   await proc.ready

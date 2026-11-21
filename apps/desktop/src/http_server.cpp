@@ -4,6 +4,7 @@
 #include "openaxe/storage_bridge.h"
 
 #include <array>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -126,7 +127,52 @@ void ServeAsset(int fd, const std::string& key) {
   SendAll(fd, body.data(), body.size());
 }
 
-void HandleClient(int fd, const std::string& root) {
+// True when `full` is genuinely inside `root`. A bare prefix compare has no
+// separator check, so root "…/ui" would also admit "…/ui-secrets/secret" — a
+// sibling directory whose name merely extends the root's. Same logic as the
+// plugin's server (packages/vst3/src/http_server.cpp), ported here because the
+// desktop shell never got the fix (issue #415).
+bool IsPathUnderRoot(const std::string& full, const std::string& root) {
+  const auto rel = std::filesystem::path(full).lexically_relative(std::filesystem::path(root));
+  if (rel.empty()) return false;
+  const std::string s = rel.generic_string();
+  if (s == "..") return false;
+  return !s.starts_with("../");
+}
+
+// True when a request's Host header names our own loopback listener. Anything
+// else is refused: without this check any web page the user visits can have its
+// browser fetch http://127.0.0.1:<port>/… and read whatever we serve (DNS
+// rebinding). Accepts 127.0.0.1/localhost/[::1] with our exact port, and
+// tolerates a missing Host only for HTTP/1.0-style clients, which browsers are
+// not. Mirrors the plugin's server (issue #415).
+bool IsAllowedHost(const std::string& request_head, unsigned short port) {
+  // Case-insensitive scan of the header block for "Host:".
+  std::string lower;
+  lower.reserve(request_head.size());
+  for (char c : request_head)
+    lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  size_t pos = lower.find("\r\nhost:");
+  size_t skip = 7;  // strlen("\r\nhost:")
+  if (pos == std::string::npos) {
+    pos = lower.find("\nhost:");
+    skip = 6;
+    if (pos == std::string::npos) return true;  // no Host header at all (HTTP/1.0)
+  }
+  size_t start = pos + skip;
+  while (start < lower.size() && (lower[start] == ' ' || lower[start] == '\t')) ++start;
+  size_t end = lower.find_first_of("\r\n", start);
+  if (end == std::string::npos) end = lower.size();
+  const std::string host = lower.substr(start, end - start);
+
+  const std::string p = ":" + std::to_string(port);
+  for (const char* h : {"127.0.0.1", "localhost", "[::1]"}) {
+    if (host == std::string(h) + p) return true;
+  }
+  return false;
+}
+
+void HandleClient(int fd, const std::string& root, unsigned short port) {
   std::array<char, kMaxRequest> buf;
 #ifdef _WIN32
   const int n = recv(fd, buf.data(), static_cast<int>(buf.size()) - 1, 0);
@@ -138,6 +184,13 @@ void HandleClient(int fd, const std::string& root) {
 
   // Parse the request target from the request line: "GET <path> HTTP/1.x".
   std::string req(buf.data());
+  // Reject cross-origin requests aimed at our loopback port before doing any
+  // filesystem work (issue #415) - a malicious page must not be able to read
+  // the UI tree or the /__asset/ library through a DNS-rebinding request.
+  if (!IsAllowedHost(req, port)) {
+    SendHeader(fd, 403, "Forbidden", 0, "text/plain");
+    return;
+  }
   const size_t sp1 = req.find(' ');
   if (req.compare(0, 4, "GET ") != 0 || sp1 == std::string::npos) {
     SendHeader(fd, 405, "Method Not Allowed", 0, "text/plain");
@@ -168,9 +221,10 @@ void HandleClient(int fd, const std::string& root) {
 
   // Resolve under root, rejecting traversal and non-files.
   std::error_code ec;
-  std::filesystem::path full = (std::filesystem::path(root) / path.substr(1)).lexically_normal();
   const std::filesystem::path root_norm = std::filesystem::path(root).lexically_normal();
-  if (!full.string().starts_with(root_norm.string()) || !std::filesystem::is_regular_file(full, ec)) {
+  const std::filesystem::path full = (root_norm / path.substr(1)).lexically_normal();
+  if (!IsPathUnderRoot(full.string(), root_norm.string()) ||
+      !std::filesystem::is_regular_file(full, ec)) {
     SendHeader(fd, 404, "Not Found", 0, "text/plain");
     return;
   }
@@ -318,6 +372,10 @@ bool HttpServer::Start(const std::string& root, unsigned short& out_port) {
   socklen_t len = sizeof(bound);
   getsockname(listen_fd_, reinterpret_cast<sockaddr*>(&bound), &len);
   out_port = ntohs(bound.sin_port);
+  // Kept so each request's Host header can be checked against the port we
+  // actually bound (issue #415) - Start's preferred-port walk means it is not
+  // always the first candidate.
+  port_ = out_port;
 
   running_.store(true, std::memory_order_release);
   thread_ = std::thread(&HttpServer::ServeLoop, this, root);
@@ -334,7 +392,7 @@ void HttpServer::ServeLoop(const std::string& root) {
     const int fd = accept(listen_fd_, nullptr, nullptr);
     if (fd < 0) break;
 #endif
-    HandleClient(fd, root);
+    HandleClient(fd, root, port_);
     CloseSocket(fd);
   }
 }

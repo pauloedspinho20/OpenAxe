@@ -62,3 +62,16 @@ storybook-static
 # Generated macOS iconset intermediate;
 # only the .icns/.ico/.png artifacts are committed.
 apps/desktop/packaging/openaxe.iconset
+
+# Local release credentials (R2 + Cloudflare — never commit).
+# In CI these are GitHub Actions secrets; this file is only for running
+# scripts/release-local.sh by hand. See docs/ci-github-actions.md.
+.env
+
+# Manual release staging (release-local.sh)
+dist-release/
+
+# alphaTab's Vite plugin copies its Bravura font and Sonivox SoundFont into
+# public/ on every dev/build start (Media Center tab viewer, issue #205).
+apps/web/public/font/
+apps/web/public/soundfont/

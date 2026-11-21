@@ -137,6 +137,48 @@ int main() {
     openaxe_graph_destroy(g);
   }
 
+  // ── Slim-size automation is Tier 2: the lock-free slot path must not forward it ──
+  // The amp family always exposes slim_size at index 2, and a slimmable capture
+  // makes it meaningful. Writing it through a slot must NOT call
+  // NamAmp::SetSlimSize synchronously (it may reallocate inside NAMCore), so a
+  // host automation thread can never race the audio thread's Process().
+  {
+    OpenAxeGraph* g = openaxe_graph_create();
+    const int32_t amp = openaxe_add_block(g, OPENAXE_BLOCK_AMP, 0, 0);
+    const std::string model_path =
+        std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/slimmable_wavenet.nam";
+    OPENAXE_EXPECT(openaxe_load_nam_model(g, amp, model_path.c_str()) == OPENAXE_LOAD_OK);
+
+    const char* symbol = nullptr;
+    float slim_min = 0.0f;
+    float slim_max = 1.0f;
+    OPENAXE_EXPECT(openaxe_block_param_info(g, amp, 2, nullptr, &symbol, &slim_min, &slim_max,
+                                            nullptr) == 1);
+    OPENAXE_EXPECT(std::strcmp(symbol, "slim_size") == 0);
+    OPENAXE_EXPECT(slim_max > slim_min);
+
+    OPENAXE_EXPECT(openaxe_bind_automation_slot(g, 3, amp) == 1);
+    const float slim_before = openaxe_get_param(g, amp, 2);
+
+    // Drive the lane across its whole range; none of it may reach the block
+    // because the slot path refuses (and would need a suspend handshake to
+    // apply) the Tier-2 slim-size write. The capture's default slim size is
+    // 1.0, so the 0.0 write is the one that would visibly differ if forwarded.
+    openaxe_set_automation_param_normalized(g, 3, 2, 0.0f);
+    OPENAXE_EXPECT(openaxe_get_param(g, amp, 2) == slim_before);
+    openaxe_set_automation_param_normalized(g, 3, 2, 1.0f);
+    OPENAXE_EXPECT(openaxe_get_param(g, amp, 2) == slim_before);
+
+    // Every other (Tier-1) entry on the same slot still writes through.
+    float tone_min = 0.0f;
+    float tone_max = 0.0f;
+    OPENAXE_EXPECT(openaxe_block_param_info(g, amp, 3, nullptr, nullptr, &tone_min, &tone_max,
+                                            nullptr) == 1);
+    openaxe_set_automation_param_normalized(g, 3, 3, 0.75f);
+    OPENAXE_EXPECT(FuzzyEq(openaxe_get_param(g, amp, 3), Denorm(0.75f, tone_min, tone_max)));
+    openaxe_graph_destroy(g);
+  }
+
   // ── THE REBIND TEST: value survives a kind swap without jumping ─────────
   {
     OpenAxeGraph* g = openaxe_graph_create();

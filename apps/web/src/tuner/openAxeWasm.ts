@@ -56,16 +56,26 @@ async function loadModule(): Promise<OpenAxeModule | null> {
       r.ok ? r.arrayBuffer() : Promise.reject(new Error(`wasm fetch ${r.status}`)),
     )
     // Dynamic import of the Emscripten glue — it is an ES module (EXPORT_ES6=1).
-    // `public/wasm-core/*` is copied verbatim and not processed by Vite, so
-    // a static `import('/wasm-core/...')` is rejected at transform time.
-    // Build the specifier at runtime so Vite's import-analysis can't
-    // statically resolve it; the browser then fetches the already-published
-    // file exactly as the worklet does via its relative import.
+    // `public/wasm-core/*` is copied verbatim and never processed by Vite, so a
+    // literal `import('/wasm-core/...')` is rejected by Vite's import-analysis
+    // (JS in `/public` can't be imported); the specifier is therefore assembled
+    // at runtime and marked @vite-ignore, letting the browser fetch the
+    // published file exactly as the worklet does via its relative import.
+    //
+    // The dev and production paths differ: under `vite dev` the import is
+    // rewritten to `__vite__injectQuery(url, 'import')`, and Vite's dev server
+    // rejects `/public` files requested with `?import` (500). The dev-only
+    // `Function` indirection sidesteps that rewrite. Production uses the plain
+    // import so it needs no eval — the web app's CSP is
+    // `script-src 'self' 'wasm-unsafe-eval'` (no `'unsafe-eval'`). The dev
+    // branch is never executed in a production build.
     const wasmJsUrl = '/wasm-core/' + 'openaxe_core.js'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const createModule = ((await Function('u', 'return import(u)')(wasmJsUrl)) as any).default as (
-      opts: Record<string, unknown>,
-    ) => Promise<OpenAxeModule>
+    type GlueModule = { default: (opts: Record<string, unknown>) => Promise<OpenAxeModule> }
+    // @ts-ignore - wasm-core is a generated Emscripten output, not a TS module
+    const glue: GlueModule = await (import.meta.env.DEV
+      ? Function('u', 'return import(u)')(wasmJsUrl)
+      : import(/* @vite-ignore */ wasmJsUrl))
+    const createModule = glue.default
     const mod = await createModule({
       instantiateWasm(
         imports: WebAssembly.Imports,

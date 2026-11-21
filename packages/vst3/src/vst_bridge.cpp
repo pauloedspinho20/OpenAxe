@@ -61,6 +61,21 @@ int32_t ResolveParamIndexJson(const json& key, int32_t core_id, OpenAxeGraph* gr
   return ResolveParamIndex(key.get<std::string>(), core_id, graph);
 }
 
+// Whether a resolved (block, index) is the Amp family's slim-size param. That
+// one is Tier 2: openaxe_set_param forwards it synchronously into NAMCore,
+// which may reallocate, so it must not run concurrently with ProcessBlock
+// (issue #211). Same symbol-based detection the desktop bridge and the host
+// automation path use, so all three agree on which param needs the handshake.
+bool IsSlimSizeParam(OpenAxeGraph* graph, int32_t core_id, int32_t index) {
+  if (!graph || core_id < 0 || index < 0) return false;
+  const char* symbol = nullptr;
+  if (openaxe_block_param_info(graph, core_id, index, nullptr, &symbol, nullptr, nullptr,
+                               nullptr) == 0) {
+    return false;
+  }
+  return symbol && std::strcmp(symbol, "slim_size") == 0;
+}
+
 bool IsValidSecretKey(const std::string& key) {
   if (key.empty()) return false;
   return std::all_of(key.begin(), key.end(), [](unsigned char c){ return std::isalnum(c) || c=='_' || c=='-'; });
@@ -344,7 +359,18 @@ std::string VstBridge::HandleDisconnect(const std::string& req){
 }
 std::string VstBridge::HandleSetParam(const std::string& req){
   try{ json args=ParseArgs(req); json o=args.empty()? json::object():args[0]; std::string jsId=o.value("blockId",""); json key=o.at("key"); float value=o.value("value",0.0f); int32_t coreId=-1; { std::lock_guard<std::mutex> lock(mutex_); auto it=blockIds_.find(jsId); if(it==blockIds_.end()) return JsonError("unknown block"); coreId=it->second; } int32_t idx=ResolveParamIndexJson(key, coreId, graph_); if(idx<0) return JsonError("unknown param");
-    openaxe_set_param(graph_, coreId, idx, value);
+    // The amp family's slim size is Tier 2: openaxe_set_param forwards it
+    // synchronously into NAMCore, which may reallocate, so it must not race an
+    // in-flight ProcessBlock. The editor runs on the UI thread, where the
+    // suspend handshake is safe; every other param stays on the lock-free path
+    // (suspending on every knob move would stall audio needlessly). This
+    // mirrors apps/desktop/src/bridge.cpp's `slim_size` special case.
+    if (IsSlimSizeParam(graph_, coreId, idx)) {
+      if (plugin_) plugin_->WithSuspend([&]{ openaxe_set_param(graph_, coreId, idx, value); });
+      else openaxe_set_param(graph_, coreId, idx, value);
+    } else {
+      openaxe_set_param(graph_, coreId, idx, value);
+    }
     // Tell the host the editor moved this, so a DAW can record automation from
     // our own UI and its parameter list tracks the knob (issue #300 E5).
     // Returns false when the block is not bound to one of the 15 automation

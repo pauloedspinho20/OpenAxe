@@ -21,7 +21,10 @@ beforeEach(() => {
   sent = []
   rafCb = null
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 async function makeRig(): Promise<RigWorkletNode> {
   const fakeNode = new FakeNode()
@@ -39,7 +42,13 @@ async function makeRig(): Promise<RigWorkletNode> {
     audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
     sampleRate: 48000,
   } as unknown as AudioContext
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ arrayBuffer: async () => new ArrayBuffer(8) }))
+  // create() stream-compiles the wasm on the main thread now; this test only
+  // asserts param coalescing, so stub the compile instead of loading real bytes.
+  vi.spyOn(WebAssembly, 'compileStreaming').mockResolvedValue({} as WebAssembly.Module)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ clone: () => ({}), arrayBuffer: async () => new ArrayBuffer(8) }),
+  )
   return RigWorkletNode.create(fakeContext)
 }
 

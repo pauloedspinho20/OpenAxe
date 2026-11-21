@@ -42,9 +42,16 @@ import { useMidiManager } from './state/midiManager'
 import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
 import { useUpdateCheck } from './hooks/useUpdateCheck'
+import { LANDING_DOWNLOAD_URL } from './config/landing'
 
 import { getShellKind } from '@/native/openaxe'
 import styles from './App.module.css'
+import { MediaCenter } from './media/MediaCenter'
+import { MediaDock } from './media/MediaDock'
+import { useMediaShortcuts } from './media/useMediaShortcuts'
+import { mediaCenterAvailable, useMediaTransport } from './media/useMediaTransport'
+import type { AnalyserLike } from './media/mediaStore'
+import { MediaGlyph } from './media/icons'
 
 function App() {
   const engine = useAudioEngine()
@@ -103,6 +110,17 @@ function App() {
   }, [])
 
   useSceneEngine(engine.rig, engine.context, engine.status)
+  // Media Center (issue #205): backing tracks + tabs, played by the core
+  // player next to the rig. Not offered inside the plugin.
+  const showMedia = mediaCenterAvailable()
+  const [mediaOpen, setMediaOpen] = useState(false)
+  useMediaTransport(
+    engine.rig,
+    engine.context,
+    isReady,
+    engine.tunerAnalyser as AnalyserLike | null,
+  )
+  useMediaShortcuts(mediaOpen)
   useSceneHotkeys()
   useUndoRedoHotkeys()
   useMidiEngine()
@@ -200,6 +218,16 @@ function App() {
           </div>
 
           <div className={styles.headerGroup}>
+            {showMedia && (
+              <HardwareButton
+                label="Media"
+                icon={<MediaGlyph size={16} />}
+                iconOnly
+                active={mediaOpen}
+                onClick={() => setMediaOpen(true)}
+                title="Media Center — backing tracks and tabs"
+              />
+            )}
             <HardwareButton
               label="Settings"
               icon={<SettingsIcon size={16} />}
@@ -236,11 +264,7 @@ function App() {
         <div className={styles.updateBanner} role="status" aria-live="polite">
           <span>New version {updateLatest.tag} available</span>
           <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <a
-              href="https://pauloedspinho20.github.io/OpenAxe/#download"
-              target="_blank"
-              rel="noopener"
-            >
+            <a href={LANDING_DOWNLOAD_URL} target="_blank" rel="noopener">
               Download
             </a>
             <button
@@ -305,6 +329,8 @@ function App() {
         onDone={() => setSetupStatus('done')}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {showMedia && <MediaCenter open={mediaOpen} onClose={() => setMediaOpen(false)} />}
+      {showMedia && !mediaOpen && <MediaDock onOpen={() => setMediaOpen(true)} />}
       <Toaster />
     </div>
   )

@@ -15,8 +15,22 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${OPENAXE_CI_IMAGE:-openaxe-ci-linux}"
 # CI runners are x86_64; on Apple Silicon this emulates (slower) but matches.
 PLATFORM="${OPENAXE_CI_PLATFORM:-linux/amd64}"
+# The seqlock stress test (vst3_monitor_tap) deadlocks under Rosetta emulation
+# (host arch != container arch). Real x86 Linux runs it normally.
+SKIP_MONITOR_TAP=0
+if [ "$(uname -m)" != "${PLATFORM#linux/}" ]; then SKIP_MONITOR_TAP=1; fi
 
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+# The image must match the platform the containers run on. If a local image
+# exists but for a different architecture (e.g. built natively on Apple
+# Silicon), rebuild it for the requested platform instead of pulling.
+if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  local_arch="$(docker image inspect "$IMAGE" --format '{{.Architecture}}')"
+  want_arch="${PLATFORM#linux/}"
+  if [ "$local_arch" != "$want_arch" ]; then
+    echo "Rebuilding $IMAGE: local arch $local_arch != platform $PLATFORM"
+    docker build --platform "$PLATFORM" -t "$IMAGE" "$ROOT/docker/ci-linux"
+  fi
+else
   echo "Building $IMAGE (first run only)…"
   docker build --platform "$PLATFORM" -t "$IMAGE" "$ROOT/docker/ci-linux"
 fi
@@ -40,4 +54,5 @@ docker run --rm --platform "$PLATFORM" \
   -v openaxe-ci-nm-ui:/work/packages/ui/node_modules \
   -e CCACHE_DIR=/root/.cache/ccache \
   -e PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright \
+  -e OPENAXE_CI_SKIP_MONITOR_TAP="$SKIP_MONITOR_TAP" \
   "$IMAGE" node scripts/ci-local.mjs "$@"

@@ -1,8 +1,8 @@
 {
   "name": "@openaxe/landing",
   "private": true,
-  "version": "0.2.8",
-  "description": "OpenAxe marketing landing — Vite + design tokens, GitHub Pages",
+  "version": "0.4.1",
+  "description": "OpenAxe marketing landing — Vite + design tokens, Cloudflare Pages",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,12 +11,18 @@
     "lint": "oxlint --config ../../.oxlintrc.json .",
     "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "fetch:releases": "node scripts/fetch-releases.mjs",
+    "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "prebuild": "node scripts/fetch-releases.mjs || true"
   },
   "dependencies": {
-    "@openaxe/ui": "workspace:*"
+    "@openaxe/ui": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
     "typescript": "~7.0.2",
     "vite": "^8.2.2"
   }

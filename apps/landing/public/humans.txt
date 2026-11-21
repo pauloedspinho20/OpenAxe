@@ -1,6 +1,3 @@
 /* the humans responsible */
-Site: OpenAxe — https://pauloedspinho20.github.io/OpenAxe/
-Repo: https://github.com/pauloedspinho20/OpenAxe
-License: GPLv3 — https://github.com/pauloedspinho20/OpenAxe/blob/dev/LICENSE
-Contact: https://github.com/pauloedspinho20/OpenAxe/issues
-Thanks: Dragonfly Reverb, NAMCore, DSPark, BYOD, Airwindows — see THIRD_PARTY_NOTICES.md
+Site: OpenAxe — https://openaxe-site.pages.dev/
+Thanks: the OpenAxe contributors

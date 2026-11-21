@@ -93,6 +93,13 @@ jobs:
       - name: Plugin automation map drift check
         run: node scripts/gen-param-schema.mjs --check --target=automation-map
 
+      # licenses/ is generated from the dependencies' own license files and is
+      # redistributed inside every binary, so a dependency bump that changes a
+      # license must not land silently. Sources that are not checked out or
+      # built are skipped, so this passes without submodules or a plugin build.
+      - name: Third-party licenses drift check
+        run: node scripts/sync-licenses.mjs --check
+
       - name: Effects config drift check
         # Covered by the plain --check above too; explicit so a stale
         # enabled_blocks.h / block_sources.cmake / generatedBlockConfig.ts
@@ -172,24 +179,40 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-1.62.1
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}-1.62.1
           restore-keys: |
             playwright-${{ runner.os }}-
 
+      # PRs need chromium only; main/dev run firefox + webkit too.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @openaxe/web exec playwright install --with-deps chromium
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm --filter @openaxe/web exec playwright install --with-deps chromium
+          else
+            pnpm --filter @openaxe/web exec playwright install --with-deps chromium firefox webkit
+          fi
 
       - name: Install Playwright system deps (cache hit)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter @openaxe/web exec playwright install-deps chromium
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm --filter @openaxe/web exec playwright install-deps chromium
+          else
+            pnpm --filter @openaxe/web exec playwright install-deps chromium firefox webkit
+          fi
 
-      - name: E2E test
-        # Full 4-project matrix (chromium/firefox/webkit + mobile) is ~3× slower.
-        # Keep PR feedback fast: only chromium (-mobile) here; main/dev retain
-        # full coverage via workflow_dispatch or a nightly job. Restore full
-        # `pnpm test:e2e` when cross-browser signal is worth the 25m install.
+      # PRs get fast chromium-only feedback; main/dev get the real
+      # cross-browser matrix. Previously the full run was deferred to "a
+      # nightly job" that was never created, so firefox/webkit regressions
+      # could reach main unseen — free runners make the honest version cheap.
+      - name: E2E test (PR — chromium only, fast feedback)
+        if: github.event_name == 'pull_request'
         run: pnpm --filter @openaxe/web exec playwright test --project=chromium-desktop --project=chromium-mobile
+
+      - name: E2E test (main/dev — full cross-browser matrix)
+        if: github.event_name != 'pull_request'
+        run: pnpm test:e2e
 
       - name: Build Storybook
         # Extended split (issue #379, plan option B): Storybook is a build

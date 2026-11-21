@@ -32,6 +32,7 @@
 // exactly like CI's `|| true` step.
 
 import { spawnSync } from 'node:child_process'
+import { existsSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -49,6 +50,7 @@ function parseArgs(argv) {
     withStorybook: false,
     e2eFull: false,
     skipSetup: false,
+    withSdks: false,
     help: false,
     error: false,
   }
@@ -57,6 +59,7 @@ function parseArgs(argv) {
     else if (arg === '--with-storybook') opts.withStorybook = true
     else if (arg === '--e2e-full') opts.e2eFull = true
     else if (arg === '--skip-setup') opts.skipSetup = true
+    else if (arg === '--with-sdks') opts.withSdks = true
     else if (arg === '--help' || arg === '-h') opts.help = true
     else if (arg.startsWith('--stage=')) {
       opts.stages ??= []
@@ -98,6 +101,8 @@ Flags:
   --stage=<a,b>     run only these stages (repeatable)
   --skip=<a,b>      skip these stages
   --skip-setup      skip the setup stage
+  --with-sdks       plugin stage: fetch the iPlug2 VST3/CLAP SDKs if missing
+                    (first release run on a fresh agent; no-op once present)
   --with-storybook  also run pnpm build-storybook (CI: push to main/dev only)
   --e2e-full        full Playwright matrix (default: chromium projects only, like CI PRs)
   --no-fail-fast    run all stages even after a failure
@@ -113,7 +118,16 @@ const results = []
 /** Run one command, streaming output. Returns true on success. */
 function run(command, args, options = {}) {
   console.log(`  $ ${command} ${args.join(' ')}`)
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', ...options })
+  // On Windows pnpm/npm are .cmd shims that CreateProcess can't launch
+  // directly — they need the shell. cmake/node/git are real .exe and must NOT
+  // go through it (quoting). (issue #427 Phase 4: Windows agent.)
+  const needsShell = process.platform === 'win32' && /^(pnpm|npm|npx|yarn)(\.cmd)?$/i.test(command)
+  const result = spawnSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    shell: needsShell,
+    ...options,
+  })
   return result.status === 0
 }
 
@@ -130,6 +144,67 @@ function ccacheHint() {
   console.log(
     '  hint  ccache not on PATH — building uncached (CI installs it; `brew install ccache` speeds up local rebuilds)',
   )
+}
+
+/** Fetch the iPlug2 format SDKs the VST3/CLAP targets need.
+ *
+ *  iPlug2 ships only SDK placeholders (Dependencies/IPlug/VST3_SDK holds a
+ *  README), so CMake creates no VST3/CLAP targets until its download scripts
+ *  have run. The "VST: Export" VSCode task does this on first run; the release
+ *  legs call us with --with-sdks so a fresh agent does the same. Idempotent:
+ *  it only runs the script whose sentinel header is missing, and it returns
+ *  true when it fetched anything (the caller must reconfigure so the newly
+ *  present SDKs create their targets). A failed/offline fetch is non-fatal —
+ *  that format's target is simply left out, exactly as before. */
+function fetchIPlugSdks() {
+  const deps = join(root, 'packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug')
+  if (!existsSync(deps)) {
+    console.log(
+      '  warn  iPlug2 source not found — skipping SDK fetch (configure did not fetch iPlug2)',
+    )
+    return false
+  }
+  const required = [
+    ['VST3', 'VST3_SDK/pluginterfaces/vst/ivstaudioprocessor.h', 'download-vst3-sdk.sh'],
+    ['CLAP', 'CLAP_SDK/include/clap/clap.h', 'download-clap-sdks.sh'],
+  ]
+  const missing = required.filter(([, sentinel]) => !existsSync(join(deps, sentinel)))
+  if (missing.length === 0) return false
+  const bash = findBash()
+  if (!bash) {
+    console.log(
+      `  warn  bash not found — cannot fetch ${missing.map(([name]) => name).join('/')} SDK(s); those targets will be skipped`,
+    )
+    return false
+  }
+  for (const [name, , script] of missing) {
+    console.log(`  fetching iPlug2 ${name} SDK (first run only) — this can take a few minutes`)
+    // Non-fatal: an offline/failed fetch leaves that format's target out.
+    run(bash, [script], { cwd: deps })
+  }
+  return true
+}
+
+/** iPlug2's SDK fetchers are bash scripts. Git for Windows ships bash but its
+ *  bin dir is not always on PATH for services/scheduled runs, so probe the
+ *  usual Git install locations when plain `bash` is not resolvable. */
+function findBash() {
+  const candidates =
+    process.platform === 'win32'
+      ? [
+          'bash',
+          'C:/Program Files/Git/bin/bash.exe',
+          'C:/Program Files/Git/usr/bin/bash.exe',
+          process.env.LOCALAPPDATA
+            ? join(process.env.LOCALAPPDATA, 'Programs/Git/bin/bash.exe')
+            : '',
+        ]
+      : ['bash', '/bin/bash']
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    if (spawnSync(candidate, ['--version'], { stdio: 'ignore' }).status === 0) return candidate
+  }
+  return null
 }
 
 function stage(name, title, fn) {
@@ -210,7 +285,8 @@ function main() {
         // The setup stage leaves a Debug/default-generator tree here for
         // local dev; this stage fully specifies its own flags, so start
         // clean instead of inheriting a clashing generator or build type.
-        run('rm', ['-rf', 'packages/core/build'])
+        // (fs, not `rm` — Windows has no rm(1).)
+        rmSync(join(root, 'packages/core/build'), { recursive: true, force: true })
         const probe = spawnSync('ninja', ['--version'], { stdio: 'ignore' })
         const generator = probe.status === 0 ? ['-G', 'Ninja'] : []
         let launcher = ['-DCMAKE_CXX_COMPILER_LAUNCHER=']
@@ -219,6 +295,8 @@ function main() {
         } else {
           ccacheHint()
         }
+        // --config/-C are no-ops on single-config generators (Ninja/Make) and
+        // required on Windows' multi-config VS generator, so pass them always.
         return (
           run('cmake', [
             '-S',
@@ -230,8 +308,15 @@ function main() {
             '-DOPENAXE_BUILD_TESTS=ON',
             ...launcher,
           ]) &&
-          run('cmake', ['--build', 'packages/core/build', '-j']) &&
-          run('ctest', ['--test-dir', 'packages/core/build', '--output-on-failure', '-j2'])
+          run('cmake', ['--build', 'packages/core/build', '--config', 'Release', '-j']) &&
+          run('ctest', [
+            '--test-dir',
+            'packages/core/build',
+            '-C',
+            'Release',
+            '--output-on-failure',
+            '-j2',
+          ])
         )
       } catch {
         return false
@@ -263,7 +348,7 @@ function main() {
       // Same tree is mounted at /work under Docker — drop a cache written
       // by the other environment instead of failing on the path mismatch.
       cleanStaleCmakeCache(join(root, 'packages/vst3'), join(root, 'packages/vst3/build'))
-      const configured = run('cmake', [
+      const configureArgs = [
         '-S',
         'packages/vst3',
         '-B',
@@ -271,22 +356,31 @@ function main() {
         '-DCMAKE_BUILD_TYPE=Release',
         '-DOPENAXE_BUILD_TESTS=OFF',
         ...launchers,
-      ])
-      if (!configured) return false
+      ]
+      if (!run('cmake', configureArgs)) return false
+      // The configure above is what fetches iPlug2; its format SDKs are a
+      // separate download, so with --with-sdks fetch them and reconfigure
+      // once. Only release legs pass this — a plain PR leg stays SDK-free.
+      if (opts.withSdks && fetchIPlugSdks() && !run('cmake', configureArgs)) return false
       if (!run('cmake', ['--build', 'packages/vst3/build', '--config', 'Release', '-j']))
         return false
-      if (
-        !run('ctest', [
-          '--test-dir',
-          'packages/vst3/build',
-          '-C',
-          'Release',
-          '--output-on-failure',
-          '-LE',
-          'validator',
-        ])
-      )
-        return false
+      const ctestArgs = [
+        '--test-dir',
+        'packages/vst3/build',
+        '-C',
+        'Release',
+        '--output-on-failure',
+        '-LE',
+        'validator',
+      ]
+      // The seqlock stress (monitor_tap case 6) deadlocks under Rosetta
+      // (emulated amd64 Linux on Apple Silicon) — skip it there; it still runs
+      // natively on macOS and on real x86 Linux. Set by the Linux docker
+      // runners when the host arch differs from the container arch.
+      if (process.env.OPENAXE_CI_SKIP_MONITOR_TAP === '1') {
+        ctestArgs.push('-E', 'vst3_monitor_tap')
+      }
+      if (!run('ctest', ctestArgs)) return false
       if (
         !run('ctest', [
           '--test-dir',

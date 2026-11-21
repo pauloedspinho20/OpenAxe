@@ -256,6 +256,9 @@ export interface OpenAxeBridge {
   loadDIWav(args: { wavBase64: string }): Promise<OpenAxeOk & { frames?: number }>
   playDI(args: { loop?: boolean }): Promise<OpenAxeOk>
   stopDI(): Promise<OpenAxeOk>
+  /** Backing-track player (issue #205), dispatched on `op` - see
+   * StudioBridge::HandlePlayer. Desktop only; the plugin doesn't bind it. */
+  player(args: { op: string } & Record<string, unknown>): Promise<OpenAxePlayerReply>
 
   meters(): Promise<Array<{ id: string; value: number; input?: number }>>
   cpuLoad(): Promise<number>
@@ -278,8 +281,9 @@ export interface OpenAxeBridge {
    * "never connected" case, not a failure (still `ok: true`). */
   secureLoad(args: { key: string }): Promise<OpenAxeOk & { value: string | null }>
   /** No-op success if there was nothing stored under `key`. */
-  /** Route the host's input channels into the rig (plugin only; a no-op
-   * elsewhere). Mirrors the web's channel modes — see input_routing.h. */
+  /** Route the host's input channels into the rig. Honored by the plugin
+   * and desktop shells, a no-op elsewhere. Mirrors the web's channel modes
+   * — see input_routing.h (plugin) and apps/desktop/src/audio.h (desktop). */
   setInputChannel(args: { mode: 'stereo' | 'l' | 'r' | 'sum' }): Promise<OpenAxeOk>
 
   secureDelete(args: { key: string }): Promise<OpenAxeOk>
@@ -312,6 +316,18 @@ export interface OpenAxeBridge {
 }
 
 type Args = Record<string, unknown> | undefined
+
+export interface OpenAxePlayerReply {
+  ok: boolean
+  error?: string
+  position?: number
+  length?: number
+  sampleRate?: number
+  playing?: boolean
+  meter?: number
+  counting?: boolean
+  written?: number
+}
 
 class NativeBridge implements OpenAxeBridge {
   private readonly w: Record<string, unknown>
@@ -450,6 +466,9 @@ class NativeBridge implements OpenAxeBridge {
   }
   stopDI() {
     return this.call<OpenAxeOk>('stopDI')
+  }
+  player(args: { op: string } & Record<string, unknown>) {
+    return this.call<OpenAxePlayerReply>('player', args)
   }
   meters() {
     return this.call<Array<{ id: string; value: number }>>('meters')

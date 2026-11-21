@@ -395,7 +395,13 @@ class AudioEngine {
   //
   // Bind/unbind/list are control-thread calls (they mutate slot bookkeeping,
   // which Process() never touches); param get/set are lock-free like their
-  // (block, index) counterparts and safe from host parameter threads.
+  // (block, index) counterparts and safe from host parameter threads - with the
+  // same one exception SetParam documents: a write whose entry resolves to an
+  // Amp-family block's slim size is Tier 2 (it reallocates inside NAMCore) and
+  // is deliberately NOT forwarded by this lock-free path. A host automating
+  // that entry must resolve the bound block and route openaxe_set_param on it
+  // through its suspend handshake instead (the VST3 layer does - see
+  // packages/vst3/src/automation_params.cpp).
 
   // Binds `slot` to `block` and returns true. Rejects the master slot
   // (permanently the bus), out-of-range slots, and unknown blocks.

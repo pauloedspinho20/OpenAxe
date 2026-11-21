@@ -22,7 +22,7 @@ pnpm + Turborepo workspace (`apps/*`, `packages/*`):
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/core`            | The C++20 DSP/graph engine — the single source of truth for signal routing, params, model/IR loading. Its own CMake/CTest build, separate from the JS toolchain (see below).            |
 | `apps/web`                 | The live product: Vite + React SPA, AudioWorklet + WASM (built from `packages/core`, committed under `apps/web/public/wasm-core/`).                                                     |
-| `apps/desktop`             | Native shell (C++ + `webview.h` + JUCE `audio_devices`) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                              |
+| `apps/desktop`             | Native shell (C++ + `webview.h` + miniaudio) reusing `apps/web`'s built UI, calling `packages/core` directly (no WASM, no FFI).                                                         |
 | `packages/ui`              | Shared React component/design-system library, consumed by `apps/web` and the desktop webview. Has its own Vitest config (`packages/ui/vite.config.ts`).                                 |
 | `packages/vst3`            | VST3 + standalone plugin (iPlug2 + `packages/core`, `WHOLE_ARCHIVE`) — scaffold builds and scans (issue #125); CLAP/AU later.                                                           |
 | `apps/ios`, `apps/android` | Scaffolding only (a README each) for planned targets — issues [#17](https://github.com/pauloedspinho20/OpenAxe/issues/17), [#16](https://github.com/pauloedspinho20/OpenAxe/issues/16). |
@@ -68,7 +68,7 @@ cmake --build packages/vst3/build && ctest --test-dir packages/vst3/build --outp
 cmake -S packages/vst3 -B packages/vst3/build -DOPENAXE_VST3_ENABLE_RTSAN=ON
 ```
 
-`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop** and **Full check** flows.
+`VSCode tasks` (`.vscode/tasks.json`) mirror all of the above — use **Run Task** (`⇧⌘B` / `Ctrl+Shift+B`) for one-click **VST: Configure / Build / Test / Full check**, **VST: Standalone**, **VST: Install bundle**, **VST: Generate design tokens** and **VST: TSan/RTSan/Validators**. The same tasks also appear for **C++**, **Desktop**, **Landing** (**Landing: Dev server / Build / Preview / Fetch releases**) and **Full check** flows.
 
 `packages/core`'s WASM build is a separate, manual step
 (`bash scripts/build-core-wasm.sh`, needs the Emscripten SDK on `PATH`) that
@@ -78,14 +78,16 @@ run it and confirm the diff (or lack of one) whenever you change
 web app calls (see `scripts/check-wasm-exports.mjs`, which catches the latter
 in CI without needing a rebuild).
 
-**GitHub Actions is enabled** — `ci.yml` (lint/format/build/test/e2e + 5 drift checks + Storybook), `desktop.yml` (3-OS), `plugin.yml` (tags + PR) and `release.yml` run on every push/PR to `main`/`dev` and on `v*` tags. `plugin.yml` stays `workflow_dispatch` + `v*` + `pull_request` (cost-heaviest matrix — confirm with maintainer before broadening triggers). Treat “CI is green” as required for merge (see branch protection in `CONTRIBUTING.md`).
+**CI/CD runs entirely on GitHub Actions** (`.github/workflows/`; see `docs/ci-github-actions.md`). `ci.yml` is the merge gate — drift guards, lint, format, typecheck, build, unit, e2e and the `packages/core` C++ suite. `desktop.yml` and `plugin.yml` build the native shell and the plugin on macOS, Windows and Linux. A push to `main` runs `auto-release.yml` (bump `VERSION` + `CHANGELOG`, commit + tag `vX.Y.Z`, back-merge `main → dev`), and the tag drives `release.yml` → Cloudflare R2 + `manifest.json` + landing, mirrored onto the GitHub Release.
+
+This replaces the self-hosted Woodpecker split from issues #427/#441: that existed because Actions minutes were billed on a private repo at macOS ×10, and standard runners are free and unmetered on public repos. Every workflow now runs the full 3-OS matrix on every event — the `full-ci` label and the Linux-only PR legs are gone.
 
 ## Drift-guard scripts
 
 Several values are duplicated across languages by design (WASM/native ABI,
 web/core param schemas) and are checked, not hand-verified — run these
 directly if you touch anything they might affect, don't just trust that CI
-will catch it (CI is currently off, see above):
+will catch it:
 
 - `node scripts/gen-param-schema.mjs --check` — web `paramSchema.ts` /
   `packages/core/param_schema.json` symbol/range agreement (issue #51), plus
@@ -98,6 +100,7 @@ will catch it (CI is currently off, see above):
 - `node scripts/sync-version.mjs --check` — every `package.json`'s
   `"version"` matches the root `VERSION` file (issue #54)
 - `node packages/ui/scripts/generate-tokens.mjs --check` — `packages/ui/tokens/design-tokens.json` → `packages/ui/tokens/{colors,spacing,typography,shadows}.css` and optionally `packages/vst3/generated/tokens.h` (`--target=cpp`; issue #131)
+- `node scripts/sync-licenses.mjs --check` — `licenses/` matches the dependencies' own license files. That directory is redistributed inside every binary (GPLv3 §4 plus the permissive deps' own notice requirements), so a dependency bump must not change a license silently. See `THIRD_PARTY_NOTICES.md`.
 
 Each has a `--fix`/write mode (`sync-version.mjs`'s is the no-flag default,
 not `--fix`); a fix still requires re-running the relevant build (wasm
@@ -105,14 +108,20 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Env vars
 
-| Var                     | Where                             | Purpose                                                                                                                                                                                           |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                     |
-| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged. |
-| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                |
+| Var                     | Where                             | Purpose                                                                                                                                                                                                                            |
+| ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_PUBLISHABLE_KEY`  | `apps/web/src/tone3000/config.ts` | Tone3000 API client key, build-time (Vite `import.meta.env`).                                                                                                                                                                      |
+| `VITE_LANDING_URL`      | `apps/web/src/config/landing.ts`  | Landing/site URL for in-app download links + the update-check manifest. Optional; defaults to `https://openaxe-site.pages.dev`.                                                                                                    |
+| `OPENAXE_UI_URL`        | `apps/desktop/src/main.cpp`       | Points the desktop webview at a dev server (`pnpm dev:desktop:attach`) instead of the bundled UI. Only loopback `http(s)` origins are accepted (issue #71) — anything else is refused and logged.                                  |
+| `OPENAXE_DESKTOP_DEBUG` | `apps/desktop/src/debug_log.cpp`  | `=1` enables the webview inspector and verbose logging on desktop.                                                                                                                                                                 |
+| `CLOUDFLARE_API_TOKEN`  | `scripts/release-local.sh`        | Cloudflare Pages deploy token (`Account → Cloudflare Pages → Edit`) for the landing step of a hand-run release. Read from the env or a gitignored `.env` at the repo root; in CI it is the GitHub Actions secret of the same name. |
 
 ## Key decisions worth knowing before you edit
 
+- **Third-party bugs and workarounds are documented** in
+  [docs/known-issues.md](./docs/known-issues.md) (alphaTab, browsers, WASM in
+  AudioWorklets, tooling). Read it before removing anything that looks like
+  an unnecessary workaround, and add an entry when you work around a new one.
 - **Product vs. Neural Amp Modeler naming (`openaxe_*` vs. `NamAmp`)** — only product-prefix compounds were renamed in #311 (`openaxe_*`/`OpenAxe*`/`OPENAXE_*`, plus `OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE`/`OPENAXE_DESKTOP_ENABLE_TSAN`). Genuine Neural Amp Modeler names keep their spelling: `NamAmp`, `NamLoadError`, `NamAmpNode`, `NamModelInfo`, `NAM_MODEL_KINDS`, `NAM_CORE_DIR`/`NAM_CORE_SOURCES_*`, `NAM_SAMPLE_FLOAT`, `nam_amp.{h,cpp}`, `nam_amp_test`, `NamModelBlockKind`, `.nam`, `third_party/nam-core`, etc. — use anchored patterns (`openaxe_`, `OPENAXE_`, `OpenAxe`, `openAxe`), never bare `nam`. The WASM artifacts are still baked and require an atomic `api.h` + `EXPORTED_FUNCTIONS` + `check-wasm-exports` + rebuild for any future ABI rename.
 - **Persisted names are now `openaxe` (with migration)** — IndexedDB `openaxe`, localStorage `openaxe:*`, desktop keychain service `OpenAxe`, and on-disk `openaxe` dir. First launch after #311 copies any existing `nam-web-studio` data into the new names (IndexedDB store-by-store copy with verified counts then delete old DB; localStorage copy-on-read; keychain/disk copy-then-delete). Migration is idempotent, copy-then-delete, and falls back to the old name on failure so no user data is orphaned if interrupted.
 - **One C++ engine, four shells** (see ARCHITECTURE.md) — if you're adding
@@ -125,11 +134,12 @@ rebuild, CMake reconfigure, etc.) to take effect.
   (IndexedDB persistence, WASM DSP); Tone3000 is the one exception (a
   network service with no audio meaning — a model-library client, not
   infrastructure this app depends on to function).
-- **Desktop is C++ + `webview.h` + JUCE `audio_devices`, not Electron** — the
+- **Desktop is C++ + `webview.h` + miniaudio, not Electron** — the
   React UI runs in a native system webview in the same process as the audio
-  engine; JUCE was adopted after RtAudio's CoreAudio backend had a
-  reproducible crash bridging independently-clocked duplex devices (see
-  `apps/desktop/CMakeLists.txt`'s comment on the migration).
+  engine; miniaudio replaced JUCE (itself adopted after RtAudio's CoreAudio
+  backend had a reproducible crash bridging independently-clocked duplex
+  devices - issue #374; see `apps/desktop/CMakeLists.txt`'s comment on the
+  migration).
 - **`strict-peer-dependencies=true`** (`.npmrc`) — a real unmet peer fails
   `pnpm install` outright rather than warning. If a routine dependency bump
   suddenly fails install with an unrelated-looking peer error, it's likely a
@@ -141,5 +151,15 @@ rebuild, CMake reconfigure, etc.) to take effect.
 - **Root `VERSION` file is the one version source of truth** — every
   `package.json` and both `apps/desktop`'s and `packages/core`'s CMake
   `project()` version read it; see
-  [CONTRIBUTING.md#releasing-desktop-builds](./CONTRIBUTING.md#releasing-desktop-builds)
+  [CONTRIBUTING.md#releasing-desktop--plugin](./CONTRIBUTING.md#releasing-desktop--plugin)
   for the tag-and-release flow.
+- **Releases run end to end on GitHub Actions.** A push to `main` runs
+  `auto-release.yml` (bump + `CHANGELOG` + commit `chore(release): X.Y.Z` +
+  tag `vX.Y.Z`, then back-merge into `dev`); the tag drives `release.yml` →
+  3-OS build → Cloudflare R2 → `sha256sums.txt` + `manifest.json` → landing
+  deploy, with the artifacts mirrored onto the GitHub Release. `dev → main` is
+  merged with a **merge commit** (keeps ancestry); `feat → dev` stays squash.
+  To cut a release by hand — Actions degraded, or reproducing a failing leg —
+  run `bash scripts/release-local.sh release`. See
+  [CONTRIBUTING.md#branching](./CONTRIBUTING.md#branching) and
+  [docs/ci-github-actions.md](./docs/ci-github-actions.md).

@@ -6,6 +6,10 @@
 # @OPENAXE_DESKTOP_BINARY@ and @OPENAXE_DESKTOP_UI_DIR@ are baked in at configure time;
 # the web UI is bundled into build/ui by scripts/build.mjs before cpack runs.
 # Brand icons live next to this script (openaxe.icns/.ico/openaxe-256.png).
+#
+# Licensing payload: @OPENAXE_REPO_ROOT@/LICENSE (GPLv3, required by its own
+# section 4) and @OPENAXE_REPO_ROOT@/licenses (the permissive dependencies'
+# notices, which their licenses require to travel with the binary).
 
 if(APPLE)
   set(app "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/openaxe-desktop.app")
@@ -17,12 +21,16 @@ if(APPLE)
   file(COPY "@OPENAXE_DESKTOP_PLIST@" DESTINATION "${app}/Contents")
   # Dock/Finder icon (Info.plist's CFBundleIconFile points here).
   file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe.icns" DESTINATION "${app}/Contents/Resources")
+  file(COPY "@OPENAXE_REPO_ROOT@/licenses" DESTINATION "${app}/Contents/Resources")
+  file(COPY_FILE "@OPENAXE_REPO_ROOT@/LICENSE" "${app}/Contents/Resources/LICENSE")
 elseif(WIN32)
   file(COPY "@OPENAXE_DESKTOP_BINARY@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
   file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
   # Explorer icon is compiled into the exe via openaxe_desktop.rc; this copy is
   # a convenience for shortcuts/installers that want a standalone .ico.
   file(COPY "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe.ico" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
+  file(COPY "@OPENAXE_REPO_ROOT@/licenses" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
+  file(COPY_FILE "@OPENAXE_REPO_ROOT@/LICENSE" "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/LICENSE")
 else()
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/bin")
   file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
@@ -31,4 +39,9 @@ else()
   file(COPY "@OPENAXE_DESKTOP_UI_DIR@" DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/openaxe-desktop")
   file(COPY_FILE "@CMAKE_CURRENT_SOURCE_DIR@/packaging/openaxe-256.png"
         "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/icons/hicolor/256x256/apps/openaxe.png")
+  # Debian policy puts copyright material under share/doc/<package>.
+  file(COPY "@OPENAXE_REPO_ROOT@/licenses"
+       DESTINATION "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/doc/openaxe-desktop")
+  file(COPY_FILE "@OPENAXE_REPO_ROOT@/LICENSE"
+        "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/share/doc/openaxe-desktop/copyright")
 endif()

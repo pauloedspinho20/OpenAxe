@@ -300,10 +300,10 @@ std::string StudioBridge::HandleListDevices(const std::string&) {
 }
 
 std::string StudioBridge::HandleGetConfig(const std::string&) {
-  // latencyFrames is RtAudio's reported device round-trip (input + output
-  // buffering), -1 when the backend can't report it or nothing is open; the ms
-  // figure is derived from it so the UI can show real measured latency rather
-  // than an estimate from the block size alone.
+  // latencyFrames is miniaudio's reported device round-trip (capture +
+  // playback internal periods), -1 when the backend can't report it or nothing
+  // is open; the ms figure is derived from it so the UI can show real measured
+  // latency rather than an estimate from the block size alone.
   const long latency_frames = audio_.IsOpen() ? audio_.StreamLatencyFrames() : -1;
   const double rate = audio_.SampleRate();
   json out = {{"ok", true},
@@ -329,7 +329,9 @@ std::string StudioBridge::HandleOpen(const std::string& req) {
     const double sample_rate = o.value("sampleRate", 48000.0);
     // 0 asks the device for the smallest block it supports (lowest possible
     // round-trip); anything else is a requested block size the backend may
-    // still adjust. The reply reports what was actually granted.
+    // still adjust. The reply reports what the stream will use: the requested
+    // period, which miniaudio buffers to in-app when the device's native
+    // period differs (the measured round-trip is latencyFrames/latencyMs).
     const unsigned int buffer_frames = o.value("bufferFrames", 128u);
 
     // Reopening while a previous stream is still live (device switch, or the
@@ -679,6 +681,10 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
       // control thread's suspend handshake like every other structural
       // mutation. Staged writes always take this path (no suspend - the
       // staged engine is never processed before its commit).
+      //
+      // A redundant resend (the UI replays the full params object on every
+      // knob move, slim included) must not suspend: skip the mutation when the
+      // live value is already what was asked for.
       OpenAxeGraph* graph = target_graph;
       Call([&] {
         MutationTarget target;
@@ -688,6 +694,7 @@ std::string StudioBridge::HandleSetParam(const std::string& req) {
         if (stage) {
           openaxe_set_param(target.graph, it->second.core_id, index, value);
         } else {
+          if (openaxe_get_param(graph, core_id, index) == value) return;
           Mutate([&] { openaxe_set_param(graph, core_id, index, value); },
                  /*reset_after=*/false);
         }
@@ -936,9 +943,17 @@ std::string StudioBridge::HandleSetReverbAlgorithm(const std::string& req) {
       if (!ResolveTarget(stage, &target).empty()) return;
       const auto it = target.blocks->find(js_id);
       if (it == target.blocks->end()) return;
+      // Redundant resend: the UI replays each block's full params object on
+      // every knob move, so setReverbAlgorithm arrives on every drag even
+      // when the algorithm never changed. The core no-ops the swap itself,
+      // but the suspend handshake here would still fire - a silent dropout on
+      // every knob move. Track the last-applied value and skip the mutation
+      // (and its suspend) entirely when it hasn't changed.
+      if (it->second.reverb_algorithm == static_cast<int32_t>(*algo)) return;
       MutateOn(target,
                [&] { openaxe_set_reverb_algorithm(target.graph, it->second.core_id, *algo); },
                /*reset_after=*/false);
+      it->second.reverb_algorithm = static_cast<int32_t>(*algo);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -965,8 +980,13 @@ std::string StudioBridge::HandleSetDelayModel(const std::string& req) {
       if (!ResolveTarget(stage, &target).empty()) return;
       const auto it = target.blocks->find(js_id);
       if (it == target.blocks->end()) return;
+      // Same redundant-resend guard as setReverbAlgorithm: skip the mutation
+      // (and its suspend handshake) when the model didn't change, instead of
+      // dropping a silent silence-gap on every knob move.
+      if (it->second.delay_model == static_cast<int32_t>(*model)) return;
       MutateOn(target, [&] { openaxe_set_delay_model(target.graph, it->second.core_id, *model); },
              /*reset_after=*/false);
+      it->second.delay_model = static_cast<int32_t>(*model);
     });
     return (json{{"ok", true}}).dump();
   } catch (const std::exception& e) {
@@ -1249,6 +1269,23 @@ std::string StudioBridge::HandleSetInputGain(const std::string& req) {
   }
 }
 
+std::string StudioBridge::HandleSetInputChannel(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    // Straight to AudioIO like the input gain above: a lone atomic the audio
+    // callback reads, so no suspend handshake is needed. An unknown mode
+    // degrades to stereo passthrough rather than failing (see
+    // InputChannelModeFromName). The UI store stays the authority here -
+    // unlike the plugin this shell has no per-project state chunk, so the
+    // open reply deliberately does NOT echo a mode back for the UI to adopt.
+    audio_.SetInputChannelMode(o.value("mode", ""));
+    return (json{{"ok", true}}).dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("setInputChannel: ") + e.what());
+  }
+}
+
 std::string StudioBridge::HandleSetMasterLevel(const std::string& req) {
   try {
     const json args = ParseArgs(req);
@@ -1323,6 +1360,78 @@ std::string StudioBridge::HandlePlayDI(const std::string& req) {
 std::string StudioBridge::HandleStopDI(const std::string&) {
   audio_.StopDI();
   return (json{{"ok", true}}).dump();
+}
+
+std::string StudioBridge::HandlePlayer(const std::string& req) {
+  try {
+    const json args = ParseArgs(req);
+    const json& o = args.empty() ? json::object() : args[0];
+    const std::string op = o.value("op", "");
+    OpenAxePlayer* player = audio_.Player();
+    if (player == nullptr) return JsonError("player: unavailable");
+    if (op == "loadBegin") {
+      const int frames = o.value("frames", 0);
+      const int channels = o.value("channels", 2);
+      const double rate = o.value("sampleRate", 0.0);
+      int ok = 0;
+      // Tier 2: reallocates the buffer the audio thread reads.
+      Mutate([&] { ok = openaxe_player_load_begin(player, frames, channels, rate); }, false);
+      if (!ok) return JsonError("player: track too long or unsupported format");
+      return (json{{"ok", true}}).dump();
+    }
+    if (op == "loadWrite") {
+      const int offset = o.value("offset", 0);
+      const int channels = std::max(1, o.value("channels", 2));
+      const std::vector<uint8_t> bytes = DecodeBase64(o.value("pcm16Base64", ""));
+      const size_t samples = bytes.size() / 2;
+      const int frames = static_cast<int>(samples / static_cast<size_t>(channels));
+      std::vector<float> pcm(samples);
+      for (size_t i = 0; i < samples; ++i) {
+        const auto v = static_cast<int16_t>(static_cast<uint16_t>(bytes[2 * i]) |
+                                            (static_cast<uint16_t>(bytes[2 * i + 1]) << 8));
+        pcm[i] = static_cast<float>(v) / 32768.0f;
+      }
+      // Safe while rendering: the buffer is unpublished until loadEnd.
+      const int written = openaxe_player_load_write(player, offset, pcm.data(), frames);
+      return (json{{"ok", written == frames}, {"written", written}}).dump();
+    }
+    // Every other op answers with the player's status, like the web worklet.
+    if (op == "loadEnd") {
+      if (openaxe_player_load_end(player) != 1) return JsonError("player: no load in progress");
+    } else if (op == "unload") {
+      Mutate([&] { openaxe_player_unload(player); }, false);
+    } else if (op == "play") {
+      openaxe_player_play(player);
+    } else if (op == "pause") {
+      openaxe_player_pause(player);
+    } else if (op == "seek") {
+      openaxe_player_seek(player, o.value("frame", 0));
+    } else if (op == "setSpeed") {
+      openaxe_player_set_speed(player, o.value("value", 1.0f));
+    } else if (op == "setSemitones") {
+      openaxe_player_set_semitones(player, o.value("value", 0.0f));
+    } else if (op == "setVolume") {
+      openaxe_player_set_volume(player, o.value("value", 1.0f));
+    } else if (op == "setLoop") {
+      openaxe_player_set_loop(player, o.value("start", 0), o.value("end", 0),
+                              o.value("enabled", false) ? 1 : 0);
+    } else if (op == "setCountIn") {
+      openaxe_player_set_count_in(player, o.value("clicks", 0), o.value("interval", 0.5f),
+                                  o.value("accent", 4));
+    } else if (op != "status") {
+      return JsonError("player: unknown op \"" + op + "\"");
+    }
+    return (json{{"ok", true},
+                 {"position", openaxe_player_position(player)},
+                 {"length", openaxe_player_length(player)},
+                 {"sampleRate", openaxe_player_source_rate(player)},
+                 {"playing", openaxe_player_is_playing(player) == 1},
+                 {"meter", openaxe_player_get_meter(player)},
+                 {"counting", openaxe_player_is_counting(player) == 1}})
+        .dump();
+  } catch (const std::exception& e) {
+    return JsonError(std::string("player: ") + e.what());
+  }
 }
 
 std::string StudioBridge::HandleMeters(const std::string&) {

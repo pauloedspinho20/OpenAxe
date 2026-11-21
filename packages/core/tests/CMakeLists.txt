@@ -18,6 +18,11 @@ add_executable(wav_test wav_test.cpp)
 target_link_libraries(wav_test PRIVATE openaxe_core)
 add_test(NAME wav_test COMMAND wav_test)
 
+# Backing-track player (issue #205): transport, speed/pitch, loop, rate.
+add_executable(backing_player_test backing_player_test.cpp)
+target_link_libraries(backing_player_test PRIVATE openaxe_core)
+add_test(NAME backing_player_test COMMAND backing_player_test)
+
 add_executable(convolver_test convolver_test.cpp)
 target_link_libraries(convolver_test PRIVATE openaxe_core)
 add_test(NAME convolver_test COMMAND convolver_test)
@@ -115,6 +120,10 @@ if(OPENAXE_HAS_NAM_CORE AND OPENAXE_HAS_REVERB_ALGOS AND OPENAXE_HAS_DSPARK)
   add_executable(api_automation_slots_test api_automation_slots_test.cpp)
   target_include_directories(api_automation_slots_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
   target_link_libraries(api_automation_slots_test PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
+  # The slim-size Tier-2 guard case loads a real slimmable capture from the
+  # NAM example models, so it needs the same dir define as api_realtime_test.
+  target_compile_definitions(api_automation_slots_test PRIVATE
+    NAM_CORE_EXAMPLE_MODELS_DIR="${NAM_CORE_DIR}/example_models")
   add_test(NAME api_automation_slots_test COMMAND api_automation_slots_test)
 else()
   message(WARNING "Skipping api_automation_slots_test - nam-core/dspark submodules must all be initialized (reverb algorithms need no submodule since #372)")

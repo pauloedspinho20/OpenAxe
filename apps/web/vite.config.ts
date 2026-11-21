@@ -2,10 +2,28 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { alphaTab } from '@coderline/alphatab-vite'
 
 export default defineConfig({
   plugins: [
     react(),
+    // Tab viewer/editor (issue #205/#206): copies alphaTab's Bravura font and
+    // SoundFont into the build and wires its render/synth workers as same-
+    // origin module workers, so they satisfy the CSP's worker-src 'self'.
+    alphaTab(),
+    {
+      // The production build carries a strict Content-Security-Policy <meta> tag
+      // (see index.html) that all three shells serve. Vite's dev server can't
+      // satisfy it: it injects an inline React Refresh preamble (blocked by
+      // `script-src 'self'`) and opens an HMR WebSocket. Strip the tag while
+      // serving so `pnpm dev` and the Playwright dev-server run keep working;
+      // it is still present in what `vite build` emits (and `vite preview`).
+      name: 'strip-csp-in-dev',
+      apply: 'serve',
+      transformIndexHtml(html) {
+        return html.replace(/\s*<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?\/>/i, '')
+      },
+    },
     {
       name: 'media-var-replace',
       transform(code, id) {
