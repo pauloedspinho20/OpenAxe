@@ -19,9 +19,38 @@
   initial-value: 0px;
 }
 
+@property --icon-start {
+  syntax: '*';
+  inherits: false;
+}
+
+@property --icon-end {
+  syntax: '*';
+  inherits: false;
+}
+
 /* Root color-scheme mapping for native browser UI + theme parity */
 :root {
   --header-h: 55px;
+  --icon-apple: url('/brands/apple.svg');
+  --icon-windows: url('/brands/windows.svg');
+  --icon-linux: url('/brands/linux.svg');
+  --icon-ios: url('/brands/ios.svg');
+  --icon-android: url('/brands/android.svg');
+  --icon-webassembly: url('/brands/webassembly.svg');
+  --icon-cplusplus: url('/brands/cplusplus.svg');
+  --icon-github: url('/brands/github.svg');
+  --icon-gitlab: url('/brands/gitlab.svg');
+  --icon-react: url('/brands/react.svg');
+  --icon-vite: url('/brands/vite.svg');
+  --icon-p5dotjs: url('/brands/p5dotjs.svg');
+  --icon-gnu: url('/brands/gnu.svg');
+  --icon-globe: url('/brands/globe.svg');
+  --icon-plug: url('/brands/plug.svg');
+  --icon-cpu: url('/brands/cpu.svg');
+  --icon-shield: url('/brands/shield.svg');
+  --icon-download: url('/brands/download.svg');
+  --icon-layers: url('/brands/layers.svg');
 }
 
 :root,
@@ -112,6 +141,270 @@ code {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ============================================================================
+   CSS-Driven Icon Engine (`modern-web-guidance` `icons` pattern)
+   ============================================================================ */
+.icon:empty {
+  --icon-start: var(--icon);
+}
+
+/* Browser fallback when Container Style Queries are unavailable */
+:where(.icon-start, .icon:empty)::before {
+  --icon-start: inherit;
+  content: image-set(linear-gradient(transparent 0 100%), var(--icon-start)) /
+    var(--icon-style-alt, '');
+  display: inline-block;
+  width: var(--icon-style-size, 1em);
+  height: var(--icon-style-size, 1em);
+  background-color: var(--icon-style-color, currentColor);
+  mask: var(--icon-start) no-repeat center / contain;
+  vertical-align: calc(
+    0.5cap - var(--icon-style-size, 1em) / 2 + var(--icon-style-voffset, -0.02em)
+  );
+  flex: none;
+  pointer-events: none;
+  forced-color-adjust: none;
+}
+
+:where(.icon-start:not(.icon, :empty))::before {
+  margin-inline-end: var(--icon-style-spacing, 0.42em);
+}
+
+:where(.icon-end)::after {
+  --icon-end: inherit;
+  content: image-set(linear-gradient(transparent 0 100%), var(--icon-end)) /
+    var(--icon-style-alt, '');
+  display: inline-block;
+  width: var(--icon-style-size, 1em);
+  height: var(--icon-style-size, 1em);
+  background-color: var(--icon-style-color, currentColor);
+  mask: var(--icon-end) no-repeat center / contain;
+  vertical-align: calc(
+    0.5cap - var(--icon-style-size, 1em) / 2 + var(--icon-style-voffset, -0.02em)
+  );
+  flex: none;
+  pointer-events: none;
+  forced-color-adjust: none;
+}
+
+:where(.icon-end:not(.icon, :empty))::after {
+  margin-inline-start: var(--icon-style-spacing, 0.42em);
+}
+
+/* Style query for elements configuring a start/end icon */
+@container style(--icon-start) {
+  ::before {
+    --icon-start: inherit;
+    content: '' / var(--icon-style-alt, '');
+    display: inline-block;
+    width: var(--icon-style-size, 1em);
+    height: var(--icon-style-size, 1em);
+    background-color: var(--icon-style-color, currentColor);
+    mask: var(--icon-start) no-repeat center / contain;
+    vertical-align: calc(
+      0.5cap - var(--icon-style-size, 1em) / 2 + var(--icon-style-voffset, -0.02em)
+    );
+    flex: none;
+    pointer-events: none;
+    forced-color-adjust: none;
+  }
+
+  :where(:not(.icon, :empty))::before {
+    margin-inline-end: var(--icon-style-spacing, 0.42em);
+  }
+}
+
+@container style(--icon-end) {
+  ::after {
+    --icon-end: inherit;
+    content: '' / var(--icon-style-alt, '');
+    display: inline-block;
+    width: var(--icon-style-size, 1em);
+    height: var(--icon-style-size, 1em);
+    background-color: var(--icon-style-color, currentColor);
+    mask: var(--icon-end) no-repeat center / contain;
+    vertical-align: calc(
+      0.5cap - var(--icon-style-size, 1em) / 2 + var(--icon-style-voffset, -0.02em)
+    );
+    flex: none;
+    pointer-events: none;
+    forced-color-adjust: none;
+  }
+
+  :where(:not(.icon, :empty))::after {
+    margin-inline-start: var(--icon-style-spacing, 0.42em);
+  }
+}
+
+@keyframes webkit-301609 {
+}
+
+@supports (
+    (-webkit-nbsp-mode: normal) or (-webkit-touch-callout: none) or (font: -apple-system-body)
+  )
+  and (content-visibility: auto) {
+  @layer webkit-301609-fix {
+    ::before,
+    ::after {
+      animation: webkit-301609 0s;
+    }
+  }
+
+  @property --icon-start {
+    syntax: '*';
+    inherits: true;
+  }
+
+  @layer webkit-325900-fix {
+    @container style(--icon-start) {
+      * {
+        --icon-start: initial;
+      }
+    }
+  }
+}
+
+[data-icon='apple'] {
+  --icon-start: var(--icon-apple);
+}
+[data-icon='windows'] {
+  --icon-start: var(--icon-windows);
+}
+[data-icon='linux'] {
+  --icon-start: var(--icon-linux);
+}
+[data-icon='ios'] {
+  --icon-start: var(--icon-ios);
+}
+[data-icon='android'] {
+  --icon-start: var(--icon-android);
+}
+[data-icon='webassembly'] {
+  --icon-start: var(--icon-webassembly);
+}
+[data-icon='cplusplus'] {
+  --icon-start: var(--icon-cplusplus);
+}
+[data-icon='github'] {
+  --icon-start: var(--icon-github);
+}
+[data-icon='gitlab'] {
+  --icon-start: var(--icon-gitlab);
+}
+[data-icon='react'] {
+  --icon-start: var(--icon-react);
+}
+[data-icon='vite'] {
+  --icon-start: var(--icon-vite);
+}
+[data-icon='p5dotjs'] {
+  --icon-start: var(--icon-p5dotjs);
+}
+[data-icon='gnu'] {
+  --icon-start: var(--icon-gnu);
+}
+[data-icon='globe'] {
+  --icon-start: var(--icon-globe);
+}
+[data-icon='plug'] {
+  --icon-start: var(--icon-plug);
+}
+[data-icon='cpu'] {
+  --icon-start: var(--icon-cpu);
+}
+[data-icon='shield'] {
+  --icon-start: var(--icon-shield);
+}
+[data-icon='download'] {
+  --icon-start: var(--icon-download);
+}
+[data-icon='layers'] {
+  --icon-start: var(--icon-layers);
+}
+
+.icon[data-icon='apple'] {
+  --icon: var(--icon-apple);
+}
+.icon[data-icon='windows'] {
+  --icon: var(--icon-windows);
+}
+.icon[data-icon='linux'] {
+  --icon: var(--icon-linux);
+}
+.icon[data-icon='ios'] {
+  --icon: var(--icon-ios);
+}
+.icon[data-icon='android'] {
+  --icon: var(--icon-android);
+}
+.icon[data-icon='webassembly'] {
+  --icon: var(--icon-webassembly);
+}
+.icon[data-icon='cplusplus'] {
+  --icon: var(--icon-cplusplus);
+}
+.icon[data-icon='github'] {
+  --icon: var(--icon-github);
+}
+.icon[data-icon='gitlab'] {
+  --icon: var(--icon-gitlab);
+}
+.icon[data-icon='react'] {
+  --icon: var(--icon-react);
+}
+.icon[data-icon='vite'] {
+  --icon: var(--icon-vite);
+}
+.icon[data-icon='p5dotjs'] {
+  --icon: var(--icon-p5dotjs);
+}
+.icon[data-icon='gnu'] {
+  --icon: var(--icon-gnu);
+}
+.icon[data-icon='globe'] {
+  --icon: var(--icon-globe);
+}
+.icon[data-icon='plug'] {
+  --icon: var(--icon-plug);
+}
+.icon[data-icon='cpu'] {
+  --icon: var(--icon-cpu);
+}
+.icon[data-icon='shield'] {
+  --icon: var(--icon-shield);
+}
+.icon[data-icon='download'] {
+  --icon: var(--icon-download);
+}
+.icon[data-icon='layers'] {
+  --icon: var(--icon-layers);
+}
+
+/* Official raster/full-color brand marks */
+.brand-img-nam {
+  display: inline-block;
+  border-radius: 4px;
+  border: 1px solid var(--seam-strong);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.brand-pill-tone3000 {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  background: var(--screen-bg);
+  border: 1px solid var(--seam-strong);
+  flex-shrink: 0;
+}
+
+.brand-pill-tone3000 img {
+  display: block;
+  width: auto;
+  height: 14px;
 }
 
 /* Layout container */
@@ -377,6 +670,8 @@ code {
 .eyebrow {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: var(--sp-2);
   padding: 4px 10px;
   background: var(--panel);
@@ -437,6 +732,33 @@ code {
   font-size: 11.5px;
   letter-spacing: 0.03em;
   color: var(--ink-3);
+}
+
+.hero-ecosystem {
+  margin-top: var(--sp-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-eco-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  border: 1px solid var(--seam);
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+.hero-eco-chip .icon-start::before {
+  --icon-style-size: 13px;
 }
 
 .hero-emblem {
@@ -551,6 +873,7 @@ code {
 
 @media (max-width: 900px) {
   .hero {
+    padding: var(--sp-4) 0 var(--sp-3);
     background:
       radial-gradient(
         600px 420px at 50% 72%,
@@ -566,13 +889,29 @@ code {
       100% 100%;
   }
 
+  .hero-container {
+    gap: var(--sp-3);
+  }
+
   .hero-grid {
     grid-template-columns: 1fr;
-    gap: var(--sp-6);
+    gap: var(--sp-4);
+  }
+
+  .hero h1 {
+    margin: var(--sp-3) 0 var(--sp-2);
+  }
+
+  .hero .lead {
+    margin-bottom: var(--sp-4);
+  }
+
+  .hero-ecosystem {
+    margin-top: var(--sp-3);
   }
 
   .hero-logo-stage {
-    width: clamp(190px, 52vw, 280px);
+    width: clamp(140px, 38vw, 220px);
   }
 }
 
@@ -1230,6 +1569,116 @@ code {
   color: var(--ink-2);
 }
 
+.platform-icons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--sp-2);
+}
+
+.platform-icon-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  color: var(--ink-1);
+  box-shadow: var(--shadow-control);
+}
+
+.platform-icon-chip .icon {
+  --icon-style-size: 16px;
+  --icon-style-voffset: 0em;
+}
+
+.oss-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.oss-card-head .ox-card-title {
+  margin: 0;
+}
+
+.oss-icon-tile {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.oss-icon-tile .icon {
+  --icon-style-size: 15px;
+  --icon-style-voffset: 0em;
+}
+
+.ecosystem-marks {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--seam);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ecosystem-nam-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-1);
+  text-decoration: none;
+}
+
+.ecosystem-nam-pill:hover {
+  border-color: var(--accent);
+}
+
+.vendor-row-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.vendor-row-brand .vendor-name {
+  margin-bottom: 0;
+}
+
+.vendor-row-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  color: var(--ink-1);
+  flex-shrink: 0;
+}
+
+.vendor-row-icon .icon {
+  --icon-style-size: 14px;
+  --icon-style-voffset: 0em;
+}
+
 .platform h3 {
   margin: 0;
   font-family: var(--font-display);
@@ -1711,6 +2160,20 @@ code {
   border-color: var(--accent);
 }
 
+.vendor-preview-chip .brand-pill-tone3000 {
+  padding: 2px 6px;
+}
+
+.vendor-preview-chip .brand-pill-tone3000 img {
+  height: 10px;
+}
+
+.vendor-preview-chip .icon {
+  --icon-style-size: 13px;
+  --icon-style-voffset: 0em;
+  color: var(--ink-2);
+}
+
 .vendor-preview-name {
   font-weight: 600;
 }
@@ -2121,6 +2584,9 @@ code {
 }
 
 .footer-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--ink-2);
   text-decoration: none;
 }

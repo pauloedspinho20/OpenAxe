@@ -131,6 +131,25 @@ function assetLabel(name: string): string {
   return name
 }
 
+function platformIcon(os: PlatformKey | 'all' | 'other'): string {
+  switch (os) {
+    case 'mac':
+      return 'apple'
+    case 'win':
+      return 'windows'
+    case 'linux':
+      return 'linux'
+    case 'all':
+      return 'layers'
+    case 'other':
+      return 'download'
+  }
+}
+
+function assetOsIcon(name: string): string {
+  return platformIcon(assetPlatform(name))
+}
+
 function assetFormatsHint(name: string): string {
   const n = name.toLowerCase()
   if (n.includes('plugin') && n.includes('macos')) return 'VST3 · CLAP · Audio Unit (Universal)'
@@ -157,13 +176,14 @@ function extractChecksumsUrl(release: ReleaseRecord): string {
 }
 
 function renderAssetRow(asset: ReleaseAsset): string {
+  const osIcon = assetOsIcon(asset.name)
   return `
     <a class="asset" href="${escapeHtml(asset.browser_download_url)}" download>
       <span class="meta">
-        <span class="name">${escapeHtml(assetLabel(asset.name))}</span>
+        <span class="name icon-start" data-icon="${escapeHtml(osIcon)}">${escapeHtml(assetLabel(asset.name))}</span>
         <span class="submeta">${escapeHtml(asset.name)} · ${escapeHtml(formatBytes(asset.size))}</span>
       </span>
-      <span class="asset-action" aria-hidden="true">⬇</span>
+      <span class="asset-action icon" data-icon="download" aria-hidden="true"></span>
     </a>`
 }
 
@@ -171,6 +191,7 @@ function renderPlatformPanel(latest: ReleaseRecord, platform: PlatformKey): stri
   const forOs = latest.assets.filter((a) => assetPlatform(a.name) === platform)
   const desktop = forOs.find((a) => assetCategory(a.name) === 'desktop')
   const plugin = forOs.find((a) => assetCategory(a.name) === 'plugin')
+  const osIcon = platformIcon(platform)
 
   const osTip: Record<PlatformKey, string> = {
     mac: 'Unsigned beta builds: right-click → Open on first Desktop launch. Copy plugin bundles into ~/Library/Audio/Plug-Ins/{VST3,CLAP,Components}.',
@@ -188,8 +209,8 @@ function renderPlatformPanel(latest: ReleaseRecord, platform: PlatformKey): stri
         </div>
         <h3 class="ox-card-title">Standalone Studio</h3>
         <p>${escapeHtml(assetFormatsHint(desktop.name))}</p>
-        <a class="ox-btn ox-btn-primary download-card-cta" href="${escapeHtml(desktop.browser_download_url)}" download>
-          ⬇ Download ${escapeHtml(latest.tag_name)}
+        <a class="ox-btn ox-btn-primary download-card-cta icon-start" data-icon="${osIcon}" href="${escapeHtml(desktop.browser_download_url)}" download>
+          Download ${escapeHtml(latest.tag_name)}
         </a>
         <div class="download-filename">${escapeHtml(desktop.name)}</div>
       </article>`
@@ -211,8 +232,8 @@ function renderPlatformPanel(latest: ReleaseRecord, platform: PlatformKey): stri
         </div>
         <h3 class="ox-card-title">VST3 · CLAP${platform === 'mac' ? ' · AU' : ''}</h3>
         <p>${escapeHtml(assetFormatsHint(plugin.name))}</p>
-        <a class="ox-btn ox-btn-ghost download-card-cta" href="${escapeHtml(plugin.browser_download_url)}" download>
-          ⬇ Download Plugin Bundle
+        <a class="ox-btn ox-btn-ghost download-card-cta icon-start" data-icon="plug" href="${escapeHtml(plugin.browser_download_url)}" download>
+          Download Plugin Bundle
         </a>
         <div class="download-filename">${escapeHtml(plugin.name)}</div>
       </article>`
@@ -259,7 +280,9 @@ function renderHomeDownloadSection(releases: ReleaseRecord[]): void {
     (a) => assetPlatform(a.name) === detected && assetCategory(a.name) === 'desktop',
   )
   if (heroCta) {
-    heroCta.textContent = `⬇ Download for ${osLabels[detected]}`
+    heroCta.textContent = `Download for ${osLabels[detected]}`
+    heroCta.dataset.icon = platformIcon(detected)
+    heroCta.classList.add('icon-start')
     if (primaryDesktop) {
       heroCta.title = `${primaryDesktop.name} (${formatBytes(primaryDesktop.size)})`
     }
@@ -276,10 +299,10 @@ function renderHomeDownloadSection(releases: ReleaseRecord[]): void {
           <time datetime="${escapeHtml(latest.published_at)}">${escapeHtml(formatDate(latest.published_at))}</time>
         </div>
         <div class="os-tablist" role="tablist" aria-label="Operating system installers">
-          <button type="button" class="os-tab" id="dl-tab-mac" role="tab" data-tab="mac" aria-selected="${detected === 'mac'}" tabindex="${detected === 'mac' ? 0 : -1}">macOS</button>
-          <button type="button" class="os-tab" id="dl-tab-win" role="tab" data-tab="win" aria-selected="${detected === 'win'}" tabindex="${detected === 'win' ? 0 : -1}">Windows</button>
-          <button type="button" class="os-tab" id="dl-tab-linux" role="tab" data-tab="linux" aria-selected="${detected === 'linux'}" tabindex="${detected === 'linux' ? 0 : -1}">Linux</button>
-          <button type="button" class="os-tab" id="dl-tab-all" role="tab" data-tab="all" aria-selected="false" tabindex="-1">All files (${latest.assets.length})</button>
+          <button type="button" class="os-tab icon-start" data-icon="apple" id="dl-tab-mac" role="tab" data-tab="mac" aria-selected="${detected === 'mac'}" tabindex="${detected === 'mac' ? 0 : -1}">macOS</button>
+          <button type="button" class="os-tab icon-start" data-icon="windows" id="dl-tab-win" role="tab" data-tab="win" aria-selected="${detected === 'win'}" tabindex="${detected === 'win' ? 0 : -1}">Windows</button>
+          <button type="button" class="os-tab icon-start" data-icon="linux" id="dl-tab-linux" role="tab" data-tab="linux" aria-selected="${detected === 'linux'}" tabindex="${detected === 'linux' ? 0 : -1}">Linux</button>
+          <button type="button" class="os-tab icon-start" data-icon="layers" id="dl-tab-all" role="tab" data-tab="all" aria-selected="false" tabindex="-1">All files (${latest.assets.length})</button>
         </div>
       </div>
 
@@ -400,7 +423,7 @@ function renderReleasesArchivePage(releases: ReleaseRecord[]): void {
                 .map(
                   (a) => `
                 <a class="archive-chip" href="${escapeHtml(a.browser_download_url)}" download title="${escapeHtml(a.name)}">
-                  <span>${escapeHtml(assetLabel(a.name))}</span>
+                  <span class="icon-start" data-icon="${escapeHtml(assetOsIcon(a.name))}">${escapeHtml(assetLabel(a.name))}</span>
                   <span class="muted">${escapeHtml(formatBytes(a.size))}</span>
                 </a>`,
                 )
@@ -428,10 +451,10 @@ function renderReleasesArchivePage(releases: ReleaseRecord[]): void {
         <button type="button" class="filter-pill" data-filter-kind="plugin" aria-pressed="false">DAW Plugin</button>
       </div>
       <div class="filter-group" role="group" aria-label="Filter by operating system">
-        <button type="button" class="filter-pill is-active" data-filter-os="all" aria-pressed="true">All OS</button>
-        <button type="button" class="filter-pill" data-filter-os="mac" aria-pressed="false">macOS</button>
-        <button type="button" class="filter-pill" data-filter-os="win" aria-pressed="false">Windows</button>
-        <button type="button" class="filter-pill" data-filter-os="linux" aria-pressed="false">Linux</button>
+        <button type="button" class="filter-pill is-active icon-start" data-icon="layers" data-filter-os="all" aria-pressed="true">All OS</button>
+        <button type="button" class="filter-pill icon-start" data-icon="apple" data-filter-os="mac" aria-pressed="false">macOS</button>
+        <button type="button" class="filter-pill icon-start" data-icon="windows" data-filter-os="win" aria-pressed="false">Windows</button>
+        <button type="button" class="filter-pill icon-start" data-icon="linux" data-filter-os="linux" aria-pressed="false">Linux</button>
       </div>
     </div>
     <div id="releases-list"></div>`

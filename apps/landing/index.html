@@ -182,7 +182,12 @@
             <li><a href="/releases.html">Releases</a></li>
             <li><a href="/vendors.html">Vendors</a></li>
             <li>
-              <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener"
+              <a
+                class="icon-start"
+                data-icon="github"
+                href="https://github.com/pauloedspinho20/OpenAxe"
+                target="_blank"
+                rel="noopener"
                 >GitHub ↗</a
               >
             </li>
@@ -220,7 +225,19 @@
             <div class="hero-intro">
               <div class="eyebrow">
                 <i class="dot dot-live" aria-hidden="true"></i>
-                Neural Amp Modeler · C++20 DSP Core · GPLv3
+                <img
+                  class="brand-img-nam"
+                  src="/brands/nam.png"
+                  alt=""
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
+                />
+                <span>Neural Amp Modeler</span>
+                <span aria-hidden="true">·</span>
+                <span class="icon-start" data-icon="cplusplus">C++20 DSP Core</span>
+                <span aria-hidden="true">·</span>
+                <span class="icon-start" data-icon="gnu">GPLv3</span>
               </div>
               <h1 id="hero-title">One modular rig. <em>Everywhere</em> you play.</h1>
               <p class="lead">
@@ -230,19 +247,55 @@
               </p>
               <div class="hero-ctas">
                 <a
-                  class="ox-btn ox-btn-primary"
+                  class="ox-btn ox-btn-primary icon-start"
+                  data-icon="webassembly"
                   data-web-app
                   href="https://openaxe.pages.dev"
                   rel="noopener"
-                  >↗ Launch Web Studio — no install</a
+                  >Launch Web Studio — no install ↗</a
                 >
-                <a id="download-cta" class="ox-btn ox-btn-ghost" href="#download"
-                  >⬇ Download Desktop</a
+                <a
+                  id="download-cta"
+                  class="ox-btn ox-btn-ghost icon-start"
+                  data-icon="download"
+                  href="#download"
+                  >Download Desktop</a
                 >
               </div>
               <p class="hero-note">
                 No accounts. No telemetry. Your rigs, presets, and captures stay on your device.
               </p>
+              <div class="hero-ecosystem" aria-label="Supported engines and platforms">
+                <span class="hero-eco-chip">
+                  <img
+                    class="brand-img-nam"
+                    src="/brands/nam.png"
+                    alt=""
+                    width="15"
+                    height="15"
+                    aria-hidden="true"
+                  />
+                  <span>NAM</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="apple">macOS</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="windows">Windows</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="linux">Linux</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="ios">iOS</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="android">Android</span>
+                </span>
+                <span class="hero-eco-chip">
+                  <span class="icon-start" data-icon="webassembly">WASM</span>
+                </span>
+              </div>
             </div>
 
             <div class="hero-emblem">
@@ -671,10 +724,22 @@
 
           <div class="arch-diagram" aria-label="Shared DSP core diagram">
             <div class="arch-core">
-              <span class="ox-badge ox-badge-live">packages/core (C++20)</span>
+              <span class="ox-badge ox-badge-live icon-start" data-icon="cplusplus"
+                >packages/core (C++20)</span
+              >
+              <span class="ecosystem-nam-pill">
+                <img
+                  class="brand-img-nam"
+                  src="/brands/nam.png"
+                  alt=""
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
+                />
+                <span>NeuralAmpModelerCore</span>
+              </span>
               <span class="arch-core-spec"
-                >GraphRig · NeuralAmpModelerCore · Zero-Latency Convolver · 10 DSP Effects · Pitch
-                Detector</span
+                >GraphRig · Zero-Latency Convolver · 10 DSP Effects · Pitch Detector</span
               >
             </div>
           </div>
@@ -684,6 +749,22 @@
               <div class="platform-top">
                 <span class="ox-badge ox-badge-live">Live</span>
                 <span class="platform-latency">~15 ms RT</span>
+              </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="WebAssembly">
+                  <span
+                    class="icon"
+                    data-icon="webassembly"
+                    role="img"
+                    aria-label="WebAssembly"
+                  ></span>
+                </span>
+                <span class="platform-icon-chip" title="React">
+                  <span class="icon" data-icon="react" role="img" aria-label="React"></span>
+                </span>
+                <span class="platform-icon-chip" title="Browser AudioWorklet">
+                  <span class="icon" data-icon="globe" role="img" aria-label="Browser"></span>
+                </span>
               </div>
               <h3>Web Studio</h3>
               <p>
@@ -700,6 +781,17 @@
                 <span class="ox-badge ox-badge-live">Live</span>
                 <span class="platform-latency">&lt;5 ms RT</span>
               </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="macOS">
+                  <span class="icon" data-icon="apple" role="img" aria-label="macOS"></span>
+                </span>
+                <span class="platform-icon-chip" title="Windows">
+                  <span class="icon" data-icon="windows" role="img" aria-label="Windows"></span>
+                </span>
+                <span class="platform-icon-chip" title="Linux">
+                  <span class="icon" data-icon="linux" role="img" aria-label="Linux"></span>
+                </span>
+              </div>
               <h3>Desktop App</h3>
               <p>
                 Lean ~12 MB native C++ shell using <code>miniaudio</code> and system webviews —
@@ -713,6 +805,20 @@
                 <span class="ox-badge ox-badge-beta">Beta</span>
                 <span class="platform-latency">Host Buffer</span>
               </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="VST3 / CLAP / AU">
+                  <span class="icon" data-icon="plug" role="img" aria-label="DAW Plugin"></span>
+                </span>
+                <span class="platform-icon-chip" title="macOS">
+                  <span class="icon" data-icon="apple" role="img" aria-label="macOS"></span>
+                </span>
+                <span class="platform-icon-chip" title="Windows">
+                  <span class="icon" data-icon="windows" role="img" aria-label="Windows"></span>
+                </span>
+                <span class="platform-icon-chip" title="Linux">
+                  <span class="icon" data-icon="linux" role="img" aria-label="Linux"></span>
+                </span>
+              </div>
               <h3>VST3 · CLAP · AU</h3>
               <p>
                 iPlug2-powered DAW plugin sharing the exact React editor, host automation slot map,
@@ -725,6 +831,14 @@
               <div class="platform-top">
                 <span class="ox-badge ox-badge-planned">Planned</span>
                 <span class="platform-latency">5–20 ms RT</span>
+              </div>
+              <div class="platform-icons">
+                <span class="platform-icon-chip" title="iOS">
+                  <span class="icon" data-icon="ios" role="img" aria-label="iOS"></span>
+                </span>
+                <span class="platform-icon-chip" title="Android">
+                  <span class="icon" data-icon="android" role="img" aria-label="Android"></span>
+                </span>
               </div>
               <h3>iOS &amp; Android</h3>
               <p>
@@ -757,7 +871,12 @@
 
           <div class="grid3">
             <article class="ox-card">
-              <h3 class="ox-card-title">GPLv3 License</h3>
+              <div class="oss-card-head">
+                <span class="oss-icon-tile" aria-hidden="true">
+                  <span class="icon" data-icon="gnu"></span>
+                </span>
+                <h3 class="ox-card-title">GPLv3 License</h3>
+              </div>
               <p>
                 Free software forever. Every DSP wrapper, plugin host layer, and design token
                 pipeline is open to inspect, fork, and build from source across all three desktop
@@ -771,7 +890,12 @@
             </article>
 
             <article class="ox-card">
-              <h3 class="ox-card-title">Real-Time Audio Safety</h3>
+              <div class="oss-card-head">
+                <span class="oss-icon-tile" aria-hidden="true">
+                  <span class="icon" data-icon="cpu"></span>
+                </span>
+                <h3 class="ox-card-title">Real-Time Audio Safety</h3>
+              </div>
               <p>
                 No heap allocations, locks, or disk I/O ever touch the audio callback. Parameter
                 changes cross via lock-free atomics while model loads run safely off-thread.
@@ -784,7 +908,12 @@
             </article>
 
             <article class="ox-card">
-              <h3 class="ox-card-title">Local-First Ecosystem</h3>
+              <div class="oss-card-head">
+                <span class="oss-icon-tile" aria-hidden="true">
+                  <span class="icon" data-icon="shield"></span>
+                </span>
+                <h3 class="ox-card-title">Local-First Ecosystem</h3>
+              </div>
               <p>
                 Load local <code>.nam</code> captures and <code>.wav</code> cabinet IRs completely
                 offline, or connect your
@@ -796,6 +925,40 @@
                 <li>Zero analytics scripts or tracking beacons</li>
                 <li>OS keychain storage for optional Tone3000 tokens</li>
               </ul>
+              <div class="ecosystem-marks">
+                <a
+                  class="ecosystem-nam-pill"
+                  href="https://www.neuralampmodeler.com/"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <img
+                    class="brand-img-nam"
+                    src="/brands/nam.png"
+                    alt="Neural Amp Modeler"
+                    width="22"
+                    height="22"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span>NAM Compatible</span>
+                </a>
+                <a
+                  class="brand-pill-tone3000"
+                  href="https://www.tone3000.com/"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <img
+                    src="/brands/tone3000.svg"
+                    alt="Tone3000"
+                    width="92"
+                    height="14"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
+              </div>
             </article>
           </div>
 
@@ -839,13 +1002,24 @@
               <h3 class="ox-card-title">Quick links</h3>
               <ul class="aside-links">
                 <li>
-                  <a data-web-app href="https://openaxe.pages.dev" rel="noopener"
-                    >↗ Open Web Studio (no install)</a
+                  <a
+                    class="icon-start"
+                    data-icon="webassembly"
+                    data-web-app
+                    href="https://openaxe.pages.dev"
+                    rel="noopener"
+                    >Open Web Studio (no install) ↗</a
                   >
                 </li>
-                <li><a href="/releases.html">All versions &amp; full release archive →</a></li>
+                <li>
+                  <a class="icon-start" data-icon="layers" href="/releases.html"
+                    >All versions &amp; full release archive →</a
+                  >
+                </li>
                 <li>
                   <a
+                    class="icon-start"
+                    data-icon="github"
                     href="https://github.com/pauloedspinho20/OpenAxe"
                     target="_blank"
                     rel="noopener"
@@ -854,6 +1028,8 @@
                 </li>
                 <li>
                   <a
+                    class="icon-start"
+                    data-icon="shield"
                     href="https://github.com/pauloedspinho20/OpenAxe/issues"
                     target="_blank"
                     rel="noopener"
@@ -982,7 +1158,12 @@
           <a data-web-app href="https://openaxe.pages.dev" rel="noopener">Web Studio ↗</a>
           <a href="/releases.html">Releases</a>
           <a href="/vendors.html">Vendors</a>
-          <a href="https://github.com/pauloedspinho20/OpenAxe" target="_blank" rel="noopener"
+          <a
+            class="icon-start"
+            data-icon="github"
+            href="https://github.com/pauloedspinho20/OpenAxe"
+            target="_blank"
+            rel="noopener"
             >GitHub ↗</a
           >
           <a
@@ -995,8 +1176,19 @@
             href="https://github.com/sdatkinson/NeuralAmpModelerCore"
             target="_blank"
             rel="noopener"
-            >NAMCore ↗</a
           >
+            <img
+              class="brand-img-nam"
+              src="/brands/nam.png"
+              alt=""
+              width="16"
+              height="16"
+              loading="lazy"
+              decoding="async"
+              aria-hidden="true"
+            />
+            <span>NAMCore ↗</span>
+          </a>
           <a href="https://www.tone3000.com" target="_blank" rel="noopener">Tone3000 ↗</a>
         </nav>
       </div>

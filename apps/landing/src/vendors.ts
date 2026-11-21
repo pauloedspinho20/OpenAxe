@@ -7,6 +7,25 @@ const REPO_NOTICES_URL =
   'https://github.com/pauloedspinho20/OpenAxe/blob/main/THIRD_PARTY_NOTICES.md'
 const REPO_LICENSES_URL = 'https://github.com/pauloedspinho20/OpenAxe/tree/main/licenses'
 
+function renderVendorMark(v: VendorEntry, compact = false): string {
+  if (v.brandImg === '/brands/tone3000.svg') {
+    const height = compact ? 10 : 14
+    const width = Math.round((height * 210) / 32)
+    return `<span class="brand-pill-tone3000" aria-hidden="true"><img src="${escapeHtml(v.brandImg)}" alt="" width="${width}" height="${height}" loading="lazy" decoding="async" /></span>`
+  }
+  if (v.brandImg) {
+    const size = compact ? 16 : 22
+    return `<img class="brand-img-nam" src="${escapeHtml(v.brandImg)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" aria-hidden="true" />`
+  }
+  if (v.icon) {
+    if (compact) {
+      return `<span class="icon" data-icon="${escapeHtml(v.icon)}" aria-hidden="true"></span>`
+    }
+    return `<span class="vendor-row-icon" aria-hidden="true"><span class="icon" data-icon="${escapeHtml(v.icon)}"></span></span>`
+  }
+  return ''
+}
+
 function renderPreviewBanner(root: HTMLElement): void {
   const featured = VENDORS.filter((v) => v.featured)
   const remaining = VENDORS.length - featured.length
@@ -21,7 +40,8 @@ function renderPreviewBanner(root: HTMLElement): void {
         rel="noopener"
         title="${escapeHtml(v.usedFor)}"
       >
-        <span class="vendor-preview-name">${escapeHtml(v.name)}</span>
+        ${renderVendorMark(v, true)}
+        ${v.brandImg === '/brands/tone3000.svg' ? '<span class="sr-only">Tone3000</span>' : `<span class="vendor-preview-name">${escapeHtml(v.name)}</span>`}
         <span class="vendor-preview-ver">${escapeHtml(v.version)}</span>
       </a>`,
     )
@@ -48,11 +68,15 @@ function renderPreviewBanner(root: HTMLElement): void {
 function renderVendorRow(v: VendorEntry): string {
   const categoryLabel = CATEGORY_LABEL.get(v.category) ?? v.category
   const repoLabel = v.repoLabel ?? 'GitHub'
+  const repoIcon = v.repoLabel === 'GitLab' ? 'gitlab' : 'github'
 
   return `
     <tr>
       <th scope="row">
-        <span class="vendor-name">${escapeHtml(v.name)}</span>
+        <div class="vendor-row-brand">
+          ${renderVendorMark(v, false)}
+          <span class="vendor-name">${escapeHtml(v.name)}</span>
+        </div>
         <span class="vendor-meta">
           <span class="vendor-meta-cat">${escapeHtml(categoryLabel)}</span>
           <span class="vendor-meta-lic">${escapeHtml(v.license)}</span>
@@ -66,10 +90,10 @@ function renderVendorRow(v: VendorEntry): string {
         <div class="vendor-links">
           ${
             v.officialUrl
-              ? `<a class="vendor-link-pill" href="${escapeHtml(v.officialUrl)}" target="_blank" rel="noopener">Official ↗</a>`
+              ? `<a class="vendor-link-pill icon-start" data-icon="globe" href="${escapeHtml(v.officialUrl)}" target="_blank" rel="noopener">Official ↗</a>`
               : ''
           }
-          <a class="vendor-link-pill" href="${escapeHtml(v.repoUrl)}" target="_blank" rel="noopener"
+          <a class="vendor-link-pill icon-start" data-icon="${repoIcon}" href="${escapeHtml(v.repoUrl)}" target="_blank" rel="noopener"
             >${escapeHtml(repoLabel)} ↗</a
           >
         </div>
