@@ -4,10 +4,10 @@
  *   Selection, Text & chords) + collapsible 248px panel with readable controls.
  * - Tablet & mobile (`layout === 'dock'`): bottom edit dock with Entry
  *   (Keypad / Fretboard / Piano or DrumLane) + Note / Effects / Bar / Select /
- *   Text tabs, Undo/Redo, and collapse toggle so the sheet keeps the screen.
+ *   Text tabs and collapse toggle so the sheet keeps the screen.
  */
 import { model, type Settings } from '@coderline/alphatab'
-import { HardwareButton, RedoIcon, UndoIcon, type IconProps, Select } from '@openaxe/ui'
+import { HardwareButton, type IconProps, Select } from '@openaxe/ui'
 import { useRef, useState, type ComponentType, type ReactNode } from 'react'
 
 import { ChordLibrary } from './ChordLibrary'
@@ -47,10 +47,6 @@ export interface ToolboxProps {
   onGroup: (g: ToolGroup | null) => void
   selectionSize: number
   hasClip: boolean
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
   onCopy: (cut: boolean) => void
   onPaste: () => void
   onLoopSelection: () => void
@@ -1042,21 +1038,7 @@ export function TabToolbox(p: ToolboxProps) {
               )
             })}
           </div>
-          <div className={t.editDockActions} role="group" aria-label="History and dock">
-            <ToolbarButton
-              label="Undo"
-              icon={<UndoIcon size={15} />}
-              disabled={!p.canUndo}
-              title="Undo (Ctrl/Cmd+Z)"
-              onClick={p.onUndo}
-            />
-            <ToolbarButton
-              label="Redo"
-              icon={<RedoIcon size={15} />}
-              disabled={!p.canRedo}
-              title="Redo (Ctrl/Cmd+Shift+Z)"
-              onClick={p.onRedo}
-            />
+          <div className={t.editDockActions}>
             <ToolbarButton
               label={collapsed ? 'Expand edit dock' : 'Collapse edit dock'}
               icon={collapsed ? <I.ChevronUpIcon size={15} /> : <I.ChevronDownIcon size={15} />}
@@ -1090,21 +1072,6 @@ export function TabToolbox(p: ToolboxProps) {
             onClick={() => p.onGroup(activeGroup === id ? null : id)}
           />
         ))}
-        <span className={t.railSpacer} />
-        <ToolbarButton
-          label="Undo"
-          title="Undo (Ctrl/Cmd+Z)"
-          icon={<UndoIcon size={15} />}
-          disabled={!p.canUndo}
-          onClick={p.onUndo}
-        />
-        <ToolbarButton
-          label="Redo"
-          title="Redo (Ctrl/Cmd+Shift+Z)"
-          icon={<RedoIcon size={15} />}
-          disabled={!p.canRedo}
-          onClick={p.onRedo}
-        />
       </div>
 
       {activeGroup && <div className={t.panel}>{bodyContent}</div>}

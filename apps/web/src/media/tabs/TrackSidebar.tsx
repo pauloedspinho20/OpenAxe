@@ -46,6 +46,8 @@ export interface TrackSidebarProps {
   toneBadge?: string | number | undefined
   /** Render as a slide-over overlay drawer on narrow viewports. */
   asDrawer?: boolean
+  /** Whether the parent Media Center view is active (gates window Escape listener). */
+  viewActive?: boolean | undefined
 }
 
 function SongInfo({ score, apply }: { score: model.Score; apply: Apply }) {
@@ -320,9 +322,9 @@ export function TrackSidebar(p: TrackSidebarProps) {
     else setLocalTab(tab)
   }
 
-  const { asDrawer, onClose } = p
+  const { asDrawer, onClose, viewActive = true } = p
   useEffect(() => {
-    if (!asDrawer) return
+    if (!asDrawer || !viewActive) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -331,7 +333,7 @@ export function TrackSidebar(p: TrackSidebarProps) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [asDrawer, onClose])
+  }, [asDrawer, onClose, viewActive])
 
   const tabs: {
     id: InspectorTab

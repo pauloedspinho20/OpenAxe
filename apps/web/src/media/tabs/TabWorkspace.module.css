@@ -823,10 +823,6 @@
   border-right: 1px solid var(--seam);
 }
 
-.railSpacer {
-  flex: 1;
-}
-
 .panel {
   width: 248px;
   overflow-y: auto;

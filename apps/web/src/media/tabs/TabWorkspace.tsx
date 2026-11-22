@@ -24,9 +24,11 @@ import {
   StaveProfile,
   type synth,
 } from '@coderline/alphatab'
-import { HardwareButton, RedoIcon, Select, UndoIcon } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useRegisterViewHistory } from '../../hooks/useRegisterViewHistory'
+import { LazyUndoStack } from '../../state/undoStack'
 import styles from '../MediaCenter.module.css'
 import { keyName } from '../library'
 import { loadMediaFile, saveMedia, saveMediaFile, type MediaItem } from '../mediaDb'
@@ -158,15 +160,21 @@ export interface TabWorkspaceProps {
   item: MediaItem
   libraryOpen?: boolean
   onToggleLibrary?: () => void
+  /** Whether the parent Media Center view is active (gates window Escape listeners). */
+  viewActive?: boolean | undefined
 }
 
-export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: TabWorkspaceProps) {
+export default function TabWorkspace({
+  item,
+  libraryOpen,
+  onToggleLibrary,
+  viewActive = true,
+}: TabWorkspaceProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const apiRef = useRef<AlphaTabApi | null>(null)
   const scoreRef = useRef<Score | null>(null)
-  const undoRef = useRef<string[]>([])
-  const redoRef = useRef<string[]>([])
+  const [historyStack] = useState(() => new LazyUndoStack<string>(UNDO_LIMIT))
   const revisionRef = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typedRef = useRef<{ digits: string; at: number }>({ digits: '', at: 0 })
@@ -235,7 +243,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
   // The live score (alphaTab mutates it in place; `tick` re-renders after edits).
   const [score, setScore] = useState<Score | null>(null)
   const [revision, setRevision] = useState(0)
-  const [history, setHistory] = useState({ undo: 0, redo: 0 })
+  const [history, setHistory] = useState({ canUndo: false, canRedo: false })
   const [renderProgress, setRenderProgress] = useState<number | null>(null)
   const [texOpen, setTexOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
@@ -516,7 +524,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
   }, [profile, viewZoom, horizontal, tabRhythm, sheetDark])
 
   useEffect(() => {
-    if (!reading) return
+    if (!reading || !viewActive) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.preventDefault()
@@ -524,7 +532,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [reading])
+  }, [reading, viewActive])
 
   useEffect(() => {
     const api = apiRef.current
@@ -650,8 +658,13 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
     revisionRef.current++
     setRevision(revisionRef.current)
   }
-  const syncHistory = () =>
-    setHistory({ undo: undoRef.current.length, redo: redoRef.current.length })
+  const syncHistory = useCallback(() => {
+    const canUndo = historyStack.canUndo()
+    const canRedo = historyStack.canRedo()
+    setHistory((prev) =>
+      prev.canUndo === canUndo && prev.canRedo === canRedo ? prev : { canUndo, canRedo },
+    )
+  }, [historyStack])
 
   const scheduleSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -692,9 +705,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
       const api = apiRef.current
       const score = scoreRef.current
       if (!api || !score) return
-      undoRef.current.push(snapshot(score))
-      if (undoRef.current.length > UNDO_LIMIT) undoRef.current.shift()
-      redoRef.current = []
+      historyStack.recordBefore(snapshot(score))
       const next = fn(score, api.settings)
       bumpRevision()
       syncHistory()
@@ -705,7 +716,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
       setTick((x) => x + 1)
       scheduleSave()
     },
-    [trackIndex, scheduleSave],
+    [historyStack, syncHistory, trackIndex, scheduleSave],
   )
 
   const restore = useCallback(
@@ -724,24 +735,37 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
       setCursor((c) => edit.clampCursor(score, c))
       scheduleSave()
     },
-    [trackIndex, scheduleSave],
+    [syncHistory, trackIndex, scheduleSave],
   )
 
   const undo = useCallback(() => {
     const score = scoreRef.current
-    const prev = undoRef.current.pop()
-    if (!score || !prev) return
-    redoRef.current.push(snapshot(score))
+    if (!score) return
+    const prev = historyStack.undo(() => snapshot(score))
+    if (!prev) return
     restore(prev)
-  }, [restore])
+  }, [historyStack, restore])
 
   const redo = useCallback(() => {
     const score = scoreRef.current
-    const next = redoRef.current.pop()
-    if (!score || !next) return
-    undoRef.current.push(snapshot(score))
+    if (!score) return
+    const next = historyStack.redo(() => snapshot(score))
+    if (!next) return
     restore(next)
-  }, [restore])
+  }, [historyStack, restore])
+
+  useRegisterViewHistory(
+    'learn',
+    score
+      ? {
+          label: 'tab edit',
+          canUndo: history.canUndo,
+          canRedo: history.canRedo,
+          undo,
+          redo,
+        }
+      : null,
+  )
 
   // Cursor overlay: locate the beat (and string) in the rendered score.
   useEffect(() => {
@@ -837,8 +861,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
     if (!api || !bytes) return
     setMidiGrid(grid)
     const next = importMidiToScore(bytes, api.settings, { grid, title: item.name })
-    undoRef.current = []
-    redoRef.current = []
+    historyStack.clear()
     syncHistory()
     scoreRef.current = next
     setScore(next)
@@ -1117,17 +1140,6 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
     const score = scoreRef.current
     if (!score) return
     const mod = e.metaKey || e.ctrlKey
-    if (mod && e.key.toLowerCase() === 'z') {
-      e.preventDefault()
-      if (e.shiftKey) redo()
-      else undo()
-      return
-    }
-    if (mod && e.key.toLowerCase() === 'y') {
-      e.preventDefault()
-      redo()
-      return
-    }
     if (e.key === ' ') {
       e.preventDefault()
       void useMediaStore.getState().toggle()
@@ -1648,8 +1660,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
       const imp = new importer.AlphaTexImporter()
       imp.initFromString(texText, api.settings)
       const next = imp.readScore()
-      undoRef.current.push(snapshot(score))
-      redoRef.current = []
+      historyStack.recordBefore(snapshot(score))
       scoreRef.current = next
       setScore(next)
       bumpRevision()
@@ -2268,25 +2279,6 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
         </div>
 
         <div className={tabStyles.topRight}>
-          {editing && !isNarrow && (
-            <ToolbarGroup label="History">
-              <ToolbarButton
-                label="Undo"
-                icon={<UndoIcon size={14} />}
-                disabled={history.undo === 0}
-                title="Undo (Ctrl/Cmd+Z)"
-                onClick={undo}
-              />
-              <ToolbarButton
-                label="Redo"
-                icon={<RedoIcon size={14} />}
-                disabled={history.redo === 0}
-                title="Redo (Ctrl/Cmd+Shift+Z)"
-                onClick={redo}
-              />
-            </ToolbarGroup>
-          )}
-
           <WorkspacePopover
             label="View"
             hideLabelBelow="sm"
@@ -2597,10 +2589,6 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
             onGroup={setToolGroup}
             selectionSize={selection.length}
             hasClip={hasClip}
-            canUndo={history.undo > 0}
-            canRedo={history.redo > 0}
-            onUndo={undo}
-            onRedo={redo}
             onCopy={copySelection}
             onPaste={pasteClipboard}
             onLoopSelection={loopSelection}
@@ -2787,6 +2775,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
             onAdd={addTrackFrom}
             onClose={closeInspector}
             asDrawer={isNarrow}
+            viewActive={viewActive}
             activeTab={inspectorTab}
             onTabChange={setInspectorTab}
             practiceBadge={
@@ -2879,10 +2868,6 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
           entryContent={inputPanelNode}
           selectionSize={selection.length}
           hasClip={hasClip}
-          canUndo={history.undo > 0}
-          canRedo={history.redo > 0}
-          onUndo={undo}
-          onRedo={redo}
           onCopy={copySelection}
           onPaste={pasteClipboard}
           onLoopSelection={loopSelection}
@@ -3149,7 +3134,7 @@ export default function TabWorkspace({ item, libraryOpen, onToggleLibrary }: Tab
         </WorkspacePopover>
       </footer>
 
-      {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <Shortcuts active={viewActive} onClose={() => setHelpOpen(false)} />}
 
       {videoOpen && score && (
         <VideoExportDialog
@@ -3225,8 +3210,9 @@ const SHORTCUTS: [string, string][] = [
   ['?', 'This help'],
 ]
 
-function Shortcuts({ onClose }: { onClose: () => void }) {
+function Shortcuts({ active = true, onClose }: { active?: boolean; onClose: () => void }) {
   useEffect(() => {
+    if (!active) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -3235,7 +3221,7 @@ function Shortcuts({ onClose }: { onClose: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [active, onClose])
 
   return (
     <div className={tabStyles.help} role="dialog" aria-label="Keyboard shortcuts" onClick={onClose}>

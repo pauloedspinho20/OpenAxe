@@ -2,21 +2,25 @@
 import { render, renderHook } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetViewHistoryForTests, useViewHistoryStore } from '../state/viewHistoryStore'
 import { useUndoRedoHotkeys } from './useUndoRedoHotkeys'
 
 const undoMock = vi.fn()
 const redoMock = vi.fn()
 
-vi.mock('../state/historyStore', () => ({
-  useHistoryStore: {
-    getState: () => ({ undo: undoMock, redo: redoMock }),
-  },
-}))
-
 describe('useUndoRedoHotkeys', () => {
   beforeEach(() => {
     undoMock.mockClear()
     redoMock.mockClear()
+    resetViewHistoryForTests()
+    useViewHistoryStore.getState().register('rig', {
+      id: Symbol('rig'),
+      label: 'rig change',
+      canUndo: true,
+      canRedo: true,
+      undo: undoMock,
+      redo: redoMock,
+    })
   })
 
   it('Ctrl+Z triggers undo', () => {
@@ -96,5 +100,48 @@ describe('useUndoRedoHotkeys', () => {
     unmount()
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
     expect(undoMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores shortcuts when disabled', () => {
+    renderHook(() => useUndoRedoHotkeys(false))
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    fireEvent.keyDown(window, { key: 'y', ctrlKey: true })
+    expect(undoMock).not.toHaveBeenCalled()
+    expect(redoMock).not.toHaveBeenCalled()
+  })
+
+  it('routes shortcuts to the active view controller without calling inactive views', () => {
+    const learnUndo = vi.fn()
+    const learnRedo = vi.fn()
+    const store = useViewHistoryStore.getState()
+    store.register('learn', {
+      id: Symbol('learn'),
+      label: 'tab edit',
+      canUndo: true,
+      canRedo: true,
+      undo: learnUndo,
+      redo: learnRedo,
+    })
+    store.setActiveView('learn')
+
+    renderHook(() => useUndoRedoHotkeys())
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    fireEvent.keyDown(window, { key: 'y', ctrlKey: true })
+
+    expect(learnUndo).toHaveBeenCalledOnce()
+    expect(learnRedo).toHaveBeenCalledOnce()
+    expect(undoMock).not.toHaveBeenCalled()
+    expect(redoMock).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op when the active view has no registered controller', () => {
+    useViewHistoryStore.getState().setActiveView('learn')
+
+    renderHook(() => useUndoRedoHotkeys())
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    fireEvent.keyDown(window, { key: 'y', ctrlKey: true })
+
+    expect(undoMock).not.toHaveBeenCalled()
+    expect(redoMock).not.toHaveBeenCalled()
   })
 })

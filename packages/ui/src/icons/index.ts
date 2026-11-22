@@ -9,4 +9,12 @@ export {
   PauseIcon,
 } from './GeneraIcons'
 export { BlockIcon, RedoIcon, UndoIcon, type BlockKind } from './BlockIcons'
-export { InputIcon, MidiIcon, OutputIcon, PowerIcon, SettingsIcon } from './HeaderIcons'
+export {
+  InputIcon,
+  LearnIcon,
+  MidiIcon,
+  OutputIcon,
+  PowerIcon,
+  RigIcon,
+  SettingsIcon,
+} from './HeaderIcons'

@@ -1,14 +1,20 @@
 /* Media Center (issue #205): library + backing-track player + tab workspace. */
 
-.dialog {
+.shell {
   --wave: var(--ink-3);
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  background: var(--panel);
+  padding: var(--sp-3) var(--sp-4);
+  box-sizing: border-box;
 }
 
 .center {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--sp-4);
-  min-height: min(72vh, 760px);
   position: relative;
 }
 
@@ -44,6 +50,7 @@
   gap: var(--sp-2);
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--seam);
   padding-right: var(--sp-4);
 }
@@ -347,6 +354,7 @@
 
 .main {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
@@ -837,22 +845,15 @@
   }
 }
 
-/* ── Score mode: the tab workspace takes the whole dialog ─────────── */
-
-.dialogScore {
-  height: calc(100svh - 2 * var(--sp-5));
-}
-
-/* The Dialog body (second child) loses most of its padding in score mode. */
-.dialogScore > div:last-child {
-  padding: 6px 10px 10px;
-}
+/* ── Score mode: the tab workspace fills the full view canvas ──────── */
 
 .centerScore {
   flex: 1;
   min-height: 0;
   grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
+  padding: 8px 12px 10px;
 }
 
 .centerScore .main {
@@ -864,11 +865,11 @@
 }
 
 @media (max-width: var(--mw-md)) {
-  .dialogScore {
-    height: 100svh;
+  .shell {
+    padding: 6px;
   }
 
-  .dialogScore > div:last-child {
+  .centerScore {
     padding: 4px 6px 6px;
   }
 }

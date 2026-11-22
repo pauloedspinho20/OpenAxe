@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Dialog, HardwareButton, Select } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
@@ -32,11 +32,11 @@ const TabWorkspace = lazy(() => import('./tabs/TabWorkspace'))
 type Filter = 'all' | 'audio' | 'score' | 'sets'
 
 interface MediaCenterProps {
-  open: boolean
-  onClose: () => void
+  /** Whether the Media Center view is currently active in the shell. */
+  active?: boolean | undefined
 }
 
-export function MediaCenter({ open, onClose }: MediaCenterProps) {
+export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}) {
   const items = useMediaStore((s) => s.items)
   const activeId = useMediaStore((s) => s.activeId)
   const error = useMediaStore((s) => s.error)
@@ -73,11 +73,11 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
     setLastActive(activeId)
     setLibraryOpen(!focusMode)
   }
-  const showLibrary = !focusMode || libraryOpen
+  const showLibrary = focusMode ? libraryOpen : !(isNarrow && newOpen)
   const libraryAsDrawer = focusMode && isNarrow && showLibrary
 
   useEffect(() => {
-    if (!libraryAsDrawer) return
+    if (!viewActive || !libraryAsDrawer) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -86,7 +86,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [libraryAsDrawer])
+  }, [viewActive, libraryAsDrawer])
 
   const importFiles = async (files: FileList | File[]) => {
     if (!files.length) return
@@ -266,96 +266,87 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   )
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Media Center"
-      width={focusMode ? '100vw' : 'min(1320px, 97vw)'}
-      maxHeight={focusMode ? '100svh' : '95vh'}
-      fullScreenMobile
-      className={`${styles.dialog} ${focusMode ? styles.dialogScore : ''}`}
-    >
-      <div
-        className={`${styles.center} ${focusMode ? styles.centerScore : ''} ${showLibrary && !libraryAsDrawer ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('Files')) {
-            e.preventDefault()
-            setDragOver(true)
-          }
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
+    <div
+      className={`${styles.shell} ${styles.center} ${focusMode ? styles.centerScore : ''} ${showLibrary && !libraryAsDrawer ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault()
-          setDragOver(false)
-          void importFiles(e.dataTransfer.files)
-        }}
-      >
-        {showLibrary &&
-          (libraryAsDrawer ? (
-            <div
-              className={styles.drawerBackdrop}
-              onClick={() => setLibraryOpen(false)}
-              role="presentation"
-            >
-              <div className={styles.drawerHostLeft} onClick={(e) => e.stopPropagation()}>
-                {sidebarNode}
-              </div>
+          setDragOver(true)
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragOver(false)
+        void importFiles(e.dataTransfer.files)
+      }}
+    >
+      {showLibrary &&
+        (libraryAsDrawer ? (
+          <div
+            className={styles.drawerBackdrop}
+            onClick={() => setLibraryOpen(false)}
+            role="presentation"
+          >
+            <div className={styles.drawerHostLeft} onClick={(e) => e.stopPropagation()}>
+              {sidebarNode}
             </div>
-          ) : (
-            sidebarNode
-          ))}
+          </div>
+        ) : (
+          sidebarNode
+        ))}
 
-        <section className={`${styles.main} ${!focusMode && !newOpen ? styles.mainBrowse : ''}`}>
-          <SetBar />
-          {!hasTransport && (
-            <div className={styles.notice}>Power on the audio engine to play tracks and tabs.</div>
-          )}
-          {notice && (
-            <div className={styles.notice} role="status">
-              {notice}
-              <button
-                type="button"
-                className={styles.chip}
-                onClick={() => useMediaStore.setState({ notice: null })}
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-          {error && (
-            <div className={styles.errorNotice} role="alert">
-              {error}
-              <button
-                type="button"
-                className={styles.chip}
-                onClick={() => useMediaStore.setState({ error: null })}
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-          {newOpen && <NewSongForm onDone={() => setNewOpen(false)} />}
-          {!active && !newOpen && <EmptyState onImport={() => fileRef.current?.click()} />}
-          {active?.kind === 'audio' && (
-            <AudioView
+      <section className={`${styles.main} ${!focusMode && !newOpen ? styles.mainBrowse : ''}`}>
+        <SetBar />
+        {!hasTransport && (
+          <div className={styles.notice}>Power on the audio engine to play tracks and tabs.</div>
+        )}
+        {notice && (
+          <div className={styles.notice} role="status">
+            {notice}
+            <button
+              type="button"
+              className={styles.chip}
+              onClick={() => useMediaStore.setState({ notice: null })}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {error && (
+          <div className={styles.errorNotice} role="alert">
+            {error}
+            <button
+              type="button"
+              className={styles.chip}
+              onClick={() => useMediaStore.setState({ error: null })}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {newOpen && <NewSongForm onDone={() => setNewOpen(false)} />}
+        {!active && !newOpen && <EmptyState onImport={() => fileRef.current?.click()} />}
+        {active?.kind === 'audio' && (
+          <AudioView
+            item={active}
+            libraryOpen={libraryOpen}
+            onToggleLibrary={() => setLibraryOpen((v) => !v)}
+          />
+        )}
+        {active?.kind === 'score' && (
+          <Suspense fallback={<div className={styles.loading}>Loading tab editor…</div>}>
+            <TabWorkspace
+              key={active.id}
               item={active}
               libraryOpen={libraryOpen}
               onToggleLibrary={() => setLibraryOpen((v) => !v)}
+              viewActive={viewActive}
             />
-          )}
-          {active?.kind === 'score' && (
-            <Suspense fallback={<div className={styles.loading}>Loading tab editor…</div>}>
-              <TabWorkspace
-                key={active.id}
-                item={active}
-                libraryOpen={libraryOpen}
-                onToggleLibrary={() => setLibraryOpen((v) => !v)}
-              />
-            </Suspense>
-          )}
-        </section>
-      </div>
-    </Dialog>
+          </Suspense>
+        )}
+      </section>
+    </div>
   )
 }
 

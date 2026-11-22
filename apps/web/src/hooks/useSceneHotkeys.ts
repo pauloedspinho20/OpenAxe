@@ -18,8 +18,9 @@ export function isEditableTarget(el: EventTarget | null): boolean {
  * OnboardingModal/TunerDialog's Escape handlers, just unconditional (no
  * `open` gate) since this shortcut is meant to work anywhere in the app.
  */
-export function useSceneHotkeys(): void {
+export function useSceneHotkeys(enabled = true): void {
   useEffect(() => {
+    if (!enabled) return
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       if (e.repeat || e.isComposing) return
@@ -30,5 +31,5 @@ export function useSceneHotkeys(): void {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [enabled])
 }
