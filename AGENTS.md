@@ -118,6 +118,13 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Key decisions worth knowing before you edit
 
+- **The app has three views (RIG, LEARN, VISUALS)** registered in
+  `apps/web/src/appViews.ts`. LEARN lives in `apps/web/src/media/`; VISUALS
+  in `apps/web/src/visuals/`, where a new scene is one folder under
+  `scenes/` plus a line in `registry.ts` (see `visuals/README.md`). Scenes
+  are three.js TSL, so check the "three.js TSL / WebGPU" section of
+  `docs/known-issues.md` before writing shader code, and verify a scene in a
+  real browser: shader errors only show up at compile time there.
 - **Third-party bugs and workarounds are documented** in
   [docs/known-issues.md](./docs/known-issues.md) (alphaTab, browsers, WASM in
   AudioWorklets, tooling). Read it before removing anything that looks like
