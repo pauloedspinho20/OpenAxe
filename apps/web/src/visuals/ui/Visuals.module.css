@@ -1,0 +1,472 @@
+.root {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 340px;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+}
+
+.panelClosed {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+@media (max-width: 900px) {
+  .root,
+  .panelClosed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, 60vh) auto;
+    overflow-y: auto;
+  }
+}
+
+/* ——— Scene list ——— */
+.sceneList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sectionLabel {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0 var(--sp-1) var(--sp-1);
+}
+
+.sceneItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--sp-1);
+}
+
+.sceneAuthor {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* ——— Stage ——— */
+.stage {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  background: #000;
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-recessed);
+}
+
+.stage:fullscreen {
+  border: 0;
+  border-radius: 0;
+}
+
+.stageIdle {
+  cursor: none;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.canvas:active {
+  cursor: grabbing;
+}
+
+/* Recording renders at a fixed size: show it whole, letterboxed. */
+.canvasFixed {
+  object-fit: contain;
+}
+
+.overlayMessage {
+  position: absolute;
+  inset: auto var(--sp-4) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px;
+  color: var(--screen-text);
+  background: var(--overlay-bg);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
+
+.overlayError {
+  inset: 50% var(--sp-4) auto;
+  transform: translateY(-50%);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-surface);
+  color: var(--ink-1);
+  pointer-events: auto;
+}
+
+.stageChrome {
+  position: absolute;
+  inset: var(--sp-2) var(--sp-2) auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.stageChromeHidden {
+  opacity: 0;
+}
+
+.stageBadges,
+.stageButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.badge {
+  padding: 2px var(--sp-2);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: #e8e6df;
+  background: rgb(0 0 0 / 55%);
+  border-radius: var(--r-sm);
+}
+
+.badgeRec {
+  color: #fff;
+  background: rgb(200 30 30 / 85%);
+}
+
+.stageButton {
+  pointer-events: auto;
+}
+
+/* ——— Control panel ——— */
+.panel {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--panel);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.panelHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--seam);
+}
+
+.panelTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.credit {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4px;
+}
+
+.credit a {
+  color: var(--accent);
+}
+
+.creditNote {
+  flex-basis: 100%;
+  color: var(--ink-3);
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.section {
+  border-bottom: 1px solid var(--seam);
+}
+
+.section > summary {
+  padding: var(--sp-2) var(--sp-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-1) var(--sp-3);
+}
+
+.paramRow {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 22px;
+}
+
+.paramLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-1);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rebuildMark {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.modMark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--led-on);
+  box-shadow: 0 0 4px var(--led-on);
+}
+
+.sliderCell {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.amountSlider {
+  flex: 0 0 72px;
+}
+
+.paramValue {
+  flex: none;
+  min-width: 38px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-2);
+}
+
+.colorInput {
+  width: 44px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+}
+
+.midiCell {
+  justify-self: end;
+  display: inline-flex;
+}
+
+.midiButton {
+  min-inline-size: 40px;
+}
+
+.rowActions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-1);
+}
+
+/* ——— Routes ——— */
+.mods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.modRow {
+  border: 1px solid var(--seam);
+  border-radius: var(--r-sm);
+  background: var(--panel-recessed);
+}
+
+.modDisabled {
+  opacity: 0.55;
+}
+
+.modHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 3px var(--sp-1);
+}
+
+.modSummary {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.modBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-top: 1px solid var(--seam);
+}
+
+.modField {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* ——— Meters ——— */
+.meters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: var(--screen-bg);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-recessed);
+}
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--screen-dim);
+}
+
+.readoutNote {
+  min-width: 32px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--screen-text);
+}
+
+.meterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meterGroupLabel {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--screen-dim);
+}
+
+.meterRow {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.meterLabel {
+  font-size: 10px;
+  color: var(--screen-text);
+}
+
+.meterTrack {
+  position: relative;
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 8%);
+  overflow: hidden;
+}
+
+.meterFill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--led-on);
+}
+
+.meterImpulse {
+  background: var(--accent);
+}
+
+/* ——— Presets ——— */
+.presetBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.presetSelect {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.presetName {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-block-size: var(--input-height);
+  padding: 4px var(--sp-2);
+  font-size: 12px;
+  color: var(--ink-1);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+}
+
+.presetDirty {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--led-warn);
+}

@@ -96,3 +96,12 @@ export function LearnIcon(props: IconProps) {
     </Icon>
   )
 }
+
+export function VisualsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z" />
+      <path d="M12 12l7.8-4.5M12 12v9M12 12L4.2 7.5" />
+    </Icon>
+  )
+}

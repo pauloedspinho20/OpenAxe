@@ -18,4 +18,5 @@ export {
   PowerIcon,
   RigIcon,
   SettingsIcon,
+  VisualsIcon,
 } from './HeaderIcons'
