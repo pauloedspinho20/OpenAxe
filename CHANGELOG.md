@@ -7,6 +7,21 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-23
+### Added
+- feat(web): VISUALS view with audio-reactive three.js WebGPU scenes (#463) (b57c272)
+- feat(media): score sections on waveform, smarter rhythm entry, and offline WebCodecs video export (#461) (b7a6601)
+- feat(media): Media Center — backing-track player + tab viewer/editor (#205, #206) (#457) (109c6d0)
+- feat(landing): redesign landing site, releases archive, and vendors ledger (#460) (8eee7b8)
+
+### Fixed
+- fix(release): push the release commit and tag in one atomic push (3ea96ed)
+- fix(landing): read the version from VERSION, not three hardcoded copies (#456) (dcf3dd4)
+- fix(release): deploy the landing to production, not a preview (#455) (4beb305)
+- fix(release): mirror files to the GitHub Release, not directories (#454) (3101f0a)
+
+
+
 ## [0.4.2] - 2026-11-23
 ### Changed
 - Dev to main (#462) (3c8e545)
