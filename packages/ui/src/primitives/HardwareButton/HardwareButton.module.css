@@ -136,6 +136,11 @@
 
 .button.fullWidth {
   inline-size: 100%;
+  /* A fullWidth button must still yield inside a flex row (e.g. the mobile
+     I/O rails hold two of them): with the base `flex-shrink: 0` each kept its
+     100% basis and the row overflowed the viewport. */
+  flex-shrink: 1;
+  min-inline-size: 0;
 }
 
 .withIcon {
