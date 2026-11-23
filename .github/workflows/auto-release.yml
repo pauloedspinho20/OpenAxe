@@ -103,11 +103,24 @@ jobs:
 
       - name: Push commit and tag
         if: steps.bump.outputs.created == 'true'
+        # One atomic push for the commit and its tag. Pushing them separately let
+        # the tag push land on a GitHub replica that did not have the commit yet
+        # ("! [remote rejected] v0.4.2 -> v0.4.2 (missing necessary objects)"):
+        # main moved, no tag existed, so release.yml never ran and the landing
+        # stayed on the previous version. --atomic also means main is never
+        # bumped without its tag. Retried for transient server-side errors.
         run: |
           NEXT="${{ steps.bump.outputs.next }}"
-          echo "Pushing v$NEXT to origin..."
-          git push origin main
-          git push origin "v$NEXT"
+          echo "Pushing main + v$NEXT to origin..."
+          for attempt in 1 2 3 4; do
+            if git push --atomic origin main "refs/tags/v$NEXT"; then
+              exit 0
+            fi
+            echo "::warning::push attempt $attempt failed, retrying in $((attempt * 10))s"
+            sleep $((attempt * 10))
+          done
+          echo "::error::Could not push main + v$NEXT. Push the tag by hand: git push origin v$NEXT"
+          exit 1
 
       # Put the release commit back on dev straight away (issue #304). Doing it
       # here rather than by hand matters twice over:

@@ -95,6 +95,61 @@ class="at">` styled by the page's `@font-face` (`alphaTab` → Bravura), and
   optional peer, which pulled Vite into the redistributed licence list.
   `scripts/sync-licenses.mjs` excludes build-only optional peers.
 
+## three.js TSL / WebGPU (`three` 0.181)
+
+These came out of porting the VISUALS scenes from GLSL to TSL
+(`apps/web/src/visuals/scenes/`).
+
+### WGSL reserved words break `Fn().setLayout()` names
+
+- **Symptom:** a black canvas and `'type' is a reserved keyword` from the WGSL
+  parser. TSL writes layout input names and function names into the WGSL as
+  they are, and WGSL reserves many common words (`type`, `ptr`, `fn`, `let`,
+  `var`, `loop`, `target`, `sample`, `filter`, `meta`...).
+- **Workaround:** pick other names (`kind` in
+  `scenes/distilledCube/scene.ts`).
+
+### A layout function shared by several materials loses its uniforms
+
+- **Symptom:** `unresolved value 'NodeBuffer_…'` or `struct member nodeUniform0
+not found` when a scene compiles. A `Fn().setLayout()` function becomes one
+  WGSL function, generated once; materials built after the first don't
+  register the uniforms or uniform arrays it reads, so their shaders refer to
+  bindings that don't exist. A single material is fine (Distilled Cube,
+  Holographic Cube Grid); Digital Core has five sharing helpers.
+- **Workaround:** only pure functions (hashes, noise) keep `setLayout`; any
+  helper that reads a scene uniform is a plain `Fn` and inlines at each call
+  (`scenes/digitalCore/materials.ts`).
+
+### Shader errors don't throw
+
+- **Symptom:** a WGSL compile or pipeline error is only logged; `compileAsync`
+  resolves and the canvas stays black.
+- **Workaround:** `VisualsEngine.loadScene` wraps scene creation in a WebGPU
+  validation error scope and shows the first error over the stage.
+
+### `screenCoordinate` is top-left on both backends
+
+- **Symptom:** a ported fullscreen shader renders upside down.
+  `gl_FragCoord` is bottom-left in GLSL, but TSL's `screenCoordinate` follows
+  WebGPU (top-left) on WebGL2 too.
+- **Workaround:** flip it: `vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y))`.
+
+### Headless Chromium drops the device on heavy scenes
+
+- **Symptom:** `Instance dropped in popErrorScope` when capturing screenshots
+  in headless Playwright. Headless Chromium runs WebGPU on SwiftShader (on the
+  CPU), and the ray-marching scenes lose the device.
+- **Workaround:** `apps/landing/scripts/capture-screenshots.mjs` launches with
+  `--enable-gpu --ignore-gpu-blocklist --use-angle=metal` to use the real GPU
+  (`CAPTURE_HEADED=1` for a visible window).
+
+### Vite hot reload doesn't refresh a loaded scene
+
+- **Symptom:** editing `scenes/*/scene.ts` changes nothing on screen. Scenes
+  are loaded with a dynamic `import()` and kept by the engine.
+- **Workaround:** reload the page after editing a scene.
+
 ## Browsers
 
 ### `std::random_device` aborts inside an AudioWorklet (Emscripten / WASM)

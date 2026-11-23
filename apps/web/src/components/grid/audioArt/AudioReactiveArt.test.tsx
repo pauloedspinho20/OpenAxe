@@ -76,8 +76,10 @@ function makeAnalyser(): AnalyserNode {
 describe('AudioReactiveArt', () => {
   beforeEach(() => {
     // canvas2dSupported() must return true so the effect creates the sketch.
+    // Cast through never: @types/three's WebGPU typings add a 'webgpu'
+    // overload, so the inferred mock return type is no longer 2D-only.
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      {} as CanvasRenderingContext2D,
+      {} as CanvasRenderingContext2D as never,
     )
     vi.stubGlobal(
       'ResizeObserver',

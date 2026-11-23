@@ -48,6 +48,67 @@ per-target status of that split, the migration order, and the latency budget).
 - **Design tokens** — Single source of truth (`packages/ui/tokens/design-tokens.json`) generating CSS custom properties (web/desktop) and `packages/vst3/generated/tokens.h` (C++ `IColor`/`constexpr float`) via `node packages/ui/scripts/generate-tokens.mjs [--target=css|cpp]`.
 - **React components** — Shared between web, desktop _and_ VST3 plugin (all via webview). Mobile reimplements primitives natively (Compose/SwiftUI) consuming the same design tokens.
 
+## App views
+
+The app has three views, switched from the header (`apps/web/src/appViews.ts`).
+They share the engine, so the rig keeps running whichever one is open.
+
+| View        | What it is                                                                      | Where           |
+| ----------- | ------------------------------------------------------------------------------- | --------------- |
+| **RIG**     | The 4×10 block grid, scenes, presets, tuner and MIDI                            | every front end |
+| **LEARN**   | Media Center: backing tracks, tabs and practice tools, played through the rig   | web, desktop    |
+| **VISUALS** | Audio-reactive WebGPU scenes driven by your playing, with presets and recording | every front end |
+
+### LEARN (Media Center)
+
+Code: `apps/web/src/media/` (library, transport, waveform) and
+`apps/web/src/media/tabs/` (the tab workspace). Audio goes through the core
+`BackingPlayer` (`openaxe_player_*`), rendered after the rig into the same
+output, so a backing track plays on the rig's device. Issues #205, #206, #459.
+
+- **Library:** import audio, Guitar Pro (GP3–8, GPX), MusicXML, MIDI or
+  AlphaTex by picker or drag-and-drop. Stored in the shared kv/asset stores
+  (IndexedDB on the web, the on-disk store on desktop). Set lists and
+  `.oapack` practice packs (song + recording + sync points + loops) for sharing.
+- **Backing tracks:** pitch-preserving speed 0.25–2× (Signalsmith Stretch),
+  ±12 semitone transpose, waveform with drag-to-loop, markers and score
+  sections, speed trainer, keyboard shortcuts and a dock that keeps the
+  transport on screen in other views.
+- **Tabs:** alphaTab 1.9 viewer and a keyboard-first Guitar Pro–style editor
+  (durations, techniques, repeats, chord library, auto-fingering, find &
+  replace, drum lane, fretboard/piano/touch keypad input, MIDI and guitar
+  step entry, lead-sheet view). Playback synthesizes the score and plays it
+  through the core player, with per-track mute/solo and a metronome.
+- **Practice:** wait mode, count-in, scored runs with a bar heat-map and a
+  progress chart, recordings paired to the tab by tapping bar starts, and
+  song-to-scene tone switching that changes the rig section by section.
+- **Export:** `.gp`/`.atex`/`.mid`, print (PDF via the browser) and video of
+  the scrolling tab (`tabs/videoExport.ts`).
+
+The plugin doesn't offer LEARN: in a DAW, the host is the transport.
+
+### VISUALS
+
+Code: `apps/web/src/visuals/` (see its [README](./apps/web/src/visuals/README.md)
+for adding a scene). three.js `WebGPURenderer` with TSL node materials, so
+the same scene runs on WebGPU or falls back to WebGL2. three.js loads only
+when the view is opened, and each scene is its own chunk.
+
+- **Audio features** (`visuals/audio/`): from an analyser tap, computed on
+  the UI thread every frame. Volume (auto-ranged), sustain, activity; pitch
+  (the core detector) as note colour wheel, register, vibrato, bend and note
+  changes; timbre as brightness, grit, attack (spectral flux) and four bands.
+  Source: the dry input, the rig output, or both (pitch from the input, tone
+  from the output). One responsiveness dial, sensitivity and a noise gate.
+- **Scenes** declare their params, default audio routes and credit as data;
+  the control panel, persistence, presets and MIDI learn are generic. Each
+  route maps a feature to a param with an amount, curve and smoothing.
+- **Control panel:** editable routes, live feature meters, per-scene saved
+  presets, MIDI CC learn, fullscreen, and live recording at preset sizes with
+  the monitor mix (MediaRecorder).
+- **Scenes shipped:** Distilled Cube, Holographic Cube Grid and Digital Core,
+  all by [Sabo Sugi](https://codepen.io/sabosugi), ported from GLSL to TSL.
+
 ## Architecture
 
 ### Signal graph (GraphRig)
@@ -121,6 +182,7 @@ OpenAxe/
 │   │   │   ├── effects/          # Web audio effect DSP modules + param schema
 │   │   │   ├── engine/           # Audio engine (GraphRig, AudioContext lifecycle)
 │   │   │   ├── hooks/            # React hooks
+│   │   │   ├── media/            # LEARN view: library, backing-track transport, tabs/ workspace
 │   │   │   ├── midi/             # MIDI message handling
 │   │   │   ├── presets/          # Preset capture, storage, sharing
 │   │   │   ├── scenes/           # Scene bank
@@ -129,8 +191,10 @@ OpenAxe/
 │   │   │   ├── storage/          # IndexedDB
 │   │   │   ├── test/             # Vitest setup
 │   │   │   ├── tone3000/         # Tone3000 API
-│   │   │   └── tuner/            # Pitch detection
+│   │   │   ├── tuner/            # Pitch detection
+│   │   │   └── visuals/          # VISUALS view: audio features, scene host, scenes/ (three.js TSL)
 │   │   └── e2e/                  # Playwright E2E tests
+│   ├── landing/               # Marketing site (Vite); scripts/capture-screenshots.mjs regenerates its app screenshots
 │   ├── desktop/               # Native desktop shell — C++ + webview.h + miniaudio + React UI (#15), see apps/desktop/README.md
 │   ├── ios/                   # Placeholder — SwiftUI + C++ via ObjC++ bridge (#17)
 │   └── android/               # Placeholder — Jetpack Compose + C++ via JNI (#17)

@@ -4,6 +4,12 @@
  * Aluminum (light) hardware finishes, plus generates the 1200x630 og-image.png.
  *
  * Uses Playwright from apps/web and runs apps/web's Vite dev server locally.
+ *
+ *   node scripts/capture-screenshots.mjs                      # everything
+ *   node scripts/capture-screenshots.mjs --only=learn,visuals # just those shots
+ *
+ * Shot names for --only: hero, workflow-grid, workflow-presets, workflow-tuner,
+ * workflow-midi, og, learn, visuals.
  */
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -17,6 +23,34 @@ const outDir = path.resolve(landingDir, 'public/screenshots')
 const ogOutPath = path.resolve(landingDir, 'public/og-image.png')
 const iconPath = path.resolve(landingDir, 'public/icons/openaxe-192.png')
 const pkgPath = path.resolve(landingDir, 'package.json')
+
+const ONLY = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--only='))
+  return arg ? new Set(arg.slice('--only='.length).split(',').filter(Boolean)) : null
+})()
+const want = (name) => !ONLY || ONLY.has(name)
+const RIG_SHOTS = ['hero', 'workflow-grid', 'workflow-presets', 'workflow-tuner', 'workflow-midi']
+
+// A short demo song for the LEARN tab workspace: sections, chords and a riff.
+const DEMO_SONG_ATEX = [
+  '\\title "Midnight Drive"',
+  '\\artist "OpenAxe Demo"',
+  '\\tempo 96',
+  '.',
+  '\\track "Lead Guitar"',
+  '\\staff {score tabs}',
+  '\\tuning (E4 B3 G3 D3 A2 E2)',
+  '\\section "Intro" (0.6 2.5 2.4).4 {ch "Em"} 0.6.8 2.5.8 (3.6 2.5 0.4).4 {ch "G"} 3.6.8 5.5.8 |',
+  '(2.5 2.4 2.3).4 {ch "D"} 0.4.8 2.3.8 (0.5 2.4 2.3).4 {ch "A"} 2.3.8 0.2.8 |',
+  '\\section "Verse" 0.6.8 0.6.8 3.6.8 0.6.8 5.6.8 3.6.8 0.6.8 5.5.8 |',
+  '7.5.8 5.5.8 7.5.8 5.5.8 (5.4 7.5).4 {ch "C5"} r.4 |',
+  '0.6.8 0.6.8 3.6.8 0.6.8 5.6.8 3.6.8 7.5.16 5.5.16 3.5.8 |',
+  '(2.5 2.4).2 {ch "E5"} (5.5 5.4).2 {ch "D5"} |',
+  '\\section "Chorus" (3.6 2.5 0.4 0.3).2 {ch "G"} (2.5 2.4 2.3 0.2).2 {ch "D"} |',
+  '(0.6 2.5 2.4 0.3).2 {ch "Em"} (3.5 2.4 0.3 1.2).2 {ch "C"} |',
+  '12.2.8 15.2.8 12.1.4 14.2.8 12.2.8 14.3.4 |',
+  '12.3.4 14.3.8 12.3.8 (14.4 14.3).2 {ch "E5"} |',
+].join('\n')
 
 const WEB_PORT = 5179
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`
@@ -394,7 +428,15 @@ async function main() {
 
   try {
     browser = await chromium.launch({
+      headless: process.env.CAPTURE_HEADED !== '1',
       args: [
+        // VISUALS scenes are heavy GPU ray-marchers: use the real GPU, not
+        // headless Chromium's software (SwiftShader) adapter, which drops
+        // the device on them. CAPTURE_HEADED=1 runs a visible window instead.
+        '--enable-unsafe-webgpu',
+        '--enable-gpu',
+        '--ignore-gpu-blocklist',
+        '--use-angle=metal',
         '--use-fake-device-for-media-stream',
         '--use-fake-ui-for-media-stream',
         '--autoplay-policy=no-user-gesture-required',
@@ -478,54 +520,69 @@ async function main() {
     await page.getByRole('button', { name: 'INPUT', exact: true }).click()
     const inputDialog = page.getByRole('dialog', { name: 'Input' })
     await inputDialog.waitFor({ state: 'visible' })
-    await inputDialog.getByLabel('DI Sample').selectOption('fender-stratocaster-neck-solo')
+    // The DI picker is the design-system Select (a combobox + listbox), not a <select>.
+    await inputDialog.getByLabel('DI Sample').click()
+    await page.getByRole('option', { name: /Neck Pickup Solo/ }).click()
     await inputDialog.getByRole('button', { name: 'Play', exact: true }).click()
     await page.waitForTimeout(300)
     await inputDialog.getByRole('button', { name: 'Close', exact: true }).click()
     await inputDialog.waitFor({ state: 'hidden' })
 
-    // Enrich Clean (row 1: Comp col 1, EQ col 2, Mixer col 3) into a realistic studio rig:
-    // Row 1: Comp (1,1) -> EQ (1,2) -> Mixer (1,3) -> Delay (1,5) -> Reverb (1,7)
-    // Row 2: Gate (2,1) -> Pedal (2,2) -> Amp (2,4) -> Cab (2,5) -> Chorus (2,6)
-    await addBlockAt(page, 1, 5, 'Delay')
-    await addBlockAt(page, 1, 7, 'Reverb')
-    await addBlockAt(page, 2, 1, 'Gate')
-    await addBlockAt(page, 2, 2, 'Pedal')
-    await addBlockAt(page, 2, 4, 'Amp')
-    await addBlockAt(page, 2, 5, 'Cab')
-    await addBlockAt(page, 2, 6, 'Chorus')
+    if (RIG_SHOTS.some(want) || want('og')) await captureRigShots(page, helperPage)
+    if (want('og')) await buildOgImage(browser, pkg.version)
+    if (want('learn')) await captureLearn(page, helperPage)
+    if (want('visuals')) await captureVisuals(page, helperPage)
+  } finally {
+    if (browser) await browser.close()
+    stopServer()
+  }
+}
 
-    // Click Delay block so the BlockInspector is rich with knobs and model selectors
-    await page
-      .getByRole('button', { name: 'Delay block - click or Enter to edit, arrow keys to move' })
-      .click()
-    await page.waitForTimeout(250)
+/** The RIG view shots (hero + the four workflow tabs). */
+async function captureRigShots(page, helperPage) {
+  // Enrich Clean (row 1: Comp col 1, EQ col 2, Mixer col 3) into a realistic studio rig:
+  // Row 1: Comp (1,1) -> EQ (1,2) -> Mixer (1,3) -> Delay (1,5) -> Reverb (1,7)
+  // Row 2: Gate (2,1) -> Pedal (2,2) -> Amp (2,4) -> Cab (2,5) -> Chorus (2,6)
+  await addBlockAt(page, 1, 5, 'Delay')
+  await addBlockAt(page, 1, 7, 'Reverb')
+  await addBlockAt(page, 2, 1, 'Gate')
+  await addBlockAt(page, 2, 2, 'Pedal')
+  await addBlockAt(page, 2, 4, 'Amp')
+  await addBlockAt(page, 2, 5, 'Cab')
+  await addBlockAt(page, 2, 6, 'Chorus')
 
-    // 1. Hero captures (full studio rig + Delay inspector + live meters)
-    await captureBothFinishes(page, helperPage, 'hero-rig', 250)
+  // Click Delay block so the BlockInspector is rich with knobs and model selectors
+  await page
+    .getByRole('button', { name: 'Delay block - click or Enter to edit, arrow keys to move' })
+    .click()
+  await page.waitForTimeout(250)
 
-    // 2. Workflow Tab 1: Modular 4x10 parallel routing — switch to Lead or select Rotary/EQ on 2 rows
-    await addBlockAt(page, 3, 3, 'Rotary')
-    await addBlockAt(page, 3, 5, 'Phaser')
-    await page
-      .getByRole('button', { name: 'Reverb block - click or Enter to edit, arrow keys to move' })
-      .click()
-    await page.waitForTimeout(250)
-    await captureBothFinishes(page, helperPage, 'workflow-grid', 250)
+  // 1. Hero captures (full studio rig + Delay inspector + live meters)
+  if (want('hero') || want('og')) await captureBothFinishes(page, helperPage, 'hero-rig', 250)
 
-    // 3. Workflow Tab 2: Presets & 8-Slot Scenes — save custom preset first, then capture PresetManager in both finishes
-    await setFinish(page, 'dark')
-    await page.getByRole('button', { name: 'PRESETS', exact: true }).click()
-    const presetDialog = page.getByRole('dialog', { name: 'PRESETS' })
-    await presetDialog.waitFor({ state: 'visible' })
-    await presetDialog.getByPlaceholder('Preset name').fill('Studio Twin Parallel')
-    await presetDialog.getByRole('button', { name: 'Save Current', exact: true }).click()
-    await presetDialog.getByText('Studio Twin Parallel').waitFor({ state: 'visible' })
-    await presetDialog.getByRole('button', { name: 'Close', exact: true }).click()
-    await presetDialog.waitFor({ state: 'hidden' })
-    // Let the save toast auto-dismiss so dialog captures remain clean
-    await page.waitForTimeout(4500)
+  // 2. Workflow Tab 1: Modular 4x10 parallel routing — switch to Lead or select Rotary/EQ on 2 rows
+  await addBlockAt(page, 3, 3, 'Rotary')
+  await addBlockAt(page, 3, 5, 'Phaser')
+  await page
+    .getByRole('button', { name: 'Reverb block - click or Enter to edit, arrow keys to move' })
+    .click()
+  await page.waitForTimeout(250)
+  if (want('workflow-grid')) await captureBothFinishes(page, helperPage, 'workflow-grid', 250)
 
+  // 3. Workflow Tab 2: Presets & 8-Slot Scenes — save custom preset first, then capture PresetManager in both finishes
+  await setFinish(page, 'dark')
+  await page.getByRole('button', { name: 'PRESETS', exact: true }).click()
+  const presetDialog = page.getByRole('dialog', { name: 'PRESETS' })
+  await presetDialog.waitFor({ state: 'visible' })
+  await presetDialog.getByPlaceholder('Preset name').fill('Studio Twin Parallel')
+  await presetDialog.getByRole('button', { name: 'Save Current', exact: true }).click()
+  await presetDialog.getByText('Studio Twin Parallel').waitFor({ state: 'visible' })
+  await presetDialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await presetDialog.waitFor({ state: 'hidden' })
+  // Let the save toast auto-dismiss so dialog captures remain clean
+  await page.waitForTimeout(4500)
+
+  if (want('workflow-presets'))
     await captureModalBothFinishes(
       page,
       helperPage,
@@ -541,8 +598,9 @@ async function main() {
       200,
     )
 
-    // 4. Workflow Tab 3: Chromatic Tuner (live DI signal feeding pitch detection)
-    const tunerDialog = page.getByRole('dialog', { name: 'Tuner' })
+  // 4. Workflow Tab 3: Chromatic Tuner (live DI signal feeding pitch detection)
+  const tunerDialog = page.getByRole('dialog', { name: 'Tuner' })
+  if (want('workflow-tuner'))
     await captureModalBothFinishes(
       page,
       helperPage,
@@ -568,8 +626,9 @@ async function main() {
       150,
     )
 
-    // 5. Workflow Tab 4: MIDI Learn & Parameter Mapping
-    const midiDialog = page.getByRole('dialog', { name: 'MIDI CONTROL' })
+  // 5. Workflow Tab 4: MIDI Learn & Parameter Mapping
+  const midiDialog = page.getByRole('dialog', { name: 'MIDI CONTROL' })
+  if (want('workflow-midi'))
     await captureModalBothFinishes(
       page,
       helperPage,
@@ -592,12 +651,59 @@ async function main() {
       },
       200,
     )
+}
 
-    // 6. Generate 1200x630 og-image.png
-    await buildOgImage(browser, pkg.version)
-  } finally {
-    if (browser) await browser.close()
-    stopServer()
+/** LEARN: the tab workspace with a demo song loaded and the DI still playing. */
+async function captureLearn(page, helperPage) {
+  await setFinish(page, 'dark')
+  await page.getByTitle('Media Center — backing tracks and tabs').click()
+  const input = page.locator('input[type="file"][accept*=".atex"]').first()
+  await input.setInputFiles({
+    name: 'OpenAxe Demo - Midnight Drive.atex',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(DEMO_SONG_ATEX, 'utf8'),
+  })
+  const item = page.getByText('Midnight Drive').first()
+  await item.waitFor({ state: 'visible', timeout: 15000 })
+  await item.click()
+  // alphaTab renders asynchronously into SVG parts.
+  await page
+    .locator('.at-surface svg, .at-surface-svg')
+    .first()
+    .waitFor({ timeout: 30000 })
+    .catch(() => {})
+  await page.waitForTimeout(1500)
+  await captureBothFinishes(page, helperPage, 'feature-learn', 400)
+}
+
+/** VISUALS: each scene reacting to the DI sample, control panel open. */
+async function captureVisuals(page, helperPage) {
+  await setFinish(page, 'dark')
+  await page.getByTitle('Audio-reactive visuals').click()
+  const scenes = [
+    ['Distilled Cube', 'feature-visuals-cube'],
+    ['Holographic Cube Grid', 'feature-visuals-grid'],
+    ['Digital Core', 'feature-visuals-core'],
+  ]
+  for (const [name, base] of scenes) {
+    await page.getByRole('button', { name, exact: true }).click()
+    // Scenes compile their shaders on load; the fps badge appears once running.
+    // (Visible only: the Frame rate select also holds hidden "60 fps" text.)
+    await page.waitForTimeout(600)
+    await page
+      .getByText(/^\d+ fps$/)
+      .filter({ visible: true })
+      .first()
+      .waitFor({ timeout: 90000 })
+      .catch(async (err) => {
+        const alert = await page
+          .getByRole('alert')
+          .allTextContents()
+          .catch(() => [])
+        throw new Error(`${name} never started rendering: ${alert.join(' | ') || err.message}`)
+      })
+    await page.waitForTimeout(2500)
+    await captureBothFinishes(page, helperPage, base, 1200)
   }
 }
 
