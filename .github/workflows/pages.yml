@@ -19,6 +19,7 @@ on:
     paths:
       - 'apps/landing/**'
       - 'packages/ui/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
