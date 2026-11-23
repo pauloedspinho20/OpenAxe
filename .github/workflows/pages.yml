@@ -1,3 +1,10 @@
+# Builds the landing on every change to it, so a broken landing fails before
+# the merge, and attaches the built site to PRs as a preview artifact.
+#
+# It does not deploy. The live site (openaxe-site.pages.dev) is Cloudflare
+# Pages, shipped by release.yml's `landing` job against the fresh R2
+# manifest. This workflow used to also deploy to GitHub Pages, which is not
+# enabled on the repo, so that job failed on every push to main.
 name: Pages — landing
 
 on:
@@ -12,12 +19,11 @@ on:
     paths:
       - 'apps/landing/**'
       - 'packages/ui/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-${{ github.ref }}
@@ -40,11 +46,6 @@ jobs:
       - name: Build landing
         run: pnpm --filter @openaxe/landing build
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: apps/landing/dist
-
       # PR preview as plain artifact (not Pages)
       - name: Upload preview artifact (PR only)
         if: github.event_name == 'pull_request'
@@ -53,15 +54,3 @@ jobs:
           name: landing-preview-${{ github.sha }}
           path: apps/landing/dist
           if-no-files-found: error
-
-  deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
