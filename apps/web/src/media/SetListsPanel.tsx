@@ -2,7 +2,7 @@
  * Set lists in the library sidebar (issue #459): make a set, add songs in
  * order with their own speed and transpose, then play it song by song.
  */
-import { HardwareButton, Select } from '@openaxe/ui'
+import { HardwareButton, PlusIcon, Select } from '@openaxe/ui'
 import { useState } from 'react'
 
 import styles from './MediaCenter.module.css'
@@ -34,7 +34,13 @@ export function SetListsPanel() {
           onKeyDown={(e) => e.key === 'Enter' && create()}
           aria-label="New set name"
         />
-        <HardwareButton size="small" label="New set" onClick={create} />
+        <HardwareButton
+          size="small"
+          onClick={create}
+          label="New set"
+          iconOnly
+          icon={<PlusIcon />}
+        />
       </div>
       {setLists.length === 0 && (
         <p className={styles.emptyList}>

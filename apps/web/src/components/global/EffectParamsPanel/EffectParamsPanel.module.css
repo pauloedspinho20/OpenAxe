@@ -68,10 +68,5 @@
 }
 
 .selectField {
-  background: var(--panel-raised) !important;
-  border: 1px solid var(--seam-strong) !important;
-  border-radius: var(--r-sm) !important;
-  padding: var(--sp-2) !important;
-  padding-right: var(--sp-2) !important;
-  text-align: center;
+  min-width: 96px;
 }

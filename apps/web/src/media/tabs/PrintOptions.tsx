@@ -3,7 +3,7 @@
  * the staves, scale, bars per row and margins - then alphaTab's print view
  * (the browser's print dialog also saves a PDF).
  */
-import { HardwareButton, Select } from '@openaxe/ui'
+import { Dialog, HardwareButton, Select } from '@openaxe/ui'
 import { useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -60,16 +60,16 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
       return next
     })
   return (
-    <div className={t.texPane} role="dialog" aria-label="Print options">
-      <div className={t.texHead}>
-        <I.PageLayoutIcon size={16} />
-        <strong>Print / PDF</strong>
-        <span className={styles.dim}>
-          Choose what goes on the page; “Save as PDF” is in the print dialog.
-        </span>
-        <span className={t.footerSpacer} />
-        <HardwareButton size="small" label="Close" onClick={onClose} />
-      </div>
+    <Dialog
+      open
+      onClose={onClose}
+      title="Print / PDF"
+      ariaLabel="Print options"
+      width="min(720px, 94vw)"
+    >
+      <span className={styles.dim}>
+        Choose what goes on the page; “Save as PDF” is in the print dialog.
+      </span>
       <div className={t.printGrid}>
         <fieldset>
           <legend>Tracks</legend>
@@ -167,6 +167,6 @@ export function PrintOptions({ tracks, shown, profile, onPrint, onClose }: Print
         />
         {chosen.size === 0 && <span className={styles.dim}>Pick at least one track.</span>}
       </div>
-    </div>
+    </Dialog>
   )
 }

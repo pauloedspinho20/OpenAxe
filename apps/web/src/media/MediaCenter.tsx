@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
-import { Dialog, HardwareButton, Select } from '@openaxe/ui'
+import { ButtonGroup, Drawer, HardwareButton, Select, Stepper } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
@@ -10,12 +10,13 @@ import { useMediaStore } from './mediaStore'
 import { PACK_EXTENSION } from './practicePack'
 import { SetBar, SetListsPanel } from './SetListsPanel'
 import { PracticeControls, TransportButtons } from './TransportBar'
+import { useNarrowViewport } from './useMediaQuery'
 import { NewSongForm } from './tabs/NewSongForm'
+import { syncedScoreSections } from './tabs/sync'
 import { ToneLink, tonePresetNames, useToneFollower } from './ToneLink'
 import { START_KEY, type ToneSection } from './tone'
-import { Tool } from './tabs/TabToolbox'
+import { WorkspacePopover, useRovingToolbar } from './tabs/WorkspaceControls'
 import * as I from './tabs/tabIcons'
-import { SidebarIcon } from './tabs/tabIcons'
 import tabStyles from './tabs/TabWorkspace.module.css'
 import { Waveform } from './Waveform'
 
@@ -25,11 +26,11 @@ const TabWorkspace = lazy(() => import('./tabs/TabWorkspace'))
 type Filter = 'all' | 'audio' | 'score' | 'sets'
 
 interface MediaCenterProps {
-  open: boolean
-  onClose: () => void
+  /** Whether the Media Center view is currently active in the shell. */
+  active?: boolean | undefined
 }
 
-export function MediaCenter({ open, onClose }: MediaCenterProps) {
+export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}) {
   const items = useMediaStore((s) => s.items)
   const activeId = useMediaStore((s) => s.activeId)
   const error = useMediaStore((s) => s.error)
@@ -58,10 +59,7 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
   const tags = useMemo(() => allTags(items), [items])
 
   const active = items.find((i) => i.id === activeId) ?? null
-  // A tab wants the whole dialog: the library folds away while one is open
-  // (the rail button brings it back), and the dialog grows to the viewport.
-  // An open track or tab wants the whole dialog: the library folds away
-  // (the rail button brings it back) and the dialog grows to the viewport.
+  const isNarrow = useNarrowViewport('(max-width: 920px)')
   const focusMode = active !== null
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [lastActive, setLastActive] = useState<string | null>(null)
@@ -69,7 +67,8 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
     setLastActive(activeId)
     setLibraryOpen(!focusMode)
   }
-  const showLibrary = !focusMode || libraryOpen
+  const showLibrary = focusMode ? libraryOpen : !(isNarrow && newOpen)
+  const libraryAsDrawer = focusMode && isNarrow && showLibrary
 
   const importFiles = async (files: FileList | File[]) => {
     if (!files.length) return
@@ -82,234 +81,238 @@ export function MediaCenter({ open, onClose }: MediaCenterProps) {
     }
   }
 
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Media Center"
-      width={focusMode ? '100vw' : 'min(1320px, 97vw)'}
-      maxHeight={focusMode ? '100svh' : '95vh'}
-      className={`${styles.dialog} ${focusMode ? styles.dialogScore : ''}`}
+  const sidebarNode = (
+    <Drawer
+      open
+      side="left"
+      overlay={libraryAsDrawer}
+      active={viewActive}
+      showHeader={libraryAsDrawer}
+      title="Library"
+      icon={<I.LibraryIcon size={15} />}
+      width="min(320px, 88vw)"
+      className={libraryAsDrawer ? undefined : styles.sidebar}
+      onClose={() => setLibraryOpen(false)}
     >
-      <div
-        className={`${styles.center} ${focusMode ? styles.centerScore : ''} ${showLibrary ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('Files')) {
-            e.preventDefault()
-            setDragOver(true)
-          }
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setDragOver(false)
-          void importFiles(e.dataTransfer.files)
-        }}
-      >
-        {focusMode && (
-          <div className={styles.libToggle}>
+      <div className={styles.sideActions}>
+        <HardwareButton
+          size="small"
+          variant="accent"
+          label={busy ? 'Importing…' : 'Import files'}
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+        />
+        <HardwareButton
+          size="small"
+          label="New song"
+          active={newOpen}
+          title="Start a new song from scratch"
+          onClick={() => {
+            setNewOpen((v) => !v)
+            if (isNarrow && focusMode) setLibraryOpen(false)
+          }}
+        />
+        <HardwareButton
+          size="small"
+          label="Import folder"
+          disabled={busy}
+          title="Import every audio and tab file in a folder (duplicates are skipped)"
+          onClick={() => folderRef.current?.click()}
+        />
+        <input
+          ref={(el) => {
+            folderRef.current = el
+            // Not in React's typings; lets the picker choose a folder.
+            el?.setAttribute('webkitdirectory', '')
+          }}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            const audioExt = AUDIO_ACCEPT.split(',').filter((x) => x.startsWith('.'))
+            const files = [...(e.target.files ?? [])].filter((f) =>
+              isImportable(f.name, audioExt, [...SCORE_EXTENSIONS, PACK_EXTENSION]),
+            )
+            if (files.length) void importFiles(files)
+            else
+              useMediaStore.setState({
+                notice: 'No audio or tab files were found in that folder.',
+              })
+            e.target.value = ''
+          }}
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          hidden
+          accept={`${AUDIO_ACCEPT},${SCORE_EXTENSIONS.join(',')},${PACK_EXTENSION}`}
+          onChange={(e) => {
+            if (e.target.files) void importFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+      </div>
+      <ButtonGroup
+        mode="tablist"
+        label="Library filter"
+        stretch
+        value={filter}
+        onChange={setFilter}
+        items={[
+          { value: 'all', label: 'All' },
+          { value: 'audio', label: 'Backing' },
+          { value: 'score', label: 'Tabs' },
+          { value: 'sets', label: 'Sets' },
+        ]}
+      />
+      {filter === 'sets' ? (
+        <SetListsPanel />
+      ) : (
+        <>
+          <div className={styles.libFilters}>
             <HardwareButton
-              label={libraryOpen ? 'Hide the library' : 'Show the library'}
-              icon={<SidebarIcon size={16} />}
-              iconOnly
-              active={libraryOpen}
-              onClick={() => setLibraryOpen((v) => !v)}
+              size="small"
+              label={favorites ? '★' : '☆'}
+              active={favorites}
+              ariaLabel={favorites ? 'Show all songs' : 'Show favourites only'}
+              title={favorites ? 'Showing favourites — click for all' : 'Favourites only'}
+              onClick={() => setFavorites((v) => !v)}
+            />
+            <Select
+              value={status ?? ''}
+              onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
+              aria-label="Filter by status"
+            >
+              <option value="">Any status</option>
+              {STATUSES.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.label}
+                </option>
+              ))}
+            </Select>
+            {tags.length > 0 && (
+              <Select
+                value={tag ?? ''}
+                onChange={(e) => setTag(e.target.value || null)}
+                aria-label="Filter by tag"
+              >
+                <option value="">Any tag</option>
+                {tags.map((t) => (
+                  <option key={t} value={t}>
+                    #{t}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </div>
+          <input
+            className={styles.search}
+            type="search"
+            placeholder="Search · 120 bpm · key:Am"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search library"
+          />
+          <ul className={styles.list}>
+            {visible.length === 0 && (
+              <li className={styles.emptyList}>
+                {items.length === 0
+                  ? 'Drop audio files (mp3, wav, flac…) or Guitar Pro / MusicXML files here.'
+                  : 'Nothing matches.'}
+              </li>
+            )}
+            {visible.map((item) => (
+              <LibraryRow
+                key={item.id}
+                item={item}
+                active={item.id === activeId}
+                onOpened={isNarrow ? () => setLibraryOpen(false) : undefined}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+    </Drawer>
+  )
+
+  return (
+    <div
+      className={`${styles.shell} ${styles.center} ${focusMode ? styles.centerScore : ''} ${showLibrary && !libraryAsDrawer ? '' : styles.centerNoLib} ${dragOver ? styles.dragOver : ''}`}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault()
+          setDragOver(true)
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragOver(false)
+        void importFiles(e.dataTransfer.files)
+      }}
+    >
+      {showLibrary && sidebarNode}
+
+      <section className={`${styles.main} ${!focusMode && !newOpen ? styles.mainBrowse : ''}`}>
+        <SetBar />
+        {!hasTransport && (
+          <div className={styles.notice}>Power on the audio engine to play tracks and tabs.</div>
+        )}
+        {notice && (
+          <div className={styles.notice} role="status">
+            {notice}
+            <HardwareButton
+              size="small"
+              label="Dismiss"
+              onClick={() => useMediaStore.setState({ notice: null })}
             />
           </div>
         )}
-        {showLibrary && (
-          <aside className={styles.sidebar}>
-            <div className={styles.sideActions}>
-              <button
-                type="button"
-                className={styles.primaryBtn}
-                onClick={() => fileRef.current?.click()}
-                disabled={busy}
-              >
-                {busy ? 'Importing…' : 'Import files'}
-              </button>
-              <button
-                type="button"
-                className={styles.chip}
-                onClick={() => setNewOpen((v) => !v)}
-                aria-pressed={newOpen}
-                title="Start a new song from scratch"
-              >
-                New song
-              </button>
-              <button
-                type="button"
-                className={styles.chip}
-                onClick={() => folderRef.current?.click()}
-                disabled={busy}
-                title="Import every audio and tab file in a folder (duplicates are skipped)"
-              >
-                Import folder
-              </button>
-              <input
-                ref={(el) => {
-                  folderRef.current = el
-                  // Not in React's typings; lets the picker choose a folder.
-                  el?.setAttribute('webkitdirectory', '')
-                }}
-                type="file"
-                multiple
-                hidden
-                onChange={(e) => {
-                  const audioExt = AUDIO_ACCEPT.split(',').filter((x) => x.startsWith('.'))
-                  const files = [...(e.target.files ?? [])].filter((f) =>
-                    isImportable(f.name, audioExt, [...SCORE_EXTENSIONS, PACK_EXTENSION]),
-                  )
-                  if (files.length) void importFiles(files)
-                  else
-                    useMediaStore.setState({
-                      notice: 'No audio or tab files were found in that folder.',
-                    })
-                  e.target.value = ''
-                }}
-              />
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                hidden
-                accept={`${AUDIO_ACCEPT},${SCORE_EXTENSIONS.join(',')},${PACK_EXTENSION}`}
-                onChange={(e) => {
-                  if (e.target.files) void importFiles(e.target.files)
-                  e.target.value = ''
-                }}
-              />
-            </div>
-            <div className={styles.filters} role="tablist" aria-label="Library filter">
-              {(['all', 'audio', 'score', 'sets'] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  role="tab"
-                  aria-selected={filter === f}
-                  className={`${styles.filter} ${filter === f ? styles.filterOn : ''}`}
-                  onClick={() => setFilter(f)}
-                >
-                  {f === 'all'
-                    ? 'All'
-                    : f === 'audio'
-                      ? 'Backing'
-                      : f === 'score'
-                        ? 'Tabs'
-                        : 'Sets'}
-                </button>
-              ))}
-            </div>
-            {filter === 'sets' ? (
-              <SetListsPanel />
-            ) : (
-              <>
-                <div className={styles.libFilters}>
-                  <button
-                    type="button"
-                    className={`${styles.chip} ${favorites ? styles.chipOn : ''}`}
-                    aria-pressed={favorites}
-                    onClick={() => setFavorites((v) => !v)}
-                    title="Favourites only"
-                  >
-                    ★
-                  </button>
-                  <Select
-                    value={status ?? ''}
-                    onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
-                    aria-label="Filter by status"
-                  >
-                    <option value="">Any status</option>
-                    {STATUSES.map((st) => (
-                      <option key={st.id} value={st.id}>
-                        {st.label}
-                      </option>
-                    ))}
-                  </Select>
-                  {tags.length > 0 && (
-                    <Select
-                      value={tag ?? ''}
-                      onChange={(e) => setTag(e.target.value || null)}
-                      aria-label="Filter by tag"
-                    >
-                      <option value="">Any tag</option>
-                      {tags.map((t) => (
-                        <option key={t} value={t}>
-                          #{t}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </div>
-                <input
-                  className={styles.search}
-                  type="search"
-                  placeholder="Search · 120 bpm · key:Am"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  aria-label="Search library"
-                />
-                <ul className={styles.list}>
-                  {visible.length === 0 && (
-                    <li className={styles.emptyList}>
-                      {items.length === 0
-                        ? 'Drop audio files (mp3, wav, flac…) or Guitar Pro / MusicXML files here.'
-                        : 'Nothing matches.'}
-                    </li>
-                  )}
-                  {visible.map((item) => (
-                    <LibraryRow key={item.id} item={item} active={item.id === activeId} />
-                  ))}
-                </ul>
-              </>
-            )}
-          </aside>
+        {error && (
+          <div className={styles.errorNotice} role="alert">
+            {error}
+            <HardwareButton
+              size="small"
+              label="Dismiss"
+              onClick={() => useMediaStore.setState({ error: null })}
+            />
+          </div>
         )}
-
-        <section className={styles.main}>
-          <SetBar />
-          {!hasTransport && (
-            <div className={styles.notice}>Power on the audio engine to play tracks and tabs.</div>
-          )}
-          {notice && (
-            <div className={styles.notice} role="status">
-              {notice}
-              <button
-                type="button"
-                className={styles.chip}
-                onClick={() => useMediaStore.setState({ notice: null })}
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-          {error && (
-            <div className={styles.errorNotice} role="alert">
-              {error}
-              <button
-                type="button"
-                className={styles.chip}
-                onClick={() => useMediaStore.setState({ error: null })}
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-          {newOpen && <NewSongForm onDone={() => setNewOpen(false)} />}
-          {!active && !newOpen && <EmptyState onImport={() => fileRef.current?.click()} />}
-          {active?.kind === 'audio' && <AudioView item={active} />}
-          {active?.kind === 'score' && (
-            <Suspense fallback={<div className={styles.loading}>Loading tab editor…</div>}>
-              <TabWorkspace key={active.id} item={active} />
-            </Suspense>
-          )}
-        </section>
-      </div>
-    </Dialog>
+        {newOpen && <NewSongForm onDone={() => setNewOpen(false)} />}
+        {!active && !newOpen && <EmptyState onImport={() => fileRef.current?.click()} />}
+        {active?.kind === 'audio' && (
+          <AudioView
+            item={active}
+            libraryOpen={libraryOpen}
+            onToggleLibrary={() => setLibraryOpen((v) => !v)}
+          />
+        )}
+        {active?.kind === 'score' && (
+          <Suspense fallback={<div className={styles.loading}>Loading tab editor…</div>}>
+            <TabWorkspace
+              key={active.id}
+              item={active}
+              libraryOpen={libraryOpen}
+              onToggleLibrary={() => setLibraryOpen((v) => !v)}
+              viewActive={viewActive}
+            />
+          </Suspense>
+        )}
+      </section>
+    </div>
   )
 }
 
-function LibraryRow({ item, active }: { item: MediaItem; active: boolean }) {
+function LibraryRow({
+  item,
+  active,
+  onOpened,
+}: {
+  item: MediaItem
+  active: boolean
+  onOpened?: (() => void) | undefined
+}) {
   const [editing, setEditing] = useState(false)
   const [details, setDetails] = useState(false)
   const [name, setName] = useState(item.name)
@@ -334,7 +337,10 @@ function LibraryRow({ item, active }: { item: MediaItem; active: boolean }) {
         <button
           type="button"
           className={styles.itemMain}
-          onClick={() => void s.open(item.id)}
+          onClick={() => {
+            void s.open(item.id)
+            onOpened?.()
+          }}
           onDoubleClick={() => setEditing(true)}
           title={item.fileName}
         >
@@ -470,18 +476,24 @@ function EmptyState({ onImport }: { onImport: () => void }) {
       <h3>Practice with backing tracks and tabs</h3>
       <p>
         Import audio (mp3, wav, flac, ogg, m4a) to play along at any speed without changing pitch,
-        transpose it, and loop the hard parts. Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML or
-        AlphaTex files to read, play and edit tabs, or a practice pack (.oapack) someone shared.
-        Everything plays through your rig's output.
+        transpose it, and loop the hard parts. Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML,
+        AlphaTex or MIDI (.mid/.midi) files to read, play and edit tabs, or a practice pack
+        (.oapack) someone shared. Everything plays through your rig's output.
       </p>
-      <button type="button" className={styles.primaryBtn} onClick={onImport}>
-        Import files
-      </button>
+      <HardwareButton variant="accent" label="Import files" onClick={onImport} />
     </div>
   )
 }
 
-function AudioView({ item }: { item: MediaItem }) {
+function AudioView({
+  item,
+  libraryOpen,
+  onToggleLibrary,
+}: {
+  item: MediaItem
+  libraryOpen: boolean
+  onToggleLibrary: () => void
+}) {
   const position = useMediaStore((st) => st.position)
   const duration = useMediaStore((st) => st.duration)
   const practice = useMediaStore((st) => st.practice)
@@ -490,11 +502,21 @@ function AudioView({ item }: { item: MediaItem }) {
   const detail = useMediaStore((st) => st.detail)
   const playing = useMediaStore((st) => st.playing)
   const [practiceOpen, setPracticeOpen] = useState(false)
+  const isPhone = useNarrowViewport('(max-width: 640px)')
+  const topbarRef = useRef<HTMLDivElement | null>(null)
+  const footerRef = useRef<HTMLDivElement | null>(null)
+  const topbarRoving = useRovingToolbar(topbarRef, 'horizontal')
+  const footerRoving = useRovingToolbar(footerRef, 'horizontal')
   const s = useMediaStore.getState()
   const total = duration || item.duration
   const loopOn = practice.loopEnabled && practice.loopStart !== null
   const countInBars = practice.countInBars
   const live = useMediaStore((st) => st.items.find((i) => i.id === item.id)) ?? item
+  const items = useMediaStore((st) => st.items)
+  const scoreMarkers = useMemo(
+    () => syncedScoreSections(items, item.id, total),
+    [items, item.id, total],
+  )
   const toneSections: ToneSection[] = [
     { key: START_KEY, label: 'Start', at: 0 },
     ...item.markers.map((m) => ({ key: m.id, label: `Marker ${m.label}`, at: m.time })),
@@ -511,68 +533,129 @@ function AudioView({ item }: { item: MediaItem }) {
 
   return (
     <div className={`${tabStyles.ws} ${styles.audioWs}`}>
-      <header className={tabStyles.topbar}>
-        <div className={tabStyles.songTitle} title={item.fileName}>
-          <strong>{item.name}</strong>
-          {item.artist && <span>{item.artist}</span>}
+      <header
+        ref={topbarRef}
+        className={tabStyles.topbar}
+        role="toolbar"
+        aria-label="Backing track header"
+        {...topbarRoving}
+      >
+        <div className={tabStyles.topLeft}>
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            label="Library"
+            ariaLabel={libraryOpen ? 'Hide library' : 'Show library'}
+            hideLabelBelow="md"
+            icon={<I.LibraryIcon size={15} />}
+            active={libraryOpen}
+            onClick={onToggleLibrary}
+          />
+          <div className={tabStyles.songTitle} title={item.fileName}>
+            <strong>{item.name}</strong>
+            {item.artist && <span>{item.artist}</span>}
+          </div>
+          {loadState === 'loading' && (
+            <span className={tabStyles.footerNote}>Loading… {Math.round(progress * 100)}%</span>
+          )}
         </div>
-        {loadState === 'loading' && (
-          <span className={tabStyles.footerNote}>Loading… {Math.round(progress * 100)}%</span>
-        )}
-        <details className={tabStyles.menu}>
-          <summary title="Rig tone for this song: a scene, and a slot per marker">
-            <I.TracksIcon size={16} /> Tone
-            {live.tone?.scene != null ? ` · scene ${live.tone.scene + 1}` : ''}
-          </summary>
-          <div className={`${tabStyles.menuList} ${styles.toneMenu}`}>
+        <div className={tabStyles.topRight}>
+          <WorkspacePopover
+            label="Practice controls"
+            triggerText="Practice"
+            hideLabelBelow="sm"
+            icon={<I.TempoIcon size={15} />}
+            placement="bottom-end"
+            sheetOnMobile
+            width="wide"
+            open={practiceOpen}
+            onOpenChange={setPracticeOpen}
+            title="Speed presets, trainer, A-B loop, transpose & volume"
+          >
+            <PracticeControls />
+          </WorkspacePopover>
+          <WorkspacePopover
+            label="Tone"
+            triggerText={live.tone?.scene != null ? `Tone · S${live.tone.scene + 1}` : 'Tone'}
+            icon={<I.ToneIcon size={15} />}
+            active={live.tone?.scene != null}
+            width="tone"
+            sheetOnMobile
+            title="Rig tone for this song: a scene, and a slot per marker"
+          >
             <ToneLink
               tone={live.tone ?? null}
               sections={toneSections}
               onChange={(tone) => void useMediaStore.getState().updateItem(item.id, { tone })}
             />
+          </WorkspacePopover>
+          <div className={styles.markers}>
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="+ Marker"
+              ariaLabel="Add section marker at playhead"
+              hideLabelBelow="sm"
+              icon={<I.SectionIcon size={15} />}
+              onClick={addMarker}
+            />
+            {item.markers.map((m, i) => {
+              const next = item.markers[i + 1]?.time ?? total
+              return (
+                <span key={m.id} className={styles.markerChip}>
+                  <button
+                    type="button"
+                    onClick={() => void s.seek(m.time)}
+                    title={`Go to ${m.label} (${formatTime(m.time)})`}
+                  >
+                    {m.label}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => s.setLoop(m.time, next, true)}
+                    title={`Loop section ${m.label}`}
+                    aria-label={`Loop section ${m.label}`}
+                  >
+                    <I.LoopIcon size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void s.updateItem(item.id, {
+                        markers: item.markers.filter((x) => x.id !== m.id),
+                      })
+                    }
+                    aria-label={`Remove marker ${m.label}`}
+                    title="Remove marker"
+                  >
+                    ×
+                  </button>
+                </span>
+              )
+            })}
+            {scoreMarkers.map((m, i) => {
+              const next = scoreMarkers[i + 1]?.time ?? total
+              return (
+                <span key={m.id} className={`${styles.markerChip} ${styles.scoreMarkerChip}`}>
+                  <button
+                    type="button"
+                    onClick={() => void s.seek(m.time)}
+                    title={`${m.label} (${m.sourceName}, bar ${m.bar + 1} · ${formatTime(m.time)})`}
+                  >
+                    {m.label}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => s.setLoop(m.time, next, true)}
+                    title={`Loop score section ${m.label}`}
+                    aria-label={`Loop score section ${m.label}`}
+                  >
+                    <I.LoopIcon size={12} />
+                  </button>
+                </span>
+              )
+            })}
           </div>
-        </details>
-        <div className={styles.markers}>
-          <Tool
-            icon={I.SectionIcon}
-            title="Add a section marker at the playhead"
-            onClick={addMarker}
-            tag="+"
-          />
-          {item.markers.map((m, i) => {
-            const next = item.markers[i + 1]?.time ?? total
-            return (
-              <span key={m.id} className={styles.markerChip}>
-                <button
-                  type="button"
-                  onClick={() => void s.seek(m.time)}
-                  title={`Go to ${m.label} (${formatTime(m.time)})`}
-                >
-                  {m.label}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => s.setLoop(m.time, next, true)}
-                  title={`Loop section ${m.label}`}
-                  aria-label={`Loop section ${m.label}`}
-                >
-                  <I.LoopIcon size={12} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void s.updateItem(item.id, {
-                      markers: item.markers.filter((x) => x.id !== m.id),
-                    })
-                  }
-                  aria-label={`Remove marker ${m.label}`}
-                  title="Remove marker"
-                >
-                  ×
-                </button>
-              </span>
-            )
-          })}
         </div>
       </header>
 
@@ -585,6 +668,12 @@ function AudioView({ item }: { item: MediaItem }) {
           loopEnd={practice.loopEnd}
           loopEnabled={practice.loopEnabled}
           markers={item.markers}
+          scoreMarkers={scoreMarkers.map((m) => ({
+            id: m.id,
+            label: m.label,
+            time: m.time,
+            title: `${m.label} (${m.sourceName}, bar ${m.bar + 1})`,
+          }))}
           onSeek={(t) => void s.seek(t)}
           onLoopChange={(a, b) => s.setLoop(a, b, true)}
           height="fill"
@@ -594,110 +683,114 @@ function AudioView({ item }: { item: MediaItem }) {
         />
       </div>
 
-      <footer className={tabStyles.footer}>
+      <footer
+        ref={footerRef}
+        className={tabStyles.footer}
+        role="toolbar"
+        aria-label="Backing track transport"
+        {...footerRoving}
+      >
         <TransportButtons />
-        <div className={tabStyles.barGroup} title="A-B loop">
-          <Tool
-            icon={I.LoopIcon}
-            title={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
-            on={loopOn}
+        {isPhone ? (
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            iconOnly
+            label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
+            icon={<I.LoopIcon size={15} />}
+            active={loopOn}
             onClick={() => s.toggleLoop()}
           />
-          <Tool
-            icon={I.LoopIcon}
-            title="Set loop start here ([)"
-            tag="A"
-            onClick={() => s.setLoopPoint('start', position)}
-          />
-          <Tool
-            icon={I.LoopIcon}
-            title="Set loop end here (])"
-            tag="B"
-            onClick={() => s.setLoopPoint('end', position)}
-          />
-        </div>
-        <div className={tabStyles.barGroup} title="Speed (pitch preserved)">
-          <Tool
-            icon={I.MinusIcon}
-            title="Slower (−5%)"
-            onClick={() => s.setSpeed(practice.speed - 0.05)}
-          />
-          <button
-            type="button"
-            className={tabStyles.zoomValue}
-            onClick={() => s.setSpeed(1)}
-            title="Speed — click to reset to 100%"
-          >
-            {Math.round(practice.speed * 100)}%
-          </button>
-          <Tool
-            icon={I.PlusIcon}
-            title="Faster (+5%)"
-            onClick={() => s.setSpeed(practice.speed + 0.05)}
-          />
-        </div>
-        <div className={tabStyles.barGroup} title="Transpose">
-          <Tool
-            icon={I.FlatIcon}
-            title="Down a semitone"
-            onClick={() => s.setSemitones(practice.semitones - 1)}
-          />
-          <button
-            type="button"
-            className={tabStyles.zoomValue}
-            onClick={() => s.setSemitones(0)}
-            title="Transpose — click to reset"
-          >
-            {practice.semitones > 0 ? '+' : ''}
-            {practice.semitones} st
-          </button>
-          <Tool
-            icon={I.SharpIcon}
-            title="Up a semitone"
-            onClick={() => s.setSemitones(practice.semitones + 1)}
-          />
-        </div>
-        <Tool
-          icon={I.CountInIcon}
-          title={
-            countInBars
-              ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''} (click to change)`
-              : 'Count-in off (click for 1 bar)'
-          }
-          tag={countInBars || undefined}
-          on={countInBars > 0}
-          onClick={() =>
-            useMediaStore
-              .getState()
-              .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
-          }
-        />
-        <div className={tabStyles.barGroup} title="Track volume">
-          <I.MuteIcon size={15} />
-          <input
-            className={styles.volume}
-            type="range"
-            min={0}
-            max={200}
-            value={Math.round(practice.volume * 100)}
-            onChange={(e) => s.setVolume(Number(e.target.value) / 100)}
-            onDoubleClick={() => s.setVolume(1)}
-            aria-label="Track volume"
-          />
-        </div>
-        <span className={tabStyles.footerSpacer} />
-        <details
-          className={tabStyles.menu}
-          open={practiceOpen}
-          onToggle={(e) => setPracticeOpen((e.target as HTMLDetailsElement).open)}
-        >
-          <summary title="Practice: speed presets, trainer, A-B loop, volume">
-            <I.TempoIcon size={18} /> Practice
-          </summary>
-          <div className={tabStyles.practicePop}>
-            <PracticeControls />
-          </div>
-        </details>
+        ) : (
+          <ButtonGroup label="A-B loop" focusableWhenDisabled>
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Loop"
+              ariaLabel={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
+              icon={<I.LoopIcon size={15} />}
+              active={loopOn}
+              onClick={() => s.toggleLoop()}
+            />
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="A"
+              ariaLabel="Set loop start here ([)"
+              onClick={() => s.setLoopPoint('start', position)}
+            />
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="B"
+              ariaLabel="Set loop end here (])"
+              onClick={() => s.setLoopPoint('end', position)}
+            />
+          </ButtonGroup>
+        )}
+        {!isPhone && (
+          <>
+            <Stepper
+              label="Speed (pitch preserved)"
+              value={`${Math.round(practice.speed * 100)}%`}
+              decrementIcon={<I.MinusIcon size={14} />}
+              incrementIcon={<I.PlusIcon size={14} />}
+              decrementLabel="Slower (−5%)"
+              incrementLabel="Faster (+5%)"
+              resetLabel={`Speed ${Math.round(practice.speed * 100)}%, reset to 100%`}
+              resetTitle="Speed — click to reset to 100%"
+              focusableWhenDisabled
+              onDecrement={() => s.setSpeed(practice.speed - 0.05)}
+              onIncrement={() => s.setSpeed(practice.speed + 0.05)}
+              onReset={() => s.setSpeed(1)}
+            />
+            <Stepper
+              label="Transpose"
+              value={`${practice.semitones > 0 ? '+' : ''}${practice.semitones} st`}
+              decrementIcon={<I.FlatIcon size={14} />}
+              incrementIcon={<I.SharpIcon size={14} />}
+              decrementLabel="Down a semitone"
+              incrementLabel="Up a semitone"
+              resetLabel={`Transpose ${practice.semitones} semitones, reset`}
+              resetTitle="Transpose — click to reset"
+              focusableWhenDisabled
+              onDecrement={() => s.setSemitones(practice.semitones - 1)}
+              onIncrement={() => s.setSemitones(practice.semitones + 1)}
+              onReset={() => s.setSemitones(0)}
+            />
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Count"
+              ariaLabel={
+                countInBars
+                  ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''} (click to change)`
+                  : 'Count-in off (click for 1 bar)'
+              }
+              badge={countInBars || undefined}
+              icon={<I.CountInIcon size={15} />}
+              active={countInBars > 0}
+              onClick={() =>
+                useMediaStore
+                  .getState()
+                  .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
+              }
+            />
+            <ButtonGroup label="Track volume" title="Track volume">
+              <I.VolumeIcon size={15} />
+              <input
+                className={styles.volume}
+                type="range"
+                min={0}
+                max={200}
+                value={Math.round(practice.volume * 100)}
+                onChange={(e) => s.setVolume(Number(e.target.value) / 100)}
+                onDoubleClick={() => s.setVolume(1)}
+                aria-label="Track volume"
+              />
+            </ButtonGroup>
+          </>
+        )}
       </footer>
     </div>
   )

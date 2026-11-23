@@ -1,3 +1,4 @@
+import { HardwareButton } from '@openaxe/ui'
 import { LoopGlyph, MediaGlyph } from './icons'
 import styles from './MediaCenter.module.css'
 import { useMediaStore } from './mediaStore'
@@ -47,16 +48,15 @@ export function MediaDock({ onOpen }: { onOpen: () => void }) {
           {semitones} st
         </span>
       )}
-      <button
-        type="button"
-        className={`${styles.tbtn} ${loopOn ? styles.tbtnOn : ''}`}
-        onClick={() => useMediaStore.getState().toggleLoop()}
-        aria-pressed={loopOn}
+      <HardwareButton
+        size="small"
+        iconOnly
+        label="Toggle loop"
         title="A-B loop"
-        aria-label="Toggle loop"
-      >
-        <LoopGlyph size={14} />
-      </button>
+        icon={<LoopGlyph size={14} />}
+        active={loopOn}
+        onClick={() => useMediaStore.getState().toggleLoop()}
+      />
     </div>
   )
 }

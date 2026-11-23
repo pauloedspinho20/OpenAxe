@@ -29,7 +29,7 @@ export const LoopGlyph = ({ size = 16 }: P) => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="1.5"
     strokeLinecap="round"
     strokeLinejoin="round"
     aria-hidden="true"
@@ -49,7 +49,9 @@ export const TabGlyph = ({ size = 16 }: P) => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="1.6"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     aria-hidden="true"
   >
     <path d="M3 6h18M3 10h18M3 14h18M3 18h18" opacity=".55" />
@@ -68,8 +70,9 @@ export const MediaGlyph = ({ size = 16 }: P) => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="1.8"
+    strokeWidth="1.5"
     strokeLinecap="round"
+    strokeLinejoin="round"
     aria-hidden="true"
   >
     <rect x="3" y="4" width="18" height="16" rx="2" />

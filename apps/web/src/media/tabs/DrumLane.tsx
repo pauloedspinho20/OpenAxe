@@ -4,6 +4,7 @@
  * to toggle that hit; the grid buttons re-divide the bar into 8ths/16ths.
  */
 import { model, type Settings } from '@coderline/alphatab'
+import { HardwareButton } from '@openaxe/ui'
 
 import styles from '../MediaCenter.module.css'
 import * as edit from './scoreEdit'
@@ -36,35 +37,29 @@ export function DrumLane({ score, cursor, apply, onCursor }: DrumLaneProps) {
             [model.Duration.Sixteenth, '1/16'],
           ] as const
         ).map(([d, label]) => (
-          <button
+          <HardwareButton
             key={d}
-            type="button"
-            className={tabStyles.pbtn}
+            size="small"
+            label={label}
             onClick={() => apply((sc, s) => ops.setBarGrid(sc, c, d, s))}
-          >
-            {label}
-          </button>
+          />
         ))}
-        <button
-          type="button"
-          className={tabStyles.pbtn}
+        <HardwareButton
+          size="small"
+          label="◀"
+          ariaLabel="Previous bar"
           onClick={() => onCursor(edit.moveBar(score, c, -1))}
-          aria-label="Previous bar"
-        >
-          ◀
-        </button>
-        <button
-          type="button"
-          className={tabStyles.pbtn}
+        />
+        <HardwareButton
+          size="small"
+          label="▶"
+          ariaLabel="Next bar"
           onClick={() => {
             if (cursor.bar >= score.masterBars.length - 1)
               apply((sc, s) => ({ ...c, bar: edit.insertBar(sc, c.bar, s), beat: 0 }))
             else onCursor(edit.moveBar(score, c, 1))
           }}
-          aria-label="Next bar"
-        >
-          ▶
-        </button>
+        />
       </div>
       <div
         className={tabStyles.drumGrid}

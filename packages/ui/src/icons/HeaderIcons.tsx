@@ -1,4 +1,4 @@
-import { Icon, type IconProps } from './Icon'
+import { Dot, Icon, type IconProps } from './Icon'
 
 export function SettingsIcon(props: IconProps) {
   const { size = 24 } = props
@@ -66,6 +66,33 @@ export function OutputIcon(props: IconProps) {
     <Icon {...props}>
       <path d="M11 12H21M18 8l4 4-4 4" />
       <path d="M8 7v10" />
+    </Icon>
+  )
+}
+
+export function RigIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <Dot cx="7.5" cy="7" />
+      <Dot cx="11" cy="7" />
+      <Dot cx="14.5" cy="7" />
+      <line x1="6.5" y1="13.5" x2="17.5" y2="13.5" />
+      <line x1="6.5" y1="16.5" x2="17.5" y2="16.5" />
+    </Icon>
+  )
+}
+
+export function LearnIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 6.5c-2.2-1.4-5.2-2-8-1.5v12.5c2.8-.5 5.8.1 8 1.5 2.2-1.4 5.2-2 8-1.5V5c-2.8-.5-5.8.1-8 1.5z" />
+      <line x1="12" y1="6.5" x2="12" y2="19" />
+      <line x1="6.5" y1="9.5" x2="9.5" y2="9.5" />
+      <line x1="6.5" y1="13" x2="9.5" y2="13" />
+      <line x1="14.5" y1="9.5" x2="17.5" y2="9.5" />
+      <line x1="14.5" y1="13" x2="17.5" y2="13" />
     </Icon>
   )
 }

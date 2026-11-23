@@ -35,6 +35,15 @@ export interface MediaMarker {
   time: number
 }
 
+export interface ScoreSection {
+  /** 0-based masterBar index. */
+  bar: number
+  /** Display label, e.g. "A Intro" or "Chorus". */
+  label: string
+  /** First-playthrough start time (seconds on the score's own timeline). */
+  time: number
+}
+
 export interface MediaItem {
   id: string
   kind: MediaKind
@@ -52,6 +61,8 @@ export interface MediaItem {
   markers: MediaMarker[]
   /** Tabs only: a recording of the song paired with the score, and its sync points. */
   sync?: RecordingSync | null
+  /** Tabs only: cached section markers (bar, label, first-playthrough seconds) for waveform display. */
+  sections?: ScoreSection[]
   /** Where playback was left (seconds; score time for tabs). */
   resume?: number
   /** Tabs only: how the workspace was left (zoom, tracks, panels...). */
@@ -150,6 +161,17 @@ export function mediaAssetId(id: string): string {
 }
 
 function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
+  const sections = Array.isArray(row.sections)
+    ? row.sections.filter(
+        (s): s is ScoreSection =>
+          !!s &&
+          typeof s === 'object' &&
+          typeof s.bar === 'number' &&
+          typeof s.label === 'string' &&
+          typeof s.time === 'number' &&
+          Number.isFinite(s.time),
+      )
+    : []
   return {
     id: row.id,
     kind: row.kind === 'score' ? 'score' : 'audio',
@@ -164,6 +186,7 @@ function normalize(row: Partial<MediaItem> & { id: string }): MediaItem {
     practice: { ...DEFAULT_PRACTICE, ...(row.practice ?? {}) },
     markers: Array.isArray(row.markers) ? row.markers : [],
     sync: row.sync && typeof row.sync.audioId === 'string' ? row.sync : null,
+    ...(sections.length ? { sections } : {}),
     resume: typeof row.resume === 'number' && row.resume > 0 ? row.resume : 0,
     view: row.view ?? null,
     runs: Array.isArray(row.runs) ? row.runs : [],
@@ -236,6 +259,8 @@ export const SCORE_EXTENSIONS = [
   '.atex',
   '.tex',
   '.cap',
+  '.mid',
+  '.midi',
 ]
 
 export function isScoreFile(fileName: string): boolean {

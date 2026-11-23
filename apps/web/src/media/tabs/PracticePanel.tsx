@@ -23,6 +23,8 @@ interface PracticePanelProps {
   routineDone: boolean
   onStartRoutine: (startSpeed: number, targetSpeed: number) => void
   onStopRoutine: () => void
+  /** Render the panel content directly without a collapsible `<details>` wrapper. */
+  bare?: boolean
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -125,78 +127,83 @@ export function PracticePanel({
   routineDone,
   onStartRoutine,
   onStopRoutine,
+  bare = false,
 }: PracticePanelProps) {
   const last = runs[runs.length - 1]
   const heat = useMemo(() => barHeat(runs), [runs])
   const span = worstSpan(worstBars(heat))
   const best = bestCleanSpeed(runs)
+  const body = (
+    <div className={t.recPanel}>
+      <RoutineControls
+        routine={routine}
+        routineDone={routineDone}
+        onStartRoutine={onStartRoutine}
+        onStopRoutine={onStopRoutine}
+      />
+      {!last ? (
+        <p className={t.hint}>
+          Turn on <strong>Listen</strong> (scores you while the song plays) or <strong>Wait</strong>{' '}
+          mode (waits for each note), then play along. Your runs, weak bars and progress show up
+          here.
+        </p>
+      ) : (
+        <>
+          <div className={t.reportRow}>
+            <strong className={t.bigNumber}>{pct(runAccuracy(last))}</strong>
+            <span className={styles.dim}>
+              last run · {last.hits}/{last.notes} notes · {pct(last.speed)} speed · {last.mode}
+            </span>
+          </div>
+          <div className={t.reportRow}>
+            <span>Best clean speed (≥90%):</span>
+            <strong>{best === null ? '—' : pct(best)}</strong>
+          </div>
+          <div className={t.tapRow}>
+            <HardwareButton
+              size="small"
+              label={
+                span
+                  ? `Loop bar${span[0] === span[1] ? '' : 's'} ${span[0] + 1}${span[0] === span[1] ? '' : `–${span[1] + 1}`}`
+                  : 'No weak bars'
+              }
+              title="Loop the bars you miss most (from the last 5 runs)"
+              icon={<I.LoopIcon size={14} />}
+              disabled={!span}
+              onClick={() => span && onLoopBars(span[0], span[1])}
+            />
+            <HardwareButton
+              size="small"
+              label="Heat map"
+              title="Colour bars by accuracy on the sheet"
+              active={heatOn}
+              onClick={() => onHeat(!heatOn)}
+            />
+          </div>
+          <Chart runs={runs} />
+          <div className={t.tapRow}>
+            <span className={styles.dim}>{runs.length} runs saved</span>
+            <HardwareButton
+              size="small"
+              label="Clear"
+              variant="danger"
+              onClick={() => {
+                if (confirm('Clear the practice history for this song?')) onClear()
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  )
+  if (bare) return body
   return (
     <details className={t.sideSection} open={runs.length > 0}>
       <summary>
-        <I.WaitIcon size={14} /> Practice report
+        <I.PracticeIcon size={14} /> Practice report
         {last && <span className={t.sideBadge}>{pct(runAccuracy(last))}</span>}
       </summary>
-      <div className={t.recPanel}>
-        <RoutineControls
-          routine={routine}
-          routineDone={routineDone}
-          onStartRoutine={onStartRoutine}
-          onStopRoutine={onStopRoutine}
-        />
-        {!last ? (
-          <p className={t.hint}>
-            Turn on <strong>Listen</strong> (scores you while the song plays) or{' '}
-            <strong>Wait</strong> mode (waits for each note), then play along. Your runs, weak bars
-            and progress show up here.
-          </p>
-        ) : (
-          <>
-            <div className={t.reportRow}>
-              <strong className={t.bigNumber}>{pct(runAccuracy(last))}</strong>
-              <span className={styles.dim}>
-                last run · {last.hits}/{last.notes} notes · {pct(last.speed)} speed · {last.mode}
-              </span>
-            </div>
-            <div className={t.reportRow}>
-              <span>Best clean speed (≥90%):</span>
-              <strong>{best === null ? '—' : pct(best)}</strong>
-            </div>
-            <div className={t.tapRow}>
-              <HardwareButton
-                size="small"
-                label={
-                  span
-                    ? `Loop bar${span[0] === span[1] ? '' : 's'} ${span[0] + 1}${span[0] === span[1] ? '' : `–${span[1] + 1}`}`
-                    : 'No weak bars'
-                }
-                title="Loop the bars you miss most (from the last 5 runs)"
-                icon={<I.LoopIcon size={14} />}
-                disabled={!span}
-                onClick={() => span && onLoopBars(span[0], span[1])}
-              />
-              <HardwareButton
-                size="small"
-                label="Heat map"
-                title="Colour bars by accuracy on the sheet"
-                active={heatOn}
-                onClick={() => onHeat(!heatOn)}
-              />
-            </div>
-            <Chart runs={runs} />
-            <div className={t.tapRow}>
-              <span className={styles.dim}>{runs.length} runs saved</span>
-              <HardwareButton
-                size="small"
-                label="Clear"
-                variant="danger"
-                onClick={() => {
-                  if (confirm('Clear the practice history for this song?')) onClear()
-                }}
-              />
-            </div>
-          </>
-        )}
-      </div>
+      {body}
     </details>
   )
 }

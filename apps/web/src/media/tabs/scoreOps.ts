@@ -408,7 +408,7 @@ export function setTrackMix(
   score: Score,
   index: number,
   mix: { volume?: number; balance?: number },
-  settings: Settings,
+  _settings?: Settings,
 ): void {
   const t = score.tracks[index]
   if (!t) return
@@ -416,7 +416,6 @@ export function setTrackMix(
     t.playbackInfo.volume = Math.min(16, Math.max(0, Math.round(mix.volume)))
   if (mix.balance !== undefined)
     t.playbackInfo.balance = Math.min(16, Math.max(0, Math.round(mix.balance)))
-  refresh(score, settings)
 }
 
 export function renameTrack(score: Score, index: number, name: string, settings: Settings): void {
@@ -462,12 +461,11 @@ export function setProgram(
   score: Score,
   trackIndex: number,
   program: number,
-  settings: Settings,
+  _settings?: Settings,
 ): void {
   const t = score.tracks[trackIndex]
   if (!t) return
   t.playbackInfo.program = Math.min(127, Math.max(0, Math.round(program)))
-  refresh(score, settings)
 }
 
 export function tuningLabel(tunings: number[]): string {
@@ -836,6 +834,14 @@ function defaultArticulations(settings: Settings): model.InstrumentArticulation[
 }
 
 /**
+ * Warm up the default GP7 drum kit table before building a new score from
+ * scratch (loading the template resets alphaTab's global Bar/Voice/Beat IDs).
+ */
+export function ensureDrumKit(settings: Settings): void {
+  defaultArticulations(settings)
+}
+
+/**
  * The GP7 articulation id of a drum note. With a track articulation table the
  * note holds an index into it; without one it holds the id itself.
  */
@@ -849,7 +855,7 @@ export function drumId(track: model.Track, note: model.Note): number {
  * track and keep its index. A bare id would be re-read as an index after a
  * save, turning a kick into whatever sits at that slot.
  */
-function drumIndex(track: model.Track, id: number, settings: Settings): number {
+export function drumIndex(track: model.Track, id: number, settings: Settings): number {
   if (!track.percussionArticulations.length) {
     // Convert any hits stored as bare ids before the table exists.
     const pending: model.Note[] = []

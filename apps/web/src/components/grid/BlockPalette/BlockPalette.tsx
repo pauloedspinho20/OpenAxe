@@ -9,30 +9,64 @@ import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import styles from './BlockPalette.module.css'
 
+const SEND_RETURN_KINDS = new Set<BlockKind>(['send-1', 'send-2', 'return-1', 'return-2'])
+
+function canPlaceKindAt(kind: BlockKind, row: number, col: number): boolean {
+  const { blocks } = useGraphStore.getState()
+  if (blocks.some((b) => b.row === row && b.col === col)) return false
+  if (SEND_RETURN_KINDS.has(kind) && blocks.some((b) => b.kind === kind)) return false
+  return true
+}
+
+function measureGridCellSize(gridEl: HTMLElement | null): number {
+  const width = gridEl?.firstElementChild?.getBoundingClientRect().width ?? 0
+  return width > 0 ? Math.round(width) : 80
+}
+
 interface DragState {
   kind: BlockKind
   label: string
   x: number
   y: number
   overGrid: boolean
+  valid: boolean
+  targetSize: number
+  chipScale: number
+}
+
+export interface PaletteDragInfo {
+  kind: BlockKind
+  cell: { row: number; col: number } | null
+  valid: boolean
 }
 
 export interface BlockPaletteProps {
   tunerAnalyser: AnalyserNode | null
+  onDragChange?: ((info: PaletteDragInfo | null) => void) | undefined
 }
 
 /**
- * A persistent shelf of every placeable block kind, above the grid. Drag a
- * chip onto an empty cell to place it there - the click-to-add popover on
- * empty cells (AddBlockMenu) still works too, this is just a second, more
- * direct path to the same `graphStore.addBlock` call. The tuner lives at the
- * left as its own non-draggable block section: a live mini readout that
- * expands into a full-size dialog (which mutes the app output) on click.
+ * A persistent shelf of every placeable block kind below the grid. Each chip
+ * mirrors the BlockCard hardware tile at compact scale and expands to match the
+ * target grid cell size while dragging onto the grid.
  */
-export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
+export function BlockPalette({ tunerAnalyser, onDragChange }: BlockPaletteProps) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const [tunerOpen, setTunerOpen] = useState(false)
   const dragRef = useRef<DragState | null>(null)
+
+  const clearDrag = (el: EventTarget & Element, pointerId: number) => {
+    try {
+      el.releasePointerCapture(pointerId)
+    } catch {
+      // Nothing to release - fine.
+    }
+    const current = dragRef.current
+    dragRef.current = null
+    setDrag(null)
+    onDragChange?.(null)
+    return current
+  }
 
   const handlePointerDown = (
     e: React.PointerEvent,
@@ -47,7 +81,19 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
     } catch {
       // Synthetic/inactive pointer - the drag still works via clientX/clientY tracking below.
     }
-    const next: DragState = { kind, label, x: e.clientX, y: e.clientY, overGrid: false }
+    const chipWidth = e.currentTarget.getBoundingClientRect().width || 54
+    const targetSize = measureGridCellSize(findGridElement())
+    const chipScale = Math.min(1, Math.max(0.55, chipWidth / targetSize))
+    const next: DragState = {
+      kind,
+      label,
+      x: e.clientX,
+      y: e.clientY,
+      overGrid: false,
+      valid: true,
+      targetSize,
+      chipScale,
+    }
     dragRef.current = next
     setDrag(next)
   }
@@ -56,20 +102,28 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
     if (!dragRef.current) return
     const gridEl = findGridElement()
     const overGrid = !!gridEl && isPointOverGrid(gridEl, e.clientX, e.clientY)
-    const next: DragState = { ...dragRef.current, x: e.clientX, y: e.clientY, overGrid }
+    const cell = overGrid && gridEl ? resolveGridCell(gridEl, e.clientX, e.clientY) : null
+    const valid = cell ? canPlaceKindAt(dragRef.current.kind, cell.row, cell.col) : false
+    const targetSize = measureGridCellSize(gridEl)
+    const next: DragState = {
+      ...dragRef.current,
+      x: e.clientX,
+      y: e.clientY,
+      overGrid,
+      valid,
+      targetSize,
+    }
     dragRef.current = next
     setDrag(next)
+    onDragChange?.(cell ? { kind: dragRef.current.kind, cell, valid } : null)
+  }
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    clearDrag(e.currentTarget, e.pointerId)
   }
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    } catch {
-      // Nothing to release - fine.
-    }
-    const current = dragRef.current
-    dragRef.current = null
-    setDrag(null)
+    const current = clearDrag(e.currentTarget, e.pointerId)
     if (!current) return
 
     const gridEl = findGridElement()
@@ -88,17 +142,25 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
   }
 
   const groups = Array.from(new Set(BLOCK_OPTIONS.map((o) => o.group)))
+  const groupedOptions = groups.map((group) => ({
+    group,
+    items: BLOCK_OPTIONS.filter((o) => o.group === group),
+  }))
 
   return (
     <div className={styles.paletteRow}>
-      {groups.map((group) => (
-        <div key={group} className={styles.group}>
+      {groupedOptions.map(({ group, items }) => (
+        <div
+          key={group}
+          className={styles.group}
+          style={{ '--group-count': items.length } as React.CSSProperties}
+        >
           <span className={`label ${styles.groupLabel}`}>{group}</span>
           <div className={styles.chips}>
-            {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
+            {items.map((option) => (
               <div
                 key={option.kind}
-                className={`${styles.chip} ${option.disabled ? styles.chipDisabled : ''}`}
+                className={`${styles.chip} ${option.disabled ? styles.chipDisabled : ''} ${drag?.kind === option.kind ? styles.chipDragging : ''}`}
                 role="button"
                 tabIndex={option.disabled ? -1 : 0}
                 aria-disabled={option.disabled}
@@ -107,16 +169,17 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
                     ? `${option.label} - not yet available (${option.vendor})`
                     : `Drag ${option.label} onto the grid`
                 }
-                title={option.disabled ? option.vendor : undefined}
+                title={option.disabled ? option.vendor : option.label}
                 onPointerDown={(e) =>
                   handlePointerDown(e, option.kind, option.label, option.disabled)
                 }
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
                 style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
               >
-                <BlockIcon kind={option.kind} size={18} />
-                <span>{option.label}</span>
+                <BlockIcon kind={option.kind} size={22} className={styles.chipIcon} />
+                <span className={styles.chipLabel}>{option.label}</span>
               </div>
             ))}
           </div>
@@ -125,17 +188,19 @@ export function BlockPalette({ tunerAnalyser }: BlockPaletteProps) {
 
       {drag && (
         <div
-          className={`${styles.ghost} ${drag.overGrid ? styles.ghostOverGrid : ''}`}
+          className={`${styles.ghost} ${drag.overGrid ? (drag.valid ? styles.ghostOverGrid : styles.ghostInvalid) : ''}`}
           style={
             {
-              left: drag.x,
-              top: drag.y,
+              width: `${drag.targetSize}px`,
+              height: `${drag.targetSize}px`,
+              transform: `translate3d(${drag.x}px, ${drag.y}px, 0) translate(-50%, -50%)`,
+              '--ghost-rest-scale': String(drag.chipScale),
               '--block-color': blockColorVar(drag.kind),
             } as React.CSSProperties
           }
         >
-          <BlockIcon kind={drag.kind} size={12} />
-          <span>{drag.label}</span>
+          <BlockIcon kind={drag.kind} size={32} className={styles.ghostIcon} />
+          <span className={styles.ghostLabel}>{drag.label}</span>
         </div>
       )}
 

@@ -129,6 +129,7 @@ interface MediaActions {
         | 'artist'
         | 'markers'
         | 'sync'
+        | 'sections'
         | 'resume'
         | 'view'
         | 'runs'

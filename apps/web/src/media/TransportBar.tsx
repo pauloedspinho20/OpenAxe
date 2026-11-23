@@ -1,4 +1,4 @@
-import { Select } from '@openaxe/ui'
+import { ButtonGroup, HardwareButton, Select, Stepper } from '@openaxe/ui'
 import { formatTime } from './decode'
 import { BackGlyph, ForwardGlyph, LoopGlyph, PauseGlyph, PlayGlyph, ToStartGlyph } from './icons'
 import styles from './MediaCenter.module.css'
@@ -93,62 +93,59 @@ export function PracticeControls() {
       <fieldset className={styles.group}>
         <legend>Count-in</legend>
         <div className={styles.row}>
-          {[0, 1, 2, 4].map((b) => (
-            <button
-              key={b}
-              type="button"
-              className={`${styles.chip} ${practice.countInBars === b ? styles.chipOn : ''}`}
-              onClick={() => s.setCountIn({ countInBars: b })}
-            >
-              {b === 0 ? 'Off' : `${b} bar${b > 1 ? 's' : ''}`}
-            </button>
-          ))}
+          <ButtonGroup
+            label="Count-in bars"
+            value={String(practice.countInBars)}
+            onChange={(v) => s.setCountIn({ countInBars: Number(v) })}
+            items={[0, 1, 2, 4].map((b) => ({
+              value: String(b),
+              label: b === 0 ? 'Off' : `${b} bar${b > 1 ? 's' : ''}`,
+            }))}
+          />
+          {tempoHint ? (
+            <div className={styles.dim}>
+              From the score: {tempoHint.bpm} BPM, {tempoHint.beatsPerBar} beats per bar
+            </div>
+          ) : (
+            <div className={styles.inlineGroup}>
+              <label className={styles.check}>
+                <input
+                  className={styles.numInput}
+                  type="number"
+                  min={20}
+                  max={400}
+                  value={practice.bpm}
+                  onChange={(e) => s.setCountIn({ bpm: Number(e.target.value) })}
+                  aria-label="Count-in tempo (BPM)"
+                />
+                BPM
+              </label>
+              <label className={styles.check}>
+                <input
+                  className={styles.numInput}
+                  type="number"
+                  min={1}
+                  max={16}
+                  value={practice.beatsPerBar}
+                  onChange={(e) => s.setCountIn({ beatsPerBar: Number(e.target.value) })}
+                  aria-label="Beats per bar"
+                />
+                beats/bar
+              </label>
+            </div>
+          )}
         </div>
-        {tempoHint ? (
-          <div className={styles.dim}>
-            From the score: {tempoHint.bpm} BPM, {tempoHint.beatsPerBar} beats per bar
-          </div>
-        ) : (
-          <div className={styles.row}>
-            <label className={styles.check}>
-              <input
-                className={styles.numInput}
-                type="number"
-                min={20}
-                max={400}
-                value={practice.bpm}
-                onChange={(e) => s.setCountIn({ bpm: Number(e.target.value) })}
-                aria-label="Count-in tempo (BPM)"
-              />
-              BPM
-            </label>
-            <label className={styles.check}>
-              <input
-                className={styles.numInput}
-                type="number"
-                min={1}
-                max={16}
-                value={practice.beatsPerBar}
-                onChange={(e) => s.setCountIn({ beatsPerBar: Number(e.target.value) })}
-                aria-label="Beats per bar"
-              />
-              beats/bar
-            </label>
-          </div>
-        )}
       </fieldset>
 
       <fieldset className={styles.group}>
         <legend>Speed</legend>
         <div className={styles.row}>
-          <button
-            type="button"
-            className={styles.step}
+          <HardwareButton
+            size="small"
+            label="−"
+            ariaLabel="Slower"
             onClick={() => s.setSpeed(practice.speed - 0.05)}
-            aria-label="Slower"
-          >
-            −
-          </button>
+          />
           <input
             type="range"
             min={25}
@@ -160,115 +157,94 @@ export function PracticeControls() {
             aria-label="Playback speed"
             className={styles.slider}
           />
-          <button
-            type="button"
-            className={styles.step}
+          <HardwareButton
+            size="small"
+            label="+"
+            ariaLabel="Faster"
             onClick={() => s.setSpeed(practice.speed + 0.05)}
-            aria-label="Faster"
-          >
-            +
-          </button>
+          />
           <output className={styles.value}>{pctLabel(practice.speed)}</output>
         </div>
-        <div className={styles.chips}>
-          {SPEED_PRESETS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`${styles.chip} ${Math.abs(practice.speed - p) < 0.001 ? styles.chipOn : ''}`}
-              onClick={() => s.setSpeed(p)}
-            >
-              {pctLabel(p)}
-            </button>
-          ))}
-        </div>
+        <ButtonGroup
+          label="Speed presets"
+          className={styles.presetStrip}
+          value={
+            SPEED_PRESETS.find((p) => Math.abs(practice.speed - p) < 0.001)?.toString() ?? null
+          }
+          onChange={(v) => s.setSpeed(Number(v))}
+          items={SPEED_PRESETS.map((p) => ({ value: String(p), label: pctLabel(p) }))}
+        />
       </fieldset>
 
       <fieldset className={styles.group}>
         <legend>Pitch</legend>
         <div className={styles.row}>
-          <button
-            type="button"
-            className={styles.step}
-            onClick={() => s.setSemitones(practice.semitones - 1)}
-            aria-label="Transpose down"
-          >
-            −
-          </button>
-          <output className={styles.valueWide}>
-            {practice.semitones > 0 ? '+' : ''}
-            {practice.semitones} st
-          </output>
-          <button
-            type="button"
-            className={styles.step}
-            onClick={() => s.setSemitones(practice.semitones + 1)}
-            aria-label="Transpose up"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className={styles.chip}
-            disabled={practice.semitones === 0}
-            onClick={() => s.setSemitones(0)}
-          >
-            Reset
-          </button>
-        </div>
-        <div className={styles.row}>
-          <span className={styles.dim}>Volume</span>
-          <input
-            type="range"
-            min={0}
-            max={200}
-            value={Math.round(practice.volume * 100)}
-            onChange={(e) => s.setVolume(Number(e.target.value) / 100)}
-            onDoubleClick={() => s.setVolume(1)}
-            aria-label="Track volume"
-            className={styles.slider}
-          />
-          <output className={styles.value}>{pctLabel(practice.volume)}</output>
+          <div className={styles.inlineGroup}>
+            <Stepper
+              label="Pitch"
+              value={`${practice.semitones > 0 ? '+' : ''}${practice.semitones} st`}
+              decrementLabel="Transpose down"
+              incrementLabel="Transpose up"
+              onDecrement={() => s.setSemitones(practice.semitones - 1)}
+              onIncrement={() => s.setSemitones(practice.semitones + 1)}
+              onReset={() => s.setSemitones(0)}
+              resetLabel="Reset transpose"
+              resetTitle="Reset transpose"
+            />
+            <HardwareButton
+              size="small"
+              label="Reset"
+              disabled={practice.semitones === 0}
+              onClick={() => s.setSemitones(0)}
+            />
+          </div>
+          <div className={styles.volumeRow}>
+            <span className={styles.dim}>Volume</span>
+            <input
+              type="range"
+              min={0}
+              max={200}
+              value={Math.round(practice.volume * 100)}
+              onChange={(e) => s.setVolume(Number(e.target.value) / 100)}
+              onDoubleClick={() => s.setVolume(1)}
+              aria-label="Track volume"
+              className={styles.slider}
+            />
+            <output className={styles.value}>{pctLabel(practice.volume)}</output>
+          </div>
         </div>
       </fieldset>
 
       <fieldset className={styles.group}>
         <legend>Loop</legend>
         <div className={styles.row}>
-          <button
-            type="button"
-            className={styles.chip}
-            onClick={() => s.setLoopPoint('start', position)}
+          <HardwareButton
+            size="small"
+            label={`A ${practice.loopStart !== null ? formatTime(practice.loopStart) : '—'}`}
             title="Set loop start here ([)"
-          >
-            A {practice.loopStart !== null ? formatTime(practice.loopStart) : '—'}
-          </button>
-          <button
-            type="button"
-            className={styles.chip}
-            onClick={() => s.setLoopPoint('end', position)}
+            onClick={() => s.setLoopPoint('start', position)}
+          />
+          <HardwareButton
+            size="small"
+            label={`B ${practice.loopEnd !== null ? formatTime(practice.loopEnd) : '—'}`}
             title="Set loop end here (])"
-          >
-            B {practice.loopEnd !== null ? formatTime(practice.loopEnd) : '—'}
-          </button>
-          <button
-            type="button"
-            className={`${styles.chip} ${practice.loopEnabled && hasRegion ? styles.chipOn : ''}`}
+            onClick={() => s.setLoopPoint('end', position)}
+          />
+          <HardwareButton
+            size="small"
+            label="Loop"
+            icon={<LoopGlyph size={12} />}
+            active={practice.loopEnabled && hasRegion}
             disabled={!hasRegion}
-            onClick={() => s.toggleLoop()}
-            aria-pressed={practice.loopEnabled}
             title="Loop on/off (L)"
-          >
-            <LoopGlyph size={12} /> {practice.loopEnabled && hasRegion ? 'On' : 'Off'}
-          </button>
-          <button
-            type="button"
-            className={styles.chip}
+            onClick={() => s.toggleLoop()}
+          />
+          <HardwareButton
+            size="small"
+            label="Clear"
             disabled={!hasRegion}
             onClick={() => s.setLoop(null, null, false)}
-          >
-            Clear
-          </button>
+          />
         </div>
         <div className={styles.row}>
           <label className={styles.check}>

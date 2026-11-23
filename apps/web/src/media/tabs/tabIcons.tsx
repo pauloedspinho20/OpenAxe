@@ -65,9 +65,9 @@ export const ThirtySecondNoteIcon = mk(
 export const SixtyFourthNoteIcon = mk(
   <>
     {head(true)}
-    <path d="M12.3 16.6V2" />
+    <path d="M12.3 16.6V3.5" />
     {Array.from({ length: 4 }, (_, i) => (
-      <path key={i} d={`M12.3 ${2 + i * 2.9}c0 2.4 4.6 2.8 3.9 5.6`} />
+      <path key={i} d={`M12.3 ${3.5 + i * 2.5}c0 2.2 4.6 2.5 3.9 5`} />
     ))}
   </>,
 )
@@ -117,36 +117,36 @@ export const TieIcon = mk(
 )
 
 // ── Effects ──────────────────────────────────────────────────────────────
-const label = (t: string, size = 8.5) => (
+const label = (t: string, size = 8.5, y = 15.2) => (
   <text
     x="12"
-    y="15.2"
+    y={y}
     textAnchor="middle"
     fontSize={size}
     fontWeight="700"
     fill="currentColor"
     stroke="none"
-    fontFamily="sans-serif"
+    fontFamily="var(--font-display, ui-monospace, monospace)"
   >
     {t}
   </text>
 )
 export const PalmMuteIcon = mk(
   <>
-    {label('P.M.', 7.5)}
+    {label('P.M.', 7.2, 14.5)}
     <path d="M3 19h18" strokeDasharray="2 2" />
   </>,
 )
 export const LetRingIcon = mk(
   <>
-    {label('L.R.', 7.5)}
+    {label('L.R.', 7.2, 14.5)}
     <path d="M3 19h18" strokeDasharray="2 2" />
   </>,
 )
 export const HammerIcon = mk(
   <>
     <path d="M4 15c3-6 13-6 16 0" />
-    {label('H', 7)}
+    {label('H', 7.2, 18.5)}
   </>,
 )
 export const SlideIcon = mk(
@@ -197,27 +197,42 @@ export const TremoloIcon = mk(
 export const TrillIcon = mk(
   <>
     <text
-      x="7"
-      y="14"
+      x="6.5"
+      y="14.5"
       textAnchor="middle"
-      fontSize="8"
+      fontSize="9"
       fontWeight="700"
       fontStyle="italic"
+      fontFamily="serif"
       fill="currentColor"
       stroke="none"
     >
       tr
     </text>
-    <path d="M12 11c1-2 2-2 3 0s2 2 3 0 2-2 3 0" />
+    <path d="M11.5 11.5c1-2 2-2 3 0s2 2 3 0 2-2 3 0" />
   </>,
 )
 export const GraceIcon = mk(
   <>
-    <ellipse cx="7" cy="17" rx="2.4" ry="1.7" fill="currentColor" />
-    <path d="M9.2 16.5V6" />
-    <path d="M6.5 13l5-5" />
-    {head(true)}
-    <path d="M12.3 16.6V6" transform="translate(4 0)" />
+    <ellipse
+      cx="6.5"
+      cy="17"
+      rx="2.3"
+      ry="1.7"
+      transform="rotate(-20 6.5 17)"
+      fill="currentColor"
+    />
+    <path d="M8.6 16.4V6.5" />
+    <path d="M6 12.5l5-4" />
+    <ellipse
+      cx="15.5"
+      cy="17.5"
+      rx="3.1"
+      ry="2.2"
+      transform="rotate(-20 15.5 17.5)"
+      fill="currentColor"
+    />
+    <path d="M18.4 16.8V4.5" />
   </>,
 )
 export const ChordIcon = mk(
@@ -287,36 +302,45 @@ export const BarDeleteIcon = mk(
 )
 export const RepeatStartIcon = mk(
   <>
-    <path d="M5 4v16" strokeWidth={3} />
+    <rect x="4" y="4" width="2.4" height="16" rx="0.6" fill="currentColor" stroke="none" />
     <path d="M9 4v16" />
-    <Dot cx={13} cy={9.5} r={1.5} />
-    <Dot cx={13} cy={14.5} r={1.5} />
+    <Dot cx={13.5} cy={9.5} r={1.5} />
+    <Dot cx={13.5} cy={14.5} r={1.5} />
   </>,
 )
 export const RepeatEndIcon = mk(
   <>
-    <path d="M19 4v16" strokeWidth={3} />
+    <rect x="17.6" y="4" width="2.4" height="16" rx="0.6" fill="currentColor" stroke="none" />
     <path d="M15 4v16" />
-    <Dot cx={11} cy={9.5} r={1.5} />
-    <Dot cx={11} cy={14.5} r={1.5} />
+    <Dot cx={10.5} cy={9.5} r={1.5} />
+    <Dot cx={10.5} cy={14.5} r={1.5} />
   </>,
 )
 export const FlatIcon = mk(<path d="M8 3v17c4-1 9-4 9-7.5S12 9 8 12" />)
 export const SharpIcon = mk(<path d="M10 4v17M15 3v17M6 10l12-3M6 16l12-3" />)
 export const TempoIcon = mk(
   <>
-    <path d="M8 21l2.5-17h3L16 21z" />
-    <path d="M12 15l5-8" />
+    <ellipse
+      cx="8"
+      cy="17.5"
+      rx="3.2"
+      ry="2.2"
+      transform="rotate(-20 8 17.5)"
+      fill="currentColor"
+    />
+    <path d="M11 16.8V5" />
+    <path d="M14.5 12h6M14.5 16h4" />
   </>,
 )
 export const TimeSigIcon = mk(
   <>
     <text
       x="12"
-      y="11"
+      y="10.8"
       textAnchor="middle"
-      fontSize="9"
+      fontSize="9.5"
       fontWeight="700"
+      fontFamily="var(--font-display, ui-monospace, monospace)"
       fill="currentColor"
       stroke="none"
     >
@@ -324,10 +348,11 @@ export const TimeSigIcon = mk(
     </text>
     <text
       x="12"
-      y="21"
+      y="20.6"
       textAnchor="middle"
-      fontSize="9"
+      fontSize="9.5"
       fontWeight="700"
+      fontFamily="var(--font-display, ui-monospace, monospace)"
       fill="currentColor"
       stroke="none"
     >
@@ -477,8 +502,9 @@ export const TabIcon = mk(
       x="8"
       y="12.6"
       textAnchor="middle"
-      fontSize="7"
+      fontSize="7.2"
       fontWeight="700"
+      fontFamily="var(--font-display, ui-monospace, monospace)"
       fill="currentColor"
       stroke="none"
     >
@@ -488,8 +514,9 @@ export const TabIcon = mk(
       x="16"
       y="16.6"
       textAnchor="middle"
-      fontSize="7"
+      fontSize="7.2"
       fontWeight="700"
+      fontFamily="var(--font-display, ui-monospace, monospace)"
       fill="currentColor"
       stroke="none"
     >
@@ -543,5 +570,161 @@ export const EarIcon = mk(
   <>
     <path d="M7 9a5 5 0 0 1 10 0c0 3-3 4-3 7a3 3 0 0 1-6 0" />
     <path d="M10 9a2 2 0 0 1 4 0c0 1.5-2 2-2 3.5" />
+  </>,
+)
+
+// ── Workspace overhaul icons ─────────────────────────────────────────────
+export const VolumeIcon = mk(
+  <>
+    <path d="M4 9h4l5-4v14l-5-4H4z" />
+    <path d="M16.5 8.8a4.5 4.5 0 0 1 0 6.4" />
+    <path d="M19 6.3a8 8 0 0 1 0 11.4" />
+  </>,
+)
+export const NotationTabIcon = mk(
+  <>
+    <path d="M3 5h18M3 8h18M3 11h18" opacity={0.55} />
+    <ellipse cx="7.5" cy="9.5" rx="2" ry="1.4" fill="currentColor" />
+    <path d="M9.4 9.2V4" />
+    <path d="M3 15.5h18M3 19.5h18" opacity={0.55} />
+    <text
+      x="15.5"
+      y="20.2"
+      textAnchor="middle"
+      fontSize="6.5"
+      fontWeight="700"
+      fontFamily="var(--font-display, ui-monospace, monospace)"
+      fill="currentColor"
+      stroke="none"
+    >
+      5
+    </text>
+  </>,
+)
+export const SheetThemeIcon = mk(
+  <>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none" />
+  </>,
+)
+export const LeadSheetIcon = mk(
+  <>
+    <rect x="4" y="4" width="6.5" height="5" rx="1" />
+    <rect x="13.5" y="4" width="6.5" height="5" rx="1" />
+    <path d="M4 13h16M4 17h12M4 20.5h9" />
+  </>,
+)
+export const FretboardIcon = mk(
+  <>
+    <rect x="3" y="5" width="18" height="14" rx="1.5" />
+    <path d="M6.5 5v14" strokeWidth={2} />
+    <path d="M11.5 5v14M16.5 5v14" opacity={0.6} />
+    <path d="M3 9.5h18M3 14.5h18" opacity={0.6} />
+    <Dot cx={14} cy={9.5} r={1.6} />
+    <Dot cx={19} cy={14.5} r={1.6} />
+  </>,
+)
+export const KeypadIcon = mk(
+  <>
+    <rect x="4" y="4" width="4" height="4" rx="0.8" />
+    <rect x="10" y="4" width="4" height="4" rx="0.8" />
+    <rect x="16" y="4" width="4" height="4" rx="0.8" />
+    <rect x="4" y="10" width="4" height="4" rx="0.8" />
+    <rect x="10" y="10" width="4" height="4" rx="0.8" />
+    <rect x="16" y="10" width="4" height="4" rx="0.8" />
+    <rect x="4" y="16" width="4" height="4" rx="0.8" />
+    <rect x="10" y="16" width="4" height="4" rx="0.8" />
+    <rect x="16" y="16" width="4" height="4" rx="0.8" />
+  </>,
+)
+export const PianoIcon = mk(
+  <>
+    <rect x="3" y="5" width="18" height="14" rx="1.5" />
+    <path d="M9 5v14M15 5v14" opacity={0.55} />
+    <rect x="7.2" y="5" width="3.4" height="8" rx="0.5" fill="currentColor" stroke="none" />
+    <rect x="13.4" y="5" width="3.4" height="8" rx="0.5" fill="currentColor" stroke="none" />
+  </>,
+)
+export const FullscreenIcon = mk(
+  <>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </>,
+)
+export const ExitFullscreenIcon = mk(
+  <>
+    <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+  </>,
+)
+export const CenterCursorIcon = mk(
+  <>
+    <path d="M12 4v16" />
+    <path d="M4 12h4.5M6.5 9.5L9 12l-2.5 2.5" />
+    <path d="M20 12h-4.5M17.5 9.5L15 12l2.5 2.5" />
+  </>,
+)
+export const ToneIcon = mk(
+  <>
+    <circle cx="12" cy="12" r="7.5" />
+    <path d="M12 12l3.8-3.8" />
+    <Dot cx={6.5} cy={17} r={1.1} />
+    <Dot cx={17.5} cy={17} r={1.1} />
+  </>,
+)
+export const PracticeIcon = mk(
+  <>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="4.2" />
+    <Dot cx={12} cy={12} r={1.5} />
+  </>,
+)
+export const SyncIcon = mk(
+  <>
+    <path d="M10 14l-2 2a3.2 3.2 0 0 1-4.5-4.5l3-3a3.2 3.2 0 0 1 4.5 0" />
+    <path d="M14 10l2-2a3.2 3.2 0 0 1 4.5 4.5l-3 3a3.2 3.2 0 0 1-4.5 0" />
+    <path d="M9 15l6-6" />
+  </>,
+)
+export const RhythmStemIcon = mk(
+  <>
+    <path d="M3 17.5h18M3 20.5h18" opacity={0.55} />
+    <path d="M7 14V5.5l10-1.5V14" />
+    <path d="M7 8.5l10-1.5" />
+  </>,
+)
+export const MoreIcon = mk(
+  <>
+    <Dot cx={12} cy={6} r={1.6} />
+    <Dot cx={12} cy={12} r={1.6} />
+    <Dot cx={12} cy={18} r={1.6} />
+  </>,
+)
+export const CloseIcon = mk(<path d="M6 6l12 12M18 6L6 18" />)
+export const ChevronDownIcon = mk(<path d="M6 9l6 6 6-6" />)
+export const ChevronUpIcon = mk(<path d="M6 15l6-6 6 6" />)
+export const ChevronLeftIcon = mk(<path d="M15 6l-6 6 6 6" />)
+export const ChevronRightIcon = mk(<path d="M9 6l6 6-6 6" />)
+export const BackspaceIcon = mk(
+  <>
+    <path d="M9 6h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-6-6z" />
+    <path d="M12.5 9.5l5 5M17.5 9.5l-5 5" />
+  </>,
+)
+export const LibraryIcon = mk(
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16M13 9h5M13 13h5M13 17h3" />
+  </>,
+)
+export const PlayTabIcon = mk(<path d="M7 5v14l12-7z" />)
+export const FileIcon = mk(
+  <>
+    <path d="M6 3h8l5 5v13H6z" />
+    <path d="M14 3v5h5" />
+  </>,
+)
+export const ViewIcon = mk(
+  <>
+    <path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z" />
+    <circle cx="12" cy="12" r="2.8" />
   </>,
 )

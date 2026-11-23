@@ -1,35 +1,11 @@
-import type { SelectHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import type { InputHTMLAttributes } from 'react'
+import { Select, type SelectProps } from '../Select/Select'
 import styles from './FormField.module.css'
 
-export interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string
-  children: ReactNode
-}
+export type SelectFieldProps = SelectProps
 
-export function SelectField({ label, children, id, ...props }: SelectFieldProps) {
-  const fieldId =
-    id ??
-    (label
-      ? label
-          .toLowerCase()
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '')
-      : undefined)
-  if (!label) {
-    return (
-      <select className={styles.select} id={id} {...props}>
-        {children}
-      </select>
-    )
-  }
-  return (
-    <label className={styles.field} htmlFor={fieldId}>
-      <span className={styles.label}>{label}</span>
-      <select className={styles.select} id={fieldId} {...props}>
-        {children}
-      </select>
-    </label>
-  )
+export function SelectField(props: SelectFieldProps) {
+  return <Select {...props} />
 }
 
 export interface InputFieldProps extends InputHTMLAttributes<HTMLInputElement> {

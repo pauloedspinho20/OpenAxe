@@ -5,6 +5,8 @@
  * linearly, beyond them the nearest segment's rate extends. One point is a
  * pure offset; none is the identity.
  */
+import type { MediaItem, ScoreSection } from '../mediaDb'
+
 export interface SyncPoint {
   /** Score time, seconds (alphaTab's timeline, as rendered at the score tempo). */
   score: number
@@ -99,4 +101,67 @@ export function mixGuide(
     }
   }
   return out
+}
+
+export interface SyncedSectionMarker {
+  id: string
+  label: string
+  time: number
+  bar: number
+  sourceName: string
+}
+
+/**
+ * Extract section markers and their first-playthrough score times from a
+ * score's master bars. Uses structural types so callers need not bundle alphaTab.
+ */
+export function extractScoreSections(
+  masterBars: readonly { section?: { marker?: string | null; text?: string | null } | null }[],
+  barStart: (bar: number) => number | null,
+): ScoreSection[] {
+  const out: ScoreSection[] = []
+  masterBars.forEach((mb, i) => {
+    if (!mb.section) return
+    const label =
+      `${mb.section.marker ? `${mb.section.marker} ` : ''}${mb.section.text || `Bar ${i + 1}`}`.trim()
+    const time = barStart(i)
+    if (time !== null && Number.isFinite(time)) {
+      out.push({ bar: i, label, time: Math.round(time * 1000) / 1000 })
+    }
+  })
+  return out
+}
+
+/**
+ * Project section markers from every score paired with `audioId` onto the
+ * recording's timeline, sorted chronologically.
+ */
+export function syncedScoreSections(
+  items: readonly Pick<MediaItem, 'id' | 'kind' | 'name' | 'sync' | 'sections'>[],
+  audioId: string,
+  duration?: number,
+): SyncedSectionMarker[] {
+  const out: SyncedSectionMarker[] = []
+  for (const item of items) {
+    if (
+      item.kind !== 'score' ||
+      item.sync?.audioId !== audioId ||
+      item.sync.points.length === 0 ||
+      !item.sections?.length
+    )
+      continue
+    for (const sec of item.sections) {
+      const time = scoreToAudio(item.sync.points, sec.time)
+      if (!Number.isFinite(time) || time < 0) continue
+      if (duration && duration > 0 && time > duration) continue
+      out.push({
+        id: `score:${item.id}:bar:${sec.bar}`,
+        label: sec.label,
+        time,
+        bar: sec.bar,
+        sourceName: item.name,
+      })
+    }
+  }
+  return out.sort((a, b) => a.time - b.time)
 }

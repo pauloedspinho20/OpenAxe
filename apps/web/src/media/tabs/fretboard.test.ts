@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { beatPositions, isBlackKey, noteName, openPitches, pitchAt, placePitch } from './fretboard'
+import {
+  beatPositions,
+  INLAYS,
+  isBlackKey,
+  noteName,
+  openPitches,
+  pitchAt,
+  placePitch,
+} from './fretboard'
 
 // Standard guitar tuning as alphaTab lists it: high E first.
 const STD = [64, 59, 55, 50, 45, 40]
@@ -52,5 +60,9 @@ describe('fretboard', () => {
       { string: 2, fret: 5 },
     ])
     expect(beatPositions(null)).toEqual([])
+  })
+
+  it('defines standard neck inlay frets', () => {
+    expect(INLAYS).toEqual([5, 7, 9, 12, 15, 17, 19, 21, 24])
   })
 })

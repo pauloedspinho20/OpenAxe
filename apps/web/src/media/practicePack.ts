@@ -19,7 +19,7 @@ export type PackItem = Pick<
   MediaItem,
   'kind' | 'name' | 'artist' | 'fileName' | 'mime' | 'duration' | 'peaks' | 'practice' | 'markers'
 > &
-  Partial<Pick<MediaItem, 'sync' | 'view' | 'barNotes' | 'tags'>>
+  Partial<Pick<MediaItem, 'sync' | 'sections' | 'view' | 'barNotes' | 'tags'>>
 
 export interface PackFile {
   key: 'main' | 'recording'
@@ -50,6 +50,7 @@ export function packItem(item: MediaItem): PackItem {
     markers: item.markers,
   }
   if (item.sync) out.sync = item.sync
+  if (item.sections?.length) out.sections = item.sections
   if (item.view) out.view = item.view
   if (item.barNotes && Object.keys(item.barNotes).length) out.barNotes = item.barNotes
   if (item.tags?.length) out.tags = item.tags

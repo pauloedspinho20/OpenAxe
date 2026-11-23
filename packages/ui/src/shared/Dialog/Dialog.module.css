@@ -59,3 +59,29 @@
   gap: var(--sp-4);
   height: 100%;
 }
+
+@media (max-width: 720px) {
+  .overlayFullMobile {
+    padding: 0;
+  }
+
+  .dialogFullMobile {
+    width: 100vw;
+    height: 100svh;
+    max-height: 100svh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .dialogFullMobile .header {
+    padding: max(8px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 8px
+      max(12px, env(safe-area-inset-left, 0px));
+    border-bottom: 1px solid var(--seam);
+  }
+
+  .dialogFullMobile .body {
+    padding: 8px max(8px, env(safe-area-inset-right, 0px))
+      max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+    gap: var(--sp-2);
+  }
+}

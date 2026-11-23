@@ -127,7 +127,8 @@ describe('components/SettingsDialog', () => {
     it('sends a channel change to the plugin through the store', () => {
       vi.mocked(getShellKind).mockReturnValue('plugin')
       renderDialog()
-      fireEvent.change(screen.getByLabelText('Input channel'), { target: { value: 'r' } })
+      fireEvent.click(screen.getByRole('combobox', { name: 'Input channel' }))
+      fireEvent.click(screen.getByRole('option', { name: 'Ch 2' }))
       // useNativeAudioEngine watches this and pushes it over the bridge; the
       // store is the single place both the plugin and the web read it from.
       expect(useIOStore.getState().inputChannel).toBe('r')

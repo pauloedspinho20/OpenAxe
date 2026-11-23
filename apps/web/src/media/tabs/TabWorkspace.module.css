@@ -64,9 +64,33 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 6px 10px;
   min-height: 36px;
   flex-shrink: 0;
+  min-width: 0;
+}
+
+.topbar {
+  justify-content: space-between;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--seam);
+}
+
+.topLeft,
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.topLeft {
+  flex: 1 1 200px;
+}
+
+.topRight {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .songTitle {
@@ -74,15 +98,14 @@
   align-items: baseline;
   gap: 8px;
   min-width: 0;
-  max-width: 280px;
-  margin-right: auto;
+  max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
 }
 
 .songTitle strong {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ink-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,6 +116,234 @@
   color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.trackPill {
+  max-width: 170px;
+}
+
+.modeSwitch {
+  flex-shrink: 0;
+}
+
+/* ── Shared workspace toolbar separators & popovers ───────────────── */
+
+.tbSepV {
+  inline-size: 1px;
+  block-size: 18px;
+  margin-inline: 2px;
+  border-inline-start: 1px solid var(--seam-strong);
+  flex-shrink: 0;
+}
+
+.tbSepH {
+  display: block;
+  block-size: 1px;
+  border-block-start: 1px solid var(--seam);
+  margin: 4px 0;
+}
+
+.popCaret {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.popoverWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.popoverSurface {
+  padding: 8px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam-strong);
+  background: var(--panel);
+  color: var(--ink-1);
+  box-shadow: 0 12px 32px var(--shadow-deep);
+  max-inline-size: calc(100vw - 16px);
+  max-block-size: min(80svh, 580px);
+  overflow-y: auto;
+}
+
+.popMenu {
+  min-inline-size: 210px;
+}
+
+.popTone {
+  inline-size: min(340px, calc(100vw - 16px));
+  padding: 10px;
+}
+
+.popWide {
+  inline-size: min(580px, calc(100vw - 16px));
+  padding: 10px;
+}
+
+.popFallback[data-open='true'] {
+  display: block;
+  position: fixed;
+  z-index: 90;
+  margin: 0;
+}
+
+@supports (position-area: block-end) {
+  .popoverSurface {
+    inset: auto;
+    margin: 0;
+  }
+
+  .popBottomEnd {
+    position-area: block-end span-inline-start;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+
+  .popBottomStart {
+    position-area: block-end span-inline-end;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+
+  .popTopEnd {
+    position-area: block-start span-inline-start;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+
+  .popTopStart {
+    position-area: block-start span-inline-end;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+}
+
+@supports not (position-area: block-end) {
+  .popoverSurface {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+  }
+}
+
+.popSheetHead {
+  display: none;
+}
+
+.popPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.popRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.popLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.popGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.popToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--seam);
+}
+
+.popMenuList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.popMenuList button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 34px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .popMenuList button:hover {
+    background: var(--panel-raised);
+  }
+}
+
+.popDivider {
+  border: none;
+  border-top: 1px solid var(--seam);
+  margin: 4px 0;
+}
+
+@media (max-width: var(--mw-md)) {
+  .trackPill {
+    display: none;
+  }
+}
+
+@media (max-width: var(--mw-sm)) {
+  .popSheetMobile {
+    position: fixed !important;
+    position-area: none !important;
+    position-anchor: auto !important;
+    margin: 0 !important;
+    inset: auto 0 0 0 !important;
+    inline-size: 100vw !important;
+    max-inline-size: 100vw !important;
+    max-block-size: 78svh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-bottom: none;
+    padding: 12px 12px max(14px, env(safe-area-inset-bottom, 0px));
+    z-index: 95;
+  }
+
+  .popSheetHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--seam);
+    font-size: 13px;
+  }
+}
+
+@media (pointer: coarse) {
+  .popMenuList button {
+    min-block-size: 40px;
+  }
 }
 
 .savedDot {
@@ -122,18 +373,6 @@
   color: var(--ink-1);
   border: none;
   padding: 4px 2px;
-}
-
-.zoomValue {
-  min-width: 46px;
-  border: none;
-  background: transparent;
-  color: var(--ink-1);
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  padding: 0 2px;
 }
 
 /* <details> dropdown menus (export, practice). */
@@ -228,6 +467,7 @@
   border-radius: var(--r-md) var(--r-md) 0 0;
   border: 1px solid var(--seam);
   border-bottom: none;
+  isolation: isolate;
 }
 
 .viewport:focus-visible {
@@ -241,10 +481,13 @@
 
 .sheet {
   position: relative;
+  isolation: isolate;
 }
 
 .host {
   min-height: 200px;
+  position: relative;
+  z-index: 0;
 }
 
 .sheetMsg {
@@ -255,11 +498,13 @@
 /* alphaTab's playback cursors and selection layer. */
 .host :global(.at-cursor-bar) {
   background: rgba(255, 196, 0, 0.12);
+  z-index: 1 !important;
 }
 
 .host :global(.at-cursor-beat) {
   background: rgba(230, 80, 40, 0.75);
   width: 3px;
+  z-index: 2 !important;
 }
 
 .host :global(.at-highlight *) {
@@ -269,6 +514,7 @@
 
 .host :global(.at-selection div) {
   background: rgba(40, 110, 230, 0.18);
+  z-index: 1 !important;
 }
 
 .beatBox {
@@ -320,21 +566,6 @@
   gap: 8px;
 }
 
-.drawerHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--ink-1);
-}
-
-.drawerHead strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* Bottom drawer (drum lane): collapsible, capped so the sheet stays big. */
 .drawerBottom {
   max-height: 40%;
@@ -378,17 +609,188 @@
   border-right: 1px solid var(--seam);
 }
 
-.railSpacer {
-  flex: 1;
-}
-
 .panel {
-  width: 232px;
+  width: 248px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* ── Mobile / tablet bottom edit dock ──────────────────────────────── */
+
+.editDock {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-md);
+  background: var(--panel-recessed);
+  overflow: hidden;
+}
+
+.editDockBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--seam);
+  background: var(--panel);
+}
+
+.editDockActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.editDockBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 8px max(8px, env(safe-area-inset-bottom, 0px));
+  max-block-size: min(44svh, 340px);
+  overflow-y: auto;
+}
+
+/* ── Touch fret entry pad ──────────────────────────────────────────── */
+
+.touchPad {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.touchStrings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: 4px;
+}
+
+.touchStringBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  padding: 3px 4px;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.touchStringOn {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--ink-1);
+}
+
+.touchStringName {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.touchStringFret {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.touchFretGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.touchKey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel-raised);
+  color: var(--ink-1);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.touchKeyOpen {
+  background: var(--panel);
+}
+
+.touchKeyAlt {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.touchKeyWarn {
+  color: var(--led-hot-bright);
+  border-color: var(--danger-border);
+  background: var(--danger-surface);
+}
+
+.touchKeyOn {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
+.touchKey:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.touchActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.touchNavGroup {
+  display: flex;
+  inline-size: 100%;
+}
+
+.touchActions button.touchActionBtn {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+}
+
+.touchActionPrimary {
+  flex: 1;
+}
+
+.touchCursorReadout {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-2);
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.touchActions button.touchChipBtn {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+}
+
+.touchAutoBtn {
+  padding: 0 10px;
+  margin-left: auto;
 }
 
 .boxSection {
@@ -441,7 +843,7 @@
 }
 
 /* Selects are the design system's (@openaxe/ui Select); only size them here. */
-.textField select {
+.textField [data-openaxe-select] {
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -481,32 +883,13 @@
 
 /* ── Shortcut sheet ────────────────────────────────────────────────── */
 
-.help {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  background: var(--overlay-bg);
-}
-
-.helpCard {
-  width: min(560px, 92vw);
-  max-height: 80vh;
-  overflow: auto;
-  padding: 14px;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--seam-strong);
-  background: var(--panel);
-}
-
-.helpCard dl {
-  margin: 10px 0 0;
+.helpList {
+  margin: 0;
   display: grid;
   gap: 6px;
 }
 
-.helpCard dl > div {
+.helpList > div {
   display: grid;
   grid-template-columns: 190px 1fr;
   gap: 10px;
@@ -514,12 +897,12 @@
   color: var(--ink-2);
 }
 
-.helpCard dt,
-.helpCard dd {
+.helpList dt,
+.helpList dd {
   margin: 0;
 }
 
-.helpCard kbd {
+.helpList kbd {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   padding: 1px 6px;
@@ -529,20 +912,7 @@
   color: var(--ink-1);
 }
 
-/* ── AlphaTex pane ─────────────────────────────────────────────────── */
-
-.texPane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  flex-shrink: 0;
-}
-
-.texHead {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
+/* ── AlphaTex editor ───────────────────────────────────────────────── */
 
 .tex {
   min-height: 200px;
@@ -559,6 +929,19 @@
   white-space: pre-wrap;
 }
 
+.midiBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--panel-recessed);
+  border: 1px solid var(--seam);
+  border-radius: var(--r-md);
+}
+
 /* ── Shared small controls (song panel, drum lane, new-song form) ──── */
 
 .paletteGroup {
@@ -566,24 +949,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 3px;
-}
-
-.pbtn {
-  min-width: 28px;
-  height: 26px;
-  padding: 0 6px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--seam-strong);
-  background: var(--panel-raised);
-  color: var(--ink-1);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.pbtn:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .num {
@@ -640,7 +1005,7 @@
   font-size: 12px;
 }
 
-.trackTable select {
+.trackTable [data-openaxe-select] {
   max-width: 130px;
 }
 
@@ -708,21 +1073,8 @@
 }
 
 @media (max-width: var(--mw-md)) {
-  .drawer {
-    position: absolute;
-    right: 8px;
-    top: 52px;
-    bottom: 60px;
-    z-index: 25;
-    width: min(440px, 92vw);
-    padding: 8px;
-    background: var(--panel);
-    border: 1px solid var(--seam-strong);
-    border-radius: var(--r-md);
-  }
-
   .panel {
-    width: 180px;
+    width: 196px;
   }
 }
 
@@ -780,17 +1132,33 @@
 }
 
 .sidebar {
-  width: 290px;
+  width: 308px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  overflow-y: auto;
-  padding: 6px;
+  padding: 8px;
   border: 1px solid var(--seam);
   border-radius: var(--r-md);
   background: var(--panel-recessed);
+}
+
+.inspectorTabs > button[role='tab'] {
+  padding: 2px 5px;
+  gap: 3px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.inspectorBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .sideSection > summary {
@@ -974,31 +1342,6 @@
   gap: 8px;
 }
 
-.segmented {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--r-sm);
-  background: var(--panel);
-}
-
-.segmented button {
-  flex: 1;
-  padding: 4px 6px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.segmented .segOn {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
 .tapRow {
   display: flex;
   align-items: center;
@@ -1141,7 +1484,7 @@
   color: var(--ink-2);
 }
 
-.toneList select {
+.toneList [data-openaxe-select] {
   min-width: 0;
 }
 
@@ -1161,7 +1504,7 @@
 .fretPanel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
   padding: 6px 8px 8px;
   background: var(--panel-recessed);
@@ -1169,11 +1512,22 @@
   border-radius: var(--r-md);
 }
 
+.fretPanelEmbedded {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 .fretHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: 6px 10px;
+  font-size: 11px;
+}
+
+.fretHint {
+  color: var(--ink-3);
   font-size: 11px;
 }
 
@@ -1195,17 +1549,141 @@
 .neckScroll {
   overflow-x: auto;
   min-width: 0;
+  scroll-snap-type: x proximity;
+}
+
+@media (pointer: coarse), (max-width: var(--mw-md)) {
+  .fret {
+    height: 38px;
+  }
+
+  .neck {
+    min-width: 1100px;
+  }
+
+  .fretDot {
+    min-width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .keyWhite {
+    flex: 0 0 36px;
+  }
+
+  .keyBlack {
+    width: 22px;
+    height: 62px;
+  }
+
+  .piano {
+    height: 108px;
+  }
+}
+
+@media (max-width: var(--mw-sm)) {
+  .topbar {
+    gap: 4px 6px;
+  }
+
+  .topLeft {
+    flex: 1 1 120px;
+  }
+
+  .modeSwitch {
+    order: 3;
+    flex-basis: 100%;
+    display: flex;
+  }
+
+  .modeSwitch > button {
+    flex: 1 1 0;
+    min-block-size: 34px;
+  }
+
+  .footer {
+    gap: 4px 6px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .footer::-webkit-scrollbar {
+    display: none;
+  }
+
+  .footer > button {
+    padding-inline: 5px;
+  }
+
+  .footerSpacer {
+    display: none;
+  }
+
+  .footer > :last-child {
+    margin-left: auto;
+  }
+
+  .helpList > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
 }
 
 .neck {
   display: grid;
+  grid-template-columns: var(--neck-cols);
   min-width: 760px;
   background: linear-gradient(180deg, #3a2a1c, #2c2016);
   border-radius: var(--r-sm);
+  overflow: clip;
+  isolation: isolate;
 }
 
 .neckRow {
-  display: contents;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: var(--neck-cols);
+  grid-template-columns: subgrid;
+  position: relative;
+  z-index: 1;
+}
+
+.neckInlays {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: var(--neck-cols);
+  grid-template-columns: subgrid;
+  grid-template-rows: 1fr;
+  pointer-events: none;
+  position: relative;
+  z-index: 0;
+}
+
+.neckInlaySlot {
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-inline-end: 2px;
+}
+
+.neckInlayDouble {
+  justify-content: space-evenly;
+}
+
+.neckInlayDot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f5f0e1, #cfc5ac 75%, #a89e86);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 45%),
+    0 0 0 1px rgb(0 0 0 / 35%);
+  opacity: 0.78;
 }
 
 .fret {
@@ -1292,12 +1770,18 @@
 }
 
 .fretNumber {
-  height: 14px;
-  font-size: 9px;
-  line-height: 14px;
+  block-size: 18px;
+  font-size: 10px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
   text-align: center;
-  color: #d9d2c0;
+  color: var(--ink-2);
   background: var(--panel-recessed);
+}
+
+.fretNumberMarked {
+  color: var(--ink-1);
+  font-weight: 700;
 }
 
 .piano {
@@ -1308,7 +1792,7 @@
 
 .keyWhite {
   position: relative;
-  flex: 0 0 22px;
+  flex: 0 0 28px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1325,7 +1809,7 @@
   position: absolute;
   top: 0;
   z-index: 1;
-  width: 14px;
+  width: 18px;
   height: 56px;
   padding: 0;
   border: 1px solid #000;
@@ -1457,7 +1941,7 @@
 }
 
 .findGrid input,
-.findGrid select {
+.findGrid [data-openaxe-select] {
   width: 100%;
   min-width: 0;
 }
@@ -1529,12 +2013,6 @@
   background: var(--panel);
   color: var(--ink-1);
   border-bottom: 1px solid var(--seam);
-}
-
-.leadValue {
-  min-width: 2.5ch;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 
 .leadSection h3 {

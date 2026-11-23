@@ -2,13 +2,19 @@
  * Video export options and progress (issue #459): size and format, frame
  * rate, colours, zoom, layout, tracks, title card and audio - then record.
  */
-import { HardwareButton, Select } from '@openaxe/ui'
-import { useRef, useState } from 'react'
+import { Dialog, HardwareButton, Select } from '@openaxe/ui'
+import { useEffect, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import * as I from './tabIcons'
 import t from './TabWorkspace.module.css'
-import { pickMime, VIDEO_SIZES } from './videoExport'
+import {
+  detectExportCapabilities,
+  type ExportCapabilities,
+  pickMime,
+  VIDEO_SIZES,
+  type VideoFormat,
+} from './videoExport'
 
 export type VideoAudio = 'synth' | 'recording' | 'none'
 
@@ -38,6 +44,8 @@ export interface VideoDialogChoice {
   paperOpacity: number
   /** Show a fretboard with the playing notes under the music. */
   fretboard: boolean
+  /** Output container for offline WebCodecs export. */
+  format: VideoFormat
 }
 
 interface VideoExportDialogProps {
@@ -81,13 +89,29 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
     backgroundImage: null,
     paperOpacity: 1,
     fretboard: false,
+    format: 'auto',
   })
   const [progress, setProgress] = useState<number | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [caps, setCaps] = useState<ExportCapabilities>(() => ({
+    offline: false,
+    mp4: false,
+    webm: false,
+    realtime: pickMime(),
+  }))
   const abort = useRef<AbortController | null>(null)
   const set = <K extends keyof VideoDialogChoice>(k: K, v: VideoDialogChoice[K]) =>
     setC((x) => ({ ...x, [k]: v }))
-  const format = pickMime()
+  useEffect(() => {
+    let cancelled = false
+    void detectExportCapabilities().then((next) => {
+      if (!cancelled) setCaps(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const canExport = caps.offline || !!caps.realtime
   const busy = progress !== null
 
   const start = () => {
@@ -111,18 +135,20 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
   }
 
   return (
-    <div className={t.texPane} role="dialog" aria-label="Export video">
-      <div className={t.texHead}>
-        <I.DownloadIcon size={16} />
-        <strong>Export video</strong>
-        <span className={styles.dim}>
-          {format
-            ? `Records in real time as ${format.ext.toUpperCase()} - keep this window open.`
-            : 'This browser cannot record video.'}
-        </span>
-        <span className={t.footerSpacer} />
-        <HardwareButton size="small" label="Close" disabled={busy} onClick={p.onClose} />
-      </div>
+    <Dialog
+      open
+      onClose={p.onClose}
+      closeDisabled={busy}
+      title="Export video"
+      width="min(760px, 94vw)"
+    >
+      <span className={styles.dim}>
+        {caps.offline
+          ? `Renders offline (faster than real time) as ${caps.mp4 && caps.webm ? 'MP4 or WebM' : caps.mp4 ? 'MP4' : 'WebM'}.`
+          : caps.realtime
+            ? `Records in real time as ${caps.realtime.ext.toUpperCase()} — keep this window open.`
+            : 'This browser cannot export video.'}
+      </span>
       <fieldset className={t.printGrid} disabled={busy}>
         <fieldset>
           <legend>Format</legend>
@@ -160,6 +186,20 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
               <option value="none">No audio</option>
             </Select>
           </label>
+          {caps.mp4 && caps.webm && (
+            <label>
+              <span className={styles.dim}>container</span>
+              <Select
+                value={c.format}
+                onChange={(e) => set('format', e.target.value as VideoFormat)}
+                aria-label="Container format"
+              >
+                <option value="auto">Auto (MP4)</option>
+                <option value="mp4">MP4 (H.264 + AAC)</option>
+                <option value="webm">WebM (VP9/VP8 + Opus)</option>
+              </Select>
+            </label>
+          )}
           <label className={styles.check}>
             <input
               type="checkbox"
@@ -368,14 +408,14 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
         ) : (
           <HardwareButton
             size="small"
-            label="Record video"
+            label="Export video"
             icon={<I.DownloadIcon size={14} />}
-            disabled={!format || c.tracks.length === 0}
+            disabled={!canExport || c.tracks.length === 0}
             onClick={start}
           />
         )}
         {message && <span className={styles.dim}>{message}</span>}
       </div>
-    </div>
+    </Dialog>
   )
 }

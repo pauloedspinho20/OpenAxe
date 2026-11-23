@@ -1,14 +1,20 @@
 /* Media Center (issue #205): library + backing-track player + tab workspace. */
 
-.dialog {
+.shell {
   --wave: var(--ink-3);
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  background: var(--panel);
+  padding: var(--sp-3) var(--sp-4);
+  box-sizing: border-box;
 }
 
 .center {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--sp-4);
-  min-height: min(72vh, 760px);
   position: relative;
 }
 
@@ -31,6 +37,8 @@
 @media (max-width: var(--mw-md)) {
   .center {
     grid-template-columns: 1fr;
+    min-height: 0;
+    flex: 1;
   }
 }
 
@@ -41,6 +49,8 @@
   flex-direction: column;
   gap: var(--sp-2);
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--seam);
   padding-right: var(--sp-4);
 }
@@ -49,40 +59,20 @@
   .sidebar {
     border-right: none;
     padding-right: 0;
-    max-height: 260px;
+    flex: 1;
+    max-height: none;
+  }
+
+  .mainBrowse {
+    display: none;
   }
 }
 
 .sideActions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-2);
   align-items: center;
-}
-
-.filters {
-  display: flex;
-  gap: 2px;
-  background: var(--panel-recessed);
-  border-radius: var(--r-sm);
-  padding: 2px;
-}
-
-.filter {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 6px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.filterOn {
-  background: var(--panel-raised);
-  color: var(--ink-1);
 }
 
 .search {
@@ -168,14 +158,9 @@
   font-size: 12px;
 }
 
-.libFilters select {
+.libFilters [data-openaxe-select] {
   min-width: 0;
   flex: 1;
-}
-
-.chipOn {
-  border-color: #f2c94c !important;
-  color: #f2c94c !important;
 }
 
 .item:hover {
@@ -246,6 +231,39 @@
   opacity: 1;
 }
 
+@media (pointer: coarse), (max-width: var(--mw-md)) {
+  .itemMain,
+  .itemStar {
+    min-height: 44px;
+  }
+
+  .itemStar {
+    min-width: 36px;
+    padding: 0 4px;
+  }
+
+  .itemDelete {
+    opacity: 0.78;
+    min-width: 38px;
+    min-height: 44px;
+    display: inline-grid;
+    place-items: center;
+  }
+}
+
+@media (pointer: coarse) {
+  .filter,
+  .search,
+  .tbtn {
+    min-height: 40px;
+  }
+
+  .tbtnPlay {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 .renameInput {
   font: inherit;
   font-size: 13px;
@@ -261,6 +279,7 @@
 
 .main {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
@@ -419,6 +438,29 @@
   color: var(--led-warn);
 }
 
+.scoreMarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed var(--accent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.scoreMarker span {
+  position: absolute;
+  bottom: 3px;
+  left: 3px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ── Transport ─────────────────────────────────────────────────────── */
 
 .transportRow {
@@ -510,18 +552,26 @@
   color: var(--ink-3);
 }
 
+.scoreMarkerChip {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--seam-strong));
+}
+
+.scoreMarkerChip button:first-child {
+  color: var(--accent);
+}
+
 /* ── Practice controls ─────────────────────────────────────────────── */
 
 .practice {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--sp-3);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
 }
 
 .group {
   border: 1px solid var(--seam);
   border-radius: var(--r-md);
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -544,77 +594,49 @@
   flex-wrap: wrap;
 }
 
+.inlineGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.volumeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.group .presetStrip {
+  display: flex;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.group .presetStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.group .presetStrip > button {
+  flex: 1 0 auto;
+}
+
 .slider {
   flex: 1;
   min-width: 80px;
   accent-color: var(--accent);
 }
 
-.step {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--seam-strong);
-  background: var(--panel-raised);
-  color: var(--ink-1);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.value,
-.valueWide {
+.value {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   min-width: 44px;
   text-align: right;
   color: var(--ink-1);
-}
-
-.valueWide {
-  min-width: 52px;
-  text-align: center;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.chip,
-.primaryBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--seam-strong);
-  background: var(--panel-raised);
-  color: var(--ink-1);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.chip:disabled,
-.primaryBtn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.chipOn {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.primaryBtn {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: transparent;
-  font-weight: 600;
-  padding: 6px 12px;
 }
 
 .check {
@@ -683,6 +705,7 @@
 @media (max-width: var(--mw-sm)) {
   .dock {
     flex-wrap: wrap;
+    padding: var(--sp-2) var(--sp-3) max(var(--sp-2), env(safe-area-inset-bottom, 0px));
   }
 
   .dockSeek {
@@ -692,25 +715,42 @@
 
   .time {
     min-width: 0;
+    font-size: 11px;
+    margin-left: 2px;
+    white-space: nowrap;
+  }
+
+  .transportRow,
+  .transportButtons {
+    gap: 4px;
+  }
+
+  .tbtn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tbtnPlay {
+    width: 36px;
+    height: 36px;
   }
 }
 
-/* ── Score mode: the tab workspace takes the whole dialog ─────────── */
-
-.dialogScore {
-  height: calc(100svh - 2 * var(--sp-5));
+@media (max-width: var(--mw-xs)) {
+  .timeDim {
+    display: none;
+  }
 }
 
-/* The Dialog body (second child) loses most of its padding in score mode. */
-.dialogScore > div:last-child {
-  padding: 6px 10px 10px;
-}
+/* ── Score mode: the tab workspace fills the full view canvas ──────── */
 
 .centerScore {
   flex: 1;
   min-height: 0;
-  grid-template-columns: 34px 240px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
+  padding: 8px 12px 10px;
 }
 
 .centerScore .main {
@@ -718,11 +758,17 @@
 }
 
 .centerNoLib {
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.libToggle {
-  align-self: start;
+@media (max-width: var(--mw-md)) {
+  .shell {
+    padding: 6px;
+  }
+
+  .centerScore {
+    padding: 4px 6px 6px;
+  }
 }
 
 /* ── Backing-track view in full-size mode ─────────────────────────── */
@@ -758,7 +804,7 @@
 
 .ruler {
   position: relative;
-  height: 22px;
+  height: 38px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--seam);
   overflow: hidden;
@@ -781,45 +827,10 @@
 .zoomBar {
   position: absolute;
   right: 0;
-  top: 0;
-  display: flex;
+  top: 1px;
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 2px;
-  height: 20px;
-  border-radius: var(--r-sm);
-  background: var(--panel);
-  font-size: 11px;
-  color: var(--ink-2);
-}
-
-.zoomBar span {
-  min-width: 34px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.zoomBar button {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 20px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--ink-1);
-  font: inherit;
-  cursor: pointer;
-}
-
-.zoomBar button:hover:not(:disabled) {
-  border-color: var(--seam-strong);
-  background: var(--panel-raised);
-}
-
-.zoomBar button:disabled {
-  opacity: 0.35;
-  cursor: default;
+  gap: 4px;
 }
 
 .minimap {
@@ -917,7 +928,7 @@
   border-radius: var(--r-sm);
 }
 
-.setCreate select {
+.setCreate [data-openaxe-select] {
   flex: 1;
   min-width: 0;
 }
