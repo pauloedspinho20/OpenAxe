@@ -3,7 +3,7 @@
  * over lyrics, the playing bar lit and kept in view; transpose and text size
  * for a music stand. Click a bar to play from there.
  */
-import { HardwareButton } from '@openaxe/ui'
+import { ButtonGroup, HardwareButton, Stepper } from '@openaxe/ui'
 import { useEffect, useRef } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -45,12 +45,21 @@ export function LeadSheetView({
         <strong>{title}</strong>
         <span className={t.footerSpacer} />
         <span className={styles.dim}>transpose</span>
-        <HardwareButton size="small" label="−" onClick={() => onTranspose(transpose - 1)} />
-        <span className={t.leadValue}>{transpose > 0 ? `+${transpose}` : transpose}</span>
-        <HardwareButton size="small" label="+" onClick={() => onTranspose(transpose + 1)} />
+        <Stepper
+          label="Transpose"
+          value={transpose > 0 ? `+${transpose}` : transpose}
+          decrementLabel="Transpose down"
+          incrementLabel="Transpose up"
+          onDecrement={() => onTranspose(transpose - 1)}
+          onIncrement={() => onTranspose(transpose + 1)}
+          onReset={() => onTranspose(0)}
+          resetTitle="Reset transpose"
+        />
         <span className={styles.dim}>size</span>
-        <HardwareButton size="small" label="A−" onClick={() => onSize(Math.max(12, size - 2))} />
-        <HardwareButton size="small" label="A+" onClick={() => onSize(Math.min(40, size + 2))} />
+        <ButtonGroup label="Text size">
+          <HardwareButton size="small" label="A−" onClick={() => onSize(Math.max(12, size - 2))} />
+          <HardwareButton size="small" label="A+" onClick={() => onSize(Math.min(40, size + 2))} />
+        </ButtonGroup>
       </div>
       {!anyChords && !anyLyrics && (
         <p className={t.hint}>

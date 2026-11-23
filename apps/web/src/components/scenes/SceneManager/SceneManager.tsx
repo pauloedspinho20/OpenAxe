@@ -3,7 +3,7 @@ import { useSceneManager } from '../../../state/sceneManager'
 import { useSceneStore } from '../../../state/sceneStore'
 import { SceneNavigator } from '../../../scenes/sceneNavigator'
 import { SLOTS_PER_SCENE } from '../../../scenes/types'
-import { Dialog, toast } from '@openaxe/ui'
+import { Dialog, HardwareButton, toast } from '@openaxe/ui'
 import styles from './SceneManager.module.css'
 
 export function SceneManager() {
@@ -63,18 +63,16 @@ export function SceneManager() {
               <span className={styles.rowMeta}>
                 {filled}/{SLOTS_PER_SCENE} slots
               </span>
-              <button
-                type="button"
-                className={styles.actionBtn}
+              <HardwareButton
+                size="small"
+                label="Jump"
+                ariaLabel={`Jump to scene ${scene.index + 1}`}
                 onClick={() => {
                   void SceneNavigator.goToScene(scene.index, { source: 'ui' })
                   closeManager()
                   toast.info(`Jumped to scene ${scene.index + 1}`)
                 }}
-                aria-label={`Jump to scene ${scene.index + 1}`}
-              >
-                Jump
-              </button>
+              />
             </div>
           )
         })}

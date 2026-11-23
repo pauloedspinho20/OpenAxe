@@ -60,6 +60,9 @@ describe('MidiManager', () => {
     openManager()
     render(<MidiManager />)
     expect(screen.getByText('1 device connected')).toBeInTheDocument()
+    const inputSelect = screen.getByRole('combobox', { name: 'MIDI input' })
+    expect(inputSelect).toHaveTextContent('Device 1')
+    fireEvent.click(inputSelect)
     expect(screen.getByRole('option', { name: 'Device 1' })).toBeInTheDocument()
     // Slot 0 trigger row is present.
     expect(screen.getByRole('button', { name: 'Clear Slot 1' })).toBeInTheDocument()

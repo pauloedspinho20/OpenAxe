@@ -1,7 +1,8 @@
 /**
- * Shared toolbar, separator, roving focusgroup, and viewport-aware popover
+ * Shared toolbar separator, roving focusgroup, and viewport-aware popover
  * primitives for the Media Center & Tabs workspace (issue #459).
  */
+import { HardwareButton } from '@openaxe/ui'
 import {
   useCallback,
   useEffect,
@@ -16,84 +17,6 @@ import {
 
 import { ChevronDownIcon, CloseIcon } from './tabIcons'
 import t from './TabWorkspace.module.css'
-
-export interface ToolbarButtonProps {
-  label: string
-  /** Optional visible text override when different from accessible label. */
-  text?: string | undefined
-  /** Hide visible text below a breakpoint while keeping aria-label intact. */
-  hideLabelBelow?: 'sm' | 'md' | 'never' | undefined
-  icon?: ReactNode | undefined
-  /**
-   * Present ONLY on true stateful toggles; omit for one-shot actions so
-   * screen readers never see `aria-pressed` on non-toggle commands.
-   */
-  pressed?: boolean | undefined
-  variant?: 'default' | 'ghost' | 'accent' | 'danger'
-  badge?: string | number | undefined
-  disabled?: boolean | undefined
-  title?: string | undefined
-  className?: string | undefined
-  onClick: () => void
-}
-
-export function ToolbarButton({
-  label,
-  text,
-  hideLabelBelow = 'never',
-  icon,
-  pressed,
-  variant = 'default',
-  badge,
-  disabled = false,
-  title,
-  className,
-  onClick,
-}: ToolbarButtonProps) {
-  const isToggle = pressed !== undefined
-  const showText = text !== undefined ? text : icon ? undefined : label
-  const hideClass =
-    hideLabelBelow === 'sm' ? t.hideTextSm : hideLabelBelow === 'md' ? t.hideTextMd : ''
-
-  return (
-    <button
-      type="button"
-      className={`${t.tbBtn} ${variant !== 'default' ? t[`tbBtn_${variant}`] : ''} ${!showText && icon ? t.tbBtnIconOnly : ''} ${className ?? ''}`}
-      aria-label={label}
-      aria-pressed={isToggle ? pressed : undefined}
-      aria-disabled={disabled || undefined}
-      data-disabled={disabled ? 'true' : undefined}
-      title={title ?? label}
-      onClick={() => {
-        if (!disabled) onClick()
-      }}
-    >
-      {icon && (
-        <span className={t.tbIcon} aria-hidden="true">
-          {icon}
-        </span>
-      )}
-      {showText !== undefined && <span className={`${t.tbText} ${hideClass}`}>{showText}</span>}
-      {badge !== undefined && badge !== '' && <span className={t.tbBadge}>{badge}</span>}
-    </button>
-  )
-}
-
-export function ToolbarGroup({
-  label,
-  className,
-  children,
-}: {
-  label: string
-  className?: string
-  children: ReactNode
-}) {
-  return (
-    <div role="group" aria-label={label} className={`${t.tbGroup} ${className ?? ''}`}>
-      {children}
-    </div>
-  )
-}
 
 export function ToolbarSeparator({
   orientation = 'vertical',
@@ -126,7 +49,7 @@ export function useRovingToolbar(
     const getItems = () =>
       Array.from(
         bar.querySelectorAll<HTMLElement>(
-          'button:not([hidden]):not([data-skip-roving]), [role="tab"]:not([hidden])',
+          'button:not([hidden]):not([disabled]):not([data-skip-roving]), [role="tab"]:not([hidden])',
         ),
       ).filter(
         (el) =>
@@ -211,21 +134,21 @@ export function useRovingToolbar(
 export interface WorkspacePopoverProps {
   label: string
   /** Optional visible text on trigger; defaults to `label`. */
-  triggerText?: string
+  triggerText?: string | undefined
   /** Hide trigger text below a breakpoint while keeping aria-label intact. */
-  hideLabelBelow?: 'sm' | 'md' | 'never'
+  hideLabelBelow?: 'sm' | 'md' | 'never' | undefined
   icon?: ReactNode
   badge?: string | number | undefined
-  active?: boolean
-  title?: string
+  active?: boolean | undefined
+  title?: string | undefined
   /** Preferred block placement on desktop; CSS anchor positioning flips automatically. */
-  placement?: 'bottom-end' | 'bottom-start' | 'top-end' | 'top-start'
+  placement?: 'bottom-end' | 'bottom-start' | 'top-end' | 'top-start' | undefined
   /** Render as a docked bottom sheet on <=640px mobile viewports. */
-  sheetOnMobile?: boolean
+  sheetOnMobile?: boolean | undefined
   /** Width constraint for the popover surface. */
-  width?: 'menu' | 'wide' | 'tone'
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
+  width?: 'menu' | 'wide' | 'tone' | undefined
+  open?: boolean | undefined
+  onOpenChange?: ((open: boolean) => void) | undefined
   children: ReactNode | ((close: () => void) => ReactNode)
 }
 
@@ -240,7 +163,7 @@ const supportsAnchorPositioning = () =>
   CSS.supports('position-area', 'block-end')
 
 /**
- * Viewport-aware popover panel tethered to its trigger button.
+ * Viewport-aware popover panel tethered to its trigger HardwareButton.
  * Uses native `popover="auto"` + CSS Anchor Positioning when available,
  * and falls back cleanly to clamped fixed coordinates + Escape/outside-click
  * dismissal in browsers without Anchor Positioning or Popover API (incl. jsdom).
@@ -251,7 +174,7 @@ export function WorkspacePopover({
   hideLabelBelow = 'never',
   icon,
   badge,
-  active = false,
+  active,
   title,
   placement = 'bottom-end',
   sheetOnMobile = false,
@@ -415,8 +338,6 @@ export function WorkspacePopover({
     }
   }, [open, placeFallback])
 
-  const hideClass =
-    hideLabelBelow === 'sm' ? t.hideTextSm : hideLabelBelow === 'md' ? t.hideTextMd : ''
   const visibleText = triggerText ?? label
   const placeClass =
     placement === 'top-end'
@@ -430,26 +351,23 @@ export function WorkspacePopover({
 
   return (
     <div className={t.popoverWrap}>
-      <button
+      <HardwareButton
         ref={triggerRef}
-        type="button"
-        className={`${t.tbBtn} ${active ? t.tbBtnActive : ''}`}
-        aria-label={label}
-        aria-expanded={open}
-        aria-controls={id}
+        size="small"
+        label={visibleText}
+        ariaLabel={label}
+        ariaExpanded={open}
+        ariaControls={id}
+        active={active}
+        icon={icon}
+        trailingIcon={<ChevronDownIcon size={12} className={t.popCaret} />}
+        badge={badge}
+        hideLabelBelow={hideLabelBelow}
         title={title ?? label}
         style={supportsAnchorPositioning() ? ({ anchorName } as CSSProperties) : undefined}
-        {...(native ? { popoverTarget: id } : { onClick: toggle })}
-      >
-        {icon && (
-          <span className={t.tbIcon} aria-hidden="true">
-            {icon}
-          </span>
-        )}
-        <span className={`${t.tbText} ${hideClass}`}>{visibleText}</span>
-        {badge !== undefined && badge !== '' && <span className={t.tbBadge}>{badge}</span>}
-        <ChevronDownIcon size={12} className={t.popCaret} />
-      </button>
+        popoverTarget={native ? id : undefined}
+        onClick={native ? undefined : toggle}
+      />
       <div
         ref={panelRef}
         id={id}
@@ -467,14 +385,13 @@ export function WorkspacePopover({
         {sheetOnMobile && (
           <div className={t.popSheetHead}>
             <strong>{label}</strong>
-            <button
-              type="button"
-              className={t.tbBtn}
-              aria-label={`Close ${label}`}
+            <HardwareButton
+              size="small"
+              iconOnly
+              label={`Close ${label}`}
+              icon={<CloseIcon size={14} />}
               onClick={closePanel}
-            >
-              <CloseIcon size={14} />
-            </button>
+            />
           </div>
         )}
         {typeof children === 'function' ? children(closePanel) : children}

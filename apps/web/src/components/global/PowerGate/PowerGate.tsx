@@ -222,14 +222,12 @@ export function PowerGate({
               >
                 Download
               </a>
-              <button
-                type="button"
-                className={styles.updateDismiss}
+              <HardwareButton
+                size="small"
+                label="Dismiss"
+                ariaLabel="Dismiss update notification"
                 onClick={dismissUpdate}
-                aria-label="Dismiss update notification"
-              >
-                Dismiss
-              </button>
+              />
             </span>
           </div>
         )}

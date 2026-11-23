@@ -3,10 +3,9 @@
  * length and the first instrument, turned into AlphaTex and imported through
  * the normal library path.
  */
-import { Select } from '@openaxe/ui'
+import { HardwareButton, Select } from '@openaxe/ui'
 import { useState } from 'react'
 
-import styles from '../MediaCenter.module.css'
 import { useMediaStore } from '../mediaStore'
 import { INSTRUMENTS, newSongTex } from './scoreOps'
 import tabStyles from './TabWorkspace.module.css'
@@ -120,12 +119,13 @@ export function NewSongForm({ onDone }: { onDone: () => void }) {
         </Select>
       </label>
       <div className={tabStyles.paletteGroup}>
-        <button type="submit" className={styles.primaryBtn} disabled={busy}>
-          {busy ? 'Creating…' : 'Create'}
-        </button>
-        <button type="button" className={styles.chip} onClick={onDone}>
-          Cancel
-        </button>
+        <HardwareButton
+          type="submit"
+          variant="accent"
+          label={busy ? 'Creating…' : 'Create'}
+          disabled={busy}
+        />
+        <HardwareButton label="Cancel" onClick={onDone} />
       </div>
     </form>
   )

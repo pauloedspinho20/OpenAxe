@@ -14,6 +14,7 @@ import {
 } from '@coderline/alphatab'
 
 import type { DecodedTrack } from '../transport'
+import { INLAYS } from './fretboard'
 
 export type VideoFormat = 'auto' | 'mp4' | 'webm'
 
@@ -996,8 +997,6 @@ export function silence(seconds: number, sampleRate = 48_000, channels = 2): Dec
     frames,
   }
 }
-
-const INLAYS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24]
 
 /** A fretboard with the playing notes (strings: 1 = lowest, drawn at the bottom). */
 function drawFretboard(

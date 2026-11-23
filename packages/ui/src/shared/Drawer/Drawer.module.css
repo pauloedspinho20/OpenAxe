@@ -1,0 +1,71 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  background: var(--overlay-bg);
+  overscroll-behavior: contain;
+}
+
+.alignLeft {
+  justify-content: flex-start;
+}
+
+.alignRight {
+  justify-content: flex-end;
+}
+
+.host {
+  block-size: 100%;
+  display: flex;
+}
+
+.overlayPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  inline-size: var(--drawer-w, min(340px, 90vw));
+  block-size: 100%;
+  min-block-size: 0;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.overlayLeft {
+  border-inline-end: 1px solid var(--seam-strong);
+  box-shadow: 12px 0 32px var(--shadow-deep);
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
+}
+
+.overlayRight {
+  border-inline-start: 1px solid var(--seam-strong);
+  box-shadow: -12px 0 32px var(--shadow-deep);
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) 10px;
+}
+
+.inlinePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-block-size: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--seam);
+  color: var(--ink-1);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

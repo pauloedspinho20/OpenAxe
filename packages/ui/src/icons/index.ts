@@ -7,6 +7,7 @@ export {
   ChevronRightIcon,
   PlayIcon,
   PauseIcon,
+  PlusIcon,
 } from './GeneraIcons'
 export { BlockIcon, RedoIcon, UndoIcon, type BlockKind } from './BlockIcons'
 export {

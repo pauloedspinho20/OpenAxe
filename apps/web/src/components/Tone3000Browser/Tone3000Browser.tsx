@@ -21,7 +21,15 @@ import {
   type AccountImportScope,
 } from '../../tone3000/accountImport'
 import { NamModelDetails } from '../grid/NamModelDetails/NamModelDetails'
-import { Dialog, HardwareButton, MixerIcon, OutlineButton, Pagination, Select } from '@openaxe/ui'
+import {
+  ButtonGroup,
+  Dialog,
+  HardwareButton,
+  MixerIcon,
+  OutlineButton,
+  Pagination,
+  Select,
+} from '@openaxe/ui'
 import styles from './Tone3000Browser.module.css'
 import { CloseIcon } from '../../../../../packages/ui/src/icons/GeneraIcons'
 
@@ -340,54 +348,29 @@ export function Tone3000Browser({ target, context }: Props) {
       zIndex={40}
       headerContent={
         <div className={styles.tabs}>
-          <button
-            type="button"
-            className={`${styles.tab} ${scope === 'browse' ? styles.tabActive : ''}`}
-            onClick={() => setScope('browse')}
-          >
-            ALL
-          </button>
-          <button
-            type="button"
-            className={`${styles.tab} ${scope === 'library' ? styles.tabActive : ''}`}
-            onClick={() => setScope('library')}
-          >
-            LIBRARY ({library.filter((e) => e.kind === 'model').length})
-          </button>
-          <button
-            type="button"
-            className={`${styles.tab} ${scope === 'favorites' ? styles.tabActive : ''}`}
-            onClick={() => setScope('favorites')}
-          >
-            FAVORITES
-          </button>
-          <button
-            type="button"
-            className={`${styles.tab} ${scope === 'created' ? styles.tabActive : ''}`}
-            onClick={() => setScope('created')}
-          >
-            MY MODELS
-          </button>
-          <span className={styles.viewToggle} role="group" aria-label="View mode">
-            <button
-              type="button"
-              className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
-              onClick={() => setViewMode('cards')}
-              aria-label="Card view"
-              title="Card view"
-            >
-              ▦
-            </button>
-            <button
-              type="button"
-              className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
-              onClick={() => setViewMode('list')}
-              aria-label="List view"
-              title="List view"
-            >
-              ☰
-            </button>
-          </span>
+          <ButtonGroup
+            label="Library scope"
+            value={scope}
+            onChange={setScope}
+            items={[
+              { value: 'browse', label: 'ALL' },
+              {
+                value: 'library',
+                label: `LIBRARY (${library.filter((e) => e.kind === 'model').length})`,
+              },
+              { value: 'favorites', label: 'FAVORITES' },
+              { value: 'created', label: 'MY MODELS' },
+            ]}
+          />
+          <ButtonGroup
+            label="View mode"
+            value={viewMode}
+            onChange={setViewMode}
+            items={[
+              { value: 'cards', label: '▦', ariaLabel: 'Card view', title: 'Card view' },
+              { value: 'list', label: '☰', ariaLabel: 'List view', title: 'List view' },
+            ]}
+          />
         </div>
       }
     >

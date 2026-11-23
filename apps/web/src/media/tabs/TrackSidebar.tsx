@@ -5,8 +5,8 @@
  * on narrow/tablet viewports.
  */
 import type { model, Settings } from '@coderline/alphatab'
-import { HardwareButton, Select } from '@openaxe/ui'
-import { useEffect, useState, type ReactNode } from 'react'
+import { ButtonGroup, Drawer, HardwareButton, Select } from '@openaxe/ui'
+import { useState, type ReactNode } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import type { EditCursor } from './scoreEdit'
@@ -14,7 +14,17 @@ import * as ops from './scoreOps'
 import * as I from './tabIcons'
 import t from './TabWorkspace.module.css'
 
-type Apply = (fn: (score: model.Score, s: Settings) => EditCursor | void) => void
+export interface ApplyOptions {
+  /** Set false for audio-only metadata edits (volume, pan, MIDI program) that don't alter sheet notation. */
+  render?: boolean | undefined
+  /** Coalesce consecutive edits with the same key into a single undo step (e.g. range sliders). */
+  coalesceKey?: string | undefined
+}
+
+type Apply = (
+  fn: (score: model.Score, s: Settings) => EditCursor | void,
+  opts?: ApplyOptions,
+) => void
 
 export type InspectorTab = 'tracks' | 'practice' | 'sync' | 'tone'
 
@@ -96,6 +106,8 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
   const presets = strings > 0 ? ops.tuningPresets(strings) : []
   const tuning = staff.stringTuning.tunings.join(',')
   const audible = p.solo.size > 0 ? p.solo.has(i) : !p.muted.has(i)
+  const isShown = p.shown.has(i)
+  const canHide = isShown && p.shown.size > 1
 
   return (
     <div
@@ -104,11 +116,19 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
       <div className={t.trackRowHead}>
         <button
           type="button"
-          className={`${t.eye} ${p.shown.has(i) ? t.eyeOn : ''}`}
+          className={`${t.eye} ${isShown ? t.eyeOn : ''}`}
           onClick={() => p.onToggleShown(i)}
-          title={p.shown.has(i) ? 'Hide from the score' : 'Show in the score'}
-          aria-label={p.shown.has(i) ? `Hide ${track.name}` : `Show ${track.name}`}
-          aria-pressed={p.shown.has(i)}
+          title={
+            canHide ? 'Hide from the score' : isShown ? 'Shown in the score' : 'Show in the score'
+          }
+          aria-label={
+            canHide
+              ? `Hide ${track.name}`
+              : isShown
+                ? `${track.name} shown in score`
+                : `Show ${track.name}`
+          }
+          aria-pressed={isShown}
         >
           {staff.isPercussion ? <I.DrumIcon size={15} /> : <I.TabIcon size={15} />}
         </button>
@@ -181,7 +201,10 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
             max={16}
             value={track.playbackInfo.volume}
             onChange={(e) =>
-              apply((sc, s) => ops.setTrackMix(sc, i, { volume: Number(e.target.value) }, s))
+              apply((sc, s) => ops.setTrackMix(sc, i, { volume: Number(e.target.value) }, s), {
+                render: false,
+                coalesceKey: `mix:${i}:volume`,
+              })
             }
             aria-label={`${track.name} volume`}
           />
@@ -196,9 +219,14 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
             max={16}
             value={track.playbackInfo.balance}
             onChange={(e) =>
-              apply((sc, s) => ops.setTrackMix(sc, i, { balance: Number(e.target.value) }, s))
+              apply((sc, s) => ops.setTrackMix(sc, i, { balance: Number(e.target.value) }, s), {
+                render: false,
+                coalesceKey: `mix:${i}:balance`,
+              })
             }
-            onDoubleClick={() => apply((sc, s) => ops.setTrackMix(sc, i, { balance: 8 }, s))}
+            onDoubleClick={() =>
+              apply((sc, s) => ops.setTrackMix(sc, i, { balance: 8 }, s), { render: false })
+            }
             aria-label={`${track.name} pan`}
           />
           <span className={t.panLabel}>R</span>
@@ -212,7 +240,11 @@ function TrackRow(p: TrackSidebarProps & { index: number }) {
               <I.NoteGlyphIcon size={14} />
               <Select
                 value={track.playbackInfo.program}
-                onChange={(e) => apply((sc, s) => ops.setProgram(sc, i, Number(e.target.value), s))}
+                onChange={(e) =>
+                  apply((sc, s) => ops.setProgram(sc, i, Number(e.target.value), s), {
+                    render: false,
+                  })
+                }
                 aria-label="Instrument"
               >
                 {!ops.PROGRAMS.some((pr) => pr.program === track.playbackInfo.program) && (
@@ -322,19 +354,6 @@ export function TrackSidebar(p: TrackSidebarProps) {
     else setLocalTab(tab)
   }
 
-  const { asDrawer, onClose, viewActive = true } = p
-  useEffect(() => {
-    if (!asDrawer || !viewActive) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [asDrawer, onClose, viewActive])
-
   const tabs: {
     id: InspectorTab
     label: string
@@ -389,46 +408,39 @@ export function TrackSidebar(p: TrackSidebarProps) {
       <SongInfo score={p.score} apply={p.apply} />
       {p.extra}
       <p className={t.hint}>
-        The eye shows a track in the score; several can be shown at once. Click a track's name to
-        edit it.
+        Click a track to view and edit it; toggle its icon to stack multiple tracks in the score.
       </p>
     </>
   )
 
-  const panel = (
-    <aside className={`${t.sidebar} ${p.asDrawer ? t.inspectorDrawer : ''}`} aria-label="Inspector">
-      <div className={t.drawerHead}>
-        <strong>
-          <I.SidebarIcon size={15} /> Inspector
-        </strong>
-        <button
-          type="button"
-          className={t.tbBtn}
-          aria-label="Close inspector"
-          title="Close inspector"
-          onClick={p.onClose}
-        >
-          <I.CloseIcon size={14} />
-        </button>
-      </div>
-
+  return (
+    <Drawer
+      open
+      side="right"
+      overlay={Boolean(p.asDrawer)}
+      active={p.viewActive}
+      showHeader
+      title="Inspector"
+      icon={<I.SidebarIcon size={15} />}
+      width="min(360px, 92vw)"
+      className={p.asDrawer ? undefined : t.sidebar}
+      onClose={p.onClose}
+    >
       {hasTabs && (
-        <div className={t.inspectorTabs} role="tablist" aria-label="Inspector sections">
-          {tabs.map(({ id, label, Icon, badge }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === id}
-              className={`${t.inspectorTab} ${activeTab === id ? t.inspectorTabOn : ''}`}
-              onClick={() => setTab(id)}
-            >
-              <Icon size={14} />
-              <span>{label}</span>
-              {badge !== undefined && badge !== '' && <em className={t.tabBadge}>{badge}</em>}
-            </button>
-          ))}
-        </div>
+        <ButtonGroup
+          mode="tablist"
+          label="Inspector sections"
+          stretch
+          className={t.inspectorTabs}
+          value={activeTab}
+          onChange={setTab}
+          items={tabs.map(({ id, label, Icon, badge }) => ({
+            value: id,
+            label,
+            icon: <Icon size={14} />,
+            badge,
+          }))}
+        />
       )}
 
       <div className={t.inspectorBody} role={hasTabs ? 'tabpanel' : undefined}>
@@ -437,18 +449,6 @@ export function TrackSidebar(p: TrackSidebarProps) {
         {hasTabs && activeTab === 'sync' && p.syncTab}
         {hasTabs && activeTab === 'tone' && p.toneTab}
       </div>
-    </aside>
+    </Drawer>
   )
-
-  if (p.asDrawer) {
-    return (
-      <div className={t.drawerBackdrop} onClick={p.onClose} role="presentation">
-        <div className={t.drawerHostRight} onClick={(e) => e.stopPropagation()}>
-          {panel}
-        </div>
-      </div>
-    )
-  }
-
-  return panel
 }

@@ -4,7 +4,8 @@
  * (with position jump shortcuts), and piano roll; cursor & playing notes
  * light up live, and MIDI / guitar step entry remain directly accessible.
  */
-import { useMemo, useRef, useState } from 'react'
+import { ButtonGroup } from '@openaxe/ui'
+import { type CSSProperties, useMemo, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
 import { type FretPos, INLAYS, isBlackKey, noteName, openPitches, pitchAt } from './fretboard'
@@ -85,49 +86,38 @@ export function FretboardPanel({
   return (
     <div className={`${t.fretPanel} ${embedded ? t.fretPanelEmbedded : ''}`}>
       <div className={t.fretHead}>
-        <div className={t.segmented} role="radiogroup" aria-label="Input mode">
-          {modeOptions.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={mode === id}
-              className={mode === id ? t.segOn : ''}
-              onClick={() => setMode(id)}
-            >
-              <Icon size={13} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        <ButtonGroup
+          mode="radiogroup"
+          label="Input mode"
+          value={mode}
+          onChange={setMode}
+          items={modeOptions.map(({ id, label, Icon }) => ({
+            value: id,
+            label,
+            icon: <Icon size={13} />,
+          }))}
+        />
 
-        <div className={t.segmented} role="radiogroup" aria-label="Play to enter notes">
-          {(
-            [
-              ['off', 'Tap'],
-              ['midi', 'MIDI'],
-              ['guitar', 'Guitar'],
-            ] as const
-          ).map(([m, label]) => (
-            <button
-              key={m}
-              type="button"
-              role="radio"
-              aria-checked={stepInput === m}
-              className={stepInput === m ? t.segOn : ''}
-              title={
-                m === 'off'
-                  ? 'Enter notes by tapping'
-                  : m === 'midi'
-                    ? 'Play notes or chords on a MIDI keyboard or guitar to write them at the cursor'
-                    : 'Play single notes on your guitar to write them at the cursor (when stopped)'
-              }
-              onClick={() => onStepInput(m)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <ButtonGroup
+          mode="radiogroup"
+          label="Play to enter notes"
+          value={stepInput}
+          onChange={onStepInput}
+          items={[
+            { value: 'off', label: 'Tap', title: 'Enter notes by tapping' },
+            {
+              value: 'midi',
+              label: 'MIDI',
+              title:
+                'Play notes or chords on a MIDI keyboard or guitar to write them at the cursor',
+            },
+            {
+              value: 'guitar',
+              label: 'Guitar',
+              title: 'Play single notes on your guitar to write them at the cursor (when stopped)',
+            },
+          ]}
+        />
 
         {stepInput !== 'off' && (
           <label className={styles.check} title="Move to the next beat after each note or chord">
@@ -141,24 +131,15 @@ export function FretboardPanel({
         )}
 
         {mode === 'neck' && (
-          <div className={t.neckJumps} role="group" aria-label="Fretboard position">
-            {(
-              [
-                ['0–5', 0],
-                ['5–12', 5],
-                ['12–24', 12],
-              ] as const
-            ).map(([label, f]) => (
-              <button
-                key={label}
-                type="button"
-                className={t.neckJumpBtn}
-                onClick={() => jumpFret(f)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <ButtonGroup
+            label="Fretboard position"
+            onChange={(f) => jumpFret(Number(f))}
+            items={[
+              { value: '0', label: '0–5' },
+              { value: '5', label: '5–12' },
+              { value: '12', label: '12–24' },
+            ]}
+          />
         )}
 
         <span className={t.fretHint}>
@@ -197,12 +178,33 @@ export function FretboardPanel({
         >
           <div
             className={t.neck}
-            style={{ gridTemplateColumns: `36px repeat(${frets}, minmax(30px, 1fr))` }}
+            style={{ '--neck-cols': `36px repeat(${frets}, minmax(30px, 1fr))` } as CSSProperties}
             role="grid"
             aria-label="Fretboard grid"
           >
-            {rows.map((s) => (
-              <div key={s} className={t.neckRow} role="row">
+            <div
+              className={t.neckInlays}
+              style={{ gridRow: `1 / ${strings + 1}` }}
+              aria-hidden="true"
+            >
+              {INLAYS.filter((f) => f <= frets).map((f) => {
+                const double = f % 12 === 0
+                return (
+                  <span
+                    key={f}
+                    className={`${t.neckInlaySlot} ${double ? t.neckInlayDouble : ''}`}
+                    style={{ gridColumn: f + 1 }}
+                    data-inlay-fret={f}
+                    data-inlay={double ? 'double' : 'single'}
+                  >
+                    <span className={t.neckInlayDot} />
+                    {double && <span className={t.neckInlayDot} />}
+                  </span>
+                )
+              })}
+            </div>
+            {rows.map((s, rowIdx) => (
+              <div key={s} className={t.neckRow} style={{ gridRow: rowIdx + 1 }} role="row">
                 {Array.from({ length: frets + 1 }, (_, f) => {
                   const cur = has(cursorNotes, s, f)
                   const play = has(playingNotes, s, f)
@@ -218,7 +220,7 @@ export function FretboardPanel({
                       aria-pressed={cur}
                       onClick={() => onFret({ string: s, fret: f })}
                     >
-                      <span className={t.fretString} style={{ height: 1 + (s - 1) * 0.35 }} />
+                      <span className={t.fretString} style={{ height: 1 + (strings - s) * 0.35 }} />
                       {(cur || play) && (
                         <span
                           className={`${t.fretDot} ${play ? t.fretDotPlay : ''} ${cur ? t.fretDotCursor : ''}`}
@@ -234,10 +236,13 @@ export function FretboardPanel({
                 })}
               </div>
             ))}
-            <div className={t.neckRow} aria-hidden>
+            <div className={t.neckRow} style={{ gridRow: strings + 1 }} aria-hidden="true">
               {Array.from({ length: frets + 1 }, (_, f) => (
-                <span key={f} className={t.fretNumber}>
-                  {INLAYS.includes(f) ? (f % 12 === 0 ? `${f}••` : `${f}•`) : f === 0 ? '' : f}
+                <span
+                  key={f}
+                  className={`${t.fretNumber} ${INLAYS.includes(f) ? t.fretNumberMarked : ''}`}
+                >
+                  {f === 0 ? '' : f}
                 </span>
               ))}
             </div>

@@ -4,7 +4,7 @@ import { useDIAuditionStore } from '../../../state/diAuditionStore'
 import { DI_SAMPLES } from '../../../diSamples'
 import type { AudioEngineState, AudioEngineActions } from '../../../hooks/useAudioEngine'
 import { getShellKind } from '../../../native/openaxe'
-import { Dialog, SelectField, ErrorText, Hint, HardwareButton } from '@openaxe/ui'
+import { Dialog, Select, ErrorText, Hint, HardwareButton } from '@openaxe/ui'
 import { PauseIcon, PlayIcon } from '../../../../../../packages/ui/src/icons/GeneraIcons'
 
 export interface InputDeviceDialogProps {
@@ -68,7 +68,7 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
   return (
     <Dialog open={open} onClose={onClose} title="Input" width="min(360px, 90vw)">
       {!isPluginShell && (
-        <SelectField
+        <Select
           label="Device"
           value={io.inputDeviceId}
           onChange={(e) => io.setInputDevice(e.target.value)}
@@ -79,10 +79,10 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
               {d.label}
             </option>
           ))}
-        </SelectField>
+        </Select>
       )}
 
-      <SelectField
+      <Select
         label="Channel"
         value={io.inputChannel}
         onChange={(e) => io.setInputChannel(e.target.value as InputChannelMode)}
@@ -91,11 +91,11 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
         <option value="r">Ch 2</option>
         <option value="stereo">Stereo</option>
         <option value="sum">Ch 1+2</option>
-      </SelectField>
+      </Select>
 
       {/* DI audition — bundled samples that loop through the rig, muting live mic */}
 
-      <SelectField
+      <Select
         label="DI Sample"
         value={effectiveSelected}
         onChange={handleSelectChange}
@@ -116,7 +116,7 @@ export function InputDeviceDialog({ open, onClose, engine }: InputDeviceDialogPr
             </option>
           ))}
         </optgroup>
-      </SelectField>
+      </Select>
 
       <HardwareButton
         label={diPlaying ? 'Pause' : 'Play'}

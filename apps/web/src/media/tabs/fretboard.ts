@@ -17,8 +17,8 @@ export const noteName = (midi: number, octave = true) =>
 
 export const isBlackKey = (midi: number) => [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12)
 
-/** Inlay positions (12 and 24 are doubled). */
-export const INLAYS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24]
+/** Fretboard inlay positions (12 and 24 are doubled). */
+export const INLAYS: readonly number[] = [5, 7, 9, 12, 15, 17, 19, 21, 24]
 
 /**
  * Open-string pitch per string, indexed by alphaTab string number (index 0

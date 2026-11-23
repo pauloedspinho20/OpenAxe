@@ -12,6 +12,7 @@ import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPer
 import { FactorySetupDialog } from './components/global/FactorySetupDialog/FactorySetupDialog'
 import { AboutDialog } from './components/global/AboutDialog/AboutDialog'
 import {
+  ButtonGroup,
   HardwareButton,
   LearnIcon,
   MidiIcon,
@@ -214,25 +215,23 @@ function App() {
         </button>
 
         {availableViews.length > 1 && (
-          <nav className={styles.viewNav} aria-label="Views">
-            {availableViews.map((view) => {
+          <ButtonGroup
+            mode="nav"
+            label="Views"
+            size="medium"
+            className={styles.viewNav}
+            value={activeView}
+            onChange={selectView}
+            items={availableViews.map((view) => {
               const ViewIcon = VIEW_ICONS[view.id]
-              const isCurrent = activeView === view.id
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  className={styles.viewBtn}
-                  aria-current={isCurrent ? 'page' : undefined}
-                  title={view.title}
-                  onClick={() => selectView(view.id)}
-                >
-                  <ViewIcon size={15} />
-                  <span>{view.label}</span>
-                </button>
-              )
+              return {
+                value: view.id,
+                label: view.label,
+                icon: <ViewIcon size={15} />,
+                title: view.title,
+              }
             })}
-          </nav>
+          />
         )}
 
         {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
@@ -332,14 +331,12 @@ function App() {
             <a href={LANDING_DOWNLOAD_URL} target="_blank" rel="noopener">
               Download
             </a>
-            <button
-              type="button"
-              className={styles.updateDismiss}
+            <HardwareButton
+              size="small"
+              label="Dismiss"
+              ariaLabel="Dismiss update"
               onClick={dismissUpdate}
-              aria-label="Dismiss update"
-            >
-              Dismiss
-            </button>
+            />
           </span>
         </div>
       )}

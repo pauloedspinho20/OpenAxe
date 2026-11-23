@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react'
 import { HardwareButton } from './HardwareButton'
-import { MidiIcon, PowerIcon, SettingsIcon } from '../../icons'
+import { ChevronRightIcon, MidiIcon, PowerIcon, SettingsIcon } from '../../icons'
 
 const meta = {
   title: 'Primitives/HardwareButton',
@@ -15,6 +15,8 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = { args: { label: 'POWER' } }
 
+export const Accent: Story = { args: { label: 'IMPORT', variant: 'accent' } }
+
 export const Active: Story = { args: { label: 'POWER', active: true } }
 
 export const Disabled: Story = { args: { label: 'SAVE', disabled: true } }
@@ -25,6 +27,17 @@ export const DangerActive: Story = { args: { label: 'DELETE', variant: 'danger',
 
 export const WithIcon: Story = {
   args: { label: 'SETTINGS', icon: <SettingsIcon size={16} />, onClick: () => {} },
+}
+
+export const WithBadgeAndTrailingIcon: Story = {
+  args: {
+    size: 'small',
+    label: 'Count',
+    badge: 2,
+    active: true,
+    trailingIcon: <ChevronRightIcon size={12} />,
+    onClick: () => {},
+  },
 }
 
 export const IconOnly: Story = {

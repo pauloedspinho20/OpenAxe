@@ -2,7 +2,7 @@
  * Video export options and progress (issue #459): size and format, frame
  * rate, colours, zoom, layout, tracks, title card and audio - then record.
  */
-import { HardwareButton, Select } from '@openaxe/ui'
+import { Dialog, HardwareButton, Select } from '@openaxe/ui'
 import { useEffect, useRef, useState } from 'react'
 
 import styles from '../MediaCenter.module.css'
@@ -135,20 +135,20 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
   }
 
   return (
-    <div className={t.texPane} role="dialog" aria-label="Export video">
-      <div className={t.texHead}>
-        <I.DownloadIcon size={16} />
-        <strong>Export video</strong>
-        <span className={styles.dim}>
-          {caps.offline
-            ? `Renders offline (faster than real time) as ${caps.mp4 && caps.webm ? 'MP4 or WebM' : caps.mp4 ? 'MP4' : 'WebM'}.`
-            : caps.realtime
-              ? `Records in real time as ${caps.realtime.ext.toUpperCase()} — keep this window open.`
-              : 'This browser cannot export video.'}
-        </span>
-        <span className={t.footerSpacer} />
-        <HardwareButton size="small" label="Close" disabled={busy} onClick={p.onClose} />
-      </div>
+    <Dialog
+      open
+      onClose={p.onClose}
+      closeDisabled={busy}
+      title="Export video"
+      width="min(760px, 94vw)"
+    >
+      <span className={styles.dim}>
+        {caps.offline
+          ? `Renders offline (faster than real time) as ${caps.mp4 && caps.webm ? 'MP4 or WebM' : caps.mp4 ? 'MP4' : 'WebM'}.`
+          : caps.realtime
+            ? `Records in real time as ${caps.realtime.ext.toUpperCase()} — keep this window open.`
+            : 'This browser cannot export video.'}
+      </span>
       <fieldset className={t.printGrid} disabled={busy}>
         <fieldset>
           <legend>Format</legend>
@@ -416,6 +416,6 @@ export function VideoExportDialog(p: VideoExportDialogProps) {
         )}
         {message && <span className={styles.dim}>{message}</span>}
       </div>
-    </div>
+    </Dialog>
   )
 }

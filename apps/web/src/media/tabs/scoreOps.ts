@@ -408,7 +408,7 @@ export function setTrackMix(
   score: Score,
   index: number,
   mix: { volume?: number; balance?: number },
-  settings: Settings,
+  _settings?: Settings,
 ): void {
   const t = score.tracks[index]
   if (!t) return
@@ -416,7 +416,6 @@ export function setTrackMix(
     t.playbackInfo.volume = Math.min(16, Math.max(0, Math.round(mix.volume)))
   if (mix.balance !== undefined)
     t.playbackInfo.balance = Math.min(16, Math.max(0, Math.round(mix.balance)))
-  refresh(score, settings)
 }
 
 export function renameTrack(score: Score, index: number, name: string, settings: Settings): void {
@@ -462,12 +461,11 @@ export function setProgram(
   score: Score,
   trackIndex: number,
   program: number,
-  settings: Settings,
+  _settings?: Settings,
 ): void {
   const t = score.tracks[trackIndex]
   if (!t) return
   t.playbackInfo.program = Math.min(127, Math.max(0, Math.round(program)))
-  refresh(score, settings)
 }
 
 export function tuningLabel(tunings: number[]): string {

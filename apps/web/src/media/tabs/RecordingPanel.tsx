@@ -4,7 +4,7 @@
  * taps become sync points, so the tab cursor, bar loops, count-in and wait
  * mode follow the real song - tempo drift included.
  */
-import { HardwareButton, Select } from '@openaxe/ui'
+import { ButtonGroup, HardwareButton, Select } from '@openaxe/ui'
 
 import { formatTime } from '../decode'
 import styles from '../MediaCenter.module.css'
@@ -65,20 +65,17 @@ export function RecordingPanel(p: RecordingPanelProps) {
 
       {paired && (
         <>
-          <div className={t.segmented} role="radiogroup" aria-label="Playback sound">
-            {(['recording', 'synth'] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                role="radio"
-                aria-checked={p.source === s}
-                className={p.source === s ? t.segOn : ''}
-                onClick={() => p.onSource(s)}
-              >
-                {s === 'recording' ? 'Recording' : 'Synth'}
-              </button>
-            ))}
-          </div>
+          <ButtonGroup
+            mode="radiogroup"
+            label="Playback sound"
+            stretch
+            value={p.source}
+            onChange={p.onSource}
+            items={[
+              { value: 'recording', label: 'Recording' },
+              { value: 'synth', label: 'Synth' },
+            ]}
+          />
 
           <div className={t.tapRow}>
             <HardwareButton

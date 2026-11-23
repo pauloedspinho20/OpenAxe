@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { HardwareButton, Select } from '@openaxe/ui'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { ButtonGroup, Drawer, HardwareButton, Select, Stepper } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
@@ -15,13 +15,7 @@ import { NewSongForm } from './tabs/NewSongForm'
 import { syncedScoreSections } from './tabs/sync'
 import { ToneLink, tonePresetNames, useToneFollower } from './ToneLink'
 import { START_KEY, type ToneSection } from './tone'
-import { Tool } from './tabs/TabToolbox'
-import {
-  ToolbarButton,
-  ToolbarGroup,
-  WorkspacePopover,
-  useRovingToolbar,
-} from './tabs/WorkspaceControls'
+import { WorkspacePopover, useRovingToolbar } from './tabs/WorkspaceControls'
 import * as I from './tabs/tabIcons'
 import tabStyles from './tabs/TabWorkspace.module.css'
 import { Waveform } from './Waveform'
@@ -76,18 +70,6 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
   const showLibrary = focusMode ? libraryOpen : !(isNarrow && newOpen)
   const libraryAsDrawer = focusMode && isNarrow && showLibrary
 
-  useEffect(() => {
-    if (!viewActive || !libraryAsDrawer) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setLibraryOpen(false)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [viewActive, libraryAsDrawer])
-
   const importFiles = async (files: FileList | File[]) => {
     if (!files.length) return
     setBusy(true)
@@ -100,52 +82,43 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
   }
 
   const sidebarNode = (
-    <aside
-      className={`${styles.sidebar} ${libraryAsDrawer ? styles.sidebarDrawer : ''}`}
-      aria-label="Library"
+    <Drawer
+      open
+      side="left"
+      overlay={libraryAsDrawer}
+      active={viewActive}
+      showHeader={libraryAsDrawer}
+      title="Library"
+      icon={<I.LibraryIcon size={15} />}
+      width="min(320px, 88vw)"
+      className={libraryAsDrawer ? undefined : styles.sidebar}
+      onClose={() => setLibraryOpen(false)}
     >
-      {libraryAsDrawer && (
-        <div className={styles.drawerHeader}>
-          <strong>
-            <I.LibraryIcon size={15} /> Library
-          </strong>
-          <ToolbarButton
-            label="Close library"
-            icon={<I.CloseIcon size={14} />}
-            onClick={() => setLibraryOpen(false)}
-          />
-        </div>
-      )}
       <div className={styles.sideActions}>
-        <button
-          type="button"
-          className={styles.primaryBtn}
-          onClick={() => fileRef.current?.click()}
+        <HardwareButton
+          size="small"
+          variant="accent"
+          label={busy ? 'Importing…' : 'Import files'}
           disabled={busy}
-        >
-          {busy ? 'Importing…' : 'Import files'}
-        </button>
-        <button
-          type="button"
-          className={styles.chip}
+          onClick={() => fileRef.current?.click()}
+        />
+        <HardwareButton
+          size="small"
+          label="New song"
+          active={newOpen}
+          title="Start a new song from scratch"
           onClick={() => {
             setNewOpen((v) => !v)
             if (isNarrow && focusMode) setLibraryOpen(false)
           }}
-          aria-pressed={newOpen}
-          title="Start a new song from scratch"
-        >
-          New song
-        </button>
-        <button
-          type="button"
-          className={styles.chip}
-          onClick={() => folderRef.current?.click()}
+        />
+        <HardwareButton
+          size="small"
+          label="Import folder"
           disabled={busy}
           title="Import every audio and tab file in a folder (duplicates are skipped)"
-        >
-          Import folder
-        </button>
+          onClick={() => folderRef.current?.click()}
+        />
         <input
           ref={(el) => {
             folderRef.current = el
@@ -180,34 +153,32 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
           }}
         />
       </div>
-      <div className={styles.filters} role="tablist" aria-label="Library filter">
-        {(['all', 'audio', 'score', 'sets'] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            role="tab"
-            aria-selected={filter === f}
-            className={`${styles.filter} ${filter === f ? styles.filterOn : ''}`}
-            onClick={() => setFilter(f)}
-          >
-            {f === 'all' ? 'All' : f === 'audio' ? 'Backing' : f === 'score' ? 'Tabs' : 'Sets'}
-          </button>
-        ))}
-      </div>
+      <ButtonGroup
+        mode="tablist"
+        label="Library filter"
+        stretch
+        value={filter}
+        onChange={setFilter}
+        items={[
+          { value: 'all', label: 'All' },
+          { value: 'audio', label: 'Backing' },
+          { value: 'score', label: 'Tabs' },
+          { value: 'sets', label: 'Sets' },
+        ]}
+      />
       {filter === 'sets' ? (
         <SetListsPanel />
       ) : (
         <>
           <div className={styles.libFilters}>
-            <button
-              type="button"
-              className={`${styles.chip} ${favorites ? styles.chipOn : ''}`}
-              aria-pressed={favorites}
+            <HardwareButton
+              size="small"
+              label={favorites ? '★' : '☆'}
+              active={favorites}
+              ariaLabel={favorites ? 'Show all songs' : 'Show favourites only'}
+              title={favorites ? 'Showing favourites — click for all' : 'Favourites only'}
               onClick={() => setFavorites((v) => !v)}
-              title="Favourites only"
-            >
-              ★
-            </button>
+            />
             <Select
               value={status ?? ''}
               onChange={(e) => setStatus((e.target.value || null) as LearnStatus | null)}
@@ -262,7 +233,7 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
           </ul>
         </>
       )}
-    </aside>
+    </Drawer>
   )
 
   return (
@@ -281,20 +252,7 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
         void importFiles(e.dataTransfer.files)
       }}
     >
-      {showLibrary &&
-        (libraryAsDrawer ? (
-          <div
-            className={styles.drawerBackdrop}
-            onClick={() => setLibraryOpen(false)}
-            role="presentation"
-          >
-            <div className={styles.drawerHostLeft} onClick={(e) => e.stopPropagation()}>
-              {sidebarNode}
-            </div>
-          </div>
-        ) : (
-          sidebarNode
-        ))}
+      {showLibrary && sidebarNode}
 
       <section className={`${styles.main} ${!focusMode && !newOpen ? styles.mainBrowse : ''}`}>
         <SetBar />
@@ -304,25 +262,21 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
         {notice && (
           <div className={styles.notice} role="status">
             {notice}
-            <button
-              type="button"
-              className={styles.chip}
+            <HardwareButton
+              size="small"
+              label="Dismiss"
               onClick={() => useMediaStore.setState({ notice: null })}
-            >
-              Dismiss
-            </button>
+            />
           </div>
         )}
         {error && (
           <div className={styles.errorNotice} role="alert">
             {error}
-            <button
-              type="button"
-              className={styles.chip}
+            <HardwareButton
+              size="small"
+              label="Dismiss"
               onClick={() => useMediaStore.setState({ error: null })}
-            >
-              Dismiss
-            </button>
+            />
           </div>
         )}
         {newOpen && <NewSongForm onDone={() => setNewOpen(false)} />}
@@ -526,9 +480,7 @@ function EmptyState({ onImport }: { onImport: () => void }) {
         AlphaTex or MIDI (.mid/.midi) files to read, play and edit tabs, or a practice pack
         (.oapack) someone shared. Everything plays through your rig's output.
       </p>
-      <button type="button" className={styles.primaryBtn} onClick={onImport}>
-        Import files
-      </button>
+      <HardwareButton variant="accent" label="Import files" onClick={onImport} />
     </div>
   )
 }
@@ -589,12 +541,14 @@ function AudioView({
         {...topbarRoving}
       >
         <div className={tabStyles.topLeft}>
-          <ToolbarButton
-            label={libraryOpen ? 'Hide library' : 'Show library'}
-            text="Library"
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            label="Library"
+            ariaLabel={libraryOpen ? 'Hide library' : 'Show library'}
             hideLabelBelow="md"
             icon={<I.LibraryIcon size={15} />}
-            pressed={libraryOpen}
+            active={libraryOpen}
             onClick={onToggleLibrary}
           />
           <div className={tabStyles.songTitle} title={item.fileName}>
@@ -606,6 +560,20 @@ function AudioView({
           )}
         </div>
         <div className={tabStyles.topRight}>
+          <WorkspacePopover
+            label="Practice controls"
+            triggerText="Practice"
+            hideLabelBelow="sm"
+            icon={<I.TempoIcon size={15} />}
+            placement="bottom-end"
+            sheetOnMobile
+            width="wide"
+            open={practiceOpen}
+            onOpenChange={setPracticeOpen}
+            title="Speed presets, trainer, A-B loop, transpose & volume"
+          >
+            <PracticeControls />
+          </WorkspacePopover>
           <WorkspacePopover
             label="Tone"
             triggerText={live.tone?.scene != null ? `Tone · S${live.tone.scene + 1}` : 'Tone'}
@@ -622,9 +590,11 @@ function AudioView({
             />
           </WorkspacePopover>
           <div className={styles.markers}>
-            <ToolbarButton
-              label="Add section marker at playhead"
-              text="+ Marker"
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="+ Marker"
+              ariaLabel="Add section marker at playhead"
               hideLabelBelow="sm"
               icon={<I.SectionIcon size={15} />}
               onClick={addMarker}
@@ -722,93 +692,91 @@ function AudioView({
       >
         <TransportButtons />
         {isPhone ? (
-          <ToolbarButton
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            iconOnly
             label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
             icon={<I.LoopIcon size={15} />}
-            pressed={loopOn}
+            active={loopOn}
             onClick={() => s.toggleLoop()}
           />
         ) : (
-          <ToolbarGroup label="A-B loop">
-            <ToolbarButton
-              label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
-              text="Loop"
+          <ButtonGroup label="A-B loop" focusableWhenDisabled>
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Loop"
+              ariaLabel={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
               icon={<I.LoopIcon size={15} />}
-              pressed={loopOn}
+              active={loopOn}
               onClick={() => s.toggleLoop()}
             />
-            <ToolbarButton
-              label="Set loop start here ([)"
-              text="A"
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="A"
+              ariaLabel="Set loop start here ([)"
               onClick={() => s.setLoopPoint('start', position)}
             />
-            <ToolbarButton
-              label="Set loop end here (])"
-              text="B"
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="B"
+              ariaLabel="Set loop end here (])"
               onClick={() => s.setLoopPoint('end', position)}
             />
-          </ToolbarGroup>
+          </ButtonGroup>
         )}
         {!isPhone && (
           <>
-            <ToolbarGroup label="Speed (pitch preserved)">
-              <Tool
-                icon={I.MinusIcon}
-                title="Slower (−5%)"
-                onClick={() => s.setSpeed(practice.speed - 0.05)}
-              />
-              <button
-                type="button"
-                className={tabStyles.zoomValue}
-                onClick={() => s.setSpeed(1)}
-                title="Speed — click to reset to 100%"
-              >
-                {Math.round(practice.speed * 100)}%
-              </button>
-              <Tool
-                icon={I.PlusIcon}
-                title="Faster (+5%)"
-                onClick={() => s.setSpeed(practice.speed + 0.05)}
-              />
-            </ToolbarGroup>
-            <ToolbarGroup label="Transpose">
-              <Tool
-                icon={I.FlatIcon}
-                title="Down a semitone"
-                onClick={() => s.setSemitones(practice.semitones - 1)}
-              />
-              <button
-                type="button"
-                className={tabStyles.zoomValue}
-                onClick={() => s.setSemitones(0)}
-                title="Transpose — click to reset"
-              >
-                {practice.semitones > 0 ? '+' : ''}
-                {practice.semitones} st
-              </button>
-              <Tool
-                icon={I.SharpIcon}
-                title="Up a semitone"
-                onClick={() => s.setSemitones(practice.semitones + 1)}
-              />
-            </ToolbarGroup>
-            <ToolbarButton
-              label={
+            <Stepper
+              label="Speed (pitch preserved)"
+              value={`${Math.round(practice.speed * 100)}%`}
+              decrementIcon={<I.MinusIcon size={14} />}
+              incrementIcon={<I.PlusIcon size={14} />}
+              decrementLabel="Slower (−5%)"
+              incrementLabel="Faster (+5%)"
+              resetLabel={`Speed ${Math.round(practice.speed * 100)}%, reset to 100%`}
+              resetTitle="Speed — click to reset to 100%"
+              focusableWhenDisabled
+              onDecrement={() => s.setSpeed(practice.speed - 0.05)}
+              onIncrement={() => s.setSpeed(practice.speed + 0.05)}
+              onReset={() => s.setSpeed(1)}
+            />
+            <Stepper
+              label="Transpose"
+              value={`${practice.semitones > 0 ? '+' : ''}${practice.semitones} st`}
+              decrementIcon={<I.FlatIcon size={14} />}
+              incrementIcon={<I.SharpIcon size={14} />}
+              decrementLabel="Down a semitone"
+              incrementLabel="Up a semitone"
+              resetLabel={`Transpose ${practice.semitones} semitones, reset`}
+              resetTitle="Transpose — click to reset"
+              focusableWhenDisabled
+              onDecrement={() => s.setSemitones(practice.semitones - 1)}
+              onIncrement={() => s.setSemitones(practice.semitones + 1)}
+              onReset={() => s.setSemitones(0)}
+            />
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Count"
+              ariaLabel={
                 countInBars
                   ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''} (click to change)`
                   : 'Count-in off (click for 1 bar)'
               }
-              text="Count"
               badge={countInBars || undefined}
               icon={<I.CountInIcon size={15} />}
-              pressed={countInBars > 0}
+              active={countInBars > 0}
               onClick={() =>
                 useMediaStore
                   .getState()
                   .setCountIn({ countInBars: countInBars >= 2 ? 0 : countInBars + 1 })
               }
             />
-            <div className={tabStyles.tbGroup} title="Track volume">
+            <ButtonGroup label="Track volume" title="Track volume">
               <I.VolumeIcon size={15} />
               <input
                 className={styles.volume}
@@ -820,23 +788,9 @@ function AudioView({
                 onDoubleClick={() => s.setVolume(1)}
                 aria-label="Track volume"
               />
-            </div>
+            </ButtonGroup>
           </>
         )}
-        <span className={tabStyles.footerSpacer} />
-        <WorkspacePopover
-          label="Practice controls"
-          triggerText={isPhone ? `${Math.round(practice.speed * 100)}%` : 'Practice'}
-          icon={<I.TempoIcon size={15} />}
-          placement="top-end"
-          sheetOnMobile
-          width="wide"
-          open={practiceOpen}
-          onOpenChange={setPracticeOpen}
-          title="Speed presets, trainer, A-B loop, transpose & volume"
-        >
-          <PracticeControls />
-        </WorkspacePopover>
       </footer>
     </div>
   )

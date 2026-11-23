@@ -74,16 +74,6 @@
   color: var(--ink-3);
 }
 
-.favoriteBtn {
-  background: none;
-  border: none;
-  color: var(--led-warn);
-  font-size: 15px;
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-}
-
 .rowInfo {
   flex: 1;
   min-width: 0;
@@ -111,33 +101,6 @@
   flex-wrap: wrap;
   gap: var(--sp-1);
   flex-shrink: 0;
-}
-
-.actionBtn {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-  background: none;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  padding: var(--sp-1) var(--sp-2);
-  cursor: pointer;
-}
-
-.actionBtn:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.actionBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.actionBtnDanger:hover:not(:disabled) {
-  color: var(--led-hot);
-  border-color: var(--led-hot);
 }
 
 .confirmRow {

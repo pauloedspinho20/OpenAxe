@@ -4,6 +4,7 @@
  * tablets with 44px+ tap targets and zero multi-digit timing ambiguity.
  */
 import { model } from '@coderline/alphatab'
+import { ButtonGroup, HardwareButton } from '@openaxe/ui'
 import { useState } from 'react'
 
 import { type FretPos, noteName, openPitches } from './fretboard'
@@ -144,104 +145,101 @@ export function TouchFretPad({
 
       {/* Navigation + quick rhythm & beat actions */}
       <div className={t.touchActions}>
-        <div className={t.touchNavGroup} role="group" aria-label="Cursor navigation">
-          <button
-            type="button"
+        <ButtonGroup label="Cursor navigation" className={t.touchNavGroup}>
+          <HardwareButton
+            size="medium"
             className={t.touchActionBtn}
-            aria-label="Previous bar"
+            icon={<I.ChevronLeftIcon size={16} />}
+            label="Bar"
+            ariaLabel="Previous bar"
             disabled={barIndex === 0}
             onClick={() => onMoveBar(-1)}
-          >
-            <I.ChevronLeftIcon size={16} />
-            <span>Bar</span>
-          </button>
-          <button
-            type="button"
+          />
+          <HardwareButton
+            size="medium"
+            iconOnly
             className={t.touchActionBtn}
-            aria-label="Previous beat"
+            icon={<I.ChevronLeftIcon size={16} />}
+            label="Previous beat"
             disabled={barIndex === 0 && beatIndex === 0}
             onClick={() => onMoveBeat(-1)}
-          >
-            <I.ChevronLeftIcon size={16} />
-          </button>
+          />
           <span className={t.touchCursorReadout}>
             {barIndex + 1}/{barCount}·{beatIndex + 1}
             {capo > 0 ? ` c${capo}` : ''}
           </span>
-          <button
-            type="button"
+          <HardwareButton
+            size="medium"
+            variant="accent"
             className={`${t.touchActionBtn} ${t.touchActionPrimary}`}
-            aria-label="Next beat"
+            trailingIcon={<I.ChevronRightIcon size={16} />}
+            label="Next"
+            ariaLabel="Next beat"
             onClick={() => onMoveBeat(1)}
-          >
-            <span>Next</span>
-            <I.ChevronRightIcon size={16} />
-          </button>
-          <button
-            type="button"
+          />
+          <HardwareButton
+            size="medium"
             className={t.touchActionBtn}
-            aria-label="Next bar"
+            trailingIcon={<I.ChevronRightIcon size={16} />}
+            label="Bar"
+            ariaLabel="Next bar"
             disabled={barIndex >= barCount - 1}
             onClick={() => onMoveBar(1)}
-          >
-            <span>Bar</span>
-            <I.ChevronRightIcon size={16} />
-          </button>
-        </div>
+          />
+        </ButtonGroup>
 
-        <div className={t.touchRhythmRow} role="group" aria-label="Duration and beat actions">
+        <ButtonGroup label="Duration and beat actions" scrollable>
           {QUICK_DURATIONS.map((d) => {
             const Icon = I.NOTE_ICON[d]
             return (
-              <button
+              <HardwareButton
                 key={d}
-                type="button"
-                className={`${t.touchChipBtn} ${beatDuration === d ? t.touchChipOn : ''}`}
-                aria-pressed={beatDuration === d}
-                aria-label={`${edit.DURATION_LABEL[d]} note`}
+                size="medium"
+                className={t.touchChipBtn}
+                icon={Icon ? <Icon size={16} /> : undefined}
+                iconOnly={Boolean(Icon)}
+                label={`${edit.DURATION_LABEL[d]} note`}
+                active={beatDuration === d}
                 onClick={() => onDuration(d)}
-              >
-                {Icon ? <Icon size={16} /> : edit.DURATION_LABEL[d]}
-              </button>
+              />
             )
           })}
-          <button
-            type="button"
-            className={`${t.touchChipBtn} ${beatDotted ? t.touchChipOn : ''}`}
-            aria-pressed={beatDotted}
-            aria-label="Dotted"
-            onClick={onToggleDot}
-          >
-            <I.DotIcon size={16} />
-          </button>
-          <button
-            type="button"
-            className={`${t.touchChipBtn} ${beatIsRest ? t.touchChipOn : ''}`}
-            aria-pressed={beatIsRest}
-            aria-label="Rest"
-            onClick={onRest}
-          >
-            <I.RestIcon size={16} />
-          </button>
-          <button
-            type="button"
+          <HardwareButton
+            size="medium"
+            iconOnly
             className={t.touchChipBtn}
-            aria-label="Dead note"
+            icon={<I.DotIcon size={16} />}
+            label="Dotted"
+            active={beatDotted}
+            onClick={onToggleDot}
+          />
+          <HardwareButton
+            size="medium"
+            iconOnly
+            className={t.touchChipBtn}
+            icon={<I.RestIcon size={16} />}
+            label="Rest"
+            active={beatIsRest}
+            onClick={onRest}
+          />
+          <HardwareButton
+            size="medium"
+            iconOnly
+            className={t.touchChipBtn}
+            icon={<I.DeadNoteIcon size={16} />}
+            label="Dead note"
             disabled={!noteOnCursorString}
             onClick={onDeadNote}
-          >
-            <I.DeadNoteIcon size={16} />
-          </button>
-          <button
-            type="button"
-            className={`${t.touchChipBtn} ${t.touchAutoBtn} ${autoAdvance ? t.touchChipOn : ''}`}
-            aria-pressed={autoAdvance}
-            aria-label="Auto advance to next beat after entering a fret"
+          />
+          <HardwareButton
+            size="medium"
+            className={`${t.touchChipBtn} ${t.touchAutoBtn}`}
+            label="Auto ▶"
+            ariaLabel="Auto advance to next beat after entering a fret"
+            active={autoAdvance}
             onClick={() => onAutoAdvance(!autoAdvance)}
-          >
-            Auto ▶
-          </button>
-        </div>
+          />
+        </ButtonGroup>
       </div>
     </div>
   )

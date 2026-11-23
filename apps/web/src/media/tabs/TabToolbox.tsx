@@ -7,7 +7,7 @@
  *   Text tabs and collapse toggle so the sheet keeps the screen.
  */
 import { model, type Settings } from '@coderline/alphatab'
-import { HardwareButton, type IconProps, Select } from '@openaxe/ui'
+import { ButtonGroup, HardwareButton, type IconProps, Select } from '@openaxe/ui'
 import { useRef, useState, type ComponentType, type ReactNode } from 'react'
 
 import { ChordLibrary } from './ChordLibrary'
@@ -17,7 +17,7 @@ import * as edit from './scoreEdit'
 import * as ops from './scoreOps'
 import * as I from './tabIcons'
 import t from './TabWorkspace.module.css'
-import { ToolbarButton, useRovingToolbar } from './WorkspaceControls'
+import { useRovingToolbar } from './WorkspaceControls'
 
 type Apply = (fn: (score: model.Score, s: Settings) => edit.EditCursor | void) => void
 export type ToolGroup = 'entry' | 'note' | 'effects' | 'bar' | 'select' | 'text'
@@ -69,8 +69,8 @@ export interface ToolboxProps {
 }
 
 /**
- * Tool button: wraps ToolbarButton with readable sizing and proper toggle vs
- * action ARIA semantics (`pressed` is only set when `on !== undefined`).
+ * Tool button: wraps HardwareButton with readable sizing and proper toggle vs
+ * action ARIA semantics (`active` is only set when `on !== undefined`).
  */
 export function Tool({
   icon: Icon,
@@ -90,11 +90,14 @@ export function Tool({
   const icon = Icon ? <Icon size={15} /> : undefined
   const hasTag = tag !== undefined && tag !== ''
   return (
-    <ToolbarButton
-      label={title}
-      text={hasTag ? String(tag) : undefined}
+    <HardwareButton
+      size="small"
+      focusableWhenDisabled
+      label={hasTag ? String(tag) : title}
+      iconOnly={!hasTag}
+      ariaLabel={title}
       icon={icon}
-      pressed={on}
+      active={on}
       disabled={!!disabled}
       title={title}
       onClick={onClick}
@@ -382,16 +385,18 @@ export function TabToolbox(p: ToolboxProps) {
             />
           </Section>
           <Section title="Rhythm">
-            <ToolbarButton
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
               label="Keep rhythm"
-              text="Keep rhythm"
-              pressed={p.keepRhythm}
+              active={p.keepRhythm}
               title="Split/merge rests to keep bar length when changing durations or pasting"
               onClick={() => p.onKeepRhythm(!p.keepRhythm)}
             />
-            <ToolbarButton
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
               label="Clean up rests"
-              text="Clean up rests"
               title="Pad and merge rests in this bar"
               onClick={() => apply((sc, s) => rhythm.normalizeBarRests(sc, c, s))}
             />
@@ -1015,34 +1020,32 @@ export function TabToolbox(p: ToolboxProps) {
           aria-label="Edit tools"
           {...railRoving}
         >
-          <div className={t.editDockTabs} role="group" aria-label="Tool categories">
-            {DOCK_GROUPS.map(({ id, label, Icon }) => {
-              const isSelected = activeGroup === id && !collapsed
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`${t.dockTab} ${isSelected ? t.dockTabOn : ''}`}
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    if (activeGroup === id && !collapsed) p.onCollapsedChange?.(true)
-                    else {
-                      p.onGroup(id)
-                      p.onCollapsedChange?.(false)
-                    }
-                  }}
-                >
-                  <Icon size={15} />
-                  <span>{label}</span>
-                </button>
-              )
-            })}
-          </div>
+          <ButtonGroup
+            label="Tool categories"
+            scrollable
+            focusableWhenDisabled
+            value={collapsed ? null : activeGroup}
+            onChange={(id) => {
+              if (activeGroup === id && !collapsed) p.onCollapsedChange?.(true)
+              else {
+                p.onGroup(id)
+                p.onCollapsedChange?.(false)
+              }
+            }}
+            items={DOCK_GROUPS.map(({ id, label, Icon }) => ({
+              value: id,
+              label,
+              icon: <Icon size={15} />,
+            }))}
+          />
           <div className={t.editDockActions}>
-            <ToolbarButton
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              iconOnly
               label={collapsed ? 'Expand edit dock' : 'Collapse edit dock'}
               icon={collapsed ? <I.ChevronUpIcon size={15} /> : <I.ChevronDownIcon size={15} />}
-              pressed={!collapsed}
+              active={!collapsed}
               onClick={() => p.onCollapsedChange?.(!collapsed)}
             />
           </div>
@@ -1063,12 +1066,15 @@ export function TabToolbox(p: ToolboxProps) {
         {...railRoving}
       >
         {RAIL_GROUPS.map(({ id, label, Icon }) => (
-          <ToolbarButton
+          <HardwareButton
             key={id}
+            size="small"
+            focusableWhenDisabled
+            iconOnly
             label={label}
             title={activeGroup === id ? `${label} (click to collapse)` : label}
             icon={<Icon size={17} />}
-            pressed={activeGroup === id}
+            active={activeGroup === id}
             onClick={() => p.onGroup(activeGroup === id ? null : id)}
           />
         ))}

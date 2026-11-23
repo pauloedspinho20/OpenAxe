@@ -1,4 +1,5 @@
 .panel {
+  min-height: 116px;
   height: 100%;
   display: flex;
   position: relative;

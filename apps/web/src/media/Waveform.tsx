@@ -1,3 +1,4 @@
+import { ButtonGroup, HardwareButton, Stepper } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { DetailPeaks } from './decode'
@@ -371,55 +372,53 @@ export function Waveform({
 
   return (
     <div className={styles.waveStack} style={fill ? { flex: 1, minHeight: 0 } : undefined}>
-      <div className={styles.ruler} aria-hidden="true">
+      <div className={styles.ruler}>
         {ticks.map((tk) => (
-          <span key={tk.t} className={styles.rulerTick} style={{ left: pct(tk.t) }}>
+          <span
+            key={tk.t}
+            className={styles.rulerTick}
+            style={{ left: pct(tk.t) }}
+            aria-hidden="true"
+          >
             {tk.label}
           </span>
         ))}
         <div className={styles.zoomBar}>
-          <button
-            type="button"
-            onClick={() => zoomAround(1 / 1.6, position)}
-            disabled={zoom <= 1}
-            title="Zoom out (Ctrl/⌘ + wheel)"
-            aria-label="Zoom out"
-          >
-            <MinusIcon size={14} />
-          </button>
-          <span title="Zoom">
-            {zoom < 1.05 ? 'fit' : `${zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)}×`}
-          </span>
-          <button
-            type="button"
-            onClick={() => zoomAround(1.6, position)}
-            disabled={zoom >= maxZoom}
-            title="Zoom in (Ctrl/⌘ + wheel)"
-            aria-label="Zoom in"
-          >
-            <PlusIcon size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => (hasRegion ? zoomToRange(loopStart!, loopEnd!) : undefined)}
-            disabled={!hasRegion}
-            title="Zoom to the loop"
-            aria-label="Zoom to the loop"
-          >
-            <LoopIcon size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setZoom(1)
-              setStart(0)
-            }}
-            disabled={zoom <= 1}
-            title="Fit the whole track"
-            aria-label="Fit"
-          >
-            ⤢
-          </button>
+          <Stepper
+            label="Waveform zoom"
+            value={zoom < 1.05 ? 'fit' : `${zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)}×`}
+            decrementIcon={<MinusIcon size={14} />}
+            incrementIcon={<PlusIcon size={14} />}
+            decrementLabel="Zoom out"
+            incrementLabel="Zoom in"
+            decrementTitle="Zoom out (Ctrl/⌘ + wheel)"
+            incrementTitle="Zoom in (Ctrl/⌘ + wheel)"
+            decrementDisabled={zoom <= 1}
+            incrementDisabled={zoom >= maxZoom}
+            onDecrement={() => zoomAround(1 / 1.6, position)}
+            onIncrement={() => zoomAround(1.6, position)}
+          />
+          <ButtonGroup label="Zoom shortcuts">
+            <HardwareButton
+              size="small"
+              iconOnly
+              icon={<LoopIcon size={14} />}
+              label="Zoom to the loop"
+              disabled={!hasRegion}
+              onClick={() => (hasRegion ? zoomToRange(loopStart!, loopEnd!) : undefined)}
+            />
+            <HardwareButton
+              size="small"
+              label="⤢"
+              ariaLabel="Fit"
+              title="Fit the whole track"
+              disabled={zoom <= 1}
+              onClick={() => {
+                setZoom(1)
+                setStart(0)
+              }}
+            />
+          </ButtonGroup>
         </div>
       </div>
       {waveform}

@@ -24,7 +24,7 @@ import {
   StaveProfile,
   type synth,
 } from '@coderline/alphatab'
-import { HardwareButton, Select } from '@openaxe/ui'
+import { ButtonGroup, Dialog, HardwareButton, Select, Stepper } from '@openaxe/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useRegisterViewHistory } from '../../hooks/useRegisterViewHistory'
@@ -63,15 +63,11 @@ import type { DecodedTrack } from '../transport'
 import { onMidiNote, requestMidiAccess } from '../../midi/midiAccess'
 import { useMidiStore } from '../../state/midiStore'
 import { detectPitch } from '../../tuner/pitchDetect'
-import { TrackSidebar, type InspectorTab } from './TrackSidebar'
+import { TrackSidebar, type ApplyOptions, type InspectorTab } from './TrackSidebar'
+import { selectTrackView, toggleTrackShown } from './trackSelection'
 import * as I from './tabIcons'
 import { TabToolbox, type ToolGroup } from './TabToolbox'
-import {
-  ToolbarButton,
-  ToolbarGroup,
-  WorkspacePopover,
-  useRovingToolbar,
-} from './WorkspaceControls'
+import { WorkspacePopover, useRovingToolbar } from './WorkspaceControls'
 import tabStyles from './TabWorkspace.module.css'
 
 type Score = model.Score
@@ -154,7 +150,7 @@ function applySheetColors(settings: Settings, dark: boolean): void {
     r[key] = dark ? (model.Color.fromJson(INK[key]) ?? paper[key]!) : paper[key]!
 }
 
-type WorkspaceMode = 'play' | 'practice' | 'edit'
+type WorkspaceMode = 'play' | 'edit'
 
 export interface TabWorkspaceProps {
   item: MediaItem
@@ -177,6 +173,8 @@ export default function TabWorkspace({
   const [historyStack] = useState(() => new LazyUndoStack<string>(UNDO_LIMIT))
   const revisionRef = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastRenderedViewRef = useRef<{ score: Score; key: string } | null>(null)
+  const lastCoalesceRef = useRef<{ key: string; at: number } | null>(null)
   const typedRef = useRef<{ digits: string; at: number }>({ digits: '', at: 0 })
   const topbarRef = useRef<HTMLDivElement | null>(null)
   const footerRef = useRef<HTMLDivElement | null>(null)
@@ -205,23 +203,14 @@ export default function TabWorkspace({
   const [horizontal, setHorizontal] = useState(item.view?.horizontal ?? false)
   const [metronome, setMetronome] = useState(false)
   const [mode, setMode] = useState<WorkspaceMode>('play')
-  const [lastBrowseMode, setLastBrowseMode] = useState<'play' | 'practice'>('play')
   const editing = mode === 'edit'
-  const setEditing = useCallback(
-    (next: boolean | ((prev: boolean) => boolean)) => {
-      setMode((cur) => {
-        const was = cur === 'edit'
-        const target = typeof next === 'function' ? next(was) : next
-        if (target === was) return cur
-        if (target) {
-          if (cur !== 'edit') setLastBrowseMode(cur)
-          return 'edit'
-        }
-        return lastBrowseMode
-      })
-    },
-    [lastBrowseMode],
-  )
+  const setEditing = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
+    setMode((cur) => {
+      const was = cur === 'edit'
+      const target = typeof next === 'function' ? next(was) : next
+      return target ? 'edit' : 'play'
+    })
+  }, [])
   const [keepRhythm, setKeepRhythm] = useState(true)
   const [padAdvance, setPadAdvance] = useState(true)
   const [dockCollapsed, setDockCollapsed] = useState(false)
@@ -381,6 +370,8 @@ export default function TabWorkspace({
 
     api.scoreLoaded.on((score) => {
       scoreRef.current = score
+      lastRenderedViewRef.current = null
+      lastCoalesceRef.current = null
       setScore(score)
       setTracks(trackList(score))
       setTitle({ title: score.title, artist: score.artist })
@@ -438,7 +429,7 @@ export default function TabWorkspace({
       try {
         const blob = await loadMediaFile(item.id)
         if (!blob) throw new Error('The file for this tab is missing')
-        const lower = item.fileName.toLowerCase()
+        const lower = liveItemRef.current.fileName.toLowerCase()
         if (lower.endsWith('.atex') || lower.endsWith('.tex')) {
           midiBytesRef.current = null
           setIsMidiSource(false)
@@ -470,8 +461,9 @@ export default function TabWorkspace({
       api.destroy()
       apiRef.current = null
       scoreRef.current = null
+      lastRenderedViewRef.current = null
     }
-  }, [item.id, item.fileName])
+  }, [item.id])
 
   // External-media bridge: alphaTab asks us to play/pause/seek; we feed it time.
   useEffect(() => {
@@ -534,11 +526,30 @@ export default function TabWorkspace({
     return () => window.removeEventListener('keydown', onKey)
   }, [reading, viewActive])
 
+  const renderViewTracked = useCallback(
+    (api: AlphaTabApi, score: Score, active: number, shownSet: Set<number>, force = true) => {
+      const indices = [...new Set([...shownSet, active])]
+        .filter((i) => i >= 0 && i < score.tracks.length)
+        .sort((a, b) => a - b)
+      const key = indices.join(',')
+      if (
+        !force &&
+        lastRenderedViewRef.current?.score === score &&
+        lastRenderedViewRef.current.key === key
+      ) {
+        return
+      }
+      lastRenderedViewRef.current = { score, key }
+      renderView(api, score, active, shownSet)
+    },
+    [],
+  )
+
   useEffect(() => {
     const api = apiRef.current
     const score = scoreRef.current
     if (!api || !score) return
-    renderView(api, score, trackIndex, shown)
+    renderViewTracked(api, score, trackIndex, shown, false)
     setCursor((c) =>
       c.track === trackIndex
         ? c
@@ -672,15 +683,17 @@ export default function TabWorkspace({
       const api = apiRef.current
       const score = scoreRef.current
       if (!api || !score) return
+      const currentItem = liveItemRef.current
       try {
         const bytes = new exporter.Gp7Exporter().export(score, api.settings)
-        const fileName = item.fileName.replace(/\.[^.]+$/, '') + '.gp'
+        const fileName = currentItem.fileName.replace(/\.[^.]+$/, '') + '.gp'
         void saveMediaFile(
-          item.id,
+          currentItem.id,
           new Blob([bytes as BlobPart], { type: 'application/octet-stream' }),
         )
           .then(() => {
-            const latest = useMediaStore.getState().items.find((i) => i.id === item.id) ?? item
+            const latest =
+              useMediaStore.getState().items.find((i) => i.id === currentItem.id) ?? currentItem
             const next = {
               ...latest,
               fileName,
@@ -688,7 +701,9 @@ export default function TabWorkspace({
               size: bytes.length,
             }
             useMediaStore.setState({
-              items: useMediaStore.getState().items.map((i) => (i.id === item.id ? next : i)),
+              items: useMediaStore
+                .getState()
+                .items.map((i) => (i.id === currentItem.id ? next : i)),
             })
             return saveMedia(next)
           })
@@ -697,26 +712,39 @@ export default function TabWorkspace({
         setError(`Autosave failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     }, 1200)
-  }, [item])
+  }, [])
 
   /** Run an edit: snapshot for undo, mutate, re-render, autosave. */
   const apply = useCallback(
-    (fn: (score: Score, s: Settings) => edit.EditCursor | void) => {
+    (fn: (score: Score, s: Settings) => edit.EditCursor | void, opts?: ApplyOptions) => {
       const api = apiRef.current
       const score = scoreRef.current
       if (!api || !score) return
-      historyStack.recordBefore(snapshot(score))
+      const now = Date.now()
+      const key = opts?.coalesceKey
+      const coalesced =
+        !!key && lastCoalesceRef.current?.key === key && now - lastCoalesceRef.current.at < 1000
+      if (!coalesced) historyStack.recordBefore(snapshot(score))
+      lastCoalesceRef.current = key ? { key, at: now } : null
       const next = fn(score, api.settings)
       bumpRevision()
       syncHistory()
-      setTracks(trackList(score))
-      setTitle({ title: score.title, artist: score.artist })
-      renderView(api, score, Math.min(trackIndex, score.tracks.length - 1), shownRef.current)
+      if (opts?.render !== false) {
+        setTracks(trackList(score))
+        setTitle({ title: score.title, artist: score.artist })
+        renderViewTracked(
+          api,
+          score,
+          Math.min(trackIndex, score.tracks.length - 1),
+          shownRef.current,
+          true,
+        )
+      }
       if (next) setCursor(edit.clampCursor(score, next))
       setTick((x) => x + 1)
       scheduleSave()
     },
-    [historyStack, syncHistory, trackIndex, scheduleSave],
+    [historyStack, syncHistory, trackIndex, scheduleSave, renderViewTracked],
   )
 
   const restore = useCallback(
@@ -725,6 +753,8 @@ export default function TabWorkspace({
       if (!api) return
       const score = model.JsonConverter.jsonToScore(json, api.settings)
       scoreRef.current = score
+      lastRenderedViewRef.current = null
+      lastCoalesceRef.current = null
       setScore(score)
       bumpRevision()
       syncHistory()
@@ -872,6 +902,8 @@ export default function TabWorkspace({
     setShown(new Set([nextTrack]))
     setCursor(edit.startCursor(nextTrack))
     bumpRevision()
+    lastRenderedViewRef.current = null
+    lastCoalesceRef.current = null
     api.renderScore(next, [nextTrack])
     setTick((t) => t + 1)
   }
@@ -1662,6 +1694,8 @@ export default function TabWorkspace({
       const next = imp.readScore()
       historyStack.recordBefore(snapshot(score))
       scoreRef.current = next
+      lastRenderedViewRef.current = null
+      lastCoalesceRef.current = null
       setScore(next)
       bumpRevision()
       syncHistory()
@@ -1700,20 +1734,15 @@ export default function TabWorkspace({
   }
 
   const selectTrack = (i: number) => {
-    setShown((m) => (m.has(i) ? m : new Set([...m, i])))
-    setTrackIndex(i)
+    const next = selectTrackView(shownRef.current, i)
+    setShown(next.shown)
+    setTrackIndex(next.trackIndex)
   }
 
   const toggleShown = (i: number) => {
-    setShown((m) => {
-      const next = new Set(m)
-      if (next.has(i)) {
-        if (next.size === 1) return m // always show at least one track
-        next.delete(i)
-        if (i === trackIndex) setTrackIndex(Math.min(...next))
-      } else next.add(i)
-      return next
-    })
+    const next = toggleTrackShown(shownRef.current, trackIndex, i)
+    setShown(next.shown)
+    if (next.trackIndex !== trackIndex) setTrackIndex(next.trackIndex)
   }
 
   const moveTrackTo = (from: number, to: number) => {
@@ -2124,9 +2153,7 @@ export default function TabWorkspace({
   const ms = useMediaStore.getState()
 
   const selectMode = (next: WorkspaceMode) => {
-    if (next !== 'edit' && mode !== 'edit') setLastBrowseMode(next)
     if (next === 'edit') {
-      if (mode !== 'edit') setLastBrowseMode(mode)
       if (isNarrow) {
         setToolGroup('entry')
         setDockCollapsed(false)
@@ -2224,12 +2251,14 @@ export default function TabWorkspace({
       >
         <div className={tabStyles.topLeft}>
           {onToggleLibrary && (
-            <ToolbarButton
-              label={libraryOpen ? 'Hide library' : 'Show library'}
-              text="Library"
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Library"
+              ariaLabel={libraryOpen ? 'Hide library' : 'Show library'}
               hideLabelBelow="md"
               icon={<I.LibraryIcon size={15} />}
-              pressed={!!libraryOpen}
+              active={!!libraryOpen}
               onClick={onToggleLibrary}
             />
           )}
@@ -2241,44 +2270,68 @@ export default function TabWorkspace({
             {(title.artist || item.artist) && <span>{title.artist || item.artist}</span>}
             {savedAt && <i className={tabStyles.savedDot} title="All changes saved" />}
           </div>
-          <button
-            type="button"
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
             className={tabStyles.trackPill}
+            label={tracks[trackIndex]?.name ?? 'Track'}
+            icon={<I.TracksIcon size={13} />}
+            badge={shown.size > 1 ? `+${shown.size - 1}` : undefined}
+            title="Active track — open Tracks inspector"
             onClick={() => {
               setInspectorTab('tracks')
               if (isNarrow) setNarrowInspectorOpen(true)
               else setSidebarOpen(true)
             }}
-            title="Active track — open Tracks inspector"
-          >
-            <I.TracksIcon size={13} />
-            <span>{tracks[trackIndex]?.name ?? 'Track'}</span>
-            {shown.size > 1 && <em>+{shown.size - 1}</em>}
-          </button>
+          />
         </div>
 
-        <div className={tabStyles.modeSwitch} role="group" aria-label="Workspace mode">
-          {(
-            [
-              ['play', 'Play', I.PlayTabIcon],
-              ['practice', 'Practice', I.PracticeIcon],
-              ['edit', 'Edit', I.EditIcon],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
-              type="button"
-              className={`${tabStyles.modeTab} ${mode === id ? tabStyles.modeTabOn : ''}`}
-              aria-pressed={mode === id}
-              onClick={() => selectMode(id)}
-            >
-              <Icon size={14} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        <ButtonGroup
+          label="Workspace mode"
+          className={tabStyles.modeSwitch}
+          focusableWhenDisabled
+          value={mode}
+          onChange={selectMode}
+          items={[
+            { value: 'play', label: 'Play', icon: <I.PlayTabIcon size={14} /> },
+            { value: 'edit', label: 'Edit', icon: <I.EditIcon size={14} /> },
+          ]}
+        />
 
         <div className={tabStyles.topRight}>
+          {!reading && (
+            <WorkspacePopover
+              label="Practice controls"
+              triggerText="Practice"
+              hideLabelBelow="sm"
+              icon={<I.TempoIcon size={15} />}
+              badge={!isPhone && trainerEnabled ? 'ON' : undefined}
+              active={practiceOpen || trainerEnabled}
+              placement="bottom-end"
+              sheetOnMobile
+              width="wide"
+              open={practiceOpen}
+              onOpenChange={setPracticeOpen}
+              title="Speed presets, trainer, count-in, A-B loop, transpose & volume"
+            >
+              <PracticeControls />
+            </WorkspacePopover>
+          )}
+          {!isPhone && (
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Focus view"
+              ariaLabel="Focus / practice view (Esc to exit)"
+              hideLabelBelow="md"
+              icon={<I.ReadingIcon size={15} />}
+              onClick={() => {
+                setEditing(false)
+                setReading(true)
+                setTimeout(() => viewportRef.current?.focus(), 0)
+              }}
+            />
+          )}
           <WorkspacePopover
             label="View"
             hideLabelBelow="sm"
@@ -2290,143 +2343,108 @@ export default function TabWorkspace({
               <div className={tabStyles.popPanel}>
                 <div className={tabStyles.popRow}>
                   <span className={tabStyles.popLabel}>Staves</span>
-                  <div className={tabStyles.segmented} role="group" aria-label="Stave profile">
-                    {(
-                      [
-                        ['tab', 'Tab', I.TabIcon],
-                        ['both', 'Both', I.NotationTabIcon],
-                        ['score', 'Notation', I.NotationIcon],
-                      ] as const
-                    ).map(([id, label, Icon]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        aria-pressed={profile === id}
-                        className={profile === id ? tabStyles.segOn : ''}
-                        onClick={() => setProfile(id)}
-                      >
-                        <Icon size={13} />
-                        <span>{label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <ButtonGroup
+                    label="Stave profile"
+                    value={profile}
+                    onChange={setProfile}
+                    items={[
+                      { value: 'tab', label: 'Tab', icon: <I.TabIcon size={13} /> },
+                      { value: 'both', label: 'Both', icon: <I.NotationTabIcon size={13} /> },
+                      { value: 'score', label: 'Notation', icon: <I.NotationIcon size={13} /> },
+                    ]}
+                  />
                 </div>
 
                 <div className={tabStyles.popRow}>
                   <span className={tabStyles.popLabel}>Zoom</span>
-                  <div className={tabStyles.popGroup}>
-                    <ToolbarButton
-                      label="Zoom out"
-                      icon={<I.ZoomOutIcon size={14} />}
-                      onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-                    />
-                    <button
-                      type="button"
-                      className={tabStyles.zoomValue}
-                      onClick={() => setZoom(1)}
-                      title="Reset zoom to 100%"
-                    >
-                      {Math.round(zoom * 100)}%
-                    </button>
-                    <ToolbarButton
-                      label="Zoom in"
-                      icon={<I.ZoomInIcon size={14} />}
-                      onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
-                    />
-                  </div>
+                  <Stepper
+                    label="Zoom"
+                    value={`${Math.round(zoom * 100)}%`}
+                    decrementIcon={<I.ZoomOutIcon size={14} />}
+                    incrementIcon={<I.ZoomInIcon size={14} />}
+                    decrementLabel="Zoom out"
+                    incrementLabel="Zoom in"
+                    resetLabel="Reset zoom to 100%"
+                    resetTitle="Reset zoom to 100%"
+                    onDecrement={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                    onIncrement={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
+                    onReset={() => setZoom(1)}
+                  />
                 </div>
 
                 <div className={tabStyles.popRow}>
                   <span className={tabStyles.popLabel}>Layout</span>
-                  <div className={tabStyles.segmented} role="group" aria-label="Sheet layout">
-                    <button
-                      type="button"
-                      aria-pressed={!horizontal}
-                      className={!horizontal ? tabStyles.segOn : ''}
-                      onClick={() => setHorizontal(false)}
-                    >
-                      <I.PageLayoutIcon size={13} />
-                      <span>Page</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={horizontal}
-                      className={horizontal ? tabStyles.segOn : ''}
-                      onClick={() => setHorizontal(true)}
-                    >
-                      <I.HorizontalLayoutIcon size={13} />
-                      <span>Line</span>
-                    </button>
-                  </div>
+                  <ButtonGroup
+                    label="Sheet layout"
+                    value={horizontal ? 'line' : 'page'}
+                    onChange={(v) => setHorizontal(v === 'line')}
+                    items={[
+                      { value: 'page', label: 'Page', icon: <I.PageLayoutIcon size={13} /> },
+                      {
+                        value: 'line',
+                        label: 'Line',
+                        icon: <I.HorizontalLayoutIcon size={13} />,
+                      },
+                    ]}
+                  />
                 </div>
 
                 <div className={tabStyles.popRow}>
                   <span className={tabStyles.popLabel}>Tab stems</span>
-                  <div
-                    className={tabStyles.segmented}
-                    role="group"
-                    aria-label="Rhythm on tab staff"
-                  >
-                    {(
-                      [
-                        ['auto', 'Auto'],
-                        ['on', 'Show'],
-                        ['off', 'Hide'],
-                      ] as const
-                    ).map(([id, label]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        aria-pressed={tabRhythm === id}
-                        className={tabRhythm === id ? tabStyles.segOn : ''}
-                        onClick={() => setTabRhythm(id)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <ButtonGroup
+                    label="Rhythm on tab staff"
+                    value={tabRhythm}
+                    onChange={setTabRhythm}
+                    items={[
+                      { value: 'auto', label: 'Auto' },
+                      { value: 'on', label: 'Show' },
+                      { value: 'off', label: 'Hide' },
+                    ]}
+                  />
                 </div>
 
                 <div className={tabStyles.popToggles}>
-                  <ToolbarButton
+                  <HardwareButton
+                    size="small"
                     label="Dark sheet"
-                    text="Dark sheet"
                     icon={<I.SheetThemeIcon size={14} />}
-                    pressed={sheetDark}
+                    active={sheetDark}
                     onClick={() => setSheetDark((v) => !v)}
                   />
-                  <ToolbarButton
-                    label="Chord diagrams on top"
-                    text="Chord strip"
+                  <HardwareButton
+                    size="small"
+                    label="Chord strip"
+                    ariaLabel="Chord diagrams on top"
                     icon={<I.ChordIcon size={14} />}
-                    pressed={score?.stylesheet.globalDisplayChordDiagramsOnTop ?? false}
+                    active={score?.stylesheet.globalDisplayChordDiagramsOnTop ?? false}
                     onClick={() =>
                       apply((sc, st) =>
                         ops.setChordStrip(sc, !sc.stylesheet.globalDisplayChordDiagramsOnTop, st),
                       )
                     }
                   />
-                  <ToolbarButton
+                  <HardwareButton
+                    size="small"
                     label="Lead sheet"
-                    text="Lead sheet"
                     icon={<I.LeadSheetIcon size={14} />}
-                    pressed={chart}
+                    active={chart}
                     onClick={() => setChart((v) => !v)}
                   />
                   {horizontal && (
-                    <ToolbarButton
+                    <HardwareButton
+                      size="small"
                       label="Center cursor"
-                      text="Center cursor"
                       icon={<I.CenterCursorIcon size={14} />}
-                      pressed={centerCursor}
+                      active={centerCursor}
                       onClick={() => setCenterCursor((v) => !v)}
                     />
                   )}
-                  <ToolbarButton
-                    label="Practice view (Esc to exit)"
-                    text="Focus view"
+                  <HardwareButton
+                    size="small"
+                    label="Focus view"
+                    ariaLabel="Practice view (Esc to exit)"
                     icon={<I.ReadingIcon size={14} />}
-                    pressed={reading}
+                    active={reading}
                     onClick={() => {
                       close()
                       setEditing(false)
@@ -2434,9 +2452,9 @@ export default function TabWorkspace({
                       setTimeout(() => viewportRef.current?.focus(), 0)
                     }}
                   />
-                  <ToolbarButton
+                  <HardwareButton
+                    size="small"
                     label={fullscreen ? 'Exit full screen' : 'Full screen'}
-                    text={fullscreen ? 'Exit full screen' : 'Full screen'}
                     icon={
                       fullscreen ? (
                         <I.ExitFullscreenIcon size={14} />
@@ -2444,7 +2462,7 @@ export default function TabWorkspace({
                         <I.FullscreenIcon size={14} />
                       )
                     }
-                    pressed={fullscreen}
+                    active={fullscreen}
                     onClick={() => {
                       close()
                       toggleFullscreen()
@@ -2526,12 +2544,14 @@ export default function TabWorkspace({
             )}
           </WorkspacePopover>
 
-          <ToolbarButton
-            label={fretOpen ? 'Hide fretboard / keypad' : 'Show fretboard / keypad'}
-            text="Input"
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            label="Input"
+            ariaLabel={fretOpen ? 'Hide fretboard / keypad' : 'Show fretboard / keypad'}
             hideLabelBelow="md"
             icon={<I.FretboardIcon size={15} />}
-            pressed={isNarrow && editing ? toolGroup === 'entry' && !dockCollapsed : fretOpen}
+            active={isNarrow && editing ? toolGroup === 'entry' && !dockCollapsed : fretOpen}
             onClick={() => {
               if (isNarrow && editing) {
                 setToolGroup('entry')
@@ -2542,12 +2562,14 @@ export default function TabWorkspace({
             }}
           />
 
-          <ToolbarButton
-            label={inspectorOpen ? 'Hide inspector panel' : 'Show inspector panel'}
-            text="Panel"
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            label="Panel"
+            ariaLabel={inspectorOpen ? 'Hide inspector panel' : 'Show inspector panel'}
             hideLabelBelow="sm"
             icon={<I.SidebarIcon size={15} />}
-            pressed={inspectorOpen}
+            active={inspectorOpen}
             onClick={toggleInspector}
           />
         </div>
@@ -2896,115 +2918,119 @@ export default function TabWorkspace({
         <TransportButtons compact />
 
         {isPhone ? (
-          <ToolbarButton
+          <HardwareButton
+            size="small"
+            focusableWhenDisabled
+            iconOnly
             label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
             icon={<I.LoopIcon size={15} />}
-            pressed={loopOn}
+            active={loopOn}
             onClick={() => ms.toggleLoop()}
           />
         ) : (
-          <ToolbarGroup label="Loop">
-            <ToolbarButton
-              label={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
-              text="Loop"
+          <ButtonGroup label="Loop" focusableWhenDisabled>
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Loop"
+              ariaLabel={loopOn ? 'Loop on (L)' : 'Loop off (L)'}
               icon={<I.LoopIcon size={15} />}
-              pressed={loopOn}
+              active={loopOn}
               onClick={() => ms.toggleLoop()}
             />
-            <ToolbarButton
-              label={`Loop bar ${cursor.bar + 1}`}
-              text="1 bar"
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="1 bar"
+              ariaLabel={`Loop bar ${cursor.bar + 1}`}
               onClick={() => loopBars(cursor.bar, cursor.bar)}
             />
-            <ToolbarButton
-              label="Loop 4 bars from cursor"
-              text="4 bars"
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="4 bars"
+              ariaLabel="Loop 4 bars from cursor"
               onClick={() => loopBars(cursor.bar, cursor.bar + 3)}
             />
             {selection.length > 1 && (
-              <ToolbarButton label="Loop selection" text="Sel" onClick={loopSelection} />
+              <HardwareButton
+                size="small"
+                focusableWhenDisabled
+                label="Sel"
+                ariaLabel="Loop selection"
+                onClick={loopSelection}
+              />
             )}
-          </ToolbarGroup>
+          </ButtonGroup>
         )}
 
         {!isPhone && (
           <>
-            <ToolbarGroup label="Speed">
-              <ToolbarButton
-                label="Slower (−5%)"
-                icon={<I.MinusIcon size={14} />}
-                onClick={() => ms.setSpeed(practice.speed - 0.05)}
-              />
-              <button
-                type="button"
-                className={tabStyles.zoomValue}
-                onClick={() => ms.setSpeed(1)}
-                title="Speed — click to reset to 100%"
-                aria-label={`Speed ${Math.round(practice.speed * 100)}%, reset to 100%`}
-              >
-                {Math.round(practice.speed * 100)}%
-              </button>
-              <ToolbarButton
-                label="Faster (+5%)"
-                icon={<I.PlusIcon size={14} />}
-                onClick={() => ms.setSpeed(practice.speed + 0.05)}
-              />
-            </ToolbarGroup>
+            <Stepper
+              label="Speed"
+              value={`${Math.round(practice.speed * 100)}%`}
+              decrementIcon={<I.MinusIcon size={14} />}
+              incrementIcon={<I.PlusIcon size={14} />}
+              decrementLabel="Slower (−5%)"
+              incrementLabel="Faster (+5%)"
+              resetLabel={`Speed ${Math.round(practice.speed * 100)}%, reset to 100%`}
+              resetTitle="Speed — click to reset to 100%"
+              focusableWhenDisabled
+              onDecrement={() => ms.setSpeed(practice.speed - 0.05)}
+              onIncrement={() => ms.setSpeed(practice.speed + 0.05)}
+              onReset={() => ms.setSpeed(1)}
+            />
 
-            {(mode === 'play' || mode === 'practice' || reading) && (
-              <ToolbarGroup label="Transpose">
-                <ToolbarButton
-                  label="Transpose down a semitone"
-                  icon={<I.FlatIcon size={14} />}
-                  onClick={() => ms.setSemitones(practice.semitones - 1)}
-                />
-                <button
-                  type="button"
-                  className={tabStyles.zoomValue}
-                  onClick={() => ms.setSemitones(0)}
-                  title="Transpose — click to reset"
-                  aria-label={`Transpose ${practice.semitones} semitones, reset`}
-                >
-                  {practice.semitones > 0 ? '+' : ''}
-                  {practice.semitones} st
-                </button>
-                <ToolbarButton
-                  label="Transpose up a semitone"
-                  icon={<I.SharpIcon size={14} />}
-                  onClick={() => ms.setSemitones(practice.semitones + 1)}
-                />
-              </ToolbarGroup>
+            {(mode === 'play' || reading) && (
+              <Stepper
+                label="Transpose"
+                value={`${practice.semitones > 0 ? '+' : ''}${practice.semitones} st`}
+                decrementIcon={<I.FlatIcon size={14} />}
+                incrementIcon={<I.SharpIcon size={14} />}
+                decrementLabel="Transpose down a semitone"
+                incrementLabel="Transpose up a semitone"
+                resetLabel={`Transpose ${practice.semitones} semitones, reset`}
+                resetTitle="Transpose — click to reset"
+                focusableWhenDisabled
+                onDecrement={() => ms.setSemitones(practice.semitones - 1)}
+                onIncrement={() => ms.setSemitones(practice.semitones + 1)}
+                onReset={() => ms.setSemitones(0)}
+              />
             )}
           </>
         )}
 
-        {(mode === 'practice' || reading) && (
-          <ToolbarGroup label="Practice modes">
-            <ToolbarButton
-              label={
+        {(mode === 'play' || reading) && (
+          <ButtonGroup label="Practice modes" focusableWhenDisabled>
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Listen"
+              ariaLabel={
                 listenOn
                   ? 'Listen mode on (click to stop)'
                   : 'Listen mode: score your playing against the tab'
               }
-              text="Listen"
               hideLabelBelow="sm"
               icon={<I.EarIcon size={15} />}
-              pressed={listenOn}
+              active={listenOn}
               onClick={() => {
                 if (!listenOn) setWaitOn(false)
                 setListenOn((v) => !v)
               }}
             />
-            <ToolbarButton
-              label={
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Wait"
+              ariaLabel={
                 waitOn
                   ? 'Wait mode on (click to stop)'
                   : 'Wait mode: wait for each note on your guitar'
               }
-              text="Wait"
               hideLabelBelow="sm"
               icon={<I.WaitIcon size={15} />}
-              pressed={waitOn}
+              active={waitOn}
               onClick={() => {
                 if (!waitOn) {
                   void useMediaStore.getState().pause()
@@ -3014,17 +3040,19 @@ export default function TabWorkspace({
               }}
             />
             {!isPhone && (
-              <ToolbarButton
-                label={
+              <HardwareButton
+                size="small"
+                focusableWhenDisabled
+                label="Count"
+                ariaLabel={
                   countInBars
                     ? `Count-in: ${countInBars} bar${countInBars > 1 ? 's' : ''}`
                     : 'Count-in off (click for 1 bar)'
                 }
-                text="Count"
                 hideLabelBelow="md"
                 badge={countInBars || undefined}
                 icon={<I.CountInIcon size={15} />}
-                pressed={countInBars > 0}
+                active={countInBars > 0}
                 onClick={() =>
                   useMediaStore
                     .getState()
@@ -3033,9 +3061,11 @@ export default function TabWorkspace({
               />
             )}
             {!reading && !isPhone && (
-              <ToolbarButton
-                label="Open practice report"
-                text="Report"
+              <HardwareButton
+                size="small"
+                focusableWhenDisabled
+                label="Report"
+                ariaLabel="Open practice report"
                 icon={<I.PracticeIcon size={14} />}
                 onClick={() => {
                   setInspectorTab('practice')
@@ -3044,25 +3074,28 @@ export default function TabWorkspace({
                 }}
               />
             )}
-          </ToolbarGroup>
+          </ButtonGroup>
         )}
 
         {mode === 'edit' && !reading && !isPhone && (
-          <ToolbarGroup label="Edit quick toggles">
-            <ToolbarButton
+          <ButtonGroup label="Edit quick toggles" focusableWhenDisabled>
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
               label="Keep rhythm"
-              text="Keep rhythm"
-              pressed={keepRhythm}
+              active={keepRhythm}
               title="Split/merge rests to keep bar length when changing durations or pasting"
               onClick={() => setKeepRhythm((v) => !v)}
             />
             {[0, 1].map((v) => (
-              <ToolbarButton
+              <HardwareButton
                 key={v}
-                label={`Voice ${v + 1}`}
-                text={`V${v + 1}`}
+                size="small"
+                focusableWhenDisabled
+                label={`V${v + 1}`}
+                ariaLabel={`Voice ${v + 1}`}
                 icon={<I.VoiceIcon size={14} />}
-                pressed={cursor.voice === v}
+                active={cursor.voice === v}
                 onClick={() => {
                   const staff = score?.tracks[cursor.track]?.staves[cursor.staff]
                   const voices = staff?.bars[cursor.bar]?.voices.length ?? 1
@@ -3071,18 +3104,19 @@ export default function TabWorkspace({
                 }}
               />
             ))}
-          </ToolbarGroup>
+          </ButtonGroup>
         )}
 
-        {(!isPhone || mode !== 'practice') && (
-          <ToolbarButton
-            label={metronome ? 'Metronome on' : 'Metronome off'}
-            text={isPhone ? undefined : 'Click'}
-            icon={<I.MetronomeIcon size={15} />}
-            pressed={metronome}
-            onClick={() => setMetronome((m) => !m)}
-          />
-        )}
+        <HardwareButton
+          size="small"
+          focusableWhenDisabled
+          iconOnly={isPhone}
+          label={isPhone ? (metronome ? 'Metronome on' : 'Metronome off') : 'Click'}
+          ariaLabel={metronome ? 'Metronome on' : 'Metronome off'}
+          icon={<I.MetronomeIcon size={15} />}
+          active={metronome}
+          onClick={() => setMetronome((m) => !m)}
+        />
 
         {renderProgress !== null && (
           <span className={tabStyles.footerNote}>
@@ -3090,48 +3124,36 @@ export default function TabWorkspace({
           </span>
         )}
 
-        <span className={tabStyles.footerSpacer} />
-
-        {reading ? (
-          <ToolbarButton
-            label="Exit practice view (Esc)"
-            text="Exit focus"
-            icon={<I.ReadingIcon size={15} />}
-            pressed
-            variant="accent"
-            onClick={() => setReading(false)}
-          />
-        ) : (
-          !isPhone &&
-          mode === 'practice' && (
-            <ToolbarButton
-              label="Focus / practice view (Esc to exit)"
-              text="Focus view"
+        {reading && (
+          <>
+            <span className={tabStyles.footerSpacer} />
+            <HardwareButton
+              size="small"
+              focusableWhenDisabled
+              label="Exit focus"
+              ariaLabel="Exit practice view (Esc)"
               icon={<I.ReadingIcon size={15} />}
-              onClick={() => {
-                setEditing(false)
-                setReading(true)
-                setTimeout(() => viewportRef.current?.focus(), 0)
-              }}
+              active
+              variant="accent"
+              onClick={() => setReading(false)}
             />
-          )
+            <WorkspacePopover
+              label="Practice controls"
+              triggerText={isPhone ? `${Math.round(practice.speed * 100)}%` : 'Practice'}
+              icon={<I.TempoIcon size={15} />}
+              badge={!isPhone && trainerEnabled ? 'ON' : undefined}
+              active={practiceOpen || trainerEnabled}
+              placement="top-end"
+              sheetOnMobile
+              width="wide"
+              open={practiceOpen}
+              onOpenChange={setPracticeOpen}
+              title="Speed presets, trainer, count-in, A-B loop, transpose & volume"
+            >
+              <PracticeControls />
+            </WorkspacePopover>
+          </>
         )}
-
-        <WorkspacePopover
-          label="Practice controls"
-          triggerText={isPhone ? `${Math.round(practice.speed * 100)}%` : 'Practice'}
-          icon={<I.TempoIcon size={15} />}
-          badge={!isPhone && trainerEnabled ? 'ON' : undefined}
-          active={practiceOpen || trainerEnabled}
-          placement="top-end"
-          sheetOnMobile
-          width="wide"
-          open={practiceOpen}
-          onOpenChange={setPracticeOpen}
-          title="Speed presets, trainer, count-in, A-B loop, transpose & volume"
-        >
-          <PracticeControls />
-        </WorkspacePopover>
       </footer>
 
       {helpOpen && <Shortcuts active={viewActive} onClose={() => setHelpOpen(false)} />}
@@ -3163,19 +3185,16 @@ export default function TabWorkspace({
         />
       )}
       {texOpen && (
-        <div className={tabStyles.texPane}>
-          <div className={tabStyles.texHead}>
-            <I.CodeIcon size={16} />
-            <strong>AlphaTex</strong>
-            <span className={styles.dim}>Edit the score as text, then apply.</span>
-            <span className={tabStyles.footerSpacer} />
-            <button type="button" className={styles.primaryBtn} onClick={applyTex}>
-              Apply
-            </button>
-            <button type="button" className={styles.chip} onClick={() => setTexOpen(false)}>
-              Close
-            </button>
-          </div>
+        <Dialog
+          open
+          onClose={() => setTexOpen(false)}
+          title="AlphaTex"
+          width="min(720px, 94vw)"
+          headerContent={
+            <HardwareButton size="small" variant="accent" label="Apply" onClick={applyTex} />
+          }
+        >
+          <span className={styles.dim}>Edit the score as text, then apply.</span>
           {texError && <div className={`${styles.errorNotice} ${tabStyles.pre}`}>{texError}</div>}
           <textarea
             className={tabStyles.tex}
@@ -3183,7 +3202,7 @@ export default function TabWorkspace({
             onChange={(e) => setTexText(e.target.value)}
             spellCheck={false}
           />
-        </div>
+        </Dialog>
       )}
     </div>
   )
@@ -3211,42 +3230,18 @@ const SHORTCUTS: [string, string][] = [
 ]
 
 function Shortcuts({ active = true, onClose }: { active?: boolean; onClose: () => void }) {
-  useEffect(() => {
-    if (!active) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [active, onClose])
-
   return (
-    <div className={tabStyles.help} role="dialog" aria-label="Keyboard shortcuts" onClick={onClose}>
-      <div className={tabStyles.helpCard} onClick={(e) => e.stopPropagation()}>
-        <div className={tabStyles.drawerHead}>
-          <strong>
-            <I.KeyboardIcon size={16} /> Keyboard shortcuts
-          </strong>
-          <ToolbarButton
-            label="Close shortcuts"
-            icon={<I.CloseIcon size={14} />}
-            onClick={onClose}
-          />
-        </div>
-        <dl>
-          {SHORTCUTS.map(([k, v]) => (
-            <div key={k}>
-              <dt>
-                <kbd>{k}</kbd>
-              </dt>
-              <dd>{v}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </div>
+    <Dialog open={active} onClose={onClose} title="Keyboard shortcuts" width="min(560px, 92vw)">
+      <dl className={tabStyles.helpList}>
+        {SHORTCUTS.map(([k, v]) => (
+          <div key={k}>
+            <dt>
+              <kbd>{k}</kbd>
+            </dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </Dialog>
   )
 }
