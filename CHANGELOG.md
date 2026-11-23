@@ -7,6 +7,13 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-23
+### Changed
+- ci(landing): run the landing build on PRs that edit pages.yml (1153073)
+- ci(landing): stop deploying to GitHub Pages (4f0c91f)
+
+
+
 ## [0.5.0] - 2026-11-23
 ### Added
 - feat(web): VISUALS view with audio-reactive three.js WebGPU scenes (#463) (b57c272)
