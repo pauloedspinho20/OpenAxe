@@ -7,6 +7,12 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-23
+### Changed
+- Dev to main (#462) (3c8e545)
+
+
+
 ## [0.4.1] - 2026-11-09
 ### Fixed
 - fix(ci): make the plugin assert work on macOS's bash 3.2 (edc172d)
