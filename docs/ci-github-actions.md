@@ -26,7 +26,7 @@ _and_ macOS, so the saving disappeared — while the costs of the split stayed:
 | `plugin.yml`       | push + PR touching `packages/vst3`/core, and `v*` tags | VST3 / CLAP / AU across three OSes, plus validators.                                                                    |
 | `release.yml`      | `v*` tag, or `workflow_dispatch`                       | The release path — see below.                                                                                           |
 | `auto-release.yml` | push to `main`                                         | Bumps `VERSION`, writes `CHANGELOG`, commits `chore(release): X.Y.Z`, tags `vX.Y.Z`, back-merges `main` into `dev`.     |
-| `pages.yml`        | `apps/landing` changes                                 | Landing preview build.                                                                                                  |
+| `pages.yml`        | `apps/landing` changes                                 | Landing build check + PR preview artifact. No deploy: `release.yml` ships the live site to Cloudflare Pages.            |
 | `stale.yml`        | weekly                                                 | Marks inactive issues/PRs.                                                                                              |
 
 Every workflow runs the **full 3-OS matrix** on every event. The `full-ci`
