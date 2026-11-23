@@ -7,7 +7,7 @@ import type { GraphRig } from '../../../engine/GraphRig'
 import { GRID_ROWS, GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey } from '../../../engine/gridConfig'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BlockCard, type BlockDragInfo } from '../BlockCard/BlockCard'
-import { BlockPalette } from '../BlockPalette/BlockPalette'
+import { BlockPalette, type PaletteDragInfo } from '../BlockPalette/BlockPalette'
 import { CableLayer, type DragPreview } from '../CableLayer/CableLayer'
 import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
 import { InputDeviceDialog } from '../InputDeviceDialog/InputDeviceDialog'
@@ -79,6 +79,7 @@ export function GridEditor({
   const [addMenuCell, setAddMenuCell] = useState<{ row: number; col: number } | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
   const [blockDrag, setBlockDrag] = useState<BlockDragInfo | null>(null)
+  const [paletteDrag, setPaletteDrag] = useState<PaletteDragInfo | null>(null)
   const [inputDialogOpen, setInputDialogOpen] = useState(false)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
   const isPluginShell = getShellKind() === 'plugin'
@@ -230,13 +231,15 @@ export function GridEditor({
     setAddMenuCell({ row, col })
   }
 
+  const activeDrag = blockDrag ?? paletteDrag
+
   const cells = []
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const block = blocks.find((b) => b.row === row && b.col === col)
-      const isDragTarget = blockDrag?.cell?.row === row && blockDrag?.cell?.col === col
+      const isDragTarget = activeDrag?.cell?.row === row && activeDrag?.cell?.col === col
       const dragClass = isDragTarget
-        ? blockDrag.valid
+        ? activeDrag.valid
           ? styles.addCellDragOver
           : styles.addCellDragOverInvalid
         : ''
@@ -456,7 +459,7 @@ export function GridEditor({
         />
       )}
 
-      <BlockPalette tunerAnalyser={tunerAnalyser} />
+      <BlockPalette tunerAnalyser={tunerAnalyser} onDragChange={setPaletteDrag} />
 
       {actionSheetBlock && (
         <BlockActionSheet

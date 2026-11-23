@@ -52,3 +52,63 @@ export class UndoStack<T> {
     return this.future.length > 0
   }
 }
+
+/**
+ * Lazy-snapshotting undo/redo history for mutable documents (such as alphaTab
+ * `Score` instances) where capturing a full serialized snapshot is only done
+ * right before an edit or when stepping undo/redo.
+ */
+export class LazyUndoStack<T> {
+  private past: T[] = []
+  private future: T[] = []
+  private readonly maxHistory: number
+
+  constructor(maxHistory = 100) {
+    this.maxHistory = maxHistory
+  }
+
+  /** Record a pre-edit snapshot, clearing any redo history. */
+  recordBefore(before: T): void {
+    this.past.push(before)
+    if (this.past.length > this.maxHistory) this.past.shift()
+    this.future = []
+  }
+
+  /** Step back one snapshot, lazily capturing the current state for redo. */
+  undo(captureCurrent: () => T): T | null {
+    const prev = this.past.pop()
+    if (prev === undefined) return null
+    this.future.push(captureCurrent())
+    return prev
+  }
+
+  /** Step forward one snapshot, lazily capturing the current state for undo. */
+  redo(captureCurrent: () => T): T | null {
+    const next = this.future.pop()
+    if (next === undefined) return null
+    this.past.push(captureCurrent())
+    if (this.past.length > this.maxHistory) this.past.shift()
+    return next
+  }
+
+  clear(): void {
+    this.past = []
+    this.future = []
+  }
+
+  canUndo(): boolean {
+    return this.past.length > 0
+  }
+
+  canRedo(): boolean {
+    return this.future.length > 0
+  }
+
+  get undoCount(): number {
+    return this.past.length
+  }
+
+  get redoCount(): number {
+    return this.future.length
+  }
+}

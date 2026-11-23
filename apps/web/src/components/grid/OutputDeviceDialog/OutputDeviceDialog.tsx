@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useIOStore } from '../../../state/ioStore'
-import { Dialog, SelectField } from '@openaxe/ui'
+import { Dialog, Select } from '@openaxe/ui'
 
 export interface OutputDeviceDialogProps {
   open: boolean
@@ -22,7 +22,7 @@ export function OutputDeviceDialog({ open, onClose }: OutputDeviceDialogProps) {
 
   return (
     <Dialog open={open} onClose={onClose} title="Output" width="min(360px, 90vw)">
-      <SelectField
+      <Select
         label="Device"
         value={io.outputDeviceId}
         onChange={(e) => io.setOutputDevice(e.target.value)}
@@ -33,7 +33,7 @@ export function OutputDeviceDialog({ open, onClose }: OutputDeviceDialogProps) {
             {d.label}
           </option>
         ))}
-      </SelectField>
+      </Select>
     </Dialog>
   )
 }

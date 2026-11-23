@@ -84,7 +84,10 @@ describe('components/GridEditor', () => {
       // No device to pick — the DAW decides what feeds the plugin — but which
       // channel of that feed reaches the rig is the player's choice.
       expect(screen.queryByText('Default input')).not.toBeInTheDocument()
-      expect(screen.getByText('Ch 1+2')).toBeInTheDocument()
+      const channelSelect = screen.getByRole('combobox', { name: 'Channel' })
+      expect(channelSelect).toBeInTheDocument()
+      fireEvent.click(channelSelect)
+      expect(screen.getByRole('option', { name: 'Ch 1+2' })).toBeInTheDocument()
     })
 
     it('does not open an output device picker in a plugin either', () => {

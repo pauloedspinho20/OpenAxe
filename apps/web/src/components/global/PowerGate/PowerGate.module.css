@@ -42,25 +42,6 @@
   color: var(--ink-3);
 }
 
-.latencySelect {
-  font: inherit;
-  font-family: var(--font-display);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--ink-1);
-  background: var(--panel-raised);
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  height: 32px;
-  padding: 0 var(--sp-3);
-  cursor: pointer;
-}
-
-.latencySelect:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
 .deviceRow {
   display: flex;
   align-items: flex-start;
@@ -97,10 +78,6 @@
   text-transform: uppercase;
   color: var(--ink-3);
   line-height: 1;
-}
-
-.deviceField .latencySelect {
-  width: 100%;
 }
 
 .deviceHint {
@@ -169,20 +146,4 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   font-weight: 600;
-}
-
-.updateDismiss {
-  font: inherit;
-  font-size: 11px;
-  color: var(--ink-2);
-  background: transparent;
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--r-sm);
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
-.updateDismiss:hover {
-  color: var(--ink-1);
-  border-color: var(--ink-3);
 }

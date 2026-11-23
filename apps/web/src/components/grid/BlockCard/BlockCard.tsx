@@ -322,6 +322,7 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
       }
       tabIndex={0}
       role="button"
+      title={label}
       aria-pressed={isSelected}
       aria-label={`${label} block - click or Enter to edit, arrow keys to move`}
       onPointerDown={handleCardPointerDown}
@@ -371,12 +372,10 @@ function BlockCardImpl({ instance, rig, onDragChange, armedJackId, onOpenMenu }:
           <BlockIcon kind={instance.kind} size={32} className={styles.blockIcon} />
         </div>
       ) : (
-        <div className={styles.blockBypassedLine}></div>
+        <div className={styles.blockBypassedLine} />
       )}
 
       <span className={styles.blockLabel}>{label}</span>
-
-      <div className={styles.meterWrap}></div>
 
       <div className={styles.jacks}>
         <div className={styles.jacksIn}>

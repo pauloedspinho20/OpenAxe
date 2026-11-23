@@ -1,0 +1,64 @@
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--seam);
+  background: var(--panel-recessed);
+  color: var(--ink-2);
+  min-inline-size: 0;
+}
+
+.vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.stretch {
+  display: flex;
+  inline-size: 100%;
+}
+
+.stretch > button {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.scrollable {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollable > button {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+/* Flatten inactive button shadows inside a recessed tray; active buttons keep their glow. */
+.group
+  > button[data-variant='default']:not([aria-pressed='true']):not([aria-checked='true']):not(
+    [aria-selected='true']
+  ):not([aria-current='page']) {
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (hover: hover) {
+  .group
+    > button[data-variant='default']:not([aria-pressed='true']):not([aria-checked='true']):not(
+      [aria-selected='true']
+    ):not([aria-current='page']):not([data-disabled='true']):hover {
+    background: var(--panel-raised);
+    border-color: var(--seam-strong);
+  }
+}

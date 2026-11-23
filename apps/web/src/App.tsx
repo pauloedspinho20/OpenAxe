@@ -12,13 +12,17 @@ import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPer
 import { FactorySetupDialog } from './components/global/FactorySetupDialog/FactorySetupDialog'
 import { AboutDialog } from './components/global/AboutDialog/AboutDialog'
 import {
+  ButtonGroup,
   HardwareButton,
-  IconButton,
+  LearnIcon,
   MidiIcon,
   PowerIcon,
+  RedoIcon,
+  RigIcon,
   SettingsIcon,
   Toggle,
   Toaster,
+  UndoIcon,
   Wordmark,
 } from '@openaxe/ui'
 import pkg from '../package.json'
@@ -28,9 +32,10 @@ import { useMidiEngine } from './hooks/useMidiEngine'
 import { useSceneEngine } from './hooks/useSceneEngine'
 import { useSceneHotkeys } from './hooks/useSceneHotkeys'
 import { useUndoRedoHotkeys } from './hooks/useUndoRedoHotkeys'
+import { useRegisterViewHistory } from './hooks/useRegisterViewHistory'
 import { useTheme } from './hooks/useTheme'
-import { RedoIcon, UndoIcon } from './components/grid/blockIcons'
 import { setHistoryTarget, useHistoryStore } from './state/historyStore'
+import { useViewHistoryStore } from './state/viewHistoryStore'
 import { useTone3000Target } from './hooks/useTone3000Target'
 import { handleTone3000CallbackOnLoad } from './tone3000/authStore'
 import { useTone3000Browser } from './tone3000/browserStore'
@@ -45,7 +50,18 @@ import { useUpdateCheck } from './hooks/useUpdateCheck'
 import { LANDING_DOWNLOAD_URL } from './config/landing'
 
 import { getShellKind } from '@/native/openaxe'
+import { APP_VIEWS, type AppViewId } from './appViews'
 import styles from './App.module.css'
+import { MediaCenter } from './media/MediaCenter'
+import { MediaDock } from './media/MediaDock'
+import { useMediaShortcuts } from './media/useMediaShortcuts'
+import { useMediaTransport } from './media/useMediaTransport'
+import type { AnalyserLike } from './media/mediaStore'
+
+const VIEW_ICONS: Record<AppViewId, typeof RigIcon> = {
+  rig: RigIcon,
+  learn: LearnIcon,
+}
 
 function App() {
   const engine = useAudioEngine()
@@ -104,7 +120,49 @@ function App() {
   }, [])
 
   useSceneEngine(engine.rig, engine.context, engine.status)
-  useSceneHotkeys()
+  // Views (RIG | LEARN): shared header, independent view containers.
+  const availableViews = APP_VIEWS.filter((v) => v.available())
+  const showMedia = availableViews.some((v) => v.id === 'learn')
+  const [activeView, setActiveView] = useState<AppViewId>('rig')
+  const [mountedViews, setMountedViews] = useState<Set<AppViewId>>(() => new Set(['rig']))
+  const rigPaneRef = useRef<HTMLDivElement | null>(null)
+  const learnPaneRef = useRef<HTMLDivElement | null>(null)
+  const focusOnSwitchRef = useRef(false)
+
+  const selectView = (id: AppViewId) => {
+    focusOnSwitchRef.current = true
+    useViewHistoryStore.getState().setActiveView(id)
+    setActiveView(id)
+    setMountedViews((prev) => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }
+
+  useEffect(() => {
+    useViewHistoryStore.getState().setActiveView(activeView)
+  }, [activeView])
+
+  useEffect(() => {
+    if (!focusOnSwitchRef.current) return
+    focusOnSwitchRef.current = false
+    const pane = activeView === 'rig' ? rigPaneRef.current : learnPaneRef.current
+    pane?.focus({ preventScroll: true })
+  }, [activeView])
+
+  const currentViewDef = availableViews.find((v) => v.id === activeView) ?? availableViews[0]!
+  const isFullWidthView = currentViewDef.fullWidth
+
+  useMediaTransport(
+    engine.rig,
+    engine.context,
+    isReady,
+    engine.tunerAnalyser as AnalyserLike | null,
+  )
+  useMediaShortcuts(showMedia && activeView === 'learn')
+  useSceneHotkeys(activeView === 'rig')
   useUndoRedoHotkeys()
   useMidiEngine()
 
@@ -116,13 +174,25 @@ function App() {
     }
   }, [isReady, updateLatest])
 
-  const canUndo = useHistoryStore((s) => s.canUndo)
-  const canRedo = useHistoryStore((s) => s.canRedo)
-  const undo = useHistoryStore((s) => s.undo)
-  const redo = useHistoryStore((s) => s.redo)
+  const rigCanUndo = useHistoryStore((s) => s.canUndo)
+  const rigCanRedo = useHistoryStore((s) => s.canRedo)
+  const rigUndo = useHistoryStore((s) => s.undo)
+  const rigRedo = useHistoryStore((s) => s.redo)
+  useRegisterViewHistory('rig', {
+    label: 'rig change',
+    canUndo: rigCanUndo,
+    canRedo: rigCanRedo,
+    undo: rigUndo,
+    redo: rigRedo,
+  })
+
+  const activeHistory = useViewHistoryStore((s) => s.controllers[activeView] ?? null)
+  const canUndo = activeHistory?.canUndo ?? false
+  const canRedo = activeHistory?.canRedo ?? false
+  const historySuffix = activeHistory?.label ? ` ${activeHistory.label}` : ''
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
-  const undoTitle = `Undo (${isMac ? '⌘Z' : 'Ctrl+Z'})`
-  const redoTitle = `Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z / Ctrl+Y'})`
+  const undoTitle = `Undo${historySuffix} (${isMac ? '⌘Z' : 'Ctrl+Z'})`
+  const redoTitle = `Redo${historySuffix} (${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z / Ctrl+Y'})`
 
   useEffect(() => {
     if (engine.rig && engine.context) setHistoryTarget({ rig: engine.rig, context: engine.context })
@@ -132,7 +202,7 @@ function App() {
   const tone3000Target = useTone3000Target(engine.rig, browser.target, engineVersion)
 
   return (
-    <div className={styles.chassis}>
+    <div className={`${styles.chassis} ${isFullWidthView ? styles.chassisFull : ''}`}>
       <header className={styles.header}>
         <button
           type="button"
@@ -143,6 +213,26 @@ function App() {
         >
           <Wordmark version={pkg.version} />
         </button>
+
+        {availableViews.length > 1 && (
+          <ButtonGroup
+            mode="nav"
+            label="Views"
+            size="medium"
+            className={styles.viewNav}
+            value={activeView}
+            onChange={selectView}
+            items={availableViews.map((view) => {
+              const ViewIcon = VIEW_ICONS[view.id]
+              return {
+                value: view.id,
+                label: view.label,
+                icon: <ViewIcon size={15} />,
+                title: view.title,
+              }
+            })}
+          />
+        )}
 
         {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />
@@ -188,16 +278,17 @@ function App() {
               title={undoTitle}
               icon={<UndoIcon size={12} />}
               iconOnly
-              onClick={() => void undo()}
-            ></HardwareButton>
-            <IconButton
+              onClick={() => void activeHistory?.undo()}
+            />
+            <HardwareButton
               label="Redo"
+              size="small"
               disabled={!canRedo}
               title={redoTitle}
-              onClick={() => void redo()}
-            >
-              <RedoIcon size={12} />
-            </IconButton>
+              icon={<RedoIcon size={12} />}
+              iconOnly
+              onClick={() => void activeHistory?.redo()}
+            />
           </div>
 
           <div className={styles.headerGroup}>
@@ -240,14 +331,12 @@ function App() {
             <a href={LANDING_DOWNLOAD_URL} target="_blank" rel="noopener">
               Download
             </a>
-            <button
-              type="button"
-              className={styles.updateDismiss}
+            <HardwareButton
+              size="small"
+              label="Dismiss"
+              ariaLabel="Dismiss update"
               onClick={dismissUpdate}
-              aria-label="Dismiss update"
-            >
-              Dismiss
-            </button>
+            />
           </span>
         </div>
       )}
@@ -258,21 +347,46 @@ function App() {
             : `Mic error: ${io.micError}`}
         </div>
       )}
-      <SceneBar rig={engine.rig} context={engine.context} />
 
-      <main className={styles.main}>
-        <GridEditor
-          rig={engine.rig}
-          tunerAnalyser={engine.tunerAnalyser}
-          tunerAnalyserL={engine.tunerAnalyserL}
-          tunerAnalyserR={engine.tunerAnalyserR}
-          analyserL={engine.analyserL}
-          analyserR={engine.analyserR}
-          outputSelectionSupported={outputSelectionSupported}
-          context={engine.context}
-          engine={engine}
-        />
-      </main>
+      <div className={styles.viewStage}>
+        <div
+          ref={rigPaneRef}
+          tabIndex={-1}
+          className={`${styles.viewPane} ${styles.rigPane} ${activeView !== 'rig' ? styles.viewPaneInactive : ''}`}
+          aria-hidden={activeView !== 'rig' || undefined}
+          inert={activeView !== 'rig' ? true : undefined}
+        >
+          <SceneBar rig={engine.rig} context={engine.context} />
+
+          <main className={styles.main}>
+            <GridEditor
+              rig={engine.rig}
+              tunerAnalyser={engine.tunerAnalyser}
+              tunerAnalyserL={engine.tunerAnalyserL}
+              tunerAnalyserR={engine.tunerAnalyserR}
+              analyserL={engine.analyserL}
+              analyserR={engine.analyserR}
+              outputSelectionSupported={outputSelectionSupported}
+              context={engine.context}
+              engine={engine}
+            />
+          </main>
+        </div>
+
+        {showMedia && mountedViews.has('learn') && (
+          <div
+            ref={learnPaneRef}
+            tabIndex={-1}
+            className={`${styles.viewPane} ${styles.learnPane} ${activeView !== 'learn' ? styles.viewPaneInactive : ''}`}
+            aria-hidden={activeView !== 'learn' || undefined}
+            inert={activeView !== 'learn' ? true : undefined}
+          >
+            <main className={styles.learnMain}>
+              <MediaCenter active={activeView === 'learn'} />
+            </main>
+          </div>
+        )}
+      </div>
 
       <Tone3000Browser target={tone3000Target} context={engine.context} />
       <PresetManager rig={engine.rig} context={engine.context} />
@@ -302,6 +416,7 @@ function App() {
         onDone={() => setSetupStatus('done')}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {showMedia && activeView !== 'learn' && <MediaDock onOpen={() => selectView('learn')} />}
       <Toaster />
     </div>
   )

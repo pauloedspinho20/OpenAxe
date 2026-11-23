@@ -34,14 +34,18 @@
     "format:check": "prettier --ignore-path ../../.prettierignore --check ."
   },
   "dependencies": {
+    "@coderline/alphatab": "1.9.0",
     "@openaxe/ui": "workspace:*",
     "@types/p5": "^1.7.7",
+    "mp4-muxer": "^5.2.2",
     "p5": "^2.3.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "webm-muxer": "^5.1.4",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@coderline/alphatab-vite": "1.9.0",
     "@playwright/test": "1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",

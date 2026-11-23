@@ -407,6 +407,7 @@ export function SettingsDialog({
       ) : (
         <>
           {/* Audio input */}
+
           <section className={styles.section}>
             <span className={`label ${styles.sectionLabel}`}>Audio Input</span>
             <div className={styles.row}>

@@ -18,6 +18,11 @@ add_executable(wav_test wav_test.cpp)
 target_link_libraries(wav_test PRIVATE openaxe_core)
 add_test(NAME wav_test COMMAND wav_test)
 
+# Backing-track player (issue #205): transport, speed/pitch, loop, rate.
+add_executable(backing_player_test backing_player_test.cpp)
+target_link_libraries(backing_player_test PRIVATE openaxe_core)
+add_test(NAME backing_player_test COMMAND backing_player_test)
+
 add_executable(convolver_test convolver_test.cpp)
 target_link_libraries(convolver_test PRIVATE openaxe_core)
 add_test(NAME convolver_test COMMAND convolver_test)

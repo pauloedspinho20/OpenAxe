@@ -241,10 +241,27 @@ jobs:
           notes="Downloads and checksums: ${R2_PUBLIC_URL}/${RELEASE_TAG}/
 
           See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for what changed."
+          # find -type f, never dist-release/*. upload-artifact roots each
+          # artifact at the least common ancestor of the files it matched.
+          # While only apps/desktop/build/openaxe-desktop-* existed, that
+          # ancestor was apps/desktop/build and the download was flat. Now the
+          # plugin bundles under packages/vst3/build match too, so the ancestor
+          # is the repo root and dist-release holds apps/ and packages/ TREES.
+          # The glob then handed `gh release` a directory, and v0.4.1 died with
+          #   read dist-release/packages: is a directory
+          # after the release had already been created. Listing real files is
+          # also layout-proof: it keeps working whatever matches in future.
+          assets=()
+          while IFS= read -r f; do assets+=("$f"); done < <(find dist-release -type f)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::nothing under dist-release to mirror — the build legs stashed no artifacts"
+            exit 1
+          fi
+          printf 'asset: %s\n' "${assets[@]}"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist-release/* --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" dist-release/* \
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
               --title "$RELEASE_TAG" --notes "$notes"
           fi
 
@@ -269,4 +286,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-        run: npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site --commit-dirty=true
+        # --branch is REQUIRED here. Without it wrangler infers the branch
+        # from git, and this job checks out a TAG — a detached HEAD — so
+        # wrangler reported the branch as "head" and Cloudflare filed every
+        # release as a PREVIEW:
+        #   Deployment alias URL: https://head.openaxe-site.pages.dev
+        # Production only updates from the project's production branch, so the
+        # landing job has never actually shipped a release to the live site.
+        # v0.4.1 went out with openaxe-site.pages.dev still advertising 0.2.8.
+        #
+        # Pinned to main: Cloudflare takes a Git-integration project's
+        # production branch from the repo default, which is main. If the
+        # project is ever reconfigured, change this to match — a mismatch is
+        # silent, and shows up only as the live site not moving.
+        run: npx wrangler pages deploy apps/landing/dist --project-name=openaxe-site --branch=main --commit-dirty=true

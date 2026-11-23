@@ -1,60 +1,7 @@
 .tabs {
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-}
-
-.tab {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  padding: var(--sp-1) var(--sp-2);
-  cursor: pointer;
-}
-
-.tab:hover {
-  color: var(--ink-1);
-}
-
-.tabActive {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.viewToggle {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: var(--sp-2);
-  padding-left: var(--sp-2);
-  border-left: 1px solid var(--seam);
-}
-
-.viewBtn {
-  width: 28px;
-  height: 28px;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--ink-3);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.viewBtn:hover {
-  color: var(--ink-1);
-}
-
-.viewBtnActive {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-dim);
+  gap: var(--sp-2);
 }
 
 .content {

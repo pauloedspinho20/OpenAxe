@@ -359,87 +359,73 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
         <div className={styles.rowActions}>
           {pickTarget ? (
             preset ? (
-              <button
-                type="button"
-                className={styles.actionBtn}
+              <HardwareButton
+                size="small"
+                label="Assign"
+                ariaLabel={`Assign ${preset.name}`}
                 onClick={() => handleAssignBankSlot(slot)}
-                aria-label={`Assign ${preset.name}`}
-              >
-                Assign
-              </button>
+              />
             ) : (
               <span className={styles.emptyLabel}>—</span>
             )
           ) : preset ? (
             <>
-              <button
-                type="button"
-                className={styles.actionBtn}
+              <HardwareButton
+                size="small"
+                label="Load"
+                ariaLabel={`Load ${preset.name}`}
+                disabled={busy}
                 onClick={() => void handleLoad(preset)}
-                disabled={busy}
-                aria-label={`Load ${preset.name}`}
-              >
-                Load
-              </button>
-              <button
-                type="button"
-                className={styles.actionBtn}
-                onClick={() => startSave(slot)}
-                disabled={busy || !rig}
-                aria-label={`Save current rig into slot ${slot + 1}`}
+              />
+              <HardwareButton
+                size="small"
+                label="Save"
+                ariaLabel={`Save current rig into slot ${slot + 1}`}
                 title="Replace this slot's preset with the current rig"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className={styles.actionBtn}
+                disabled={busy || !rig}
+                onClick={() => startSave(slot)}
+              />
+              <HardwareButton
+                size="small"
+                label="Rename"
+                ariaLabel={`Rename ${preset.name}`}
                 onClick={() => startRename(slot)}
-                aria-label={`Rename ${preset.name}`}
-              >
-                Rename
-              </button>
-              <button
-                type="button"
-                className={styles.actionBtn}
+              />
+              <HardwareButton
+                size="small"
+                label="Export"
+                ariaLabel={`Export ${preset.name}`}
                 onClick={() => downloadPresetAsFile(preset)}
-                aria-label={`Export ${preset.name}`}
-              >
-                Export
-              </button>
-              <button
-                type="button"
-                className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-                onClick={() => requestDelete(slot, presetId!, preset.name)}
+              />
+              <HardwareButton
+                size="small"
+                label="Delete"
+                variant="danger"
+                ariaLabel={`Delete ${preset.name}`}
                 disabled={busy}
-                aria-label={`Delete ${preset.name}`}
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className={styles.favoriteBtn}
-                onClick={() => void handleToggleFavorite(preset)}
-                aria-label={
+                onClick={() => requestDelete(slot, presetId!, preset.name)}
+              />
+              <HardwareButton
+                size="small"
+                label={preset.favorite ? '★' : '☆'}
+                active={!!preset.favorite}
+                ariaLabel={
                   preset.favorite ? `Unfavorite ${preset.name}` : `Favorite ${preset.name}`
                 }
                 title={preset.favorite ? 'Unfavorite' : 'Favorite'}
-              >
-                {preset.favorite ? '★' : '☆'}
-              </button>
+                onClick={() => void handleToggleFavorite(preset)}
+              />
             </>
           ) : (
             rig && (
-              <button
-                type="button"
-                className={styles.actionBtn}
-                onClick={() => startSave(slot)}
-                disabled={busy}
-                aria-label={`Save current rig into slot ${slot + 1}`}
+              <HardwareButton
+                size="small"
+                label="Save"
+                ariaLabel={`Save current rig into slot ${slot + 1}`}
                 title="Save the current rig into this slot"
-              >
-                Save
-              </button>
+                disabled={busy}
+                onClick={() => startSave(slot)}
+              />
             )
           )}
         </div>
@@ -463,62 +449,52 @@ export function PresetManager({ rig, context }: PresetManagerProps) {
             </div>
             <div className={styles.rowActions}>
               {pickTarget ? (
-                <button
-                  type="button"
-                  className={styles.actionBtn}
+                <HardwareButton
+                  size="small"
+                  label="Assign"
+                  ariaLabel={`Assign ${preset.name}`}
                   onClick={() => handleAssignPreset(preset)}
-                  aria-label={`Assign ${preset.name}`}
-                >
-                  Assign
-                </button>
+                />
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={() => handlePlace(preset)}
-                    aria-label={`Place ${preset.name}`}
+                  <HardwareButton
+                    size="small"
+                    label="Place"
+                    ariaLabel={`Place ${preset.name}`}
                     title="Put this preset in the first free bank slot"
-                  >
-                    Place
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={() => void handleLoad(preset)}
+                    onClick={() => handlePlace(preset)}
+                  />
+                  <HardwareButton
+                    size="small"
+                    label="Load"
+                    ariaLabel={`Load ${preset.name}`}
                     disabled={busy}
-                    aria-label={`Load ${preset.name}`}
-                  >
-                    Load
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
+                    onClick={() => void handleLoad(preset)}
+                  />
+                  <HardwareButton
+                    size="small"
+                    label="Export"
+                    ariaLabel={`Export ${preset.name}`}
                     onClick={() => downloadPresetAsFile(preset)}
-                    aria-label={`Export ${preset.name}`}
-                  >
-                    Export
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.favoriteBtn}
-                    onClick={() => void handleToggleFavorite(preset)}
-                    aria-label={
+                  />
+                  <HardwareButton
+                    size="small"
+                    label={preset.favorite ? '★' : '☆'}
+                    active={!!preset.favorite}
+                    ariaLabel={
                       preset.favorite ? `Unfavorite ${preset.name}` : `Favorite ${preset.name}`
                     }
                     title={preset.favorite ? 'Unfavorite' : 'Favorite'}
-                  >
-                    {preset.favorite ? '★' : '☆'}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-                    onClick={() => requestDelete(null, preset.id, preset.name)}
+                    onClick={() => void handleToggleFavorite(preset)}
+                  />
+                  <HardwareButton
+                    size="small"
+                    label="Delete"
+                    variant="danger"
+                    ariaLabel={`Delete ${preset.name}`}
                     disabled={busy}
-                    aria-label={`Delete ${preset.name}`}
-                  >
-                    Delete
-                  </button>
+                    onClick={() => requestDelete(null, preset.id, preset.name)}
+                  />
                 </>
               )}
             </div>
