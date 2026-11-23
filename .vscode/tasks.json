@@ -109,7 +109,7 @@
       "label": "Landing: Build",
       "type": "shell",
       "command": "pnpm --filter @openaxe/landing build",
-      "detail": "Production build of the landing site to apps/landing/dist (index.html + releases.html) - prebuild refreshes generated/releases.json, see pages.yml for the GitHub Pages deploy",
+      "detail": "Production build of the landing site to apps/landing/dist (index.html + releases.html) - prebuild refreshes generated/releases.json, release.yml's landing job deploys it to Cloudflare Pages",
       "group": "build",
       "presentation": {
         "reveal": "always",
