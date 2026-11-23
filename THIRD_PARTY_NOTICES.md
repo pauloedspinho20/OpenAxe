@@ -64,7 +64,8 @@ separate from the copyright license.
 The React app's npm production dependencies ship inside the desktop app and the
 plugin editor as well as on the web. The full summary and texts are generated
 into [`licenses/npm-packages.txt`](./licenses/npm-packages.txt); the headline
-components are React, Vite, Zustand and the Tone3000 client (all MIT).
+components are React, Vite, Zustand and the Tone3000 client (all MIT). The
+VISUALS view renders with [three.js](https://threejs.org) (`three`, MIT).
 
 The Media Center's tab viewer/editor uses [alphaTab](https://alphatab.net)
 (`@coderline/alphatab`, **MPL-2.0**, file-level copyleft and GPLv3-compatible;

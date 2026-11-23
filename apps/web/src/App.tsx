@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { GridEditor } from './components/grid/GridEditor/GridEditor'
 import { MidiManager } from './components/midi/MidiManager/MidiManager'
 import { PresetManager } from './components/presets/PresetManager/PresetManager'
@@ -19,6 +19,7 @@ import {
   PowerIcon,
   RedoIcon,
   RigIcon,
+  VisualsIcon,
   SettingsIcon,
   Toggle,
   Toaster,
@@ -58,9 +59,15 @@ import { useMediaShortcuts } from './media/useMediaShortcuts'
 import { useMediaTransport } from './media/useMediaTransport'
 import type { AnalyserLike } from './media/mediaStore'
 
+// three.js + the scenes load only once VISUALS is first opened.
+const VisualsView = lazy(() =>
+  import('./visuals/VisualsView').then((m) => ({ default: m.VisualsView })),
+)
+
 const VIEW_ICONS: Record<AppViewId, typeof RigIcon> = {
   rig: RigIcon,
   learn: LearnIcon,
+  visuals: VisualsIcon,
 }
 
 function App() {
@@ -127,6 +134,7 @@ function App() {
   const [mountedViews, setMountedViews] = useState<Set<AppViewId>>(() => new Set(['rig']))
   const rigPaneRef = useRef<HTMLDivElement | null>(null)
   const learnPaneRef = useRef<HTMLDivElement | null>(null)
+  const visualsPaneRef = useRef<HTMLDivElement | null>(null)
   const focusOnSwitchRef = useRef(false)
 
   const selectView = (id: AppViewId) => {
@@ -148,7 +156,12 @@ function App() {
   useEffect(() => {
     if (!focusOnSwitchRef.current) return
     focusOnSwitchRef.current = false
-    const pane = activeView === 'rig' ? rigPaneRef.current : learnPaneRef.current
+    const pane =
+      activeView === 'rig'
+        ? rigPaneRef.current
+        : activeView === 'learn'
+          ? learnPaneRef.current
+          : visualsPaneRef.current
     pane?.focus({ preventScroll: true })
   }, [activeView])
 
@@ -383,6 +396,28 @@ function App() {
           >
             <main className={styles.learnMain}>
               <MediaCenter active={activeView === 'learn'} />
+            </main>
+          </div>
+        )}
+
+        {mountedViews.has('visuals') && (
+          <div
+            ref={visualsPaneRef}
+            tabIndex={-1}
+            className={`${styles.viewPane} ${styles.learnPane} ${activeView !== 'visuals' ? styles.viewPaneInactive : ''}`}
+            aria-hidden={activeView !== 'visuals' || undefined}
+            inert={activeView !== 'visuals' ? true : undefined}
+          >
+            <main className={styles.learnMain}>
+              <Suspense fallback={null}>
+                <VisualsView
+                  active={activeView === 'visuals'}
+                  context={engine.context}
+                  rig={engine.rig as { outputNode?: unknown } | null}
+                  outputAnalyser={engine.analyser}
+                  inputAnalyser={engine.tunerAnalyser}
+                />
+              </Suspense>
             </main>
           </div>
         )}

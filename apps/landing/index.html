@@ -139,6 +139,14 @@
           },
           {
             "@type": "Question",
+            "name": "What are the LEARN and VISUALS views?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "LEARN is a practice room beside the rig: play backing tracks at any speed or key, open and edit Guitar Pro, MusicXML and MIDI tabs, loop sections and score your practice runs, in the Web Studio and the desktop app. VISUALS turns your playing into audio-reactive WebGPU scenes that follow your volume, pitch and tone, with presets, MIDI Learn and video recording."
+            }
+          },
+          {
+            "@type": "Question",
             "name": "How do I open the unsigned macOS Desktop app on first launch?",
             "acceptedAnswer": {
               "@type": "Answer",
@@ -195,6 +203,7 @@
             <li><a href="/" aria-current="page">Home</a></li>
             <li><a href="/#signal-chain">Signal Chain</a></li>
             <li><a href="/#workflow">Workflow</a></li>
+            <li><a href="/#learn-visuals">Learn &amp; Visuals</a></li>
             <li><a href="/#platforms">Platforms</a></li>
             <li><a href="/#download">Download</a></li>
             <li><a href="/releases.html">Releases</a></li>
@@ -261,7 +270,9 @@
               <p class="lead">
                 Wire <strong>Neural Amp Modeler</strong> captures, zero-latency cabinet IRs, and 10
                 studio effects across a 4×10 parallel grid. Play instantly in your browser, on
-                native desktop, or inside your DAW as a VST3, CLAP, or Audio Unit plugin.
+                native desktop, or inside your DAW as a VST3, CLAP, or Audio Unit plugin. Then learn
+                songs with backing tracks and tabs, and turn your playing into audio-reactive
+                visuals.
               </p>
               <div class="hero-ctas">
                 <a
@@ -727,11 +738,273 @@
         </div>
       </section>
 
+      <!-- 4. Learn & Visuals -->
+      <section
+        class="section reveal-section"
+        id="learn-visuals"
+        aria-labelledby="learn-visuals-title"
+      >
+        <div class="container">
+          <div class="section-head">
+            <span class="section-kicker">04 · Learn &amp; Visuals</span>
+            <h2 id="learn-visuals-title">Learn the songs, then light up the room</h2>
+            <p class="sub">
+              Two more views beside the rig: LEARN for backing tracks, tabs and practice, and
+              VISUALS for audio-reactive scenes driven by every note you play.
+            </p>
+          </div>
+
+          <div class="workflow-tabs" data-tabs>
+            <div class="tablist-scroll" role="tablist" aria-label="Learn and Visuals capabilities">
+              <button
+                type="button"
+                id="lv-tab-learn"
+                class="wf-tab"
+                role="tab"
+                data-tab="learn"
+                aria-selected="true"
+                tabindex="0"
+              >
+                01 · LEARN: Tracks &amp; Tabs
+              </button>
+              <button
+                type="button"
+                id="lv-tab-cube"
+                class="wf-tab"
+                role="tab"
+                data-tab="cube"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                02 · VISUALS: Distilled Cube
+              </button>
+              <button
+                type="button"
+                id="lv-tab-grid"
+                class="wf-tab"
+                role="tab"
+                data-tab="grid"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                03 · VISUALS: Holographic Grid
+              </button>
+              <button
+                type="button"
+                id="lv-tab-core"
+                class="wf-tab"
+                role="tab"
+                data-tab="core"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                04 · VISUALS: Digital Core
+              </button>
+            </div>
+
+            <div class="workflow-panels">
+              <div role="tabpanel" data-panel="learn" aria-labelledby="lv-tab-learn">
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Media Center</span>
+                    <h3>Practise with backing tracks and Guitar Pro tabs</h3>
+                    <p>
+                      Import audio, Guitar Pro (GP3–8, GPX), MusicXML, MIDI or AlphaTex and play
+                      along through your own rig. Backing tracks keep their pitch at any speed, and
+                      tabs play through the same engine with the cursor following along.
+                    </p>
+                    <ul>
+                      <li>
+                        Speed 0.25–2× with a speed trainer, ±12 semitone transpose, A-B and section
+                        loops on the waveform
+                      </li>
+                      <li>
+                        Keyboard-first tab editor with chord library, auto-fingering, find &amp;
+                        replace, drum lane and touch fret pad
+                      </li>
+                      <li>
+                        Wait mode, count-in, scored practice runs with a bar heat-map, and
+                        recordings synced to the tab
+                      </li>
+                      <li>
+                        Set lists, song-to-scene tone switching, practice packs, print to PDF and
+                        video export
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/feature-learn-dark.webp"
+                      alt="OpenAxe LEARN view with a tab and its inspector in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/feature-learn-light.webp"
+                      alt="OpenAxe LEARN view with a tab and its inspector in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="tabpanel"
+                data-panel="cube"
+                aria-labelledby="lv-tab-cube"
+                hidden="until-found"
+              >
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Audio Reactive</span>
+                    <h3>Visuals that listen to volume, pitch and timbre</h3>
+                    <p>
+                      The VISUALS view turns your playing into real-time WebGPU scenes. Every note,
+                      bend and pick attack moves the picture: loudness drives the light, the note
+                      you play picks the colour, and your tone shapes the detail.
+                    </p>
+                    <ul>
+                      <li>
+                        Auto-ranging volume, note colour wheel, register, vibrato, bends and note
+                        changes
+                      </li>
+                      <li>
+                        Brightness, grit, pick attacks and four frequency bands from your rig or the
+                        dry input
+                      </li>
+                      <li>
+                        One responsiveness dial from smooth and cinematic to punchy, plus
+                        sensitivity and a noise gate
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/feature-visuals-cube-dark.webp"
+                      alt="Distilled Cube visual reacting to a guitar in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/feature-visuals-cube-light.webp"
+                      alt="Distilled Cube visual reacting to a guitar in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="tabpanel"
+                data-panel="grid"
+                aria-labelledby="lv-tab-grid"
+                hidden="until-found"
+              >
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Control Panel</span>
+                    <h3>Every scene, fully tweakable and saved as presets</h3>
+                    <p>
+                      One global control panel adapts to each scene. Re-route any audio feature to
+                      any parameter with its own amount, curve and smoothing, then save the look as
+                      a preset for the next gig or stream.
+                    </p>
+                    <ul>
+                      <li>Editable audio routes, live feature meters and per-scene presets</li>
+                      <li>MIDI Learn any control from your foot controller</li>
+                      <li>Fullscreen with auto-hiding controls for projection and streaming</li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/feature-visuals-grid-dark.webp"
+                      alt="Holographic Cube Grid visual with its control panel in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/feature-visuals-grid-light.webp"
+                      alt="Holographic Cube Grid visual with its control panel in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="tabpanel"
+                data-panel="core"
+                aria-labelledby="lv-tab-core"
+                hidden="until-found"
+              >
+                <div class="workflow-panel-inner">
+                  <div class="workflow-copy">
+                    <span class="ox-badge ox-badge-accent">Record &amp; Share</span>
+                    <h3>Record the visuals with what you hear</h3>
+                    <p>
+                      Capture a video of the scene reacting to your playing, with your rig and
+                      backing track as the soundtrack, at landscape, vertical or square sizes ready
+                      for social posts.
+                    </p>
+                    <ul>
+                      <li>720p, 1080p, 4K, vertical 1080×1920 and square presets</li>
+                      <li>WebGPU rendering with an automatic WebGL2 fallback</li>
+                      <li>Scenes by Sabo Sugi, credited in the app</li>
+                    </ul>
+                  </div>
+                  <div class="workflow-media">
+                    <img
+                      class="finish-img finish-img-dark"
+                      src="/screenshots/feature-visuals-core-dark.webp"
+                      alt="Digital Core visual with live feature meters in Carbon finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <img
+                      class="finish-img finish-img-light"
+                      src="/screenshots/feature-visuals-core-light.webp"
+                      alt="Digital Core visual with live feature meters in Aluminum finish"
+                      width="1440"
+                      height="900"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 5. One Engine, Four Shells -->
       <section class="section reveal-section" id="platforms" aria-labelledby="platforms-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">04 · Cross-Platform Architecture</span>
+            <span class="section-kicker">05 · Cross-Platform Architecture</span>
             <h2 id="platforms-title">One C++20 engine, four ways to play</h2>
             <p class="sub">
               Every shell drives the exact same lock-free <code>packages/core</code> DSP engine via
@@ -879,7 +1152,7 @@
       <section class="section reveal-section" id="open-source" aria-labelledby="oss-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">05 · Open Source &amp; Engineering</span>
+            <span class="section-kicker">06 · Open Source &amp; Engineering</span>
             <h2 id="oss-title">Built in the open, owned by players</h2>
             <p class="sub">
               Zero lock-in, zero background phone-home, and lock-free audio thread guarantees tested
@@ -996,7 +1269,7 @@
       <section class="section reveal-section" id="download" aria-labelledby="download-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">06 · Install &amp; Play</span>
+            <span class="section-kicker">07 · Install &amp; Play</span>
             <h2 id="download-title">Download OpenAxe</h2>
             <p class="sub">
               Auto-detected for your platform. Prefer zero setup?
@@ -1071,7 +1344,7 @@
       <section class="section reveal-section" id="faq" aria-labelledby="faq-title">
         <div class="container">
           <div class="section-head">
-            <span class="section-kicker">07 · Quick-Start FAQ</span>
+            <span class="section-kicker">08 · Quick-Start FAQ</span>
             <h2 id="faq-title">Frequently asked questions</h2>
           </div>
 
@@ -1111,6 +1384,19 @@
                   in any modern desktop or mobile browser to run the same C++20 DSP engine inside an
                   AudioWorklet via WebAssembly — including built-in guitar DI loops if you don’t
                   have an audio interface plugged in yet.
+                </p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>What are the LEARN and VISUALS views?</summary>
+              <div class="faq-answer">
+                <p>
+                  <strong>LEARN</strong> is a practice room beside the rig: play backing tracks at
+                  any speed or key, open and edit Guitar Pro, MusicXML and MIDI tabs, loop sections
+                  and score your practice runs, in the Web Studio and the desktop app.
+                  <strong>VISUALS</strong> turns your playing into audio-reactive WebGPU scenes that
+                  follow your volume, pitch and tone, with presets, MIDI Learn and video recording.
                 </p>
               </div>
             </details>
