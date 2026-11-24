@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { HardwareButton, MixerIcon, Panel, PowerIcon } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
-import { useEngineVersion } from '../../../state/engineVersion'
+import { bumpAfterLoad, useEngineVersion } from '../../../state/engineVersion'
 import { useTone3000Library } from '../../../tone3000/library'
 import type { GraphRig } from '../../../engine/GraphRig'
 import { NAM_MODEL_KINDS } from '../../../engine/blocks/blockRegistry'
@@ -204,21 +204,29 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
             block
               ? {
                   loadModel: (json: string, info: { id: string; name: string }) =>
-                    (
-                      block as unknown as {
-                        loadModel: (
-                          j: string,
-                          s: unknown,
-                          i: { id: string; name: string },
-                        ) => Promise<unknown>
-                      }
-                    ).loadModel(json, 1, info),
+                    bumpAfterLoad(
+                      (
+                        block as unknown as {
+                          loadModel: (
+                            j: string,
+                            s: unknown,
+                            i: { id: string; name: string },
+                          ) => Promise<unknown>
+                        }
+                      ).loadModel(json, 1, info),
+                    ),
                   loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) =>
-                    (
-                      block as unknown as {
-                        loadIR: (b: AudioBuffer, m: number, i: { id: string; name: string }) => void
-                      }
-                    ).loadIR(buffer, 1, info),
+                    bumpAfterLoad(
+                      (
+                        block as unknown as {
+                          loadIR: (
+                            b: AudioBuffer,
+                            m: number,
+                            i: { id: string; name: string },
+                          ) => void
+                        }
+                      ).loadIR(buffer, 1, info),
+                    ),
                 }
               : null
           }
