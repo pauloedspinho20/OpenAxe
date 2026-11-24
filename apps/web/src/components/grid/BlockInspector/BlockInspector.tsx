@@ -17,7 +17,7 @@ import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { GRID_COLS, GRID_ROWS } from '../../../engine/gridConfig'
-import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
+import { BLOCK_KIND_LABELS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
 import type { Gear } from '@/tone3000/types'
@@ -110,8 +110,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const isIr = instance.kind === 'cab'
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const vendor = BLOCK_KIND_VENDORS[instance.kind]
-  const vendorUrl = BLOCK_KIND_VENDOR_URLS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   // Post-input-trim tap for the IN meter - the same facade shape as the
@@ -129,8 +127,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
 
   const panelLabel = isAssetKind ? loaded?.name : label
-  const panelLabelUrl = isAssetKind ? libraryEntry?.creator : vendor
-  const panelUrl = isAssetKind ? libraryEntry?.sourceUrl : vendorUrl
 
   const showDynamicsMeter =
     block != null && rig != null && (block.kind === 'compressor' || block.kind === 'noise-gate')
@@ -139,8 +135,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     <Panel
       className={styles.panel}
       {...(panelLabel !== undefined && { label: panelLabel })}
-      {...(panelLabelUrl !== undefined && { labelUrl: panelLabelUrl })}
-      {...(panelUrl !== undefined && { url: panelUrl })}
       corner={
         isAssetKind && (
           <div className={styles.screenRow}>

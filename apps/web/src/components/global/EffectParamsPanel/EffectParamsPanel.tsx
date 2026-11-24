@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
-import { getParamSchema, type ParamFieldSchema } from '@/effects/paramSchema'
+import {
+  DEFAULT_KNOB_SIZE,
+  KNOB_SIZE_BY_KIND,
+  getParamSchema,
+  type ParamFieldSchema,
+} from '@/effects/paramSchema'
 import { ParamMidiMenu } from '@/components/midi/ParamMidiMenu/ParamMidiMenu'
 import { actionKey } from '@/midi/actions'
 import { useMidiStore } from '@/state/midiStore'
@@ -44,6 +49,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   // Shared with EffectDetailsDialog - see useBlockParamValues for why local
   // state, rather than block.getParams(), drives what is displayed.
   const { values, setParam } = useBlockParamValues(blockId, block)
+  const kindKnobSize = KNOB_SIZE_BY_KIND[block.kind]
   const schema = getParamSchema(block.kind).filter((f) => !f.visible || f.visible(values))
   // Right-click MIDI menu target - one menu per panel, retargeted per knob.
   const [midiMenu, setMidiMenu] = useState<{
@@ -95,7 +101,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
         step={field.step}
         defaultValue={field.defaultValue}
         formatValue={field.formatValue}
-        size={50}
+        size={field.size ?? kindKnobSize ?? DEFAULT_KNOB_SIZE}
         description={field.description}
         onChange={(value) => setParam(field.key, value)}
         highlighted={learningKey === actionKey({ kind: 'param', blockId, paramKey: field.key })}
@@ -111,7 +117,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
     )
   }
   return (
-    <div className={styles.panel}>
+    <div className={`${styles.panel} ${kindKnobSize ? styles.compact : ''}`}>
       {groupFields(schema).map(([groupName, fields]) => {
         // Model/character-style selectors (primary) get their own row above
         // the knob cluster (and any non-primary selects like Drive's Diode),
