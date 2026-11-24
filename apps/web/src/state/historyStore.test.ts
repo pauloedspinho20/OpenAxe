@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGraphStore } from './graphStore'
 import {
   flushHistoryForTests,
+  getHistoryStack,
   resetHistoryForTests,
   useHistoryStore,
   setHistoryTarget,
@@ -155,5 +156,72 @@ describe('historyStore', () => {
       .loadGraph(state.blocks, state.edges, state.masterLevel, state.masterMuted)
     // still only one undo entry
     expect(useHistoryStore.getState().canUndo).toBe(before)
+  })
+
+  describe('deferred param snapshots', () => {
+    it('settles a pending knob edit as its own step before a structural change', async () => {
+      const id = useGraphStore.getState().addBlock('compressor', 0, 0)!
+      resetHistoryForTests()
+
+      useGraphStore.getState().setBlockParams(id, { drive: 0.4 })
+      useGraphStore.getState().addBlock('eq', 0, 2)
+
+      // Both steps are on the stack and the Undo button knows it.
+      expect(useHistoryStore.getState().canUndo).toBe(true)
+      await useHistoryStore.getState().undo()
+      expect(useGraphStore.getState().blocks).toHaveLength(1)
+      expect(useGraphStore.getState().blocks[0]?.params).toEqual({ drive: 0.4 })
+      await useHistoryStore.getState().undo()
+      expect(useGraphStore.getState().blocks[0]?.params).toEqual({})
+    })
+
+    it('notifies canUndo when a structural no-op settles a pending knob edit', () => {
+      const id = useGraphStore.getState().addBlock('compressor', 0, 0)!
+      resetHistoryForTests()
+
+      useGraphStore.getState().setBlockParams(id, { drive: 0.4 })
+      // Replaces the edges array without changing the graph.
+      useGraphStore.setState({ edges: [...useGraphStore.getState().edges] })
+
+      expect(useHistoryStore.getState().canUndo).toBe(true)
+    })
+
+    it('coalesces a master fader drag into one step', async () => {
+      resetHistoryForTests()
+      for (const level of [0.9, 0.8, 0.7, 0.6]) useGraphStore.getState().setMasterLevel(level)
+      expect(useHistoryStore.getState().canUndo).toBe(false)
+
+      vi.advanceTimersByTime(350)
+      expect(useHistoryStore.getState().canUndo).toBe(true)
+      await useHistoryStore.getState().undo()
+      expect(useGraphStore.getState().masterLevel).toBe(1)
+      expect(useHistoryStore.getState().canUndo).toBe(false)
+    })
+
+    it('records the model loaded at edit time, not one loaded during the debounce', () => {
+      const id = useGraphStore.getState().addBlock('amp', 0, 0)!
+      let model = { id: 'old', name: 'Old' }
+      const liveBlock = { getLoadedModel: () => model, getLoadedIr: () => null }
+      setHistoryTarget({
+        rig: {
+          listBlockIds: () => [id],
+          getBlock: () => liveBlock as never,
+          addBlock: async () => id,
+          removeBlock: async () => undefined,
+          listEdgeIds: () => [],
+          connect: () => ({ ok: true }),
+        },
+        context: {} as AudioContext,
+      })
+      resetHistoryForTests()
+
+      useGraphStore.getState().setBlockParams(id, { gain: 0.5 })
+      model = { id: 'new', name: 'New' } // loaded mid-debounce, outside the store
+      vi.advanceTimersByTime(350)
+
+      const top = getHistoryStack().value.blocks.find((b) => b.id === id)
+      expect(top?.params).toEqual({ gain: 0.5 })
+      expect(top?.modelId).toBe('old')
+    })
   })
 })
