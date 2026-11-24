@@ -83,6 +83,9 @@
   .meterAndParams {
     align-items: flex-end;
     gap: var(--sp-3);
+    display: grid;
+    grid-template-columns: 100% 1fr 1fr;
+    grid-template-rows: 100% 100%;
   }
 }
 

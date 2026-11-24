@@ -90,7 +90,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
             Select a block in the grid to see its parameters and options.
           </p>
         ) : (
-          <div>
+          <>
             <p className={styles.empty}>Add a block to start</p>
             <HardwareButton label="ADD BLOCK" onClick={() => setAddOpen(true)} fullWidth />
             <AddBlockMenu
@@ -98,7 +98,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
               onPick={addToFirstCell}
               onClose={() => setAddOpen(false)}
             />
-          </div>
+          </>
         )}
       </Panel>
     )

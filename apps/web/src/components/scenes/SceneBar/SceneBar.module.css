@@ -149,7 +149,7 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s ease;
-  width: fit-content;
+  width: max-content;
 }
 
 .slotActionLabel,
@@ -168,6 +168,7 @@
 .slotActionLabel {
   border-bottom: 1px solid var(--ink-3);
   height: 30px;
+  width: 100%;
 }
 
 .slotActionBtn {
