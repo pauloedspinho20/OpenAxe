@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
-import { ButtonGroup, Drawer, HardwareButton, Select, Stepper } from '@openaxe/ui'
+import { ButtonGroup, Drawer, HardwareButton, PlusIcon, Select, Stepper } from '@openaxe/ui'
 
 import { AUDIO_ACCEPT, formatTime } from './decode'
 import { NoteGlyph, TabGlyph } from './icons'
@@ -19,6 +19,7 @@ import { WorkspacePopover, useRovingToolbar } from './tabs/WorkspaceControls'
 import * as I from './tabs/tabIcons'
 import tabStyles from './tabs/TabWorkspace.module.css'
 import { Waveform } from './Waveform'
+import { StarIcon, StarOutlineIcon } from '../../../../packages/ui/src/icons/GeneraIcons'
 
 // alphaTab is large; only load it when a score is opened.
 const TabWorkspace = lazy(() => import('./tabs/TabWorkspace'))
@@ -99,20 +100,10 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
       <div className={styles.sideActions}>
         <HardwareButton
           size="small"
-          variant="accent"
-          label={busy ? 'Importing…' : 'Import files'}
+
+          label={busy ? 'Importing…' : 'Import'}
           disabled={busy}
           onClick={() => fileRef.current?.click()}
-        />
-        <HardwareButton
-          size="small"
-          label="New song"
-          active={newOpen}
-          title="Start a new song from scratch"
-          onClick={() => {
-            setNewOpen((v) => !v)
-            if (isNarrow && focusMode) setLibraryOpen(false)
-          }}
         />
         <HardwareButton
           size="small"
@@ -121,6 +112,19 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
           title="Import every audio and tab file in a folder (duplicates are skipped)"
           onClick={() => folderRef.current?.click()}
         />
+        <HardwareButton
+          size="small"
+          label="New song"
+          icon={<PlusIcon />}
+          iconOnly
+          active={newOpen}
+          title="Start a new song from scratch"
+          onClick={() => {
+            setNewOpen((v) => !v)
+            if (isNarrow && focusMode) setLibraryOpen(false)
+          }}
+        />
+
         <input
           ref={(el) => {
             folderRef.current = el
@@ -175,7 +179,9 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
           <div className={styles.libFilters}>
             <HardwareButton
               size="small"
-              label={favorites ? '★' : '☆'}
+              icon={favorites ? <StarIcon /> : <StarOutlineIcon />}
+              iconOnly
+              label={favorites ? 'Favorites' : 'Add to favorites'}
               active={favorites}
               ariaLabel={favorites ? 'Show all songs' : 'Show favourites only'}
               title={favorites ? 'Showing favourites — click for all' : 'Favourites only'}
@@ -476,12 +482,18 @@ function EmptyState({ onImport }: { onImport: () => void }) {
   return (
     <div className={styles.empty}>
       <h3>Practice with backing tracks and tabs</h3>
-      <p>
+
+      <p className="label">
         Import audio (mp3, wav, flac, ogg, m4a) to play along at any speed without changing pitch,
-        transpose it, and loop the hard parts. Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML,
-        AlphaTex or MIDI (.mid/.midi) files to read, play and edit tabs, or a practice pack
-        (.oapack) someone shared. Everything plays through your rig's output.
+        transpose it, and loop the hard parts.
       </p>
+
+      <p className="label">
+        Import Guitar Pro (.gp, .gp3–.gp5, .gpx), MusicXML, AlphaTex or MIDI (.mid/.midi)
+      </p>
+
+      <p className="label">Everything plays through your rig's output.</p>
+
       <HardwareButton variant="accent" label="Import files" onClick={onImport} />
     </div>
   )
