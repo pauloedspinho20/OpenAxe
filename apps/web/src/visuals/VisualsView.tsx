@@ -359,7 +359,6 @@ export function VisualsView({
               title={s.description}
               onClick={() => store.selectScene(s.id)}
             />
-            {s.credit && <span className={styles.sceneAuthor}>by {s.credit.author}</span>}
           </div>
         ))}
       </nav>

@@ -2270,20 +2270,6 @@ export default function TabWorkspace({
             {(title.artist || item.artist) && <span>{title.artist || item.artist}</span>}
             {savedAt && <i className={tabStyles.savedDot} title="All changes saved" />}
           </div>
-          <HardwareButton
-            size="small"
-            focusableWhenDisabled
-            className={tabStyles.trackPill}
-            label={tracks[trackIndex]?.name ?? 'Track'}
-            icon={<I.TracksIcon size={13} />}
-            badge={shown.size > 1 ? `+${shown.size - 1}` : undefined}
-            title="Active track — open Tracks inspector"
-            onClick={() => {
-              setInspectorTab('tracks')
-              if (isNarrow) setNarrowInspectorOpen(true)
-              else setSidebarOpen(true)
-            }}
-          />
         </div>
 
         <ButtonGroup
@@ -2317,21 +2303,7 @@ export default function TabWorkspace({
               <PracticeControls />
             </WorkspacePopover>
           )}
-          {!isPhone && (
-            <HardwareButton
-              size="small"
-              focusableWhenDisabled
-              label="Focus view"
-              ariaLabel="Focus / practice view (Esc to exit)"
-              hideLabelBelow="md"
-              icon={<I.ReadingIcon size={15} />}
-              onClick={() => {
-                setEditing(false)
-                setReading(true)
-                setTimeout(() => viewportRef.current?.focus(), 0)
-              }}
-            />
-          )}
+
           <WorkspacePopover
             label="View"
             hideLabelBelow="sm"
@@ -2565,7 +2537,7 @@ export default function TabWorkspace({
           <HardwareButton
             size="small"
             focusableWhenDisabled
-            label="Panel"
+            label="Inspector"
             ariaLabel={inspectorOpen ? 'Hide inspector panel' : 'Show inspector panel'}
             hideLabelBelow="sm"
             icon={<I.SidebarIcon size={15} />}

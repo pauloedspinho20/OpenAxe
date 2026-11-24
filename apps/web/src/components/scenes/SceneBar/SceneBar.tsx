@@ -169,12 +169,12 @@ export function SceneBar({ rig }: SceneBarProps) {
           <span className={styles.sceneIndex}>{String(activeScene + 1).padStart(2, '0')}</span>
           <span className={styles.sceneName}>{sceneLabel}</span>
         </button>
-        {/*    <HardwareButton
+        {/*   <HardwareButton
           label="›"
           onClick={() => void SceneNavigator.nextScene({ source: 'ui' })}
           title="Next scene"
-        /> */}
-        {/*   <button
+        />
+        <button
           type="button"
           className={styles.navArrow}
           onClick={() => void SceneNavigator.nextScene({ source: 'ui' })}
@@ -210,13 +210,14 @@ export function SceneBar({ rig }: SceneBarProps) {
               ) : (
                 <HardwareButton
                   fullWidth
-                  label={`${i + 1} ${name ?? 'Empty'}`}
+                  label={`${i + 1}`}
                   active={isActive}
                   onClick={() => void SceneNavigator.goToSlot(i, { source: 'ui' })}
                   title={name ?? 'Empty'}
                 />
               )}
               <div className={styles.slotActions}>
+                <div className={styles.slotActionLabel}>{name ?? 'Empty'}</div>
                 <button
                   type="button"
                   className={styles.slotActionBtn}

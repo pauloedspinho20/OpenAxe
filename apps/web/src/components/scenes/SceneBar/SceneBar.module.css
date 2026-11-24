@@ -149,8 +149,10 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s ease;
+  width: fit-content;
 }
 
+.slotActionLabel,
 .slotActionBtn {
   font-family: var(--font-display);
   font-size: 10px;
@@ -161,6 +163,15 @@
   border-radius: var(--r-sm);
   padding: var(--sp-1) var(--sp-2);
   text-align: left;
+}
+
+.slotActionLabel {
+  border-bottom: 1px solid var(--ink-3);
+  height: 30px;
+}
+
+.slotActionBtn {
+  color: var(--ink-3);
   cursor: pointer;
 }
 

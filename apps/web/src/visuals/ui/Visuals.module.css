@@ -51,11 +51,6 @@
   padding-bottom: var(--sp-1);
 }
 
-.sceneAuthor {
-  font-size: 11px;
-  color: var(--ink-2);
-}
-
 /* ——— Stage ——— */
 .stage {
   position: relative;

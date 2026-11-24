@@ -15,6 +15,7 @@
 .header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-3);
   width: 100%;
@@ -34,7 +35,6 @@
 
 .headerGroupWrapper {
   display: flex;
-  margin-left: auto;
 }
 
 .headerGroup {
