@@ -5,6 +5,7 @@ import type { BlockLoadTarget } from '../tone3000/importService'
 import type { AmpBlock } from '../engine/blocks/AmpBlock'
 import type { CabBlock } from '../engine/blocks/CabBlock'
 import { useSettingsStore } from '../state/settingsStore'
+import { bumpAfterLoad } from '../state/engineVersion'
 
 /**
  * Resolves the live block the Tone3000 catalog should load into, given
@@ -35,7 +36,9 @@ export function useTone3000Target(
     if (browserTarget.slot === 'model') {
       return {
         loadModel: (json: string, info: { id: string; name: string }) =>
-          (block as AmpBlock).loadModel(json, useSettingsStore.getState().namQuality, info),
+          bumpAfterLoad(
+            (block as AmpBlock).loadModel(json, useSettingsStore.getState().namQuality, info),
+          ),
         loadIR: () => {
           throw new Error('This block is not a Cab block')
         },
@@ -46,7 +49,7 @@ export function useTone3000Target(
         throw new Error('This block is not an Amp block')
       },
       loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) =>
-        (block as CabBlock).loadIR(buffer, 1, info),
+        bumpAfterLoad((block as CabBlock).loadIR(buffer, 1, info)),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rig, browserTarget, engineVersion])
