@@ -347,21 +347,25 @@ export function VisualsView({
     ) : null
 
   return (
-    <div className={`${styles.root} ${store.panelOpen ? '' : styles.panelClosed}`}>
-      <nav className={styles.sceneList} aria-label="Visuals">
-        <span className={styles.sectionLabel}>Visuals</span>
-        {SCENES.map((s) => (
-          <div key={s.id} className={styles.sceneItem}>
-            <HardwareButton
-              label={s.name}
-              fullWidth
-              ariaCurrent={s.id === def.id ? 'page' : false}
-              title={s.description}
-              onClick={() => store.selectScene(s.id)}
-            />
-          </div>
-        ))}
-      </nav>
+    <div
+      className={`${styles.root} ${store.panelOpen ? '' : styles.panelClosed} ${store.listOpen ? '' : styles.listClosed}`}
+    >
+      {store.listOpen && (
+        <nav className={styles.sceneList} aria-label="Visuals">
+          <span className={styles.sectionLabel}>Visuals</span>
+          {SCENES.map((s) => (
+            <div key={s.id} className={styles.sceneItem}>
+              <HardwareButton
+                label={s.name}
+                fullWidth
+                ariaCurrent={s.id === def.id ? 'page' : false}
+                title={s.description}
+                onClick={() => store.selectScene(s.id)}
+              />
+            </div>
+          ))}
+        </nav>
+      )}
 
       <div
         ref={stageRef}
@@ -409,6 +413,16 @@ export function VisualsView({
                     ? `Record ${recordSize.label}`
                     : 'Recording is not supported in this browser'
                 }
+              />
+            )}
+            {!fullscreen && (
+              <HardwareButton
+                label="List"
+                size="small"
+                className={styles.stageButton}
+                active={store.listOpen}
+                title={store.listOpen ? 'Hide the visuals list' : 'Show the visuals list'}
+                onClick={() => store.setListOpen(!store.listOpen)}
               />
             )}
             {!fullscreen && (

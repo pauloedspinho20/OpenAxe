@@ -65,7 +65,9 @@ export function MediaCenter({ active: viewActive = true }: MediaCenterProps = {}
   const [lastActive, setLastActive] = useState<string | null>(null)
   if (activeId !== lastActive) {
     setLastActive(activeId)
-    setLibraryOpen(!focusMode)
+    // Selecting a song must not collapse the library; it only re-opens when
+    // no song is active (the library is the whole screen then).
+    if (!focusMode) setLibraryOpen(true)
   }
   const showLibrary = focusMode ? libraryOpen : !(isNarrow && newOpen)
   const libraryAsDrawer = focusMode && isNarrow && showLibrary

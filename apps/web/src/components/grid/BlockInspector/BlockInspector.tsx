@@ -13,6 +13,10 @@ import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
 import { EffectDetailsDialog } from '../EffectDetailsDialog/EffectDetailsDialog'
 import { EFFECT_PARAM_SCHEMAS, getParamSchema } from '../../../effects/paramSchema'
+import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
+import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
+import type { BlockKind } from '../../../engine/blocks/Block'
+import { GRID_COLS, GRID_ROWS } from '../../../engine/gridConfig'
 import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
@@ -45,6 +49,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const blocks = useGraphStore((s) => s.blocks)
   const instance = blocks.find((b) => b.id === selectedBlockId) ?? null
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const [effectDetailsOpen, setEffectDetailsOpen] = useState(false)
   const openBrowser = useTone3000Browser((s) => s.openBrowser)
 
@@ -64,12 +69,37 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     }
   }, [instance?.id])
 
+  /** Places the new block in the first free cell (row-major), i.e. the top-left of an empty grid. */
+  const addToFirstCell = (kind: BlockKind) => {
+    setAddOpen(false)
+    for (let row = 0; row < GRID_ROWS; row++) {
+      for (let col = 0; col < GRID_COLS; col++) {
+        if (blocks.some((b) => b.row === row && b.col === col)) continue
+        const id = useGraphStore.getState().addBlock(kind, row, col)
+        if (id !== null) openCatalogForNewBlock(id, kind)
+        return
+      }
+    }
+  }
+
   if (!instance) {
     return (
       <Panel>
-        <p className={styles.empty}>
-          Select a block in the grid to see its parameters and options.
-        </p>
+        {!!selectedBlockId ? (
+          <p className={styles.empty}>
+            Select a block in the grid to see its parameters and options.
+          </p>
+        ) : (
+          <div>
+            <p className={styles.empty}>Add a block to start</p>
+            <HardwareButton label="ADD BLOCK" onClick={() => setAddOpen(true)} fullWidth />
+            <AddBlockMenu
+              open={addOpen}
+              onPick={addToFirstCell}
+              onClose={() => setAddOpen(false)}
+            />
+          </div>
+        )}
       </Panel>
     )
   }

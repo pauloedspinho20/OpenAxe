@@ -11,7 +11,7 @@ import { usePresetManager } from '../../../state/presetManager'
 import { capturePreset } from '../../../presets/capture'
 import { getPreset, listPresets, savePreset } from '../../../presets/presetStore'
 import type { Preset } from '../../../presets/types'
-import { HardwareButton, toast } from '@openaxe/ui'
+import { Dialog, HardwareButton, toast } from '@openaxe/ui'
 import styles from './SceneBar.module.css'
 
 export interface SceneBarProps {
@@ -61,6 +61,11 @@ export function SceneBar({ rig }: SceneBarProps) {
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [saveBusy, setSaveBusy] = useState(false)
+  const [namingOpen, setNamingOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  // Preset switch waiting on the user's decision about unsaved edits.
+  const pendingRef = useRef<(() => void) | null>(null)
+  const [newName, setNewName] = useState('')
   const wasPresetManagerOpen = useRef(false)
 
   const refreshNames = async () => {
@@ -80,14 +85,54 @@ export function SceneBar({ rig }: SceneBarProps) {
 
   // Recomputed only when the live graph or the saved baseline actually change.
   const isDirty = useMemo(() => {
-    if (!saved || !rig) return false
+    // Mid-switch the graph still holds the previous preset; not user edits.
+    if (!rig || switching) return false
+    // Empty slot: anything on the grid is unsaved work worth naming.
+    if (!saved) return blocks.length > 0
     const current = capturePreset(saved.id, saved.name, rig, useGraphStore, {})
     return !presetContentEquals(saved, current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saved, rig, blocks, edges, masterLevel, masterMuted])
+  }, [saved, rig, switching, blocks, edges, masterLevel, masterMuted])
 
-  const handleSaveCurrent = async () => {
-    if (!rig || !saved) return
+  const handleSaveNew = async (): Promise<boolean> => {
+    if (!rig) return false
+    const { activeScene: sceneIdx, activeSlot: slotIdx } = useSceneStore.getState()
+    const bank = usePresetBankStore.getState()
+    const firstEmpty = bank.slots.findIndex((s) => s == null)
+    if (firstEmpty < 0) {
+      toast.warning('Every preset slot is full', {
+        description: 'Free one in the Presets library first.',
+      })
+      return false
+    }
+    const name = newName.trim() || `Preset ${firstEmpty + 1}`
+    setSaveBusy(true)
+    try {
+      const created = capturePreset(crypto.randomUUID(), name, rig, useGraphStore, { tags: [] })
+      await savePreset(created)
+      bank.setSlot(firstEmpty, created.id)
+      useSceneStore.getState().assignSlot(sceneIdx, slotIdx, firstEmpty)
+      useCurrentPresetStore.getState().setSaved(created)
+      await refreshNames()
+      setNamingOpen(false)
+      setNewName('')
+      finishPending()
+      toast.success(`Saved "${created.name}"`, {
+        description: `Placed in slot ${slotIdx + 1} of scene ${sceneIdx + 1}`,
+      })
+      return true
+    } finally {
+      setSaveBusy(false)
+    }
+  }
+
+  const handleSaveCurrent = async (): Promise<boolean> => {
+    if (!rig) return false
+    if (!saved) {
+      setNewName('')
+      setNamingOpen(true)
+      return false
+    }
     setSaveBusy(true)
     try {
       const updated = capturePreset(saved.id, saved.name, rig, useGraphStore, {
@@ -99,9 +144,43 @@ export function SceneBar({ rig }: SceneBarProps) {
       useCurrentPresetStore.getState().setSaved(updated)
       await refreshNames()
       toast.success(`Saved changes to "${updated.name}"`)
+      return true
     } finally {
       setSaveBusy(false)
     }
+  }
+
+  /** Run a preset switch, first asking what to do with unsaved edits. */
+  const guardUnsaved = (action: () => void) => {
+    if (!isDirty) {
+      action()
+      return
+    }
+    pendingRef.current = action
+    setConfirmOpen(true)
+  }
+
+  const finishPending = () => {
+    const action = pendingRef.current
+    pendingRef.current = null
+    action?.()
+  }
+
+  const cancelPending = () => {
+    pendingRef.current = null
+    setConfirmOpen(false)
+  }
+
+  const handleConfirmSave = async () => {
+    setConfirmOpen(false)
+    if (!saved) {
+      // Empty slot: needs a name first; the switch continues once it's saved.
+      setNewName('')
+      setNamingOpen(true)
+      return
+    }
+    if (await handleSaveCurrent()) finishPending()
+    else pendingRef.current = null
   }
 
   if (!hydrated) return null
@@ -144,130 +223,184 @@ export function SceneBar({ rig }: SceneBarProps) {
   const saveTitle = !rig
     ? 'Power on to save'
     : !saved
-      ? 'No preset loaded in this slot'
+      ? isDirty
+        ? 'Save the grid as a new preset in this slot'
+        : 'Add a block to save a new preset'
       : isDirty
         ? 'Save changes to the current preset'
         : 'No changes to save'
 
   return (
     <div className={styles.bar} role="group" aria-label="Scenes">
-      <div className={styles.sceneNav}>
-        {/*   <button
-          type="button"
-          className={styles.navArrow}
-          onClick={() => void SceneNavigator.prevScene({ source: 'ui' })}
-          aria-label="Previous scene"
-        >
-          ‹
-        </button> */}
-        <button
-          type="button"
-          className={styles.readout}
-          onClick={openSceneManager}
-          aria-label={`${sceneLabel} — open scene list`}
-        >
-          <span className={styles.sceneIndex}>{String(activeScene + 1).padStart(2, '0')}</span>
-          <span className={styles.sceneName}>{sceneLabel}</span>
-        </button>
-        {/*   <HardwareButton
-          label="›"
-          onClick={() => void SceneNavigator.nextScene({ source: 'ui' })}
-          title="Next scene"
-        />
-        <button
-          type="button"
-          className={styles.navArrow}
-          onClick={() => void SceneNavigator.nextScene({ source: 'ui' })}
-          aria-label="Next scene"
-        >
-          ›
-        </button> */}
+      <div className={styles.group}>
+        <div className={styles.groupRow}>
+          <HardwareButton
+            label={`SCENES`}
+            onClick={openSceneManager}
+            title="Open scene list"
+            ariaLabel={`${sceneLabel} — open scene list`}
+          />
+          <span className={`label ${styles.groupLabel}`}>
+            {`${String(activeScene + 1).padStart(2, '0')} ${sceneLabel}`}
+          </span>
+        </div>
       </div>
 
-      <div className={styles.slots}>
-        {Array.from({ length: SLOTS_PER_SCENE }, (_, i) => {
-          const bankSlot = scene.slots[i]
-          const presetId = bankSlot != null ? (bankSlots[bankSlot] ?? null) : null
-          const name = presetId ? (names.get(presetId) ?? '…') : null
-          const isActive = i === activeSlot
-          return (
-            <div
-              key={i}
-              className={`${styles.slot} ${switching && isActive ? styles.pending : ''}`}
-            >
-              {renamingSlot === i ? (
-                <input
-                  autoFocus
-                  className={styles.renameInput}
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void commitRename(i)
-                    if (e.key === 'Escape') setRenamingSlot(null)
-                  }}
-                  onBlur={() => void commitRename(i)}
-                />
-              ) : (
-                <HardwareButton
-                  fullWidth
-                  label={`${i + 1}`}
-                  active={isActive}
-                  onClick={() => void SceneNavigator.goToSlot(i, { source: 'ui' })}
-                  title={name ?? 'Empty'}
-                />
-              )}
-              <div className={styles.slotActions}>
-                <div className={styles.slotActionLabel}>{name ?? 'Empty'}</div>
-                <button
-                  type="button"
-                  className={styles.slotActionBtn}
-                  onClick={() => openPicker({ scene: activeScene, slot: i })}
-                  aria-label={`Pick a different preset for slot ${i + 1}`}
-                  title="Pick a saved preset"
+      <div className={`${styles.group} ${styles.groupEnd}`}>
+        <div className={styles.groupRow}>
+          <span
+            className={`label ${styles.groupLabel}`}
+            title={saved?.name ?? 'No preset in this slot'}
+            aria-label={`Current preset: ${saved?.name ?? 'none'}${isDirty ? ' (unsaved changes)' : ''}`}
+          >
+            {saved?.name ?? 'Empty'}
+          </span>
+          <div className={styles.slots}>
+            {Array.from({ length: SLOTS_PER_SCENE }, (_, i) => {
+              const bankSlot = scene.slots[i]
+              const presetId = bankSlot != null ? (bankSlots[bankSlot] ?? null) : null
+              const name = presetId ? (names.get(presetId) ?? '…') : null
+              const isActive = i === activeSlot
+              return (
+                <div
+                  key={i}
+                  className={`${styles.slot} ${switching && isActive ? styles.pending : ''}`}
                 >
-                  Pick…
-                </button>
-                <button
-                  type="button"
-                  className={styles.slotActionBtn}
-                  onClick={() => startRename(i)}
-                  disabled={!presetId}
-                  aria-label={`Rename slot ${i + 1}`}
-                  title="Rename"
-                >
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  className={styles.slotActionBtn}
-                  onClick={() => handleClear(i)}
-                  disabled={!presetId}
-                  aria-label={`Clear slot ${i + 1}`}
-                  title="Clear slot"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )
-        })}
+                  {renamingSlot === i ? (
+                    <input
+                      autoFocus
+                      className={styles.renameInput}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void commitRename(i)
+                        if (e.key === 'Escape') setRenamingSlot(null)
+                      }}
+                      onBlur={() => void commitRename(i)}
+                    />
+                  ) : (
+                    <HardwareButton
+                      fullWidth
+                      label={`${i + 1}`}
+                      active={isActive}
+                      onClick={() =>
+                        guardUnsaved(() => void SceneNavigator.goToSlot(i, { source: 'ui' }))
+                      }
+                      title={name ?? 'Empty'}
+                    />
+                  )}
+                  <div className={styles.slotActions}>
+                    <div className={styles.slotActionLabel}>{name ?? 'Empty'}</div>
+                    <button
+                      type="button"
+                      className={styles.slotActionBtn}
+                      onClick={() =>
+                        guardUnsaved(() => openPicker({ scene: activeScene, slot: i }))
+                      }
+                      aria-label={`Pick a different preset for slot ${i + 1}`}
+                      title="Pick a saved preset"
+                    >
+                      Pick…
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.slotActionBtn}
+                      onClick={() => startRename(i)}
+                      disabled={!presetId}
+                      aria-label={`Rename slot ${i + 1}`}
+                      title="Rename"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.slotActionBtn}
+                      onClick={() => handleClear(i)}
+                      disabled={!presetId}
+                      aria-label={`Clear slot ${i + 1}`}
+                      title="Clear slot"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className={styles.currentPreset}>
+            <HardwareButton
+              label="PRESETS"
+              onClick={openLibrary}
+              title="Browse, save-as-new, import, export, or delete presets"
+            />
+
+            <HardwareButton
+              label="SAVE"
+              active={isDirty}
+              disabled={!isDirty || saveBusy}
+              onClick={() => void handleSaveCurrent()}
+              title={saveTitle}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className={styles.currentPreset}>
-        <HardwareButton
-          label="PRESETS"
-          onClick={openLibrary}
-          title="Browse, save-as-new, import, export, or delete presets"
-        />
+      <Dialog open={confirmOpen} onClose={cancelPending} title="Unsaved changes">
+        <p>
+          {saved
+            ? `"${saved.name}" has changes that haven't been saved.`
+            : 'This slot has a rig that has not been saved as a preset.'}{' '}
+          Switching presets will lose them.
+        </p>
+        <div className={styles.nameForm}>
+          <HardwareButton label="CANCEL" onClick={cancelPending} fullWidth />
+          <HardwareButton
+            label="DISCARD"
+            variant="danger"
+            fullWidth
+            onClick={() => {
+              setConfirmOpen(false)
+              finishPending()
+            }}
+          />
+          <HardwareButton
+            label={saved ? 'SAVE & SWITCH' : 'SAVE…'}
+            variant="accent"
+            fullWidth
+            disabled={saveBusy}
+            onClick={() => void handleConfirmSave()}
+          />
+        </div>
+      </Dialog>
 
-        <HardwareButton
-          label="SAVE"
-          active={isDirty}
-          disabled={!isDirty || saveBusy}
-          onClick={() => void handleSaveCurrent()}
-          title={saveTitle}
-        />
-      </div>
+      <Dialog
+        open={namingOpen}
+        onClose={() => {
+          setNamingOpen(false)
+          pendingRef.current = null
+        }}
+        title="Save preset"
+      >
+        <form
+          className={styles.nameForm}
+          onSubmit={(e) => {
+            e.preventDefault()
+            void handleSaveNew()
+          }}
+        >
+          <input
+            autoFocus
+            type="text"
+            className={styles.renameInput}
+            placeholder="Preset name"
+            aria-label="Preset name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <HardwareButton label="SAVE" onClick={() => void handleSaveNew()} disabled={saveBusy} />
+        </form>
+      </Dialog>
 
       {!rig && <span className={`label ${styles.hint}`}>Power on to hear preset changes</span>}
     </div>

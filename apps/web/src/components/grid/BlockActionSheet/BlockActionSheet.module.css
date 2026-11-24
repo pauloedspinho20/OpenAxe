@@ -102,3 +102,24 @@
   flex-wrap: wrap;
   gap: var(--sp-2);
 }
+
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.footerActions > * {
+  flex: 1 1 160px;
+}
+
+/* Exactly two cables: show them side by side. */
+.connectionListPair {
+  flex-direction: row;
+}
+
+.connectionListPair > .connectionRow {
+  flex: 1 1 0;
+  min-width: 0;
+}

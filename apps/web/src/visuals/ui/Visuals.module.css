@@ -12,9 +12,18 @@
   grid-template-columns: 200px minmax(0, 1fr);
 }
 
+.listClosed {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.listClosed.panelClosed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (max-width: 900px) {
   .root,
-  .panelClosed {
+  .panelClosed,
+  .listClosed {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(320px, 60vh) auto;
     overflow-y: auto;

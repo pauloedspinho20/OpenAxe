@@ -50,7 +50,7 @@ describe('components/GridEditor', () => {
     const { container } = render(<GridEditor {...baseProps} />)
     expect(container.textContent).toContain('Amp')
     expect(container.textContent).toContain('Cab')
-    expect(container.textContent).toContain('Select a block in the grid')
+    expect(container.textContent).toContain('Add a block to start')
     expect(screen.getByRole('button', { name: 'MUTE' })).toBeInTheDocument()
   })
 

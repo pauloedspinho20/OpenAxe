@@ -1,7 +1,7 @@
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { BLOCK_OPTIONS } from '../blockOptions'
-import { Chip, Dialog } from '@openaxe/ui'
-import { blockColorVar } from '../blockColors'
+import { Dialog } from '@openaxe/ui'
+import { BlockChip } from '../BlockPalette/BlockChip'
 import styles from './AddBlockMenu.module.css'
 
 export interface AddBlockMenuProps {
@@ -20,19 +20,28 @@ export function AddBlockMenu({ open, onPick, onClose }: AddBlockMenuProps) {
           <span className={`label ${styles.groupLabel}`}>{group}</span>
           <div className={styles.options}>
             {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => (
-              <Chip
+              <BlockChip
                 key={option.kind}
-                disabled={option.disabled}
                 kind={option.kind}
+                label={option.label}
+                size={64}
+                role="menuitem"
+                disabled={option.disabled}
                 aria-label={
                   option.disabled
                     ? `${option.label} - not yet available (${option.vendor})`
-                    : undefined
+                    : option.label
                 }
                 title={option.disabled ? option.vendor : undefined}
-                label={option.label}
-                style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
-                onPick={() => onPick(option.kind)}
+                onClick={() => {
+                  if (!option.disabled) onPick(option.kind)
+                }}
+                onKeyDown={(e) => {
+                  if (!option.disabled && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault()
+                    onPick(option.kind)
+                  }
+                }}
               />
             ))}
           </div>
