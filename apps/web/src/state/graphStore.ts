@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useEngineVersion } from './engineVersion'
 import type { BlockKind, EffectParams } from '../engine/blocks/Block'
 import { SEND_RETURN_KINDS } from '../engine/blocks/blockRegistry'
 import { GRID_COLS, IN_RAIL, OUT_RAIL, jack, jackKey, type Jack } from '../engine/gridConfig'
@@ -283,6 +284,10 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
   setMasterMuted: (muted) => set({ masterMuted: muted }),
   setTunerMuted: (muted) => set({ tunerMuted: muted }),
 
-  loadGraph: (blocks, edges, masterLevel, masterMuted) =>
-    set({ blocks, edges, masterLevel, masterMuted }),
+  loadGraph: (blocks, edges, masterLevel, masterMuted) => {
+    set({ blocks, edges, masterLevel, masterMuted })
+    // Reconcile no longer bumps on param-only passes, but a loaded graph can
+    // reuse live block ids while their models/IRs changed underneath.
+    useEngineVersion.getState().bump()
+  },
 }))

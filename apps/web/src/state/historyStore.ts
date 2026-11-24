@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { UndoStack } from './undoStack'
-import { useGraphStore } from './graphStore'
+import { useGraphStore, type GraphState } from './graphStore'
 import { applyPreset } from '../presets/apply'
 import type { Preset, PresetBlockData, PresetEdgeData, PresetRig } from '../presets/types'
 import type { PresetBlock } from '../presets/types'
@@ -24,9 +24,16 @@ let target: HistoryTarget | null = null
 let isRestoring = false
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let pendingSnapshot: GraphSnapshot | null = null
+/**
+ * Graph state of the latest param-only change whose snapshot has not been
+ * built yet. Building a snapshot walks every block (rig lookups + two
+ * JSON.stringify compares), so doing it on every knob tick made drags
+ * stutter; for param-only changes it is deferred to the debounce trailing
+ * edge. The state object is immutable, so holding it loses nothing.
+ */
+let deferredState: GraphState | null = null
 
-function getSnapshotFromGraph(): GraphSnapshot {
-  const g = useGraphStore.getState()
+function getSnapshotFromGraph(g: GraphState = useGraphStore.getState()): GraphSnapshot {
   const rig = target?.rig ?? null
   return {
     blocks: g.blocks.map((b) => {
@@ -104,11 +111,36 @@ function notify(): void {
   useHistoryStore.setState({ canUndo: stack.canUndo(), canRedo: stack.canRedo() })
 }
 
+function materializeDeferred(): void {
+  if (!deferredState) return
+  const state = deferredState
+  deferredState = null
+  pendingSnapshot = getSnapshotFromGraph(state)
+}
+
+function isParamOnlyStoreChange(next: GraphState, prev: GraphState): boolean {
+  if (next.edges !== prev.edges) return false
+  if (next.masterLevel !== prev.masterLevel || next.masterMuted !== prev.masterMuted) return false
+  if (next.blocks.length !== prev.blocks.length) return false
+  return next.blocks.every((b, i) => {
+    const o = prev.blocks[i]
+    return (
+      !!o &&
+      o.id === b.id &&
+      o.kind === b.kind &&
+      o.row === b.row &&
+      o.col === b.col &&
+      o.bypass === b.bypass
+    )
+  })
+}
+
 function flushPending(): void {
   if (debounceTimer) {
     clearTimeout(debounceTimer)
     debounceTimer = null
   }
+  materializeDeferred()
   if (pendingSnapshot) {
     const toPush = pendingSnapshot
     pendingSnapshot = null
@@ -162,8 +194,37 @@ function schedulePush(next: GraphSnapshot): void {
 
 function ensureSubscription(): void {
   if (unsubscribeGraph) return
-  unsubscribeGraph = useGraphStore.subscribe((state) => {
+  unsubscribeGraph = useGraphStore.subscribe((state, prevState) => {
     if (isRestoring) return
+    if (isParamOnlyStoreChange(state, prevState)) {
+      // Cheap path for knob drags: remember the state, build the snapshot once
+      // when the burst settles (see deferredState).
+      deferredState = state
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
+        materializeDeferred()
+        const toPush = pendingSnapshot
+        pendingSnapshot = null
+        if (toPush && !snapshotsEqual(stack.value, toPush)) {
+          stack.push(toPush)
+          notify()
+        }
+      }, HISTORY_DEBOUNCE_MS)
+      return
+    }
+    // Structural change: settle any deferred param edit first so it keeps its
+    // own undo step.
+    if (deferredState) {
+      materializeDeferred()
+      const toPush = pendingSnapshot
+      pendingSnapshot = null
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+        debounceTimer = null
+      }
+      if (toPush && !snapshotsEqual(stack.value, toPush)) stack.push(toPush)
+    }
     // Build snapshot from the new state — need to use the subscribe payload directly
     // to avoid reading stale model refs through getSnapshotFromGraph's rig path?
     // For correctness we capture via getSnapshotFromGraph which reads current graphStore + rig.
@@ -195,6 +256,7 @@ export function resetHistoryForTests(): void {
     debounceTimer = null
   }
   pendingSnapshot = null
+  deferredState = null
   isRestoring = false
   stack = createInitialStack()
   notify()

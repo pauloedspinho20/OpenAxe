@@ -35,20 +35,27 @@ interface MaybeBypassable {
 async function reconcile(
   rig: GraphRigControls,
   state: GraphState,
-  positions: Map<string, { row: number; col: number }>,
+  positions: Map<string, { row: number; col: number; bypass?: boolean | undefined }>,
 ): Promise<void> {
+  // Whether this pass changed anything a component reading live block state
+  // could observe. A pure param change must not bump: the bump re-renders App
+  // and every card, which made knob drags lag.
+  let structural = false
+  let bypassChanged = false
   const liveBlockIds = new Set(rig.listBlockIds())
   const storeBlockIds = new Set(state.blocks.map((b) => b.id))
 
   for (const id of liveBlockIds) {
     if (!storeBlockIds.has(id)) {
       await rig.removeBlock(id)
+      structural = true
       positions.delete(id)
     }
   }
   for (const block of state.blocks) {
     if (!liveBlockIds.has(block.id)) {
       await rig.addBlock(block.kind, block.row, block.col, block.id)
+      structural = true
       positions.set(block.id, { row: block.row, col: block.col })
     }
   }
@@ -61,11 +68,17 @@ async function reconcile(
     // that reconciles every block must not move blocks that never moved.
     if (!prev || prev.row !== block.row || prev.col !== block.col) {
       rig.moveBlock(block.id, block.row, block.col)
+      structural = true
       positions.set(block.id, { row: block.row, col: block.col })
     }
     rig.setBlockParams(block.id, block.params)
     if (block.bypass !== undefined) {
       ;(rig.getBlock(block.id) as MaybeBypassable | null)?.setBypass?.(block.bypass)
+      const known = positions.get(block.id)
+      if (known && known.bypass !== block.bypass) {
+        bypassChanged = true
+        known.bypass = block.bypass
+      }
     }
   }
 
@@ -73,10 +86,16 @@ async function reconcile(
   const storeEdgeIds = new Set(state.edges.map((e) => e.id))
 
   for (const id of liveEdgeIds) {
-    if (!storeEdgeIds.has(id)) rig.disconnect(id)
+    if (!storeEdgeIds.has(id)) {
+      rig.disconnect(id)
+      structural = true
+    }
   }
   for (const edge of state.edges) {
-    if (!liveEdgeIds.has(edge.id)) rig.connect(edge.from, edge.to, edge.id)
+    if (!liveEdgeIds.has(edge.id)) {
+      rig.connect(edge.from, edge.to, edge.id)
+      structural = true
+    }
   }
 
   rig.setMasterLevel(state.masterLevel)
@@ -85,9 +104,9 @@ async function reconcile(
 
   // Block creation above is async - components that read live block state
   // imperatively during render (BlockCard) have nothing else to subscribe
-  // to that would tell them it just finished. Bump unconditionally, even on
-  // a reconcile pass with nothing to add/remove; it's a cheap re-render.
-  useEngineVersion.getState().bump()
+  // to that would tell them it just finished. Bump when blocks/edges changed;
+  // bypass flips also change what those components show.
+  if (structural || bypassChanged) useEngineVersion.getState().bump()
 }
 
 /**
@@ -102,7 +121,7 @@ export function bindGraphRig(
   store: UseBoundStore<StoreApi<GraphState>>,
   rig: GraphRigControls,
 ): () => void {
-  const positions = new Map<string, { row: number; col: number }>()
+  const positions = new Map<string, { row: number; col: number; bypass?: boolean | undefined }>()
   let chain: Promise<void> = reconcile(rig, store.getState(), positions)
   let unbound = false
 

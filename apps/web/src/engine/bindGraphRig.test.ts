@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGraphStore, type BlockInstance, type EdgeInstance } from '../state/graphStore'
 import { bindGraphRig, type GraphRigControls } from './bindGraphRig'
 import { jack } from './gridConfig'
+import { useEngineVersion } from '../state/engineVersion'
 
 function createMockRig(): {
   [K in keyof GraphRigControls]: ReturnType<typeof vi.fn<GraphRigControls[K]>>
@@ -58,6 +59,22 @@ describe('bindGraphRig', () => {
       masterMuted: false,
       tunerMuted: false,
     })
+  })
+
+  it('does not bump the engine version on a param-only change', async () => {
+    const rig = createMockRig()
+    const id = addBlock('compressor', 0, 1)
+    rig.listBlockIds.mockImplementation(() => [id])
+    rig.listEdgeIds.mockImplementation(() => useGraphStore.getState().edges.map((e) => e.id))
+    bindGraphRig(useGraphStore, rig)
+    await flush()
+    const before = useEngineVersion.getState().version
+
+    useGraphStore.getState().setBlockParams(id, { threshold: -20 })
+    await flush()
+
+    expect(rig.setBlockParams).toHaveBeenLastCalledWith(id, { threshold: -20 })
+    expect(useEngineVersion.getState().version).toBe(before)
   })
 
   it('applies the current state immediately on bind', async () => {
