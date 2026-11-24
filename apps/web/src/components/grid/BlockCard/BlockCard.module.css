@@ -1,11 +1,17 @@
 .card {
   position: relative;
+  container-type: size;
+  container-name: block-card;
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  width: 100%;
   height: 100%;
   min-width: 0;
-  padding: 2px 2px 6px;
+  min-height: 0;
+  padding: 2px 3px 3px;
   background: var(--panel-raised);
   border: 1px solid var(--ink-1);
   border-radius: var(--r-lg);
@@ -13,8 +19,6 @@
   cursor: grab;
   touch-action: none;
   overflow: visible;
-  align-items: center;
-  justify-content: space-between;
   outline: 2px solid transparent;
 }
 
@@ -34,15 +38,12 @@
 
 .blockIconWrapper {
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding-top: 18px;
-}
-
-@media (max-width: var(--mw-md)) {
-  .card {
-    padding: var(--sp-1);
-  }
 }
 
 .card:hover {
@@ -75,14 +76,14 @@
 }
 
 .header {
-  position: absolute;
-  top: 0;
+  position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-1);
   width: 100%;
+  min-height: 0;
 }
 
 .blockIcon,
@@ -91,29 +92,39 @@
   text-align: center;
 }
 
+.blockIcon {
+  width: clamp(14px, min(44cqi, 44cqb), 32px);
+  height: clamp(14px, min(44cqi, 44cqb), 32px);
+  flex-shrink: 0;
+}
+
 .blockBypassedLine {
-  position: absolute;
-  left: 0;
-  right: 0;
+  align-self: center;
   height: 2px;
   width: 100%;
   background-color: var(--ink-1);
 }
 
 .blockLabel {
-  position: absolute;
-  bottom: 4px;
-  left: 0;
-  right: 0;
+  height: 18px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: clamp(6.5px, 15cqi, 11px);
+  line-height: 1.05;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: bold;
+  letter-spacing: clamp(0.1px, 0.9cqi, 0.8px);
+  font-weight: 700;
 }
 
-.kindIcon {
-  flex-shrink: 0;
+@media (max-width: var(--mw-lg)) {
+  .blockLabel {
+    height: 12px;
+  }
 }
 
 .headerActions {
@@ -125,27 +136,17 @@
   width: 100%;
 }
 
-.meterWrap {
-  display: flex;
-}
-
-@media (max-width: var(--mw-xl)) {
-  .card {
-    padding: var(--sp-1);
-  }
-  .headerActions {
-    display: flex;
-  }
-  .meterWrap {
-    display: none;
-  }
-}
-
 .bypassBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(10px, 22cqi, 16px);
+  height: clamp(10px, 22cqi, 16px);
+  padding: 0;
   background: none;
   border: none;
   color: var(--ink-3);
-  font-size: 10px;
+  font-size: clamp(7px, 14cqi, 10px);
   line-height: 1;
   cursor: pointer;
 }
@@ -153,9 +154,10 @@
 .bypassBtnOn {
   color: var(--led-on);
 }
+
 .bypassBtn:hover,
 .bypassBtnOn:hover {
-  scale: 1.5;
+  scale: 1.25;
 }
 
 .removeBtn {
@@ -173,21 +175,54 @@
 }
 
 .menuBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(12px, 25cqi, 18px);
+  height: clamp(10px, 22cqi, 16px);
+  padding: 0;
   background: none;
   border: none;
   color: var(--ink-2);
-  font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px;
-  border-radius: var(--r-lg);
-  height: 20px;
-  width: 22px;
+  border-radius: var(--r-sm);
+}
+
+.menuBtn svg {
+  width: clamp(9px, 20cqi, 14px);
+  height: clamp(9px, 20cqi, 14px);
 }
 
 .menuBtn:hover {
   color: var(--ink-1);
-  scale: 1.5;
+  scale: 1.25;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bypassBtn,
+  .menuBtn {
+    transition:
+      scale 0.12s ease,
+      color 0.12s ease;
+  }
+}
+
+@container block-card ((max-width: 36px) or (max-height: 36px)) {
+  .blockLabel {
+    display: none;
+  }
+
+  .blockIcon {
+    width: clamp(16px, min(56cqi, 56cqb), 24px);
+    height: clamp(16px, min(56cqi, 56cqb), 24px);
+  }
+}
+
+@container block-card ((max-width: 30px) or (max-height: 30px)) {
+  .menuBtn {
+    display: none;
+  }
 }
 
 .jacks {
@@ -258,16 +293,10 @@
   }
 }
 
-/* Mobile: keep labels readable, enlarge hit-areas to 44px, move jacks to top/bottom */
+/* Mobile: give top/bottom transposed jacks vertical breathing room */
 @media (max-width: var(--mw-md)) {
   .card {
-    padding: 4px 4px 6px;
-    gap: 2px;
-  }
-
-  .blockLabel {
-    font-size: 8px;
-    letter-spacing: 0.6px;
+    padding: 6px 3px 7px;
   }
 
   /* Transposed vertical flow: inputs on top edge, outputs on bottom */
@@ -286,11 +315,5 @@
     justify-content: space-around;
     width: 100%;
     height: auto;
-  }
-}
-
-@media (max-width: var(--mw-sm)) {
-  .card {
-    padding: 2px 2px 4px;
   }
 }

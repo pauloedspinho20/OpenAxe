@@ -118,6 +118,17 @@ rebuild, CMake reconfigure, etc.) to take effect.
 
 ## Key decisions worth knowing before you edit
 
+- **The app has three views (RIG, LEARN, VISUALS)** registered in
+  `apps/web/src/appViews.ts`. LEARN lives in `apps/web/src/media/`; VISUALS
+  in `apps/web/src/visuals/`, where a new scene is one folder under
+  `scenes/` plus a line in `registry.ts` (see `visuals/README.md`). Scenes
+  are three.js TSL, so check the "three.js TSL / WebGPU" section of
+  `docs/known-issues.md` before writing shader code, and verify a scene in a
+  real browser: shader errors only show up at compile time there.
+- **Third-party bugs and workarounds are documented** in
+  [docs/known-issues.md](./docs/known-issues.md) (alphaTab, browsers, WASM in
+  AudioWorklets, tooling). Read it before removing anything that looks like
+  an unnecessary workaround, and add an entry when you work around a new one.
 - **Product vs. Neural Amp Modeler naming (`openaxe_*` vs. `NamAmp`)** — only product-prefix compounds were renamed in #311 (`openaxe_*`/`OpenAxe*`/`OPENAXE_*`, plus `OPENAXE_SECURE_STORAGE_USE_PLAIN_FILE`/`OPENAXE_DESKTOP_ENABLE_TSAN`). Genuine Neural Amp Modeler names keep their spelling: `NamAmp`, `NamLoadError`, `NamAmpNode`, `NamModelInfo`, `NAM_MODEL_KINDS`, `NAM_CORE_DIR`/`NAM_CORE_SOURCES_*`, `NAM_SAMPLE_FLOAT`, `nam_amp.{h,cpp}`, `nam_amp_test`, `NamModelBlockKind`, `.nam`, `third_party/nam-core`, etc. — use anchored patterns (`openaxe_`, `OPENAXE_`, `OpenAxe`, `openAxe`), never bare `nam`. The WASM artifacts are still baked and require an atomic `api.h` + `EXPORTED_FUNCTIONS` + `check-wasm-exports` + rebuild for any future ABI rename.
 - **Persisted names are now `openaxe` (with migration)** — IndexedDB `openaxe`, localStorage `openaxe:*`, desktop keychain service `OpenAxe`, and on-disk `openaxe` dir. First launch after #311 copies any existing `nam-web-studio` data into the new names (IndexedDB store-by-store copy with verified counts then delete old DB; localStorage copy-on-read; keychain/disk copy-then-delete). Migration is idempotent, copy-then-delete, and falls back to the old name on failure so no user data is orphaned if interrupted.
 - **One C++ engine, four shells** (see ARCHITECTURE.md) — if you're adding

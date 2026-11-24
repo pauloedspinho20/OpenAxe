@@ -54,6 +54,30 @@ const SOURCES = [
   },
   { name: 'DSPark', file: 'DSPark.txt', from: 'packages/core/third_party/dspark/LICENSE' },
   { name: 'DaisySP', file: 'DaisySP.txt', from: 'packages/core/third_party/daisysp/LICENSE' },
+  // Backing-track player time-stretch (issue #205).
+  {
+    name: 'Signalsmith Stretch',
+    file: 'Signalsmith-Stretch.txt',
+    from: 'packages/core/third_party/signalsmith-stretch/LICENSE.txt',
+  },
+  {
+    name: 'Signalsmith Linear',
+    file: 'Signalsmith-Linear.txt',
+    from: 'packages/core/third_party/signalsmith-linear/LICENSE.txt',
+  },
+  // Assets alphaTab's Vite plugin copies into the web build (tab viewer,
+  // issue #205): the Bravura music font and the Sonivox GM SoundFont. Their
+  // licenses differ from alphaTab's own MPL-2.0, which npm-packages.txt covers.
+  {
+    name: 'Bravura font (via alphaTab)',
+    file: 'Bravura-OFL.txt',
+    from: 'apps/web/node_modules/@coderline/alphatab/dist/font/Bravura-OFL.txt',
+  },
+  {
+    name: 'Sonivox SoundFont (via alphaTab)',
+    file: 'Sonivox-SoundFont.txt',
+    from: 'apps/web/node_modules/@coderline/alphatab/dist/soundfont/LICENSE',
+  },
   {
     name: 'miniaudio',
     file: 'miniaudio.txt',
@@ -141,6 +165,43 @@ const LICENSE_FILENAMES = [
   'COPYING',
 ]
 
+// Build-time tools that npm metadata wrongly places in the production graph.
+// alphaTab declares its Vite plugin as an *optional peer*, and pnpm links an
+// optional peer whenever the package is anywhere in the workspace - so the
+// plugin (a devDependency of apps/web, used only by vite.config.ts) and the
+// whole Vite toolchain under it show up in `pnpm licenses list --prod`, with
+// OS-specific binaries that would make this file differ per platform. None of
+// it is bundled. Packages reachable ONLY through these are left out; anything
+// also reachable another way stays.
+const BUILD_ONLY_PEERS = new Set(['@coderline/alphatab-vite'])
+
+/** name@version of every production package reachable without a BUILD_ONLY_PEERS hop. */
+function shippedPackages() {
+  let raw
+  try {
+    raw = execFileSync('pnpm', ['list', '-r', '--prod', '--depth', 'Infinity', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+  } catch {
+    return null
+  }
+  const seen = new Set()
+  const walk = (deps) => {
+    for (const [name, info] of Object.entries(deps ?? {})) {
+      if (BUILD_ONLY_PEERS.has(name)) continue
+      const key = `${name}@${info.version}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      walk(info.dependencies)
+    }
+  }
+  for (const project of JSON.parse(raw)) walk(project.dependencies)
+  return seen
+}
+
 function npmLicenses() {
   let raw
   try {
@@ -154,9 +215,15 @@ function npmLicenses() {
     return null // no install yet — skip rather than fail --check
   }
   const byLicense = JSON.parse(raw)
+  const shipped = shippedPackages()
   const packages = []
   for (const [spdx, entries] of Object.entries(byLicense)) {
-    for (const entry of entries) packages.push({ ...entry, spdx })
+    for (const entry of entries) {
+      const versions = shipped
+        ? entry.versions.filter((v) => shipped.has(`${entry.name}@${v}`))
+        : entry.versions
+      if (versions.length) packages.push({ ...entry, versions, spdx })
+    }
   }
   packages.sort((a, b) => a.name.localeCompare(b.name))
 

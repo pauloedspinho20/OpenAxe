@@ -64,15 +64,13 @@ function MappingRow({ action, label }: { action: MidiAction; label?: string }) {
         active={isLearning}
         onClick={() => (isLearning ? useMidiStore.getState().cancelLearn(key) : armLearn(action))}
       />
-      <button
-        type="button"
-        className={styles.clearBtn}
-        onClick={() => useMidiStore.getState().clearMappingForAction(key)}
+      <HardwareButton
+        size="small"
+        label="Clear"
+        ariaLabel={`Clear ${label ?? actionLabel(action)}`}
         disabled={!mapping}
-        aria-label={`Clear ${label ?? actionLabel(action)}`}
-      >
-        Clear
-      </button>
+        onClick={() => useMidiStore.getState().clearMappingForAction(key)}
+      />
     </div>
   )
 }
@@ -210,13 +208,12 @@ function MidiManagerBody() {
         Only Note On, Control Change, and Program Change are used. Clock, note-off, and other
         messages are ignored. Presses are detected on CC values 64 and above.
       </p>
-      <button
-        type="button"
-        className={styles.dangerBtn}
+      <HardwareButton
+        label="Reset all mappings"
+        variant="danger"
+        className={styles.resetBtn}
         onClick={() => useMidiStore.getState().resetAll()}
-      >
-        Reset all mappings
-      </button>
+      />
     </Dialog>
   )
 }

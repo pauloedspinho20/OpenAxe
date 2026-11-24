@@ -78,7 +78,8 @@ describe('PowerGate', () => {
   it('reports a latency change', () => {
     const onLatencyChange = vi.fn()
     render(<PowerGate {...baseProps} onLatencyChange={onLatencyChange} />)
-    fireEvent.change(screen.getByLabelText('Latency mode'), { target: { value: 'balanced' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Latency mode' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Balanced' }))
     expect(onLatencyChange).toHaveBeenCalledWith('balanced')
   })
 
@@ -111,7 +112,8 @@ describe('PowerGate', () => {
       outputDevices: [],
     })
     render(<PowerGate {...baseProps} />)
-    fireEvent.change(screen.getByLabelText('Input device'), { target: { value: 'd1' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Input device' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Mic' }))
     expect(setInputDevice).toHaveBeenCalledWith('d1')
   })
 

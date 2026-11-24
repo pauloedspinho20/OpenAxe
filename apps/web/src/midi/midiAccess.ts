@@ -11,6 +11,7 @@ import { isTriggerEdge, messageMatches, parseMidiMessage } from './message'
 import { useMidiManager } from '../state/midiManager'
 import { useMidiStore } from '../state/midiStore'
 import type { MidiAction } from './actions'
+import type { MidiMessage } from './types'
 
 const LEARN_TIMEOUT_MS = 15000
 
@@ -94,10 +95,49 @@ useMidiStore.subscribe((state, prev) => {
   if (state.selectedInputId !== prev.selectedInputId) bindInputs()
 })
 
+/** Returns true when it consumed the note (no rig mapping fires for it). */
+export type NoteListener = (note: number, velocity: number) => boolean
+const noteListeners = new Set<NoteListener>()
+
+/**
+ * Listen to note-ons (e.g. the tab editor's MIDI step entry). While a
+ * listener consumes notes, note mappings don't fire. Returns the unsubscribe.
+ */
+export function onMidiNote(listener: NoteListener): () => void {
+  noteListeners.add(listener)
+  return () => noteListeners.delete(listener)
+}
+
+/** Returns true when it consumed the CC (no rig mapping fires for it). */
+export type CcListener = (message: MidiMessage) => boolean
+const ccListeners = new Set<CcListener>()
+
+/**
+ * Listen to control changes (e.g. the VISUALS view's own MIDI learn and
+ * param bindings). Not called while the rig's own Learn is armed. Returns
+ * the unsubscribe.
+ */
+export function onMidiCc(listener: CcListener): () => void {
+  ccListeners.add(listener)
+  return () => ccListeners.delete(listener)
+}
+
 function handleMessage(event: MIDIMessageEvent): void {
   const message = parseMidiMessage(event.data)
   if (!message) return
   useMidiStore.getState().setLastMessage(message)
+
+  if (message.type === 'cc' && !useMidiStore.getState().learning) {
+    let consumed = false
+    for (const l of ccListeners) consumed = l(message) || consumed
+    if (consumed) return
+  }
+
+  if (message.type === 'noteon' && !useMidiStore.getState().learning) {
+    let consumed = false
+    for (const l of noteListeners) consumed = l(message.number, message.value) || consumed
+    if (consumed) return
+  }
 
   const learning = useMidiStore.getState().learning
   if (learning) {

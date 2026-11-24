@@ -73,4 +73,10 @@ describe('useSceneHotkeys', () => {
     fireEvent.keyDown(window, { key: '1' })
     expect(goToSlotMock).not.toHaveBeenCalled()
   })
+
+  it('ignores keys when disabled', () => {
+    renderHook(() => useSceneHotkeys(false))
+    fireEvent.keyDown(window, { key: '3' })
+    expect(goToSlotMock).not.toHaveBeenCalled()
+  })
 })

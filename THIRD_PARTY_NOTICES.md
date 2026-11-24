@@ -12,14 +12,16 @@ require their notices to be **distributed with the binaries** — see
 
 ## Compiled into the C++ engine
 
-| Component            | Path                                                         | License  | Upstream                                           |
-| -------------------- | ------------------------------------------------------------ | -------- | -------------------------------------------------- |
-| NeuralAmpModelerCore | `packages/core/third_party/nam-core` (submodule)             | MIT      | https://github.com/sdatkinson/NeuralAmpModelerCore |
-| AudioDSPTools        | via NeuralAmpModelerCore `Dependencies/`                     | MIT      | https://github.com/sdatkinson/AudioDSPTools        |
-| Eigen                | via NeuralAmpModelerCore `Dependencies/eigen`                | MPL-2.0¹ | https://eigen.tuxfamily.org                        |
-| nlohmann/json        | via NeuralAmpModelerCore, and CMake `FetchContent` `v3.11.3` | MIT      | https://github.com/nlohmann/json                   |
-| DSPark               | `packages/core/third_party/dspark` (submodule)               | MIT      | https://github.com/CristianMoresi/DSPark           |
-| DaisySP              | `packages/core/third_party/daisysp` (submodule)              | MIT²     | https://github.com/electro-smith/DaisySP           |
+| Component            | Path                                                         | License  | Upstream                                                 |
+| -------------------- | ------------------------------------------------------------ | -------- | -------------------------------------------------------- |
+| NeuralAmpModelerCore | `packages/core/third_party/nam-core` (submodule)             | MIT      | https://github.com/sdatkinson/NeuralAmpModelerCore       |
+| AudioDSPTools        | via NeuralAmpModelerCore `Dependencies/`                     | MIT      | https://github.com/sdatkinson/AudioDSPTools              |
+| Eigen                | via NeuralAmpModelerCore `Dependencies/eigen`                | MPL-2.0¹ | https://eigen.tuxfamily.org                              |
+| nlohmann/json        | via NeuralAmpModelerCore, and CMake `FetchContent` `v3.11.3` | MIT      | https://github.com/nlohmann/json                         |
+| DSPark               | `packages/core/third_party/dspark` (submodule)               | MIT      | https://github.com/CristianMoresi/DSPark                 |
+| DaisySP              | `packages/core/third_party/daisysp` (submodule)              | MIT²     | https://github.com/electro-smith/DaisySP                 |
+| Signalsmith Stretch  | `packages/core/third_party/signalsmith-stretch` (submodule)  | MIT      | https://github.com/Signalsmith-Audio/signalsmith-stretch |
+| Signalsmith Linear   | `packages/core/third_party/signalsmith-linear` (submodule)   | MIT      | https://github.com/Signalsmith-Audio/linear              |
 
 ¹ Eigen is _primarily_ MPL-2.0; some files are BSD, Apache or MINPACK-licensed.
 Its own `COPYING.README` is reproduced at the top of `licenses/Eigen.txt`. All
@@ -62,7 +64,16 @@ separate from the copyright license.
 The React app's npm production dependencies ship inside the desktop app and the
 plugin editor as well as on the web. The full summary and texts are generated
 into [`licenses/npm-packages.txt`](./licenses/npm-packages.txt); the headline
-components are React, Vite, Zustand and the Tone3000 client (all MIT).
+components are React, Vite, Zustand and the Tone3000 client (all MIT). The
+VISUALS view renders with [three.js](https://threejs.org) (`three`, MIT).
+
+The Media Center's tab viewer/editor uses [alphaTab](https://alphatab.net)
+(`@coderline/alphatab`, **MPL-2.0**, file-level copyleft and GPLv3-compatible;
+shipped unmodified). Its Vite plugin copies two assets into the build, each
+under its own license: the **Bravura** music font (SIL OFL 1.1,
+[`licenses/Bravura-OFL.txt`](./licenses/Bravura-OFL.txt)) and the **Sonivox**
+General MIDI SoundFont used to synthesize tab playback (Apache-2.0,
+[`licenses/Sonivox-SoundFont.txt`](./licenses/Sonivox-SoundFont.txt)).
 
 > **`p5@2.3.2` is LGPL-2.1, and is conveyed here under GPL-3.0 via LGPL-2.1 §3.**
 > It is a direct, genuinely imported production dependency, so it ships in every

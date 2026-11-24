@@ -150,6 +150,20 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
       module.HEAPU32.set([this.inL, this.inR], this.inPtrs >> 2)
       module.HEAPU32.set([this.outL, this.outR], this.outPtrs >> 2)
       this.silence = new Float32Array(FRAMES)
+      // Backing-track player (issue #205): a separate core handle rendered
+      // after the rig into the same output buffers. Optional so an older
+      // WASM artifact without the symbols still runs the rig.
+      this.player = null
+      if (typeof module._openaxe_player_create === 'function') {
+        // Never let the player take the rig down with it.
+        try {
+          this.player = module._openaxe_player_create()
+          module._openaxe_player_reset(this.player, sampleRate, FRAMES)
+        } catch (error) {
+          this.player = null
+          console.error('[rig] backing-track player unavailable:', error)
+        }
+      }
     })
   }
 
@@ -617,7 +631,15 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        case 'player': {
+          this.handlePlayer(module, message, reply)
+          break
+        }
         case 'dispose': {
+          if (this.player) {
+            module._openaxe_player_destroy(this.player)
+            this.player = null
+          }
           module._openaxe_graph_destroy(this.graph)
           if (this.staged !== null) {
             module._openaxe_graph_destroy(this.staged)
@@ -635,6 +657,113 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
       reply.error = String(error)
     }
     if (reply) this.port.postMessage(reply)
+  }
+
+  /**
+   * Backing-track player ops (issue #205), mirroring the desktop bridge's
+   * `openAxe.player` handler. Loads arrive in chunks (loadBegin, many
+   * loadWrite, loadEnd) so no single message stalls the render thread; the
+   * worklet shares one thread with process(), so the Tier-2 calls can never
+   * race a render.
+   */
+  handlePlayer(module, message, reply) {
+    const player = this.player
+    if (!player) {
+      if (reply) reply.error = 'this build has no backing-track player'
+      return
+    }
+    switch (message.op) {
+      case 'loadBegin':
+        if (
+          !module._openaxe_player_load_begin(
+            player,
+            message.frames | 0,
+            message.channels | 0,
+            message.sampleRate,
+          )
+        ) {
+          if (reply) reply.error = 'track too long or unsupported format'
+          return
+        }
+        break
+      case 'loadWrite': {
+        const data = message.data
+        const channels = message.channels | 0 || 2
+        const ptr = module._malloc(data.length * BYTES_PER_FLOAT)
+        try {
+          module.HEAPF32.set(data, ptr >> 2)
+          module._openaxe_player_load_write(
+            player,
+            message.offset | 0,
+            ptr,
+            Math.floor(data.length / channels),
+          )
+        } finally {
+          module._free(ptr)
+        }
+        break
+      }
+      case 'loadEnd':
+        module._openaxe_player_load_end(player)
+        break
+      case 'unload':
+        module._openaxe_player_unload(player)
+        break
+      case 'play':
+        module._openaxe_player_play(player)
+        break
+      case 'pause':
+        module._openaxe_player_pause(player)
+        break
+      case 'seek':
+        module._openaxe_player_seek(player, message.frame | 0)
+        break
+      case 'setSpeed':
+        module._openaxe_player_set_speed(player, message.value)
+        break
+      case 'setSemitones':
+        module._openaxe_player_set_semitones(player, message.value)
+        break
+      case 'setVolume':
+        module._openaxe_player_set_volume(player, message.value)
+        break
+      case 'setLoop':
+        module._openaxe_player_set_loop(
+          player,
+          message.start | 0,
+          message.end | 0,
+          message.enabled ? 1 : 0,
+        )
+        break
+      case 'setCountIn':
+        if (typeof module._openaxe_player_set_count_in === 'function') {
+          module._openaxe_player_set_count_in(
+            player,
+            message.clicks | 0,
+            message.interval,
+            message.accent | 0 || 4,
+          )
+        }
+        break
+      case 'status':
+        break
+      default:
+        if (reply) reply.error = `unknown player op "${message.op}"`
+        return
+    }
+    if (reply) {
+      reply.ok = true
+      reply.player = {
+        position: module._openaxe_player_position(player),
+        length: module._openaxe_player_length(player),
+        sampleRate: module._openaxe_player_source_rate(player),
+        playing: module._openaxe_player_is_playing(player) === 1,
+        meter: module._openaxe_player_get_meter(player),
+        counting:
+          typeof module._openaxe_player_is_counting === 'function' &&
+          module._openaxe_player_is_counting(player) === 1,
+      }
+    }
   }
 
   /**
@@ -720,6 +849,14 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
     module.HEAPF32.set(input[0] ?? this.silence, this.inL >> 2)
     module.HEAPF32.set(input[1] ?? input[0] ?? this.silence, this.inR >> 2)
     module._openaxe_process(this.graph, this.inPtrs, 2, this.outPtrs, 2, FRAMES)
+    if (this.player) {
+      try {
+        module._openaxe_player_render(this.player, this.outPtrs, 2, FRAMES)
+      } catch (error) {
+        console.error('[rig] backing-track player render failed:', error)
+        this.player = null
+      }
+    }
 
     const output = outputs[0] ?? []
     output[0]?.set(module.HEAPF32.subarray(this.outL >> 2, (this.outL >> 2) + FRAMES))

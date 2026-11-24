@@ -43,7 +43,12 @@ Topology (`add_block`/`connect`/`move_block`, with validation), params by index
 plus metadata (`block_param_info`), NAM model load/unload, reverb algorithm
 choice **and** the user-facing reverb control mapping (`set_reverb_control`),
 delay models, per-block bypass and I/O trims, master level/mute, per-block
-meters, and CPU load.
+meters, and CPU load. Next to the graph, a separate `OpenAxePlayer` handle
+(`openaxe_player_*`, issue #205) plays a backing track with pitch-preserving
+speed, transposition and an A-B loop (Signalsmith Stretch). It has no routing
+path into the rig: shells render it right after `openaxe_process` into the same
+output buffers, so it reaches the user's device and survives staged rig
+switches. Decoding stays in the UI (`decodeAudioData`), which every webview has.
 
 ### What a front end is still allowed to own
 
@@ -57,28 +62,34 @@ meters, and CPU load.
 - Rendering, layout, interaction, theming — `packages/ui` and the design
   tokens.
 - Network services with no audio meaning (the Tone3000 model library client).
+- Visualisation: the VISUALS view's scenes and the audio features that drive
+  them read analyser taps on the UI thread and never touch the signal path,
+  so they stay in the front end.
 
 ## Per-target status
 
-| Concern                      | Web                                                 | Desktop                            | VST3/CLAP/AU                                       | Owner it should have                 |
-| ---------------------------- | --------------------------------------------------- | ---------------------------------- | -------------------------------------------------- | ------------------------------------ |
-| DSP effects                  | core via the rig worklet                            | core, in-process                   | core, in-process                                   | core ✅                              |
-| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                 | core's `NamAmp`                    | core's `NamAmp`                                    | core ✅                              |
-| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet         | core                               | core                                               | core ✅                              |
-| Signal graph + routing rules | core `graph_rig` (single rig worklet)               | core `graph_rig`                   | core `graph_rig`                                   | core ✅                              |
-| Reverb control mapping       | core (`set_reverb_control`)                         | core                               | core                                               | core ✅                              |
-| Block I/O trims              | core trims via the rig worklet                      | core trims                         | core trims                                         | core ✅                              |
-| Bypass / master bus          | core via the rig worklet                            | core                               | core                                               | core ✅                              |
-| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet          | core, IR decoded by `wav.cpp`      | core, via `loadIrWav`                              | core ✅                              |
-| Tuner pitch detection        | core via WASM, TS fallback kept for tests           | core (`openaxe_detect_pitch`)      | core, fed by the monitor tap                       | core ✅                              |
-| Metering                     | core peak (`get_meter`) via the rig worklet         | core peak + a synthesized waveform | core peak + `MonitorTap` (seqlock ring)            | core ✅                              |
-| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test | core table                         | core table + generated automation map              | **generated from core** ⚠️           |
-| Input channel routing        | Web Audio splitter/merger                           | not offered (device layer)         | host bus → `input_routing.cpp`, in the state chunk | front end ✅                         |
-| Host automation              | n/a                                                 | n/a                                | generated slot map, params reported to host        | core ✅                              |
-| MIDI mapping                 | TS Web MIDI → core mapping model                    | core mapping model                 | host MIDI bus → core, sample-accurate              | core ✅                              |
-| Rig state (save/restore)     | browser store                                       | browser store                      | core state doc in the host chunk (authoritative)   | core ✅                              |
-| Presets / scenes / bank      | TS model + IndexedDB                                | TS model + shared on-disk store    | TS model + the same shared store                   | **core model**, front-end storage ❌ |
-| Library, prefs, asset cache  | IndexedDB + localStorage                            | shared on-disk store               | the same shared store                              | front end ✅                         |
+| Concern                      | Web                                                            | Desktop                                                                | VST3/CLAP/AU                                       | Owner it should have                  |
+| ---------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------- |
+| DSP effects                  | core via the rig worklet                                       | core, in-process                                                       | core, in-process                                   | core ✅                               |
+| Amp (NAM inference)          | core's `NamAmp` via the rig worklet                            | core's `NamAmp`                                                        | core's `NamAmp`                                    | core ✅                               |
+| Amp tone stack               | core (`tone_stack.cpp`) via the rig worklet                    | core                                                                   | core                                               | core ✅                               |
+| Signal graph + routing rules | core `graph_rig` (single rig worklet)                          | core `graph_rig`                                                       | core `graph_rig`                                   | core ✅                               |
+| Reverb control mapping       | core (`set_reverb_control`)                                    | core                                                                   | core                                               | core ✅                               |
+| Block I/O trims              | core trims via the rig worklet                                 | core trims                                                             | core trims                                         | core ✅                               |
+| Bypass / master bus          | core via the rig worklet                                       | core                                                                   | core                                               | core ✅                               |
+| Cab / IR convolution         | core (`convolver.cpp`) via the rig worklet                     | core, IR decoded by `wav.cpp`                                          | core, via `loadIrWav`                              | core ✅                               |
+| Tuner pitch detection        | core via WASM, TS fallback kept for tests                      | core (`openaxe_detect_pitch`)                                          | core, fed by the monitor tap                       | core ✅                               |
+| Metering                     | core peak (`get_meter`) via the rig worklet                    | core peak + a synthesized waveform                                     | core peak + `MonitorTap` (seqlock ring)            | core ✅                               |
+| Param ranges                 | hand-written in `paramSchema.ts`, guarded by a test            | core table                                                             | core table + generated automation map              | **generated from core** ⚠️            |
+| Input channel routing        | Web Audio splitter/merger                                      | not offered (device layer)                                             | host bus → `input_routing.cpp`, in the state chunk | front end ✅                          |
+| Host automation              | n/a                                                            | n/a                                                                    | generated slot map, params reported to host        | core ✅                               |
+| MIDI mapping                 | TS Web MIDI → core mapping model                               | core mapping model                                                     | host MIDI bus → core, sample-accurate              | core ✅                               |
+| Rig state (save/restore)     | browser store                                                  | browser store                                                          | core state doc in the host chunk (authoritative)   | core ✅                               |
+| Presets / scenes / bank      | TS model + IndexedDB                                           | TS model + shared on-disk store                                        | TS model + the same shared store                   | **core model**, front-end storage ❌  |
+| Library, prefs, asset cache  | IndexedDB + localStorage                                       | shared on-disk store                                                   | the same shared store                              | front end ✅                          |
+| Backing-track player         | core `BackingPlayer` rendered after the rig in the worklet     | core, rendered after the graph in the miniaudio callback               | not offered (the DAW is the transport)             | core ✅                               |
+| Tab viewer/editor            | alphaTab (render/edit) → synthesized audio → core player       | same UI in the webview, same core player                               | not offered                                        | front end (alphaTab) + core player ✅ |
+| Audio-reactive visuals       | three.js WebGPU (WebGL2 fallback), features from analyser taps | same UI in the webview; 256-point output tap, recordings without audio | same UI in the webview                             | front end ✅ (rendering only)         |
 
 ✅ done · ⚠️ core owns it, a front end still duplicates part · ❌ not in core yet
 
@@ -188,14 +199,15 @@ ephemeral-port problem.
 
 What lives where:
 
-| Data                                       | Web          | Desktop + plugins                     |
-| ------------------------------------------ | ------------ | ------------------------------------- |
-| Presets, scene bank, preset bank, MIDI map | IndexedDB    | shared store, one record per key      |
-| Tone3000 library metadata                  | IndexedDB    | shared store                          |
-| Cached `.nam` / IR blobs                   | IndexedDB    | shared store, fetched via `/__asset/` |
-| Theme, onboarding, factory-setup flag, I/O | localStorage | localStorage, mirrored to the store   |
-| Tone3000 refresh token                     | localStorage | OS keychain (never the shared store)  |
-| The rig itself, in a plugin                | n/a          | core state doc in the host chunk      |
+| Data                                       | Web                                     | Desktop + plugins                     |
+| ------------------------------------------ | --------------------------------------- | ------------------------------------- |
+| Presets, scene bank, preset bank, MIDI map | IndexedDB                               | shared store, one record per key      |
+| Tone3000 library metadata                  | IndexedDB                               | shared store                          |
+| Cached `.nam` / IR blobs                   | IndexedDB                               | shared store, fetched via `/__asset/` |
+| Media library (backing tracks, tabs)       | IndexedDB `media` + assets `media:<id>` | shared store (same keys)              |
+| Theme, onboarding, factory-setup flag, I/O | localStorage                            | localStorage, mirrored to the store   |
+| Tone3000 refresh token                     | localStorage                            | OS keychain (never the shared store)  |
+| The rig itself, in a plugin                | n/a                                     | core state doc in the host chunk      |
 
 Three details that are easy to get wrong:
 

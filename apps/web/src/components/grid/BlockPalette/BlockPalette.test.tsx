@@ -82,4 +82,65 @@ describe('BlockPalette', () => {
     expect(useGraphStore.getState().addBlock).not.toHaveBeenCalled()
     expect(openCatalogForNewBlock).not.toHaveBeenCalled()
   })
+
+  it('reports live valid/invalid drop targets via onDragChange and clears on drop', () => {
+    const onDragChange = vi.fn()
+    render(<BlockPalette tunerAnalyser={null} onDragChange={onDragChange} />)
+    const ampChip = screen.getByRole('button', { name: 'Drag Amp onto the grid' })
+
+    fireEvent.pointerDown(ampChip, { clientX: 5, clientY: 5, pointerId: 1, bubbles: true })
+    fireEvent.pointerMove(ampChip, { clientX: 10, clientY: 10, pointerId: 1, bubbles: true })
+    expect(onDragChange).toHaveBeenLastCalledWith({
+      kind: 'amp',
+      cell: { row: 0, col: 0 },
+      valid: true,
+    })
+
+    // Occupy (0, 0) and confirm the target reports invalid.
+    useGraphStore.setState({
+      blocks: [{ id: 'existing', kind: 'cab', row: 0, col: 0, params: {} }],
+    })
+    fireEvent.pointerMove(ampChip, { clientX: 10, clientY: 10, pointerId: 1, bubbles: true })
+    expect(onDragChange).toHaveBeenLastCalledWith({
+      kind: 'amp',
+      cell: { row: 0, col: 0 },
+      valid: false,
+    })
+
+    fireEvent.pointerUp(ampChip, { clientX: 10, clientY: 10, pointerId: 1, bubbles: true })
+    expect(onDragChange).toHaveBeenLastCalledWith(null)
+  })
+
+  it('reports invalid target when dragging a duplicate Send 1 onto an empty cell', () => {
+    useGraphStore.setState({
+      blocks: [{ id: 's1', kind: 'send-1', row: 1, col: 2, params: {} }],
+    })
+    const onDragChange = vi.fn()
+    render(<BlockPalette tunerAnalyser={null} onDragChange={onDragChange} />)
+    const sendChip = screen.getByRole('button', { name: 'Drag Send 1 onto the grid' })
+
+    fireEvent.pointerDown(sendChip, { clientX: 5, clientY: 5, pointerId: 1, bubbles: true })
+    fireEvent.pointerMove(sendChip, { clientX: 10, clientY: 10, pointerId: 1, bubbles: true })
+    expect(onDragChange).toHaveBeenLastCalledWith({
+      kind: 'send-1',
+      cell: { row: 0, col: 0 },
+      valid: false,
+    })
+  })
+
+  it('clears drag state and does not place a block on pointercancel', () => {
+    const onDragChange = vi.fn()
+    render(<BlockPalette tunerAnalyser={null} onDragChange={onDragChange} />)
+    const chip = screen.getByRole('button', { name: 'Drag Amp onto the grid' })
+
+    fireEvent.pointerDown(chip, { clientX: 5, clientY: 5, pointerId: 1, bubbles: true })
+    fireEvent.pointerMove(chip, { clientX: 10, clientY: 10, pointerId: 1, bubbles: true })
+    expect(screen.getAllByText('Amp').length).toBeGreaterThanOrEqual(2)
+
+    fireEvent.pointerCancel(chip, { pointerId: 1, bubbles: true })
+    expect(onDragChange).toHaveBeenLastCalledWith(null)
+    expect(screen.getAllByText('Amp')).toHaveLength(1)
+    expect(useGraphStore.getState().addBlock).not.toHaveBeenCalled()
+    expect(openCatalogForNewBlock).not.toHaveBeenCalled()
+  })
 })
