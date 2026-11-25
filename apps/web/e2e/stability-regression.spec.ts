@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 /**
  * A practical stand-in for issue #11's "audio engine regression tests:
@@ -13,6 +13,25 @@ import { test, expect } from '@playwright/test'
  * dedicated OfflineAudioContext-based Vitest suite or manual QA with real
  * model files - both are still open (see the issue).
  */
+/**
+ * Open the Add-a-block menu for an empty grid cell.
+ *
+ * This test exercises engine churn, not pointer hit-testing, so it activates
+ * the cell's button directly rather than via a coordinate click. On the mobile
+ * (transposed) layout a pointer click is unreliable here: Playwright re-scrolls
+ * the cell on every retry, and each time something else covers it - the sticky
+ * header/inspector panel, or the output jack and cable of the block above it.
+ * Tap/click placement itself is covered by core-flow and send-return.
+ */
+async function clickAddCell(page: Page, row: number, col: number) {
+  const cell = page.getByRole('button', {
+    name: `Add a block at row ${row}, column ${col}`,
+    exact: true,
+  })
+  await expect(cell).toBeVisible()
+  await cell.evaluate((el) => (el as HTMLButtonElement).click())
+}
+
 test('builds a full FX chain, toggles every bypass, and tears it down without errors', async ({
   page,
   context,
@@ -145,12 +164,10 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   for (let i = 0; i < FX_KINDS.length; i++) {
     const row = (i % 3) + 1
     const col = Math.floor(i / 3) + 1
-    await page
-      .getByRole('button', { name: `Add a block at row ${row}, column ${col}`, exact: true })
-      .click()
+    await clickAddCell(page, row, col)
     await page.getByRole('menuitem', { name: FX_KINDS[i], exact: true }).click()
   }
-  await page.getByRole('button', { name: 'Add a block at row 1, column 5', exact: true }).click()
+  await clickAddCell(page, 1, 5)
   await page.getByRole('menuitem', { name: 'Mixer', exact: true }).click()
 
   for (const kind of FX_KINDS) {
