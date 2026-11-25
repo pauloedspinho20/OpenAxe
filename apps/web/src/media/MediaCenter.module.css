@@ -318,6 +318,10 @@
   margin: 0 0 var(--sp-2);
 }
 
+.empty p {
+  margin-bottom: 12px;
+}
+
 .loading {
   margin: auto;
   color: var(--ink-3);

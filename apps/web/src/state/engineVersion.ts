@@ -19,3 +19,18 @@ export const useEngineVersion = create<EngineVersionState>()((set) => ({
   version: 0,
   bump: () => set((s) => ({ version: s.version + 1 })),
 }))
+
+/**
+ * Run a model/IR load and bump once it settles. Loads go straight to the
+ * live block (not through graphStore), so nothing else tells components that
+ * read the loaded asset name imperatively (BlockCard, BlockInspector) to
+ * re-render. Reconcile only bumps on structural changes.
+ */
+export function bumpAfterLoad<T>(result: T): T {
+  const bump = () => useEngineVersion.getState().bump()
+  if (result instanceof Promise) {
+    return result.finally(bump) as T
+  }
+  bump()
+  return result
+}

@@ -1,6 +1,7 @@
 import { NAM_MODEL_KINDS } from '../../engine/blocks/blockRegistry'
 import type { BlockKind } from '../../engine/blocks/Block'
 import type { Gear } from '../../tone3000/types'
+import { useSelection } from '../../state/selection'
 import { useTone3000Browser } from '../../tone3000/browserStore'
 
 /**
@@ -9,8 +10,12 @@ import { useTone3000Browser } from '../../tone3000/browserStore'
  * remembers to click it - open the catalog immediately instead, pre-filtered
  * to the new block's own gear type. No-op for kinds with no asset to load
  * (mixer, the 10 synthetic effects).
+ *
+ * Also makes the new block the active (selected) one, whichever way it was
+ * added (palette drag, add menu, change-type).
  */
 export function openCatalogForNewBlock(blockId: string, kind: BlockKind): void {
+  useSelection.getState().selectNew(blockId)
   if (kind === 'cab') {
     useTone3000Browser.getState().openBrowser({ blockId, slot: 'ir', gear: 'cab' })
     return

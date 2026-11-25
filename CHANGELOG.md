@@ -7,6 +7,25 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-25
+### Added
+- feat(web): media center and icon updates (1cfd0e8)
+- feat(web): per-kind knob size, drop author line in block inspector (a367faf)
+- feat(web): preset save flow, shared block chips, drag fix, collapsible visuals list (378a651)
+
+### Fixed
+- fix(web): keep mobile add-menu working after placing a block (8a662fe)
+- fix(web): address review of the knob-drag lag fix (6eba463)
+- fix(web): stop knob drags re-rendering the app and snapshotting per tick (d167222)
+- fix(landing): keep the desktop nav inline (1fb0227)
+
+### Changed
+- test(web): make mobile stability e2e reliable (22c3084)
+- style(web): inspector and scene bar spacing, panel header tweaks (55bf4a3)
+- wip: carry over in-progress UI changes (402cfb9)
+
+
+
 ## [0.5.1] - 2026-11-23
 ### Changed
 - ci(landing): run the landing build on PRs that edit pages.yml (1153073)
