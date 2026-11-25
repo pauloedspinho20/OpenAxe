@@ -1,9 +1,9 @@
-import { Chip, Dialog, HardwareButton, toast } from '@openaxe/ui'
+import { Dialog, HardwareButton, toast } from '@openaxe/ui'
 import { useGraphStore } from '../../../state/graphStore'
 import { useSelection } from '../../../state/selection'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import { BLOCK_OPTIONS } from '../blockOptions'
-import { blockColorVar } from '../blockColors'
+import { BlockChip } from '../BlockPalette/BlockChip'
 import { jack } from '../../../engine/gridConfig'
 import type { BlockKind } from '../../../engine/blocks/Block'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
@@ -114,20 +114,6 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
       <div className={styles.sheet}>
         {/* Change block type — same list as Add a block */}
         <div className={styles.section}>
-          {/* Destructive actions */}
-          <div className={styles.sectionActions}>
-            <HardwareButton
-              label={instance.bypass ? 'ENABLE BLOCK' : 'BYPASS BLOCK'}
-              onClick={handleBypass}
-              fullWidth
-            />
-            <HardwareButton
-              label="REMOVE BLOCK"
-              onClick={handleRemove}
-              fullWidth
-              variant="danger"
-            />
-          </div>
           <p className={styles.sectionTitle}>Change block type</p>
           {/*   <p className={styles.hint}>Replace this slot with a different block. Current: {label}.</p> */}
           {groups.map((group) => (
@@ -137,17 +123,21 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
                 {BLOCK_OPTIONS.filter((o) => o.group === group).map((option) => {
                   const isCurrent = option.kind === instance.kind
                   return (
-                    <Chip
+                    <BlockChip
                       key={option.kind}
-                      disabled={option.disabled}
                       kind={option.kind}
+                      label={option.label}
+                      size={64}
+                      role="menuitem"
+                      disabled={option.disabled}
                       aria-label={
                         option.disabled
                           ? `${option.label} - not yet available (${option.vendor})`
                           : isCurrent
                             ? `${option.label} (current)`
-                            : undefined
+                            : option.label
                       }
+                      aria-current={isCurrent || undefined}
                       title={
                         option.disabled
                           ? option.vendor
@@ -155,9 +145,23 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
                             ? 'Current block type'
                             : undefined
                       }
-                      label={option.label + (isCurrent ? ' ✓' : '')}
-                      style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
-                      onPick={() => handleChangeKind(option.kind)}
+                      style={
+                        isCurrent
+                          ? ({
+                              borderColor: 'var(--accent)',
+                              color: 'var(--accent)',
+                            } as React.CSSProperties)
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!option.disabled) handleChangeKind(option.kind)
+                      }}
+                      onKeyDown={(e) => {
+                        if (!option.disabled && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault()
+                          handleChangeKind(option.kind)
+                        }
+                      }}
                     />
                   )
                 })}
@@ -175,7 +179,9 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
               desktop.
             </p>
           ) : (
-            <div className={styles.connectionList}>
+            <div
+              className={`${styles.connectionList} ${incoming.length + outgoing.length === 2 ? styles.connectionListPair : ''}`}
+            >
               {incoming.map((e) => {
                 const src = blocks.find((b) => b.id === e.from.blockId)
                 const srcLabel =
@@ -216,15 +222,28 @@ export function BlockActionSheet({ open, label, blockId, onClose }: BlockActionS
                   </div>
                 )
               })}
-              {hasConnections && (
-                <HardwareButton
-                  label="Disconnect all cables"
-                  onClick={handleDisconnectAll}
-                  fullWidth
-                />
-              )}
             </div>
           )}
+          <div className={styles.footerActions}>
+            {hasConnections && (
+              <HardwareButton
+                label="Disconnect all cables"
+                onClick={handleDisconnectAll}
+                fullWidth
+              />
+            )}
+            <HardwareButton
+              label={instance.bypass ? 'ENABLE BLOCK' : 'BYPASS BLOCK'}
+              onClick={handleBypass}
+              fullWidth
+            />
+            <HardwareButton
+              label="REMOVE BLOCK"
+              onClick={handleRemove}
+              fullWidth
+              variant="danger"
+            />
+          </div>
         </div>
       </div>
     </Dialog>

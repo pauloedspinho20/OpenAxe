@@ -70,3 +70,14 @@
 .selectField {
   min-width: 96px;
 }
+
+/* Kinds with a custom (smaller) knob size: tighter spacing, one row. */
+.compact,
+.compact .fields {
+  flex-wrap: nowrap;
+  gap: var(--sp-4);
+}
+
+.compact {
+  column-gap: var(--sp-4);
+}

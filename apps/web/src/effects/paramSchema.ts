@@ -15,6 +15,8 @@ interface KnobField {
   formatValue: (value: number) => string
   /** Visually clusters fields (e.g. EQ's 4 bands) - purely a rendering hint. */
   group?: string
+  /** Knob diameter in px for this field; overrides the kind's default from KNOB_SIZE_BY_KIND. */
+  size?: number
   /** If set, the field is only rendered when this returns true for the current values. */
   visible?: (values: EffectParams) => boolean
   /** Human-readable help shown in knob tooltip and Effect Details dialog. */
@@ -42,6 +44,18 @@ interface SelectField {
 }
 
 export type ParamFieldSchema = KnobField | SelectField
+
+/** Knob diameter used when neither the field nor its kind sets one. */
+export const DEFAULT_KNOB_SIZE = 50
+
+/**
+ * Per-kind knob diameter (px). Kinds listed here are also laid out tighter
+ * and kept on a single row (see EffectParamsPanel) - use it for blocks with
+ * so many controls that the default size wraps onto a second line.
+ */
+export const KNOB_SIZE_BY_KIND: Partial<Record<BlockKind, number>> = {
+  eq: 44,
+}
 
 type SymbolRange = { min: number; max: number }
 /** reverb is excluded - see the comment above EFFECT_PARAM_SCHEMAS.reverb for why its knobs

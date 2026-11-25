@@ -153,7 +153,14 @@ async function applySlot(scene: number, slot: number, mySeq: number): Promise<Sc
 
   if (!presetId) {
     useCurrentPresetStore.getState().setSaved(null)
-    await clearGrid()
+    // Mark the switch in flight so the Save button doesn't read the
+    // not-yet-cleared grid as unsaved work against the empty baseline.
+    useSceneStore.getState().setSwitching(true)
+    try {
+      await clearGrid()
+    } finally {
+      if (mySeq === seq) useSceneStore.getState().setSwitching(false)
+    }
     if (mySeq !== seq) return { ok: false, reason: 'superseded', scene, slot, presetId: null }
     return { ok: false, reason: 'empty-slot', scene, slot, presetId: null }
   }

@@ -52,6 +52,12 @@ describe('preset selection', () => {
     expect(useSelection.getState().selectionSource).toBe('user')
   })
 
+  it('selectNew selects a just-placed block without arming tap-to-move', () => {
+    useSelection.getState().selectNew('d')
+    expect(useSelection.getState().selectedBlockId).toBe('d')
+    expect(useSelection.getState().selectionSource).toBe('preset')
+  })
+
   it('applyPresetSelection clears the selection for an empty preset', () => {
     useSelection.setState({ selectedBlockId: 'stale', selectionSource: 'user' })
     applyPresetSelection('p1', [], [])

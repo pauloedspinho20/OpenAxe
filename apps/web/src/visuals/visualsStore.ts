@@ -74,6 +74,8 @@ export interface VisualsState {
   activePreset: Record<string, string | null>
   showMeters: boolean
   panelOpen: boolean
+  /** Left scene-list sidebar visibility. */
+  listOpen: boolean
   /** Not persisted: param currently waiting for a CC. */
   learning: { sceneId: string; param: string } | null
 
@@ -88,6 +90,7 @@ export interface VisualsState {
   setRecord: (patch: Partial<RecordPrefs>) => void
   setShowMeters: (show: boolean) => void
   setPanelOpen: (open: boolean) => void
+  setListOpen: (open: boolean) => void
   startLearn: (sceneId: string, param: string) => void
   cancelLearn: () => void
   completeLearn: (match: MidiMatch) => void
@@ -134,6 +137,7 @@ export const useVisualsStore = create<VisualsState>()(
       activePreset: {},
       showMeters: true,
       panelOpen: true,
+      listOpen: true,
       learning: null,
 
       selectScene: (id) => set({ sceneId: findScene(id).id }),
@@ -168,6 +172,7 @@ export const useVisualsStore = create<VisualsState>()(
       setRecord: (patch) => set((s) => ({ record: { ...s.record, ...patch } })),
       setShowMeters: (showMeters) => set({ showMeters }),
       setPanelOpen: (panelOpen) => set({ panelOpen }),
+      setListOpen: (listOpen) => set({ listOpen }),
       startLearn: (sceneId, param) => set({ learning: { sceneId, param } }),
       cancelLearn: () => set({ learning: null }),
       completeLearn: (match) =>

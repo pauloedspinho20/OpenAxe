@@ -13,7 +13,11 @@ import { LiveMeter } from '@/components/global/LiveMeter/LiveMeter'
 import { NamModelDetails } from '../NamModelDetails/NamModelDetails'
 import { EffectDetailsDialog } from '../EffectDetailsDialog/EffectDetailsDialog'
 import { EFFECT_PARAM_SCHEMAS, getParamSchema } from '../../../effects/paramSchema'
-import { BLOCK_KIND_LABELS, BLOCK_KIND_VENDOR_URLS, BLOCK_KIND_VENDORS } from '../blockOptions'
+import { AddBlockMenu } from '../AddBlockMenu/AddBlockMenu'
+import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
+import type { BlockKind } from '../../../engine/blocks/Block'
+import { GRID_COLS, GRID_ROWS } from '../../../engine/gridConfig'
+import { BLOCK_KIND_LABELS } from '../blockOptions'
 import styles from './BlockInspector.module.css'
 import { useTone3000Browser } from '@/tone3000/browserStore'
 import type { Gear } from '@/tone3000/types'
@@ -45,6 +49,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const blocks = useGraphStore((s) => s.blocks)
   const instance = blocks.find((b) => b.id === selectedBlockId) ?? null
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const [effectDetailsOpen, setEffectDetailsOpen] = useState(false)
   const openBrowser = useTone3000Browser((s) => s.openBrowser)
 
@@ -64,12 +69,37 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     }
   }, [instance?.id])
 
+  /** Places the new block in the first free cell (row-major), i.e. the top-left of an empty grid. */
+  const addToFirstCell = (kind: BlockKind) => {
+    setAddOpen(false)
+    for (let row = 0; row < GRID_ROWS; row++) {
+      for (let col = 0; col < GRID_COLS; col++) {
+        if (blocks.some((b) => b.row === row && b.col === col)) continue
+        const id = useGraphStore.getState().addBlock(kind, row, col)
+        if (id !== null) openCatalogForNewBlock(id, kind)
+        return
+      }
+    }
+  }
+
   if (!instance) {
     return (
       <Panel>
-        <p className={styles.empty}>
-          Select a block in the grid to see its parameters and options.
-        </p>
+        {!!selectedBlockId ? (
+          <p className={styles.empty}>
+            Select a block in the grid to see its parameters and options.
+          </p>
+        ) : (
+          <>
+            <p className={styles.empty}>Add a block to start</p>
+            <HardwareButton label="ADD BLOCK" onClick={() => setAddOpen(true)} fullWidth />
+            <AddBlockMenu
+              open={addOpen}
+              onPick={addToFirstCell}
+              onClose={() => setAddOpen(false)}
+            />
+          </>
+        )}
       </Panel>
     )
   }
@@ -80,8 +110,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const isIr = instance.kind === 'cab'
   const schema = getParamSchema(instance.kind)
   const label = BLOCK_KIND_LABELS[instance.kind]
-  const vendor = BLOCK_KIND_VENDORS[instance.kind]
-  const vendorUrl = BLOCK_KIND_VENDOR_URLS[instance.kind]
   const isAssetKind = NAM_MODEL_KINDS.has(instance.kind) || instance.kind === 'cab'
   const analyser = rig?.getBlockAnalyser(instance.id) ?? null
   // Post-input-trim tap for the IN meter - the same facade shape as the
@@ -99,8 +127,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
   const emptyText = isIr ? 'NO IR LOADED' : 'NO MODEL LOADED'
 
   const panelLabel = isAssetKind ? loaded?.name : label
-  const panelLabelUrl = isAssetKind ? libraryEntry?.creator : vendor
-  const panelUrl = isAssetKind ? libraryEntry?.sourceUrl : vendorUrl
 
   const showDynamicsMeter =
     block != null && rig != null && (block.kind === 'compressor' || block.kind === 'noise-gate')
@@ -109,8 +135,6 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
     <Panel
       className={styles.panel}
       {...(panelLabel !== undefined && { label: panelLabel })}
-      {...(panelLabelUrl !== undefined && { labelUrl: panelLabelUrl })}
-      {...(panelUrl !== undefined && { url: panelUrl })}
       corner={
         isAssetKind && (
           <div className={styles.screenRow}>
