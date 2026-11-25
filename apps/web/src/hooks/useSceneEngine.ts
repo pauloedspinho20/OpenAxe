@@ -3,6 +3,7 @@ import type { GraphRig } from '../engine/GraphRig'
 import type { EngineStatus } from './useAudioEngine'
 import { SceneNavigator } from '../scenes/sceneNavigator'
 import { useSceneStore } from '../state/sceneStore'
+import { clearStartMuted } from '../state/startMuted'
 
 /**
  * The one React<->SceneNavigator seam: registers the live rig/context with
@@ -28,6 +29,8 @@ export function useSceneEngine(
     if (status !== 'ready' || !hydrated || !context) return
     if (restoredForRef.current === context) return
     restoredForRef.current = context
-    void SceneNavigator.reloadActive({ source: 'boot' })
+    // Disarm the one-shot start-muted request once the boot restore (which
+    // re-applies the active preset's mute) has settled.
+    void Promise.resolve(SceneNavigator.reloadActive({ source: 'boot' })).finally(clearStartMuted)
   }, [status, context, hydrated])
 }

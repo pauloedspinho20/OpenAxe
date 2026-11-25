@@ -4,6 +4,8 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import { PowerGate } from './PowerGate'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useIOStore } from '@/state/ioStore'
+import { useGraphStore } from '@/state/graphStore'
+import { clearStartMuted, isStartMuted } from '@/state/startMuted'
 import { getOpenAxe, getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
 
@@ -63,6 +65,18 @@ describe('PowerGate', () => {
     render(<PowerGate {...baseProps} onPowerOn={onPowerOn} />)
     fireEvent.click(screen.getByRole('button', { name: 'POWER ON' }))
     expect(onPowerOn).toHaveBeenCalledWith()
+  })
+
+  it('powers on muted, flagging the master mute first', () => {
+    const onPowerOn = vi.fn()
+    useGraphStore.getState().setMasterMuted(false)
+    render(<PowerGate {...baseProps} onPowerOn={onPowerOn} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Power on muted' }))
+    expect(useGraphStore.getState().masterMuted).toBe(true)
+    // Armed so the boot preset restore can't overwrite the mute.
+    expect(isStartMuted()).toBe(true)
+    expect(onPowerOn).toHaveBeenCalledTimes(1)
+    clearStartMuted()
   })
 
   it('shows the error text when in the error state', () => {
