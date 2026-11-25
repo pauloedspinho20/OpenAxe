@@ -2,6 +2,7 @@ import { cymatics } from './scenes/cymatics/definition'
 import { digitalCore } from './scenes/digitalCore/definition'
 import { distilledCube } from './scenes/distilledCube/definition'
 import { holoGrid } from './scenes/holoGrid/definition'
+import { neuralBrain } from './scenes/neuralBrain/definition'
 import { plasmaGlobe } from './scenes/plasmaGlobe/definition'
 import type { SceneDefinition } from './types'
 
@@ -17,6 +18,7 @@ export const SCENES: readonly SceneDefinition[] = [
   digitalCore,
   cymatics,
   plasmaGlobe,
+  neuralBrain,
 ]
 
 export function findScene(id: string | null | undefined): SceneDefinition {
