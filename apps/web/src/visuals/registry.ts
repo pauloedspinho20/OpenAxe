@@ -2,7 +2,6 @@ import { digitalCore } from './scenes/digitalCore/definition'
 import { distilledCube } from './scenes/distilledCube/definition'
 import { holoGrid } from './scenes/holoGrid/definition'
 import { plasmaGlobe } from './scenes/plasmaGlobe/definition'
-import { reactionDiffusion } from './scenes/reactionDiffusion/definition'
 import type { SceneDefinition } from './types'
 
 /**
@@ -15,7 +14,6 @@ export const SCENES: readonly SceneDefinition[] = [
   distilledCube,
   holoGrid,
   digitalCore,
-  reactionDiffusion,
   plasmaGlobe,
 ]
 
