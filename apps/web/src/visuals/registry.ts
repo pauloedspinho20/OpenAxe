@@ -1,3 +1,4 @@
+import { cymatics } from './scenes/cymatics/definition'
 import { digitalCore } from './scenes/digitalCore/definition'
 import { distilledCube } from './scenes/distilledCube/definition'
 import { holoGrid } from './scenes/holoGrid/definition'
@@ -14,6 +15,7 @@ export const SCENES: readonly SceneDefinition[] = [
   distilledCube,
   holoGrid,
   digitalCore,
+  cymatics,
   plasmaGlobe,
 ]
 
