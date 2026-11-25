@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
-  padding: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-5);
   border-radius: var(--r-lg);
   border: 1px solid var(--seam);
   background-color: var(--panel);
@@ -16,6 +16,7 @@
 
 @media (max-width: var(--mw-lg)) {
   .panel {
+    padding: var(--sp-2);
     flex-direction: column;
   }
 }
@@ -33,6 +34,7 @@
   .header {
     gap: var(--sp-2);
     width: 100%;
+    align-items: center;
   }
 }
 
@@ -43,12 +45,12 @@
 }
 
 .label {
-  font-size: 14px;
+  font-size: 16px;
   font-family: var(--font-display);
   letter-spacing: 1px;
   text-transform: uppercase;
   font-weight: 500;
-  color: var(--ink-2);
+  color: var(--accent);
 }
 
 .body {
@@ -59,7 +61,7 @@
   height: 100%;
 }
 
-@media (max-width: var(--mw-xl)) {
+@media (max-width: var(--mw-lg)) {
   .body {
     width: 100%;
   }

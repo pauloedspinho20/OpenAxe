@@ -7,6 +7,7 @@ import { findGridElement, isPointOverGrid, resolveGridCell } from '../gridGeomet
 import { blockColorVar } from '../blockColors'
 import { TunerDialog } from '../TunerDialog/TunerDialog'
 import { openCatalogForNewBlock } from '../openCatalogForNewBlock'
+import { BlockChip } from './BlockChip'
 import styles from './BlockPalette.module.css'
 
 const SEND_RETURN_KINDS = new Set<BlockKind>(['send-1', 'send-2', 'return-1', 'return-2'])
@@ -158,12 +159,12 @@ export function BlockPalette({ tunerAnalyser, onDragChange }: BlockPaletteProps)
           <span className={`label ${styles.groupLabel}`}>{group}</span>
           <div className={styles.chips}>
             {items.map((option) => (
-              <div
+              <BlockChip
                 key={option.kind}
-                className={`${styles.chip} ${option.disabled ? styles.chipDisabled : ''} ${drag?.kind === option.kind ? styles.chipDragging : ''}`}
-                role="button"
-                tabIndex={option.disabled ? -1 : 0}
-                aria-disabled={option.disabled}
+                kind={option.kind}
+                label={option.label}
+                disabled={option.disabled}
+                dragging={drag?.kind === option.kind}
                 aria-label={
                   option.disabled
                     ? `${option.label} - not yet available (${option.vendor})`
@@ -176,11 +177,7 @@ export function BlockPalette({ tunerAnalyser, onDragChange }: BlockPaletteProps)
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
-                style={{ '--block-color': blockColorVar(option.kind) } as React.CSSProperties}
-              >
-                <BlockIcon kind={option.kind} size={22} className={styles.chipIcon} />
-                <span className={styles.chipLabel}>{option.label}</span>
-              </div>
+              />
             ))}
           </div>
         </div>
@@ -193,7 +190,7 @@ export function BlockPalette({ tunerAnalyser, onDragChange }: BlockPaletteProps)
             {
               width: `${drag.targetSize}px`,
               height: `${drag.targetSize}px`,
-              transform: `translate3d(${drag.x}px, ${drag.y}px, 0) translate(-50%, -50%)`,
+              translate: `calc(${drag.x}px - 50%) calc(${drag.y}px - 50%)`,
               '--ghost-rest-scale': String(drag.chipScale),
               '--block-color': blockColorVar(drag.kind),
             } as React.CSSProperties

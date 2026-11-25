@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { UndoStack } from './undoStack'
-import { useGraphStore } from './graphStore'
+import { useGraphStore, type GraphState } from './graphStore'
 import { applyPreset } from '../presets/apply'
 import type { Preset, PresetBlockData, PresetEdgeData, PresetRig } from '../presets/types'
 import type { PresetBlock } from '../presets/types'
@@ -24,13 +24,47 @@ let target: HistoryTarget | null = null
 let isRestoring = false
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let pendingSnapshot: GraphSnapshot | null = null
+/**
+ * Graph state of the latest param-only change whose snapshot has not been
+ * built yet. Building a snapshot (param copies + two JSON.stringify compares)
+ * on every knob tick made drags stutter, so for param-only changes it is
+ * deferred to the debounce trailing edge. The state object is immutable, so
+ * holding it loses nothing. The loaded model/IR live on the rig rather than
+ * in the store, so they are captured at change time (cheap lookups) - reading
+ * them at flush time would fold a model loaded mid-debounce into this step.
+ */
+let deferred: { state: GraphState; assets: AssetMap | null } | null = null
 
-function getSnapshotFromGraph(): GraphSnapshot {
-  const g = useGraphStore.getState()
+type AssetMap = Map<
+  string,
+  { modelId: string | null; modelName: string | null; irId: string | null; irName: string | null }
+>
+
+function captureAssets(g: GraphState): AssetMap | null {
   const rig = target?.rig ?? null
+  if (!rig) return null
+  const assets: AssetMap = new Map()
+  for (const b of g.blocks) {
+    const block = rig.getBlock(b.id) as PresetBlock | null
+    const model = block?.getLoadedModel?.() ?? null
+    const ir = block?.getLoadedIr?.() ?? null
+    assets.set(b.id, {
+      modelId: model?.id ?? null,
+      modelName: model?.name ?? null,
+      irId: ir?.id ?? null,
+      irName: ir?.name ?? null,
+    })
+  }
+  return assets
+}
+
+function getSnapshotFromGraph(
+  g: GraphState = useGraphStore.getState(),
+  assets: AssetMap | null = captureAssets(g),
+): GraphSnapshot {
   return {
     blocks: g.blocks.map((b) => {
-      if (!rig) {
+      if (!assets) {
         return {
           id: b.id,
           kind: b.kind,
@@ -44,9 +78,7 @@ function getSnapshotFromGraph(): GraphSnapshot {
           irName: null,
         } satisfies PresetBlockData
       }
-      const block = rig.getBlock(b.id) as PresetBlock | null
-      const model = block?.getLoadedModel?.() ?? null
-      const ir = block?.getLoadedIr?.() ?? null
+      const asset = assets.get(b.id)
       return {
         id: b.id,
         kind: b.kind,
@@ -54,10 +86,10 @@ function getSnapshotFromGraph(): GraphSnapshot {
         col: b.col,
         ...(b.bypass !== undefined ? { bypass: b.bypass } : {}),
         params: { ...b.params },
-        modelId: model?.id ?? null,
-        modelName: model?.name ?? null,
-        irId: ir?.id ?? null,
-        irName: ir?.name ?? null,
+        modelId: asset?.modelId ?? null,
+        modelName: asset?.modelName ?? null,
+        irId: asset?.irId ?? null,
+        irName: asset?.irName ?? null,
       } satisfies PresetBlockData
     }),
     edges: g.edges.map((e) => ({ id: e.id, from: { ...e.from }, to: { ...e.to } })),
@@ -104,11 +136,38 @@ function notify(): void {
   useHistoryStore.setState({ canUndo: stack.canUndo(), canRedo: stack.canRedo() })
 }
 
+function materializeDeferred(): void {
+  if (!deferred) return
+  const { state, assets } = deferred
+  deferred = null
+  pendingSnapshot = getSnapshotFromGraph(state, assets)
+}
+
+function isParamOnlyStoreChange(next: GraphState, prev: GraphState): boolean {
+  if (next.edges !== prev.edges) return false
+  // masterLevel is a continuous control (fader drag) like a knob, so it takes
+  // the deferred path too; masterMuted is a discrete toggle and does not.
+  if (next.masterMuted !== prev.masterMuted) return false
+  if (next.blocks.length !== prev.blocks.length) return false
+  return next.blocks.every((b, i) => {
+    const o = prev.blocks[i]
+    return (
+      !!o &&
+      o.id === b.id &&
+      o.kind === b.kind &&
+      o.row === b.row &&
+      o.col === b.col &&
+      o.bypass === b.bypass
+    )
+  })
+}
+
 function flushPending(): void {
   if (debounceTimer) {
     clearTimeout(debounceTimer)
     debounceTimer = null
   }
+  materializeDeferred()
   if (pendingSnapshot) {
     const toPush = pendingSnapshot
     pendingSnapshot = null
@@ -162,8 +221,40 @@ function schedulePush(next: GraphSnapshot): void {
 
 function ensureSubscription(): void {
   if (unsubscribeGraph) return
-  unsubscribeGraph = useGraphStore.subscribe((state) => {
+  unsubscribeGraph = useGraphStore.subscribe((state, prevState) => {
     if (isRestoring) return
+    if (isParamOnlyStoreChange(state, prevState)) {
+      // Cheap path for knob drags: remember the state, build the snapshot once
+      // when the burst settles (see `deferred`).
+      deferred = { state, assets: captureAssets(state) }
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
+        materializeDeferred()
+        const toPush = pendingSnapshot
+        pendingSnapshot = null
+        if (toPush && !snapshotsEqual(stack.value, toPush)) {
+          stack.push(toPush)
+          notify()
+        }
+      }, HISTORY_DEBOUNCE_MS)
+      return
+    }
+    // Structural change: settle any deferred param edit first so it keeps its
+    // own undo step.
+    if (deferred) {
+      materializeDeferred()
+      const toPush = pendingSnapshot
+      pendingSnapshot = null
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+        debounceTimer = null
+      }
+      if (toPush && !snapshotsEqual(stack.value, toPush)) {
+        stack.push(toPush)
+        notify()
+      }
+    }
     // Build snapshot from the new state — need to use the subscribe payload directly
     // to avoid reading stale model refs through getSnapshotFromGraph's rig path?
     // For correctness we capture via getSnapshotFromGraph which reads current graphStore + rig.
@@ -195,6 +286,7 @@ export function resetHistoryForTests(): void {
     debounceTimer = null
   }
   pendingSnapshot = null
+  deferred = null
   isRestoring = false
   stack = createInitialStack()
   notify()
