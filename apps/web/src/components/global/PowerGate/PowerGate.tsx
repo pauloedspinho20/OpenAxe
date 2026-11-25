@@ -217,8 +217,8 @@ export function PowerGate({
             />
             <HardwareButton
               size="small"
-              label="Power on muted"
-              ariaLabel="Power on muted"
+              label="Start muted"
+              ariaLabel="Start muted"
               onClick={() => {
                 // Arm the flag too: the boot preset restore would otherwise
                 // overwrite the mute with the preset's saved value.

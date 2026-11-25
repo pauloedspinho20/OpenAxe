@@ -67,11 +67,11 @@ describe('PowerGate', () => {
     expect(onPowerOn).toHaveBeenCalledWith()
   })
 
-  it('powers on muted, flagging the master mute first', () => {
+  it('starts muted, flagging the master mute first', () => {
     const onPowerOn = vi.fn()
     useGraphStore.getState().setMasterMuted(false)
     render(<PowerGate {...baseProps} onPowerOn={onPowerOn} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Power on muted' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start muted' }))
     expect(useGraphStore.getState().masterMuted).toBe(true)
     // Armed so the boot preset restore can't overwrite the mute.
     expect(isStartMuted()).toBe(true)
