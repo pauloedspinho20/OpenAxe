@@ -1,0 +1,308 @@
+import type { Modulation, SceneDefinition, SceneParam } from '../../types'
+import { REGIMES } from './presets'
+
+/**
+ * "ReactionDiffusion" by Shader Effects Inc. - a living Gray-Scott
+ * reaction-diffusion pattern: two chemicals feed, react and diffuse across a
+ * grid until coral, spots, mazes or dividing cells grow out of noise.
+ * Ported from the original WebGPU compute kernels (TypeGPU) to TSL
+ * render-target ping-pong passes, so it runs on WebGPU with a WebGL2
+ * fallback, and made audio reactive.
+ *
+ * New on top of the original: blooms (pick attacks seed new growth at a
+ * random spot), feed/kill drift (playing pushes the regime around its point),
+ * hue shift and a spinning light.
+ */
+const params: readonly SceneParam[] = [
+  {
+    key: 'regime',
+    label: 'Pattern',
+    group: 'Pattern',
+    type: 'select',
+    default: 'coral',
+    options: [
+      ...REGIMES.map((r) => ({ value: r.id, label: r.name })),
+      { value: 'custom', label: 'Custom (feed / kill)' },
+    ],
+    description: 'A named Gray-Scott regime. Changing it re-seeds the plate.',
+  },
+  {
+    key: 'feed',
+    label: 'Feed',
+    group: 'Pattern',
+    type: 'number',
+    min: 0.01,
+    max: 0.1,
+    step: 0.0005,
+    default: 0.0545,
+    description: 'Custom pattern only: how fast chemical U is replenished.',
+  },
+  {
+    key: 'kill',
+    label: 'Kill',
+    group: 'Pattern',
+    type: 'number',
+    min: 0.03,
+    max: 0.07,
+    step: 0.0005,
+    default: 0.062,
+    description: 'Custom pattern only: how fast chemical V is removed.',
+  },
+  {
+    key: 'feedShift',
+    label: 'Feed drift',
+    group: 'Pattern',
+    type: 'number',
+    min: -0.01,
+    max: 0.01,
+    step: 0.0001,
+    default: 0,
+    description: 'Pushes the feed rate off the pattern’s point. Small moves change the character.',
+  },
+  {
+    key: 'killShift',
+    label: 'Kill drift',
+    group: 'Pattern',
+    type: 'number',
+    min: -0.005,
+    max: 0.005,
+    step: 0.0001,
+    default: 0,
+  },
+  {
+    key: 'diffusionRatio',
+    label: 'Diffusion ratio',
+    group: 'Pattern',
+    type: 'number',
+    min: 0.2,
+    max: 0.9,
+    step: 0.01,
+    default: 0.5,
+    description: 'Lower = tighter, more filament-like.',
+  },
+  {
+    key: 'featureSize',
+    label: 'Feature size',
+    group: 'Pattern',
+    type: 'number',
+    min: 1,
+    max: 6,
+    step: 0.01,
+    default: 3,
+    description: 'Zooms into the grid: higher shows bigger cells.',
+  },
+  { key: 'reseed', label: 'Re-seed', group: 'Pattern', type: 'action' },
+  { key: 'clear', label: 'Clear', group: 'Pattern', type: 'action' },
+
+  {
+    key: 'speed',
+    label: 'Speed',
+    group: 'Animation',
+    type: 'number',
+    min: 0,
+    max: 16,
+    step: 0.1,
+    default: 6,
+    description: 'Simulation steps per frame (fractions carry over to the next frame).',
+  },
+  { key: 'paused', label: 'Paused', group: 'Animation', type: 'boolean', default: false },
+  {
+    key: 'lightSpin',
+    label: 'Light spin',
+    group: 'Animation',
+    type: 'number',
+    min: -2,
+    max: 2,
+    step: 0.01,
+    default: 0,
+    description: 'Turns the relief light around the pattern, in tenths of a turn per second.',
+  },
+
+  {
+    key: 'bloom',
+    label: 'Bloom',
+    group: 'Audio seeding',
+    type: 'number',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0,
+    description: 'Each rise drops new reagent at a random spot; route an impulse (Attack) here.',
+  },
+  {
+    key: 'bloomSize',
+    label: 'Bloom size',
+    group: 'Audio seeding',
+    type: 'number',
+    min: 0.005,
+    max: 0.15,
+    step: 0.001,
+    default: 0.03,
+  },
+  {
+    key: 'bloomCount',
+    label: 'Blooms per hit',
+    group: 'Audio seeding',
+    type: 'number',
+    min: 1,
+    max: 8,
+    step: 1,
+    default: 2,
+  },
+
+  {
+    key: 'brushSize',
+    label: 'Brush size',
+    group: 'Mouse',
+    type: 'number',
+    min: 0.01,
+    max: 0.3,
+    step: 0.01,
+    default: 0.04,
+    description: 'Drag the stage to paint reagent.',
+  },
+  {
+    key: 'brushStrength',
+    label: 'Brush strength',
+    group: 'Mouse',
+    type: 'number',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0.6,
+  },
+
+  {
+    key: 'colorBackground',
+    label: 'Background',
+    group: 'Colour',
+    type: 'color',
+    default: '#050a14',
+  },
+  { key: 'colorWall', label: 'Wall colour', group: 'Colour', type: 'color', default: '#38bdf8' },
+  { key: 'colorCell', label: 'Cell colour', group: 'Colour', type: 'color', default: '#e2f5ff' },
+  {
+    key: 'hueShift',
+    label: 'Hue shift',
+    group: 'Colour',
+    type: 'number',
+    min: 0,
+    max: 1,
+    step: 0.001,
+    default: 0,
+    wrap: true,
+    description: 'Rotates the wall and cell colours around the colour wheel.',
+  },
+  {
+    key: 'contrast',
+    label: 'Contrast',
+    group: 'Colour',
+    type: 'number',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0.5,
+    description: 'Sharpness of the cell walls.',
+  },
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    group: 'Colour',
+    type: 'number',
+    min: 0.05,
+    max: 0.6,
+    step: 0.01,
+    default: 0.28,
+    description: 'Pattern level the wall colour sits on.',
+  },
+
+  {
+    key: 'relief',
+    label: 'Relief',
+    group: 'Lighting',
+    type: 'number',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0.4,
+    description: 'Lights the pattern as a raised surface. 0 is flat.',
+  },
+  {
+    key: 'lightAngle',
+    label: 'Light angle',
+    group: 'Lighting',
+    type: 'number',
+    min: 0,
+    max: 360,
+    step: 1,
+    default: 135,
+    unit: '°',
+    wrap: true,
+  },
+  {
+    key: 'brightness',
+    label: 'Brightness',
+    group: 'Lighting',
+    type: 'number',
+    min: 0,
+    max: 3,
+    step: 0.01,
+    default: 1,
+  },
+
+  {
+    key: 'gridSize',
+    label: 'Grid size',
+    group: 'Quality',
+    type: 'select',
+    default: '512',
+    rebuild: true,
+    options: [
+      { value: '256', label: '256²' },
+      { value: '512', label: '512²' },
+      { value: '1024', label: '1024²' },
+    ],
+    description: 'Simulation cells. Larger allows finer detail at the same feature size.',
+  },
+]
+
+const mod = (
+  id: string,
+  param: string,
+  source: Modulation['source'],
+  amount: number,
+  curve: Modulation['curve'] = 'linear',
+  attack = 0,
+  release = 0,
+): Modulation => ({ id, param, source, amount, curve, attack, release, enabled: true })
+
+const modulations: readonly Modulation[] = [
+  // Attacks bloom new growth; louder playing grows it faster and brighter.
+  mod('bloom-onset', 'bloom', 'onset', 1, 'expo'),
+  mod('speed-vol', 'speed', 'volume', 0.25, 'ease'),
+  mod('bright-sustain', 'brightness', 'sustain', 0.08),
+  // Pitch: the note picks the colour, the register nudges the regime.
+  mod('hue-note', 'hueShift', 'pitchClass', 1, 'linear', 0.05),
+  mod('feed-register', 'feedShift', 'register', 0.15, 'ease', 0.5, 1),
+  mod('light-bend', 'lightAngle', 'bend', 0.15),
+  // Timbre.
+  mod('relief-bright', 'relief', 'brightness', 0.25, 'ease', 0.1, 0.4),
+  mod('contrast-grit', 'contrast', 'grit', 0.3, 'ease', 0.1, 0.5),
+  mod('kill-low', 'killShift', 'bandLow', 0.12, 'ease', 0.2, 0.8),
+]
+
+export const reactionDiffusion: SceneDefinition = {
+  id: 'reaction-diffusion',
+  name: 'Reaction Diffusion',
+  description:
+    'A living Gray-Scott pattern that grows coral, spots and mazes; pick attacks bloom new growth.',
+  credit: {
+    author: 'Shader Effects Inc.',
+    url: 'https://github.com/shader-effects-inc/shaders',
+    license: 'MIT',
+    note: 'Ported from WebGPU compute (TypeGPU) to TSL render passes and made audio reactive.',
+  },
+  params,
+  modulations,
+  load: () => import('./scene'),
+}
