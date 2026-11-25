@@ -108,7 +108,11 @@ test('builds a full FX chain, toggles every bypass, and tears it down without er
   // intermediate state to race against.
   const blocks = page.getByRole('button', { name: /block - click or Enter to edit/ })
   await expect(blocks).toHaveCount(3, { timeout: SCENE_LOAD_TIMEOUT })
-  await page.getByRole('button', { name: '8 Bypass' }).click()
+  await page.getByRole('button', { name: '8', exact: true }).click()
+  // The SceneBar now guards preset switches behind an "Unsaved changes" dialog
+  // when the loaded preset reads as dirty; this test doesn't care about the edits.
+  const discard = page.getByRole('button', { name: 'DISCARD' })
+  if (await discard.isVisible({ timeout: 2000 }).catch(() => false)) await discard.click()
   await expect(blocks).toHaveCount(1, { timeout: SCENE_LOAD_TIMEOUT })
   // Mixer removal now lives in the block's actions sheet (⋯ menu) — the direct
   // Remove button was moved from BlockCard to BlockActionSheet for mobile.

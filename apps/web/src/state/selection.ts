@@ -13,6 +13,11 @@ interface SelectionState {
    */
   selectionSource: 'user' | 'preset' | null
   select: (id: string) => void
+  /**
+   * Select a just-placed block without arming mobile tap-to-move: the next
+   * empty-cell tap must still open the add menu, not relocate the new block.
+   */
+  selectNew: (id: string) => void
   clear: () => void
 }
 
@@ -98,5 +103,6 @@ export const useSelection = create<SelectionState>()((set) => ({
     const presetId = useCurrentPresetStore.getState().saved?.id
     if (presetId) lastSelectedByPreset.set(presetId, id)
   },
+  selectNew: (id) => set({ selectedBlockId: id, selectionSource: 'preset' }),
   clear: () => set({ selectedBlockId: null, selectionSource: null }),
 }))

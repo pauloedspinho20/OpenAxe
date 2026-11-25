@@ -15,7 +15,7 @@ import { useTone3000Browser } from '../../tone3000/browserStore'
  * added (palette drag, add menu, change-type).
  */
 export function openCatalogForNewBlock(blockId: string, kind: BlockKind): void {
-  useSelection.getState().select(blockId)
+  useSelection.getState().selectNew(blockId)
   if (kind === 'cab') {
     useTone3000Browser.getState().openBrowser({ blockId, slot: 'ir', gear: 'cab' })
     return
