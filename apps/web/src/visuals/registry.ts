@@ -1,3 +1,4 @@
+import { cymatics } from './scenes/cymatics/definition'
 import { digitalCore } from './scenes/digitalCore/definition'
 import { distilledCube } from './scenes/distilledCube/definition'
 import { holoGrid } from './scenes/holoGrid/definition'
@@ -9,7 +10,7 @@ import type { SceneDefinition } from './types'
  * `load: () => import('./scene')`) and a `scene.ts` exporting `createScene`,
  * then list the definition here. Nothing else in the host needs to change.
  */
-export const SCENES: readonly SceneDefinition[] = [distilledCube, holoGrid, digitalCore]
+export const SCENES: readonly SceneDefinition[] = [distilledCube, holoGrid, digitalCore, cymatics]
 
 export function findScene(id: string | null | undefined): SceneDefinition {
   return SCENES.find((s) => s.id === id) ?? SCENES[0]!
