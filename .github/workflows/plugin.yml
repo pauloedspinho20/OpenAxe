@@ -62,6 +62,12 @@ jobs:
             extra_artifacts: packages/vst3/build/*.clap
             cpack_generator: DEB
     runs-on: ${{ matrix.os }}
+    # DIAGNOSTIC (throwaway branch): embedded debug info + PDBs on Windows so a
+    # crash dump of the pluginval Editor segfault has symbols for our code.
+    env:
+      CXXFLAGS: ${{ startsWith(matrix.os, 'windows') && '/Z7' || '' }}
+      CFLAGS: ${{ startsWith(matrix.os, 'windows') && '/Z7' || '' }}
+      LDFLAGS: ${{ startsWith(matrix.os, 'windows') && '/DEBUG' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -259,6 +265,16 @@ jobs:
             sudo apt-get install -y --no-install-recommends xvfb xauth
           fi
 
+      - name: DIAGNOSTIC - enable Windows crash dumps
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpFolder -Value "$env:RUNNER_TEMP\dumps" -PropertyType ExpandString -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpType -Value 2 -PropertyType DWord -Force | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\dumps" | Out-Null
+
       # Called directly rather than through ctest: the ctest entries wrap it
       # in `bash -c`, which on Windows runners can resolve to WSL's bash.exe
       # instead of Git Bash.
@@ -294,6 +310,20 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
+
+      - name: DIAGNOSTIC - analyse Windows crash dumps
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cdb = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Debuggers' -Recurse -Filter cdb.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $cdb) { Write-Host "::warning::cdb.exe not found"; exit 0 }
+          $pdbDirs = (Get-ChildItem packages/vst3/build -Recurse -Filter *.pdb | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique) -join ';'
+          Write-Host "PDB dirs: $pdbDirs"
+          Get-ChildItem "$env:RUNNER_TEMP\dumps" -Filter *.dmp | ForEach-Object {
+            Write-Host "::group::$($_.Name)"
+            & $cdb.FullName -z $_.FullName -y "$pdbDirs;srv*$env:RUNNER_TEMP\sym*https://msdl.microsoft.com/download/symbols" -c ".ecxr; .lines -e; kpn 60; !analyze -v; lm m OpenAxe*; q" 2>&1 | Select-Object -Last 200
+            Write-Host "::endgroup::"
+          }
 
       # The remaining host validators (auval, the VST3 validator,
       # clap-validator) SKIP cleanly when their tool is absent, which on a bare
