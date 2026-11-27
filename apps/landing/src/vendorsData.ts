@@ -134,7 +134,7 @@ export const VENDORS: readonly VendorEntry[] = [
   {
     name: 'iPlug2',
     category: 'plugin',
-    version: 'd54f690',
+    version: '1527935',
     license: 'zlib-style',
     usedFor:
       'C++ audio plugin framework wrapping packages/core and hosting the shared WebView editor across DAW formats.',

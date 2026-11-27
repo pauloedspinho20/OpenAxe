@@ -76,7 +76,7 @@ void RegisterParams(iplug::Plugin& plugin) {
   // out, so every slot kept its uninitialised [0,1] default, the host saw
   // unnamed parameters, and automation recorded nothing the core understood.
   //
-  // Exact API is the pinned iPlug2 d54f690:
+  // Exact API is the pinned iPlug2 1527935 (unchanged since d54f690):
   //   IParam::InitDouble(name, default, min, max, step, label, flags, group,
   //                      shape, unit, displayFunc)   (IPlugParameter.h)
   //   IPlugPluginBase::InitParamRange(start, end, countStart, nameFmt, ...)
