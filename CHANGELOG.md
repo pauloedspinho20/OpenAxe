@@ -7,6 +7,18 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-27
+### Added
+- feat(web): add Fractal Studio visual (Julia, Mandelbrot, Mandelbulb) (2ea67df)
+- feat(visuals): add Neural Brain scene (d6d8c9e)
+- feat(visuals): add Reaction Diffusion and Plasma Globe scenes (353c805)
+- feat(visuals): add Cymatics scene (Chladni plate sand) (118e9d6)
+
+### Changed
+- chore(visuals): drop the Reaction Diffusion scene (784a2b5)
+
+
+
 ## [0.6.0] - 2026-11-25
 ### Added
 - feat(web): media center and icon updates (1cfd0e8)
