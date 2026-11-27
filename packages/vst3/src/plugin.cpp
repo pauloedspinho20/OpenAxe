@@ -43,9 +43,12 @@ using openaxe_vst3::RouteInput;
 #ifdef OPENAXE_HAS_WEBVIEW
 #include "bridge_polyfill.h"
 #include "http_server.h"
-#include "openaxe/ui_url.h"
 #include "ui_root.h"
 #include "vst_bridge.h"
+#include "webview_session.h"
+#if defined(WEBVIEW_EDITOR_DELEGATE)
+#include "x11_error_trap.h"
+#endif
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -134,18 +137,19 @@ void ZeroOutputs(iplug::sample** outputs, int nChansOut, int nFrames) {
 
 }  // namespace
 
-#ifdef OPENAXE_HAS_WEBVIEW
+#if defined(OPENAXE_HAS_WEBVIEW) && IPLUG_EDITOR && defined(OPENAXE_HAS_IGRAPHICS)
 namespace {
+// macOS / Windows editor shell: the React UI in an IGraphics IWebViewControl.
+// Everything about talking to the page is in WebViewSession, shared with the
+// Linux shell (the plugin as WebViewEditorDelegate, further down).
 class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
  public:
   OpenAxeWebViewControl(const iplug::igraphics::IRECT& bounds, openaxe_vst3::VstBridge* bridge,
                         const std::string& url)
-      : IWebViewControl(bounds, true, nullptr, nullptr, true, true), bridge_(bridge), url_(url) {}
+      : IWebViewControl(bounds, true, nullptr, nullptr, true, true), session_(bridge), url_(url) {}
   void OnWebViewReady() override {
     VstLog("WebViewReady: loading url=" + url_);
-    contentLoaded_ = false;
-    pendingJs_.clear();
-    if (!url_.empty()) LoadURL(url_.c_str());
+    session_.Begin(*this, url_);
   }
 
   // Track the whole editor area whenever the host resizes the window (issue
@@ -171,94 +175,19 @@ class OpenAxeWebViewControl : public iplug::igraphics::IWebViewControl {
   }
   void OnWebContentLoaded() override {
     VstLog("WebContentLoaded: url=" + url_);
-    // The polyfill normally arrives inside index.html, injected by HttpServer
-    // so it runs before the SPA's module scripts (issue #300 A1). This late
-    // injection is only a fallback for the OPENAXE_UI_URL dev-server case,
-    // where the HTML comes from Vite and we can't rewrite it. It is
-    // idempotent (the script guards on __openAxePolyfilled), but note that in
-    // dev-server mode it is still too late for useAudioEngine.ts's
-    // module-scope shell check — running the plugin against `pnpm dev:web`
-    // needs a Vite plugin to inject the same script. Tracked in #300 A1.
-    const char* dbgEnv = std::getenv("OPENAXE_DESKTOP_DEBUG");
-    std::string poly =
-        openaxe_vst3::BridgePolyfillJs("plugin", dbgEnv && std::string(dbgEnv) == "1");
-    EvaluateJavaScript(poly.c_str(), nullptr);
-    // Anything the page asked for while it was still loading has been waiting
-    // for this moment — see EvalOrQueue.
-    contentLoaded_ = true;
-    for (const auto& js : pendingJs_) EvaluateJavaScript(js.c_str(), nullptr);
-    pendingJs_.clear();
+    session_.ContentLoaded(*this);
     IWebViewControl::OnWebContentLoaded();
   }
   void OnMessageFromWebView(const char* json) override {
     if (VstLogEnabled()) VstLog(std::string("OnMessage: ") + (json ? json : "null"));
-    if (!json || !bridge_) return;
-    std::string req(json);
-    std::string resp;
-    int msgId = -1;
-    try {
-      auto j = nlohmann::json::parse(req, nullptr, false);
-      if (j.is_discarded() || !j.is_object()) return;
-      // iPlug2's own document-start scripts post key events through this same
-      // channel as {"msg":"SKPFUI",...}. They are not bridge calls: without
-      // this guard every keystroke produced a "missing method" error and a
-      // spurious IPlugWebViewResolve(-1, ...).
-      if (!j.contains("method")) return;
-      if (j.contains("id")) msgId = j.value("id", -1);
-      resp = bridge_->HandleMessage(req);
-    } catch (...) {
-      resp = "{\"ok\":false,\"error\":\"handler exception\"}";
-    }
-    if (msgId < 0) return;  // fire-and-forget call; nothing to resolve
-    // Build the JS string literal with the JSON serializer rather than by
-    // hand (issue #300 A4): the previous loop escaped only \ ' \n \r, so any
-    // U+2028 / U+2029 in the payload — legal inside a JSON string, illegal
-    // raw inside a JS string literal — produced a syntax error and silently
-    // dropped the reply. nlohmann's dump() gives us a correctly quoted and
-    // escaped literal; the two line separators still need doing by hand
-    // because they are valid JSON but not valid JS source.
-    std::string literal = nlohmann::json(resp).dump();
-    for (size_t i = 0; (i = literal.find("\xE2\x80\xA8", i)) != std::string::npos;) {
-      literal.replace(i, 3, "\\u2028");
-      i += 6;
-    }
-    for (size_t i = 0; (i = literal.find("\xE2\x80\xA9", i)) != std::string::npos;) {
-      literal.replace(i, 3, "\\u2029");
-      i += 6;
-    }
-    const std::string js =
-        "window.IPlugWebViewResolve(" + std::to_string(msgId) + "," + literal + ")";
-    EvalOrQueue(js);
+    // Messages that aren't bridge calls (iPlug2's own key/gesture traffic)
+    // are dropped here, as before: this shell has no use for them.
+    session_.HandleMessage(*this, json);
   }
 
  private:
-  // iPlug2's EvaluateJavaScript is a silent no-op while the page is still
-  // loading — `if (mWKWebView && ![mWKWebView isLoading])` in
-  // IPlugWebView_mac.mm, with no queue and no error. So a bridge call made
-  // from the page's own module scope, before the load finishes, gets its
-  // answer dropped on the floor and its promise never settles.
-  //
-  // That is not hypothetical: the shared-storage work made the app read its
-  // preferences at module scope, before mounting React, and the two calls it
-  // makes landed in exactly that window. The editor came up as a blank
-  // window in every plugin format, because the await before
-  // createRoot().render() never resolved. Queue instead of dropping, and
-  // flush once the content is loaded.
-  void EvalOrQueue(const std::string& js) {
-    if (contentLoaded_) {
-      EvaluateJavaScript(js.c_str(), nullptr);
-      return;
-    }
-    // A page that somehow never finishes loading must not grow this without
-    // bound. Far more than the handful of calls a boot actually makes.
-    constexpr size_t kMaxPending = 256;
-    if (pendingJs_.size() < kMaxPending) pendingJs_.push_back(js);
-  }
-
-  openaxe_vst3::VstBridge* bridge_ = nullptr;
+  openaxe_vst3::WebViewSession session_;
   std::string url_;
-  bool contentLoaded_ = false;
-  std::vector<std::string> pendingJs_;
 };
 }  // namespace
 #endif
@@ -284,6 +213,13 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
         uiRoot_, openaxe_vst3::BridgePolyfillJs("plugin", devtools));
     uiServerAcquired_ = uiPort_ != 0;
   }
+#if defined(WEBVIEW_EDITOR_DELEGATE)
+  webSession_ = std::make_unique<openaxe_vst3::WebViewSession>(bridge_.get());
+  {
+    const char* dbg = std::getenv("OPENAXE_DESKTOP_DEBUG");
+    if (dbg && std::string(dbg) == "1") SetEnableDevTools(true);
+  }
+#endif
   VstLog("OpenAxe VST ctor: uiRoot=" + uiRoot_ + " port=" + std::to_string(uiPort_) + " hasWebView=1");
   if (const char* e = std::getenv("OPENAXE_UI_URL")) VstLog(std::string("OPENAXE_UI_URL=") + e);
   else VstLog("OPENAXE_UI_URL not set");
@@ -327,16 +263,12 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
     // forwards them to the webview.
     pGraphics->AttachCornerResizer(iplug::igraphics::EUIResizerMode::Size, false);
     const iplug::igraphics::IRECT b = pGraphics->GetBounds();
-    // Prefer webview when we have a UI to serve or a dev server to attach to
-    const char* envUrl = std::getenv("OPENAXE_UI_URL");
-    // Same shared check the editor and desktop use (issue #300 J1); this used
-    // to be a fourth, untested copy pasted into this lambda.
-    bool useDevServer = envUrl && *envUrl && openaxe::IsTrustedUiUrl(envUrl);
-    VstLog("mLayout: uiPort=" + std::to_string(uiPort_) + " uiRoot=" + uiRoot_ + " useDev=" + (useDevServer ? "1" : "0") + (envUrl ? std::string(" env=") + envUrl : ""));
-    if ((uiPort_ != 0 && !uiRoot_.empty()) || useDevServer) {
-      std::string url;
-      if (useDevServer) url = envUrl;
-      else if (uiPort_ != 0) url = "http://127.0.0.1:" + std::to_string(uiPort_) + "/index.html";
+    // Prefer webview when we have a UI to serve or a dev server to attach to.
+    // EditorUiUrl applies the shared trusted-URL check (issue #300 J1) and is
+    // the same resolution the Linux editor uses.
+    const std::string url = openaxe_vst3::EditorUiUrl(uiPort_, uiRoot_);
+    VstLog("mLayout: uiPort=" + std::to_string(uiPort_) + " uiRoot=" + uiRoot_ + " url=" + url);
+    if (!url.empty()) {
       VstLog("mLayout: creating webview url=" + url);
       auto* webView = new OpenAxeWebViewControl(b, bridge_.get(), url);
       const char* dbg = std::getenv("OPENAXE_DESKTOP_DEBUG");
@@ -370,6 +302,83 @@ OpenAxePlugin::~OpenAxePlugin() {
 #endif
   openaxe_graph_destroy(graph_);
 }
+
+#if defined(WEBVIEW_EDITOR_DELEGATE) && defined(OPENAXE_HAS_WEBVIEW)
+// The editor runs inside a GDK X-error trap for its whole lifetime - see
+// x11_error_trap.h. iPlug2's Linux webview is a GtkPlug in the host's X11
+// window, and when a host reconfigures or destroys that parent, GTK's requests
+// against our plug window can fail with BadWindow. Those errors arrive
+// asynchronously - while GTK processes events between host calls, not inside
+// any one of ours - and GDK's default handler turns them into a process
+// abort. pluginval's Editor test hit it on every out-of-process run.
+//
+// So: one trap pushed once the editor exists and popped (sync + discard) after
+// it is gone, plus a nested one around the close itself so the teardown's own
+// errors are flushed in order. Only GTK's X connection is affected; the host's
+// own Xlib error handler, which is process-global, is never touched.
+void* OpenAxePlugin::OpenWindow(void* pParent) {
+  VstLog("OpenWindow (delegate)");
+  // A previous editor that the host never closed: drop its trap first so the
+  // trap stack stays strictly nested.
+  editorTrap_.reset();
+  void* view = nullptr;
+  {
+    // Covers the open itself when GTK is already up (a reopen, or a host
+    // that uses GTK); a no-op on the very first open, before GTK exists.
+    openaxe_vst3::ScopedX11ErrorTrap trap;
+    view = iplug::WebViewEditorDelegate::OpenWindow(pParent);
+  }
+  // After the base call: on first open that is what initialises GTK and opens
+  // the display the long-lived trap needs.
+  editorTrap_ = std::make_unique<openaxe_vst3::ScopedX11ErrorTrap>();
+  return view;
+}
+
+void OpenAxePlugin::CloseWindow() {
+  VstLog("CloseWindow (delegate)");
+  {
+    openaxe_vst3::ScopedX11ErrorTrap trap;
+    iplug::WebViewEditorDelegate::CloseWindow();
+  }
+  editorTrap_.reset();
+}
+
+// Linux editor (see plugin.h). iPlug2 calls OnWebViewReady once the GtkPlug +
+// WebKitWebView exist inside the host's window.
+void OpenAxePlugin::OnWebViewReady() {
+  const std::string url = openaxe_vst3::EditorUiUrl(uiPort_, uiRoot_);
+  VstLog("WebViewReady (delegate): url=" + url);
+  if (url.empty()) {
+    // Same message the IGraphics shells draw when there is no UI to serve.
+    LoadHTML(
+        "<body style='background:#333;color:#fff;font:14px sans-serif;"
+        "display:flex;align-items:center;justify-content:center;height:100vh;margin:0'>"
+        "<div>OpenAxe &mdash; UI not found<br><small>Run pnpm --filter @openaxe/web build "
+        "or set OPENAXE_UI_URL=http://127.0.0.1:5173</small></div></body>");
+    return;
+  }
+  EnableScroll(false);
+  webSession_->Begin(*this, url);
+}
+
+void OpenAxePlugin::OnWebContentLoaded() {
+  VstLog("WebContentLoaded (delegate)");
+  webSession_->ContentLoaded(*this);
+  // iPlug2's own handler announces the parameter list to the page and calls
+  // OnUIOpen(); keep both, as the IWebViewControl shells do via their base.
+  iplug::WebViewEditorDelegate::OnWebContentLoaded();
+}
+
+void OpenAxePlugin::OnMessageFromWebView(const char* json) {
+  if (VstLogEnabled()) VstLog(std::string("OnMessage (delegate): ") + (json ? json : "null"));
+  // Non-bridge traffic (key presses, parameter gestures) goes to iPlug2, which
+  // forwards keys to the host - with the plugin as the delegate there is no
+  // IGraphics layer to have handled them.
+  if (!webSession_->HandleMessage(*this, json)) {
+    iplug::WebViewEditorDelegate::OnMessageFromWebView(json);
+  }
+}
+#endif
 
 #if IPLUG_DSP
 void OpenAxePlugin::OnReset() {

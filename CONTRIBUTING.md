@@ -187,7 +187,7 @@ See `.github/workflows/release.yml`:
 
 1. The tag push (`v*`) is the trigger, after the `guard` job's `tag == VERSION` check.
 2. The `plugin` step runs `node scripts/ci-local.mjs --stage=plugin --skip-setup --with-sdks` (fetches the iPlug2 VST3/CLAP SDKs on a fresh agent), builds the `EXCLUDE_FROM_ALL` AU/CLAP targets, then `scripts/collect-plugin-bundles.mjs` zips them per platform:
-   - **macOS:** VST3 + AU + CLAP; **Windows:** VST3 + CLAP; **Linux:** headless (no IGraphics backend), so no GUI bundles — `--allow-empty`, and the `.deb` is the Linux artifact.
+   - **macOS:** VST3 + AU + CLAP; **Windows:** VST3 + CLAP; **Linux:** no plugin bundles in releases yet (CI builds them, with the editor, since the iPlug2 1527935 pin; the release leg still doesn't) — `--allow-empty`, and the `.deb` is the Linux artifact.
 3. `scripts/r2-upload.mjs` uploads the zip alongside the desktop installer to `r2://openaxe-releases/<tag>/`, and `release-publish.yml` writes `sha256sums.txt` + `manifest.json`.
 4. Tests (`ctest`, plus `pluginval --strictness 10` / `auval` / VST3 validator / `clap-validator`, which SKIP when the tool/bundle is absent) run as part of the same plugin stage.
 
