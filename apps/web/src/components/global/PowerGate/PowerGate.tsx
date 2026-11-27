@@ -2,6 +2,8 @@ import { HardwareButton, Panel, PowerIcon, Select, Wordmark } from '@openaxe/ui'
 import pkg from '../../../../package.json'
 import type { AudioEnginePowerOnOptions, EngineStatus } from '@/hooks/useAudioEngine'
 import { useIOStore, type LatencyHint } from '@/state/ioStore'
+import { useGraphStore } from '@/state/graphStore'
+import { armStartMuted, clearStartMuted } from '@/state/startMuted'
 import { getShellKind, shellOwnsAudioDevice } from '@/native/openaxe'
 import { useTone3000Auth } from '@/tone3000/authStore'
 import { useUpdateCheck } from '@/hooks/useUpdateCheck'
@@ -201,14 +203,32 @@ export function PowerGate({
             size="large"
           />
         ) : (
-          <HardwareButton
-            label={starting ? 'Starting…' : 'POWER ON'}
-            iconOnly
-            icon={<PowerIcon />}
-            onClick={() => onPowerOn()}
-            disabled={starting}
-            size="large"
-          />
+          <div className={styles.powerRow}>
+            <HardwareButton
+              label={starting ? 'Starting…' : 'POWER ON'}
+              iconOnly
+              icon={<PowerIcon />}
+              onClick={() => {
+                clearStartMuted()
+                onPowerOn()
+              }}
+              disabled={starting}
+              size="large"
+            />
+            <HardwareButton
+              size="small"
+              label="Start muted"
+              ariaLabel="Start muted"
+              onClick={() => {
+                // Arm the flag too: the boot preset restore would otherwise
+                // overwrite the mute with the preset's saved value.
+                armStartMuted()
+                useGraphStore.getState().setMasterMuted(true)
+                onPowerOn()
+              }}
+              disabled={starting}
+            />
+          </div>
         )}
         {updateLatest && (
           <div className={styles.updateBanner} role="status" aria-live="polite">
