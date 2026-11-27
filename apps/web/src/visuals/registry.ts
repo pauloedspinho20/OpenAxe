@@ -4,8 +4,10 @@ import { distilledCube } from './scenes/distilledCube/definition'
 import { fluidSim } from './scenes/fluidSim/definition'
 import { fractalStudio } from './scenes/fractalStudio/definition'
 import { holoGrid } from './scenes/holoGrid/definition'
+import { neonKaleidoscope } from './scenes/neonKaleidoscope/definition'
 import { neuralBrain } from './scenes/neuralBrain/definition'
 import { plasmaGlobe } from './scenes/plasmaGlobe/definition'
+import { quantumCore } from './scenes/quantumCore/definition'
 import type { SceneDefinition } from './types'
 
 /**
@@ -23,6 +25,8 @@ export const SCENES: readonly SceneDefinition[] = [
   neuralBrain,
   fractalStudio,
   fluidSim,
+  neonKaleidoscope,
+  quantumCore,
 ]
 
 export function findScene(id: string | null | undefined): SceneDefinition {
