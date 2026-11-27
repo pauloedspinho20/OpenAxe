@@ -1,3 +1,4 @@
+import { isStartMuted } from '../state/startMuted'
 import type { UseBoundStore, StoreApi } from 'zustand'
 import type { GraphState } from '../state/graphStore'
 import { applyPresetSelection } from '../state/selection'
@@ -199,7 +200,7 @@ function syncStore(store: UseBoundStore<StoreApi<GraphState>>, preset: Preset): 
     })),
     preset.edges.map((e) => ({ id: e.id, from: e.from, to: e.to })),
     preset.masterLevel,
-    preset.masterMuted,
+    preset.masterMuted || isStartMuted(),
   )
 }
 
