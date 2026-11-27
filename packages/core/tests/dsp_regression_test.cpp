@@ -138,6 +138,16 @@ std::vector<Case> BuildCases() {
   add("compressor/4to1", BlockKind::kCompressor,
       {{"threshold", -18.0f}, {"ratio", 4.0f}, {"attack", 5.0f}, {"release", 100.0f}});
   add("eq/flat", BlockKind::kEq, {{"mix", 1.0f}});
+  // Every band moved, with the top bell high enough that its design matters:
+  // DSPark 1.8 switched Peak bands from the bilinear bell to an
+  // analog-matched one, which reshapes exactly this region. Added with the
+  // DSPark 1.9 bump so a future default change can't pass silently the way
+  // eq/flat let that one.
+  add("eq/bells", BlockKind::kEq,
+      {{"band0_frequency", 120.0f}, {"band0_gain", -4.0f},
+       {"band1_frequency", 800.0f}, {"band1_gain", 6.0f}, {"band1_q", 1.5f},
+       {"band2_frequency", 9000.0f}, {"band2_gain", 9.0f}, {"band2_q", 2.0f},
+       {"band3_frequency", 6000.0f}, {"band3_gain", 3.0f}, {"mix", 1.0f}});
   add("chorus/default", BlockKind::kChorus,
       {{"rate", 0.8f}, {"depth", 3.0f}, {"delay", 12.0f}, {"feedback", 0.2f}, {"mix", 1.0f}});
   add("flanger/default", BlockKind::kFlanger,
