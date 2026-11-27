@@ -150,6 +150,32 @@ not found` when a scene compiles. A `Fn().setLayout()` function becomes one
   are loaded with a dynamic `import()` and kept by the engine.
 - **Workaround:** reload the page after editing a scene.
 
+## Neural Amp Modeler core (`NeuralAmpModelerCore` 0.6)
+
+### Captures aren't resampled to the host rate
+
+- **Symptom:** a capture trained at 48 kHz sounded different when the audio
+  device ran at 44.1 or 96 kHz. `nam::DSP::Reset(rate, ...)` only records the
+  rate, and the model keeps treating each sample as 1/48000 s, so its whole
+  frequency response shifts (about +3 dB at 10 kHz for the example WaveNet at
+  44.1 kHz). Since 0.6, only `Linear` models adapt by themselves
+  (`SupportsArbitrarySampleRate()`).
+- **Workaround:** `NamAmp::Reset` runs any other model at its own rate behind
+  AudioDSPTools' `ResamplingContainer` (Lanczos, A=12), the same approach the
+  official NAM plugin takes (`packages/core/src/dsp/nam_amp.cpp`; tests in
+  `packages/core/tests/nam_amp_test.cpp`). Captures with no rate are taken to
+  be 48 kHz. The converter adds roughly 1 ms of latency.
+
+### AudioDSPTools' resampler headers need iPlug2 symbols
+
+- **Symptom:** `ResamplingContainer.h` / `LanczosResampler.h` don't compile on
+  their own. They use `iplug::PI` and `DEFAULT_BLOCK_SIZE`, which came from
+  iPlug2's `IPlugConstants.h` and are left for the includer to define. Their
+  shared kernel table is also filled without a lock on first construction.
+- **Workaround:** `nam_amp.cpp` defines both constants (internal linkage, so
+  they can't clash with iPlug2 in the plugin), and builds every converter
+  under a mutex.
+
 ## Browsers
 
 ### `std::random_device` aborts inside an AudioWorklet (Emscripten / WASM)

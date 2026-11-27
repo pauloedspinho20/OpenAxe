@@ -81,6 +81,9 @@ if(EXISTS "${NAM_CORE_DIR}/NAM/dsp.cpp")
     "${NAM_CORE_DIR}"
     "${NAM_CORE_DIR}/Dependencies/eigen"
     "${NAM_CORE_DIR}/Dependencies/nlohmann"
+    # AudioDSPTools' ResamplingContainer (header-only): NamAmp runs a capture
+    # at its training rate behind it when the engine rate differs.
+    "${NAM_CORE_DIR}/Dependencies/AudioDSPTools"
   )
   target_compile_definitions(openaxe_core PRIVATE NAM_SAMPLE_FLOAT)
   set(OPENAXE_HAS_NAM_CORE TRUE)
