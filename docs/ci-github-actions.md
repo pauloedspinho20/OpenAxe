@@ -77,6 +77,12 @@ pipelines were portable in the first place:
   `collect-plugin-bundles.mjs --allow-empty` keeps that from failing the release.
 - **macOS** builds VST3 + AU + CLAP. AU and CLAP are `EXCLUDE_FROM_ALL`, so the
   workflow builds those targets explicitly.
+- **pluginval** (issue #130) is installed on all three OSes, pinned to v1.0.4,
+  and **gates** `plugin.yml`. PRs run strictness 5 with 3 repeats on the VST3
+  (the editor open/close race check, about a minute). Tags, the nightly
+  schedule and manual runs use strictness 10, plus the AU on macOS. Linux runs
+  it under Xvfb. The other host validators (auval, Steinberg's validator,
+  clap-validator) still skip when absent.
 
 ### Required secrets
 

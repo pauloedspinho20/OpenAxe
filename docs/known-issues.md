@@ -192,7 +192,8 @@ remove_shared_mem`, then `Trace/breakpoint trap`) as soon as GTK draws.
   audio settings". Run `pulseaudio -D --load=module-null-sink`, and dismiss the
   dialog with `xdotool key Return`.
 - pluginval's Editor test closes the editor before WebKit finishes loading the
-  page under emulation; use the standalone app to check the page and bridge.
+  page under emulation (and v1.0.4 has no `--validate-in-process`: an unknown
+  flag is silently ignored); use the standalone app to check the page and bridge.
 - Building the VST3 SDK's own tools (validator, `editorhost`) needs VSTGUI's
   xcb/cairo/pango/gtkmm-3.0 dev packages. `editorhost` couldn't create its X
   window under Xvfb at all.

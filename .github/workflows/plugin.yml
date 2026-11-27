@@ -11,6 +11,10 @@ name: Plugin Build
 
 on:
   workflow_dispatch:
+  # Nightly full-strictness pluginval (issue #130). Scheduled runs use the
+  # default branch's code and workflow.
+  schedule:
+    - cron: '17 3 * * *'
   push:
     tags: ['v*']
   pull_request:
@@ -218,13 +222,85 @@ jobs:
       - name: Plugin tests (no host)
         run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -LE validator
 
-      # The validators need real host tooling (pluginval, auval, the VST3
-      # validator, clap-validator) and each SKIPs cleanly when its tool is
-      # absent, which on a bare runner is all of them — hence `|| true`. That
-      # also means a genuine validator failure cannot fail this job today; the
-      # cost of installing pluginval in CI is tracked separately in #130.
-      - name: Plugin validators (when the tools are present)
-        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -L validator || true
+      # ── pluginval (issue #130) ─────────────────────────────────────────────
+      # A real host: loads the bundle, processes audio, round-trips state and
+      # opens/closes the editor. Run locally it caught an editor-teardown host
+      # crash on macOS (#300) and an X11 BadWindow abort on Linux (#486) that
+      # nothing in CI could see while this was `|| true` with no pluginval
+      # installed. Now installed and GATING:
+      #   - every PR: strictness 5, 3 repeats — the editor open/close race check
+      #     (vst3_editor_lifecycle's settings), about a minute natively.
+      #   - tags, nightly, manual: strictness 10, plus the AU on macOS.
+      # Pinned like every other tool here (#74): v1.0.4 is the latest stable;
+      # the 2.0 line is still beta. pluginval itself doesn't load CLAP.
+      - name: Install pluginval
+        shell: bash
+        env:
+          PLUGINVAL_VERSION: v1.0.4
+        run: |
+          case "${{ runner.os }}" in
+            Linux)   asset=pluginval_Linux.zip ;;
+            macOS)   asset=pluginval_macOS.zip ;;
+            Windows) asset=pluginval_Windows.zip ;;
+          esac
+          dest="$RUNNER_TEMP/pluginval"
+          mkdir -p "$dest"
+          curl -fsSL -o "$RUNNER_TEMP/pluginval.zip" \
+            "https://github.com/Tracktion/pluginval/releases/download/$PLUGINVAL_VERSION/$asset"
+          unzip -q -o "$RUNNER_TEMP/pluginval.zip" -d "$dest"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            echo "$dest/pluginval.app/Contents/MacOS" >> "$GITHUB_PATH"
+          else
+            chmod +x "$dest"/pluginval* 2>/dev/null || true
+            echo "$dest" >> "$GITHUB_PATH"
+          fi
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            # The editor needs an X display (WebKitGTK in a GtkPlug).
+            sudo apt-get install -y --no-install-recommends xvfb xauth
+          fi
+
+      # Called directly rather than through ctest: the ctest entries wrap it
+      # in `bash -c`, which on Windows runners can resolve to WSL's bash.exe
+      # instead of Git Bash.
+      - name: pluginval
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            args=(--strictness-level 5 --repeat 3)
+          else
+            args=(--strictness-level 10)
+          fi
+          # Hosted runners are slower than a dev machine; give each test room.
+          args+=(--timeout-ms 300000)
+          bundles=$(find packages/vst3/build -maxdepth 2 -name 'OpenAxe.vst3' -print)
+          if [ "${{ runner.os }}" = "macOS" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+            bundles="$bundles $(find packages/vst3/build -maxdepth 2 -name 'OpenAxe.component' -print)"
+          fi
+          if [ -z "${bundles// }" ]; then
+            echo "::error::No OpenAxe.vst3 to validate"
+            exit 1
+          fi
+          run() {
+            if [ "${{ runner.os }}" = "Linux" ]; then
+              xvfb-run -a -s "-screen 0 1600x1000x24" "$@"
+            else
+              "$@"
+            fi
+          }
+          status=0
+          for b in $bundles; do
+            echo "::group::pluginval ${args[*]} $b"
+            run pluginval "${args[@]}" --validate "$b" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      # The remaining host validators (auval, the VST3 validator,
+      # clap-validator) SKIP cleanly when their tool is absent, which on a bare
+      # runner is most of them — hence `|| true`. pluginval is excluded here:
+      # it's the gating step above.
+      - name: Other plugin validators (when the tools are present)
+        run: ctest --test-dir packages/vst3/build -C ${{ matrix.cmake_preset }} --output-on-failure -L validator -E "pluginval|editor_lifecycle" || true
 
       # ── Signing (only when secrets are present, otherwise builds unsigned) ──
 
