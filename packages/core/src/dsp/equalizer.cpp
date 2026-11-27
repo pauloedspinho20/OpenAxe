@@ -60,7 +60,17 @@ struct EqualizerTraits {
 
   // One-time setup, run before the defaults are seeded (setNumBands resets
   // every band, so it must not run after them).
-  static void Configure(EqualizerProc& proc) { proc.setNumBands(kBandCount); }
+  //
+  // setMatchedBells(false): DSPark 1.8 made analog-matched Peak bells the
+  // default. They are more faithful near Nyquist (2.9 dB worst deviation from
+  // the analog bell at 48 kHz vs 11 dB bilinear), but they change the sound of
+  // every saved rig with a high mid bell - about +1 dB at 16 kHz in the
+  // eq/bells golden. Pinned to the bilinear bells this EQ has always had;
+  // adopting the matched design is a deliberate, re-blessed change of its own.
+  static void Configure(EqualizerProc& proc) {
+    proc.setNumBands(kBandCount);
+    proc.setMatchedBells(false);
+  }
 
   static void Apply(EqualizerProc& proc, const float* values, int index, float value) {
     (void)value;

@@ -1,3 +1,15 @@
+// AudioDSPTools' resampler pulls in WDL's wdltypes.h, which includes
+// <windows.h> on Windows; without NOMINMAX its min/max macros break every
+// std::max( in the resampler headers (MSVC C2589). Must precede all includes.
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#endif
+
 #include "openaxe/dsp/nam_amp.h"
 
 #include <filesystem>
@@ -9,11 +21,54 @@
 // ever one nlohmann in the translation unit.
 #include "json.hpp"
 
+#include <cmath>
+#include <mutex>
+
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include "NAM/slimmable.h"
 
+// AudioDSPTools' resampling headers read `iplug::PI` and `DEFAULT_BLOCK_SIZE`,
+// which they expect their includer to supply (the code came out of iPlug2,
+// where IPlugConstants.h does). Namespace-scope constexprs have internal
+// linkage, so these can't collide with iPlug2's own definitions when
+// packages/vst3 links both. The block size is only a default argument we
+// never use - NamAmp::Reset always passes the real one.
+namespace iplug {
+constexpr double PI = 3.14159265358979323846;
+}  // namespace iplug
+namespace dsp {
+constexpr int DEFAULT_BLOCK_SIZE = 512;
+}  // namespace dsp
+#include "dsp/ResamplingContainer/ResamplingContainer.h"
+
 namespace openaxe::dsp {
+
+namespace {
+
+// Rates closer than this are the same rate - no converter.
+constexpr double kSameRateTolerance = 0.5;
+
+// LanczosResampler fills its shared kernel tables in its first constructor
+// call with no synchronisation, and two engines (two plugin instances, or the
+// engine's own load thread vs. a host-driven Reset) can construct one at once.
+// Every construction happens under this lock; Reset is off the audio thread,
+// so the lock never reaches Process.
+std::mutex& ResamplerConstructionMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+}  // namespace
+
+// Mono, filter half-width 12 - the NAM plugin's own choice (A=12): about a
+// millisecond of combined latency at 44.1 kHz, with a stop band well clear of
+// the audible range. Each direction keeps a fixed 2x128k-sample float ring
+// (1 MB each), allocated only while a converter is actually needed.
+struct NamResampler {
+  explicit NamResampler(double model_rate) : container(model_rate) {}
+  ::dsp::ResamplingContainer<float, 1, 12> container;
+};
 
 NamAmp::NamAmp() = default;
 NamAmp::~NamAmp() = default;
@@ -91,6 +146,10 @@ std::optional<NamLoadError> NamAmp::LoadModelFromJson(const std::string& json_te
 // disagree about what a loaded model reports.
 void NamAmp::AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& config) {
   dsp_ = std::move(loaded);
+  // A converter sized for the previous capture's rate is wrong for this one;
+  // the caller's Reset() (required after every load) builds the right one.
+  resampler_.reset();
+  processing_sample_rate_ = 0.0;
   slim_size_ = 1.0;
 
   // Snapshot the model's own metadata. `input_level`/`output_level` are the
@@ -119,6 +178,8 @@ void NamAmp::AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& co
 // passes audio through unchanged. Frees - not real-time safe.
 void NamAmp::UnloadModel() {
   dsp_.reset();
+  resampler_.reset();
+  processing_sample_rate_ = 0.0;
   info_ = NamModelInfo{};
   slim_size_ = 1.0;
   source_json_.clear();
@@ -127,12 +188,46 @@ void NamAmp::UnloadModel() {
 // Whether a capture is currently loaded (a block with none is a passthrough).
 bool NamAmp::HasModel() const { return dsp_ != nullptr; }
 
-// Prepare the loaded model for a sample rate and maximum block size. NAMCore
-// resamples internally when the host rate differs from the capture's expected
-// rate (info_.sample_rate), so any rate is valid - it just costs more CPU.
-// Allocates; not real-time safe. No-op without a model.
+// Prepare the loaded model for a sample rate and maximum block size.
+// NAMCore's Reset() does NOT resample: a WaveNet/LSTM/ConvNet capture fed
+// 44.1 kHz audio still treats each sample as 1/48000 s, which shifts its whole
+// frequency response (by ~8% here, ~2x at 96 kHz). Linear models are the one
+// kind that adapt themselves (SupportsArbitrarySampleRate), so those get the
+// engine rate directly; everything else runs at its own rate behind a
+// converter. Allocates; not real-time safe. No-op without a model.
 void NamAmp::Reset(double sample_rate, int max_buffer_size) {
-  if (dsp_) dsp_->Reset(sample_rate, max_buffer_size);
+  resampler_.reset();
+  processing_sample_rate_ = 0.0;
+  if (!dsp_) return;
+
+  const double model_rate =
+      info_.sample_rate > 0.0 ? info_.sample_rate : kNamAssumedSampleRate;
+  const bool needs_converter = sample_rate > 0.0 && max_buffer_size > 0 &&
+                               std::abs(model_rate - sample_rate) >= kSameRateTolerance &&
+                               !dsp_->SupportsArbitrarySampleRate();
+  if (!needs_converter) {
+    dsp_->Reset(sample_rate, max_buffer_size);
+    processing_sample_rate_ = sample_rate;
+    return;
+  }
+
+  auto resampler = std::make_unique<NamResampler>(model_rate);
+  {
+    std::lock_guard<std::mutex> lock(ResamplerConstructionMutex());
+    resampler->container.Reset(sample_rate, max_buffer_size);
+  }
+  // The converter hands the model at most ceil(block * model/engine) samples
+  // per call (ResamplingContainer::MaxEncapsulatedBlockSize); +1 for rounding.
+  const int model_max_block =
+      static_cast<int>(std::ceil(static_cast<double>(max_buffer_size) * model_rate / sample_rate)) +
+      1;
+  dsp_->Reset(model_rate, model_max_block);
+  resampler_ = std::move(resampler);
+  processing_sample_rate_ = model_rate;
+}
+
+int NamAmp::ResamplingLatency() const {
+  return resampler_ ? resampler_->container.GetLatency() : 0;
 }
 
 // Run `num_frames` of mono audio through the model in place of the input.
@@ -146,6 +241,16 @@ void NamAmp::Process(const float* input, float* output, int num_frames) {
   // doesn't const-qualify the input pointee.
   float* in_ptrs[1] = {const_cast<float*>(input)};
   float* out_ptrs[1] = {output};
+  if (resampler_) {
+    // Up/down-convert around the model. The callback captures one pointer, so
+    // the container's std::function holds it inline (no allocation), and the
+    // container's buffers were all sized in Reset().
+    nam::DSP* model = dsp_.get();
+    resampler_->container.ProcessBlock(
+        in_ptrs, out_ptrs, num_frames,
+        [model](float** in, float** out, int n) { model->process(in, out, n); });
+    return;
+  }
   dsp_->process(in_ptrs, out_ptrs, num_frames);
 }
 
