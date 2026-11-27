@@ -7,6 +7,17 @@ All notable changes to OpenAxe are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-27
+### Added
+- feat(web): add Neon Kaleidoscope and Inside Quantum Core visuals (1923ef3)
+- feat(web): add Fluid Simulation visual (ported from WebGL-Fluid-Simulation) (0a24c6d)
+- feat(power-gate): add a "Power on muted" button (f4ee1a0)
+
+### Fixed
+- fix(web): rename muted power button so e2e 'Power on' locators stay unique (fbb80c5)
+
+
+
 ## [0.7.0] - 2026-11-27
 ### Added
 - feat(web): add Fractal Studio visual (Julia, Mandelbrot, Mandelbulb) (2ea67df)
