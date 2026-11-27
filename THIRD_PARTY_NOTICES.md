@@ -42,7 +42,7 @@ are GPL-compatible, and Eigen ships unmodified.
 
 | Component             | Source                         | License                                     | Upstream                           |
 | --------------------- | ------------------------------ | ------------------------------------------- | ---------------------------------- |
-| iPlug2                | CMake `FetchContent` `d54f690` | **zlib-style** (_not_ MIT)³                 | https://github.com/iPlug2/iPlug2   |
+| iPlug2                | CMake `FetchContent` `1527935` | **zlib-style** (_not_ MIT)³                 | https://github.com/iPlug2/iPlug2   |
 | iPlug2 WebView extras | within iPlug2                  | MIT — notice must be kept on redistribution | https://github.com/iPlug2/iPlug2   |
 | VST3 SDK              | fetched via iPlug2             | **GPLv3 or proprietary** (dual)⁴            | Steinberg                          |
 | CLAP SDK              | fetched via iPlug2             | MIT                                         | https://github.com/free-audio/clap |

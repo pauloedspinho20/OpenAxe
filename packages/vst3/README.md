@@ -16,7 +16,7 @@ git submodule update --init -- packages/core/third_party/dspark packages/core/th
 git submodule update --init --recursive
 ```
 
-iPlug2 itself is fetched at configure time via `FetchContent_Declare` (pinned `GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4` — never a floating ref, per #74). The VST3/AU/CLAP SDKs are **not** vendored as submodules; iPlug2 curates them under `Dependencies/` and provides `Scripts/download-iplug-sdks.sh` / `download-prebuilt-libs.sh`. Pinning iPlug2 pins the SDKs transitively — see `packages/vst3/CMakeLists.txt`'s comment for the trade-off and the alternative (submodules with `.gitmodules` SHAs) if offline reproducible builds are later required.
+iPlug2 itself is fetched at configure time via `FetchContent_Declare` (pinned `GIT_TAG 15279358bfc500820c27605d16834a3d49a38cee` — never a floating ref, per #74). The VST3/AU/CLAP SDKs are **not** vendored as submodules; iPlug2 curates them under `Dependencies/` and provides `Scripts/download-iplug-sdks.sh` / `download-prebuilt-libs.sh`. Pinning iPlug2 pins the SDKs transitively — see `packages/vst3/CMakeLists.txt`'s comment for the trade-off and the alternative (submodules with `.gitmodules` SHAs) if offline reproducible builds are later required.
 
 ## Build
 

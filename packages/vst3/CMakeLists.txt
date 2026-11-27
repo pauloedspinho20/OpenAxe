@@ -74,7 +74,7 @@ add_subdirectory(../../packages/core core)
 # and record SDK SHAs in .gitmodules — the choice is documented here so #74's
 # floating-pin lesson is not repeated.
 include(FetchContent)
-# Pinned to 2026-08-19 master (d54f69050f517e43b941d88c2a170f0a840b9ee4). Never float — see #74.
+# Pinned to 2026-11-27 master (15279358bfc500820c27605d16834a3d49a38cee). Never float — see #74.
 # NO GIT_SHALLOW here, deliberately — it is a time bomb when GIT_TAG is a bare
 # commit SHA. For a SHA, FetchContent generates
 #   git clone --no-checkout --depth 1 --no-single-branch <url>
@@ -94,7 +94,7 @@ include(FetchContent)
 FetchContent_Declare(
   iplug2
   GIT_REPOSITORY https://github.com/iPlug2/iPlug2
-  GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4
+  GIT_TAG 15279358bfc500820c27605d16834a3d49a38cee
 )
 
 # Try to fetch iPlug2 source; if offline, keep configuring (smoke test still builds).
@@ -777,6 +777,21 @@ else()
   if(IPLUG2_AVAILABLE AND NOT APPLE)
     message(STATUS "packages/vst3: AUv2 skipped — macOS only")
   endif()
+endif()
+
+# ── NanoVG Metal source needs ARC (iPlug2 since 96870c7) ──────────────────
+# iPlug2 used to compile IGraphicsNanoVG_src.m once, in a shared OBJECT library
+# that set -fobjc-arc itself. It now hands the file to every consuming target
+# (through iPlug2::IGraphics::NanoVG::Metal's INTERFACE sources) so each plugin
+# can prefix its Objective-C classes, and leaves -fobjc-arc to
+# iplug_configure_target(), which we don't use. Without the flag the file stops
+# the build with "#error This file must be compiled with Arc". All our targets
+# live in this directory, so one directory-scoped property covers them.
+# (We don't apply iPlug2's per-target ObjC prefix header; neither did the old
+# shared object library, so class-name behaviour is unchanged.)
+if(APPLE AND DEFINED IGRAPHICS_NANOVG_METAL_SRC)
+  set_source_files_properties(${IGRAPHICS_NANOVG_METAL_SRC}
+    PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
 
 # ── Packaging (CPack, issue #136) ──────────────────────────────────────
