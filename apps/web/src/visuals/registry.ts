@@ -1,6 +1,7 @@
 import { cymatics } from './scenes/cymatics/definition'
 import { digitalCore } from './scenes/digitalCore/definition'
 import { distilledCube } from './scenes/distilledCube/definition'
+import { fluidSim } from './scenes/fluidSim/definition'
 import { fractalStudio } from './scenes/fractalStudio/definition'
 import { holoGrid } from './scenes/holoGrid/definition'
 import { neonKaleidoscope } from './scenes/neonKaleidoscope/definition'
@@ -23,6 +24,7 @@ export const SCENES: readonly SceneDefinition[] = [
   plasmaGlobe,
   neuralBrain,
   fractalStudio,
+  fluidSim,
   neonKaleidoscope,
   quantumCore,
 ]
