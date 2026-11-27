@@ -70,8 +70,10 @@ pipelines were portable in the first place:
 - **Windows** now builds **x64** on a hosted runner. The old UTM agent produced
   **ARM64**, which was a consequence of the host Mac rather than a target
   choice — x64 is what nearly every Windows user needs.
-- **Linux** builds the plugin headless (no IGraphics backend, SDKs not
-  fetched), so it produces no GUI bundles. The `.deb` is the Linux artifact;
+- **Linux**: `plugin.yml` fetches the SDKs and builds real VST3/CLAP bundles
+  with the WebKitGTK editor (iPlug2 has supported Linux since the 1527935
+  pin). Releases don't ship them yet: `release.yml` still treats Linux as
+  headless, the `.deb` is the Linux artifact, and
   `collect-plugin-bundles.mjs --allow-empty` keeps that from failing the release.
 - **macOS** builds VST3 + AU + CLAP. AU and CLAP are `EXCLUDE_FROM_ALL`, so the
   workflow builds those targets explicitly.

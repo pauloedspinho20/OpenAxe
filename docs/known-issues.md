@@ -176,6 +176,53 @@ not found` when a scene compiles. A `Fn().setLayout()` function becomes one
   they can't clash with iPlug2 in the plugin), and builds every converter
   under a mutex.
 
+## iPlug2 on Linux (pinned `1527935`)
+
+### Closing the editor can abort the host with an X `BadWindow`
+
+- **Symptom:** the host process died when the plugin editor closed, with
+  `Gdk-WARNING ... X Window System error ... BadWindow (invalid Window
+parameter) ... request_code 12`. iPlug2's Linux webview is a GtkPlug inside
+  the host's X11 window. A host that destroys that parent first also destroys
+  our plug window, the requests GTK then makes against it fail, and GDK's
+  default X error handler aborts the process. It reproduced on every pluginval
+  Editor test, but is timing-dependent: `GDK_SYNCHRONIZE=1` hides it.
+- **Workaround:** the plugin's Linux `OpenWindow`/`CloseWindow` run inside a
+  GDK X-error trap that syncs and discards errors from requests made in it
+  (`packages/vst3/src/x11_error_trap.{h,cpp}`). It's a separate translation
+  unit because `<gdk/gdkx.h>` (Xlib) and iPlug2 both define `KeyCode`.
+  Upstream-worthy.
+
+### `IWebViewControl` doesn't exist on Linux
+
+- **Symptom:** the macOS/Windows editor (an IGraphics `IWebViewControl`)
+  can't be built on Linux. iPlug2 offers its Linux webview only as
+  `WebViewEditorDelegate`, and doesn't define `iPlug2::Extras::IWebViewControl`
+  there.
+- **Workaround:** on Linux the plugin itself is the webview
+  (`WEBVIEW_EDITOR_DELEGATE`). The page/bridge logic both shells need lives
+  in `packages/vst3/src/webview_session.{h,cpp}`.
+
+### Testing the Linux plugin under Docker on Apple Silicon
+
+Not product bugs, but each one cost time. The CI image (`openaxe-ci-linux`)
+is amd64, so it runs under Rosetta there:
+
+- X11 shared memory trips a Rosetta assertion (`VMAllocationTracker.cpp ...
+remove_shared_mem`, then `Trace/breakpoint trap`) as soon as GTK draws.
+  Start Xvfb with `-extension MIT-SHM`, and set
+  `WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1`.
+- `gdb` can't trace under Rosetta (`Couldn't get registers`); use logs
+  (`OPENAXE_DESKTOP_DEBUG=1` writes the plugin's) or an arm64 image.
+- With no sound card the standalone app stops on a modal "Please check the
+  audio settings". Run `pulseaudio -D --load=module-null-sink`, and dismiss the
+  dialog with `xdotool key Return`.
+- pluginval's Editor test closes the editor before WebKit finishes loading the
+  page under emulation; use the standalone app to check the page and bridge.
+- Building the VST3 SDK's own tools (validator, `editorhost`) needs VSTGUI's
+  xcb/cairo/pango/gtkmm-3.0 dev packages. `editorhost` couldn't create its X
+  window under Xvfb at all.
+
 ## Browsers
 
 ### `std::random_device` aborts inside an AudioWorklet (Emscripten / WASM)

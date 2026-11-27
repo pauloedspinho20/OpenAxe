@@ -34,6 +34,8 @@
 namespace openaxe_vst3 {
 class VstBridge;
 class HttpServer;
+class WebViewSession;
+class ScopedX11ErrorTrap;
 }
 
 const int kNumPresets = 2;  // Clean Boost, Ambient Swell — generated from same rows as web
@@ -54,6 +56,18 @@ class OpenAxePlugin final : public iplug::Plugin {
   // Main-thread pump. Applies Tier-2 parameter writes the audio thread parked
   // in deferred_writes_ (issue #300 C1).
   void OnIdle() override;
+#endif
+
+#if defined(WEBVIEW_EDITOR_DELEGATE) && defined(OPENAXE_HAS_WEBVIEW)
+  // Linux editor shell: iPlug2 hosts its webview only as an editor delegate
+  // there (WebKitGTK in a GtkPlug; no IWebViewControl), so the plugin itself
+  // is the IWebView. These forward to the same WebViewSession the macOS /
+  // Windows IWebViewControl uses — see webview_session.h.
+  void OnWebViewReady() override;
+  void OnWebContentLoaded() override;
+  void OnMessageFromWebView(const char* json) override;
+  void* OpenWindow(void* pParent) override;
+  void CloseWindow() override;
 #endif
 
   // Portable JSON round-trip (same document as the host chunk, just on disk)
@@ -223,5 +237,10 @@ class OpenAxePlugin final : public iplug::Plugin {
    bool uiServerAcquired_ = false;
    unsigned short uiPort_ = 0;
    std::string uiRoot_;
+#if defined(WEBVIEW_EDITOR_DELEGATE)
+   std::unique_ptr<openaxe_vst3::WebViewSession> webSession_;
+   // Held from OpenWindow to CloseWindow - see OpenAxePlugin::OpenWindow.
+   std::unique_ptr<openaxe_vst3::ScopedX11ErrorTrap> editorTrap_;
+#endif
 #endif
 };

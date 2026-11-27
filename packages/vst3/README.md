@@ -44,11 +44,22 @@ cmake --build packages/vst3/build --config Release
 
 ### Linux
 
+The editor is the same React UI as everywhere else, hosted by iPlug2's
+WebKitGTK webview (a GtkPlug embedded in the host's X11 window, so X11 or
+XWayland hosts). It needs `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`; build with
+`-DOPENAXE_VST3_EDITOR=OFF` for a headless plugin without them.
+
 ```bash
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev
+cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
+# iPlug2 ships only SDK placeholders - fetch the VST3/CLAP SDKs, then reconfigure:
+(cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash download-vst3-sdk.sh && bash download-clap-sdks.sh)
 cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build --config Release
+cmake --build packages/vst3/build --target openaxe_clap
 ./packages/vst3/build/openaxe_vst3_smoke
-# Copy build/openaxe_vst3.vst3 to ~/.vst3/
+# build/OpenAxe.vst3 is a bundle directory (Contents/x86_64-linux/OpenAxe.so,
+# UI in Contents/Resources/ui): copy the whole directory to ~/.vst3/
 ```
 
 Standalone iteration (no host, debugger-friendly):
