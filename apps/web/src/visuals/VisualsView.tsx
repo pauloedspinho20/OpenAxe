@@ -81,7 +81,7 @@ export function VisualsView({
   const rebuildKey = useMemo(
     () =>
       JSON.stringify(
-        def.params.filter((p) => p.type === 'number' && p.rebuild).map((p) => params[p.key]),
+        def.params.filter((p) => p.type !== 'action' && p.rebuild).map((p) => params[p.key]),
       ),
     [def, params],
   )
