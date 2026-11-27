@@ -95,6 +95,8 @@ interface WorkletReply {
   meters?: Record<string, number>
   inputMeters?: Record<string, number>
   gainReductions?: Record<string, number>
+  /** Latest analyser-tap samples (mono), or absent while the tap is filling / off. */
+  samples?: { in?: Float32Array; out: Float32Array }
   gateGains?: Record<string, number>
   /** Core block-kind ids this WASM was built with - see assertCompiledKindsMatchConfig. */
   compiledKinds?: number[]
@@ -545,6 +547,32 @@ export class RigWorkletNode {
   async inputMeters(): Promise<Record<string, number>> {
     const reply = await this.request({ type: 'inputMeters' })
     return reply.inputMeters ?? {}
+  }
+
+  /** Switch a block's analysis tap on or off (openaxe_set_block_tap). Off by default. */
+  setBlockTap(blockId: string, enabled: boolean): void {
+    this.send({ type: 'blockTap', block: blockId, enabled })
+  }
+
+  /** Switch the master-bus tap on or off (openaxe_set_master_tap). */
+  setMasterTap(enabled: boolean): void {
+    this.send({ type: 'masterTap', enabled })
+  }
+
+  /** The master bus's last `count` mono samples (pre-mute), or null if the tap is off or filling. */
+  async masterSamples(count: number): Promise<Float32Array | null> {
+    const reply = await this.request({ type: 'masterSamples', count })
+    return reply.samples?.out ?? null
+  }
+
+  /** The block's last `count` input/output samples, or null if the tap is off or still filling. */
+  async blockSamples(
+    blockId: string,
+    count: number,
+  ): Promise<{ in: Float32Array; out: Float32Array } | null> {
+    const reply = await this.request({ type: 'blockSamples', block: blockId, count })
+    const samples = reply.samples
+    return samples?.in ? { in: samples.in, out: samples.out } : null
   }
 
   /** Gain reduction in dB (≤0) per block id from openaxe_get_gain_reduction. */

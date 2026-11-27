@@ -6,6 +6,7 @@
 }
 
 .track {
+  position: relative;
   height: var(--fader-track-height);
   width: var(--fader-track-width);
   display: flex;
@@ -75,4 +76,143 @@
   font-family: var(--font-display);
   font-size: 10px;
   color: var(--ink-2);
+}
+
+/* Horizontal variant: a short recessed slot, thumb turned 90 degrees. */
+.wrapH {
+  flex-direction: row;
+  gap: var(--sp-2);
+}
+
+.trackH {
+  height: 28px;
+  padding: 0 var(--sp-2);
+  align-items: center;
+}
+
+.inputH {
+  writing-mode: horizontal-tb;
+  direction: ltr;
+  width: 100%;
+  height: 4px;
+  cursor: ew-resize;
+}
+
+.inputH::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+}
+.inputH::-moz-range-track {
+  width: 100%;
+  height: 4px;
+}
+.inputH::-webkit-slider-thumb {
+  width: 11px;
+  height: 20px;
+  margin-left: 0;
+  margin-top: -8px;
+}
+.inputH::-moz-range-thumb {
+  width: 11px;
+  height: 20px;
+}
+
+/* Detent tick across the groove at the snap value. */
+.snapMark {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  height: 1px;
+  background: var(--ink-2);
+  opacity: 0.7;
+  pointer-events: none;
+  transform: translateY(50%);
+}
+
+.snapMarkH {
+  top: 3px;
+  bottom: 3px;
+  left: auto;
+  right: auto;
+  width: 1px;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+/* Value bubble (valueDisplay="tooltip"): above the track, only while it is hovered,
+   focused or dragged. Never intercepts the pointer. */
+.tip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 5;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  transform: translateX(-50%);
+  background: var(--panel-raised);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-control);
+  color: var(--ink-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 80ms;
+}
+
+.track:hover .tip,
+.track:focus-within .tip,
+.track:active .tip {
+  opacity: 1;
+}
+
+/* fill: the track takes whatever height the parent gives it. */
+.wrapFill {
+  /* Out of flow, so the native range input's intrinsic height cannot size the parent:
+     the parent's own (stretched) height decides how tall the track is. */
+  position: absolute;
+  inset: 0;
+  align-items: stretch;
+}
+
+.trackFill {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  /* No recessed box around the groove, just enough end padding that the thumb never
+     overhangs the track at either extreme. */
+  padding: 6px 0;
+  background: none;
+  box-shadow: none;
+}
+
+.trackFill .input::-webkit-slider-runnable-track {
+  width: 6px;
+  background: var(--fader-track);
+  box-shadow: inset 0 0 0 1px var(--seam-strong);
+  border-radius: 3px;
+}
+.trackFill .input::-moz-range-track {
+  width: 6px;
+  background: var(--fader-track);
+  border-radius: 3px;
+}
+.trackFill .input::-webkit-slider-thumb {
+  width: 20px;
+  height: 10px;
+  margin-left: -7px;
+}
+.trackFill .input::-moz-range-thumb {
+  width: 20px;
+  height: 10px;
+}
+
+/* The detent notch is short, not a rule across the whole track. */
+.trackFill .snapMark {
+  left: 8px;
+  right: 8px;
+  background: var(--accent);
+  opacity: 0.8;
 }

@@ -176,7 +176,8 @@ describe('paramSchema vs packages/core/param_schema.json', () => {
     const core = coreParamsFor(kind)
     // `mix`/`level` and the I/O trims are engine-level staging rather than DSP params
     // on some kinds, so they are allowed to have no entry in the core table.
-    const staging = new Set(['mix', 'level', 'input_level', 'output_level'])
+    // `tempoSync` is UI-only: effects/tempoSync.ts turns it into the block's time/rate.
+    const staging = new Set(['mix', 'level', 'input_level', 'output_level', 'tempoSync'])
     const unknown = [...webFieldsFor(kind).keys()].filter(
       (key) => !core.has(key) && !staging.has(key),
     )

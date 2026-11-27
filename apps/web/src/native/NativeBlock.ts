@@ -133,6 +133,8 @@ export class NativeBlock implements PresetBlock {
       // symbol - they must go through their dedicated bridge calls
       // (openaxe_set_reverb_algorithm / openaxe_set_delay_model), not
       // setParam, which would reject the key and silently drop the knob.
+      // UI-only; effects/tempoSync.ts turns it into the block's time/rate.
+      if (key === 'tempoSync') continue
       if (key === 'reverbAlgorithm' && typeof value === 'string') {
         void this.bridge.setReverbAlgorithm({ blockId: this.id, algorithm: value })
         continue

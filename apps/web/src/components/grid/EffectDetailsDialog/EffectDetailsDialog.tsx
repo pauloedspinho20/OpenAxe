@@ -1,8 +1,10 @@
-import { useState, type MouseEvent } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
 import { Dialog, HardwareButton, Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { GraphRig } from '../../../engine/GraphRig'
 import type { BlockKind } from '../../../engine/blocks/Block'
+import { graphicResponseDb } from '../../../effects/eqResponse'
 import {
+  EQ_GRAPHIC_BANDS,
   getParamSchema,
   getReverbRawSchemas,
   type ParamFieldSchema,
@@ -11,6 +13,8 @@ import { useBlockParamValues } from '../../../effects/useBlockParamValues'
 import { actionKey } from '../../../midi/actions'
 import { useMidiStore } from '../../../state/midiStore'
 import { useGraphStore } from '../../../state/graphStore'
+import { BlockSpectrum, blockSpectrumSource } from '../BlockSpectrum/BlockSpectrum'
+import { EqGraphicPanel } from '../EqGraphicPanel/EqGraphicPanel'
 import { ParamMidiMenu } from '../../midi/ParamMidiMenu/ParamMidiMenu'
 import { BLOCK_KIND_LABELS } from '../blockOptions'
 import styles from './EffectDetailsDialog.module.css'
@@ -22,6 +26,8 @@ interface Props {
   blockId: string | null
   rig: GraphRig | null
 }
+
+const isSelect = (f: ParamFieldSchema) => f.control === 'select'
 
 function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchema[]]> {
   const groups = new Map<string, ParamFieldSchema[]>()
@@ -112,7 +118,27 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
   // knobs, and a Digital delay rendered wow_depth/wow_rate - controls the
   // algorithm has no symbol for, so the writes reach the store, get re-applied
   // forever by bindGraphRig, and map to nothing.
-  const schema = getParamSchema(kind).filter((f) => !f.visible || f.visible(values))
+  // Graphic-mode EQ: the ten band knobs are replaced by the faders-over-curve
+  // panel below, so they are dropped from the generic knob grid.
+  const spectrumSource = useMemo(
+    () => (open && kind === 'eq' && rig && blockId ? blockSpectrumSource(rig, blockId) : null),
+    [open, kind, rig, blockId],
+  )
+  const isEqGraphic = kind === 'eq' && values.mode === 'graphic'
+  // The graphic EQ's own response, drawn over the live spectrum so you can see it
+  // shaping the signal. Parametric mode has no in-app curve model, so no overlay.
+  const eqOverlay = isEqGraphic
+    ? (hz: number) =>
+        graphicResponseDb(
+          EQ_GRAPHIC_BANDS.map((b) =>
+            typeof values[b.key] === 'number' ? (values[b.key] as number) : 0,
+          ),
+          hz,
+        )
+    : undefined
+  const schema = getParamSchema(kind).filter(
+    (f) => (!f.visible || f.visible(values)) && !(isEqGraphic && 'fader' in f && f.fader),
+  )
 
   // Raw per-algorithm symbols, minus everything the abstraction already owns.
   const rawSchemas = isReverb
@@ -162,7 +188,6 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
             ))}
           </Select>
           <span className={`label ${styles.selectLabel}`}>{field.label}</span>
-          {description && <span className={styles.desc}>{description}</span>}
         </div>
       )
     }
@@ -188,19 +213,35 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
           }
           {...(mappable && blockId ? { onContextMenu: openMidiMenu(field) } : {})}
         />
-        {description && <span className={styles.desc}>{description}</span>}
       </div>
     )
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title={`${label} Details`} width="720px">
+    <Dialog open={open} onClose={onClose} title={`${label} Details`} width="fit-content">
       <div className={styles.body}>
         <div className={styles.header}>
           <p>
-            All controls for this block, including expert / raw parameters. Hover a knob for a
-            tooltip; descriptions are also shown below each control.
+            All controls for this block, including expert / raw parameters. Hover a control for a
+            description.
           </p>
+        </div>
+
+        <div className={styles.visuals}>
+          {/* The analyser is an EQ (and master output) feature only. */}
+          {open && kind === 'eq' && rig && blockId && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Real-time spectrum</span>
+              <BlockSpectrum source={spectrumSource} overlay={eqOverlay} />
+            </div>
+          )}
+
+          {isEqGraphic && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Graphic EQ</span>
+              <EqGraphicPanel values={values} setParam={setParam} />
+            </div>
+          )}
         </div>
 
         {schema.length === 0 && rawSchemas.length === 0 ? (
@@ -210,11 +251,22 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
             {schema.length > 0 && (
               <div className={styles.section}>
                 <span className={styles.sectionTitle}>Controls</span>
-                {groupFields(schema).map(([g, fields]) => (
-                  <div key={g || '_'} className={styles.fields}>
-                    {fields.map((f) => renderField(f))}
-                  </div>
-                ))}
+                <div className={styles.groups}>
+                  {groupFields(schema).map(([g, fields]) => (
+                    <div key={g || '_'} className={styles.group}>
+                      {/* A group holding only a selector (e.g. Mode) needs no title; the select labels itself. */}
+                      {g && !(fields.length === 1 && fields[0]?.control === 'select') && (
+                        <span className={styles.groupTitle}>{g}</span>
+                      )}
+                      <div className={styles.fields}>
+                        {/* Selectors (mode / model / algorithm) lead, then the knobs. */}
+                        {[...fields]
+                          .sort((a, b) => Number(isSelect(b)) - Number(isSelect(a)))
+                          .map((f) => renderField(f))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -226,8 +278,12 @@ export function EffectDetailsDialog({ open, onClose, kind, blockId, rig }: Props
                   ones the Size / Damping / Width / Pre-delay knobs already drive are deliberately
                   not repeated here.
                 </p>
-                <div className={styles.fields}>
-                  {rawSchemas.map((f) => renderField(f, 44, false))}
+                <div className={styles.groups}>
+                  <div className={styles.group}>
+                    <div className={styles.fields}>
+                      {rawSchemas.map((f) => renderField(f, 44, false))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

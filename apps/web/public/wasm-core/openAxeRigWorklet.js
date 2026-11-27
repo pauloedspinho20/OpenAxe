@@ -537,6 +537,68 @@ class OpenAxeRigProcessor extends AudioWorkletProcessor {
           reply.ok = true
           break
         }
+        // Real-time analyser tap (details dialog): enable a block's sample
+        // ring, then read its most recent input/output samples. typeof-guarded
+        // like inputMeters so an older wasm binary just reports nothing.
+        case 'blockTap': {
+          const coreBlock = this.blockByJs.get(message.block)
+          if (coreBlock !== undefined && typeof module._openaxe_set_block_tap === 'function') {
+            module._openaxe_set_block_tap(this.graph, coreBlock, message.enabled ? 1 : 0)
+          }
+          reply.ok = true
+          break
+        }
+        case 'masterTap': {
+          if (typeof module._openaxe_set_master_tap === 'function') {
+            module._openaxe_set_master_tap(this.graph, message.enabled ? 1 : 0)
+          }
+          reply.ok = true
+          break
+        }
+        case 'masterSamples': {
+          const count = Math.min(message.count | 0, 4096)
+          if (count > 0 && typeof module._openaxe_get_master_samples === 'function') {
+            this.tapPtr ??= module._malloc(4096 * 2 * BYTES_PER_FLOAT)
+            const got = module._openaxe_get_master_samples(this.graph, this.tapPtr, count)
+            if (got === count) {
+              reply.samples = {
+                out: module.HEAPF32.slice(this.tapPtr >> 2, (this.tapPtr >> 2) + count),
+              }
+            }
+          }
+          reply.ok = true
+          break
+        }
+        case 'blockSamples': {
+          const coreBlock = this.blockByJs.get(message.block)
+          const count = Math.min(message.count | 0, 4096)
+          if (
+            coreBlock !== undefined &&
+            count > 0 &&
+            typeof module._openaxe_get_block_samples === 'function'
+          ) {
+            // One reusable scratch region for both taps (input then output).
+            this.tapPtr ??= module._malloc(4096 * 2 * BYTES_PER_FLOAT)
+            const inPtr = this.tapPtr
+            const outPtr = this.tapPtr + 4096 * BYTES_PER_FLOAT
+            const gotIn = module._openaxe_get_block_samples(this.graph, coreBlock, 0, inPtr, count)
+            const gotOut = module._openaxe_get_block_samples(
+              this.graph,
+              coreBlock,
+              1,
+              outPtr,
+              count,
+            )
+            if (gotIn === count && gotOut === count) {
+              reply.samples = {
+                in: module.HEAPF32.slice(inPtr >> 2, (inPtr >> 2) + count),
+                out: module.HEAPF32.slice(outPtr >> 2, (outPtr >> 2) + count),
+              }
+            }
+          }
+          reply.ok = true
+          break
+        }
         case 'gainReductions': {
           const out = {}
           for (const [jsId, coreBlock] of this.blockByJs) {

@@ -40,6 +40,17 @@ export const EQ_PARAMS = Object.freeze({
   band3_q: 11,
   low_cut: 12,
   high_cut: 13,
+  mode: 14,
+  graphic0_gain: 15,
+  graphic1_gain: 16,
+  graphic2_gain: 17,
+  graphic3_gain: 18,
+  graphic4_gain: 19,
+  graphic5_gain: 20,
+  graphic6_gain: 21,
+  graphic7_gain: 22,
+  graphic8_gain: 23,
+  graphic9_gain: 24,
 })
 
 export const CHORUS_PARAMS = Object.freeze({ rate: 0, depth: 1, delay: 2, feedback: 3, stereo: 4 })

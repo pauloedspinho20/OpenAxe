@@ -173,7 +173,7 @@ grid-size coupling.
 - **Pool**: `OPENAXE_AUTOMATION_SLOT_COUNT = 16` slots. Slot 0 is
   permanently the master bus (level, mute); slots 1..15 bind to live blocks -
   more than any realistic rig fills, far fewer than 480.
-- **Entries per slot**: `OPENAXE_AUTOMATION_PARAMS_PER_SLOT = 20`, a frozen
+- **Entries per slot**: `OPENAXE_AUTOMATION_PARAMS_PER_SLOT = 32`, a frozen
   stride. Each entry of a bound slot _is_ an index into the bound block's
   param table; its display name, range and unit resolve dynamically from
   `openaxe_automation_slot_param_info` (which forwards to the bound
@@ -182,9 +182,9 @@ grid-size coupling.
 - **Host id layout** (`packages/vst3/generated/automation_param_map.h`,
   generated): id 0 = master level, id 1 = master mute, then slot-major:
 
-      SlotParamId(slot, entry) = 2 + (slot - 1) * 20 + entry
+      SlotParamId(slot, entry) = 2 + (slot - 1) * 32 + entry
 
-  Total declared parameters: 2 + 15 × 20 = **302**.
+  Total declared parameters: 2 + 15 × 32 = **482**.
 
 - **Normalization**: values cross the plugin/host boundary as 0..1 and map
   linearly onto the resolved param's `[min, max]` (from the schema / live
@@ -198,7 +198,7 @@ Validation against `param_schema.json` found the real maximum: **reverb-hall
 exposes 18 params** (room 17, plate 9). A 12-entry slot would silently leave
 reverb tails unautomatable, and picking which 12 by hand would bake index-
 order assumptions back into the ABI. So the stride is schema-driven and set
-with headroom (20 > 18 today); the generator
+with headroom (32 > 26 today; it was 20 until the eq block's graphic mode took it to 26 params, a one-time id remap made while the plugin was still a scaffold); the generator
 (`scripts/gen-param-schema.mjs`) fails if any kind/variant ever exceeds it.
 
 **Both numbers are frozen API surface.** Changing `paramsPerSlot` shifts

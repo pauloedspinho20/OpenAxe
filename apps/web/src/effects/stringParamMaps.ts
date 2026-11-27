@@ -23,6 +23,7 @@ const CHARACTER_MAP: Record<string, number> = { clean: 0, opto: 1, fet: 2, varim
 // `mode` is shared by three kinds with different enums, so it keys off kind.
 const MODE_MAP: Record<string, Record<string, number>> = {
   tremolo: { normal: 0, harmonic: 1 },
+  eq: { parametric: 0, graphic: 1 },
   filter: { pedal: 0, env: 1, lfo: 2 },
   'pitch-shifter': { detune: 0, whammy: 1 },
 }

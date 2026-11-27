@@ -481,6 +481,7 @@ export function GridEditor({
           open={outputDialogOpen}
           onClose={() => setOutputDialogOpen(false)}
           outputSelectionSupported={outputSelectionSupported}
+          rig={rig}
         />
       )}
       <TunerDialog open={tunerOpen} onClose={() => setTunerOpen(false)} analyser={tunerAnalyser} />

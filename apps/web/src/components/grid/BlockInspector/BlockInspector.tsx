@@ -224,6 +224,7 @@ export function BlockInspector({ rig, context }: BlockInspectorProps) {
           entry={libraryEntry}
           slot={isIr ? 'ir' : 'model'}
           blockId={blockId}
+          block={block}
           loadTarget={
             block
               ? {

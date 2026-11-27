@@ -8,6 +8,7 @@ import { Tone3000Browser } from './components/Tone3000Browser/Tone3000Browser'
 /* import { OnboardingModal } from './components/global/OnboardingModal/OnboardingModal' */
 import { PowerGate } from './components/global/PowerGate/PowerGate'
 import { SettingsDialog } from './components/global/SettingsDialog/SettingsDialog'
+import { TempoControl } from './components/global/TempoControl/TempoControl'
 import { HeaderPerfWidget } from './components/global/HeaderPerfWidget/HeaderPerfWidget'
 import { FactorySetupDialog } from './components/global/FactorySetupDialog/FactorySetupDialog'
 import { AboutDialog } from './components/global/AboutDialog/AboutDialog'
@@ -47,6 +48,7 @@ import { useSettingsStore } from './state/settingsStore'
 import { useMidiManager } from './state/midiManager'
 import { useMidiStore } from './state/midiStore'
 import { useEngineVersion } from './state/engineVersion'
+import { useTempoSync } from './hooks/useTempoSync'
 import { useUpdateCheck } from './hooks/useUpdateCheck'
 import { LANDING_DOWNLOAD_URL } from './config/landing'
 
@@ -96,6 +98,7 @@ function App() {
   // Re-render when the engine's live block state changes (model/IR loads) -
   // graphStore doesn't track that, see engineVersion.ts.
   const engineVersion = useEngineVersion((s) => s.version)
+  useTempoSync()
   const openMidiManager = useMidiManager((s) => s.openManager)
   const settingsOpen = useSettingsStore((s) => s.open)
   const openSettings = useSettingsStore((s) => s.openSettings)
@@ -246,6 +249,10 @@ function App() {
             })}
           />
         )}
+
+        <div className={`${styles.headerGroup} ${styles.tempoGroup}`}>
+          <TempoControl />
+        </div>
 
         {/*  <div className={`${styles.headerGroup} ${styles.status}`}>
           <Led on={isReady} color={engine.status === 'error' ? 'statusRed' : 'statusGreen'} />

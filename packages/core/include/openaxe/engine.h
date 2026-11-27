@@ -74,8 +74,12 @@ inline constexpr size_t kMaxIrBytes = 8u * 1024u * 1024u;
 // parameter id (a saved DAW project's lanes would land elsewhere). See
 // packages/vst3/README.md's design note before touching them.
 inline constexpr int kAutomationSlotCount = 16;
-// Frozen stride with headroom over today's widest table (reverb-hall, 18).
-inline constexpr int kAutomationParamsPerSlot = 20;
+// Frozen stride with headroom over today's widest table (eq, 26 with its graphic
+// mode; raised from 20 while the plugin was still a scaffold).
+// Frames kept per block by the analysis tap (a power of two); also the largest
+// FFT the real-time analyser can run.
+inline constexpr uint32_t kBlockTapSize = 4096;
+inline constexpr int kAutomationParamsPerSlot = 32;
 // Slot 0 is permanently the master bus - it never binds to a block.
 inline constexpr int kMasterAutomationSlot = 0;
 
@@ -548,6 +552,11 @@ class AudioEngine {
   // ── Metering ──────────────────────────────────────────────────────────
   float GetMeter(BlockId id) const;   // peak |sample| over the last Process() call, 0 if unknown
   float GetInputMeter(BlockId id) const;  // peak |sample| at the block's input (post input trim), 0 if unknown
+  // Analysis tap: off by default. See BlockState::tap_enabled.
+  void SetMasterTap(bool enabled);
+  int GetMasterSamples(float* out, int count) const;
+  void SetBlockTap(BlockId id, bool enabled);
+  int GetBlockSamples(BlockId id, int tap, float* out, int count) const;
   float GetCpuLoad() const;           // fraction of real-time budget the last Process() call used
   float GetGainReduction(BlockId id) const;  // compressor GR in dB (≤0), 0 if unknown/not a compressor. Tier 1.
   float GetGateGain(BlockId id) const;       // gate openness 0..1 (1 = open), 0 if unknown/not a gate. Tier 1.
@@ -666,6 +675,12 @@ class AudioEngine {
   std::atomic<float> cpu_load_{0.0f};
   std::atomic<float> master_level_{1.0f};
   std::atomic<bool> master_muted_{false};
+  // Master-bus analysis tap (output spectrum): mono (L+R)/2 of the final bus x master
+  // level, taken BEFORE the mute so the analyser keeps showing the rig's output while
+  // it is muted. Off by default; single writer (audio thread), snapshot reader.
+  std::atomic<bool> master_tap_enabled_{false};
+  std::atomic<uint32_t> master_tap_pos_{0};
+  std::array<float, kBlockTapSize> master_tap_{};
   std::atomic<bool> tuner_muted_{false};
 
   std::vector<BlockId> exec_order_;
