@@ -111,6 +111,8 @@ void TestBadJsonReturnsInvalidFormat() {
   OPENAXE_EXPECT(!amp.HasModel());
 }
 
+constexpr double kPi = 3.14159265358979323846;
+
 std::string ReadModelJson(const char* name) {
   std::ifstream ifs(std::string(NAM_CORE_EXAMPLE_MODELS_DIR) + "/" + name, std::ios::binary);
   return std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
@@ -139,7 +141,7 @@ double ToneAmplitude(const std::vector<float>& signal, size_t start, double freq
   double re = 0.0, im = 0.0;
   const size_t n = signal.size() - start;
   for (size_t i = 0; i < n; ++i) {
-    const double phase = 2.0 * M_PI * freq * static_cast<double>(i) / rate;
+    const double phase = 2.0 * kPi * freq * static_cast<double>(i) / rate;
     re += signal[start + i] * std::cos(phase);
     im -= signal[start + i] * std::sin(phase);
   }
@@ -156,7 +158,7 @@ double SineGainDb(NamAmp& amp, double rate, double freq) {
   std::vector<float> input(total), output(total, 0.0f);
   const double amplitude = 0.01;  // small: keeps the capture near-linear
   for (size_t i = 0; i < total; ++i) {
-    input[i] = static_cast<float>(amplitude * std::sin(2.0 * M_PI * freq * i / rate));
+    input[i] = static_cast<float>(amplitude * std::sin(2.0 * kPi * freq * i / rate));
   }
   for (size_t pos = 0; pos < total; pos += kBlock) {
     const int n = static_cast<int>(std::min<size_t>(kBlock, total - pos));
@@ -189,7 +191,7 @@ void TestOtherRatesRunBehindConverter() {
 
     std::vector<float> input(4096), output(4096, 0.0f);
     for (size_t i = 0; i < input.size(); ++i) {
-      input[i] = static_cast<float>(0.1 * std::sin(2.0 * M_PI * 220.0 * i / rate));
+      input[i] = static_cast<float>(0.1 * std::sin(2.0 * kPi * 220.0 * i / rate));
     }
     size_t pos = 0;
     for (const int n : {1, 512, 37, 128, 511, 2, 300}) {

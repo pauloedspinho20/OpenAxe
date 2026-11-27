@@ -1,3 +1,15 @@
+// AudioDSPTools' resampler pulls in WDL's wdltypes.h, which includes
+// <windows.h> on Windows; without NOMINMAX its min/max macros break every
+// std::max( in the resampler headers (MSVC C2589). Must precede all includes.
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#endif
+
 #include "openaxe/dsp/nam_amp.h"
 
 #include <filesystem>
