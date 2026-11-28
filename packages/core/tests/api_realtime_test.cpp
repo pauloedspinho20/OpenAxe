@@ -105,8 +105,8 @@ void TestEndToEndDsparkRig() {
 
   OPENAXE_EXPECT(openaxe_block_param_count(graph, compressor) == 8);
   // eq / gate / tremolo now have an extra engine mix (hybrid dry/wet, #263);
-  // eq additionally carries the post-band low/high cuts (issue #373)
-  OPENAXE_EXPECT(openaxe_block_param_count(graph, eq) == 15);
+  // eq additionally carries the post-band low/high cuts (issue #373) and the graphic mode (mode + 10 gains)
+  OPENAXE_EXPECT(openaxe_block_param_count(graph, eq) == 26);
   OPENAXE_EXPECT(openaxe_block_param_count(graph, gate) == 7);
   OPENAXE_EXPECT(openaxe_block_param_count(graph, tremolo) == 6);
 

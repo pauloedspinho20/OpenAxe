@@ -306,3 +306,12 @@
 .link:hover {
   text-decoration: underline;
 }
+
+/* The block's parameter knobs, in the same darker card the effect dialogs use. */
+.controls {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--panel-recessed);
+  border-radius: var(--r-md);
+}

@@ -71,13 +71,48 @@
   min-width: 96px;
 }
 
-/* Kinds with a custom (smaller) knob size: tighter spacing, one row. */
-.compact,
-.compact .fields {
+/* Kinds with a custom (smaller) knob size: one row, controls close together within a
+   group, groups clearly apart. Groups stretch to the row height so faders can fill it. */
+.compact {
   flex-wrap: nowrap;
-  gap: var(--sp-4);
+  align-items: stretch;
+  gap: var(--sp-6);
 }
 
-.compact {
-  column-gap: var(--sp-4);
+.compact .fields {
+  flex-wrap: nowrap;
+  gap: var(--sp-1);
+}
+
+.compact .group {
+  justify-content: flex-end;
+}
+
+.compact .group:has(.fieldsWithFaders) {
+  justify-content: stretch;
+}
+
+.compact .fieldsWithFaders {
+  flex: 1;
+  /* Tall enough that a band fader has real travel (the knob cells alone are ~60px). */
+  min-height: 108px;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+
+/* A graphic-EQ band fader, as tall as its group. */
+.faderCell {
+  position: relative;
+  width: var(--fader-track-width);
+  align-self: stretch;
+}
+
+/* The compact (one-row) strips are the tightest: let the mode select shrink. */
+.compact .selectField {
+  min-width: 80px;
+}
+
+/* Knobs beside the band faders sit on the same baseline as every other knob in the strip. */
+.fieldsWithFaders > :not(.faderCell) {
+  align-self: flex-end;
 }

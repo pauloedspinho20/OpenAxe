@@ -225,7 +225,7 @@ OpenAxePlugin::OpenAxePlugin(const iplug::InstanceInfo& info)
   else VstLog("OPENAXE_UI_URL not set");
 #endif
 #if IPLUG_DSP
-  // Declare the full stable 302-param list (issue #127 / #121). When the SDK
+  // Declare the full stable 482-param list (issue #127 / #121). When the SDK
   // isn't present this is a no-op; when it is, hosts see Master + Slot 1..15
   // groups at construction and automation lanes persist across sessions.
   openaxe_vst3::params::RegisterParams(*this);

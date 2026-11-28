@@ -6,6 +6,8 @@
 // Only built if OPENAXE_HAS_DSPARK.
 #include "openaxe/dsp/equalizer.h"
 
+#include "openaxe/api.h"
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -19,7 +21,7 @@ using openaxe::dsp::Equalizer;
 namespace {
 
 void TestParamCountAndInfo() {
-  OPENAXE_EXPECT(Equalizer::ParamCount() == 14);
+  OPENAXE_EXPECT(Equalizer::ParamCount() == 25);
   const auto& first = Equalizer::GetParamInfo(0);
   OPENAXE_EXPECT(std::string(first.symbol) == "band0_frequency");
   const auto& last_band = Equalizer::GetParamInfo(11);
@@ -28,6 +30,9 @@ void TestParamCountAndInfo() {
   OPENAXE_EXPECT(std::string(low_cut.symbol) == "low_cut");
   const auto& high_cut = Equalizer::GetParamInfo(13);
   OPENAXE_EXPECT(std::string(high_cut.symbol) == "high_cut");
+  OPENAXE_EXPECT(std::string(Equalizer::GetParamInfo(14).symbol) == "mode");
+  OPENAXE_EXPECT(std::string(Equalizer::GetParamInfo(15).symbol) == "graphic0_gain");
+  OPENAXE_EXPECT(std::string(Equalizer::GetParamInfo(24).symbol) == "graphic9_gain");
 }
 
 void TestGetSetEveryParam() {
@@ -153,6 +158,148 @@ void TestAllDefaultsAreTransparent() {
   OPENAXE_EXPECT(close);
 }
 
+// Steady-state level of a unit sine at `freq_hz` through a graphic-mode EQ whose
+// band `band` is set to `gain_db` (all others flat).
+float GraphicSinePeak(int band, float gain_db, float freq_hz) {
+  Equalizer eq;
+  eq.Reset(48000.0);
+  eq.SetParam(14, 1.0f);
+  eq.SetParam(15 + band, gain_db);
+  constexpr int kFrames = 4800;
+  std::vector<float> input(kFrames), out_l(kFrames), out_r(kFrames);
+  const float* in_ptrs[2] = {input.data(), input.data()};
+  float* out_ptrs[2] = {out_l.data(), out_r.data()};
+  double energy = 0.0;
+  long count = 0;
+  for (int block = 0; block < 6; ++block) {
+    for (int i = 0; i < kFrames; ++i) {
+      const int n = block * kFrames + i;
+      input[i] = std::sin(static_cast<float>(n) / 48000.0f * freq_hz * 6.283185307179586f);
+    }
+    eq.Process(in_ptrs, out_ptrs, kFrames);
+    if (block >= 4) {
+      for (int i = 0; i < kFrames; ++i) {
+        energy += static_cast<double>(out_l[i]) * out_l[i];
+        ++count;
+      }
+    }
+  }
+  // RMS scaled to a unit-sine amplitude. Peak would under-read near Nyquist,
+  // where a few samples per cycle never land on the crest.
+  return static_cast<float>(std::sqrt(2.0 * energy / static_cast<double>(count)));
+}
+
+float DbOf(float linear) { return 20.0f * std::log10(linear); }
+
+void TestGraphicBandGainAtCentre() {
+  // Each octave band hits its set gain at its own centre frequency.
+  const float centres[10] = {31.25f, 62.5f, 125.0f, 250.0f, 500.0f,
+                             1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
+  for (int band = 2; band < 10; ++band) {  // the lowest two are too slow to settle in 0.5 s
+    OPENAXE_EXPECT(std::fabs(DbOf(GraphicSinePeak(band, 9.0f, centres[band])) - 9.0f) < 0.3f);
+    OPENAXE_EXPECT(std::fabs(DbOf(GraphicSinePeak(band, -9.0f, centres[band])) + 9.0f) < 0.3f);
+  }
+  // A band does not move a frequency four octaves away.
+  OPENAXE_EXPECT(std::fabs(DbOf(GraphicSinePeak(5, 12.0f, 62.5f))) < 0.6f);
+}
+
+void TestGraphicFlatIsBitIdentical() {
+  Equalizer eq;
+  eq.Reset(48000.0);
+  eq.SetParam(14, 1.0f);
+  constexpr int kFrames = 512;
+  std::vector<float> input(kFrames), out_l(kFrames), out_r(kFrames);
+  for (int i = 0; i < kFrames; ++i) input[i] = std::sin(static_cast<float>(i) * 0.05f);
+  const float* in_ptrs[2] = {input.data(), input.data()};
+  float* out_ptrs[2] = {out_l.data(), out_r.data()};
+  eq.Process(in_ptrs, out_ptrs, kFrames);
+  bool same = true;
+  for (int i = 0; i < kFrames; ++i) same = same && out_l[i] == input[i] && out_r[i] == input[i];
+  OPENAXE_EXPECT(same);
+}
+
+void TestGraphicModeIsolation() {
+  // Parametric bands do nothing in graphic mode, and are live again after switching back.
+  Equalizer eq;
+  eq.Reset(48000.0);
+  eq.SetParam(14, 1.0f);
+  eq.SetParam(1, 12.0f);  // parametric band 0 gain - must be ignored in graphic mode
+  constexpr int kFrames = 256;
+  std::vector<float> input(kFrames, 0.5f), out_l(kFrames), out_r(kFrames);
+  const float* in_ptrs[2] = {input.data(), input.data()};
+  float* out_ptrs[2] = {out_l.data(), out_r.data()};
+  eq.Process(in_ptrs, out_ptrs, kFrames);
+  OPENAXE_EXPECT(out_l[kFrames - 1] == 0.5f);
+  eq.SetParam(14, 0.0f);
+  for (int block = 0; block < 4; ++block) eq.Process(in_ptrs, out_ptrs, kFrames);
+  OPENAXE_EXPECT(out_l[kFrames - 1] > 0.5f * 2.0f);  // DC through a +12 dB low shelf
+}
+
+// The analysis tap (real-time analyser): off by default, then returns exactly
+// the samples the block saw and produced, and nothing for unknown blocks.
+void TestAnalysisTap() {
+  OpenAxeGraph* g = openaxe_graph_create();
+  const int32_t eq = openaxe_add_block(g, OPENAXE_BLOCK_EQ, 0, 0);
+  OPENAXE_EXPECT(openaxe_connect(g, OPENAXE_IN_RAIL, 0, eq, 0) >= 0);
+  OPENAXE_EXPECT(openaxe_connect(g, eq, 0, OPENAXE_OUT_RAIL, 0) >= 0);
+  constexpr int32_t kBlock = 512;
+  openaxe_reset(g, 48000.0, kBlock);
+
+  std::vector<float> input(kBlock), output(kBlock);
+  const float* in_ptrs[1] = {input.data()};
+  float* out_ptrs[1] = {output.data()};
+  std::vector<float> fed;
+  auto run_blocks = [&](int blocks) {
+    for (int b = 0; b < blocks; ++b) {
+      for (int i = 0; i < kBlock; ++i) {
+        input[i] = 0.5f * std::sin(static_cast<float>(fed.size() + i) * 0.07f);
+      }
+      fed.insert(fed.end(), input.begin(), input.end());
+      openaxe_process(g, in_ptrs, 1, out_ptrs, 1, kBlock);
+    }
+  };
+
+  std::vector<float> got(4096);
+  run_blocks(10);
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, eq, 0, got.data(), 4096) == 0);  // tap off
+
+  openaxe_set_block_tap(g, eq, 1);
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, eq, 0, got.data(), 4096) == 0);  // not yet filled
+  run_blocks(10);                                                              // 5120 frames
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, eq, 0, got.data(), 4096) == 4096);
+  // Input tap == the most recent 4096 frames fed in (default trim is unity), in order.
+  bool in_matches = true;
+  const size_t tail = fed.size() - 4096;
+  for (size_t i = 0; i < 4096; ++i) in_matches = in_matches && std::fabs(got[i] - fed[tail + i]) < 1e-5f;
+  OPENAXE_EXPECT(in_matches);
+  // A flat EQ passes audio through, so the output tap matches too.
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, eq, 1, got.data(), 4096) == 4096);
+  bool out_matches = true;
+  for (size_t i = 0; i < 4096; ++i) out_matches = out_matches && std::fabs(got[i] - fed[tail + i]) < 1e-3f;
+  OPENAXE_EXPECT(out_matches);
+  // Counts above the ring size are capped; unknown blocks yield nothing.
+  std::vector<float> big(8192);
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, eq, 0, big.data(), 8192) == 4096);
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, 999, 0, got.data(), 4096) == 0);
+
+  openaxe_set_block_tap(g, eq, 0);
+  OPENAXE_EXPECT(openaxe_get_block_samples(g, eq, 0, got.data(), 4096) == 0);
+
+  // Master tap: off by default, and it keeps reporting the signal while the master is muted.
+  OPENAXE_EXPECT(openaxe_get_master_samples(g, got.data(), 4096) == 0);
+  openaxe_set_master_tap(g, 1);
+  openaxe_set_master_muted(g, 1);
+  run_blocks(10);
+  OPENAXE_EXPECT(openaxe_get_master_samples(g, got.data(), 4096) == 4096);
+  float peak = 0.0f;
+  for (float v : got) peak = std::max(peak, std::fabs(v));
+  OPENAXE_EXPECT(peak > 0.3f);                                        // the signal, not silence
+  OPENAXE_EXPECT(std::fabs(*std::max_element(output.begin(), output.end())) < 1e-6f);  // yet muted
+  openaxe_set_master_tap(g, 0);
+  OPENAXE_EXPECT(openaxe_get_master_samples(g, got.data(), 4096) == 0);
+  openaxe_graph_destroy(g);
+}
+
 }  // namespace
 
 int main() {
@@ -161,6 +308,10 @@ int main() {
   TestBassBoostRaisesLevelBelowBoost();
   TestCutsAttenuateOutOfBand();
   TestAllDefaultsAreTransparent();
+  TestGraphicBandGainAtCentre();
+  TestGraphicFlatIsBitIdentical();
+  TestGraphicModeIsolation();
+  TestAnalysisTap();
 
   return openaxe::test::g_failures == 0 ? 0 : 1;
 }

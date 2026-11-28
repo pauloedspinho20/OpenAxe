@@ -700,7 +700,7 @@ endif()
 
 # ── CLAP target (issue #135) ─────────────────────────────────────────
 # VST3 alone leaves out Bitwig (where CLAP is the better citizen). iPlug2
-# builds all three formats from one source tree. The plugin's 302 param IDs
+# builds all three formats from one source tree. The plugin's 482 param IDs
 # stay stable across formats — AU and CLAP expose the same slot-major IDs
 # (2 + (slot-1)*20 + entry) so a lane's meaning never collides across
 # formats. `.aupreset`/`.vstpreset` share the same JSON chunk (issue #128).
@@ -788,7 +788,7 @@ endif()
 # ── AUv2 target (issue #135, macOS only) ──────────────────────────────
 # Logic/GarageBand gate: auval -v aumf Nms1 NwSt must be clean — aumf, not
 # aufx, because config.h sets PLUG_DOES_MIDI_IN 1, which OPENAXE_AU_TYPE above
-# resolves to the music-effect type. Same Plugin class, same 302 IDs, same
+# resolves to the music-effect type. Same Plugin class, same 482 IDs, same
 # chunk — parameter IDs stay stable and don't collide across VST3/AU/CLAP.
 # AUv3 (app extension) is out of scope (#17).
 if(APPLE AND IPLUG2_AVAILABLE)

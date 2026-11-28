@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-4);
+  min-width: 0;
 }
 
 .header {
@@ -34,10 +35,56 @@
   padding-bottom: var(--sp-2);
 }
 
+/* Parameter groups (EQ bands, cuts, ...) sit side by side as cards and wrap as the
+   dialog narrows, instead of each group taking a full-width row. */
+.visuals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+
+.visuals > .section {
+  flex: 1 1 480px;
+  min-width: 0;
+}
+
+.visuals:empty {
+  display: none;
+}
+
+/* The dialog is as wide as its content (up to the screen): parameter cards sit in one row
+   and only wrap onto another row when there are too many to fit. */
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sp-3);
+}
+
+.group {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--panel-recessed);
+  border-radius: var(--r-md);
+}
+
+.groupTitle {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3);
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3) var(--sp-4);
 }
 
 .fieldCard {
@@ -46,14 +93,6 @@
   align-items: center;
   gap: var(--sp-1);
   min-width: 96px;
-}
-
-.desc {
-  max-width: 120px;
-  font-size: 10px;
-  color: var(--ink-3);
-  text-align: center;
-  line-height: 1.3;
 }
 
 .selectWrapper {

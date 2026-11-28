@@ -70,6 +70,8 @@ export class RigBlock implements PresetBlock {
       // openaxe_set_reverb_algorithm. Reverb control knobs (roomSize/
       // damping/...) are routed by the worklet through the core's ReverbControl
       // mapping on setParam, so they stay generic.
+      // UI-only; effects/tempoSync.ts turns it into the block's time/rate.
+      if (key === 'tempoSync') continue
       if (key === 'reverbAlgorithm' && typeof value === 'string') {
         this.worklet.setReverbAlgorithm(this.id, value)
         continue

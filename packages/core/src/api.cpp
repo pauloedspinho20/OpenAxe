@@ -474,6 +474,23 @@ float openaxe_get_input_meter(OpenAxeGraph* graph, int32_t block_id) {
   return LiveEngine(graph)->GetInputMeter(block_id);
 }
 
+void openaxe_set_block_tap(OpenAxeGraph* graph, int32_t block_id, int32_t enabled) {
+  LiveEngine(graph)->SetBlockTap(block_id, enabled != 0);
+}
+
+void openaxe_set_master_tap(OpenAxeGraph* graph, int32_t enabled) {
+  LiveEngine(graph)->SetMasterTap(enabled != 0);
+}
+
+int32_t openaxe_get_master_samples(OpenAxeGraph* graph, float* out, int32_t count) {
+  return LiveEngine(graph)->GetMasterSamples(out, count);
+}
+
+int32_t openaxe_get_block_samples(OpenAxeGraph* graph, int32_t block_id, int32_t tap, float* out,
+                                  int32_t count) {
+  return LiveEngine(graph)->GetBlockSamples(block_id, tap, out, count);
+}
+
 float openaxe_get_cpu_load(OpenAxeGraph* graph) { return LiveEngine(graph)->GetCpuLoad(); }
 
 float openaxe_get_gain_reduction(OpenAxeGraph* graph, int32_t block_id) {

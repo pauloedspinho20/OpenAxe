@@ -184,6 +184,35 @@ export class GraphRig implements GraphRigControls, PresetRig, StageCapableRig {
     this.inputPeaks.set(id, peak)
   }
 
+  // ── Real-time analyser tap ──────────────────────────────────────────────
+
+  /** Turn a block's analysis tap on or off. Leave it off unless a view is showing it. */
+  setBlockTap(id: string, enabled: boolean): void {
+    if (this.blocks.has(id)) this.worklet.setBlockTap(id, enabled)
+  }
+
+  /** Latest mono input/output samples of a block, or null while the tap is off or filling. */
+  readBlockSamples(
+    id: string,
+    count: number,
+  ): Promise<{ in: Float32Array; out: Float32Array } | null> {
+    return this.blocks.has(id) ? this.worklet.blockSamples(id, count) : Promise.resolve(null)
+  }
+
+  /** Turn the master-bus tap on or off (pre-mute, so it still reads while muted). */
+  setMasterTap(enabled: boolean): void {
+    this.worklet.setMasterTap(enabled)
+  }
+
+  readMasterSamples(count: number): Promise<Float32Array | null> {
+    return this.worklet.masterSamples(count)
+  }
+
+  /** Sample rate the tapped samples are at. */
+  analysisSampleRate(): number {
+    return this.context.sampleRate
+  }
+
   /** Current gain reduction in dB (≤0) for a block, 0 if unknown/not a dynamics block. */
   getGainReduction(id: string): number {
     return this.gainReductions.get(id) ?? 0
