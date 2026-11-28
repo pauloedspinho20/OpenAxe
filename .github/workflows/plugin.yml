@@ -65,9 +65,9 @@ jobs:
     # DIAGNOSTIC (throwaway branch): embedded debug info + PDBs on Windows so a
     # crash dump of the pluginval Editor segfault has symbols for our code.
     env:
-      CXXFLAGS: ${{ startsWith(matrix.os, 'windows') && '/Z7' || '' }}
-      CFLAGS: ${{ startsWith(matrix.os, 'windows') && '/Z7' || '' }}
-      LDFLAGS: ${{ startsWith(matrix.os, 'windows') && '/DEBUG' || '' }}
+      CXXFLAGS: ${{ startsWith(matrix.os, 'windows') && '-Z7' || '' }}
+      CFLAGS: ${{ startsWith(matrix.os, 'windows') && '-Z7' || '' }}
+      LDFLAGS: ${{ startsWith(matrix.os, 'windows') && '-DEBUG' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
