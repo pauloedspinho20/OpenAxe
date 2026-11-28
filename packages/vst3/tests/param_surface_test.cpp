@@ -1,5 +1,5 @@
 // CTest for the host parameter surface scaffolding (issue #127).
-// Verifies the stable 302-param layout from generated/automation_param_map.h,
+// Verifies the stable 482-param layout from generated/automation_param_map.h,
 // normalized<->real helpers, group names, and the slim_size control-thread
 // routing signal — all without needing the iPlug2 SDK or a host.
 //
@@ -20,18 +20,18 @@ static int g_failures = 0;
 namespace {
 
 void TestHostParamCount() {
-  CHECK(openaxe_vst3::params::HostParamCount() == 302);
-  CHECK(openaxe::automation::kTotalPluginParams == 302);
-  std::printf("  param count: %d (2 master + 15*20)\n", openaxe_vst3::params::HostParamCount());
+  CHECK(openaxe_vst3::params::HostParamCount() == 482);
+  CHECK(openaxe::automation::kTotalPluginParams == 482);
+  std::printf("  param count: %d (2 master + 15*32)\n", openaxe_vst3::params::HostParamCount());
 }
 
 void TestHostIdLayout() {
   using namespace openaxe::automation;
   // Master ids 0,1
   CHECK(SlotParamId(1, 0) == 2);
-  CHECK(SlotParamId(1, 19) == 21);
-  CHECK(SlotParamId(15, 0) == 2 + 14*20);
-  CHECK(SlotParamId(15, 19) == 2 + 15*20 -1);
+  CHECK(SlotParamId(1, 31) == 33);
+  CHECK(SlotParamId(15, 0) == 2 + 14*32);
+  CHECK(SlotParamId(15, 31) == 2 + 15*32 - 1);
   // Round-trip through helper
   for (int id = 0; id < kTotalPluginParams; ++id) {
     int slot=-1, entry=-1;

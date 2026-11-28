@@ -68,7 +68,7 @@ void RegisterParams(iplug::Plugin& plugin) {
   using namespace openaxe::automation;
   // iPlug's Plugin is also an IEditorDelegate: GetParam / InitParamRange etc.
   // Declare exactly kTotalPluginParams stable ids, grouped per slot so hosts
-  // show "Master" + "Slot 1" .. "Slot 15" sections rather than 302 flat rows.
+  // show "Master" + "Slot 1" .. "Slot 15" sections rather than 482 flat rows.
   //
   // The constructor already allocates all kTotalPluginParams IParam objects
   // (MakeConfig(HostParamCount(), kNumPresets) in plugin.cpp); this function
