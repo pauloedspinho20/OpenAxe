@@ -3,6 +3,7 @@ import type { EffectParams } from './Effect'
 import type { BlockKind } from '../engine/blocks/Block'
 import { MIXER_INPUT_COUNT } from '../engine/blocks/MixerBlock'
 import { PARAM_RANGES } from './generatedParamRanges'
+import { TEMPO_SYNC_KEY, TEMPO_SYNC_OPTIONS, isTempoSynced } from './tempoSync'
 
 interface KnobField {
   key: string
@@ -17,6 +18,8 @@ interface KnobField {
   group?: string
   /** Knob diameter in px for this field; overrides the kind's default from KNOB_SIZE_BY_KIND. */
   size?: number
+  /** Render as a small vertical fader with a detent at `defaultValue` instead of a knob (still a numeric param). */
+  fader?: boolean
   /** If set, the field is only rendered when this returns true for the current values. */
   visible?: (values: EffectParams) => boolean
   /** Human-readable help shown in knob tooltip and Effect Details dialog. */
@@ -54,7 +57,7 @@ export const DEFAULT_KNOB_SIZE = 50
  * so many controls that the default size wraps onto a second line.
  */
 export const KNOB_SIZE_BY_KIND: Partial<Record<BlockKind, number>> = {
-  eq: 44,
+  eq: 34,
 }
 
 type SymbolRange = { min: number; max: number }
@@ -109,13 +112,14 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
   return [
     {
       key: `band${index}_frequency`,
-      label: `Freq ${index + 1}`,
+      label: 'Freq',
       control: 'knob',
       ...range('eq', `band${index}_frequency`),
       step: 10,
       defaultValue: freqDefault,
       formatValue: hz,
       group,
+      visible: parametricOnly,
     },
     {
       key: `band${index}_gain`,
@@ -126,6 +130,7 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
       defaultValue: 0,
       formatValue: dB,
       group,
+      visible: parametricOnly,
     },
     {
       key: `band${index}_q`,
@@ -136,8 +141,43 @@ function eqBand(index: number, freqDefault: number): KnobField[] {
       defaultValue: 0.707,
       formatValue: plain,
       group,
+      visible: parametricOnly,
     },
   ]
+}
+
+/** The EQ's parametric bands are out of the signal path in graphic mode, so their knobs hide. */
+const parametricOnly = (v: EffectParams) => v.mode !== 'graphic'
+const graphicOnly = (v: EffectParams) => v.mode === 'graphic'
+
+/** ISO octave centres of the graphic EQ, in core order (graphic0_gain ... graphic9_gain). */
+export const EQ_GRAPHIC_BANDS: ReadonlyArray<{ key: string; label: string; hz: number }> = [
+  { key: 'graphic0_gain', label: '31', hz: 31.25 },
+  { key: 'graphic1_gain', label: '62', hz: 62.5 },
+  { key: 'graphic2_gain', label: '125', hz: 125 },
+  { key: 'graphic3_gain', label: '250', hz: 250 },
+  { key: 'graphic4_gain', label: '500', hz: 500 },
+  { key: 'graphic5_gain', label: '1k', hz: 1000 },
+  { key: 'graphic6_gain', label: '2k', hz: 2000 },
+  { key: 'graphic7_gain', label: '4k', hz: 4000 },
+  { key: 'graphic8_gain', label: '8k', hz: 8000 },
+  { key: 'graphic9_gain', label: '16k', hz: 16000 },
+]
+
+function eqGraphicFields(): KnobField[] {
+  const bands: KnobField[] = EQ_GRAPHIC_BANDS.map((b) => ({
+    key: b.key,
+    label: b.label,
+    control: 'knob',
+    ...range('eq', b.key),
+    step: 0.5,
+    defaultValue: 0,
+    formatValue: dB,
+    group: 'Graphic',
+    fader: true,
+    visible: graphicOnly,
+  }))
+  return bands
 }
 
 /**
@@ -318,9 +358,10 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     ...eqBand(1, 500),
     ...eqBand(2, 2000),
     ...eqBand(3, 6000),
+    ...eqGraphicFields(),
     {
       key: 'low_cut',
-      label: 'Low Cut',
+      label: 'HPF',
       control: 'knob',
       ...range('eq', 'low_cut'),
       step: 5,
@@ -331,7 +372,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
     },
     {
       key: 'high_cut',
-      label: 'High Cut',
+      label: 'LPF',
       control: 'knob',
       ...range('eq', 'high_cut'),
       step: 50,
@@ -351,12 +392,26 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
+    {
+      key: 'mode',
+      label: 'Mode',
+      control: 'select',
+      options: [
+        { value: 'parametric', label: 'Parametric' },
+        { value: 'graphic', label: 'Graphic' },
+      ],
+      defaultValue: 'parametric',
+      group: 'Mode',
+      primary: true,
+      description: 'Parametric: 4 sweepable bands. Graphic: 10 fixed octave sliders.',
+    },
   ],
   chorus: [
     {
       key: 'rate',
       label: 'Rate',
       control: 'knob',
+      visible: (v) => !isTempoSynced(v),
       ...range('chorus', 'rate'),
       step: 0.05,
       defaultValue: 0.2,
@@ -419,12 +474,21 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       description:
         'Stereo offsets the two channels\u2019 LFOs by a quarter cycle for width. Mono sweeps them together, which survives a later mono sum instead of partly cancelling.',
     },
+    {
+      key: TEMPO_SYNC_KEY,
+      label: 'Sync',
+      control: 'select',
+      options: TEMPO_SYNC_OPTIONS,
+      defaultValue: 'off',
+      description: 'Lock to the global tempo (header BPM). Off = free-running.',
+    },
   ],
   flanger: [
     {
       key: 'rate',
       label: 'Rate',
       control: 'knob',
+      visible: (v) => !isTempoSynced(v),
       ...range('flanger', 'rate'),
       step: 0.05,
       defaultValue: 0.2,
@@ -472,6 +536,14 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
     },
+    {
+      key: TEMPO_SYNC_KEY,
+      label: 'Sync',
+      control: 'select',
+      options: TEMPO_SYNC_OPTIONS,
+      defaultValue: 'off',
+      description: 'Lock to the global tempo (header BPM). Off = free-running.',
+    },
   ],
   phaser: [
     {
@@ -514,6 +586,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       key: 'rate',
       label: 'Rate',
       control: 'knob',
+      visible: (v) => !isTempoSynced(v),
       ...range('tremolo', 'rate'),
       step: 0.1,
       defaultValue: 4,
@@ -576,6 +649,14 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       defaultValue: 0.4,
       formatValue: percent,
       description: 'Dry/wet blend. 0 = dry, 1 = fully wet.',
+    },
+    {
+      key: TEMPO_SYNC_KEY,
+      label: 'Sync',
+      control: 'select',
+      options: TEMPO_SYNC_OPTIONS,
+      defaultValue: 'off',
+      description: 'Lock to the global tempo (header BPM). Off = free-running.',
     },
   ],
   'ring-mod': [
@@ -942,6 +1023,7 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
       key: 'time',
       label: 'Time',
       control: 'knob',
+      visible: (v) => !isTempoSynced(v),
       ...range('delay', 'time'),
       step: 5,
       defaultValue: 300,
@@ -1051,6 +1133,14 @@ export const EFFECT_PARAM_SCHEMAS: Record<EffectKind, ParamFieldSchema[]> = {
         { value: 'ping-pong', label: 'Ping-Pong' },
       ],
       defaultValue: 'stereo',
+    },
+    {
+      key: TEMPO_SYNC_KEY,
+      label: 'Sync',
+      control: 'select',
+      options: TEMPO_SYNC_OPTIONS,
+      defaultValue: 'off',
+      description: 'Lock to the global tempo (header BPM). Off = free-running.',
     },
   ],
   // Four permissive reverb algorithms (packages/core, issue #372): Hall, Room, Plate,

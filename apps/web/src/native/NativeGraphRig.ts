@@ -311,6 +311,29 @@ export class NativeGraphRig implements GraphRigControls, PresetRig, StageCapable
     this.inputPeaks.set(id, peak)
   }
 
+  // ── Real-time analyser tap ──────────────────────────────────────────────
+  // The desktop bridge does not carry the sample tap yet, so the analyser reports
+  // "no data" and the details dialog shows its empty state there.
+
+  setBlockTap(_id: string, _enabled: boolean): void {}
+
+  readBlockSamples(
+    _id: string,
+    _count: number,
+  ): Promise<{ in: Float32Array; out: Float32Array } | null> {
+    return Promise.resolve(null)
+  }
+
+  setMasterTap(_enabled: boolean): void {}
+
+  readMasterSamples(_count: number): Promise<Float32Array | null> {
+    return Promise.resolve(null)
+  }
+
+  analysisSampleRate(): number {
+    return 48000
+  }
+
   getGainReduction(id: string): number {
     return this.gainReductions.get(id) ?? 0
   }

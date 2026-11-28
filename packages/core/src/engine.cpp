@@ -79,12 +79,16 @@
 namespace openaxe::engine {
 namespace {
 
-// Largest ParamCount() among the wrapped DSP families (the hall reverb's
-// 18) - every block gets a fixed-size atomic param array this big regardless
-// of kind, so BlockState never needs to resize a container of atomics
+// Largest ParamCount() among the wrapped DSP families, plus the engine-level
+// mix/level appended after it (the eq's 26 with its graphic mode, +1 mix = 27)
+// - every block gets a fixed-size atomic param array this big regardless of
+// kind, so BlockState never needs to resize a container of atomics
 // (std::atomic isn't move/copy-constructible, so a resizable one is awkward
-// for no benefit here - 18 floats per block is nothing).
-constexpr int kMaxParamsPerBlock = 18;
+// for no benefit here - 32 floats per block is nothing). Tied to the plugin
+// automation stride: a block can never have more params than a slot exposes.
+constexpr int kMaxParamsPerBlock = kAutomationParamsPerSlot;
+
+static_assert((kBlockTapSize & (kBlockTapSize - 1)) == 0, "tap ring size must be a power of two");
 
 constexpr int kAmpInputLevelParam = 0;
 constexpr int kAmpOutputLevelParam = 1;
@@ -641,6 +645,18 @@ struct AudioEngine::BlockState {
   // actually saw. Stored alongside `meter` (the post-output-trim peak) so a
   // UI can show per-block IN/OUT levels for gain staging.
   std::atomic<float> input_meter{0.0f};
+
+  // Analysis tap (real-time analyser in the block details dialog). Two mono
+  // rings (L+R)/2 of the block's input (post input trim) and output (post
+  // output trim), written only while `tap_enabled` is set, so a block nobody
+  // is looking at costs one relaxed load per buffer. `tap_pos` is the total
+  // number of frames ever written (both rings advance together). Single
+  // writer (audio thread); the reader copies a snapshot and a torn read only
+  // blurs one display frame, so no lock is needed.
+  std::atomic<bool> tap_enabled{false};
+  std::atomic<uint32_t> tap_pos{0};
+  std::array<float, kBlockTapSize> tap_in{};
+  std::array<float, kBlockTapSize> tap_out{};
 };
 
 
@@ -1705,6 +1721,14 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
       }
       state.input_meter.store(in_peak, std::memory_order_relaxed);
     }
+    const bool tap = state.tap_enabled.load(std::memory_order_relaxed);
+    const uint32_t tap_start = state.tap_pos.load(std::memory_order_relaxed);
+    if (tap) {
+      for (int i = 0; i < num_frames; ++i) {
+        state.tap_in[(tap_start + static_cast<uint32_t>(i)) & (kBlockTapSize - 1)] =
+            0.5f * (state.input_l[0][static_cast<size_t>(i)] + state.input_r[0][static_cast<size_t>(i)]);
+      }
+    }
 
     if (state.bypassed.load(std::memory_order_relaxed)) {
       std::copy_n(state.input_l[0].data(), num_frames, state.output_l.data());
@@ -1819,6 +1843,13 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
                         std::fabs(state.output_r[static_cast<size_t>(i)])});
     }
     state.meter.store(peak, std::memory_order_relaxed);
+    if (tap) {
+      for (int i = 0; i < num_frames; ++i) {
+        state.tap_out[(tap_start + static_cast<uint32_t>(i)) & (kBlockTapSize - 1)] =
+            0.5f * (state.output_l[static_cast<size_t>(i)] + state.output_r[static_cast<size_t>(i)]);
+      }
+      state.tap_pos.store(tap_start + static_cast<uint32_t>(num_frames), std::memory_order_release);
+    }
   }
 
   const float* final_l = nullptr;
@@ -1839,6 +1870,18 @@ void AudioEngine::Process(const float* const* input, int input_channels, float* 
   const bool silent = master_muted_.load(std::memory_order_relaxed) ||
                       tuner_muted_.load(std::memory_order_relaxed);
   const float master_gain = silent ? 0.0f : master_level_.load(std::memory_order_relaxed);
+
+  if (master_tap_enabled_.load(std::memory_order_relaxed)) {
+    // Pre-mute: the level knob still applies, the mute does not.
+    const float level = master_level_.load(std::memory_order_relaxed);
+    const uint32_t start_pos = master_tap_pos_.load(std::memory_order_relaxed);
+    for (int i = 0; i < num_frames; ++i) {
+      const float l = final_l ? final_l[i] : 0.0f;
+      const float r = final_r ? final_r[i] : 0.0f;
+      master_tap_[(start_pos + static_cast<uint32_t>(i)) & (kBlockTapSize - 1)] = 0.5f * (l + r) * level;
+    }
+    master_tap_pos_.store(start_pos + static_cast<uint32_t>(num_frames), std::memory_order_release);
+  }
 
   for (int i = 0; i < num_frames; ++i) {
     const float l = (final_l ? final_l[i] : 0.0f) * master_gain;
@@ -2921,6 +2964,43 @@ bool AudioEngine::IsTunerMuted() const { return tuner_muted_.load(std::memory_or
 float AudioEngine::GetMeter(BlockId id) const {
   const BlockState* state = FindBlockThreadSafe(id);
   return state ? state->meter.load(std::memory_order_relaxed) : 0.0f;
+}
+
+void AudioEngine::SetMasterTap(bool enabled) {
+  master_tap_enabled_.store(enabled, std::memory_order_relaxed);
+}
+
+// Most recent `count` mono samples (oldest first) of the master bus, before the mute.
+// 0 if the tap is off or has not yet accumulated `count` frames.
+int AudioEngine::GetMasterSamples(float* out, int count) const {
+  if (!out || count <= 0 || !master_tap_enabled_.load(std::memory_order_relaxed)) return 0;
+  count = std::min(count, static_cast<int>(kBlockTapSize));
+  const uint32_t pos = master_tap_pos_.load(std::memory_order_acquire);
+  if (pos < static_cast<uint32_t>(count)) return 0;
+  const uint32_t first = pos - static_cast<uint32_t>(count);
+  for (int i = 0; i < count; ++i) out[i] = master_tap_[(first + static_cast<uint32_t>(i)) & (kBlockTapSize - 1)];
+  return count;
+}
+
+void AudioEngine::SetBlockTap(BlockId id, bool enabled) {
+  BlockState* state = FindBlockThreadSafe(id);
+  if (!state) return;
+  state->tap_enabled.store(enabled, std::memory_order_relaxed);
+}
+
+// Copy the most recent `count` mono samples (oldest first) of the block's input
+// (tap 0) or output (tap 1) into `out`. Returns how many were written: 0 for an
+// unknown id, a tap that is off, or one that has not yet filled `count` frames.
+int AudioEngine::GetBlockSamples(BlockId id, int tap, float* out, int count) const {
+  const BlockState* state = FindBlockThreadSafe(id);
+  if (!state || !out || count <= 0 || !state->tap_enabled.load(std::memory_order_relaxed)) return 0;
+  count = std::min(count, static_cast<int>(kBlockTapSize));
+  const uint32_t pos = state->tap_pos.load(std::memory_order_acquire);
+  if (pos < static_cast<uint32_t>(count)) return 0;
+  const auto& ring = tap == 0 ? state->tap_in : state->tap_out;
+  const uint32_t first = pos - static_cast<uint32_t>(count);
+  for (int i = 0; i < count; ++i) out[i] = ring[(first + static_cast<uint32_t>(i)) & (kBlockTapSize - 1)];
+  return count;
 }
 
 // Post-input-trim peak over the last Process() call - the level the block's

@@ -59,6 +59,14 @@ if(MSVC)
 endif()
 
 # ── Shared core (issue #14) ────────────────────────────────────────────────
+# Every plugin format is a shared object that links openaxe_core statically,
+# so the core must be position-independent. Apple and Windows toolchains
+# produce PIC by default; GCC on Linux does not, and the link stops on NAMCore's
+# thread_local prewarm flag (R_X86_64_TPOFF32 ... recompile with -fPIC). It
+# never surfaced before because Linux CI didn't fetch the plugin SDKs, so no
+# Linux VST3/CLAP was ever actually linked. Set before add_subdirectory so the
+# core and its vendored sources pick it up.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(../../packages/core core)
 
 # ── iPlug2 (issue #125) ───────────────────────────────────────────────────
@@ -74,7 +82,7 @@ add_subdirectory(../../packages/core core)
 # and record SDK SHAs in .gitmodules — the choice is documented here so #74's
 # floating-pin lesson is not repeated.
 include(FetchContent)
-# Pinned to 2026-08-19 master (d54f69050f517e43b941d88c2a170f0a840b9ee4). Never float — see #74.
+# Pinned to 2026-11-27 master (15279358bfc500820c27605d16834a3d49a38cee). Never float — see #74.
 # NO GIT_SHALLOW here, deliberately — it is a time bomb when GIT_TAG is a bare
 # commit SHA. For a SHA, FetchContent generates
 #   git clone --no-checkout --depth 1 --no-single-branch <url>
@@ -94,7 +102,7 @@ include(FetchContent)
 FetchContent_Declare(
   iplug2
   GIT_REPOSITORY https://github.com/iPlug2/iPlug2
-  GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4
+  GIT_TAG 15279358bfc500820c27605d16834a3d49a38cee
 )
 
 # Try to fetch iPlug2 source; if offline, keep configuring (smoke test still builds).
@@ -106,29 +114,38 @@ endif()
 set(IPLUG2_AVAILABLE OFF)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../packages/core/third_party/nam-core/NAM/dsp.cpp")
   # ── Editor availability (decided early: it gates iPlug2's own cmake includes) ──
-# The webview editor is an IGraphics control (IWebViewControl), so it can only be
-# built where iPlug2's IGraphics has a backend. In the pinned iPlug2 revision that
-# means macOS/iOS, Windows and WEB only: IGraphicsPrivate.h defines
-# FONT_DESCRIPTOR_TYPE for OS_MAC/OS_IOS/OS_WIN/OS_WEB and leaves the #else branch
-# commented "NO_IGRAPHICS". Compiling any IGraphics translation unit elsewhere
-# fails outright.
+# The editor is the shared React app in a native webview, hosted two ways:
 #
-# That includes iPlug2's own IGraphics object libraries (IGraphicsFlexBox,
-# NanoVG, ...) which Scripts/cmake/IGraphics.cmake defines. They are part of the
-# default `all` target, so the include itself has to be skipped — gating only our
-# sources still leaves `cmake --build` compiling them.
+#   macOS / Windows — an IGraphics control (IWebViewControl) inside an
+#     IGraphics editor. OPENAXE_HAS_IGRAPHICS.
+#   Linux — iPlug2's WebViewEditorDelegate: WebKitGTK in a GtkPlug embedded in
+#     the host's X11 window (XEmbed), no IGraphics at all. iPlug2 supports
+#     IWebViewControl on macOS/Windows only, so on Linux the plugin itself is
+#     the webview. OPENAXE_LINUX_WEBVIEW_EDITOR; needs webkit2gtk-4.1.
 #
-# Where the editor is off the plugin builds headless: DSP, host parameters, state
+# IGraphics.cmake is only included where IGraphics is used: its object libraries
+# (IGraphicsFlexBox, NanoVG, ...) are part of the default `all` target, so
+# including it on Linux would compile a backend nothing links.
+#
+# With the editor off the plugin builds headless: DSP, host parameters, state
 # chunks, presets and MIDI all work and the host draws its own generic parameter
 # UI. Overridable so the headless path can be built and tested anywhere:
 #   cmake -S packages/vst3 -B build -DOPENAXE_VST3_EDITOR=OFF
-set(_openaxe_igraphics_default OFF)
-if(APPLE OR WIN32)
-  set(_openaxe_igraphics_default ON)
+set(_openaxe_editor_default OFF)
+if(APPLE OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(_openaxe_editor_default ON)
 endif()
-option(OPENAXE_VST3_EDITOR "Build the plugin's webview editor (needs iPlug2 IGraphics)"
-       ${_openaxe_igraphics_default})
-set(OPENAXE_HAS_IGRAPHICS ${OPENAXE_VST3_EDITOR})
+option(OPENAXE_VST3_EDITOR "Build the plugin's webview editor"
+       ${_openaxe_editor_default})
+set(OPENAXE_HAS_IGRAPHICS OFF)
+set(OPENAXE_LINUX_WEBVIEW_EDITOR OFF)
+if(OPENAXE_VST3_EDITOR)
+  if(APPLE OR WIN32)
+    set(OPENAXE_HAS_IGRAPHICS ON)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(OPENAXE_LINUX_WEBVIEW_EDITOR ON)
+  endif()
+endif()
 
 FetchContent_GetProperties(iplug2)
   if(NOT iplug2_POPULATED)
@@ -155,6 +172,13 @@ FetchContent_GetProperties(iplug2)
   endif()
   if(OPENAXE_HAS_IGRAPHICS AND EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake")
     include(${iplug2_SOURCE_DIR}/Scripts/cmake/IGraphics.cmake)
+  endif()
+  # Defines iPlug2::WebView (WebKitGTK + WebViewEditorDelegate) — see the
+  # editor-availability note above. pkg-config fails the configure loudly if
+  # webkit2gtk-4.1 is missing, which is what we want: -DOPENAXE_VST3_EDITOR=OFF
+  # is the explicit way to build without it.
+  if(OPENAXE_LINUX_WEBVIEW_EDITOR AND EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/WebView.cmake")
+    include(${iplug2_SOURCE_DIR}/Scripts/cmake/WebView.cmake)
   endif()
   # Fallback defines for standalone plugin CMake (not using IPlugPlugin.cmake's PROJECT_DIR)
   if(NOT DEFINED PROJECT_DIR)
@@ -234,8 +258,11 @@ else()
 endif()
 
 set(OPENAXE_ENABLE_WEBVIEW OFF)
-if(OPENAXE_WEBVIEW_SOURCES AND OPENAXE_HAS_IGRAPHICS)
+if(OPENAXE_WEBVIEW_SOURCES AND (OPENAXE_HAS_IGRAPHICS OR OPENAXE_LINUX_WEBVIEW_EDITOR))
   set(OPENAXE_ENABLE_WEBVIEW ON)
+  # On Linux the plugin targets also link iPlug2::WebView, which brings
+  # WEBVIEW_EDITOR_DELEGATE: plugin.cpp keys the delegate-based editor off that
+  # (iPlug2's IPlugDelegate_select.h ranks it above the NO_IGRAPHICS set above).
   # NOTE: the compile definition and the CMake variable are two different
   # things. add_compile_definitions() only reaches the compiler — guards below
   # must test OPENAXE_ENABLE_WEBVIEW, not OPENAXE_HAS_WEBVIEW, or they evaluate
@@ -249,9 +276,9 @@ elseif(NOT OPENAXE_WEBVIEW_SOURCES)
   message(STATUS "packages/vst3: webview not available — editor builds as stub (offline)")
 else()
   message(STATUS
-    "packages/vst3: iPlug2 IGraphics has no backend on this platform — building "
-    "the plugin headless (DSP/params/state/MIDI, host-generic UI). The webview "
-    "editor needs IGraphics, see the comment above this message.")
+    "packages/vst3: editor off (OPENAXE_VST3_EDITOR=OFF, or no webview host on "
+    "this platform) — building the plugin headless (DSP/params/state/MIDI, "
+    "host-generic UI).")
 endif()
 FetchContent_GetProperties(nlohmann_json)
 if(NOT nlohmann_json_POPULATED)
@@ -438,6 +465,18 @@ function(openaxe_link_sockets target)
 endfunction()
 
 set(PLUGIN_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/app_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/storage_bridge.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ui_url.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/monitor_tap.cpp src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/input_routing.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp)
+# Shared webview plumbing for both editor shells (IWebViewControl on macOS/
+# Windows, WebViewEditorDelegate on Linux) - only built with an editor, as it
+# includes iPlug2's IPlugWebView.h.
+if(OPENAXE_ENABLE_WEBVIEW)
+  list(APPEND PLUGIN_SOURCES src/webview_session.cpp)
+endif()
+# Linux editor only: GDK X-error trap around opening/closing the GtkPlug editor
+# (see src/x11_error_trap.h). Its own TU because <gdk/gdkx.h> and iPlug2 can't
+# share one.
+if(OPENAXE_LINUX_WEBVIEW_EDITOR)
+  list(APPEND PLUGIN_SOURCES src/x11_error_trap.cpp)
+endif()
 
 if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   # VST3 target (issue #125) — the first format, always built when SDK present.
@@ -477,6 +516,10 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_vst3 PRIVATE iPlug2_Extras_IWebViewControl_obj)
   endif()
+  # Linux editor: WebKitGTK + WebViewEditorDelegate (see editor availability).
+  if(OPENAXE_LINUX_WEBVIEW_EDITOR AND TARGET iPlug2::WebView)
+    target_link_libraries(openaxe_vst3 PRIVATE iPlug2::WebView)
+  endif()
   if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
     target_link_libraries(openaxe_vst3 PRIVATE webview::core)
   endif()
@@ -508,7 +551,30 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
       # (The Info.plist is generated above from resources/Info.plist.in and
       # attached via MACOSX_BUNDLE_INFO_PLIST — no template file is expected
       # in PLUG_RESOURCES_DIR.)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      # VST3 on Linux is a bundle directory, not a bare file: hosts (and
+      # pluginval: "No types found") only load
+      #   OpenAxe.vst3/Contents/<arch>-linux/OpenAxe.so
+      # Same layout as iPlug2's iplug_configure_vst3, kept at the build root
+      # where the tests and validators look for OpenAxe.vst3.
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+        set(OPENAXE_VST3_LINUX_ARCH "aarch64-linux")
+      elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+        set(OPENAXE_VST3_LINUX_ARCH "x86_64-linux")
+      else()
+        set(OPENAXE_VST3_LINUX_ARCH "${CMAKE_SYSTEM_PROCESSOR}-linux")
+      endif()
+      set(_vst3_bin_dir "${CMAKE_BINARY_DIR}/OpenAxe.vst3/Contents/${OPENAXE_VST3_LINUX_ARCH}")
+      set_target_properties(openaxe_vst3 PROPERTIES
+        OUTPUT_NAME "OpenAxe"
+        PREFIX ""
+        SUFFIX ".so"
+        LIBRARY_OUTPUT_DIRECTORY "${_vst3_bin_dir}"
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG "${_vst3_bin_dir}"
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE "${_vst3_bin_dir}"
+      )
     else()
+      # Windows: a single-file .vst3 module.
       set_target_properties(openaxe_vst3 PROPERTIES
         OUTPUT_NAME "OpenAxe"
         PREFIX ""
@@ -518,6 +584,12 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   endif()
 
   add_executable(openaxe_standalone src/plugin.cpp src/automation_params.cpp src/plugin_state.cpp src/presets.cpp src/asset_loading.cpp src/editor.cpp src/primitives.cpp src/grid_bridge.cpp src/input_routing.cpp src/http_server.cpp src/vst_bridge.cpp src/ui_root.cpp src/bridge_polyfill.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/secure_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/app_storage.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/storage_bridge.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ui_url.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/monitor_tap.cpp)
+  if(OPENAXE_ENABLE_WEBVIEW)
+    target_sources(openaxe_standalone PRIVATE src/webview_session.cpp)
+  endif()
+  if(OPENAXE_LINUX_WEBVIEW_EDITOR)
+    target_sources(openaxe_standalone PRIVATE src/x11_error_trap.cpp)
+  endif()
   target_include_directories(openaxe_standalone PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${iplug2_SOURCE_DIR} ${iplug2_SOURCE_DIR}/IPlug ${iplug2_SOURCE_DIR}/IPlug/APP ${iplug2_SOURCE_DIR}/IPlug/Extras/WebView ${iplug2_SOURCE_DIR}/IGraphics ${iplug2_SOURCE_DIR}/IGraphics/Platforms ${iplug2_SOURCE_DIR}/IGraphics/Controls ${iplug2_SOURCE_DIR}/IGraphics/Drawing ${iplug2_SOURCE_DIR}/WDL ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src ${iplug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src)
   if(TARGET iPlug2::IGraphics)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2::IGraphics)
@@ -530,6 +602,10 @@ if(IPLUG2_AVAILABLE AND VST3_SDK_AVAILABLE)
   endif()
   if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_standalone PRIVATE iPlug2_Extras_IWebViewControl_obj)
+  endif()
+  # Linux editor: WebKitGTK + WebViewEditorDelegate (see editor availability).
+  if(OPENAXE_LINUX_WEBVIEW_EDITOR AND TARGET iPlug2::WebView)
+    target_link_libraries(openaxe_standalone PRIVATE iPlug2::WebView)
   endif()
   if(EXISTS "${iplug2_SOURCE_DIR}/Scripts/cmake/APP.cmake")
     include("${iplug2_SOURCE_DIR}/Scripts/cmake/APP.cmake")
@@ -624,7 +700,7 @@ endif()
 
 # ── CLAP target (issue #135) ─────────────────────────────────────────
 # VST3 alone leaves out Bitwig (where CLAP is the better citizen). iPlug2
-# builds all three formats from one source tree. The plugin's 302 param IDs
+# builds all three formats from one source tree. The plugin's 482 param IDs
 # stay stable across formats — AU and CLAP expose the same slot-major IDs
 # (2 + (slot-1)*20 + entry) so a lane's meaning never collides across
 # formats. `.aupreset`/`.vstpreset` share the same JSON chunk (issue #128).
@@ -653,6 +729,10 @@ if(IPLUG2_AVAILABLE AND CLAP_SDK_AVAILABLE)
   endif()
   if(OPENAXE_ENABLE_WEBVIEW AND TARGET iPlug2_Extras_IWebViewControl_obj)
     target_link_libraries(openaxe_clap PRIVATE iPlug2_Extras_IWebViewControl_obj)
+  endif()
+  # Linux editor: WebKitGTK + WebViewEditorDelegate (see editor availability).
+  if(OPENAXE_LINUX_WEBVIEW_EDITOR AND TARGET iPlug2::WebView)
+    target_link_libraries(openaxe_clap PRIVATE iPlug2::WebView)
   endif()
   target_link_libraries(openaxe_clap PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,openaxe_core>)
   if(OPENAXE_ENABLE_WEBVIEW AND TARGET webview)
@@ -708,7 +788,7 @@ endif()
 # ── AUv2 target (issue #135, macOS only) ──────────────────────────────
 # Logic/GarageBand gate: auval -v aumf Nms1 NwSt must be clean — aumf, not
 # aufx, because config.h sets PLUG_DOES_MIDI_IN 1, which OPENAXE_AU_TYPE above
-# resolves to the music-effect type. Same Plugin class, same 302 IDs, same
+# resolves to the music-effect type. Same Plugin class, same 482 IDs, same
 # chunk — parameter IDs stay stable and don't collide across VST3/AU/CLAP.
 # AUv3 (app extension) is out of scope (#17).
 if(APPLE AND IPLUG2_AVAILABLE)
@@ -779,6 +859,21 @@ else()
   endif()
 endif()
 
+# ── NanoVG Metal source needs ARC (iPlug2 since 96870c7) ──────────────────
+# iPlug2 used to compile IGraphicsNanoVG_src.m once, in a shared OBJECT library
+# that set -fobjc-arc itself. It now hands the file to every consuming target
+# (through iPlug2::IGraphics::NanoVG::Metal's INTERFACE sources) so each plugin
+# can prefix its Objective-C classes, and leaves -fobjc-arc to
+# iplug_configure_target(), which we don't use. Without the flag the file stops
+# the build with "#error This file must be compiled with Arc". All our targets
+# live in this directory, so one directory-scoped property covers them.
+# (We don't apply iPlug2's per-target ObjC prefix header; neither did the old
+# shared object library, so class-name behaviour is unchanged.)
+if(APPLE AND DEFINED IGRAPHICS_NANOVG_METAL_SRC)
+  set_source_files_properties(${IGRAPHICS_NANOVG_METAL_SRC}
+    PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+endif()
+
 # ── Packaging (CPack, issue #136) ──────────────────────────────────────
 # Produces installers for the three plugin formats, versioned from the root
 # VERSION file (like desktop). Artifacts are attached to the tag-triggered
@@ -832,9 +927,14 @@ function(openaxe_bundle_ui target)
   get_target_property(_is_app_bundle ${target} MACOSX_BUNDLE)
   if(APPLE AND (_is_bundle OR _is_app_bundle))
     set(_ui_dest "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources/ui")
+  elseif(target STREQUAL "openaxe_vst3" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Linux VST3 bundle: Contents/<arch>-linux/OpenAxe.so, so the UI goes in
+    # Contents/Resources/ui - the resolver's first choice once it finds the
+    # bundle's Contents directory.
+    set(_ui_dest "$<TARGET_FILE_DIR:${target}>/../Resources/ui")
   else()
-    # Bare module (Linux/Windows .vst3/.clap, or a non-bundle build): the
-    # resolver also looks for a sibling ui/ directory next to the binary.
+    # Bare module (Windows .vst3, Linux/Windows .clap, or a non-bundle build):
+    # the resolver also looks for a sibling ui/ directory next to the binary.
     set(_ui_dest "$<TARGET_FILE_DIR:${target}>/ui")
   endif()
   # POST_BUILD alone is not enough: it only fires when the target relinks, so
@@ -894,12 +994,25 @@ endif()
 
 # Install the built bundles to standard locations (CPack + workflow's
 # productbuild/WIX/DEB generators handle the platform specifics).
-if(TARGET openaxe_vst3)
-  install(TARGETS openaxe_vst3 LIBRARY DESTINATION "Library/Audio/Plug-Ins/VST3" NAMELINK_SKIP)
-  # Also allow manual copy from build dir (what the smoke test + validators use)
-endif()
-if(TARGET openaxe_clap)
-  install(TARGETS openaxe_clap LIBRARY DESTINATION "Library/Audio/Plug-Ins/CLAP" NAMELINK_SKIP)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # Standard Linux plug-in paths (lib/vst3, lib/clap under the install prefix,
+  # e.g. /usr/lib/vst3 for the DEB). The VST3 goes in as the whole bundle so
+  # its Contents/Resources/ui travels with it.
+  if(TARGET openaxe_vst3)
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/OpenAxe.vst3" DESTINATION "lib/vst3"
+            USE_SOURCE_PERMISSIONS)
+  endif()
+  if(TARGET openaxe_clap)
+    install(TARGETS openaxe_clap LIBRARY DESTINATION "lib/clap" NAMELINK_SKIP)
+  endif()
+else()
+  if(TARGET openaxe_vst3)
+    install(TARGETS openaxe_vst3 LIBRARY DESTINATION "Library/Audio/Plug-Ins/VST3" NAMELINK_SKIP)
+    # Also allow manual copy from build dir (what the smoke test + validators use)
+  endif()
+  if(TARGET openaxe_clap)
+    install(TARGETS openaxe_clap LIBRARY DESTINATION "Library/Audio/Plug-Ins/CLAP" NAMELINK_SKIP)
+  endif()
 endif()
 if(TARGET openaxe_au)
   install(TARGETS openaxe_au LIBRARY DESTINATION "Library/Audio/Plug-Ins/Components" NAMELINK_SKIP)

@@ -377,6 +377,20 @@ float openaxe_get_meter(OpenAxeGraph* graph, int32_t block_id);
 // DSP actually received - 0 for an unknown block. Pairs with
 // openaxe_get_meter for per-block IN/OUT gain-staging meters.
 float openaxe_get_input_meter(OpenAxeGraph* graph, int32_t block_id);
+// Analysis tap for a block's real-time analyser (details dialog). Off by
+// default, so an unwatched block pays nothing; enable it while a view is open.
+// openaxe_get_block_samples copies the most recent `count` mono samples
+// ((L+R)/2, oldest first; count is capped at the tap size, 4096) of the block's
+// input (tap 0, post input trim) or output (tap 1, post output trim) into `out`
+// and returns how many it wrote - 0 for an unknown block, a tap that is off, or
+// one that has not yet accumulated `count` frames. Safe from any thread.
+void openaxe_set_block_tap(OpenAxeGraph* graph, int32_t block_id, int32_t enabled);
+// The same for the master bus, taken before the master mute (so an output analyser keeps
+// working while muted) but after the master level. Off by default.
+void openaxe_set_master_tap(OpenAxeGraph* graph, int32_t enabled);
+int32_t openaxe_get_master_samples(OpenAxeGraph* graph, float* out, int32_t count);
+int32_t openaxe_get_block_samples(OpenAxeGraph* graph, int32_t block_id, int32_t tap, float* out,
+                                  int32_t count);
 // Fraction of real-time budget the last openaxe_process call used.
 float openaxe_get_cpu_load(OpenAxeGraph* graph);
 // Compressor (and gate) gain reduction in dB (≤0, 0 = no reduction), 0 for unknown/non-dynamics blocks. Tier 1.
@@ -400,7 +414,7 @@ float openaxe_get_gate_gain(OpenAxeGraph* graph, int32_t block_id);
 // (block_id, index) counterparts.
 
 #define OPENAXE_AUTOMATION_SLOT_COUNT 16
-#define OPENAXE_AUTOMATION_PARAMS_PER_SLOT 20
+#define OPENAXE_AUTOMATION_PARAMS_PER_SLOT 32
 
 // Binds `slot` to `block_id` and returns 1. Slot values already written
 // through that slot re-apply onto the new target through its own ranges;

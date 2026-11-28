@@ -13,12 +13,12 @@
 namespace openaxe::automation {
 
 inline constexpr int kSlotCount = 16;
-inline constexpr int kParamsPerSlot = 20;
+inline constexpr int kParamsPerSlot = 32;
 inline constexpr int kMasterSlotIndex = 0;  // permanently the master bus
 inline constexpr int kFirstBlockSlot = 1;
 inline constexpr int kBlockSlotCount = 15;
 inline constexpr int kMasterParamCount = 2;
-inline constexpr int kTotalPluginParams = kMasterParamCount + kBlockSlotCount * kParamsPerSlot;  // = 302
+inline constexpr int kTotalPluginParams = kMasterParamCount + kBlockSlotCount * kParamsPerSlot;  // = 482
 
 // Host parameter id of entry `entry` (0..kParamsPerSlot-1) on block slot
 // `slot` (kFirstBlockSlot..kSlotCount-1). Master slot entries precede all

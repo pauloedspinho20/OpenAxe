@@ -480,7 +480,7 @@
       "label": "VST: Configure (Release)",
       "type": "shell",
       "command": "cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release",
-      "detail": "Configures the VST3 + standalone plugin (iPlug2 + core, WHOLE_ARCHIVE). Fetches iPlug2 via FetchContent (pinned d54f690) — offline smoke tests still configure. See packages/vst3/README.md",
+      "detail": "Configures the VST3 + standalone plugin (iPlug2 + core, WHOLE_ARCHIVE). Fetches iPlug2 via FetchContent (pinned 1527935) — offline smoke tests still configure. See packages/vst3/README.md",
       "group": "build",
       "presentation": {
         "reveal": "always",

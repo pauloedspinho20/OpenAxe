@@ -68,7 +68,7 @@ void RegisterParams(iplug::Plugin& plugin) {
   using namespace openaxe::automation;
   // iPlug's Plugin is also an IEditorDelegate: GetParam / InitParamRange etc.
   // Declare exactly kTotalPluginParams stable ids, grouped per slot so hosts
-  // show "Master" + "Slot 1" .. "Slot 15" sections rather than 302 flat rows.
+  // show "Master" + "Slot 1" .. "Slot 15" sections rather than 482 flat rows.
   //
   // The constructor already allocates all kTotalPluginParams IParam objects
   // (MakeConfig(HostParamCount(), kNumPresets) in plugin.cpp); this function
@@ -76,7 +76,7 @@ void RegisterParams(iplug::Plugin& plugin) {
   // out, so every slot kept its uninitialised [0,1] default, the host saw
   // unnamed parameters, and automation recorded nothing the core understood.
   //
-  // Exact API is the pinned iPlug2 d54f690:
+  // Exact API is the pinned iPlug2 1527935 (unchanged since d54f690):
   //   IParam::InitDouble(name, default, min, max, step, label, flags, group,
   //                      shape, unit, displayFunc)   (IPlugParameter.h)
   //   IPlugPluginBase::InitParamRange(start, end, countStart, nameFmt, ...)

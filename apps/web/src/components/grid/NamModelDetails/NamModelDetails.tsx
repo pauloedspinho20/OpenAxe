@@ -5,6 +5,8 @@ import { apiListModels } from '../../../tone3000/client'
 import { bulkDownloadToneModels } from '../../../tone3000/bulkDownload'
 import type { Tone3000Model, Tone3000Slot } from '../../../tone3000/types'
 import { Dialog, HardwareButton, OutlineButton } from '@openaxe/ui'
+import { EffectParamsPanel } from '../../global/EffectParamsPanel/EffectParamsPanel'
+import type { Block } from '../../../engine/blocks/Block'
 import styles from './NamModelDetails.module.css'
 
 export interface NamModelDetailsProps {
@@ -15,6 +17,8 @@ export interface NamModelDetailsProps {
   entry: Tone3000LibraryEntry | null
   slot?: Tone3000Slot
   blockId?: string | null
+  /** The live block; when given, its parameter controls appear at the top of the dialog. */
+  block?: Block | null
   loadTarget?: {
     loadModel: (json: string, info: { id: string; name: string }) => Promise<unknown>
     loadIR: (buffer: AudioBuffer, info: { id: string; name: string }) => void
@@ -54,6 +58,7 @@ export function NamModelDetails({
   entry,
   slot,
   blockId,
+  block,
   loadTarget,
   audioContext,
 }: NamModelDetailsProps) {
@@ -222,6 +227,11 @@ export function NamModelDetails({
 
   return (
     <Dialog open={open} onClose={onClose} title="Model Details">
+      {open && block && blockId && (
+        <div className={styles.controls}>
+          <EffectParamsPanel key={blockId} blockId={blockId} block={block} />
+        </div>
+      )}
       <div className={styles.hero}>
         {heroImage && <img src={heroImage} alt="" className={styles.heroImage} loading="lazy" />}
 

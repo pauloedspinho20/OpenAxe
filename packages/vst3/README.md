@@ -16,7 +16,7 @@ git submodule update --init -- packages/core/third_party/dspark packages/core/th
 git submodule update --init --recursive
 ```
 
-iPlug2 itself is fetched at configure time via `FetchContent_Declare` (pinned `GIT_TAG d54f69050f517e43b941d88c2a170f0a840b9ee4` — never a floating ref, per #74). The VST3/AU/CLAP SDKs are **not** vendored as submodules; iPlug2 curates them under `Dependencies/` and provides `Scripts/download-iplug-sdks.sh` / `download-prebuilt-libs.sh`. Pinning iPlug2 pins the SDKs transitively — see `packages/vst3/CMakeLists.txt`'s comment for the trade-off and the alternative (submodules with `.gitmodules` SHAs) if offline reproducible builds are later required.
+iPlug2 itself is fetched at configure time via `FetchContent_Declare` (pinned `GIT_TAG 15279358bfc500820c27605d16834a3d49a38cee` — never a floating ref, per #74). The VST3/AU/CLAP SDKs are **not** vendored as submodules; iPlug2 curates them under `Dependencies/` and provides `Scripts/download-iplug-sdks.sh` / `download-prebuilt-libs.sh`. Pinning iPlug2 pins the SDKs transitively — see `packages/vst3/CMakeLists.txt`'s comment for the trade-off and the alternative (submodules with `.gitmodules` SHAs) if offline reproducible builds are later required.
 
 ## Build
 
@@ -44,11 +44,22 @@ cmake --build packages/vst3/build --config Release
 
 ### Linux
 
+The editor is the same React UI as everywhere else, hosted by iPlug2's
+WebKitGTK webview (a GtkPlug embedded in the host's X11 window, so X11 or
+XWayland hosts). It needs `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`; build with
+`-DOPENAXE_VST3_EDITOR=OFF` for a headless plugin without them.
+
 ```bash
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev
+cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
+# iPlug2 ships only SDK placeholders - fetch the VST3/CLAP SDKs, then reconfigure:
+(cd packages/vst3/build/_deps/iplug2-src/Dependencies/IPlug && bash download-vst3-sdk.sh && bash download-clap-sdks.sh)
 cmake -S packages/vst3 -B packages/vst3/build -DCMAKE_BUILD_TYPE=Release
 cmake --build packages/vst3/build --config Release
+cmake --build packages/vst3/build --target openaxe_clap
 ./packages/vst3/build/openaxe_vst3_smoke
-# Copy build/openaxe_vst3.vst3 to ~/.vst3/
+# build/OpenAxe.vst3 is a bundle directory (Contents/x86_64-linux/OpenAxe.so,
+# UI in Contents/Resources/ui): copy the whole directory to ~/.vst3/
 ```
 
 Standalone iteration (no host, debugger-friendly):
@@ -162,7 +173,7 @@ grid-size coupling.
 - **Pool**: `OPENAXE_AUTOMATION_SLOT_COUNT = 16` slots. Slot 0 is
   permanently the master bus (level, mute); slots 1..15 bind to live blocks -
   more than any realistic rig fills, far fewer than 480.
-- **Entries per slot**: `OPENAXE_AUTOMATION_PARAMS_PER_SLOT = 20`, a frozen
+- **Entries per slot**: `OPENAXE_AUTOMATION_PARAMS_PER_SLOT = 32`, a frozen
   stride. Each entry of a bound slot _is_ an index into the bound block's
   param table; its display name, range and unit resolve dynamically from
   `openaxe_automation_slot_param_info` (which forwards to the bound
@@ -171,9 +182,9 @@ grid-size coupling.
 - **Host id layout** (`packages/vst3/generated/automation_param_map.h`,
   generated): id 0 = master level, id 1 = master mute, then slot-major:
 
-      SlotParamId(slot, entry) = 2 + (slot - 1) * 20 + entry
+      SlotParamId(slot, entry) = 2 + (slot - 1) * 32 + entry
 
-  Total declared parameters: 2 + 15 × 20 = **302**.
+  Total declared parameters: 2 + 15 × 32 = **482**.
 
 - **Normalization**: values cross the plugin/host boundary as 0..1 and map
   linearly onto the resolved param's `[min, max]` (from the schema / live
@@ -187,7 +198,7 @@ Validation against `param_schema.json` found the real maximum: **reverb-hall
 exposes 18 params** (room 17, plate 9). A 12-entry slot would silently leave
 reverb tails unautomatable, and picking which 12 by hand would bake index-
 order assumptions back into the ABI. So the stride is schema-driven and set
-with headroom (20 > 18 today); the generator
+with headroom (32 > 26 today; it was 20 until the eq block's graphic mode took it to 26 params, a one-time id remap made while the plugin was still a scaffold); the generator
 (`scripts/gen-param-schema.mjs`) fails if any kind/variant ever exceeds it.
 
 **Both numbers are frozen API surface.** Changing `paramsPerSlot` shifts

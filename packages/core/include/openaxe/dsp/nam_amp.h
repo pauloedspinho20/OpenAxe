@@ -16,6 +16,15 @@ struct dspData;
 
 namespace openaxe::dsp {
 
+// Sample-rate converter around the model, defined in nam_amp.cpp so
+// AudioDSPTools' headers stay private to this library like NAMCore's own.
+struct NamResampler;
+
+// The rate a capture is assumed to have been trained at when its .nam file
+// doesn't say. Same assumption the official NAM plugin makes: 48 kHz is the
+// trainer's only supported rate for the standard captures.
+inline constexpr double kNamAssumedSampleRate = 48000.0;
+
 enum class NamLoadError {
   kFileNotFound,
   kInvalidFormat,
@@ -73,13 +82,33 @@ class NamAmp {
   // that can carry its own captures.
   const std::string& SourceJson() const { return source_json_; }
 
-  // Must be called before Process(), and whenever sample rate or max block
-  // size changes. Not real-time safe.
+  // Must be called before Process(), after every model load, and whenever
+  // sample rate or max block size changes. Not real-time safe.
+  //
+  // A capture only sounds right at the rate it was trained at (NAMCore does
+  // not resample - its Reset() just records the host rate). So when
+  // `sample_rate` differs from the capture's rate and the model can't adapt by
+  // itself (nam::DSP::SupportsArbitrarySampleRate - true only for Linear
+  // models), the model runs at its own rate behind a Lanczos converter, the
+  // same approach the official NAM plugin takes. Captures with no recorded
+  // rate are taken to be kNamAssumedSampleRate.
   void Reset(double sample_rate, int max_buffer_size);
 
-  // Real-time safe. input/output are mono buffers of num_frames samples;
-  // no-op (silence untouched) if no model is loaded.
+  // Real-time safe. input/output are mono buffers of num_frames samples
+  // (num_frames <= the max_buffer_size given to Reset); no-op (output
+  // untouched) if no model is loaded.
   void Process(const float* input, float* output, int num_frames);
+
+  // Whether the last Reset() put a sample-rate converter around the model.
+  bool IsResampling() const { return resampler_ != nullptr; }
+
+  // Delay in engine-rate samples the converter adds (0 when not resampling).
+  // It is on top of whatever the capture itself does.
+  int ResamplingLatency() const;
+
+  // The rate the model itself runs at after the last Reset(): the capture's
+  // rate when resampling, otherwise the engine rate. 0 before any Reset().
+  double ProcessingSampleRate() const { return processing_sample_rate_; }
 
   // Only meaningful if ModelInfo().is_slimmable; no-op otherwise, mirroring
   // NAMCore's own "check Has...() first" convention. Not real-time safe.
@@ -97,6 +126,9 @@ class NamAmp {
   void AdoptModel(std::unique_ptr<nam::DSP> loaded, const nam::dspData& config);
 
   std::unique_ptr<nam::DSP> dsp_;
+  // Non-null only while the engine rate differs from the capture's (see Reset).
+  std::unique_ptr<NamResampler> resampler_;
+  double processing_sample_rate_ = 0.0;
   NamModelInfo info_;
   double slim_size_ = 1.0;
   // The exact .nam JSON the current model came from (see SourceJson).

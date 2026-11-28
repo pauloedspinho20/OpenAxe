@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
+import { Fader, Knob, Select, type ContextMenuAnchor } from '@openaxe/ui'
 import type { Block } from '@/engine/blocks/Block'
 import {
   DEFAULT_KNOB_SIZE,
@@ -45,6 +45,15 @@ function groupFields(schema: ParamFieldSchema[]): Array<[string, ParamFieldSchem
  * very next unrelated store change (adding some other block, say) would
  * silently revert it back to the store's stale copy.
  */
+/** Groups holding faders (the graphic EQ bands) lead; the rest keep their order. */
+function sortFaderGroupsFirst(
+  groups: Array<[string, ParamFieldSchema[]]>,
+): Array<[string, ParamFieldSchema[]]> {
+  const hasFader = (g: [string, ParamFieldSchema[]]) =>
+    g[1].some((f) => f.control === 'knob' && f.fader)
+  return [...groups].sort((a, b) => Number(hasFader(b)) - Number(hasFader(a)))
+}
+
 export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   // Shared with EffectDetailsDialog - see useBlockParamValues for why local
   // state, rather than block.getParams(), drives what is displayed.
@@ -91,6 +100,36 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
 
     const current =
       typeof values[field.key] === 'number' ? (values[field.key] as number) : field.defaultValue
+    if (field.fader) {
+      return (
+        <div
+          key={field.key}
+          className={styles.faderCell}
+          title={field.description}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setMidiMenu({
+              anchor: { x: e.clientX, y: e.clientY },
+              paramKey: field.key,
+              paramLabel: field.label,
+            })
+          }}
+        >
+          <Fader
+            label={field.label}
+            value={current}
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            snapTo={field.defaultValue}
+            fill
+            valueDisplay="tooltip"
+            formatValue={field.formatValue}
+            onChange={(value) => setParam(field.key, value)}
+          />
+        </div>
+      )
+    }
     return (
       <Knob
         key={field.key}
@@ -118,7 +157,7 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
   }
   return (
     <div className={`${styles.panel} ${kindKnobSize ? styles.compact : ''}`}>
-      {groupFields(schema).map(([groupName, fields]) => {
+      {sortFaderGroupsFirst(groupFields(schema)).map(([groupName, fields]) => {
         // Model/character-style selectors (primary) get their own row above
         // the knob cluster (and any non-primary selects like Drive's Diode),
         // so the "which model is this?" choice reads first.
@@ -130,7 +169,9 @@ export function EffectParamsPanel({ blockId, block }: EffectParamsPanelProps) {
             {/*  {selectors.length > 0 && (
               <div className={styles.selectRow}>{selectors.map(renderField)}</div>
             )} */}
-            <div className={styles.fields}>
+            <div
+              className={`${styles.fields} ${fields.some((f) => f.control === 'knob' && f.fader) ? styles.fieldsWithFaders : ''}`}
+            >
               {selectors.map(renderField)}
               {mainFields.map(renderField)}
             </div>

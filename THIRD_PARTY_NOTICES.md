@@ -15,7 +15,7 @@ require their notices to be **distributed with the binaries** — see
 | Component            | Path                                                         | License  | Upstream                                                 |
 | -------------------- | ------------------------------------------------------------ | -------- | -------------------------------------------------------- |
 | NeuralAmpModelerCore | `packages/core/third_party/nam-core` (submodule)             | MIT      | https://github.com/sdatkinson/NeuralAmpModelerCore       |
-| AudioDSPTools        | via NeuralAmpModelerCore `Dependencies/`                     | MIT      | https://github.com/sdatkinson/AudioDSPTools              |
+| AudioDSPTools        | via NeuralAmpModelerCore `Dependencies/`                     | MIT⁵     | https://github.com/sdatkinson/AudioDSPTools              |
 | Eigen                | via NeuralAmpModelerCore `Dependencies/eigen`                | MPL-2.0¹ | https://eigen.tuxfamily.org                              |
 | nlohmann/json        | via NeuralAmpModelerCore, and CMake `FetchContent` `v3.11.3` | MIT      | https://github.com/nlohmann/json                         |
 | DSPark               | `packages/core/third_party/dspark` (submodule)               | MIT      | https://github.com/CristianMoresi/DSPark                 |
@@ -30,6 +30,12 @@ are GPL-compatible, and Eigen ships unmodified.
 ² Only the MIT portion of the DaisySP repository is compiled — the separate
 `DaisySP-LGPL` tree is deliberately **not** used (`packages/core/CMakeLists.txt`).
 
+⁵ The engine compiles AudioDSPTools' header-only `ResamplingContainer` /
+`LanczosResampler` (NamAmp's sample-rate converter). Those two files are
+modified from iPlug2 and WDL and carry iPlug2's zlib-style notice in their
+headers, so every binary, not only the plugin, ships `licenses/iPlug2.txt`.
+They ship unmodified.
+
 ## Desktop shell
 
 | Component                     | Source                               | License                    | Upstream                                            |
@@ -42,7 +48,7 @@ are GPL-compatible, and Eigen ships unmodified.
 
 | Component             | Source                         | License                                     | Upstream                           |
 | --------------------- | ------------------------------ | ------------------------------------------- | ---------------------------------- |
-| iPlug2                | CMake `FetchContent` `d54f690` | **zlib-style** (_not_ MIT)³                 | https://github.com/iPlug2/iPlug2   |
+| iPlug2                | CMake `FetchContent` `1527935` | **zlib-style** (_not_ MIT)³                 | https://github.com/iPlug2/iPlug2   |
 | iPlug2 WebView extras | within iPlug2                  | MIT — notice must be kept on redistribution | https://github.com/iPlug2/iPlug2   |
 | VST3 SDK              | fetched via iPlug2             | **GPLv3 or proprietary** (dual)⁴            | Steinberg                          |
 | CLAP SDK              | fetched via iPlug2             | MIT                                         | https://github.com/free-audio/clap |

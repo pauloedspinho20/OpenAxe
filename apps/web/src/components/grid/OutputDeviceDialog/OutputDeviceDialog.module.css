@@ -1,0 +1,10 @@
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+.row > :first-child {
+  flex: 1;
+  min-width: 0;
+}

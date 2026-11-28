@@ -45,6 +45,10 @@
   border-left: 1px solid var(--seam);
 }
 
+.headerGroup.tempoGroup {
+  border-left: none;
+}
+
 .headerGroup:first-child {
   padding-left: 0;
   border-left: none;

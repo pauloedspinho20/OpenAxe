@@ -1,5 +1,8 @@
 #include "openaxe/dsp/equalizer.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "Effects/Equalizer.h"
 #include "internal/biquad.h"
 #include "internal/dspark_wrapper.h"
@@ -15,8 +18,19 @@ constexpr int kBandParamCount = kBandCount * kFieldsPerBand;
 // #373). Freq-only, fixed Butterworth Q - indices 12/13, after the band table.
 constexpr int kLowCutParam = kBandParamCount;
 constexpr int kHighCutParam = kBandParamCount + 1;
-constexpr int kParamCount = kBandParamCount + 2;
+// Graphic mode (issue: Graphic EQ in the eq block): `mode` (0 parametric,
+// 1 graphic) and ten fixed-frequency octave gains.
+// Appended after the cuts so every existing parametric index is unchanged.
+constexpr int kModeParam = kBandParamCount + 2;
+constexpr int kGraphicBandCount = 10;
+constexpr int kGraphicFirstParam = kModeParam + 1;
+constexpr int kParamCount = kGraphicFirstParam + kGraphicBandCount;
 constexpr float kCutQ = 0.707f;
+// ISO octave centres. Constant-Q peaks (Q = sqrt(2)) so adjacent octaves
+// overlap by a half-power point and a flat slider set sums to exactly 0 dB.
+constexpr float kGraphicFreq[kGraphicBandCount] = {31.25f,  62.5f,   125.0f,  250.0f, 500.0f,
+                                                    1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
+constexpr float kGraphicQ = 1.41421356f;
 
 // Guitar/bass-oriented band types, mirroring ParametricEQ.ts's DEFAULT_BANDS:
 // low-shelf, two sweepable mid peaks, high-shelf.
@@ -43,6 +57,8 @@ constexpr float kDefaults[kParamCount] = {
     6000.0f, 0.0f, 0.707f,  // band 3: high-shelf
     20.0f,                 // low_cut: HPF frequency, off at range min
     20000.0f,              // high_cut: LPF frequency, off at range max
+    0.0f,                  // mode: parametric
+    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  // graphic gains, flat
 };
 
 using EqualizerProc = dspark::Equalizer<float, kBandCount>;
@@ -60,7 +76,17 @@ struct EqualizerTraits {
 
   // One-time setup, run before the defaults are seeded (setNumBands resets
   // every band, so it must not run after them).
-  static void Configure(EqualizerProc& proc) { proc.setNumBands(kBandCount); }
+  //
+  // setMatchedBells(false): DSPark 1.8 made analog-matched Peak bells the
+  // default. They are more faithful near Nyquist (2.9 dB worst deviation from
+  // the analog bell at 48 kHz vs 11 dB bilinear), but they change the sound of
+  // every saved rig with a high mid bell - about +1 dB at 16 kHz in the
+  // eq/bells golden. Pinned to the bilinear bells this EQ has always had;
+  // adopting the matched design is a deliberate, re-blessed change of its own.
+  static void Configure(EqualizerProc& proc) {
+    proc.setNumBands(kBandCount);
+    proc.setMatchedBells(false);
+  }
 
   static void Apply(EqualizerProc& proc, const float* values, int index, float value) {
     (void)value;
@@ -88,7 +114,39 @@ struct Equalizer::Impl {
   DsparkEffect<EqualizerProc, EqualizerTraits> dsp;
   internal::Biquad hp[2];
   internal::Biquad lp[2];
+  // Graphic mode: ten peaking biquads per channel, series. Bands at exactly
+  // 0 dB are skipped, so a flat graphic EQ is bit-identical to a bypass.
+  internal::Biquad graphic[2][kGraphicBandCount];
   double sample_rate = 48000.0;
+
+  // RBJ peaking filter at a fixed frequency/Q, gain in dB.
+  void RefreshGraphicBand(int band) {
+    const float sr = static_cast<float>(sample_rate);
+    const float gain_db = dsp.GetParam(kGraphicFirstParam + band);
+    const float f = kGraphicFreq[band];
+    for (int ch = 0; ch < 2; ++ch) {
+      internal::Biquad& b = graphic[ch][band];
+      if (gain_db == 0.0f || f >= sr * 0.45f) {
+        b.b0 = 1.0f;
+        b.b1 = b.b2 = b.a1 = b.a2 = 0.0f;
+        continue;
+      }
+      const float a = std::pow(10.0f, gain_db / 40.0f);
+      const float w0 = 6.28318530718f * f / sr;
+      const float alpha = std::sin(w0) / (2.0f * kGraphicQ);
+      const float cosw = std::cos(w0);
+      const float a0 = 1.0f + alpha / a;
+      b.b0 = (1.0f + alpha * a) / a0;
+      b.b1 = (-2.0f * cosw) / a0;
+      b.b2 = (1.0f - alpha * a) / a0;
+      b.a1 = b.b1;
+      b.a2 = (1.0f - alpha / a) / a0;
+    }
+  }
+  void RefreshAllGraphic() {
+    for (int band = 0; band < kGraphicBandCount; ++band) RefreshGraphicBand(band);
+  }
+  bool GraphicActive(int band) const { return dsp.GetParam(kGraphicFirstParam + band) != 0.0f; }
 
   void RefreshCuts() {
     const float sr = static_cast<float>(sample_rate);
@@ -111,13 +169,30 @@ void Equalizer::Reset(double sample_rate) {
   impl_->dsp.Reset(sample_rate);
   for (auto& hp : impl_->hp) hp.Reset();
   for (auto& lp : impl_->lp) lp.Reset();
+  for (auto& ch : impl_->graphic)
+    for (auto& band : ch) band.Reset();
   impl_->RefreshCuts();
+  impl_->RefreshAllGraphic();
 }
 
 // Four biquad bands in series (low shelf, two sweepable peaks, high shelf)
 // followed by the global cuts. Real-time safe.
 void Equalizer::Process(const float* const* input, float* const* output, int num_frames) {
-  impl_->dsp.Process(input, output, num_frames);
+  if (impl_->dsp.GetParam(kModeParam) >= 0.5f) {
+    // Graphic mode: the four parametric bands are out of the path entirely.
+    if (num_frames <= 0) return;
+    for (int ch = 0; ch < 2; ++ch) {
+      float* out = output[ch];
+      if (out != input[ch]) std::copy(input[ch], input[ch] + num_frames, out);
+      for (int band = 0; band < kGraphicBandCount; ++band) {
+        if (!impl_->GraphicActive(band)) continue;
+        internal::Biquad& f = impl_->graphic[static_cast<size_t>(ch)][static_cast<size_t>(band)];
+        for (int i = 0; i < num_frames; ++i) out[i] = f.Process(out[i]);
+      }
+    }
+  } else {
+    impl_->dsp.Process(input, output, num_frames);
+  }
   // Skipped outright at the defaults (not run as "almost transparent"
   // biquads), which is what keeps default presets bit-identical.
   const float low = impl_->dsp.GetParam(kLowCutParam);
@@ -136,7 +211,8 @@ void Equalizer::Process(const float* const* input, float* const* output, int num
 
 // Param surface: 4 bands x (frequency Hz, gain dB, Q), in band order - so
 // index / 3 is the band and index % 3 the field, which is what Apply relies
-// on - followed by low_cut (HPF Hz) and high_cut (LPF Hz).
+// on - followed by low_cut (HPF Hz) and high_cut (LPF Hz), then the graphic
+// mode: mode, graphic0_gain..graphic9_gain.
 int Equalizer::ParamCount() { return DsparkEffect<EqualizerProc, EqualizerTraits>::ParamCount(); }
 
 // Name/symbol/range/unit for one param index (band0_frequency, band0_gain,
@@ -154,6 +230,9 @@ float Equalizer::GetParam(int index) const { return impl_->dsp.GetParam(index); 
 void Equalizer::SetParam(int index, float value) {
   impl_->dsp.SetParam(index, value);
   if (index == kLowCutParam || index == kHighCutParam) impl_->RefreshCuts();
+  if (index >= kGraphicFirstParam && index < kParamCount) {
+    impl_->RefreshGraphicBand(index - kGraphicFirstParam);
+  }
 }
 
 }  // namespace openaxe::dsp
